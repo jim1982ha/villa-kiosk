@@ -1,3 +1,17 @@
+## 2.496.544
+
+What you will see:
+- In a device's window, every trend chart (a single reading, or each reading's own chart in a group) has a slider
+  with two handles beside the axis numbers, exactly as high as the axis. Drag them, by finger or mouse, to keep only
+  the values between them.
+- Each point of the chart then shows the average of only the readings inside that range; a point with none inside
+  drops to 0. The parts of the chart above and below the range are covered with fine grey stripes.
+- A line above the chart says what is kept, its average and how long the readings were in range, for example "Only
+  300 to 900 W: average 412 W, 6h 30min in range". Tap "Show all" to go back to the full chart.
+- The range stays when you switch between 1h, 24h, 1w, 1m and 1y, and is cleared when you close the window or open
+  another reading. It works with the axis from 0 or zoomed; the handles stay level with the axis numbers.
+- The chart showing two readings on two scales has no slider.
+
 ## 2.496.543
 
 What you will see:

@@ -33,6 +33,7 @@ import { dayTime } from "@/utils/dateText";
 import { HOUR_MS } from "@/utils/localDay";
 import { bandEnd } from "@/utils/timelineCells";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
+import { FINER, type FinerSeries } from "@/utils/rangeFilter";
 
 /** One row of Home Assistant's state history, as the REST endpoint sends it. */
 export interface StateRow {
@@ -64,6 +65,10 @@ export type HistoryRequest =
   /** Numeric, in the range's step (historyRange `period`: five minutes up to a day, an hour for a week, a day, a week): the recorder's
    *  long-term figures for a day or a week, else what is kept of every change, in that step. */
   | { kind: "trend"; ids: readonly string[]; hours: number; period?: StatisticsPeriod }
+  /** The finer values a "trend" of `period` is made of, for its range filter (utils/rangeFilter FINER): the readings
+   *  for a five-minute step, else the recorder's figures of the finer period (or, for a device it keeps none of, every
+   *  change kept, in that finer step). Asked only while a chart's filter leaves something out. */
+  | { kind: "finer"; ids: readonly string[]; hours: number; period?: StatisticsPeriod }
   /** Numeric, every change as reported (the pressure tendency). */
   | { kind: "readings"; id: string; hours: number }
   /** Raw states — no numeric parse — for each id (the camera's status bar). */
@@ -97,6 +102,7 @@ export interface StateWindow {
 /** What each kind of request answers with. */
 export type HistoryAnswer<R extends HistoryRequest> =
   R extends { kind: "trend" } ? Record<string, HistorySeries>
+  : R extends { kind: "finer" } ? Record<string, FinerSeries>
   : R extends { kind: "readings" } ? HistorySeries
   : R extends { kind: "states" } ? Record<string, StateHistoryPoint[]>
   : R extends { kind: "stateWindow" } ? StateWindow
@@ -123,7 +129,7 @@ export function historyKey(q: HistoryRequest | HistoryRequests): string {
     const ids = "ids" in r ? [...r.ids].join(",") : r.kind === "stateWindow" && r.follow?.length ? `${r.id}>${r.follow.join(",")}` : r.id;
     const extra = r.kind === "statistics"
       ? `|${r.period}|${[...r.fields].join(",")}|${r.since ?? ""}`
-      : r.kind === "trend" ? `|${r.period ?? "5minute"}` : "";
+      : r.kind === "trend" || r.kind === "finer" ? `|${r.period ?? "5minute"}` : "";
     return `${r.kind}:${ids}|${r.hours ?? ""}${extra}`;
   };
   if ("kind" in q && typeof q.kind === "string") return one(q as HistoryRequest);
@@ -405,6 +411,26 @@ async function trend(port: HistoryPort, ids: readonly string[], period: Statisti
   return out;
 }
 
+/** The finer values of a trend of `period` (rangeFilter FINER), over the same window: one reader with `trend` (the
+ *  readings, the recorder's figures, and the same fallback to every change kept for a device with no figures). */
+async function finer(port: HistoryPort, ids: readonly string[], period: StatisticsPeriod,
+  window: { from: number; to: number }): Promise<Record<string, FinerSeries>> {
+  const source = FINER[period];
+  const out: Record<string, FinerSeries> = {};
+  if (source === "readings") {
+    for (const id of ids) out[id] = { of: period, series: await readings(port, id, window) };
+    return out;
+  }
+  const stepMs = PERIOD_MS[source];
+  const figures = await statistics(port, ids, source, ["mean"], window);
+  for (const id of ids) {
+    const fig = figures[id]?.mean;
+    out[id] = { of: period, stepMs,
+      series: fig && fig.points.length ? fig : intervalSeries(await readings(port, id, window), stepMs) };
+  }
+  return out;
+}
+
 /** Answer one request at `now`. */
 export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R, now: number): Promise<HistoryAnswer<R>> {
   const window = requestWindow(r, now);
@@ -413,6 +439,8 @@ export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R,
   switch (r.kind) {
     case "trend":
       return await trend(port, r.ids, r.period ?? "5minute", window, now) as HistoryAnswer<R>;
+    case "finer":
+      return await finer(port, r.ids, r.period ?? "5minute", window) as HistoryAnswer<R>;
     case "readings":
       return await readings(port, r.id, window) as HistoryAnswer<R>;
     case "states": {
