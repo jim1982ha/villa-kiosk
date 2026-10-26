@@ -22,7 +22,7 @@ import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage } from "./chartUti
 import { formatUnitValue } from "@/utils/entityValue";
 import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
-import YAxis, { type AxisTick } from "./ChartAxis";
+import YAxis, { useChartsFromZero, type AxisTick } from "./ChartAxis";
 
 export interface LineSpec {
   pts: readonly HistoryPoint[];
@@ -93,7 +93,9 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   // A line with no readings still has its outage, and its band says so
   // (every line is kept); whether there is anything to draw is lineChart's.
   const w = drawableWindow(window, ...lines.map((l) => l.pts));
-  const g = w ? chartGeometry(w, lines.map((l) => ({ pts: l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared", unit: l.unit })), plot, 0.08) : null;
+  // from 0 unless this tablet zoomed its charts (a tap on any y-axis, owner 2026-10-26)
+  const zero = useChartsFromZero();
+  const g = w ? chartGeometry(w, lines.map((l) => ({ pts: l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared", unit: l.unit })), plot, 0.08, zero) : null;
   const { frac, handlers } = useChartPointer<SVGSVGElement>();
   if (!g) return <><ChartEmpty status={status} height={height} /><TimeAxis g={null} /></>;
 
@@ -105,7 +107,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   return (
     <>
       <div className="chart-with-axis has-unit">
-        <YAxis height={H} frame={H} unit={lines[0].unit?.trim()} ticks={leftAxis} cls={lines[0].cls?.split(" ")[0]} color={lines[0].color} />
+        <YAxis zoomable height={H} frame={H} unit={lines[0].unit?.trim()} ticks={leftAxis} cls={lines[0].cls?.split(" ")[0]} color={lines[0].color} />
         <div className="spark-wrap weather-chart-wrap">
           <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label}
             style={{ height: H, touchAction: "none" }} {...handlers}>
@@ -151,7 +153,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
           )}
         </div>
         {/* The right axis is the colour of the line it measures. */}
-        {right && <YAxis side="right" height={H} frame={H} unit={right.unit?.trim() || right.label} ticks={g.series[ownAt].ticks}
+        {right && <YAxis zoomable side="right" height={H} frame={H} unit={right.unit?.trim() || right.label} ticks={g.series[ownAt].ticks}
           cls={right.cls?.split(" ")[0]} color={right.color} />}
       </div>
       <TimeAxis g={g} right={!!right} />

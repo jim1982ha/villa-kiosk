@@ -54,3 +54,31 @@ export function loadOverviewView(): OverviewViewSnapshot | null {
   return readJson<OverviewViewSnapshot>(OVERVIEW_VIEW_KEY, (v): v is OverviewViewSnapshot =>
     typeof v === "object" && v !== null && ["alpha", "beta", "radius", "targetX", "targetY", "targetZ"].every((k) => Number.isFinite((v as Record<string, unknown>)[k])));
 }
+
+// ── Charts from 0 ───────────────────────────────────────────────────────────
+// ⚠️ A TREND READS FROM 0 (owner, 2026-10-26: "show the 0 in the Y axis … so it is easier to read trends charts";
+// opening from 0, one tap on any chart's Y axis zooms every chart to its values, and back): a battery that went from
+// 40 to 91 % read as a cliff on a 40-90 axis. Per tablet, for every chart; absent (or no storage): from 0.
+
+const CHARTS_FROM_ZERO_KEY = "villa-kiosk:charts-from-zero";
+const chartZeroListeners = new Set<() => void>();
+let chartsZeroNow: boolean | null = null;
+
+/** Whether every line chart's y-axis starts at 0 on this tablet (the default), or is zoomed to its values. */
+export function chartsFromZero(): boolean {
+  if (chartsZeroNow === null) chartsZeroNow = readString(CHARTS_FROM_ZERO_KEY) !== "0";
+  return chartsZeroNow;
+}
+
+/** Sets it for every chart on this tablet, and tells each chart shown now. */
+export function setChartsFromZero(on: boolean): void {
+  chartsZeroNow = on;
+  writeString(CHARTS_FROM_ZERO_KEY, on ? "1" : "0");
+  chartZeroListeners.forEach((l) => l());
+}
+
+/** Calls `listener` whenever it changes; returns the unsubscribe (useSyncExternalStore's shape). */
+export function onChartsFromZero(listener: () => void): () => void {
+  chartZeroListeners.add(listener);
+  return () => { chartZeroListeners.delete(listener); };
+}

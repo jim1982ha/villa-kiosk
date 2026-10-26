@@ -782,6 +782,7 @@ input[type="range"]::-moz-range-thumb {
 .chart-with-axis > .spark-wrap { flex: 1 1 auto; min-width: 0; }
 .chart-yaxis { position: relative; flex: 0 0 2.6em; font-size: var(--text-2xs, 11px); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .chart-yaxis.left { text-align: right; }
+.chart-yaxis.zoomable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .chart-yaxis.right { text-align: left; }
 .chart-yaxis-tick { position: absolute; left: 0; right: 0; transform: translateY(50%); line-height: 1; white-space: nowrap; }
 .chart-yaxis-unit { position: absolute; left: 0; right: 0; top: -2em; line-height: 1; opacity: 0.8; white-space: nowrap; }

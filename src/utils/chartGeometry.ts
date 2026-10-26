@@ -161,6 +161,8 @@ export function readingAt(pts: readonly Reading[], gaps: readonly HistoryGap[], 
  */
 export function chartGeometry(
   window: TimeWindow, input: readonly ChartSeriesInput[], plot: PlotRect, pad = 0,
+  /** Every scale includes 0 (the tablet's "charts from 0", viewPrefs.chartsFromZero): shared and own as "fromZero". */
+  zero = false,
 ): ChartGeometry {
   const sx = timeScale(window, plot.left, plot.right);
   const span = window.to - window.from || 1;
@@ -168,7 +170,8 @@ export function chartGeometry(
     window.from + Math.max(0, Math.min(1, (x - plot.left) / ((plot.right - plot.left) || 1))) * span;
   const range = (vs: number[], fromZero: boolean, units: readonly (string | undefined)[]): [number, number] => {
     if (vs.length === 0) return [0, 1];
-    let lo = fromZero ? 0 : Math.min(...vs), hi = Math.max(...vs);
+    // from 0: the axis holds 0 whichever side the values are (a temperature below 0 keeps its own floor)
+    let lo = fromZero ? Math.min(0, ...vs) : Math.min(...vs), hi = fromZero ? Math.max(0, ...vs) : Math.max(...vs);
     // Every series on this scale in the same bounded unit, and every value
     // inside its bounds: the axis may not pass them (naturalBounds).
     const b = units.length > 0 && units.every((u) => naturalBounds(u) !== null && u?.trim() === units[0]?.trim())
@@ -182,11 +185,11 @@ export function chartGeometry(
     return [lo, hi];
   };
   const sharedInput = input.filter((s) => (s.scale ?? "shared") === "shared");
-  const shared = range(sharedInput.flatMap((s) => s.pts.map((p) => p.v)), false, sharedInput.map((s) => s.unit));
+  const shared = range(sharedInput.flatMap((s) => s.pts.map((p) => p.v)), zero, sharedInput.map((s) => s.unit));
   const slice = (plot.bottom - plot.top) / Math.max(1, input.length);
   const series = input.map((s, i): SeriesGeometry => {
     const kind = s.scale ?? "shared";
-    const [lo, hi] = kind === "shared" ? shared : range(s.pts.map((p) => p.v), kind === "fromZero", [s.unit]);
+    const [lo, hi] = kind === "shared" ? shared : range(s.pts.map((p) => p.v), kind === "fromZero" || zero, [s.unit]);
     const sy = (v: number) => plot.bottom - ((v - lo) / (hi - lo)) * (plot.bottom - plot.top);
     const minW = (plot.right - plot.left) * MIN_BAND_OF_PLOT;
     const bands = s.gaps.flatMap((gap) => {
