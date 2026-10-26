@@ -21,8 +21,9 @@ import { AGENT_CHECKS, type FmTicketCheck } from "./fmTypes";
 import { fmtDuration } from "@/components/panels/chartUtils";
 
 /** "within 5min": the Agent's next look, in the one duration's words (fmtDuration; architecture review K, 2026-10-24:
- *  written by hand at each place). */
-const withinLook = (c: AgentCadence): string => `within ${fmtDuration(c.checkMinutes * 60_000)}`;
+ *  written by hand at each place) — the open issues' pill, this table's rows and a watched fault's pill once its moment
+ *  passed (fm/faultConfirm.confirmParts: it was written there a second time, architecture review, 2026-10-26). */
+export const withinLook = (c: Pick<AgentCadence, "checkMinutes">): string => `within ${fmtDuration(c.checkMinutes * 60_000)}`;
 
 export interface SourceRow {
   source: IssueSource;

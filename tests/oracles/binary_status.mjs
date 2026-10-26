@@ -90,7 +90,11 @@ ck("the list paints the tone, the page builds its rows here, and the tones have 
 // makes sense". The room glows for a detection and for a problem state "on" (an open door); never for an "on" that is
 // good news (connected, plugged in). A detection is no fault (no line in Needs attention).
 {
-  const { detectsPresence, alertIsFault, glowsRoom } = await import("@/config/BinarySensorClasses");
+  const { detectsPresence } = await import("@/config/BinarySensorClasses");
+  // a fault: the condition its problem state reads in (config/deviceCondition, owner 2026-10-26: alertIsFault is gone)
+  const { conditionOf, glowsRoom } = await import("@/config/deviceCondition");
+  const alertIsFault = (id, c) => { const p = alertStateFor(c);
+    return p !== undefined && conditionOf("binary_sensor", { entity_id: id, state: p, attributes: { device_class: c } }) === "wrong"; };
   const { readFileSync } = await import("node:fs");
   const DETECT = ["motion", "moving", "occupancy", "presence"];
   const NOT = ["door", "window", "garage_door", "opening", "lock", "moisture", "smoke", "connectivity", "problem", undefined, "made_up"];

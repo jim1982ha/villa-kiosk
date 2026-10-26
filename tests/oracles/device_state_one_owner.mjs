@@ -28,10 +28,11 @@ const { statusKeyFor, STATUS_COLOR, UNKNOWN_STATES, isUnavailable } =
 const ent = (id, state, dc) => ({
   entity_id: id, state, attributes: dc ? { device_class: dc } : {},
 });
-/** A badge reading with no per-entity override configured. */
+/** A badge reading with no per-entity override configured — its condition as readingOf takes it (deviceCondition). */
+const { conditionOf } = await import("@/config/deviceCondition");
 const read = (type, e) => ({
   type, entity: e, linkedOn: false,
-  alertState: alertStateFor(e.attributes.device_class),
+  condition: conditionOf(type, e),
 });
 
 let fail = 0;
@@ -157,9 +158,10 @@ if (strayPairs.length) console.log(`      pair spelled out again in: ${strayPair
 
 console.log("\n  assertions:");
 ck("the scan reached the source tree", FILES.length > 100);
-// owner, 2026-10-21: "the entity badge to follow the state of the entity … everywhere": a detection is red on its badge, its bar and its panel alike
-ck("a motion sensor detecting takes the red \"!\" over its own (on) face", motionBadge.mark === "alarm" && motionBadge.face === "active");
-ck("  ...and its history bar agrees", STATUS_COLOR[motionHistory] === STATUS_COLOR.alert);
+// owner, 2026-10-26: a detection is in use, "reserve the ! for devices that are really in error": its badge wears the
+// plain dot over its own (on) face; its window and history bar keep red ("keep red there", config/deviceCondition)
+ck("a motion sensor detecting wears the plain in-use dot over its own (on) face, never the red \"!\"", motionBadge.mark === "active" && motionBadge.face === "active");
+ck("  ...and its history bar keeps red", STATUS_COLOR[motionHistory] === STATUS_COLOR.alert);
 ck("  ...and the panel flags it", motionIsFault === true);
 ck("a leak sensor still alerts", leakKind === "alert");
 ck("connectivity alerts when DOWN, not when up", connDown === "alert" && connUp !== "alert");

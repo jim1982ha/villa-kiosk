@@ -12,7 +12,6 @@
 
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { alarmText, rowText } from "@/config/reading";
-import { alertIsFault } from "@/config/BinarySensorClasses";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
@@ -26,7 +25,6 @@ import type { EntityMapping } from "@/types/scene.types";
 import { isOffline, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
 import { countOf } from "@/utils/countOf";
 import type { Since } from "@/config/presence";
-import { isDomain } from "@/utils/entityDomain";
 
 export type AttentionKind = "unavailable" | "fault" | "schedule" | "alarm";
 
@@ -395,13 +393,14 @@ export function buildAttentionItems(opts: {
   // Zigbee2MQTT relay-lock/config sub-entity is technically a binary_sensor
   // too, and was never meant to be villa-facing. An unavailable device is
   // never `alert` (its face is the amber "unavailable"), so it is listed once,
-  // above, as that. A detection (a motion sensor that sees someone) is red and
-  // NO fault (alertIsFault, owner 2026-10-21): the one red badge not listed.
+  // above, as that. A device in use (a detection, a door open, a lock
+  // unlocked) is never `alert` either (config/deviceCondition: in use, owner
+  // 2026-10-26), so it is no line here. ⚠️ A SECOND FILTER SAID IT AGAIN (to
+  // 2.496.542, alertIsFault): once in use stopped being red it matched nothing.
   const looks = storeLookSource(entities, { entityMap, isCritical: devices.isCritical, isHidden: devices.isHidden });
   for (const id of devices.ids) {
     const entity = entities[id];
     if (!entity || !deviceLook(id, looks).alert) continue;
-    if (isDomain(id, "binary_sensor") && !alertIsFault(id, entity.attributes.device_class as string | undefined)) continue;
     items.push({
       id: `alarm:${id}`,
       kind: "alarm",
@@ -452,6 +451,9 @@ export interface VillaAttention extends VillaProblems {
    *  the Cockpit list COUNT and show. */
   attentionGroups: AttentionGroup[];
   health: VillaHealth;
+  /** May this profile be shown anything about `entityId`: not hidden in the villa's system, and the profile may open
+   *  it. The one predicate every list of the profile's passes (the Cockpit's Watched list too: config/cockpitIssues). */
+  shows: (entityId: string) => boolean;
 }
 
 export type VillaHealthLevel = "ok" | "warn" | "danger";
@@ -474,15 +476,20 @@ export interface VillaHealth {
  * Items with no device (a schedule) stand for themselves.
  */
 export function attentionFor(att: VillaProblems, may: (entityId: string) => boolean): VillaAttention {
-  const attentionItems = att.attentionItems.filter((i) => !i.entityId || may(i.entityId));
+  // ⚠️ HIDDEN, FOR THE PROFILE TOO (owner, 2026-10-25: "hidden means hidden everywhere"): the items are built without
+  // a hidden device already (buildAttentionItems, for the role-blind marks); a list built beside them, the Cockpit's
+  // Watched faults, asked the profile alone and showed one. The profile's lists read this one predicate.
+  const shows = (id: string) => !att.devices.isHidden(id) && may(id);
+  const attentionItems = att.attentionItems.filter((i) => !i.entityId || shows(i.entityId));
   // Grouped AFTER the profile's filter, never before: a row is built only
   // from problems this profile may open, so it cannot name a hidden one.
   const attentionGroups = groupAttention(attentionItems);
   return {
-    devices: devicesFor(att.devices, may),
+    devices: devicesFor(att.devices, shows),
     attentionItems,
     attentionGroups,
     health: villaHealthFrom(attentionGroups),
+    shows,
   };
 }
 

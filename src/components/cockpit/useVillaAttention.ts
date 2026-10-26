@@ -14,6 +14,12 @@ import { useMemo } from "react";
 import { useVillaModel, useVillaModelOrNull } from "@/config/VillaModel";
 import { useProfile, useProfileOrNull } from "@/auth/ProfileContext";
 import { attentionFor, issueSeverity, type AttentionSeverity, type VillaAttention } from "@/config/attention";
+import { cockpitIssues, type CockpitIssues } from "@/config/cockpitIssues";
+import { useFmData } from "@/fm/FmDataContext";
+import { useAgent } from "@/agent/AgentContext";
+import { useHA } from "@/ha/HAStateStore";
+import { useConfig } from "@/config/ConfigContext";
+import { useNow } from "@/hooks/useInterval";
 
 export type { VillaAttention };
 
@@ -26,6 +32,21 @@ export function useVillaAttention(): VillaAttention {
     const sees = visibleTo(role);
     return attentionFor(attention, (id) => sees.has(id));
   }, [attention, visibleTo, role]);
+}
+
+/** Every card of the Cockpit's Overview for THIS profile (config/cockpitIssues): the open issues and the Watched
+ *  list, from the same view the top bar counts. Read again every minute: a watched card past its moment goes, a
+ *  "closes at about" turns to "at the next check", even when nothing else changes. */
+export function useCockpitIssues(): CockpitIssues {
+  const view = useVillaAttention();
+  const { data } = useFmData();
+  const { status } = useAgent();
+  const { entities } = useHA();
+  const { config, resolvedRooms } = useConfig();
+  const now = useNow(60_000);
+  const cadence = status?.cadence ?? null;
+  return useMemo(() => cockpitIssues(view, { fmData: data, cadence, now: new Date(now), entities,
+    entityMap: config.entityMap, resolvedRooms }), [view, data, cadence, now, entities, config.entityMap, resolvedRooms]);
 }
 
 /** How serious the issues are that the Cockpit's Overview lists for these entities' devices (a device window: the

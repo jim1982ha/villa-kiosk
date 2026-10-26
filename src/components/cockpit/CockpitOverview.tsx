@@ -12,24 +12,19 @@ import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import WorkButtons, { useConfirmedClose, type ConfirmedClose } from "@/components/fm/WorkButtons";
 import type { Doors } from "@/auth/doors";
-import { useVillaAttention } from "./useVillaAttention";
-import { cardFocused, type AttentionGroup } from "@/config/attention";
-import { cockpitCard, type CardLine, type CardView } from "@/config/cockpitCard";
+import { useCockpitIssues } from "./useVillaAttention";
+import { cardFocused } from "@/config/attention";
+import type { CardLine, CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
 import { useVillaModel } from "@/config/VillaModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
-import { useAgent } from "@/agent/AgentContext";
 import FaultStageModal from "@/components/fm/FaultStageModal";
 import { localStamp } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
-import { confirmingCards } from "@/config/cockpitCard";
-import { confirmingFaults } from "@/fm/faultConfirm";
 import FoldedList from "@/components/common/FoldedList";
-import { useProfile } from "@/auth/ProfileContext";
-import { useNow } from "@/hooks/useInterval";
 
 
 export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket, onReportProblem,
@@ -67,12 +62,11 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportFaultFor]);
 
-  // Shared with HUD's own top-bar alert icon/overflow-menu badge — see
-  // useVillaAttention's own docstring for why that sharing is load-bearing,
-  // not just tidiness (the two used to disagree).
-  const { attentionGroups } = useVillaAttention();
-  // the faults a person closed that the VESTA Agent reads again: LAST in the same list, never counted (owner, 2026-10-23)
-  const watched = useWatchedCards();
+  // Every card, decided once for this profile (config/cockpitIssues), from the view HUD's own top-bar alert icon and
+  // overflow-menu badge count — see useVillaAttention's own docstring for why that sharing is load-bearing, not just
+  // tidiness (the two used to disagree). `watched`: the faults a person closed that the VESTA Agent reads again, LAST
+  // in the same list, never counted (owner, 2026-10-23).
+  const { open, watched } = useCockpitIssues();
   // the marked card in sight, once per request (a device window's warning) — after it is drawn
   const focusKey = (focusFaults ?? []).join("|");
   useEffect(() => {
@@ -93,9 +87,9 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
           "Needs attention" AND the Faults tab's open list, which showed the same faults twice. Raising a fault is
           here, beside what it is raised about. */}
       {/* The title, and on its right the (i) then "Open a ticket" (owner, 2026-10-14) — a guest's "Report a problem". */}
-      {(attentionGroups.length > 0 || watched.length > 0 || canReport) && (
+      {(open.length > 0 || watched.length > 0 || canReport) && (
         <div className="cockpit-issues-head">
-          <div className="settings-section-title">Open issues{attentionGroups.length > 0 ? ` (${attentionGroups.length})` : ""}</div>
+          <div className="settings-section-title">Open issues{open.length > 0 ? ` (${open.length})` : ""}</div>
           {canManage && !raising && (
             <div className="cockpit-issues-actions">
               <FaultTiming />
@@ -113,12 +107,12 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
         <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
           onDone={() => setRaising(null)} />
       )}
-      {attentionGroups.length > 0 && (
+      {open.length > 0 && (
         <div className="cockpit-attention-list">
-          {attentionGroups.map((group) => (
-            <CockpitAttentionRow key={group.key} group={group} onOpenEntity={onOpenEntity}
+          {open.map((card) => (
+            <CockpitAttentionRow key={card.key} card={card} onOpenEntity={onOpenEntity}
               canManage={canManage} onEditTicket={onEditTicket}
-              focused={cardFocused(group.entityId, focusFaults, devices.deviceOf)} />
+              focused={cardFocused(card.entityId, focusFaults, devices.deviceOf)} />
           ))}
         </div>
       )}
@@ -134,41 +128,20 @@ export default function CockpitOverview({ onOpenEntity, doors, reportFaultFor, o
   );
 }
 
-/** The faults a person closed that the VESTA Agent reads again (fm/faultConfirm), as THIS profile may see them — the
- *  devices it may open, as useVillaAttention filters the open issues. Read again every minute: a card past its moment
- *  goes even when nothing else changes. */
-function useWatchedCards(): CardView[] {
-  const { data } = useFmData();
-  const { status } = useAgent();
-  const { entities } = useHA();
-  const { config, resolvedRooms } = useConfig();
-  const { devices, visibleTo } = useVillaModel();
-  const { role } = useProfile();
-  const now = useNow(60_000);
-  const cadence = status?.cadence ?? null;
-  return useMemo(() => {
-    const sees = visibleTo(role);
-    return confirmingCards(confirmingFaults(data, cadence, now),
-      { devices, entities, entityMap: config.entityMap, resolvedRooms, may: (id) => sees.has(id) });
-  }, [data, cadence, now, devices, entities, config.entityMap, resolvedRooms, visibleTo, role]);
-}
-
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
  *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
  *  room, every problem a line INSIDE the card. A card holding a fault carries its actions (owner, 2026-10-14):
  *  "Open Ticket" (was "Mark in progress"; the Tickets tab's wrench and Title Case, owner 2026-10-14) makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear
  *  one alone), then "Edit ticket" opens it in the Tickets tab; "Close" closes them all ("no action needed"). A line
  *  that is only what Home Assistant reports has no button: it goes when the device is back. */
-function CockpitAttentionRow({ group, onOpenEntity, canManage, onEditTicket, focused }: {
-  group: AttentionGroup;
+function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicket, focused }: {
+  card: CardView;
   onOpenEntity: (id: string) => void;
   canManage: boolean;
   onEditTicket: (ticketId: string) => void;
   /** The device a window's warning opened the Cockpit for: its card marked. */
   focused?: boolean;
 }) {
-  const { status } = useAgent();
-  const card = cockpitCard(group, status?.cadence ?? null);
   // ONE close-question per card, its own Close and each line's: asking on one puts the others' buttons back
   const closer = useConfirmedClose();
   return <AttentionCard card={card} onOpenEntity={onOpenEntity} focused={focused}

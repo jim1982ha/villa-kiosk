@@ -103,8 +103,8 @@ export interface RoomChipModel {
   health: RoomHealth;
 }
 
-/** A room's health, worst first: "alert" — something needs attention (an
- *  unlocked door, a leak, a critical device silent); "fault" — a device has an
+/** A room's health, worst first: "alert" — something needs attention (a
+ *  leak, a jammed lock, a critical device silent; a device in use never is); "fault" — a device has an
  *  open Cockpit fault, check soon; "unavailable" — contact with a device is
  *  lost; "ok" — none of these.
  *
@@ -112,8 +112,7 @@ export interface RoomChipModel {
  *  BORDER and "lost contact" its count's colour, so a red border sat beside a
  *  green count (owner, 2026-10-04: "confusing"). One place answers "is this
  *  room all right?" now — the number — and the border only says something is
- *  on. Attention outranks lost contact: an unlocked door is the thing to act
- *  on first, and a room with both still reads "not all right". */
+ *  on. Attention outranks lost contact: a leak is the thing to act on first, and a room with both still reads "not all right". */
 export type RoomHealth = "alert" | "fault" | "unavailable" | "ok";
 
 /** ⚠️ A FAULT OUTRANKS LOST CONTACT, AS ON THE BADGE (owner, 2026-10-22: badge proposal 2): red act now, amber check

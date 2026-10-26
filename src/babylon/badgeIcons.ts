@@ -7,7 +7,7 @@
 
 import type { Category } from "@/types/scene.types";
 import { categorySurface, markSurface, badgeGround, FADED_ALPHA, type DeviceSurfaceState } from "@/config/EntityCategories";
-import type { BadgeMark, LinkPill } from "@/utils/deviceActivity";
+import { pillOf, type BadgeMark, type LinkPill } from "@/utils/deviceActivity";
 import { chipProportions } from "@/config/chipProportions";
 import { ICON_NODES, type IconPrimitive } from "./badgeIconNodes";
 
@@ -439,7 +439,7 @@ function badgeImageDataUrl(
     // both corners' plain dot in the badge's colour: in use (top) as a linked entity on (bottom) — it was "" for the top,
     // so an "active" mark came out white (owner, 2026-10-26)
     const hue = categorySurface(category, "active", colorOverride).glyph;
-    if (mark) drawPill(ctx, pills, pills.top, mark, hue);
+    if (mark) drawPill(ctx, pills, pills.top, pillOf(mark), hue);
     if (linkPill) drawPill(ctx, pills, pills.bottom, linkPill, hue);
 
     url = canvas.toDataURL("image/png");
@@ -456,7 +456,7 @@ function badgeImageDataUrl(
  */
 function drawPill(
   ctx: CanvasRenderingContext2D, g: ReturnType<typeof pillGeometry>, at: { cx: number; cy: number },
-  pill: BadgeMark | "on" | "off", hue: string,
+  pill: Exclude<LinkPill, null>, hue: string,
 ): void {
   const { cx, cy } = at;
   ctx.beginPath();
@@ -474,10 +474,10 @@ function drawPill(
   }
   ctx.beginPath();
   ctx.arc(cx, cy, g.r, 0, Math.PI * 2);
-  const plain = pill === "on" || pill === "active";      // in use: the same filled dot as a linked entity on
-  ctx.fillStyle = plain ? hue : markSurface(pill).fill;
+  // "on": filled in the badge's colour, no symbol — a linked entity on, and in use (deviceActivity.pillOf)
+  ctx.fillStyle = pill === "on" ? hue : markSurface(pill).fill;
   ctx.fill();
-  if (plain) return;
+  if (pill === "on") return;
   const symbol = markSurface(pill).symbol;
   ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";
