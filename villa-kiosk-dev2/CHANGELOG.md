@@ -1,3 +1,15 @@
+## 2.496.547
+
+What you will see:
+- Filtering a device's history chart now removes the days (or hours) with nothing in your range: only the ones with
+  readings inside it are drawn, side by side, as one unbroken line. The dates under the chart are the first, middle
+  and last day kept, and the tooltip gives each point's real date.
+- The green chip says how much is kept: "≥ 600 W · 7 of 30 days" (hours, weeks, or a time such as "3h 20min of 1d"
+  on the shortest period).
+- A thin ribbon at the foot of the chart shows the whole period, green where the kept days were. It sits in the space
+  already under the chart: nothing moves, and without a filter there is no ribbon and no extra space.
+- When nothing is in your range the chart says so, and the slider stays so you can widen it.
+
 ## 2.496.546
 
 What you will see:
