@@ -36,9 +36,9 @@ from vesta_shared.messaging import incident_tag, no_code as _no_code  # noqa: E4
 from vesta_shared.timeutil import clock, day_label, day_time_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
-from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW  # noqa: E402  (pack.standing says which)
+from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart  # noqa: E402
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
-from vesta_shared.offline import devices_offline, held_since  # noqa: E402  (the one reading of "offline now")
+from vesta_shared.offline import devices_offline, reported_since  # noqa: E402  (offline now; when it last REALLY reported)
 from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
@@ -123,7 +123,13 @@ def run(args) -> dict:
     handed_over = {(o["rule_id"], o["entity_id"]): f"Followed by alert {incident_tag(alerted[dev])}, which says when it is back."
                    for o in store.findings(status="open") if o["rule_id"] == "PM-UNAVAILABLE"
                    for dev in [pack.physical_device_of(o["entity_id"]) or o["entity_id"]] if dev in alerted}
-    findings += silent_findings(cli, pack, states, now_ref, params, Z)
+    # the reconnect loops' logbook, read once: it also says when the villa's system restarted, so the silence check
+    # reads past a restart's stamp only for the sensors stamped by one (or after what was read)
+    try:
+        book = cli.logbook_read(day_end - timedelta(days=int(params.behaviour("reconnect_days"))), day_end, now=now_ref)
+    except Exception:  # noqa: BLE001 — logbook is optional: every stamp is then read past
+        book = None
+    findings += silent_findings(cli, pack, states, now_ref, params, Z, suspect=restart_stamps(book, params))
 
     level_rows = [r for r in pack.entities("level")
                   if params.has(f"{r['asset']}_max_c") or params.has(f"{r['asset']}_max_humidity_pct")]
@@ -132,7 +138,7 @@ def run(args) -> dict:
     findings += level_findings(pack, params, level_rows, lvl_stats, today, zone)
 
     # ---- forensics: reconnect loops from the logbook -------------------------
-    found, said = reconnect_findings(cli, pack, states, day_end, today, params, zone, Z, now_ref)
+    found, said = reconnect_findings(cli, pack, states, day_end, today, params, zone, Z, now_ref, book=book)
     findings += found
     notes += said
 
@@ -439,34 +445,44 @@ def battery_findings(pack, states: dict, params, today: date, stats: dict | None
     return out
 
 
-def silent_findings(cli, pack, states: dict, now_ref: datetime, params, Z, rows: list[dict] | None = None) -> list:
+def restart_stamps(book, params):
+    """Whether a stamp may be a restart's: within restart_settle_minutes of one of the villa's own "started" entries in
+    `book` (a logbook read), or outside what it read; None without a book (every stamp may be)."""
+    if book is None:
+        return None
+    starts, settle = ha_restarts(book.rows), params.behaviour("restart_settle_minutes")
+    return lambda t: in_restart(t, starts, settle) or t < book.start or t > book.reach
+
+
+def silent_findings(cli, pack, states: dict, now_ref: datetime, params, Z, rows: list[dict] | None = None,
+                    suspect=None) -> list:
     """PM-SILENT: a level sensor online, quiet for `silence_hours`, whose device says nothing else either, and which
     normally reports all the time (its hours before it went quiet) — one finding per device. `rows`: the level rows to
-    judge (every one of the pack when None); their statistics are read only for those quiet long enough."""
-    quiet_rows: list[tuple[dict, dict, datetime]] = []
+    judge (every one of the pack when None); their statistics are read only for those quiet long enough.
+
+    ⚠️ THE REAL MOMENT BEFORE THE FILTER (villa, 2026-10-26): when it last reported is the one restart-aware clock's
+    (vesta_shared.offline.reported_since, one history read for every candidate), asked BEFORE "quiet long enough" is
+    judged — filtered on the restart's stamp, a sensor silent for 3 days was not found until a day after a restart,
+    and its open fault closed at the next recheck (recheck.READS) to come back a day later."""
+    quiet: dict[str, tuple[dict, dict]] = {}
     for row in pack.entities("level") if rows is None else rows:   # silence: a level sensor online and quiet
         st = states.get(row["entity_id"])
         if not st or pack.is_asleep(row["entity_id"]):     # quiet between its reports by design (vesta_shared.asleep)
             continue
         asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"], "critical": False})
-        lc = st.get("last_changed")
         if pack.standing(row["entity_id"], st.get("state")) == ANSWERS:
             # ⚠️ SILENT MEANS NOT REPORTING, NOT UNCHANGED (villa, 2026-10-01): last_reported moves at
             # each report (HA 2024.3+). But many integrations write only on a CHANGE, and every
             # restart stamps all of them (villa, 2026-10-04) — so quiet alone proves nothing; the
             # sensor's own history decides below whether it normally reports all the time.
-            lr = st.get("last_reported") or lc
-            try:
-                since = datetime.fromisoformat(lr).astimezone(Z) if lr else None
-            except ValueError:
-                since = None
-            if since is not None:
-                quiet_rows.append((row, asset, since))
+            quiet[row["entity_id"]] = (row, asset)
+    history = getattr(cli, "history", None)
+    heard = reported_since(history, {e: states[e] for e in quiet}, now_ref, suspect=suspect)
+    quiet_rows = [(row, asset, heard[e].astimezone(Z)) for e, (row, asset) in quiet.items() if e in heard]
     # silence: one finding per device, and only for a sensor that normally reports all the time
     silence_hours = params.behaviour("silence_hours")
     long_quiet = [(r, a, t) for r, a, t in quiet_rows if (now_ref - t).total_seconds() / 3600 >= silence_hours
-                  and not _device_still_talks(pack, states, r["entity_id"], now_ref, silence_hours)]
-    long_quiet = _quiet_since(cli, states, long_quiet, now_ref)
+                  and not _device_still_talks(pack, states, r["entity_id"], now_ref, silence_hours, history, suspect)]
     out = []
     if long_quiet:
         # judged on the hours just BEFORE it went quiet (features.reporting_share)
@@ -635,41 +651,29 @@ def told_cleared(store, closed_ids, at: datetime, zone: str, settings: dict) -> 
     return out
 
 
-def _device_still_talks(pack, states: dict, entity_id: str, now: datetime, hours: float) -> bool:
+def _device_still_talks(pack, states: dict, entity_id: str, now: datetime, hours: float, history=None,
+                        suspect=None) -> bool:
     """Has another reading of `entity_id`'s device reported within `hours`? Then the device is talking and this reading
-    has simply not changed — it is not silent.
+    has simply not changed — it is not silent. When each last reported is the restart-aware clock's
+    (vesta_shared.offline.reported_since, `history`: the client's; None: their own stamps).
 
     ⚠️ STILL IS NOT SILENT (villa, 2026-10-19): the system monitor's disk use went from 78.6 % to 2.4 % when the disk
     was emptied, and at one decimal of a large disk it then stayed 2.4 % for days; it writes only on a change, so it
-    read "has not reported for 1 d 9 h although it is online" while its disk-free reading went on reporting."""
+    read "has not reported for 1 d 9 h although it is online" while its disk-free reading went on reporting.
+    ⚠️ NOR IS A RESTART TALKING (villa, 2026-10-26): a restart stamps every sibling too, and a dead device's battery
+    reading, stamped 6 h ago, kept its silent temperature from being found."""
+    near = {}
     for e in pack.entities_of_device(pack.device_id_of(entity_id)) - {entity_id}:
         st = states.get(e) or {}
         if pack.standing(e, st.get("state")) not in (ANSWERS, ABSENT):
             continue
-        at = st.get("last_reported") or st.get("last_changed")
-        try:
-            if at and (now - datetime.fromisoformat(at).astimezone(now.tzinfo)).total_seconds() / 3600 < hours:
-                return True
-        except ValueError:
-            continue
-    return False
-
-
-def _quiet_since(cli, states: dict, quiet: list[tuple], now_ref: datetime) -> list[tuple]:
-    """`quiet` [(row, asset, since)] with each since its last real reading, when its last report is only the last change
-    of its state: read from its history past a restart (vesta_shared.offline.held_since, one read for them all).
-
-    ⚠️ A RESTART IS NOT A REPORT (villa, 2026-10-26): every restart of the villa's system stamps every sensor's
-    last_reported and last_changed, so a sensor silent for days "had not reported for 6h" — the hours since the restart."""
-    held = {}
-    for row, _a, since in quiet:
-        st = states.get(row["entity_id"]) or {}
-        if st.get("last_reported") in (None, st.get("last_changed")):      # nothing reported since that change
-            held[row["entity_id"]] = (str(st.get("state")), since)
-    if not held:
-        return quiet
-    real = held_since(getattr(cli, "history", None), held, now_ref)
-    return [(r, a, min(t, real.get(r["entity_id"], t).astimezone(t.tzinfo))) for r, a, t in quiet]
+        at = reported_since(None, {e: st}, now).get(e)
+        if at is not None and (now - at).total_seconds() / 3600 < hours:
+            near[e] = st                  # only one that looks recent can be talking: only it is read past a restart
+    if not near:
+        return False
+    heard = reported_since(history, near, now, suspect=suspect)
+    return any((now - t).total_seconds() / 3600 < hours for t in heard.values())
 
 
 def _device_named(pack, asset: dict, entity_id: str) -> dict:

@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from vesta_shared.problems import Problems, incident_runs
 from vesta_shared.result import PRIORITIES
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
-from vesta_shared.store import Incident, Notes, Store, notes_of, watch_until
+from vesta_shared import alert_watch
+from vesta_shared.store import Incident, Notes, Store, notes_of
 
 
 class Incidents:
@@ -36,14 +37,12 @@ class Incidents:
         return bool((self._get(iid) or {}).get("closed_at"))
 
     def watching(self, iid: int, now: datetime | None = None) -> bool:
-        """Is closed incident `iid` still watched (its copies titled "(watch)", owner 2026-10-25)? Until the desk says its
-        watch is over (Notes.WATCH_OVER, written with this close's moment), at its first look past watch_until; a watch
-        nobody ended (an incident closed before 0.12.356, the desk stopped) is over a day after its time."""
+        """Is closed incident `iid` still watched (its copies titled "(watch)", owner 2026-10-25)? The one answer
+        (vesta_shared.alert_watch.watching), the one the desk's last word and the Cockpit's confirmsBy read.
+        ⚠️ A DAY TYPED HERE (architecture review, 2026-10-26): a watch nobody ended was "(watch)" for one day written
+        here, while the desk left it after its own setting (alerts.late_close_days)."""
         inc = self._get(iid)
-        until = watch_until(inc)
-        if not inc or until is None or notes_of(inc).get(Notes.WATCH_OVER) == inc.get("closed_at"):
-            return False
-        return (now or datetime.now(timezone.utc)) < until + timedelta(days=1)
+        return bool(inc) and alert_watch.watching(inc, now)
 
     def runs(self, iid: int) -> int | None:
         """How many times it alerted in the last days (a "Back at …" step says it); None for no such incident."""

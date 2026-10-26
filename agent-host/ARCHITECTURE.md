@@ -1006,3 +1006,23 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   after a restart masks the same), then the pack's. `translation._named`: longest first, whole words; a name of two
   words or more in any capitals ("Test Lock" = the pack's "Test lock"); a ONE-word name only with its own capitals
   ("Pool" never takes "the pool"). The events carry no name of their own (the critical_* blueprints send ids).
+
+## A closed alert's watch, and when a sensor really last reported: one owner each (architecture review, 2026-10-26)
+
+- **A closed alert's watch: `vesta_shared/alert_watch.py`.** The desk carries its two settings on every open incident
+  (`terms`: reopen_hours, clear_minutes; `Notes.WATCH_TERMS`), and every close goes through `alert_watch.close` (through
+  `Problems.close_incident` and `Problems.closed_in_kiosk`): who closed it (`person`: a person's close the desk reads
+  again, `check_quiet`), whether it can come back (`can_come_back=False`: the automation gone, the villa back online —
+  its next outage is a new number), which writes the length (`Notes.WATCH_MINUTES`: the reopen window, and for a
+  person's close the desk can read again at least its wait) or drops it. Every reader asks it: `until` (the Cockpit's
+  confirmsBy), `watching` (the "(watch)" title; a watch nobody ended is left after `alerts.late_close_days`, the limit
+  the desk's late all-clear reads too — no day typed in the engine), `reopens` (the desk's "Back again" under the same
+  number: within the watch, never a second reading of reopen_hours), `over` (the desk's last word, or none when its
+  alert came back as another number during a watch an older desk carried), and the desk's closing words say the
+  length the close wrote (`minutes`). With reopen_hours 0 an alert the villa clears is watched nowhere. An incident an
+  older desk carried only a length for keeps it.
+- **When a sensor really last reported: `vesta_shared/offline.reported_since`**, beside `held_since`: its
+  last_reported when that moved alone (a real report of the same value), else since when it really holds its state,
+  one history read for all of them. The silence check (`nightly.silent_findings`, read again by recheck.py every 5
+  minutes) and its "the device still talks" both ask it BEFORE judging, so a restart's stamp neither hides a silent
+  sensor nor closes its open fault.

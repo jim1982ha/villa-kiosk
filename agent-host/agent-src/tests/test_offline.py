@@ -240,3 +240,28 @@ def test_an_open_offline_fault_closes_when_its_device_answers(tmp_path, monkeypa
     relay.update({"state": "off", "last_changed": NOW.isoformat()})                                  # its relay does
     assert recheck.back_online(store, lambda: Cli(), NOW, 5, "UTC", _pack())["closed"] == [fid]
     assert store.findings("open") == []
+
+
+def test_when_a_sensor_really_last_reported_is_read_past_a_restart_and_never_for_a_real_report():
+    # villa, 2026-10-26: the silence check's one clock (reported_since). A restart stamped both times of a sensor
+    # unchanged for 3 days: its history says 3 days. A sensor that reported its same value an hour ago (last_reported
+    # alone moved) did report then, whatever its history says, and is not read.
+    from vesta_shared.offline import reported_since
+    restart, last = NOW - timedelta(hours=6), NOW - timedelta(days=3)
+    asked: list = []
+
+    def history(ids, start, end):
+        asked.append(sorted(ids))
+        return {e: [{"state": "5", "last_changed": (last - timedelta(hours=1)).isoformat()},
+                    {"state": "7", "last_changed": last.isoformat()},
+                    {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
+                    {"state": "7", "last_changed": restart.isoformat()}] for e in ids}
+    states = {"sensor.stamped": {"state": "7", "last_changed": restart.isoformat(), "last_reported": restart.isoformat()},
+              "sensor.repeats": {"state": "7", "last_changed": restart.isoformat(),
+                                 "last_reported": (NOW - timedelta(hours=1)).isoformat()},
+              "sensor.old_ha": {"state": "7", "last_changed": restart.isoformat()},          # no last_reported at all
+              "sensor.no_time": {"state": "7"}}
+    real = reported_since(history, states, NOW)
+    assert real == {"sensor.stamped": last, "sensor.repeats": NOW - timedelta(hours=1), "sensor.old_ha": last}, real
+    assert asked == [["sensor.old_ha", "sensor.stamped"]]                         # one read, only those it can change
+    assert reported_since(None, states, NOW)["sensor.stamped"] == restart       # no history: the stamps, as before

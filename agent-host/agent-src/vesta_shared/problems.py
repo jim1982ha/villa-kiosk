@@ -27,7 +27,8 @@ from typing import Callable
 from . import agreement, result
 from .limits import limit
 from .messaging import no_code as _no_code
-from .store import Incident, Notes, Store, notes_of, watch_until
+from .store import Incident, Notes, Store, notes_of
+from . import alert_watch
 
 DONE = "done"                          # a person answered Done (a button, or "#N done")
 CLEARED = "cleared"                    # its source is gone: the night check no longer sees it, HA cleared it
@@ -177,12 +178,17 @@ class Problems:
     # each closed an incident or a finding, then had to remember to clear its task and resolve its Kiosk fault —
     # and to agree with source_gone() on which states end a Problem. The state decides here, once; the callers get
     # back the fault actions to carry out.
-    def close_incident(self, iid: int, state: str, now_iso: str, note: str = "", who: str | None = None, **fields) -> list[dict]:
-        """The incident ends in `state` (closed now). When that state ends its Problem (Incident.ANSWERED_OR_CLEARED)
-        its open task closes too — done by a person, or cleared — its close saying `note`, by `who` when a person did
-        it (review 29: a Telegram Done showed "resolved … by VESTA Agent" on the card). Returns a script's `actions`
-        for it: [result.faults_changed()] when a task moved (result.moved)."""
-        self.store.update_incident(iid, state=state, closed_at=now_iso, **fields)
+    def close_incident(self, iid: int, state: str, now_iso: str, note: str = "", who: str | None = None, *,
+                       person: str | None = None, can_come_back: bool = True, terms: dict | None = None,
+                       **fields) -> list[dict]:
+        """The incident ends in `state` (closed now), with the watch that follows (alert_watch.close: `person` — a
+        person closed it, as the desk's read-again says it; `can_come_back`; `terms` — the desk's, else those it
+        carries). When that state ends its Problem (Incident.ANSWERED_OR_CLEARED) its open task closes too — done by a
+        person, or cleared — its close saying `note`, by `who` when a person did it (review 29: a Telegram Done showed
+        "resolved … by VESTA Agent" on the card). Returns a script's `actions` for it: [result.faults_changed()] when a
+        task moved (result.moved)."""
+        alert_watch.close(self.store, iid, state, now_iso, person=person, can_come_back=can_come_back, t=terms,
+                          **fields)
         return result.moved(self.settle(f"incident:{int(iid)}", note=note, who=who))
 
     def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
@@ -368,9 +374,10 @@ class Problems:
                 # ⚠️ A DONE IS A DONE, WHEREVER IT IS GIVEN (architecture review 24): closed in the Kiosk, a door fault
                 # skipped the check a Done button gets — the door still unlocked, it stayed closed for good. The alert
                 # desk reads it again once (quiet_after_done), when its rule names its states
+                # the one close of an alert (alert_watch.close): a person's, read again, its watch from the desk's terms
                 when = _moment(at)
-                self.store.note(sid, {"check_quiet": said}, state=Incident.DONE, reply="Closed in the Cockpit",
-                                closed_at=when.isoformat() if when else self.store.now())
+                alert_watch.close(self.store, sid, Incident.DONE, when.isoformat() if when else self.store.now(),
+                                  person=said, reply="Closed in the Cockpit")
                 return sid
         return None
 
@@ -392,7 +399,7 @@ class Problems:
             if inc and inc.get("closed_at"):
                 # kiosk_words.reopened: who and when, said once — mail to the alert desk (store.Notes), which names who
                 # is asked (its chase.asks: a skill's setting, never the engine's)
-                self.store.note(sid, {Notes.KIOSK_REOPENED: said or by or "a person"}, drop=("check_quiet",),
+                self.store.note(sid, {Notes.KIOSK_REOPENED: said or by or "a person"}, drop=(alert_watch.CHECK,),
                                 closed_at=None, reply=None, state=Incident.ASKED, asked_at=self.store.now())
                 self.store.reopening_told(task_id)
                 return sid
@@ -608,8 +615,8 @@ class Problems:
     def confirms_by(self, task: dict, next_night: Callable[[datetime], datetime | None] | None = None,
                     now: datetime | None = None) -> str | None:
         """Until when the closed fault of `task` is watched — back within it, it reopens as the same problem: the Kiosk
-        fault's `confirmsBy`. An alert's: its close plus the desk's watch (Notes.WATCH_MINUTES, carried by the desk:
-        desk.watch_minutes), and while the desk's read-again after a person's close (`check_quiet`) waits, until it is
+        fault's `confirmsBy`. An alert's: its close plus its watch (alert_watch.until), and while the desk's
+        read-again after a person's close (`check_quiet`) waits, until it is
         read. A night-check finding's: the night check's next run after its close (`next_night`), the read that would
         see it back (owner, 2026-10-25). None for a task open, an older task of the same problem, a close nothing
         watches (no watch carried, no night schedule), or a watch over."""
@@ -624,10 +631,10 @@ class Problems:
         pending = False
         if kind == "incident":
             inc = self.store.incident(sid)
-            until = watch_until(inc)
+            until = alert_watch.until(inc)
             if until is None:
                 return None
-            pending = bool(notes_of(inc).get("check_quiet"))
+            pending = alert_watch.awaiting_read(inc)
         elif kind == "finding":
             closed = _moment(task.get("done_at"))
             until = next_night(closed) if closed and next_night else None

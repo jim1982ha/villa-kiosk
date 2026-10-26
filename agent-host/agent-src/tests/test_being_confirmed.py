@@ -4,7 +4,7 @@ and the alert desk reads it again after its clear_minutes (quiet_after_done). Me
 ever, and carries `confirmsBy` (agent-contract.json ticket.fields): the moment the desk reads it again, counted from the
 close. The desk's verdict: right — the fault stays resolved; still bad — it opens again; cannot tell — it stays resolved.
 ⚠️ EVERY CLOSE ALIKE (owner, 2026-10-25): any closed fault is watched until it can no longer come back as the same problem
-— an alert's close plus the longer of the desk's wait and its reopen window (desk.watch_minutes), whoever closed it; a
+— an alert's close plus its reopen window, and for a person's close at least the desk's wait (alert_watch.length); a
 night-check fault until the night check's next run. Driven through the desk, Problems and the real Kiosk class over the
 fake transport. Synthetic villa."""
 from __future__ import annotations
@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
 from villa_timeline import TimelineVilla
+from vesta_shared import alert_watch
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
 
@@ -26,7 +27,7 @@ spec.loader.exec_module(desk)
 
 FM = 222
 WAIT = desk.DEFAULTS["clear_minutes"]                   # the desk's read-again wait (rules.yaml behaviour), never a copy
-WATCH = desk.watch_minutes(WAIT, desk.DEFAULTS["reopen_hours"])   # how long any closed alert is watched
+WATCH = alert_watch.length(desk.terms(), read_again=True)        # how long a closed alert is watched
 
 
 def run(c):
@@ -202,11 +203,11 @@ def test_an_alert_the_villa_clears_is_watched_as_a_persons_close_is(tmp_path):
 
 
 def test_an_alert_whose_automation_is_gone_is_not_watched(tmp_path):
-    # an end that cannot come back: its close takes any watch away (desk._close without one)
+    # an end that cannot come back: its close takes any watch away (desk._close without the desk's terms)
     v, k, st = villa(tmp_path=tmp_path)
     now = datetime.now(timezone.utc)
     iid = door(st, now)
-    desk.carry_watch(st, iid, WATCH)
+    alert_watch.carry(st, iid, desk.terms())
     out = {"send": [], "actions": []}
     desk._close(st, st.incident(iid), now, out, "Closed.")
     (task,) = st.tasks(None)

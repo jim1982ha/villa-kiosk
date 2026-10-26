@@ -112,11 +112,80 @@ def test_a_restart_is_not_a_report_the_silence_counts_from_the_last_real_reading
         {"state": "27.5", "last_changed": last.isoformat()},                          # its last real reading
         {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
         {"state": "27.5", "last_changed": restart.isoformat()}]}]}))                 # the restart's rewrite
+    (fx / "logbook.json").write_text(json.dumps({"entries": [          # the villa's own "started" entry
+        {"when": restart.isoformat(), "domain": "homeassistant", "name": "Home Assistant", "message": "started"}]}))
     _hourly(fx, "a", {"sensor.example_th": (last - timedelta(days=10), 10 * 24, True)})
     _pack(tmp_path, {"level": [_row("sensor.example_th", "TH temperature")]})
     _night(tmp_path, "--as-of", AS_OF)
     (f,) = _open(tmp_path, "PM-SILENT")
     assert "has not reported for 3d " in f["summary"], f["summary"]
+
+
+def _restarted_sensor(fx, restart, last, eid="sensor.example_th"):
+    """`eid` reading 27.5 since `last`, its stamps rewritten by a restart of the villa's system at `restart`."""
+    (fx / "states.json").write_text(json.dumps({"states": {eid: {
+        "state": "27.5", "attributes": {}, "last_changed": restart.isoformat(), "last_reported": restart.isoformat()}}}))
+    (fx / "history_raw_a.json").write_text(json.dumps({"entities": [{"entity_id": eid, "states": [
+        {"state": "27.1", "last_changed": (last - timedelta(minutes=5)).isoformat()},
+        {"state": "27.5", "last_changed": last.isoformat()},                          # its last real reading
+        {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
+        {"state": "27.5", "last_changed": restart.isoformat()}]}]}))                 # the restart's rewrite
+    # the villa's own "started" entry, which tells the night which stamps are a restart's (nightly.restart_stamps)
+    (fx / "logbook.json").write_text(json.dumps({"entries": [
+        {"when": restart.isoformat(), "domain": "homeassistant", "name": "Home Assistant", "message": "started"}]}))
+
+
+def test_a_restart_inside_the_silence_hours_does_not_hide_a_silent_sensor(tmp_path):
+    # villa, 2026-10-26: the check filtered on the restart's stamp before reading the history — 6 h after a restart a
+    # sensor silent for 3 days was "quiet for 6 h", not found until a day after the restart
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    last = NOW - timedelta(days=3)
+    _restarted_sensor(fx, NOW - timedelta(hours=6), last)
+    _hourly(fx, "a", {"sensor.example_th": (last - timedelta(days=10), 10 * 24, True)})
+    _pack(tmp_path, {"level": [_row("sensor.example_th", "TH temperature")]})
+    _night(tmp_path, "--as-of", AS_OF)
+    (f,) = _open(tmp_path, "PM-SILENT")
+    assert "has not reported for 3d " in f["summary"], f["summary"]
+
+
+def test_only_a_stamp_the_logbook_puts_at_a_restart_is_read_past(tmp_path):
+    # 2026-10-26: every changing sensor had its 7 days read each night — with the logbook saying no restart then, a
+    # sensor that last changed 6 h ago really reported 6 h ago: its stamp stands, no history read, not silent
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    _restarted_sensor(fx, NOW - timedelta(hours=6), NOW - timedelta(days=3))
+    (fx / "logbook.json").write_text(json.dumps({"entries": []}))
+    _hourly(fx, "a", {"sensor.example_th": (NOW - timedelta(days=13), 10 * 24, True)})
+    _pack(tmp_path, {"level": [_row("sensor.example_th", "TH temperature")]})
+    _night(tmp_path, "--as-of", AS_OF)
+    assert _open(tmp_path, "PM-SILENT") == []
+
+
+def test_the_night_does_not_take_a_restarted_sibling_for_a_device_still_talking(tmp_path):
+    # the same, through the night check: the device's battery reading, stamped by the restart 6 h ago and unchanged
+    # for 3 days in its history, does not keep its silent temperature from being found
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    restart, last = NOW - timedelta(hours=6), NOW - timedelta(days=3)
+    temp, bat = "sensor.example_th", "sensor.example_th_battery"
+    _restarted_sensor(fx, restart, last, temp)
+    states = json.loads((fx / "states.json").read_text())
+    states["states"][bat] = {"state": "80", "attributes": {}, "last_changed": restart.isoformat(),
+                             "last_reported": restart.isoformat()}
+    (fx / "states.json").write_text(json.dumps(states))
+    hist = json.loads((fx / "history_raw_a.json").read_text())
+    hist["entities"].append({"entity_id": bat, "states": [
+        {"state": "81", "last_changed": (last - timedelta(hours=1)).isoformat()},
+        {"state": "80", "last_changed": last.isoformat()},
+        {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
+        {"state": "80", "last_changed": restart.isoformat()}]})
+    (fx / "history_raw_a.json").write_text(json.dumps(hist))
+    _hourly(fx, "a", {temp: (last - timedelta(days=10), 10 * 24, True)})
+    _pack(tmp_path, {"level": [_row(temp, "TH temperature", asset="th", device="dev-th")],
+                     "battery": [_row(bat, "TH battery", family="battery", asset="th", device="dev-th")]})
+    _night(tmp_path, "--as-of", AS_OF)
+    assert [f["entity_id"] for f in _open(tmp_path, "PM-SILENT")] == [temp]
 
 
 def test_a_sensor_with_no_history_is_not_called_silent(tmp_path):
@@ -542,6 +611,36 @@ def test_a_reading_that_holds_still_while_its_device_reports_is_not_silent():
     assert nightly._device_still_talks(pack, talks, "sensor.disk", now, 24)
     assert not nightly._device_still_talks(pack, quiet, "sensor.disk", now, 24)   # the whole device quiet: silent
     assert not nightly._device_still_talks(pack, gone, "sensor.disk", now, 24)    # an offline reading says nothing
+
+
+def test_a_sibling_stamped_by_a_restart_is_not_a_device_still_talking():
+    # villa, 2026-10-26: a restart stamps every reading of a dead device; its battery, "reported" 6 h ago by the
+    # restart alone, said the device still talked. Its history says when it really last reported.
+    import importlib.util
+    from vesta_shared.knowledge_pack import KnowledgePack
+    spec = importlib.util.spec_from_file_location("nightly_s", os.path.join(
+        os.path.dirname(__file__), "..", "starter", "skills", "preventive-maintenance", "scripts", "nightly.py"))
+    nightly = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(nightly)
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families={}, assets={}, areas=[],
+                         people=[], channels={}, unknown_area=[], unclassified=[], retention={},
+                         devices={"th": {"name": "TH", "manufacturer": "M", "model": "X", "via": ""}},
+                         entity_devices={"sensor.th_temp": "th", "sensor.th_battery": "th"})
+    restart, last = NOW - timedelta(hours=6), NOW - timedelta(days=3)
+    stamped = {"sensor.th_battery": {"state": "80", "last_changed": restart.isoformat(),
+                                     "last_reported": restart.isoformat()}}
+
+    def history(ids, start, end):
+        return {"sensor.th_battery": [{"state": "81", "last_changed": (last - timedelta(hours=1)).isoformat()},
+                                      {"state": "80", "last_changed": last.isoformat()},
+                                      {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
+                                      {"state": "80", "last_changed": restart.isoformat()}]}
+    assert not nightly._device_still_talks(pack, stamped, "sensor.th_temp", NOW, 24, history)
+    # a real change of the battery 6 h ago: the device does talk
+    def changed(ids, start, end):
+        return {"sensor.th_battery": [{"state": "81", "last_changed": (last - timedelta(hours=1)).isoformat()},
+                                      {"state": "80", "last_changed": restart.isoformat()}]}
+    assert nightly._device_still_talks(pack, stamped, "sensor.th_temp", NOW, 24, changed)
 
 
 def test_the_night_leaves_out_a_reload_of_virtual_devices(tmp_path):

@@ -11,6 +11,10 @@ asset's, else the entity's), "a device the villa's system knows nothing about is
 Nothing here holds a threshold or a list: the families are the caller's (each skill names its own), as are the
 minimum (`min_minutes`: the night's settings; the page and the chat ask for everything), the devices an alert already
 follows (`alerted`) and from how many devices an integration counts as down (`integration_min`).
+
+It also holds the one restart-aware clock every caller asks past a restart of the villa's system: since when an entity
+really is in its state (held_since: offline, unlocked) and since when it really last reported (reported_since: the
+silence check).
 """
 from __future__ import annotations
 
@@ -98,6 +102,42 @@ def held_since(history, held: dict[str, tuple[str, datetime]], now: datetime,
             out[eid] = min(last, pts[0][0])
             if over is not None and out[eid] <= start + timedelta(minutes=1):   # the read's own first row
                 over.add(eid)
+    return out
+
+
+def reported_since(history, states: dict[str, dict], now: datetime, over: set | None = None,
+                   suspect=None) -> dict[str, datetime]:
+    """When each entity of `states` ({entity: its state record: state, last_changed, last_reported}) REALLY last
+    reported: its last_reported when that is later than its last_changed (a report that repeated its value: only a real
+    reading moves last_reported alone); else since when it really holds its state (held_since, ONE history read for all
+    of those), past a restart that stamped both. `over`: as held_since's. An entity with no time (or one not readable)
+    is left out.
+
+    ⚠️ A RESTART IS NOT A REPORT (villa, 2026-10-26): every restart of the villa's system stamps every sensor's
+    last_reported and last_changed. The silence check filtered on that stamp before reading the history, so a sensor
+    silent for 3 days was not found until a day after a restart, and its open fault closed at the next recheck and came
+    back a day later; a device's other reading stamped by the restart counted as "still talking". Every caller asks this
+    one clock, before it judges anything.
+
+    `suspect(stamp)`: whether a stamp may be a restart's (the villa's own "started" entries, when the caller read them);
+    only those are read past (None: every one whose report is its last change). ⚠️ ONE READ OF WHAT CAN BE A RESTART
+    (2026-10-26): every sensor that changed value had its 7 days read each night, the 02:00 check's whole level family."""
+    out: dict[str, datetime] = {}
+    held: dict[str, tuple[str, datetime]] = {}
+    for eid, st in states.items():
+        try:
+            changed = villa_time((st or {}).get("last_changed"), "UTC")
+            reported = villa_time((st or {}).get("last_reported"), "UTC") or changed
+        except ValueError:
+            continue
+        if reported is None:
+            continue
+        if (changed is not None and reported > changed) or (suspect is not None and not suspect(reported)):
+            out[eid] = reported
+        else:
+            held[eid] = (str((st or {}).get("state")), reported)
+    if held:
+        out.update(held_since(history, held, now, over))
     return out
 
 

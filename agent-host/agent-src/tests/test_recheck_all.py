@@ -465,3 +465,23 @@ def test_a_battery_that_moves_a_step_at_night_is_handed_over(tmp_path):
     found = [F(rule_id="PM-BATTERY-CRIT", entity_id=BAT_LOW, summary="Door A battery at 8%: replace now."),
              F(rule_id="PM-BATTERY-LOW", entity_id=BAT_CRIT, summary="Lock B battery at 15%: replace within the week.")]
     assert N.battery_moved(opened, found) == {("PM-BATTERY-LOW", BAT_LOW): "Now: Door A battery at 8%: replace now."}
+
+
+def test_a_restart_does_not_close_an_open_silent_fault(tmp_path):
+    # villa, 2026-10-26: a restart of the villa's system stamps every sensor; the recheck read the quiet sensor as
+    # "reported 6 h ago", closed its fault ("Cleared: the check at … no longer sees it"), and the night opened it again
+    # a day later. Its history says it last really reported 3 days ago: the fault stays open.
+    _pack(tmp_path)
+    store, f = _night_findings(tmp_path)
+    restart, last = NOW - timedelta(hours=6), NOW - timedelta(days=3)
+    _villa(tmp_path, {TEMP: {"state": "21.5", "attributes": {}, "last_changed": restart.isoformat(),
+                             "last_reported": restart.isoformat()}})
+    (tmp_path / "fx" / "history_raw_a.json").write_text(json.dumps({"entities": [{"entity_id": TEMP, "states": [
+        {"state": "21.1", "last_changed": (last - timedelta(minutes=5)).isoformat()},
+        {"state": "21.5", "last_changed": last.isoformat()},
+        {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
+        {"state": "21.5", "last_changed": restart.isoformat()}]}]}))
+    _tick(tmp_path)
+    st = Store(str(tmp_path / "s.sqlite"))
+    assert st.finding(f["temp"][0])["status"] == "open"
+    assert st.finding(f["temp"][0])["seen_at"] == NOW.isoformat()                 # read again, and still there

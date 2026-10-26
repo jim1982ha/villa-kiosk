@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.350 (26 October 2026)
+
+- vesta_shared.offline.reported_since(history, states, now, over, suspect): when each entity really last reported:
+  last_reported when it moved alone, else held_since (one history read) — with `suspect`, only for a stamp that may be
+  a restart's. preventive-maintenance nightly.silent_findings asks it BEFORE the silence_hours filter
+  (recheck.READS["PM-SILENT"] with it: an open PM-SILENT no longer closes after a restart); the night passes
+  restart_stamps(book): the reconnect loops' logbook, now read once before the silence check (its "started" entries,
+  restart_settle_minutes; a stamp outside the read is suspect too). _device_still_talks(history=, suspect=) reads
+  restart-stamped siblings past the restart; _quiet_since folded in.
+- vesta_shared.alert_watch: a closed alert's watch, one owner. The desk carries terms (Notes.WATCH_TERMS:
+  reopen_hours, clear_minutes) on every open incident; alert_watch.close (Problems.close_incident person=,
+  can_come_back=, terms=; Problems.closed_in_kiosk) writes Notes.WATCH_MINUTES (the reopen window, at least
+  clear_minutes for a person's close the desk can read again) or drops it. until (store.watch_until kept as its alias
+  for an edited skill), reopens (desk.came_back: within the watch), watching (Incidents.watching:
+  alerts.late_close_days, moved here, no hard-coded day), over (desk.watch_over: nothing said when the alert came back
+  as another number during an older desk's watch), minutes (the desk's closing "Watch …"). desk.watch_minutes,
+  carry_watch, reopen_hours() and LATE_CLOSE_DAYS replaced by desk.terms(). The villa-silent recovery closes with
+  can_come_back=False. An incident carrying only WATCH_MINUTES (before 0.6.350) keeps that length.
+
 ## 0.6.349 (26 October 2026)
 
 - vesta_shared.offline.held_since(history, {entity: (state, last_changed)}, now, over): since when each entity is

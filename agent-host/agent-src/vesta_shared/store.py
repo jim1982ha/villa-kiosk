@@ -110,33 +110,19 @@ class Notes:
     # nothing said it waits 10 minutes clear): set by the desk while what it claims reads over (seen_again), gone when it
     # holds again; read by Problems.card for the Kiosk fault's `closesAt`
     CLOSES_AT = "closes_at"
-    # how long the desk watches it after a person's close (its clear_minutes, owner 2026-10-23): carried by the desk as it
-    # carries the check, so the engine never reads the skill's settings; Problems.card reads closed_at + this as the
-    # Kiosk fault's `confirmsBy` while the desk's `check_quiet` waits
+    # how long its close is watched (owner 2026-10-23, every close 2026-10-25): written by THE close
+    # (vesta_shared.alert_watch.close) from the terms below, gone when that close cannot come back; every reader asks
+    # alert_watch (until, watching, reopens). An open incident of a desk before 0.6.350 carried it while open.
     WATCH_MINUTES = "watch_minutes"
+    # what a watch is made of, the alert desk's two settings (alert_watch.terms: its reopen window and its read-again
+    # wait), carried on every open incident by the desk as it carries the check, so a close the engine makes (the
+    # Cockpit's) never reads the skill's settings
+    WATCH_TERMS = "watch_terms"
     # the close whose watch the desk has ended (its closed_at): every copy said "Closed on …", its alert struck (owner,
     # 2026-10-25); written by the desk's watch_over, read by Incidents.watching — a later close is watched again
     WATCH_OVER = "watch_over"
     KIOSK_REOPENED = "kiosk_reopened"                            # mail: who reopened its fault in the Kiosk, and when
     UNREACHED = "unreached"                                      # mail: Telegram refused every chat of the FM's
-
-
-def watch_until(inc) -> datetime | None:
-    """Until when closed incident `inc` is watched — back within it, it reopens under its own number: its close plus the
-    desk's watch (Notes.WATCH_MINUTES, desk.watch_minutes). None for an incident open, or one no watch was carried for.
-    ⚠️ ONE ANSWER (owner, 2026-10-25: Telegram's last update "should match more or less with the time the Fault has
-    disappeared from the Watchlist"): the Kiosk fault's confirmsBy (Problems.confirms_by), the card's "(watch)" title
-    (Incidents.watching) and the desk's last word (watch_over) all read it here."""
-    inc = dict(inc) if inc is not None else {}
-    watch = notes_of(inc).get(Notes.WATCH_MINUTES)
-    try:
-        closed = datetime.fromisoformat(str(inc.get("closed_at")).replace("Z", "+00:00")) if inc.get("closed_at") else None
-        if closed is None or watch is None:
-            return None
-        closed = closed if closed.tzinfo else closed.replace(tzinfo=timezone.utc)
-        return closed + timedelta(minutes=float(watch))
-    except (TypeError, ValueError):
-        return None
 
 
 def notes_of(inc) -> dict:
@@ -601,3 +587,8 @@ class Store:
     def audit(self, who: str, action: str, detail: dict):
         self.db.execute("INSERT INTO audit (at, who, action, detail) VALUES (?,?,?,?)", (_now(), who, action, json.dumps(detail)))
         self.db.commit()
+
+
+# A closed alert's watch lives in vesta_shared.alert_watch (its one owner, 2026-10-26). The name stays here for a
+# starter skill a villa edited (kept by updates) that still imports it.
+from .alert_watch import until as watch_until  # noqa: E402,F401

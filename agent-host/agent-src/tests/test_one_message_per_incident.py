@@ -439,7 +439,8 @@ def test_a_cleared_alert_is_watched_then_closed_struck_with_the_time_it_ended(ag
     # owner, 2026-10-25 (#86): "(watch)" while it can come back as the same alert; when the watch ends, every copy says
     # so — "Closed on …: it did not come back within 1h." under its "Cleared on … Watch 1h." — "(closed)", its alert struck
     from vesta_shared import message_format as F
-    from vesta_shared.store import Store, watch_until
+    from vesta_shared.alert_watch import until as watch_until
+    from vesta_shared.store import Store
     from vesta_shared.timeutil import moment_label
     ha_alert(agent)
     run(agent.on_ha_event("vesta_critical_event", {

@@ -35,8 +35,9 @@ decides alone to act on the villa.
      The desk knows no automation by name: whatever an automation claims is the automation's.
    - `abandoned` with `still_true: false` (back to normal just as the automation gave up) closes the
      incident; still true, the owner hears it.
-   - An alert back within `reopen_hours` of its incident closing (rules.yaml `behaviour:`, a
-     villa's villa.rules.yaml first) reopens it: "Back again: N
+   - An alert back within its incident's watch reopens it: `reopen_hours` after it closed (rules.yaml
+     `behaviour:`, a villa's villa.rules.yaml first), and after a person's close the desk reads again, at least
+     `clear_minutes`. Reopened: "Back again: N
      times since …", under its own number, the villa system's latest words, its ladder started again
      and its OWN task and Kiosk fault open again, titled "(again: N times in D days)", D the limit
      `problems.again_days`. Each run is counted on its own by the digest, the reports and the retune proposal.
@@ -79,7 +80,7 @@ person asks, read the value in force, never quote a number from here.
 - Only one chase may run: the agent's. The villa system's `vesta_task_actions` ignores these
   events (they never carry `task_text`).
 - Villa silent: no contact with the villa's system for `villa_silent_minutes` opens one P1 incident to both chats;
-  the next contact closes it with a "back online" line.
+  the next contact closes it with a "back online" line, and no watch: the next outage is a new alert.
 - Alert fatigue: an automation that fired more than `alert_fatigue_per_month` (its window: `alerts.fatigue_window_days`) becomes a "retune" proposal in the
   weekly report. Nothing is changed automatically.
 
