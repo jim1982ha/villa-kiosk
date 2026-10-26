@@ -1,9 +1,10 @@
 // src/utils/rangeFilter.ts
 // THE range filter of a trend chart (owner, 2026-10-26): two handles beside the chart's y-axis keep only the values
 // between them. Each point of the chart becomes the average of ONLY the finer values inside [lo, hi] within that
-// point's step; a step with none inside sits on its unfiltered value held inside the range: on the upper limit when
-// its values were above it, on the lower one when below (owner: "not to 0 but to the lower limit, and the same for the
-// higher limit"), never 0 and never a gap. A side with no limit is ±Infinity (a handle at that end of the axis).
+// point's step, and a step with none inside is REMOVED: the kept steps are drawn side by side, one unbroken line with
+// no gap (owner: "remove the X values so that only in-filter values are trended", "there shouldn't be any gap in the
+// data"). It replaced a step held on the limit it passed (2.496.546), which still drew every step. A side with no
+// limit is ±Infinity (a handle at that end of the axis).
 //
 // The finer values of a step (FINER): a five-minute step's are the readings themselves, each held until the next
 // reading or outage and weighted by how long it held (trendInterval.knownSpans, the weights the chart's own values are
@@ -11,16 +12,17 @@
 // counted once.
 //
 // The owner's example (tests/oracles/range_filter.mjs): daily averages of 7 days of hourly values, all 0 but day 2
-// 500 for 1h, day 3 1000 for 1h, day 4 1500 all day, day 5 5000 for 2h and 2000 for 2h. Kept 3000 to 5000: day 5 reads
-// 5000 (only its two 5000 hours), never 3500, and every other day 3000 (their averages are below the range).
+// 500 for 1h, day 3 1000 for 1h, day 4 1500 all day, day 5 5000 for 2h and 2000 for 2h. Kept 3000 to 5000: day 5 alone
+// is drawn, reading 5000 (only its two 5000 hours), never 3500.
 //
 // Also here, pure, everything the slider decides: when a range filters anything, where a handle goes for a pointer or
 // a key, and the state that keeps a range per chart while the period changes and forgets it when another reading is
 // opened. Pure: tests/oracles/range_filter.mjs.
 
-import type { HistorySeries } from "@/types/ha.types";
+import type { HistoryPoint, HistorySeries } from "@/types/ha.types";
 import { cellEdges, cellIndex } from "./timelineCells";
 import { knownSpans } from "./trendInterval";
+import { HOUR_MS } from "./localDay";
 import type { StatisticsPeriod } from "./statisticsSeries";
 
 /** The values kept: `lo` -Infinity is no lower limit, `hi` Infinity no upper one. */
@@ -46,9 +48,6 @@ export interface FinerSeries {
 }
 
 const inside = (v: number, r: ValueRange) => v >= r.lo && v <= r.hi;
-
-/** `v` held inside the range. */
-const holdIn = (v: number, r: ValueRange) => Math.max(r.lo, Math.min(r.hi, v));
 
 /**
  * Each step between `edges` (the chart's own step edges, timelineCells.cellEdges): the average of its finer values
@@ -81,20 +80,61 @@ export function stepsInRange(finer: Pick<FinerSeries, "series" | "stepMs">, edge
   return w.map((wk, k) => (wk > 0 ? sum[k] / wk : null));
 }
 
+/** A chart filtered and closed up: what LineChart draws in place of the chart unfiltered. */
+export interface KeptChart {
+  /** The kept steps side by side, the k-th at `window.from + k × stepMs` and lasting `stepMs`: one unbroken line.
+   *  No outages: a step that was out has nothing in range and is gone. */
+  series: HistorySeries;
+  /** A time on the closed-up chart → the real time it stands for: a kept step's own start (and its own length). */
+  realAt: (t: number) => number;
+  /** What the dates under the chart say: the first kept step, the middle one and the last (the window's end when the
+   *  last is the step still running: "now"), real times. */
+  ticks: [number, number, number];
+  /** The real window's length, h: the dates and the tooltip are worded for the period chosen, not the kept part. */
+  spanHours: number;
+  /** The kept steps along the REAL window (fractions 0 to 1), consecutive ones merged: the ribbon under the chart. */
+  ribbon: { from: number; to: number }[];
+  /** How many steps are kept, of how many the chart had. */
+  count: number;
+  of: number;
+}
+
 /**
- * `base` (the chart as drawn unfiltered, in steps of `stepMs`) filtered to `range` from its finer values. Every point
- * of the chart stays where it is, with its new value: the average of its finer values in range, else its own value
- * held inside the range. Its outages are unchanged.
+ * `base` (the chart as drawn unfiltered, in steps of `stepMs`) filtered to `range` from its finer values: each step
+ * the average of its finer values in range, a step with none removed, the rest closed up.
  */
-export function filterSeries(base: HistorySeries, finer: Pick<FinerSeries, "series" | "stepMs">, stepMs: number,
-  range: ValueRange): HistorySeries {
-  const edges = cellEdges(base.window.from, base.window.to, stepMs);
+export function keptChart(base: HistorySeries, finer: Pick<FinerSeries, "series" | "stepMs">, stepMs: number,
+  range: ValueRange): KeptChart {
+  const { from, to } = base.window;
+  const edges = cellEdges(from, to, stepMs);
   const steps = stepsInRange(finer, edges, range, base.window);
-  const points = base.points.map((p) => {
-    const k = cellIndex(edges, p.t);
-    return { t: p.t, v: (k >= 0 && k < steps.length ? steps[k] : null) ?? holdIn(p.v, range) };
+  const kept: { k: number; p: HistoryPoint }[] = [];
+  for (const p of base.points) {
+    const k = cellIndex(edges, p.t), v = k >= 0 && k < steps.length ? steps[k] : null;
+    if (v !== null) kept.push({ k, p: { t: p.t, v } });
+  }
+  const n = kept.length;
+  const points = kept.map(({ p }, j) => ({ t: from + j * stepMs, v: p.v }));
+  const realAt = (t: number) => {
+    if (n === 0) return from;
+    const j = Math.max(0, Math.min(n - 1, Math.floor((t - from) / stepMs)));
+    const k = kept[j].k, len = Math.min(edges[k + 1], to) - kept[j].p.t;
+    return kept[j].p.t + Math.max(0, Math.min(1, (t - from - j * stepMs) / stepMs)) * len;
+  };
+  const last = n ? kept[n - 1] : null;
+  const ticks: [number, number, number] = last
+    ? [kept[0].p.t, kept[Math.floor((n - 1) / 2)].p.t, edges[last.k + 1] >= to ? to : last.p.t]
+    : [from, (from + to) / 2, to];
+  const span = to - from || 1, at = (t: number) => Math.max(0, Math.min(1, (t - from) / span));
+  const ribbon: { from: number; to: number }[] = [];
+  kept.forEach(({ k, p }, j) => {
+    const a = at(p.t), b = at(edges[k + 1]);
+    if (j > 0 && kept[j - 1].k === k - 1) ribbon[ribbon.length - 1].to = b; else ribbon.push({ from: a, to: b });
   });
-  return { ...base, points };
+  return {
+    series: { ...base, points, gaps: [], window: { from, to: from + Math.max(1, n) * stepMs } },
+    realAt, ticks, spanHours: span / HOUR_MS, ribbon, count: n, of: base.points.length,
+  };
 }
 
 // ── The slider ─────────────────────────────────────────────────────────────

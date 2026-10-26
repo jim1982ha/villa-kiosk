@@ -33,18 +33,20 @@ export function rangeWords(r: ValueRange, step: number, unit: string): string {
   return `${lo}${r.lo < 0 || r.hi < 0 ? " to " : "–"}${hi}${unit}`;
 }
 
-/** The chip: what is kept; a tap shows everything. While the detail loads it is dimmed (the chart is drawn in full
+/** The chip: what is kept, and once filtered how much of the chart (`kept`, chartUtils.keptWords); a tap shows
+ *  everything. While the detail loads it is dimmed (the chart is drawn in full
  *  meanwhile); when it could not be read, a warning sign replaces the filter's and the chart is in full. */
-export function RangeChip({ range, step, unit, state, onClear }: {
-  range: ValueRange; step: number; unit: string; state: "ready" | "loading" | "failed"; onClear: () => void;
+export function RangeChip({ range, step, unit, state, kept, onClear }: {
+  range: ValueRange; step: number; unit: string; state: "ready" | "loading" | "failed"; kept?: string; onClear: () => void;
 }) {
   const words = rangeWords(range, step, unit);
   const note = state === "loading" ? ", loading the detail" : state === "failed" ? ", couldn't load the detail: shown in full" : "";
   return (
     <button type="button" className={`chart-range-chip${state === "ready" ? "" : ` ${state}`}`} onClick={onClear}
-      aria-busy={state === "loading" || undefined} aria-label={`Only ${words}${note}. Tap to show all`} title="Show all">
+      aria-busy={state === "loading" || undefined} aria-label={`Only ${words}${kept ? `, ${kept}` : ""}${note}. Tap to show all`} title="Show all">
       {state === "failed" ? <AlertTriangle size={11} aria-hidden /> : <Filter size={11} aria-hidden />}
       <span className="chart-range-chip-words">{words}</span>
+      {kept && <span className="chart-range-chip-kept">· {kept}</span>}
       <span className="chart-range-chip-x" aria-hidden><X size={10} strokeWidth={3} /></span>
     </button>
   );

@@ -24,6 +24,9 @@ const M = 60_000;
 const NONE = { lo: -Infinity, hi: Infinity };
 const FITS = ["zero", "fitted"];
 
+// a closed-up chart as "day:value" per kept step (its real day, read back through realAt)
+const keptOf = (c, start, stepMs) => c.series.points.map((p) => `${Math.round((c.realAt(p.t) - start) / stepMs)}:${Math.round(p.v * 1000) / 1000}`).join();
+
 console.log("  the owner's example: daily averages of 7 days of hourly values");
 {
   const start = localMidnight(Date.UTC(2026, 5, 1, 12));            // a week with no clock change
@@ -36,24 +39,36 @@ console.log("  the owner's example: daily averages of 7 days of hourly values");
   const finer = { of: "day", stepMs: HOUR_MS, series: { points, gaps: [], window } };
   const day = (d) => points.filter((p) => p.t >= start + d * DAY_MS && p.t < start + (d + 1) * DAY_MS).reduce((a, p) => a + p.v, 0) / 24;
   const base = { points: Array.from({ length: 7 }, (_, d) => ({ t: start + d * DAY_MS, v: day(d) })), gaps: [], window };
-  const run = (lo, hi) => R.filterSeries(base, finer, DAY_MS, { lo, hi });
-  const vals = (r) => r.points.map((p) => Math.round(p.v * 1000) / 1000).join();
+  const run = (lo, hi) => R.keptChart(base, finer, DAY_MS, { lo, hi });
+  const kept = (lo, hi) => keptOf(run(lo, hi), start, DAY_MS);
   ck("unfiltered (today's chart), day 2 reads 500 / 24, about 21", near(base.points[1].v, 500 / 24) && Math.round(base.points[1].v) === 21);
   const all = run(-Infinity, Infinity);
-  ck("  ...and the rule with no limit gives that same chart, point for point", all.points.every((p, i) => near(p.v, base.points[i].v)), vals(all));
-  ck("kept 450 to 550: day 2 reads 500; a day with nothing in range sits on the limit its average passed: below on 450 (never 0), days 4 and 5 (1500, 583 on average) above on 550",
-     vals(run(450, 550)) === "450,500,450,550,550,450,450", vals(run(450, 550)));
-  ck("kept 550 to 1500: day 3 1000, day 4 1500, day 5 (only 0, 2000, 5000) its own 583 average, already inside; the others on 550",
-     vals(run(550, 1500)) === "550,550,1000,1500,583.333,550,550", vals(run(550, 1500)));
-  const c = run(3000, 5000);
-  ck("kept 3000 to 5000: day 5 reads 5000 (its two 5000 hours, never 3500), the others on 3000 (their averages are below)",
-     vals(c) === "3000,3000,3000,3000,5000,3000,3000", vals(c));
-  ck("  ...each point stays where the chart drew it", c.points.every((p, i) => p.t === base.points[i].t) && c.gaps === base.gaps);
-  ck("kept up to 10 (no lower limit): the 1500 day, all above, sits on 10; the quiet days read 0, their own",
-     vals(run(-Infinity, 10)) === "0,0,0,10,0,0,0", vals(run(-Infinity, 10)));
+  ck("  ...and the rule with no limit gives that same chart, every day kept, on its own day",
+     all.count === 7 && all.of === 7 && all.series.points.every((p, i) => near(p.v, base.points[i].v) && all.realAt(p.t) === base.points[i].t), keptOf(all, start, DAY_MS));
+  ck("kept 450 to 550: only day 2 is drawn, reading 500; every day with nothing in range is removed",
+     kept(450, 550) === "1:500", kept(450, 550));
+  ck("kept 550 to 1500: day 3 1000, day 4 1500; day 5 (only 0, 2000, 5000: none inside, though its 583 average is) removed",
+     kept(550, 1500) === "2:1000,3:1500", kept(550, 1500));
+  ck("kept 3000 to 5000: day 5 alone, reading 5000 (its two 5000 hours, never 3500)", kept(3000, 5000) === "4:5000", kept(3000, 5000));
+  const q = run(-Infinity, 10);
+  ck("kept up to 10 (no lower limit): the 1500 day is removed, the quiet days read 0, their own",
+     keptOf(q, start, DAY_MS) === "0:0,1:0,2:0,4:0,5:0,6:0" && q.count === 6 && q.of === 7, keptOf(q, start, DAY_MS));
+  ck("  ...closed up: the kept days side by side, a day apart, on a window as long as they are, no outage",
+     q.series.points.every((p, j) => p.t === start + j * DAY_MS) && q.series.window.from === start
+       && q.series.window.to === start + 6 * DAY_MS && q.series.gaps.length === 0, q.series.points.map((p) => p.t - start));
+  const g = chartGeometry(q.series.window, [{ pts: q.series.points, gaps: [] }], { left: 0, right: 320, top: 0, bottom: 100 });
+  ck("  ...drawn as ONE unbroken line across the whole plot (owner: no gap)", g.series[0].runs.length === 1
+     && g.series[0].runs[0][0].x === 0 && g.series[0].runs[0].at(-1).x === 320, g.series[0].runs.map((r) => r.length));
+  ck("  ...the ribbon: the whole week but the removed day (day 4), consecutive days merged",
+     JSON.stringify(q.ribbon) === JSON.stringify([{ from: 0, to: 3 / 7 }, { from: 4 / 7, to: 1 }]), q.ribbon);
+  ck("  ...the dates: the first kept day, the middle one (the third of six) and the week's end (the last is its last day)",
+     q.ticks[0] === start && q.ticks[1] === start + 2 * DAY_MS && q.ticks[2] === window.to && near(q.spanHours, 7 * 24), q.ticks.map((t) => (t - start) / DAY_MS));
+  const one = run(3000, 5000);
+  ck("  ...one day kept: its date first and in the middle, and its own day last (not the week's end)",
+     one.ticks.join() === [4, 4, 4].map((d) => start + d * DAY_MS).join() && one.ribbon.length === 1 && near(one.ribbon[0].from, 4 / 7), one.ticks);
 }
 
-console.log("\n  the owner's pump, 273 to 514 W: a run day on 514, a quiet day on 273");
+console.log("\n  the owner's pump, 273 to 514 W: nothing in range on any day");
 {
   const start = localMidnight(Date.UTC(2026, 5, 1, 12)), D = 6;
   const window = { from: start, to: start + D * DAY_MS };
@@ -64,9 +79,8 @@ console.log("\n  the owner's pump, 273 to 514 W: a run day on 514, a quiet day o
   for (let d = 0; d < D; d++) for (let hr = 0; hr < 24; hr++) points.push({ t: start + d * DAY_MS + hr * HOUR_MS, v: hourly(d, hr) });
   const avg = (d) => points.slice(d * 24, d * 24 + 24).reduce((a, p) => a + p.v, 0) / 24;
   const base = { points: Array.from({ length: D }, (_, d) => ({ t: start + d * DAY_MS, v: avg(d) })), gaps: [], window };
-  const f = R.filterSeries(base, { of: "day", stepMs: HOUR_MS, series: { points, gaps: [], window } }, DAY_MS, { lo: 273, hi: 514 });
-  ck("nothing in range on any day: each run day (average above) reads 514, each quiet day (below) 273",
-     f.points.every((p, d) => p.v === (runDay(d) ? 514 : 273)), f.points.map((p) => p.v));
+  const f = R.keptChart(base, { of: "day", stepMs: HOUR_MS, series: { points, gaps: [], window } }, DAY_MS, { lo: 273, hi: 514 });
+  ck("every day removed: nothing kept (0 of 6), no ribbon", f.count === 0 && f.of === D && f.series.points.length === 0 && f.ribbon.length === 0, f);
 }
 
 console.log("\n  a Wi-Fi signal, always negative (dBm): -75 and below");
@@ -79,9 +93,8 @@ console.log("\n  a Wi-Fi signal, always negative (dBm): -75 and below");
   for (let d = 0; d < D; d++) for (let hr = 0; hr < 24; hr++) points.push({ t: start + d * DAY_MS + hr * HOUR_MS, v: hourly(d, hr) });
   const avg = (d) => points.slice(d * 24, d * 24 + 24).reduce((a, p) => a + p.v, 0) / 24;
   const base = { points: Array.from({ length: D }, (_, d) => ({ t: start + d * DAY_MS, v: avg(d) })), gaps: [], window };
-  const f = R.filterSeries(base, { of: "day", stepMs: HOUR_MS, series: { points, gaps: [], window } }, DAY_MS, { lo: -Infinity, hi: -75 });
-  ck("the weak day reads -80 (its weak hours only); every other day, all above the range, sits on -75, never 0",
-     f.points.map((p) => p.v).join() === "-75,-75,-80,-75", f.points.map((p) => p.v));
+  const f = R.keptChart(base, { of: "day", stepMs: HOUR_MS, series: { points, gaps: [], window } }, DAY_MS, { lo: -Infinity, hi: -75 });
+  ck("the weak day alone, reading -80 (its weak hours only); every other day removed", keptOf(f, start, DAY_MS) === "2:-80", keptOf(f, start, DAY_MS));
 }
 
 console.log("\n  a five-minute step: the readings themselves, each weighted by how long it held");
@@ -93,18 +106,17 @@ console.log("\n  a five-minute step: the readings themselves, each weighted by h
     gaps: [{ from: t0 + 12 * M, to: t0 + 15 * M }], window };
   const base = intervalSeries(raw, 5 * M);
   const finer = { of: "5minute", series: raw };
-  const all = R.filterSeries(base, finer, 5 * M, NONE);
+  const all = R.keptChart(base, finer, 5 * M, NONE);
   ck("with no limit, the rule is the chart's own five-minute values (intervalSeries)",
-     all.points.length === base.points.length && all.points.every((p, i) => near(p.v, base.points[i].v)), [all.points, base.points]);
-  const hi = R.filterSeries(base, finer, 5 * M, { lo: 50, hi: 150 });
+     all.series.points.length === base.points.length && all.series.points.every((p, i) => near(p.v, base.points[i].v)), [all.series.points, base.points]);
+  const hi = R.keptChart(base, finer, 5 * M, { lo: 50, hi: 150 });
   ck("kept 50 to 150: 10:00 reads 100 (its 2 min at 100), 10:05 100, 10:10 100 (2 min known before the outage)",
-     hi.points.map((p) => p.v).join() === "100,100,100", hi.points.map((p) => p.v));
-  const lo = R.filterSeries(base, finer, 5 * M, { lo: 0, hi: 50 });
-  ck("kept 0 to 50: 10:00 reads 10, 10:05 10, 10:10 (only 100s, above) on 50",
-     lo.points.map((p) => p.v).join() === "10,10,50", lo.points.map((p) => p.v));
+     keptOf(hi, t0, 5 * M) === "0:100,1:100,2:100", keptOf(hi, t0, 5 * M));
+  const lo = R.keptChart(base, finer, 5 * M, { lo: 0, hi: 50 });
+  ck("kept 0 to 50: 10:00 reads 10, 10:05 10, 10:10 (only 100s) removed", keptOf(lo, t0, 5 * M) === "0:10,1:10", keptOf(lo, t0, 5 * M));
   const w = { points: [{ t: t0, v: 20 }, { t: t0 + M, v: 40 }], gaps: [], window: { from: t0, to: t0 + 5 * M } };
-  const tw = R.filterSeries(intervalSeries(w, 5 * M), { of: "5minute", series: w }, 5 * M, { lo: 0, hi: 100 });
-  ck("  ...a reading counts for how long it held (1 min at 20, 4 at 40 → 36, not 30)", near(tw.points[0].v, 36), tw.points[0].v);
+  const tw = R.keptChart(intervalSeries(w, 5 * M), { of: "5minute", series: w }, 5 * M, { lo: 0, hi: 100 });
+  ck("  ...a reading counts for how long it held (1 min at 20, 4 at 40 → 36, not 30)", near(tw.series.points[0].v, 36), tw.series.points[0].v);
 }
 
 const chart = (pts, extra = {}) => ({ lines: [{ pts, label: "x", unit: " W" }], window: { from: 0, to: 3000 }, status: "ready", label: "H",
@@ -247,6 +259,58 @@ console.log("\n  the chip on the unit line; no line above the chart, no value pi
      rangeWords({ lo: -1234, hi: -1000 }, 100, " dBm").length <= 20 && rangeWords({ lo: 2730, hi: 5140 }, 1000, " W").length <= 16, tight);
 }
 
+console.log("\n  closed up on screen: one line, the real dates, the count on the chip, the ribbon in the strip under the plot");
+{
+  const { fmtChartTick, keptWords } = await import("@/components/panels/chartUtils");
+  const start = localMidnight(Date.UTC(2026, 5, 1, 12)), window = { from: start, to: start + 7 * DAY_MS };
+  // hourly: 900 W from 10:00 to 14:00 on days 1, 2 and 5, else 150 W
+  const run = (d) => d === 1 || d === 2 || d === 5;
+  const points = [];
+  for (let d = 0; d < 7; d++) for (let hr = 0; hr < 24; hr++) points.push({ t: start + d * DAY_MS + hr * HOUR_MS, v: run(d) && hr >= 10 && hr < 14 ? 900 : 150 });
+  const avg = (d) => points.slice(d * 24, d * 24 + 24).reduce((a, p) => a + p.v, 0) / 24;
+  const base = { points: Array.from({ length: 7 }, (_, d) => ({ t: start + d * DAY_MS, v: avg(d) })), gaps: [], window };
+  const finer = { of: "day", stepMs: HOUR_MS, series: { points, gaps: [], window } };
+  const show = (range) => {
+    const k = R.keptChart(base, finer, DAY_MS, range);
+    return { k, html: draw(h(LineChart, { lines: [{ pts: k.series.points, gaps: k.series.gaps, label: "x", unit: " W" }], status: "ready", label: "H",
+      stepMs: DAY_MS, height: 110, window: k.count ? k.series.window : window,
+      filter: { base: base.points, range, onChange() {}, state: "ready", kept: k } })) };
+  };
+  for (const fit of FITS) {
+    P.setChartFit(fit);
+    const { k, html } = show({ lo: 600, hi: Infinity });
+    ck(`${fit}: three run days kept (2nd, 3rd, 6th), drawn as one line`, k.count === 3 && (inside(html, "weather-chart").match(/<polyline/g) ?? []).length === 1, k.count);
+    ck("  ...the chip counts them on the unit line: \u201c\u2265 600 W \u00b7 3 of 7 days\u201d", text(inside(html, "chart-unit-line")).includes("3 of 7 days"), text(inside(html, "chart-unit-line")));
+    const dates = [...inside(html, "weather-axis").matchAll(/<span>([^<]*)<\/span>/g)].map((m) => m[1]);
+    ck("  ...the dates are the kept days' own (the first, the middle one, the last), never the closed-up chart's",
+       dates.join("|") === [1, 2, 5].map((d) => fmtChartTick(start + d * DAY_MS, 7 * 24)).join("|"), dates);
+    const wrap = inside(html, "spark-wrap"), rib = inside(html, "chart-range-ribbon");
+    const bottom = Number(/class="chart-range-ribbon" style="bottom:([\d.]+)px"/.exec(html)?.[1]);
+    ck("  ...the ribbon: inside the plot's own box (no row added), one segment per run of kept days, in the 12px strip under the plot's floor",
+       wrap.includes(rib) && (rib.match(/<i /g) ?? []).length === 2 && bottom >= 0 && bottom + 4 <= 12, [bottom, rib]);
+  }
+  const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
+  const rule = /\.chart-range-ribbon \{([^}]*)\}/.exec(css)?.[1] ?? "";
+  ck("  ...and it takes no room: absolutely placed, 4px high", /position: absolute/.test(rule) && /height: 4px/.test(rule), rule);
+  const unf = draw(h(LineChart, { lines: [{ pts: base.points, label: "x", unit: " W" }], status: "ready", label: "H", stepMs: DAY_MS, height: 110, window,
+    filter: { base: base.points, range: null, onChange() {}, state: "ready" } }));
+  const wait = draw(h(LineChart, { lines: [{ pts: base.points, label: "x", unit: " W" }], status: "ready", label: "H", stepMs: DAY_MS, height: 110, window,
+    filter: { base: base.points, range: { lo: 600, hi: Infinity }, onChange() {}, state: "loading", kept: null } }));
+  ck("no range, or the detail still loading: no ribbon and no count", !/chart-range-ribbon|chart-range-chip-kept/.test(unf + wait));
+  const { k, html } = show({ lo: 2000, hi: Infinity });
+  ck("nothing in range: no line, no ribbon, a plain line says so, and the slider stays to widen it",
+     k.count === 0 && !/<polyline|chart-range-ribbon/.test(html) && text(inside(html, "chart-range-none")).includes("Nothing in \u2265 2k W. Widen the range")
+       && (html.match(/chart-range-thumb/g) ?? []).length === 2 && text(inside(html, "chart-unit-line")).includes("0 of 7 days"), text(inside(html, "chart-range-none")));
+  const labels = [...inside(html, "chart-yaxis").matchAll(/">([-\d.]+)(k?)</g)].map((m) => Number(m[1]) * (m[2] ? 1000 : 1));
+  const loThumb = Number(/data-k="lo" style="top:([\d.]+)px"/.exec(html)?.[1]);
+  ck(`  ...fitted (${P.chartFit()}), the axis frames the values and the limit, not a sliver around the limit; its handle inside`,
+     P.chartFit() === "fitted" && new Set(labels).size === labels.length && Math.min(...labels) <= 1000 && Math.max(...labels) >= 2000 && loThumb > 12 && loThumb < 98, [labels, loThumb]);
+  ck("the count at each step: days, hours, weeks; five-minute steps as the time they make",
+     keptWords(3, 7, DAY_MS) === "3 of 7 days" && keptWords(18, 24, HOUR_MS) === "18 of 24 hours" && keptWords(3, 52, 7 * DAY_MS) === "3 of 52 weeks"
+       && keptWords(40, 288, 5 * M) === "3h 20min of 1d" && keptWords(0, 288, 5 * M) === "0min of 1d",
+     [keptWords(40, 288, 5 * M), keptWords(0, 288, 5 * M)]);
+}
+
 console.log("\n  in the chart's columns: the unit over the axis numbers, the fit mark in the dates' row under the slider or the numbers");
 {
   const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
@@ -307,10 +371,13 @@ console.log("\n  the finer values come from the one history source, only while a
      && historyKey({ kind: "finer", ids: ["a"], hours: 24, period: "day" }) !== historyKey({ kind: "trend", ids: ["a"], hours: 24, period: "day" }));
   const tree = parseTsx("components/panels/NumericHistory.tsx");
   const decl = (name) => { let d = null; const v = (n) => { if (ts.isVariableDeclaration(n) && n.name.getText() === name) d = n; ts.forEachChild(n, v); }; v(tree); return d?.initializer?.getText().replace(/\s+/g, " "); };
-  const calls = []; const vc = (n) => { if (ts.isCallExpression(n) && n.expression.getText() === "filterSeries") calls.push(n); ts.forEachChild(n, vc); }; vc(tree);
-  ck("NumericHistory filters each line with the range set on it (the one filter rule, rangeFilter.filterSeries)",
+  const calls = []; const vc = (n) => { if (ts.isCallExpression(n) && n.expression.getText() === "keptChart") calls.push(n); ts.forEachChild(n, vc); }; vc(tree);
+  ck("NumericHistory filters each line with the range set on it (the one filter rule, rangeFilter.keptChart)",
      calls.length === 1 && calls[0].arguments[3]?.getText() === "on" && decl("on") === "base ? activeRange(kept) : null"
-       && decl("kept") === "filterOf(filters, scope, s.id)" && /^ready \? filterSeries\(/.test(decl("done") ?? ""), [calls.map((c) => c.getText()), decl("on"), decl("kept")]);
+       && decl("kept") === "filterOf(filters, scope, s.id)" && /^ready \? keptChart\(/.test(decl("done") ?? ""), [calls.map((c) => c.getText()), decl("on"), decl("kept")]);
+  ck("NumericHistory draws a filtered chart closed up: its kept line on its own window, no outages (the frame on the period's window when nothing is kept)",
+     /lines: \[done \? \{ \.\.\.l, pts: done\.series\.points, gaps: done\.series\.gaps \} : l\]/.test(tree.text)
+       && /window: done && done\.count > 0 \? done\.series\.window : base\?\.window/.test(tree.text) && /kept: done/.test(tree.text));
   ck("NumericHistory asks for them only for the charts whose range leaves something out, else nothing",
      /finerIds\.length \? \{ finer: \{ kind: "finer", ids: finerIds, hours: range\.hours, period: range\.period \} \} : null/.test(tree.text.replace(/\s+/g, " "))
        && /const filtering = slidable\.filter\(\(s\) => activeRange\(filterOf\(filters, scope, s\.id\)\)\)/.test(tree.text));
@@ -348,9 +415,12 @@ console.log("\n  kept while the period changes, cleared for another reading");
   const props = (el) => el.openingElement?.attributes ?? el.attributes;
   const spread = (el) => props(el).properties.filter((p) => ts.isJsxSpreadAttribute(p)).map((p) => p.expression.getText());
   const dual = charts.filter((el) => /scale: "own"/.test(el.getText()));
+  const attr = (el, k) => props(el).properties.find((p) => ts.isJsxAttribute(p) && p.name.getText() === k)?.initializer?.expression?.getText();
   ck("the chart on two scales has no slider; every one-line chart has one",
      dual.length === 1 && spread(dual[0]).length === 0 && !/filter=/.test(dual[0].getText())
-       && charts.length === 3 && charts.filter((el) => el !== dual[0]).every((el) => spread(el).some((s) => /^filtered\(/.test(s))), charts.map(spread));
+       && charts.length === 3 && charts.filter((el) => el !== dual[0]).every((el) => ["filter", "lines", "window"].every((k) => attr(el, k) === `f.${k}`))
+       && named("filtered").length === 2 && named("filtered").every((c) => ts.isVariableDeclaration(c.parent) && c.parent.name.getText() === "f"),
+     charts.map((el) => ["filter", "lines", "window"].map((k) => attr(el, k))));
 }
 
 console.log("\n  every line chart shows the fit mark, a bar chart none");

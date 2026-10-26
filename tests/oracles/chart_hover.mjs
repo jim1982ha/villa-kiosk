@@ -46,7 +46,7 @@ ck("no chart reads the pointer itself: useChartPointer does, once", readers.leng
 for (const f of ["LineChart.tsx", "BarChart.tsx", "StateTimeline.tsx"]) {
   ck(`  ${f} uses it`, /useChartPointer</.test(read(f)));
 }
-ck("  LineChart reads it as a time in the geometry", /const hover = frac !== null \? g\.hover\(g\.tAt\(frac \* W\)\) : null;/.test(read("LineChart.tsx")));
+ck("  LineChart reads it as a time in the geometry", /const hover = frac !== null && !nothing \? g\.hover\(g\.tAt\(frac \* W\)\) : null;/.test(read("LineChart.tsx")));
 
 // owner, 2026-10-18: lines of one list start their text at the same place, with or without an icon — an energy bar's
 // "Total" (no colour key) sat left of its devices (one each).

@@ -31,7 +31,7 @@ console.log("\n  every chart passes its step (the wiring)");
 const src = (f) => readFileSync(new URL(`../../src/components/panels/${f}`, import.meta.url), "utf8");
 const line = src("LineChart.tsx"), num = src("NumericHistory.tsx"), band = src("LastDayTimeline.tsx");
 const weather = src("WeatherPanel.tsx"), energy = src("EnergyPanel.tsx"), head = src("historyRange.tsx");
-ck("the line chart's tooltip says the moment at its step", /stamp=\{fmtStepStamp\(hover\.t, stepMs, g\.spanHours\)\}/.test(line) && !/fmtChartStamp\(hover/.test(line));
+ck("the line chart's tooltip says the moment at its step (a closed-up chart: its kept step's real time, worded for the period)", /stamp=\{fmtStepStamp\(realAt\(hover\.t\), stepMs, dated\.spanHours\)\}/.test(line) && !/fmtChartStamp\(hover/.test(line));
 ck("every device line chart gives the range's step, its header 'avg'",
    (num.match(/<LineChart stepMs=\{range\.grainMs\}/g) || []).length === 3 && /aggregationWords\(range\.grainMs, "avg"\)/.test(num)
    && (num.match(/step=\{step\}/g) || []).length === 3);

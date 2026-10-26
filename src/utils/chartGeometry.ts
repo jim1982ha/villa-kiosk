@@ -187,8 +187,11 @@ export function chartGeometry(
     const margin = pad > 0 ? pad : LIMIT_MARGIN;
     // ⚠️ FITTED TO A RANGE (owner, 2026-10-26): to its finite limits (an open side: the values on that side), with a
     // margin, so each handle sits inside the axis and never on an end; values outside are drawn on its edge (sy)
-    if (!fromZero && finite.length > 0) {
-      let lo = Number.isFinite(L.lo) ? L.lo : Math.min(L.hi, ...vs), hi = Number.isFinite(L.hi) ? L.hi : Math.max(L.lo, ...vs);
+    // ...unless no value lies past its one limit (nothing in range, owner 2026-10-26): it would frame a sliver around
+    // that limit ("2.001k, 2.001k, 2k"); the values and the limit are framed instead, as below
+    const lo0 = Number.isFinite(L.lo) ? L.lo : Math.min(L.hi, ...vs), hi0 = Number.isFinite(L.hi) ? L.hi : Math.max(L.lo, ...vs);
+    if (!fromZero && finite.length > 0 && (finite.length === 2 || !isFlat(lo0, hi0))) {
+      let lo = lo0, hi = hi0;
       if (isFlat(lo, hi)) hi = lo + 1;
       const p = (hi - lo) * margin;
       return [lo - p, hi + p];

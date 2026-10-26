@@ -16,15 +16,16 @@
 // carry LineChart's slider; the chart on two scales does not (one slider stands on one axis). A range is plain state
 // here, per series, scoped to the readings shown (rangeFilter.filterScope): kept while the period changes, forgotten
 // when the window closes or another reading is opened. Never stored. The finer values are asked only while a range
-// leaves something out.
+// leaves something out; once in, the chart is the kept steps closed up (rangeFilter.keptChart) on their own window.
 
 import { useState } from "react";
 import LineChart, { type ChartFilter } from "./LineChart";
 import { useHistoryRange, HistoryHeader, ChartStep } from "./historyRange";
 import { aggregationWords } from "./chartUtils";
 import { useHistorySource } from "@/hooks/useHistorySource";
+import type { TimeWindow } from "@/utils/lineChart";
 import {
-  activeRange, filterOf, filterScope, filterSeries, NO_FILTERS, withFilter, type FilterState,
+  activeRange, filterOf, filterScope, keptChart, NO_FILTERS, withFilter, type FilterState,
 } from "@/utils/rangeFilter";
 
 export interface NumericSeries {
@@ -61,19 +62,22 @@ export default function NumericHistory({ series, named = false }: {
     pts: history[s.id]?.points ?? [], gaps: history[s.id]?.gaps ?? [], label: s.label,
     unit: s.unit ? ` ${s.unit}` : "", color: s.color, ...extra,
   });
-  /** A one-line chart's line and its filter: filtered once its finer values (for this period) are in. */
-  const filtered = (s: NumericSeries): { lines: ReturnType<typeof line>[]; filter: ChartFilter } => {
+  /** A one-line chart's line, window and filter: filtered and closed up once its finer values (for this period) are
+   *  in. */
+  const filtered = (s: NumericSeries): { lines: ReturnType<typeof line>[]; window?: TimeWindow; filter: ChartFilter } => {
     const base = history[s.id];
     const kept = filterOf(filters, scope, s.id);
     const on = base ? activeRange(kept) : null;
     const f = finer?.finer?.[s.id];
     const ready = on && f && f.of === range.period && finerStatus === "ready" && status === "ready";
-    const done = ready ? filterSeries(base!, f, range.grainMs, on) : null;
+    const done = ready ? keptChart(base!, f, range.grainMs, on) : null;
     const l = line(s);
     return {
-      lines: [done ? { ...l, pts: done.points } : l],
+      lines: [done ? { ...l, pts: done.series.points, gaps: done.series.gaps } : l],
+      // nothing kept: the chart's frame stays on its own window, the slider on it to widen the range
+      window: done && done.count > 0 ? done.series.window : base?.window,
       filter: {
-        base: base?.points ?? [], range: kept,
+        base: base?.points ?? [], range: kept, kept: done,
         onChange: (r) => setFilters((st) => withFilter(st, scope, s.id, r)),
         state: done ? "ready" : finerStatus === "failed" ? "failed" : "loading",
       },
@@ -82,11 +86,12 @@ export default function NumericHistory({ series, named = false }: {
 
   if (series.length === 0) return null;
   if (series.length === 1 && !named) {
+    const f = filtered(series[0]);
     return (
       <div className="field">
         <HistoryHeader title={range.title} picker={picker} step={step} />
-        <LineChart stepMs={range.grainMs} label="History" height={110} window={history[series[0].id]?.window} status={status}
-          {...filtered(series[0])} />
+        <LineChart stepMs={range.grainMs} label="History" height={110} status={status} window={f.window} lines={f.lines}
+          filter={f.filter} />
       </div>
     );
   }
@@ -107,15 +112,18 @@ export default function NumericHistory({ series, named = false }: {
   }
   return (
     <>
-      {series.map((s, i) => (
+      {series.map((s, i) => {
+        const f = filtered(s);
+        return (
         <div className="field" key={s.id}>
           {i === 0
             ? <HistoryHeader title={`${s.label}, ${range.title.toLowerCase()}`} picker={picker} step={step} />
             : <label className="entity-label">{s.label}, {range.title.toLowerCase()}<ChartStep words={step} /></label>}
-          <LineChart stepMs={range.grainMs} label={`${s.label} history`} height={110} window={history[s.id]?.window} status={status}
-            {...filtered(s)} />
+          <LineChart stepMs={range.grainMs} label={`${s.label} history`} height={110} status={status} window={f.window}
+            lines={f.lines} filter={f.filter} />
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }

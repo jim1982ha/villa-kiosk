@@ -18,9 +18,9 @@ import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
 import { NOT_KEPT_COLOR, STATUS_COLOR } from "@/utils/stateColors";
-import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage } from "./chartUtils";
-import { activeRange, type ValueRange } from "@/utils/rangeFilter";
-import ChartRangeSlider, { RangeChip } from "./ChartRangeSlider";
+import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage, keptWords } from "./chartUtils";
+import { activeRange, type KeptChart, type ValueRange } from "@/utils/rangeFilter";
+import ChartRangeSlider, { RangeChip, rangeWords } from "./ChartRangeSlider";
 import { formatUnitValue } from "@/utils/entityValue";
 import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
@@ -45,8 +45,10 @@ export interface LineSpec {
 }
 
 /** A range filter on a one-line chart (owner, 2026-10-26): the slider beside its left axis, the left-out sides
- *  hatched over the plot, and the chip on the unit line. NumericHistory filters the line (utils/rangeFilter) and passes
- *  it as `lines[0]`; the axis holds `base` too. */
+ *  hatched over the plot, and the chip on the unit line. NumericHistory filters the line and closes it up
+ *  (rangeFilter.keptChart), and passes it as `lines[0]` on its own window; the axis holds `base` too. The dates and the
+ *  tooltip read the kept steps' real times, and a ribbon in the empty strip under the plot shows where they were in
+ *  the period: no line or row is added, so nothing moves and nothing is left empty without it. */
 export interface ChartFilter {
   /** The chart's values unfiltered: its axis holds them. */
   base: readonly HistoryPoint[];
@@ -57,6 +59,8 @@ export interface ChartFilter {
   /** "loading" while the finer values come (the line is drawn unfiltered meanwhile), "failed" when they could not be
    *  read. */
   state: "ready" | "loading" | "failed";
+  /** The chart closed up, once filtered ("ready"). */
+  kept?: KeptChart | null;
 }
 
 /** The drawing's own units: the SVG stretches to the tile's width. */
@@ -79,11 +83,12 @@ export function TimeAxis({ g, right, slider }: { g: ChartGeometry | null; right?
   if (!g) return <div className="weather-axis"><span>&nbsp;</span></div>;
   const [a, b, c] = g.ticks;
   const endsNow = Math.abs(c - Date.now()) < 5 * 60_000;
+  // a label that repeats the one before it is left blank (a closed-up chart of one or two steps), its place kept
+  const words = [fmtChartTick(a, g.spanHours), fmtChartTick(b, g.spanHours), endsNow ? "now" : fmtChartTick(c, g.spanHours)];
   return (
     <div className={`weather-axis under-yaxis${right ? " right" : ""}${slider ? " beside-range" : ""}`}>
       <span className="chart-fit-corner"><FitMark /></span>
-      <span>{fmtChartTick(a, g.spanHours)}</span><span>{fmtChartTick(b, g.spanHours)}</span>
-      <span>{endsNow ? "now" : fmtChartTick(c, g.spanHours)}</span>
+      {words.map((w, i) => <span key={i}>{i > 0 && w === words[i - 1] ? "\u00a0" : w}</span>)}
     </div>
   );
 }
@@ -114,14 +119,17 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   const plot = { left: 0, right: W, top: TOP, bottom: BOT };
   // A line with no readings still has its outage, and its band says so
   // (every line is kept); whether there is anything to draw is lineChart's.
-  const w = drawableWindow(window, ...lines.map((l) => l.pts));
   // from 0 unless this tablet fitted its charts (a tap on any y-axis or its fit mark, owner 2026-10-26)
   const fit = useChartFit();
   // one slider stands on one axis: never on a chart of two lines
   const slid = filter && lines.length === 1 ? filter : null;
   // filtered, the axis holds the values unfiltered and filtered, and the range's limits (chartGeometry)
   const on = slid ? activeRange(slid.range) : null;
-  const g = w ? chartGeometry(w, lines.map((l, i) => ({ pts: l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared", unit: l.unit,
+  const kept = on && slid?.state === "ready" ? slid.kept ?? null : null;
+  // nothing in range: the frame is drawn on the values unfiltered (the axis, and the slider to widen it), no line
+  const nothing = kept?.count === 0;
+  const w = drawableWindow(window, ...(nothing ? [slid!.base] : lines.map((l) => l.pts)));
+  const g = w ? chartGeometry(w, lines.map((l, i) => ({ pts: nothing ? slid!.base : l.pts, gaps: l.gaps ?? [], scale: l.scale ?? "shared", unit: l.unit,
     ...(i === 0 && on ? { holds: slid!.base.map((p) => p.v), limits: on } : {}) })), plot, 0.08, fit) : null;
   const { frac, handlers } = useChartPointer<SVGSVGElement>();
   const hatch = `range-hatch-${useId().replace(/[^\w-]/g, "")}`;
@@ -130,7 +138,10 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   const leftAxis: readonly AxisTick[] = g.series[0].ticks;
   const ownAt = lines.findIndex((l, i) => i > 0 && (l.scale ?? "shared") !== "shared");
   const right = ownAt > 0 ? lines[ownAt] : null;
-  const hover = frac !== null ? g.hover(g.tAt(frac * W)) : null;
+  const hover = frac !== null && !nothing ? g.hover(g.tAt(frac * W)) : null;
+  // the dates and the tooltip of a closed-up chart: its kept steps' real times, worded for the whole period
+  const realAt = kept && !nothing ? kept.realAt : (t: number) => t;
+  const dated = kept && !nothing ? { ...g, ticks: kept.ticks, spanHours: kept.spanHours } : g;
   const style = (l: LineSpec) => (l.color ? { stroke: l.color } : undefined);
   const ax = g.series[0];
   const unit = lines[0].unit ?? "";
@@ -138,7 +149,8 @@ export default function LineChart({ lines, window, height = 150, status, label, 
     <>
       <ChartUnitLine slider={!!slid} left={{ unit: unit.trim(), cls: lines[0].cls?.split(" ")[0], color: lines[0].color }}
         right={right ? { unit: right.unit?.trim() || right.label, cls: right.cls?.split(" ")[0], color: right.color } : null}>
-        {on && slid && <RangeChip range={on} step={ax.step} unit={unit} state={slid.state} onClear={() => slid.onChange(null)} />}
+        {on && slid && <RangeChip range={on} step={ax.step} unit={unit} state={slid.state}
+          kept={kept ? keptWords(kept.count, kept.of, stepMs) : undefined} onClear={() => slid.onChange(null)} />}
       </ChartUnitLine>
       <div className="chart-with-axis">
         {slid && <ChartRangeSlider axis={ax} top={TOP} bottom={BOT} height={H} range={on} unit={unit}
@@ -153,7 +165,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
             {g.series.flatMap((s, i) => s.bands.map((b, j) => (
               <rect key={`gap${i}-${j}`} x={b.x} y={b.y} width={b.w} height={b.h} fill={b.gap.notKept ? NOT_KEPT_COLOR : STATUS_COLOR.unavailable} opacity={b.gap.notKept ? 0.5 : 0.18} />
             )))}
-            {g.series.map((sg, i) => {
+            {!nothing && g.series.map((sg, i) => {
               const l = lines[i];
               const cls = `${l.cls ?? ""}${l.dashed ? " dashed" : ""}`;
               return (
@@ -189,7 +201,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
             {hover && <line x1={hover.x} y1={TOP} x2={hover.x} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
           </svg>
           {hover && (
-            <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtStepStamp(hover.t, stepMs, g.spanHours)}
+            <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtStepStamp(realAt(hover.t), stepMs, dated.spanHours)}
               rows={lines.flatMap((l, i) => {
                 const r = hover.readings[i], out = hover.outages[i];
                 const who = lines.length > 1 ? `${l.label} ` : "";
@@ -202,12 +214,19 @@ export default function LineChart({ lines, window, height = 150, status, label, 
                 return [{ key: `${i}`, marker: keyOf(l), text: `${who}${value}` }];
               })} />
           )}
+          {/* Where the kept steps were in the period, in the strip under the plot the chart already has (H - BOT). */}
+          {kept && !nothing && (
+            <div className="chart-range-ribbon" style={{ bottom: (H - BOT) / 2 - 2 }} aria-hidden>
+              {kept.ribbon.map((r) => <i key={r.from} style={{ left: `${r.from * 100}%`, width: `${(r.to - r.from) * 100}%` }} />)}
+            </div>
+          )}
+          {nothing && <div className="chart-range-none">Nothing in {rangeWords(on!, ax.step, unit)}. Widen the range, or tap the chip to show all.</div>}
         </div>
         {/* The right axis is the colour of the line it measures. */}
         {right && <YAxis zoomable side="right" height={H} frame={H} ticks={g.series[ownAt].ticks}
           cls={right.cls?.split(" ")[0]} color={right.color} />}
       </div>
-      <TimeAxis g={g} right={!!right} slider={!!slid} />
+      <TimeAxis g={dated} right={!!right} slider={!!slid} />
     </>
   );
 }

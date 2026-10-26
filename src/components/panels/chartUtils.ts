@@ -159,3 +159,11 @@ export function mergeStateHistories(
   }
   return out;
 }
+
+/** How much of the chart a range keeps, at its step (owner, 2026-10-26): "7 of 30 days", "18 of 24 hours", "3 of 52
+ *  weeks"; five-minute steps as the time they make, "3h 20min of 1d". */
+export function keptWords(count: number, of: number, stepMs: number): string {
+  if (stepMs < HOUR_MS) return `${count ? fmtDuration(count * stepMs) : "0min"} of ${fmtDuration(of * stepMs)}`;
+  const noun = stepMs >= 28 * DAY_MS ? "months" : stepMs >= 7 * DAY_MS ? "weeks" : stepMs >= DAY_MS ? "days" : "hours";
+  return `${count} of ${of} ${noun}`;
+}
