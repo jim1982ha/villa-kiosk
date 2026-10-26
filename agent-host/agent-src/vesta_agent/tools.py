@@ -29,13 +29,15 @@ import os
 import re
 import time
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, NamedTuple
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 from vesta_shared import read_guard, retention
 from vesta_shared.limits import limit
 from vesta_shared.messaging import no_platform_name
+from vesta_shared.offline import held_since
+from vesta_shared.timeutil import villa_time
 
 from . import __version__, script_run, status, tool_access
 from .policy import ROLE_WORDS, Person, Policy
@@ -166,6 +168,60 @@ def with_asleep(text: str, is_asleep) -> str:
         return x
     marked = mark(body)
     return json.dumps(marked, ensure_ascii=False) if hit else text
+
+
+#: What the AI is told beside a state's own last_changed (with_held_since)
+HELD_NOTE = ("when this state really began, read from the history: a restart of the villa's system resets "
+             "last_changed, so say this time, never last_changed")
+HELD_OVER_NOTE = "in this state since before the history read: say \"since before\" this time"
+
+
+def with_held_since(text: str, history, now: datetime) -> str:
+    """A read tool's answer with, on each state record (a state read, a search, a device's entities), since when it REALLY is in that state (`in_state_since`,
+    vesta_shared.offline.held_since: one history read for them all), when that is not its last_changed.
+
+    ⚠️ A RESTART IS NOT WHEN A DOOR WAS UNLOCKED (villa, 2026-10-26): the weekly report's headline said "the Master
+    Bedroom door has been unlocked since Sunday 13:29", the restart of the villa's system, of a door unlocked since
+    Saturday 18:25 — the AI read last_changed, which every restart resets."""
+    if not text or '"last_changed"' not in text:
+        return text
+    try:
+        body = json.loads(text)
+    except ValueError:
+        return text
+    records: list[tuple[str, dict]] = []
+
+    def find(x, key=None):
+        if isinstance(x, list):
+            for v in x:
+                find(v)
+        elif isinstance(x, dict):
+            eid = x.get("entity_id") or (key if isinstance(key, str) and "." in key else None)
+            if eid and "state" in x and x.get("last_changed"):
+                records.append((eid, x))
+            for k, v in x.items():
+                find(v, k)
+    find(body)
+    most = limit("ai.state_since_entities", 20, unit="entities", group="ai", lo=1, hi=100,
+                 says="How many devices of one state read the AI is told since when each really is in its state "
+                      "(read from the history, past a restart of the villa's system).",
+                 reached="A larger read gives the AI the villa's system's own last-changed times only.", told="")
+    if not records or len(records) > most:
+        return text
+    held = {}
+    for eid, r in records:
+        t = villa_time(r["last_changed"], "UTC")
+        if t is not None:
+            held[eid] = (str(r.get("state")), t)
+    over: set[str] = set()
+    real = held_since(history, held, now, over)
+    hit = False
+    for eid, r in records:
+        if eid in real and eid in held and real[eid] < held[eid][1]:
+            r["in_state_since"] = real[eid].isoformat()
+            r["in_state_since_note"] = HELD_OVER_NOTE if eid in over else HELD_NOTE
+            hit = True
+    return json.dumps(body, ensure_ascii=False) if hit else text
 
 
 def without_hidden(text: str, hidden: set[str]) -> str:
@@ -389,6 +445,10 @@ class Toolbox:
             text = scrub("".join(b.get("text", "") for b in blocks if b.get("type") == "text"), self._secrets())
             text = without_hidden(text, self._hidden())       # every read tool, never the search alone
             text = with_asleep(text, self._asleep())
+            if not res.get("isError") and name != "ha_get_history":   # a history's rows are moments already
+                from vesta_shared.ha_client import McpClient
+                text = await asyncio.to_thread(with_held_since, text, McpClient(session=self.reader.mcp).history,
+                                               datetime.now(timezone.utc))
             facts = await asyncio.to_thread(self._history_facts, args, text) \
                 if name == "ha_get_history" and not res.get("isError") else None
             if facts is not None:

@@ -99,6 +99,26 @@ def test_a_sensor_that_froze_once_before_is_judged_by_the_days_before_it_stopped
     assert [f["entity_id"] for f in _open(tmp_path, "PM-SILENT")] == ["sensor.example_th"]
 
 
+def test_a_restart_is_not_a_report_the_silence_counts_from_the_last_real_reading(tmp_path):
+    # villa, 2026-10-26: every restart stamps last_reported and last_changed — a sensor silent for 3 days read "has not
+    # reported for 34h", the hours since the restart; its history says when it really last read something new
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    restart, last = NOW - timedelta(hours=34), NOW - timedelta(days=3)
+    (fx / "states.json").write_text(json.dumps({"states": {"sensor.example_th": {
+        "state": "27.5", "attributes": {}, "last_changed": restart.isoformat(), "last_reported": restart.isoformat()}}}))
+    (fx / "history_raw_a.json").write_text(json.dumps({"entities": [{"entity_id": "sensor.example_th", "states": [
+        {"state": "27.1", "last_changed": (last - timedelta(minutes=5)).isoformat()},
+        {"state": "27.5", "last_changed": last.isoformat()},                          # its last real reading
+        {"state": "unavailable", "last_changed": (restart - timedelta(seconds=30)).isoformat()},
+        {"state": "27.5", "last_changed": restart.isoformat()}]}]}))                 # the restart's rewrite
+    _hourly(fx, "a", {"sensor.example_th": (last - timedelta(days=10), 10 * 24, True)})
+    _pack(tmp_path, {"level": [_row("sensor.example_th", "TH temperature")]})
+    _night(tmp_path, "--as-of", AS_OF)
+    (f,) = _open(tmp_path, "PM-SILENT")
+    assert "has not reported for 3d " in f["summary"], f["summary"]
+
+
 def test_a_sensor_with_no_history_is_not_called_silent(tmp_path):
     # absence is not evidence: with nothing to compare, the check says nothing
     fx = tmp_path / "fx"

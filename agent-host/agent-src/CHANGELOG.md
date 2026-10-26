@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.349 (26 October 2026)
+
+- vesta_shared.offline.held_since(history, {entity: (state, last_changed)}, now, over): since when each entity is
+  really in its state, read back past a restart's rewrite and its no-reading gap; offline_since is it with every one
+  offline.
+- tools.with_held_since: every read tool's state records (but a history's) carry `in_state_since` and its note when
+  it is older than last_changed (ai.state_since_entities, 20 per read).
+- preventive-maintenance nightly._quiet_since: PM-SILENT's since is the last real reading when nothing was reported
+  after the last change (a restart stamps both).
+
 ## 0.6.348 (26 October 2026)
 
 - vesta_shared.offline.offline_since(over=): an entity with no real reading in the whole read is added to it;

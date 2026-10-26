@@ -57,33 +57,42 @@ def history_days() -> int:
 
 
 def offline_since(history, since: dict[str, datetime], now: datetime, over: set | None = None) -> dict[str, datetime]:
-    """When each entity of `since` ({entity: its last_changed}) REALLY went offline: its history read back from that
-    moment to its last real reading (never "unavailable" or "unknown"); the start of the window read when it gave none
-    in it — and then it is added to `over`: offline longer than was read. `history`: the client's history(entity_ids,
-    start, end).
-
-    ⚠️ THE START OF THE READ IS NOT WHEN IT WENT (villa, 2026-10-26: "Timmerflotte_2623 has been offline for 7d 22h",
-    offline since 17 Oct, 8d 22h: the read began seven days before its restart clock and found no reading), so the
-    words say "over" (Group.over).
+    """When each entity of `since` ({entity: its last_changed}) REALLY went offline: held_since with every one offline.
 
     ⚠️ A RESTART IS NOT A NEW OUTAGE (villa, 2026-10-25: "matter integration (3 devices) has been offline for 11h
     48min" — a sensor offline since 17 Oct and an LED strip since 21 Oct read "10h" in the daily report): a restart of
-    the villa's system gives every entity a new last_changed, and every "offline for" counted from it. Whatever the
-    read does (no client, an error), each keeps its last_changed."""
+    the villa's system gives every entity a new last_changed, and every "offline for" counted from it."""
+    return held_since(history, {e: ("unavailable", t) for e, t in since.items()}, now, over)
+
+
+def held_since(history, held: dict[str, tuple[str, datetime]], now: datetime,
+               over: set | None = None) -> dict[str, datetime]:
+    """Since when each entity of `held` ({entity: (its state now, its last_changed)}) REALLY is in that state: its
+    history read back from its last_changed to its last real reading of another state (a gap with no reading, a
+    restart's, does not end it); the start of the window read when it gave none in it — and then it is added to
+    `over`: in that state longer than was read. `history`: the client's history(entity_ids, start, end). Whatever the
+    read does (no client, an error), each keeps its last_changed.
+
+    ⚠️ THE START OF THE READ IS NOT WHEN IT WENT (villa, 2026-10-26: "Timmerflotte_2623 has been offline for 7d 22h",
+    offline since 17 Oct, 8d 22h: the read began seven days before its restart clock and found no reading), so the
+    words say "over" (Group.over). ⚠️ NOR IS A RESTART WHEN A DOOR WAS UNLOCKED (villa, 2026-10-26: the weekly report
+    said "unlocked since Sunday 13:29", the restart, of a door unlocked since Saturday 18:25)."""
+    since = {e: t for e, (_s, t) in held.items() if t is not None}
     if history is None or not since:
         return dict(since)
     start = min(since.values()) - timedelta(days=history_days())
     try:
         rows = history(sorted(since), start, now) or {}
-    except Exception:  # noqa: BLE001 — the restart's clock, as before, rather than no finding
+    except Exception:  # noqa: BLE001 — the restart's clock, as before, rather than no answer
         return dict(since)
     out = dict(since)
     for eid, last in since.items():
+        now_state = str(held[eid][0])
         pts = sorted((t, r.get("state")) for r in rows.get(eid) or ()
                      if (t := villa_time(r.get("last_changed"), "UTC")) is not None and t <= last)
-        real = [t for t, s in pts if s not in NO_READING]
-        if real:
-            went = [t for t, _s in pts if t > real[-1]]
+        other = [t for t, s in pts if s not in NO_READING and str(s) != now_state]
+        if other:
+            went = [t for t, _s in pts if t > other[-1]]
             out[eid] = min([last, *went[:1]])
         elif pts:
             out[eid] = min(last, pts[0][0])

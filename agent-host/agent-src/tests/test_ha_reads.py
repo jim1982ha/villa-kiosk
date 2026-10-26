@@ -248,3 +248,40 @@ def test_the_log_says_who_reads_the_villa_and_for_how_long(tmp_path, caplog):
         script_run.run(v.s, v.state, sk, "look.py", ["find"], by=script_run.PAGE)
     said = [r.getMessage() for r in caplog.records]
     assert said.count("Skill probe: look.py find started") == 1, said           # the AI's script: its start, once
+
+
+def test_the_ai_reads_since_when_a_door_is_really_unlocked_never_the_restart(tmp_path):
+    # villa, 2026-10-26: the weekly report's headline said "the Master Bedroom door has been unlocked since Sunday
+    # 13:29" — the restart of the villa's system, which resets last_changed — of a door unlocked since Saturday 18:25
+    import asyncio
+    from ha_fake import FakeHA, tool
+    from helpers import make_agent
+    from vesta_agent.routing import CONVERSATION, Origin
+    unlocked, restart = "2026-10-24T10:25:00+00:00", "2026-10-25T05:29:00+00:00"
+    state = {"data": {"entity_id": "lock.example_door", "state": "unlocked", "last_changed": restart}}
+    rows = [{"state": "locked", "last_changed": "2026-10-24T08:00:00+00:00"},
+            {"state": "unlocked", "last_changed": unlocked},
+            {"state": "unavailable", "last_changed": "2026-10-25T05:28:30+00:00"},     # the restart's gap
+            {"state": "unlocked", "last_changed": restart}]
+    history = {"data": {"success": True, "entities": [{"entity_id": "lock.example_door", "states": rows}]}}
+    found = {"data": {"entities": [{"entity_id": "lock.example_door", "state": "unlocked", "last_changed": restart}]}}
+    ha = FakeHA(tools=[tool("ha_get_state", entity_id="string"), tool("ha_search", query="string")],
+                answers={"ha_get_state": json.dumps(state), "ha_get_history": json.dumps(history),
+                         "ha_search": json.dumps(found)})
+    v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
+                              "ha_read_tools": ["ha_get_state", "ha_search"]}, reader=ha)
+    asyncio.run(v.refresh_server_tools())
+    get = next(t for t in v.toolbox().tool_objects(None, Origin(-1, CONVERSATION)) if t.name == "ha_get_state")
+    said = json.loads(asyncio.run(get.handler({"entity_id": "lock.example_door"}))["content"][0]["text"])["data"]
+    assert said["last_changed"] == restart                                        # the villa's own answer, kept
+    assert datetime.fromisoformat(said["in_state_since"]) == datetime.fromisoformat(unlocked), said
+    assert "restart" in said["in_state_since_note"]
+    # every read tool that gives a state with its last_changed: a search too
+    search = next(t for t in v.toolbox().tool_objects(None, Origin(-1, CONVERSATION)) if t.name == "ha_search")
+    hit = json.loads(asyncio.run(search.handler({"query": "door"}))["content"][0]["text"])["data"]["entities"][0]
+    assert datetime.fromisoformat(hit["in_state_since"]) == datetime.fromisoformat(unlocked), hit
+    # a state that really changed at its last_changed: nothing added
+    rows[:] = [{"state": "locked", "last_changed": "2026-10-24T08:00:00+00:00"}, {"state": "unlocked", "last_changed": restart}]
+    ha.answers["ha_get_history"] = json.dumps(history)
+    said = json.loads(asyncio.run(get.handler({"entity_id": "lock.example_door"}))["content"][0]["text"])["data"]
+    assert "in_state_since" not in said, said

@@ -1,3 +1,10 @@
+## 0.12.360
+
+What you will see:
+- A restart of the villa's system is no longer taken for the moment a door was unlocked or a sensor last reported:
+  - the reports and the chat say "unlocked since Saturday 18:25", not the restart's "Sunday 13:29";
+  - "has not reported for 3d …" counts from the sensor's last real reading, not from the restart.
+
 ## 0.12.359
 
 What you will see:
