@@ -1,3 +1,11 @@
+## 2.496.542
+
+What you will see:
+- Every history chart (a device's window, the Weather window) now starts its Y axis at 0, so a trend reads at its
+  true size: a battery going from 40 to 91% no longer looks like a cliff.
+- Tap a chart's Y axis (its numbers on the left, or on the right) to zoom every chart on this tablet to its values,
+  as before; tap again to go back to 0. The tablet remembers the choice. Energy and rain bars always start at 0.
+
 ## 2.496.541
 
 What you will see:
