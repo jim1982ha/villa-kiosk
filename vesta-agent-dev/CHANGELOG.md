@@ -1,3 +1,16 @@
+## 0.12.361
+
+What you will see:
+- After a restart of the villa's system, a sensor that had already gone silent is reported at once, with how long it
+  has really been silent ("has not reported for 3d …"), not a day later. Its open problem no longer shows "Cleared"
+  after a restart and comes back the next day. Another reading of the same device, refreshed only by the restart, no
+  longer counts as the device still reporting.
+- When the villa comes back online, its "no contact" alert closes without a watch: a new outage is a new alert, and
+  the old one is never told "it did not come back".
+- A closed alert's watch is one length everywhere: Telegram's "Watch …", the Cockpit's "VESTA confirms by …" and the
+  "(watch)" title. With the reopen window set to 0, an alert the villa clears is watched nowhere; after a Done that
+  VESTA checks again, it is watched until that check.
+
 ## 0.12.360
 
 What you will see:
