@@ -1,3 +1,11 @@
+## 2.496.543
+
+What you will see:
+- Cockpit: a device hidden in the villa's system no longer shows in the Watched list once its fault is closed. It was
+  already left out of the open issues; hidden now means hidden in both lists.
+- Nothing else changes. Behind the scenes, "is this device in trouble, in use or at rest" is now decided in one place
+  for the map, the rooms, the Cockpit and the device window, so the next change to how devices look is made once.
+
 ## 2.496.542
 
 What you will see:
