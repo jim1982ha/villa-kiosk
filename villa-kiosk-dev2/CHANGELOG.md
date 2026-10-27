@@ -1,3 +1,10 @@
+## 2.496.551
+
+What you will see:
+- A phone on its side: the camera window's buttons at the top right (warning, "Also on this device", Edit, the fault
+  wrench) are the size of the column of buttons under them and end at the same right edge, and so does the "Also on
+  this device" list. They used to be smaller and sit a little to the left of the column.
+
 ## 2.496.550
 
 What you will see:
