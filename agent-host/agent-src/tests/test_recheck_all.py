@@ -126,7 +126,9 @@ def test_the_recheck_closes_what_is_gone_keeps_what_is_still_there_and_touches_n
 def test_a_reading_that_did_not_come_back_closes_nothing(tmp_path):
     _pack(tmp_path)
     store, f = _night_findings(tmp_path)
-    _villa(tmp_path, {BAT_LOW: _st("unavailable", 60)})                  # one with no value, the others not read
+    # one with no value, the others not read; gone 5 minutes, under unavailable_minutes: not offline yet either (a
+    # battery is watched for going offline too, offline.watched_kinds)
+    _villa(tmp_path, {BAT_LOW: _st("unavailable", 5)})
     assert _tick(tmp_path)["actions"] == []
     assert all(Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == "open" for fid, _ in f.values())
 

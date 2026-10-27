@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.355 (27 October 2026)
+
+- problems.problem_name(text, again) → {headline, detail}: the one name of a problem. messaging.headline (the former
+  outcome_words.ticket_title; outcome_words.py removed) and messaging.problem_title_chars (limit problems.title_chars,
+  160) replace alerts.title_chars, alerts.task_title_chars, problems.alert_title_chars, problems.task_title_chars,
+  kiosk.fault_title_chars, reports.title_chars, chat.alert_title_chars and chat.problem_title_chars. The headline is cut
+  before "(again: …)", so naming a name again changes nothing. current_title, open_problems (now with `detail`), the
+  desk's task titles, nightly's message items, compose, facts and playbook read it; no reader cuts a title again.
+  limits.RETIRED: the Limits tab says a value still set for a retired key, with the key that took its job (any other
+  undeclared key too). tests/test_problem_name.py drives a three-line alert back again through the card,
+  open_problems, the morning message and the chat's status.
+- offline.watched_kinds() (limit offline.watched_kinds): power, energy, security, level, runtime, water, generation,
+  battery, network: the one list nightly.offline_findings, recheck.py, facts.Ctx (states, offline) and concierge.status
+  read. nightly.WATCHED_FAMILIES, concierge.FAMILIES and reports.yaml offline_families removed; a villa reports.yaml
+  that still names offline_families is said in facts.json's problems. concierge reads locks and alarms from `security`.
+- policy.NUMBERS (approval_ttl_minutes 15, 1..1440; siren_auto_off_min 3, 1..60): DEFAULTS, the check,
+  LimitsTab._policy_rows and form_schema()["numbers"] read it; rules.js takes each input's min and max from the schema.
+
 ## 0.6.354 (27 October 2026)
 
 - daily.power_asset(pack, entity_id): the asset whose power reading an entity is; threshold_from_readings(readings,

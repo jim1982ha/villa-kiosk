@@ -24,7 +24,7 @@ from vesta_shared import limits
 from vesta_shared.daily import VILLA_WIDE
 
 from ..places import where
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, KEEP, PROFILES, WORDS, Policy, reset_words, value_words
+from ..policy import DEFAULT_BEHAVIOUR, KEEP, NUMBERS, PROFILES, WORDS, Policy, reset_words, value_words
 from .changes import Refused, _read
 from .policy_doc import _yaml
 
@@ -204,6 +204,11 @@ class LimitsTab:
         declared, bad = limits.scan(self.roots())
         problems += bad
         file_values = self._file_values()
+        # a value set for a limit the code no longer has (an older agent's, or one merged into another): said
+        for key in sorted(set(file_values) - set(declared)):
+            now = limits.RETIRED.get(key)
+            problems.append(f"{key} is set in {limits.FILE} but no longer read"
+                            + (f": {now} does its job now, set it there." if now else "."))
         for key in sorted(declared):
             d = declared[key]
             value = file_values.get(key, d.default)
@@ -453,12 +458,10 @@ class LimitsTab:
         for k, (default, lo, hi) in KEEP.items():
             rows.append((["settings", "keep", k], keep.get(k, default), default, "number", None, lo, hi,
                          "Also in Rules (file), under settings › keep.", f"How long the agent keeps: {k.replace('_', ' ')}."))
-        rows.append((["approval_ttl_minutes"], raw.get("approval_ttl_minutes", DEFAULTS["approval_ttl_minutes"]),
-                     DEFAULTS["approval_ttl_minutes"], "number", None, 1, 1440, f"Also in {where('actions')}.",
-                     WORDS["approval_ttl_minutes"]))
-        rows.append((["siren_auto_off_min"], raw.get("siren_auto_off_min", DEFAULTS["siren_auto_off_min"]),
-                     DEFAULTS["siren_auto_off_min"], "number", None, 1, 60, f"Also in {where('protected')}.",
-                     WORDS["siren_auto_off_min"]))
+        # the agent's two numbers, bounded by the table its check reads (policy.NUMBERS), each with the Rules card it is on
+        for k, (default, lo, hi) in NUMBERS.items():
+            rows.append(([k], raw.get(k, default), default, "number", None, lo, hi,
+                         f"Also in {where({'siren_auto_off_min': 'protected'}.get(k, 'actions'))}.", WORDS[k]))
         return [{"id": {"src": "policy", "path": p}, "group": POLICY_GROUP, "section": "policy.yaml",
                  "name": ".".join(p), "label": label, "value": v, "default": d, "kind": kind, "choices": ch,
                  "unit": unit_of(p[-1]) if kind == "number" else "", "lo": lo, "hi": hi, "reached": "", "told": "",

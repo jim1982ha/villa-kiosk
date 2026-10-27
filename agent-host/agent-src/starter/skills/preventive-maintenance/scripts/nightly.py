@@ -33,16 +33,16 @@ sys.path.insert(0, HERE)
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
 from vesta_shared import occupancy  # noqa: E402  (the villa's state per day: like with like)
-from vesta_shared.messaging import incident_tag, no_code as _no_code  # noqa: E402
+from vesta_shared.messaging import incident_tag  # noqa: E402
 from vesta_shared.timeutil import clock, day_label, day_time_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import STATUS, document, split_title, status_line  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart  # noqa: E402
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
-from vesta_shared.offline import device_answers, devices_offline, reported_since  # noqa: E402  (offline now; when it last REALLY reported)
+from vesta_shared.offline import device_answers, devices_offline, reported_since, watched_kinds  # noqa: E402  (offline now; when it last REALLY reported)
 from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
-from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import Problems, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
 from vesta_shared import battery  # noqa: E402  (a battery's ids and its rested level: one owner)
@@ -505,10 +505,6 @@ def silent_findings(cli, pack, states: dict, now_ref: datetime, params, Z, rows:
     return out
 
 
-#: The families whose devices are read for being offline (and, for `level`, silent).
-WATCHED_FAMILIES = ("power", "energy", "security", "level", "runtime", "water", "generation")
-
-
 def alerted_offline(store, pack) -> dict[str, int]:
     """The devices (pack.device_id_of, else the entity) an open alert already follows for being offline, each with that
     alert's number: an alert whose bad states hold "unavailable" (the alert desk's incidents).
@@ -549,7 +545,7 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
                      states_of=None) -> list:
     """The devices offline now, as PM-UNAVAILABLE findings — for the night check and for recheck.py every 5 minutes,
     from the ONE reading of "offline now" (vesta_shared.offline.devices_offline, the reports' and the concierge's too)
-    over this skill's WATCHED_FAMILIES, with its settings: `unavailable_minutes`, `integration_down_devices`. One
+    over the kinds watched for it (vesta_shared.offline.watched_kinds, the reports' and the chat's too), with its settings: `unavailable_minutes`, `integration_down_devices`. One
     finding per physical device, never one per entity; an integration down: one finding, worded here.
 
     ⚠️ FOUND AT ONCE, NOT AT 02:00 (owner, 2026-10-18 — architecture review, offline devices #1): Timmerflotte_5969
@@ -564,7 +560,7 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
     out = []
     # since when each is REALLY offline (`history`: the client's, read back past a restart), and an integration down
     # only for its devices gone together (`integration_down_window_minutes`): villa, 2026-10-25
-    for g in devices_offline(pack, states, now, WATCHED_FAMILIES, min_minutes=params.behaviour("unavailable_minutes"),
+    for g in devices_offline(pack, states, now, watched_kinds(), min_minutes=params.behaviour("unavailable_minutes"),
                              alerted=frozenset(alerted), integration_min=params.behaviour("integration_down_devices"),
                              together_minutes=params.behaviour("integration_down_window_minutes"), history=history):
         if states_of is not None and not g.integration and device_answers(pack, g.entity_ids, states_of):
@@ -604,7 +600,7 @@ def told_now(res: dict, title: str | None = None, store=None, at: datetime | Non
     (told_cleared, told_watch_over, told_again)."""
     def item(d):
         note = result.fault_note(d.get("check"))
-        return f"- {_no_code(again_title(d.get('summary', ''), d.get('again')))}" + (f"\n{note}" if note else "")
+        return f"- {problem_name(d.get('summary', ''), d.get('again'))['headline']}" + (f"\n{note}" if note else "")
     sections = [(label, [[d.get("id"), item(d)] for d in ds if d.get("severity") == "P2"])
                 for label, ds in (("New", res["new_findings"]), ("Back again", res["again"]))]
     if not any(items for _, items in sections):

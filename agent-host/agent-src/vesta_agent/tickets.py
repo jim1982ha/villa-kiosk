@@ -19,7 +19,7 @@ from vesta_shared.problems import Problems
 
 from .kiosk import MINE, KioskError, closing, confirming, noted, retitled, tagged, todo
 from .kiosk import fault_title_chars
-from .outcome_words import ticket_title
+from vesta_shared.messaging import headline
 from .scheduler import next_slot
 
 log = logging.getLogger("vesta.outcome")
@@ -81,12 +81,12 @@ class Tickets:
         # its alert's number and where it came from (Problems.card); a fault with no task is a chat's ("Create this fault")
         task = self._store().task(int(task_id)) if task_id else None
         want = self._card(Problems(self._store()), task) if task else {"number": None, "origin": "chat", "check": None}
-        tid = await self.kiosk.add_ticket(ticket_title(title)[:fault_title_chars()], entity_id=entity_id, note=note, document_ids=docs,
+        tid = await self.kiosk.add_ticket(headline(title)[:fault_title_chars()], entity_id=entity_id, note=note, document_ids=docs,
                                           **({"number": want["number"]} if want["number"] else {}),
                                           **({"origin": want["origin"]} if want["origin"] else {}),
                                           **({"check": want["check"]} if want["check"] else {}),
                                           **({"pattern": self._pattern(want)} if self._pattern(want) else {}))
-        log.info("Kiosk ticket %s created: %s", tid, ticket_title(title)[:80])
+        log.info("Kiosk ticket %s created: %s", tid, headline(title)[:80])
         if task_id:
             self._store().set_task_uid(int(task_id), tid)
         self.state.log("executed", {"tool": "ticket", "ticket": tid, "entity": entity_id})
@@ -113,7 +113,7 @@ class Tickets:
         gate, Kiosk._gated); None for a title a person wrote, or nothing to word."""
         if not want.get("pattern") or (card or {}).get("person_titled"):
             return None
-        return {"titlePattern": ticket_title(want["pattern"])[:fault_title_chars()], "since": want["since"]}
+        return {"titlePattern": headline(want["pattern"])[:fault_title_chars()], "since": want["since"]}
 
     async def reopen(self, a: dict) -> bool:
         """{task_id, title, note}: the task's fault open again in the Kiosk under its new title — or, when it
@@ -122,7 +122,7 @@ class Tickets:
         if not task or not self.kiosk.enabled:
             return False
         uid = task.get("todo_uid")
-        if uid and await self.kiosk.reopen_ticket(uid, ticket_title(a.get("title") or task.get("summary") or ""), a.get("note")):
+        if uid and await self.kiosk.reopen_ticket(uid, headline(a.get("title") or task.get("summary") or ""), a.get("note")):
             log.info("Kiosk ticket %s open again: %s", uid, (a.get("title") or "")[:80])
             return True
         # a new fault is a fault like any other: its note says what to check (villa, 2026-10-11: the Onsen pump's new
@@ -290,7 +290,7 @@ class Tickets:
                 elif want["open"]:
                     # what the fault must say now, put right in ONE write (Kiosk.amend: retitled, tagged, noted)
                     amends = []
-                    title = ticket_title(want["title"])[:fault_title_chars()]
+                    title = headline(want["title"])[:fault_title_chars()]
                     # the title the agent last gave it, not the one it has: a title a person wrote stays (kiosk.retitled)
                     if title and (card.get("agent_title") or card.get("title")) != title:
                         amends.append(retitled(title))

@@ -166,7 +166,14 @@ KEEP = {
 #: actions.py said "registered with VESTA", the others "the VESTA Agent" — review 6).
 NOT_REGISTERED = "You are not registered with the VESTA Agent."
 
-DEFAULTS = {"act_enabled": False, "approval_ttl_minutes": 15, "siren_auto_off_min": 3}
+#: The agent's two numbers, name: (default, lowest, highest) — the ONE table the check below, the Limits tab's rows and
+#: the Rules tab's inputs read (architecture review P: the bounds were written in all three).
+NUMBERS = {
+    "approval_ttl_minutes": (15, 1, 1440),  # how long an Approve or Refuse button works
+    "siren_auto_off_min": (3, 1, 60),       # when a siren the agent switched on stops
+}
+
+DEFAULTS = {"act_enabled": False, **{k: d for k, (d, _lo, _hi) in NUMBERS.items()}}
 
 
 @dataclass
@@ -639,7 +646,8 @@ def form_schema() -> dict:
     return {"rules": RULE_WORDS, "actionable": list(ACTIONABLE), "siren_domains": list(SIREN_DOMAINS),
             "lists": [{"key": k, "label": _LIST_WORDS[k][0], "hint": _LIST_WORDS[k][1], "domains": [d]}
                       for k, d in ENTITY_LISTS.items() if d],
-            "words": WORDS, "resets": reset_words(), "roles": ROLE_WORDS}
+            "words": WORDS, "resets": reset_words(), "roles": ROLE_WORDS,
+            "numbers": {k: {"lo": lo, "hi": hi} for k, (_d, lo, hi) in NUMBERS.items()}}
 
 def _id(v: Any) -> int | None:
     """An id as the agent reads it (int(...)): a number, or a number written as text."""
@@ -813,7 +821,7 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
     v["act_enabled"], valid = read_bool(raw.get("act_enabled", DEFAULTS["act_enabled"]), DEFAULTS["act_enabled"])
     if "act_enabled" in raw and not valid:
         out.append("act_enabled must be true or false.")
-    for k, lo, hi in (("approval_ttl_minutes", 1, 1440), ("siren_auto_off_min", 1, 60)):
+    for k, (_d, lo, hi) in NUMBERS.items():
         val = raw.get(k)
         v[k], valid = read_int_in(val, lo, hi, DEFAULTS[k])
         if val is not None and not valid:

@@ -277,7 +277,7 @@ def one_list(clue_rows: list[dict], problems: list[dict], device_of, name_of, ho
              "figures": f, "task_ids": [], "also": [], "group_title": cl.get("group_title"), "look_at": cl["playbook"].get("look_at", ""),
              "entity_ids": [f["entity_id"]] if f.get("entity_id") else []})
     for pr in problems:
-        title = pr["title"].split("\n")[0]
+        title = pr["title"]                     # its one name (problems.problem_name): one line already
         whole = pr["kind"] in WHOLE_DEVICE
         add({"from": "task", "kind": pr["kind"], "device": device_of(pr.get("entity_id"), pr["id"], whole),
              "subject": name_of(pr.get("entity_id"), whole) or title, "title": title, "severity": pr["severity"],

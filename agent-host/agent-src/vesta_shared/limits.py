@@ -41,6 +41,13 @@ GROUPS = {
 
 _cache: dict[str, Any] = {"path": None, "mtime": None, "values": {}}
 
+#: Limits the code no longer declares, each with the one that took its job: a value limits.yaml still sets for one is
+#: said on the Limits tab, never dropped in silence (architecture review P, 2026-10-27: eight lengths of one problem's
+#: name became problems.title_chars).
+RETIRED = {k: "problems.title_chars" for k in (
+    "alerts.title_chars", "alerts.task_title_chars", "problems.alert_title_chars", "problems.task_title_chars",
+    "kiosk.fault_title_chars", "reports.title_chars", "chat.alert_title_chars", "chat.problem_title_chars")}
+
 
 def path() -> str:
     """limits.yaml: VESTA_LIMITS, else beside policy.yaml (VESTA_POLICY, the scripts' environment), else the agent's

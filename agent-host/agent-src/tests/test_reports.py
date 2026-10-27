@@ -675,7 +675,7 @@ def test_html_like_text_the_ai_writes_shows_as_text_and_breaks_nothing():
     assert page.count("<a ") == page.count("</a>")
 
 
-def test_the_monitoring_table_lists_devices_not_their_sensors():
+def test_the_monitoring_table_lists_devices_not_their_sensors(monkeypatch):
     # owner, 2026-10-09: "make sure this table only reports devices (and not entities related to a device)" — it listed
     # a phone's Wi-Fi traffic as two rows "RX" and "TX", and one pump plug's sensors as rows of their own
     import sys as _s
@@ -701,7 +701,8 @@ def test_the_monitoring_table_lists_devices_not_their_sensors():
     c = facts.Ctx.__new__(facts.Ctx)
     c.pack, c.Z = pack, ZoneInfo("UTC")
     c.now = datetime(2026, 10, 9, 12, tzinfo=ZoneInfo("UTC"))
-    c.cfg = {"offline_families": ["power", "switch", "network", "battery"], }
+    c.cfg = {}
+    monkeypatch.setattr(facts, "watched_kinds", lambda: ["power", "switch", "network", "battery"])
     off = lambda at: {"state": "unavailable", "last_changed": at}
     c._states = {"sensor.spa_pump_power": off("2026-10-09T09:05:00+00:00"), "sensor.jet_pump_power": off("2026-10-09T09:01:00+00:00"),
                  "switch.spa_relay": off("2026-10-09T09:03:00+00:00"), "sensor.rx": off("2026-10-09T08:00:00+00:00"),

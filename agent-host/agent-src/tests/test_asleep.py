@@ -237,7 +237,7 @@ def test_the_weekly_report_reads_a_sleeping_device_s_last_real_charge(monkeypatc
         def history(self, ids, start, end):
             return {"sensor.lone_battery": [{"state": "41", "last_changed": "2026-10-09T09:00:00+00:00"},
                                             {"state": "unavailable", "last_changed": NOW.isoformat()}]}
-    c = SimpleNamespace(_states=None, cfg={"offline_families": []}, pack=pack, cli=Cli(), now=NOW)
+    c = SimpleNamespace(_states=None, cfg={}, pack=pack, cli=Cli(), now=NOW)
     assert facts.Ctx.states(c)["sensor.lone_battery"]["state"] == "41"
 
 
@@ -347,7 +347,7 @@ def test_the_weekly_report_and_the_night_check_say_a_battery_with_no_report_in_d
     pack.asleep_are(["sensor.lone_battery"])
 
     def page(cli):
-        c = SimpleNamespace(_states=None, cfg={"offline_families": []}, pack=pack, cli=cli, now=DOOR_NOW,
+        c = SimpleNamespace(_states=None, cfg={}, pack=pack, cli=cli, now=DOOR_NOW,
                             store=SimpleNamespace(cache_get=lambda k: None, findings=lambda status=None: []),
                             need=lambda *p: 8, tasks=lambda: [], params=lambda: VillaParams())
         c.states = lambda: facts.Ctx.states(c)

@@ -639,10 +639,11 @@ then fixed with the probe's scenarios as the tests. Decided:
   `critical` by `pack.is_critical`, a device the villa's system knows nothing about dropped once; `merged_integrations`
   is the merge features.py had. Callers: `nightly.offline_findings` (its settings: `unavailable_minutes` as the
   minimum, `integration_down_devices`; its words, `integration_name`; `alerted_offline`), `facts.Ctx.offline` and
-  `concierge.status` (no minimum: every one). No threshold in vesta_shared. The three family lists (reports.yaml
-  `offline_families`, nightly `WATCHED_FAMILIES`, concierge `FAMILIES`) stay in their skills and DIFFER today
-  (reports: + battery, network; night: + water, generation); test_offline holds them side by side until the owner
-  decides whether to make them one.
+  `concierge.status` (no minimum: every one). No threshold in vesta_shared. The kinds watched are ONE list since
+  review P (2026-10-27, the owner chose every kind): `offline.watched_kinds()`, the limit `offline.watched_kinds` on
+  the Limits tab; the three lists the skills kept (reports.yaml `offline_families`, nightly `WATCHED_FAMILIES`,
+  concierge `FAMILIES`) are gone, and a villa's reports.yaml that still names `offline_families` is said in facts.json's
+  problems, never read.
 
 ## The night check owns each number asked twice (owner, 2026-10-19, 0.12.267)
 
@@ -1026,3 +1027,22 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   one history read for all of them. The silence check (`nightly.silent_findings`, read again by recheck.py every 5
   minutes) and its "the device still talks" both ask it BEFORE judging, so a restart's stamp neither hides a silent
   sensor nor closes its open fault.
+
+## One name for a problem, one list of watched kinds, one table of the agent's numbers (architecture review P, 2026-10-27)
+
+- **A problem's name: `vesta_shared.problems.problem_name(text, again)`** → {headline, detail}. headline: the text's
+  first line through `messaging.headline` (no rule code, no leading emoji: the former `outcome_words.ticket_title`),
+  with `again_title`'s "(again: …)", at most `problems.title_chars` (`messaging.problem_title_chars`) — cut before the
+  count, so naming a name again changes nothing. detail: the other lines. Readers: `Problems.current_title` (the
+  Cockpit's fault, the tasks' summaries through `source_title`), `open_problems` (title + detail: the morning message,
+  the weekly page's to-do list, the chat's villa status), the desk's task titles, the night check's message items,
+  facts' alert rows and fixed list. The eight title lengths (alerts.title_chars, alerts.task_title_chars,
+  problems.alert_title_chars, problems.task_title_chars, kiosk.fault_title_chars, reports.title_chars,
+  chat.alert_title_chars, chat.problem_title_chars) are the one `problems.title_chars`; a value a villa set for an old
+  key is no longer read, and the Limits tab says so with the key that took its job (`limits.RETIRED`). `kiosk.fault_title_chars()` and `result.reopened` read it.
+- **The kinds watched for going offline: `vesta_shared.offline.watched_kinds()`** (above, "the devices offline now").
+- **The agent's two numbers: `policy.NUMBERS`** (approval_ttl_minutes, siren_auto_off_min: default, lowest, highest),
+  read by the check, `LimitsTab._policy_rows` and `form_schema()["numbers"]`, which the Rules tab's inputs take their
+  min and max from (rules.js `bounds`). The Rules tab's "min" after the Approve buttons' number stays: the owner's
+  wording (2026-10-07).
+

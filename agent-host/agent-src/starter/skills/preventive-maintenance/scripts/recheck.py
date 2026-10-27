@@ -71,7 +71,7 @@ from vesta_shared import battery  # noqa: E402  (the battery rules' ids: one own
 from vesta_shared.device_state import has_value, is_offline  # noqa: E402
 from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.limits import limit  # noqa: E402
-from vesta_shared.offline import device_answers  # noqa: E402  (a device that answers is not offline)
+from vesta_shared.offline import device_answers, watched_kinds  # noqa: E402  (a device that answers is not offline)
 from vesta_shared.past import Logbook  # noqa: E402
 import rules as R  # noqa: E402
 
@@ -170,7 +170,7 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_m
     none = {"actions": [], "send": [], "found": []}
     if pack is None or client() is None:
         return none
-    ids = sorted({r["entity_id"] for fam in N.WATCHED_FAMILIES for r in pack.entities(fam)})
+    ids = sorted({r["entity_id"] for fam in watched_kinds() for r in pack.entities(fam)})
     at = now.astimezone(ZoneInfo(zone))
     found, moved = [], []
     for f in N.offline_findings(pack, client().states(ids), at, params, set(N.alerted_offline(store, pack)),

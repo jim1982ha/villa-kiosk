@@ -29,6 +29,7 @@ import aiohttp
 
 from vesta_shared import agreement
 from vesta_shared.ha_client import error_short_chars
+from vesta_shared.messaging import problem_title_chars
 from vesta_shared.limits import limit
 
 log = logging.getLogger("vesta.kiosk")
@@ -59,9 +60,9 @@ MINE = "va-"
 
 
 def fault_title_chars() -> int:
-    return limit("kiosk.fault_title_chars", 200, unit="characters", group="text", lo=60, hi=2000,
-                 says="The longest title of a fault sent to the VESTA Kiosk.",
-                 reached="The rest of the title is cut, with no mark.", told="")
+    """The longest title of a fault sent to the VESTA Kiosk: a problem's name, as long as every page's
+    (vesta_shared.messaging.problem_title_chars — architecture review P: it was its own setting)."""
+    return problem_title_chars()
 
 
 def fault_note_chars() -> int:

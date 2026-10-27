@@ -26,7 +26,7 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
 from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.messaging import incident_tag  # noqa: E402  ("Incident #N", the same everywhere)
-from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
+from vesta_shared.offline import devices_offline, watched_kinds  # noqa: E402  (the one reading of "offline now")
 from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
@@ -36,17 +36,6 @@ from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Li
 SHOW = limit("chat.names_per_line", 12, unit="names", group="ai", lo=1, hi=500,
              says="Names listed on each line of the villa status the AI reads before answering in a chat.",
              reached="The others are counted: 'and N more'.", told="ai")
-ALERT_TITLE_CHARS = limit("chat.alert_title_chars", 120, unit="characters", group="text", lo=40, hi=1000,
-                          says="Longest open-alert title in the villa status the AI reads.", reached="A longer one is cut.",
-                          told="")
-PROBLEM_TITLE_CHARS = limit("chat.problem_title_chars", 160, unit="characters", group="text", lo=40, hi=1000,
-                            says="Longest open-problem title in the villa status the AI reads.",
-                            reached="A longer one is cut.", told="")
-#: The families the status reads (offline, a lock open, an alarm on). Its own list, beside the reports' and the night
-#: check's (test_offline holds the three side by side).
-FAMILIES = ("security", "power", "energy", "runtime", "level", "battery")
-
-
 def _names(items: list[str]) -> str:
     return "; ".join(items[:SHOW]) + (f"; and {len(items) - SHOW} more" if len(items) > SHOW else "")
 
@@ -64,20 +53,20 @@ def status(pack: KnowledgePack, states: dict, store: Store | None, history=None)
     # ⚠️ ONE "OFFLINE" (architecture review 30, then round 3 of 2026-10-19): the one reading of the night check and the
     # reports — "unknown" is not offline, a device per row, the villa's critical list (pack.is_critical), a device the
     # villa's system knows nothing about left out — with no minimum: the chat says every one
-    for g in devices_offline(pack, states, datetime.now(timezone.utc), FAMILIES, history=history):
+    for g in devices_offline(pack, states, datetime.now(timezone.utc), watched_kinds(), history=history):
         if g.critical:
             problems.append(f"{g.name} offline")
         else:
             offline[g.key] = g.name
-    for fam in FAMILIES:
-        for r in pack.entities(fam):
-            s = states.get(r["entity_id"], {}).get("state")
-            if fam == "security" and r["entity_id"].startswith("lock.") and s == "unlocked":
-                problems.append(f"{r['name']} unlocked")
-            elif fam == "security" and r.get("device_class") in ("moisture", "smoke") and s == "on":
-                problems.append(f"{r['name']} ALARM")
-            # ⚠️ A LOW BATTERY IS THE NIGHT CHECK'S (architecture review 30): a "<= 20" here was a second threshold beside
-            # its battery_warn_pct; its battery finding is an open problem, listed below
+    # a lock open, an alarm on: the security devices' own states
+    for r in pack.entities("security"):
+        s = states.get(r["entity_id"], {}).get("state")
+        if r["entity_id"].startswith("lock.") and s == "unlocked":
+            problems.append(f"{r['name']} unlocked")
+        elif r.get("device_class") in ("moisture", "smoke") and s == "on":
+            problems.append(f"{r['name']} ALARM")
+        # ⚠️ A LOW BATTERY IS THE NIGHT CHECK'S (architecture review 30): a "<= 20" here was a second threshold beside
+        # its battery_warn_pct; its battery finding is an open problem, listed below
     open_now = Problems(store).open_problems() if store else []
     alerts = [p for p in open_now if p["incident"]]
     tasks = [p for p in open_now if not p["incident"]]
@@ -89,9 +78,9 @@ def status(pack: KnowledgePack, states: dict, store: Store | None, history=None)
     if offline_names:
         lines.append(f"Offline ({len(offline_names)}): " + _names(offline_names))
     if alerts:
-        lines.append(f"Open alerts ({len(alerts)}): " + _names([f"{incident_tag(p['incident'])} · {p['title'][:ALERT_TITLE_CHARS]}" for p in alerts]))
+        lines.append(f"Open alerts ({len(alerts)}): " + _names([f"{incident_tag(p['incident'])} · {p['title']}" for p in alerts]))
     if tasks:
-        lines.append(f"Open problems ({len(tasks)}): " + _names([p["title"][:PROBLEM_TITLE_CHARS] for p in tasks]))
+        lines.append(f"Open problems ({len(tasks)}): " + _names([p["title"] for p in tasks]))
     if watch:
         lines.append("Watch: " + _names(watch))
     if colour == "green":

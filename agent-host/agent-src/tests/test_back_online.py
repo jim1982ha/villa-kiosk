@@ -432,8 +432,9 @@ def _door_pack(tmp_path, hidden=(), asleep=False):
         "families": {"security": [] if "lock.example_door" in hidden else [
                          {"entity_id": "lock.example_door", "name": "Example door", "area": "Garden",
                           "family": "security", "asset": "example_door", "device_id": "dev-door"}],
-                     "network": [{"entity_id": "sensor.example_door_signal", "name": "Example door signal",
-                                  "area": "Garden", "family": "network", "asset": "example_door", "device_id": "dev-door"}]},
+                     "network": [] if "sensor.example_door_signal" in hidden else [
+                         {"entity_id": "sensor.example_door_signal", "name": "Example door signal",
+                          "area": "Garden", "family": "network", "asset": "example_door", "device_id": "dev-door"}]},
         "assets": {}}))
     if asleep:
         (tmp_path / "unavailable_by_design.json").write_text(json.dumps({"ids": ["lock.example_door"]}))
@@ -445,7 +446,10 @@ def test_every_way_an_offline_fault_ends_through_the_recheck_says_its_own_senten
     # asked in its order; none of its sentences may be lost — each driven through the 5-minute recheck as it runs
     sys.path.insert(0, os.path.join(SKILL, "scripts"))
     import recheck
-    _door_pack(tmp_path, hidden=["lock.example_door"] if ending == "hidden" else (), asleep=ending == "asleep")
+    # hidden: the whole door, its signal too — a network device is watched for going offline as well (one list,
+    # offline.watched_kinds), so a signal left showing would be the door offline again
+    _door_pack(tmp_path, hidden=["lock.example_door", "sensor.example_door_signal"] if ending == "hidden" else (),
+               asleep=ending == "asleep")
     store = Store(str(tmp_path / "s.sqlite"))
     fid, _ = store.raise_finding("PM-UNAVAILABLE", "lock.example_door", "security", "2026-10-10", "P2",
                                  "Example door has been offline for 1h.", {"hours": 1, "entities": ["lock.example_door"]})

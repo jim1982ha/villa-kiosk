@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from .limits import limit
 from .message_format import PRESSED_STAGE, STEPS
+from .messaging import problem_title_chars
 
 #: A script result's mark that the Kiosk's faults must be brought up to date (its findings opened, still open or
 #: closed): the engine repairs them (app.run_code_job). ⚠️ ONE KEY, WRITTEN AND READ HERE (architecture review 13): the
@@ -168,9 +169,7 @@ def faults_changed() -> dict:
 #: them: the engine reads each as faults_changed(), its words unread. The starter skills no longer call them
 #: (tests/test_outcome.py holds it).
 def reopened(task_id: int, title: str, note: str = "") -> dict:
-    title_max = limit("kiosk.fault_title_chars", 200, unit="characters", group="text", lo=60, hi=2000,
-                      says="The longest title of a fault sent to the VESTA Kiosk.",
-                      reached="The rest of the title is cut, with no mark.", told="")
+    title_max = problem_title_chars()
     note_max = limit("kiosk.update_note_chars", 500, unit="characters", group="text", lo=100, hi=5000,
                      says="The longest note added to a fault's update in the VESTA Kiosk.",
                      reached="The rest of the note is cut, with no mark.", told="")

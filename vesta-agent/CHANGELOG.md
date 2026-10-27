@@ -1,3 +1,20 @@
+## 0.12.366
+
+What you will see:
+- An alert has one name everywhere: the Cockpit's fault, the morning message ("Still open", "Also noted"), the weekly
+  page's to-do list and the chat's villa status all show its first line, without the 🚨 or the rule code, with how often it came
+  back: "Pool pump stopped (again: 3 times in 7 days)". Before, the Cockpit and the to-do list lost the "again"
+  count, and the morning message showed the alert's three lines with the emoji, cut through the count on a long one.
+- On the Limits tab, the eight lengths that cut a problem's name are one row, "problems.title_chars". If one of the
+  old rows had been changed, the tab says so at the top and names the new row to set.
+- One list of the kinds of device watched for going offline, for the night check, the reports and the chat: power,
+  energy, security, levels, running hours, water, generation, batteries and network devices (routers, access
+  points). A router or a battery device that goes offline now gets its offline fault and night-check message like any
+  other device, and a water meter or solar inverter offline is now in the weekly report's offline table and in the
+  chat's answer. The list is one row on the Limits tab, "offline.watched_kinds".
+- On the Rules tab, "Approve buttons work for" and "Siren stops after" accept the same numbers as their Limits rows
+  (1 to 1440 and 1 to 60 minutes), read from the one place the agent checks them.
+
 ## 0.12.365
 
 What you will see:

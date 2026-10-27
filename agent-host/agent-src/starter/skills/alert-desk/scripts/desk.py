@@ -39,7 +39,7 @@ from vesta_shared.store import Incident, Notes, Store, alerted_states, notes_of 
 from vesta_shared import alert_watch as W  # noqa: E402  (a closed alert's watch: one owner)
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared.timeutil import day_time_label, moment_label, villa_time  # noqa: E402
-from vesta_shared.problems import AGAIN_DAYS, Problems, again_title, incident_runs  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import AGAIN_DAYS, Problems, incident_runs, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
@@ -56,11 +56,6 @@ from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Li
 FATIGUE_WINDOW_DAYS = limit("alerts.fatigue_window_days", 30, unit="days", group="detect", lo=1, hi=365,
                             says="Days over which an automation's alerts are counted to propose retuning it.",
                             reached="Older alerts do not count.", told="person")
-TASK_TITLE_CHARS = limit("alerts.task_title_chars", 250, unit="characters", group="text", lo=40, hi=2000,
-                         says="Longest title of the fault an alert reopens.", reached="A longer one is cut.", told="")
-TITLE_CHARS = limit("alerts.title_chars", 200, unit="characters", group="text", lo=40, hi=2000,
-                    says="Longest alert title, taken from the villa's own message.", reached="A longer one is cut.",
-                    told="")
 
 SKILL = os.path.dirname(HERE)
 # rules.yaml with the villa's own villa.rules.yaml on top (kept by updates): a villa's route comes FIRST, so it
@@ -590,8 +585,9 @@ def _ladder(store: Store, iid: int, ev: dict, now: datetime, sev: str, route: di
     if does(sev, route) == "chase":
         store.update_incident(iid, state=Incident.ASKED, asked_at=now.isoformat(), assignee=CHASE["asks"])
         eid, check = ev.get("entity_id", ""), route.get("check") or ""
-        title = again or ev["message"]
-        Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, title[:TASK_TITLE_CHARS], check, note=note)
+        # its task is named as every page names the alert (problems.problem_name), "(again: …)" included when it came back
+        title = again or problem_name(ev["message"])["headline"]
+        Problems(store).reopen_task("incident", iid, ev["rule_id"], eid, title, check, note=note)
         # new, reopened or still open: the engine makes its fault what the task says (tickets.repair, Problems.card)
         out["actions"].append(R.faults_changed())
     elif does(sev, route) == "digest":
@@ -640,7 +636,7 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     carry_to(store, inc["id"], sev, p)
     inc = store.incident(inc["id"])
     runs = incident_runs(inc, store)
-    title = again_title(str(p.get("message") or inc["rule_id"])[:TITLE_CHARS], runs - 1)
+    title = problem_name(str(p.get("message") or inc["rule_id"]), runs - 1)["headline"]
     _ladder(store, inc["id"], {**p, "rule_id": inc["rule_id"], "entity_id": inc["entity_id"],
                                "message": p.get("message") or inc["rule_id"]}, now, sev, route, out, again=title,
             note="Back again." if came_back_now else "Still there after the close.")

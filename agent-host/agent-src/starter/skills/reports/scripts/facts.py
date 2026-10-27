@@ -56,9 +56,9 @@ ERROR_CHARS = limit("reports.error_chars", 300, unit="characters", group="text",
 from vesta_shared.skill_settings import retired  # noqa: E402  (a villa setting the skill no longer reads: said)
 from vesta_shared.timeutil import day_label, day_time_label, local_day, month_label, villa_date, villa_time  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)
-from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
+from vesta_shared.problems import Problems, problem_name  # noqa: E402  (what is still open, and its one name: one owner)
 
-from vesta_shared.offline import devices_offline  # noqa: E402  (the one reading of "offline now")
+from vesta_shared.offline import devices_offline, watched_kinds  # noqa: E402  (the one reading of "offline now")
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.retention import days_words  # noqa: E402  (how long the villa's system keeps detail, in words)
 from vesta_shared.past import automation_run, unread  # noqa: E402  (one reading of "a rule ran"; the one "could not be read whole")
@@ -143,7 +143,7 @@ class Ctx:
 
     def states(self) -> dict:
         if self._states is None:
-            ids = [r["entity_id"] for fam in self.cfg.get("offline_families") or [] for r in self.pack.families.get(fam, [])]
+            ids = [r["entity_id"] for fam in watched_kinds() for r in self.pack.families.get(fam, [])]
             ids += [r["entity_id"] for r in self.pack.families.get("battery", [])]
             # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery has a line
             self._states = read_states(self.cli, self.pack, self.now, sorted(set(ids))) if ids else {}
@@ -335,15 +335,21 @@ class Ctx:
     def offline(self) -> list[dict]:
         """The DEVICES offline: one row per Home Assistant device, by its name, since its first sensor went — the one
         reading of it (vesta_shared.offline.devices_offline: the night check's and the concierge's), over this skill's
-        `offline_families`, with no minimum (the page lists every one).
+        kinds watched for it (vesta_shared.offline.watched_kinds, the night check's and the chat's too), with no minimum
+        (the page lists every one).
 
         ⚠️ DEVICES, NOT THEIR SENSORS (owner, 2026-10-09: "make sure this table only reports devices, and not entities
         related to a device"). It listed sensors: a phone's Wi-Fi traffic as two rows "RX" and "TX", one pump plug as
         "Jacuzzi Pump Power" beside its relay. A sensor with no device keeps its own row; a device Home Assistant
         knows nothing about (no name, maker or model: a phone seen on the Wi-Fi) is not one of the villa's."""
+        if "offline_families" in self.cfg:
+            # ⚠️ ONE LIST NOW (architecture review P, 2026-10-27): a villa's own reports.yaml that still names its
+            # families is said, never read in silence: the Limits tab holds the one list
+            self.problems.append("villa.reports.yaml: offline_families is no longer read; the kinds of device watched "
+                                 "for going offline are one setting, offline.watched_kinds, on the Limits tab")
         return [{"name": g.name, "since": _local(g.since.isoformat(), self.Z) if g.since else "", "critical": g.critical,
                  "family": g.family, "entity_id": g.entity_id}
-                for g in devices_offline(self.pack, self.states(), self.now, self.cfg.get("offline_families") or [],
+                for g in devices_offline(self.pack, self.states(), self.now, watched_kinds(),
                                          history=getattr(getattr(self, "cli", None), "history", None))]
 
 
@@ -426,7 +432,7 @@ def _alert_rows(c: Ctx) -> list[dict]:
         outcome = words.get(state, state)
         if i.get("reply"):
             outcome += f" ({i['reply']})" if i["reply"].lower() not in outcome.lower() else ""
-        rows.append({"when": i["opened_at"], "what": _no_code(p.get("message") or p.get("label") or i["rule_id"]).split("\n")[0],
+        rows.append({"when": i["opened_at"], "what": problem_name(p.get("message") or p.get("label") or i["rule_id"])["headline"],
                      "lasted": lasted or ("open" if not i.get("closed_at") else ""), "outcome": outcome,
                      "severity": i.get("severity"), "source": "agent"})
     rows += c.ha_alerts()
@@ -607,7 +613,7 @@ def s_money(c: Ctx) -> dict:
 def s_fixed_suggest(c: Ctx) -> dict:
     # ⚠️ "FIXED" IS WHAT ENDED, NOT WHAT HAPPENED ONCE (architecture review 30): a pump that ran short one night, or a
     # battery-trend event, opened and closed the same day — listed "Fixed" though nobody repaired anything
-    fixed = [{"title": _no_code(f["summary"]), "day": f.get("closed_day")} for f in c.store.findings(status="closed")
+    fixed = [{"title": problem_name(f["summary"])["headline"], "day": f.get("closed_day")} for f in c.store.findings(status="closed")
              if f.get("closed_day") and c.start.isoformat() <= f["closed_day"] <= c.end.isoformat()
              and f["closed_day"] != (f.get("reopened_day") or f.get("opened_day"))]
     props = [{"id": p["id"], "title": p.get("title"), "detail": p.get("detail"), "benefit": p.get("benefit")}

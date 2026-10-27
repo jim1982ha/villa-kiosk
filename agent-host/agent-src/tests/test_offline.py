@@ -1,6 +1,6 @@
 """The devices offline now — one reading (vesta_shared.offline.devices_offline) with three callers: the night check and
 recheck.py, the reports' monitoring table, the concierge's status (architecture review round 3, 2026-10-19: three walks,
-three groupings, three family lists)."""
+three groupings; review P, 2026-10-27: three family lists, now one)."""
 from __future__ import annotations
 
 import os
@@ -91,28 +91,23 @@ def test_the_callers_minimum_the_alerted_devices_and_the_integration_are_the_cal
     assert [g.name for g in devices_offline(pack, STATES, NOW, ["level"], min_minutes=10)] == ["Tank 2"]   # 12min, alone
 
 
-def test_the_three_callers_name_their_families_side_by_side():
-    # ⚠️ THREE LISTS (architecture review round 3, 2026-10-19): the reports' reports.yaml, the night check's
-    # WATCHED_FAMILIES and the concierge's FAMILIES each name their own families. Whether to make them one is the
-    # owner's call; until then this test keeps the three in one place, so a change to one is read beside the others.
-    import yaml
-    reports = yaml.safe_load(open(os.path.join(STARTER_SKILLS, "reports", "reports.yaml")))["offline_families"]
-    night = re.search(r'^WATCHED_FAMILIES = \((.*)\)$',
-                      open(os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "nightly.py")).read(), re.M)
-    chat = re.search(r'^FAMILIES = \((.*)\)$',
-                     open(os.path.join(STARTER_SKILLS, "villa-concierge", "scripts", "concierge.py")).read(), re.M)
-    assert night and chat
-    night = [x.strip(' "') for x in night.group(1).split(",") if x.strip()]
-    chat = [x.strip(' "') for x in chat.group(1).split(",") if x.strip()]
-    assert reports == ["power", "energy", "battery", "security", "level", "network", "runtime"]
-    assert night == ["power", "energy", "security", "level", "runtime", "water", "generation"]
-    assert chat == ["security", "power", "energy", "runtime", "level", "battery"]
-    assert set(night) - set(reports) == {"water", "generation"} and set(reports) - set(night) == {"battery", "network"}
-    assert set(chat) <= set(reports)
+def test_no_caller_keeps_its_own_list_of_watched_kinds():
+    # ⚠️ ONE LIST (architecture review P, 2026-10-27; the owner chose every kind): the night check's WATCHED_FAMILIES,
+    # the concierge's FAMILIES and the reports' offline_families each named their own — a router offline was in the
+    # weekly report and nowhere else. The list is vesta_shared.offline.watched_kinds, on the Limits tab.
+    from vesta_shared.offline import watched_kinds
+    assert watched_kinds() == ["power", "energy", "security", "level", "runtime", "water", "generation", "battery",
+                               "network"]
+    sources = {os.path.join(d, *f): open(os.path.join(STARTER_SKILLS, d, *f)).read() for d, *f in (
+        ("preventive-maintenance", "scripts", "nightly.py"), ("preventive-maintenance", "scripts", "recheck.py"),
+        ("villa-concierge", "scripts", "concierge.py"), ("reports", "scripts", "facts.py"), ("reports", "reports.yaml"))}
+    for path, text in sources.items():
+        assert not re.search(r"^(WATCHED_FAMILIES|FAMILIES|offline_families)\s*[=:]", text, re.M), path
 
 
-def test_the_three_callers_read_the_one_reading(tmp_path):
-    # the reports' table, the concierge's status and the night check's findings all come from devices_offline
+def test_the_three_callers_read_the_one_list_and_the_one_reading(tmp_path, monkeypatch):
+    # the reports' table, the concierge's status and the night check's findings all come from devices_offline, over
+    # the one list: a list set on the Limits tab reaches all three
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "villa-concierge", "scripts"))
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
@@ -121,25 +116,24 @@ def test_the_three_callers_read_the_one_reading(tmp_path):
     import nightly
     from vesta_shared.store import Store
     from zoneinfo import ZoneInfo
+    (tmp_path / "limits.yaml").write_text("offline.watched_kinds: [power, switch, network]\n")
+    monkeypatch.setenv("VESTA_LIMITS", str(tmp_path / "limits.yaml"))
     pack = _pack(critical=["switch.spa_relay"])
     c = facts.Ctx.__new__(facts.Ctx)
-    c.pack, c.Z, c.now, c._states = pack, ZoneInfo("Asia/Makassar"), NOW, STATES
-    c.cfg = {"offline_families": ["power", "switch"]}
-    assert c.offline() == [{"name": "Spa Plug", "since": "2026-10-09T15:00", "critical": True, "family": "power",
-                            "entity_id": "sensor.spa_pump_power"}]
+    c.pack, c.Z, c.now, c._states, c.cfg = pack, ZoneInfo("Asia/Makassar"), NOW, STATES, {}
+    assert [o["name"] for o in c.offline()] == ["Spa Plug", "Unnamed Ubiquiti U6 Lite"]
     s = concierge.status(pack, STATES, Store(str(tmp_path / "s.sqlite")))
     assert s["colour"] == "red" and s["problems"] == ["Spa Plug offline"]
-    assert s["offline"] == ["Lone Battery", "Tank", "Tank 2", "Tank 3"]      # its own families (level in, network out)
+    assert s["offline"] == ["Unnamed Ubiquiti U6 Lite"]                  # the same two devices: no tank, no battery
     from vesta_shared.params import VillaParams
     params = VillaParams(helpers=[], states={}, defaults={"unavailable_minutes": 10, "integration_down_devices": 3,
                                                                   "integration_down_window_minutes": 30})
     found = nightly.offline_findings(pack, STATES, NOW, params)
     assert [(f.rule_id, f.entity_id, f.summary) for f in found] == [
         ("PM-UNAVAILABLE", "sensor.spa_pump_power", "Spa Plug has been offline for 5h."),
-        ("PM-UNAVAILABLE", "sensor.tank", "zigbee integration (3 devices) has been offline for 12min.")]
-    assert found[1].detail["entities"] == ["sensor.tank", "sensor.tank2", "sensor.tank3"]
-    # the alert that follows the plug takes it; the integration still counts its three
-    assert [f.entity_id for f in nightly.offline_findings(pack, STATES, NOW, params, {"plug"})] == ["sensor.tank"]
+        ("PM-UNAVAILABLE", "sensor.ap_rx", "Unnamed Ubiquiti U6 Lite has been offline for 2h.")]
+    # the alert that follows the plug takes it
+    assert [f.entity_id for f in nightly.offline_findings(pack, STATES, NOW, params, {"plug"})] == ["sensor.ap_rx"]
 
 
 def test_a_restart_is_not_a_new_outage_and_three_unrelated_drops_are_not_an_integration_down():

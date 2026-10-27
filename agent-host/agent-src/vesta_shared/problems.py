@@ -26,7 +26,7 @@ from typing import Callable
 
 from . import agreement, result
 from .limits import limit
-from .messaging import no_code as _no_code
+from .messaging import headline, problem_title_chars
 from .store import Incident, Notes, Store, notes_of
 from . import alert_watch, kiosk_words
 
@@ -54,17 +54,6 @@ AGAIN_DAYS = again_days()
 #: What a task's fault says when it opens again because its problem was read still there after a person closed it —
 #: as the alert desk's reopening says it (its quiet_after_done), one sentence for both.
 STILL_THERE = "Still there after the close."
-
-
-def task_title_chars() -> int:
-    return limit("problems.task_title_chars", 250, unit="characters", group="text", lo=60, hi=2000,
-                 says="The longest title a problem's task keeps.", reached="The rest of the title is cut.", told="")
-
-
-def alert_title_chars() -> int:
-    return limit("problems.alert_title_chars", 200, unit="characters", group="text", lo=60, hi=2000,
-                 says="The longest title an alert's problem keeps (from the alert's own message).",
-                 reached="The rest of the title is cut.", told="")
 
 
 def occurrences(finding: dict | None) -> list[str]:
@@ -98,8 +87,25 @@ def _runs_of(inc: dict) -> list[str]:
 
 
 def again_title(summary: str, again: int | None) -> str:
-    """A problem's title with how often it came back: the Kiosk fault, the digest and the AI all read this one."""
+    """`summary` with how often it came back ("(again: 3 times in 7 days)"); problem_name() is what every page shows."""
     return f"{summary} (again: {again + 1} times in {again_days()} days)" if again else summary
+
+
+def problem_name(text: str, again: int | None = None) -> dict:
+    """THE name of a problem, the same on every surface — the Cockpit's fault, the morning message, the weekly page,
+    the playbook, the chat's villa status, the night check's message: {headline, detail}. headline: the text's first
+    line with no rule code and no emoji (messaging.headline), with how often it came back, at most
+    problems.title_chars long — cut before "(again: …)", never through it, so a cut again cuts nothing. detail: the
+    text's other lines ("" when none), shown only where there is room for them.
+
+    ⚠️ ONE NAME (architecture review P, 2026-10-27): an alert's text has three lines (what tripped, the reading, the
+    limit held). The Cockpit kept the first and lost the "(again: …)" written after the LAST; the morning message
+    showed all three with the 🚨, cut at 160 — on a long alert, through the count; the weekly page dropped the count;
+    eight settings cut the same title."""
+    lines = [ln.strip() for ln in (text or "").strip().splitlines() if ln.strip()]
+    tail = again_title("", again)
+    head = headline(text)[:max(0, problem_title_chars() - len(tail))].rstrip()
+    return {"headline": head + tail, "detail": "\n".join(lines[1:])}
 
 
 
@@ -533,14 +539,14 @@ class Problems:
             # ⚠️ ONE OPENER (architecture review, 2026-10-19): this reopened the last task itself, the alert desk through
             # reopen_task — a third way (open_task, for a raised priority) made a second task and a second Kiosk fault
             why = STILL_THERE if kind == "finding" and self.still_there_after_close(source) else note or "Back again."
-            tid, how = self.reopen_task(kind, sid, last["rule_id"], last["entity_id"], title[:task_title_chars()],
+            tid, how = self.reopen_task(kind, sid, last["rule_id"], last["entity_id"], title,
                                         self.check_of(last), note=why)
             return [tid] if how == "reopened" else []
         if kind != "finding":
             return []
         row = self.store.finding(sid)
         check = json.loads(row.get("detail") or "{}").get("check") or ""
-        return [self.store.add_task(row["rule_id"], row["entity_id"], title[:task_title_chars()], source=source, check_text=check or None)]
+        return [self.store.add_task(row["rule_id"], row["entity_id"], title, source=source, check_text=check or None)]
 
     def settle_all(self, faults: set[str] | None = None) -> list[int]:
         """settle() for every open problem and every open task — the repair's one pass: the ids of the tasks that moved.
@@ -675,15 +681,16 @@ class Problems:
             if row and row.get("status") == "open" and row.get("summary"):
                 # ⚠️ THE SAME NAME AS EVERY READER (architecture review 24): the repair renamed the fault to the bare
                 # summary seconds after the night wrote "(again: …)" — the Cockpit never showed it
-                return again_title(row["summary"], len(occurrences(row)) - 1)
+                return problem_name(row["summary"], len(occurrences(row)) - 1)["headline"]
         if kind == "incident":
             # ⚠️ AN ALERT SAYS WHAT HOME ASSISTANT SAYS NOW (architecture review, 2026-10-14): Home Assistant re-worded an
             # open alert (desk RESTATED), Telegram showed the new words, the card kept the first ones
             inc = self.store.incident(sid)
             message = notes_of(inc).get(Notes.MESSAGE) if inc and not inc.get("closed_at") else None
             if message:
-                return again_title(str(message)[:alert_title_chars()], incident_runs(inc, self.store) - 1)
-        return self.title_of(task)
+                return problem_name(str(message), incident_runs(inc, self.store) - 1)["headline"]
+        # a task with no source, or its problem over: its own words, named when it was written (never cut again)
+        return headline(self.title_of(task))
 
     def check_of(self, task: dict) -> str:
         """What to do on site, as the problem's SOURCE says it now ("" when nothing says): an alert's route check, carried
@@ -716,19 +723,21 @@ class Problems:
             d = json.loads(f.get("detail") or "{}")
             since = f.get("reopened_day") or f["opened_day"]
             back = len(occurrences(f)) - 1
+            named = problem_name(f["summary"], back)
             out.append({"id": f"finding-{f['id']}", "source": f"finding:{f['id']}", "rule_id": f["rule_id"],
                         "entity_id": f["entity_id"], "severity": f["severity"],
-                        "title": again_title(_no_code(f["summary"]), back), "again": back,
+                        "title": named["headline"], "detail": named["detail"], "again": back,
                         "check": d.get("check") or "", "since": since, "incident": None,
                         "figures": {k: v for k, v in d.items() if isinstance(v, (int, float, str)) and k != "check"}})
         for i in self.store.incidents(open_only=True):
             p = notes_of(i)
             src = f"incident:{i['id']}"
+            named = problem_name(p.get("message") or i["rule_id"], incident_runs(i, self.store) - 1)
             out.append({"id": f"incident-{i['id']}", "source": src, "rule_id": i["rule_id"],
                         "entity_id": i["entity_id"], "severity": i["severity"],
                         # its latest run is when it opened, how often it came back is in its title (review 24: a
                         # reopened alert stayed "still open since the 1st", never new, never "again")
-                        "title": again_title(_no_code(p.get("message") or i["rule_id"]), incident_runs(i, self.store) - 1),
+                        "title": named["headline"], "detail": named["detail"],
                         # what to do, as the Kiosk fault's note says it (check_of): the digest's "Still open" line read a
                         # key the desk never wrote, so an alert's line had no check where a finding's had one
                         "check": self.check_of(self.store.last_task(src) or {"source": src}),

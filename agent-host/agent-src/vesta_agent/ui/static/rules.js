@@ -5,10 +5,12 @@ import { fileEditor } from "./viewer.js";
 // ---------------------------------------------------------------- rules (policy.yaml)
 // the rules, the lists and their domains, the siren's domains: policy.form_schema(), served with the file —
 // the page keeps no copy (two copies had drifted: input_button offered, then refused on save)
-export let SCHEMA = { rules: {}, lists: [], actionable: [], siren_domains: [], words: {}, resets: {} };
+export let SCHEMA = { rules: {}, lists: [], actionable: [], siren_domains: [], words: {}, resets: {}, numbers: {} };
 
 // the settings' names and choices are the agent's (policy.FIELDS, RESET_WORDS), served in SCHEMA: never a copy here
 const W = (path) => SCHEMA.words[path] || path;
+// a number's bounds, from the table the agent's check reads (policy.NUMBERS): never written here
+const bounds = (k) => ({ min: SCHEMA.numbers[k]?.lo, max: SCHEMA.numbers[k]?.hi });
 // the villa's devices, from the agent's knowledge pack: chosen by name, never typed as ids
 export const ENT = { list: [], byId: {} };
 
@@ -252,7 +254,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // how long an Approve button works: with the services that ask for one, on the title's line (owner, 2026-10-06)
   // its (i) after the unit (owner, 2026-10-07): "Approve buttons work for [15] min (i)"
   const ttl = h("label", { class: "field row-inline" }, h("span", {}, W("approval_ttl_minutes").replace(/ \(minutes\)$/, "")),
-    h("input", { type: "number", min: 1, max: 1440, value: f.approval_ttl_minutes, "aria-label": W("approval_ttl_minutes"),
+    h("input", { type: "number", ...bounds("approval_ttl_minutes"), value: f.approval_ttl_minutes, "aria-label": W("approval_ttl_minutes"),
                  oninput: on((t) => (f.approval_ttl_minutes = num(t.value))) }), h("span", {}, "min"),
     infoButton(W("approval_ttl_minutes"), "An Approve or Refuse button older than this does nothing: the person asks again."))
   const services = h("section", { class: "card" },
@@ -282,7 +284,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
           : [h("span", { class: "muted" }, "None")])),
       field(W("siren_entity"), picker(() => (f.siren_entity ? [f.siren_entity] : []), (v) => (f.siren_entity = v[0] || null), SCHEMA.siren_domains, true),
             "The siren the alert desk may ask the owner to sound."),
-      field(W("siren_auto_off_min"), h("input", { type: "number", min: 1, max: 60, value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))),
+      field(W("siren_auto_off_min"), h("input", { type: "number", ...bounds("siren_auto_off_min"), value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))),
     // in the page, not behind the (i) (owner, 2026-10-15): hiding is done in the villa's system, not here (knowledge_pack)
     h("p", { class: "muted" }, "Devices hidden in the villa's system are ignored by the agent: left out of the villa status, the reports and what the AI is told."));
 

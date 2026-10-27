@@ -8,7 +8,9 @@ villa could read three different answers to "what is offline". Here: one walk, o
 physical device, else integration + asset, else the entity), one name (the device's own, device_label; else the
 asset's, else the entity's), "a device the villa's system knows nothing about is not the villa's" applied once.
 
-Nothing here holds a threshold or a list: the families are the caller's (each skill names its own), as are the
+The kinds of device watched for going offline are ONE list, watched_kinds() (architecture review P, 2026-10-27: the
+night check, the reports and the chat each named their own, so a router offline was in the weekly report and nowhere
+else, a water meter offline raised a fault the report never listed). The rest is the caller's: the
 minimum (`min_minutes`: the night's settings; the page and the chat ask for everything), the devices an alert already
 follows (`alerted`) and from how many devices an integration counts as down (`integration_min`).
 
@@ -24,6 +26,16 @@ from datetime import datetime, timedelta
 from .device_state import OFFLINE_NOW
 from .limits import limit
 from .timeutil import villa_time
+
+def watched_kinds() -> list[str]:
+    """The kinds of device (the knowledge pack's families) whose going offline is told: the night check's faults and
+    their 5-minute recheck, the reports' offline table and the chat's villa status all read this one list."""
+    return limit("offline.watched_kinds", ["power", "energy", "security", "level", "runtime", "water", "generation",
+                                           "battery", "network"], unit="kinds", group="detect",
+                 says="Kinds of device watched for going offline: by the night check, in the reports and in the chat's "
+                      "villa status.",
+                 reached="A device of another kind is never called offline.", told="")
+
 
 #: What a history row says when the device gave no reading: what "offline since" walks back over
 NO_READING = frozenset({"unavailable", "unknown"})

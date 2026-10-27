@@ -45,6 +45,24 @@ def no_code(s: str) -> str:
     return re.sub(r"^\s*\[[^\]]{2,80}\]\s*", "", s or "").strip()
 
 
+def problem_title_chars() -> int:
+    """THE longest name of a problem, on every surface (architecture review P, 2026-10-27: eight settings cut the same
+    title — the Kiosk fault's, the task's, the alert's, the morning message's, the chat's — each its own way)."""
+    return limit("problems.title_chars", 160, unit="characters", group="text", lo=40, hi=1000,
+                 says="The longest name of a problem: the Cockpit's fault, the morning message, the reports and the "
+                      "chat's villa status all show the same one.",
+                 reached="The name is cut; how often it came back is always kept.", told="")
+
+
+def headline(s: str) -> str:
+    """What a person reads as the name of a problem: the first line of its text, with no rule code (no_code) and no
+    leading emoji or symbol (the 🚨 of an alert). An alert's text has several lines (what tripped, its limit, held);
+    only the first names it."""
+    s = (s or "").strip().splitlines()[0] if (s or "").strip() else ""
+    s = re.sub(r"^[^\w(\"'\[]+", "", s)          # 🚨 before the rule code, or alone
+    return re.sub(r"^[^\w(\"']+", "", no_code(s)).strip()
+
+
 #: A web page cited in an investigation's text: "[2]" (its place in the page's sources).
 CITE = re.compile(r"\[(\d{1,2})\]")
 

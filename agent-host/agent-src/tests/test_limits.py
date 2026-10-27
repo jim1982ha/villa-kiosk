@@ -146,6 +146,34 @@ def test_a_rule_is_saved_in_policy_yaml_and_checked_by_the_agents_rules(ui):
     assert status == 400 and "at least 0.05" in " ".join(body["problems"])
 
 
+def test_the_agents_two_numbers_are_bounded_by_one_table_on_both_tabs(ui):
+    # architecture review P (2026-10-27): "1 to 1440 minutes" and "1 to 60 minutes" were written in the agent's check,
+    # the Limits tab's rows and the Rules tab's inputs. All three read policy.NUMBERS now.
+    import re
+    from vesta_agent.policy import NUMBERS, form_schema
+    from vesta_agent.policy import problems as policy_problems
+    rows = {r["id"]["path"][0]: r for r in _rows(ui)["rows"] if r["id"]["src"] == "policy" and len(r["id"]["path"]) == 1}
+    schema = form_schema()["numbers"]
+    for key, (default, lo, hi) in NUMBERS.items():
+        assert (rows[key]["lo"], rows[key]["hi"], rows[key]["default"]) == (lo, hi, default), key
+        assert schema[key] == {"lo": lo, "hi": hi}, key
+        assert policy_problems({key: hi}) == [] and any(key in x for x in policy_problems({key: hi + 1})), key
+    js = open(os.path.join(SRC, "vesta_agent", "ui", "static", "rules.js"), encoding="utf-8").read()
+    for key in NUMBERS:
+        (inp,) = re.findall(r'h\("input", \{ type: "number", ([^}]*?)value: f\.' + key, js)
+        assert inp == f'...bounds("{key}"), ', key                     # its bounds from the schema, none of its own
+
+
+def test_a_value_set_for_a_limit_merged_into_another_is_said_never_dropped_in_silence(ui):
+    # review P (2026-10-27): eight lengths of a problem's name became problems.title_chars — a villa that had set one
+    with open(os.path.join(ui.config_dir, limits.FILE), "w", encoding="utf-8") as f:
+        f.write("kiosk.fault_title_chars: 300\nan.old.limit: 4\n")
+    said = _rows(ui)["problems"]
+    assert "kiosk.fault_title_chars is set in limits.yaml but no longer read: problems.title_chars does its job now, " \
+           "set it there." in said
+    assert "an.old.limit is set in limits.yaml but no longer read." in said
+
+
 def test_every_change_is_in_page_changes(ui):
     _put(ui, {"src": "policy", "path": ["approval_ttl_minutes"]}, 20)
 
@@ -189,7 +217,7 @@ NOT_LIMITS = {
     # the log and the agent's own records only: never what a person or the AI reads
     ("vesta_agent/tickets.py", "(title or \"\")[:80]"): "a log line",
     ("vesta_agent/tickets.py", "(title or \"\")[:60]"): "a log line",
-    ("vesta_agent/tickets.py", "ticket_title(title)[:80]"): "a log line",
+    ("vesta_agent/tickets.py", "headline(title)[:80]"): "a log line",
     ("vesta_agent/tickets.py", "(a.get(\"title\") or \"\")[:80]"): "a log line",
     ("vesta_agent/tickets.py", "unseen[:10]"): "a log line",
     ("vesta_agent/tools.py", "status.step_summary(**step(name, args))[:100]"): "a log line",
