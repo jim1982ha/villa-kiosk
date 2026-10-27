@@ -24,7 +24,7 @@ import { badgeImage } from "@/babylon/badgeIcons";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
-import { badgeOwnerOf, deviceLook, groupLook, storeLookSource, type LookSource } from "@/utils/deviceActivity";
+import { badgeOwnerOf, deviceLook, groupLook, lookMarks, storeLookSource, type LookSource } from "@/utils/deviceActivity";
 import { bulkSwitchPlan, bulkWords } from "@/config/activeDevices";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { ROW_SWITCH_DOMAINS } from "@/utils/quickAction";
@@ -132,7 +132,7 @@ export default function SummaryGroupPanel({
 }: Props) {
   // Entities on the 3D map; anything else exists only in Home Assistant and
   // is listed last and tinted (config/VillaModel).
-  const { mappedEntityIds, devices: villaDevices, hasFault } = useVillaModel();
+  const { mappedEntityIds, marks } = useVillaModel();
   const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
   const roomFloors = useRoomFloors();
   const { config, resolvedRooms } = useConfig();
@@ -143,13 +143,9 @@ export default function SummaryGroupPanel({
    *  linked entity through devicePower, its device_class alarm). A
    *  linked entity is frequently not itself in this group (a pump's switch
    *  lives elsewhere), so this reads the whole store, not the group's list. */
-  // ...and the villa's critical list as the villa model folds it (devices.isCritical): a critical device that lost
-  // contact is red here, as on the map and the Cockpit (2.496.428).
-  // ...and hidden as the villa model reads it (devices.isHidden): a hidden row keeps its "hidden" mark, never red or amber
-  // ...and its open faults (VillaModel.hasFault): the amber "!" its map badge carries (owner, 2026-10-22: badge proposal 2)
-  const looks = storeLookSource(entities, {
-    ...config, isCritical: villaDevices.isCritical, isHidden: villaDevices.isHidden, hasFault,
-  });
+  // ...and the villa model's marks, as the map reads them (VillaModel `marks`): a critical device that lost contact is
+  // red, a hidden row keeps its "hidden" mark (never red or amber), an open fault its amber "!".
+  const looks = storeLookSource(entities, { ...config, ...lookMarks(marks) });
   const { role } = useProfile();
   const entityLabel = useEntityLabel();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();

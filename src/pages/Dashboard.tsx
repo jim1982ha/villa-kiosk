@@ -39,7 +39,7 @@ import { displayLabelFor } from "@/config/EntityMap";
 import { deviceRoom, entityIdsKey, resolveRooms, roomIdSet } from "@/config/devicePlace";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
-import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
+import { deviceLook, lookMarks, storeLookSource } from "@/utils/deviceActivity";
 import { chipRooms, shown as surfaceShown, mergeTeleportPoints, roomChoicesFor, type Surface } from "./surfaces";
 import { START, screenReducer, type Screen, type ScreenAction } from "./screen";
 import type { Doors } from "@/auth/doors";
@@ -52,8 +52,7 @@ import type { SceneManager } from "@/babylon/SceneManager";
 import type { ActivePanel } from "@/types/panel.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { VillaModelProvider, useVillaModelValue, useVillaSets, useDeviceIdentity } from "@/config/VillaModel";
-import { criticalDevices, deviceOf, hiddenIn } from "@/config/deviceGroups";
-import { useCriticalDevices } from "@/ha/criticalDevices";
+import { deviceOf } from "@/config/deviceGroups";
 import { categoryMembers } from "@/config/villaVisibility";
 import AskDialog from "@/components/common/AskDialog";
 import { readSceneMirror } from "./sceneMirror";
@@ -62,8 +61,7 @@ import { readSceneMirror } from "./sceneMirror";
 export default function Dashboard() {
   const { config, update, resolvedRooms, setResolvedRooms } = useConfig();
   const { role } = useProfile();
-  const { connect, entities, suppressedEntityIds, hiddenInHaEntityIds, ws, haConfig, subscribeAll, entityAreaNames, entityDeviceIds,
-    deviceUnits } = useHA();
+  const { connect, entities, suppressedEntityIds, ws, haConfig, subscribeAll, entityAreaNames } = useHA();
   // ⚠️ A ROOM FOR EVERY DEVICE, NOT FOR A LIST (architecture review, 2026-10-15): rooms were worked out for the ids on
   // the map and the stored mappings, and each new place that showed a device had to join that list — a fault on a sensor
   // the model does not draw had no room line (owner, 2026-10-15). Every entity Home Assistant has now gets its room by
@@ -405,17 +403,13 @@ export default function Dashboard() {
   // The open panel's header actions — Back, readings, edit, report, badge,
   // the linked switch and its "ask first" — are components/panels/
   // useOpenPanelActions'; this page only provides them and draws the dialog.
-  // The villa's critical devices, folded onto their devices as the villa model folds them (devices.isCritical — one
-  // shared read, ha/criticalDevices): a critical device that lost contact is red on the map, its room chip, the open
-  // window and the room chooser, as on the Cockpit (2.496.428). This page sits outside the villa model, so it folds here.
-  const criticalIds = useCriticalDevices();
-  const critical = useMemo(() => criticalDevices(criticalIds, identity.folding, entityDeviceIds, deviceUnits),
-    [criticalIds, identity.folding, entityDeviceIds, deviceUnits]);
-  const isCritical = useCallback((id: string) => critical.has(id), [critical]);
-  useEffect(() => { manager?.setCriticalDevices(critical); }, [manager, critical]);
-  // Hidden in the villa's system, as the villa model reads it (deviceGroups.hiddenIn — VillaDevices.isHidden): never
-  // red or amber on the map, its room chip, the open window or the room chooser, as it is in no Cockpit list.
-  const isHidden = useMemo(() => hiddenIn(hiddenInHaEntityIds, identity.folding), [hiddenInHaEntityIds, identity.folding]);
+  // Each device's marks, the villa model's ONE value (VillaModel `marks`: critical, hidden, an amber Cockpit issue),
+  // handed as it is to the map, the open window and the room chooser, as the room lists read it: a critical device that
+  // lost contact is red, a hidden one quiet (in no Cockpit list), one with a fault or late maintenance its amber "!"
+  // (architecture review N: this page gathered them itself, folding two a second time).
+  const marks = villa.marks;
+  const isHidden = marks.isHidden;
+  useEffect(() => { manager?.setDeviceMarks(marks); }, [manager, marks]);
   const categoryGroupEntityIds = useMemo(
     () => (categoryGroup ? categoryMembers(role, categoryGroup, {
       entityMap: config.entityMap, entities, dismissed: dismissedIds,
@@ -423,14 +417,8 @@ export default function Dashboard() {
       isHidden, deviceOf: (id) => deviceOf(identity.folding, id),
     }) : []),
     [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds, isHidden, identity.folding]);
-  useEffect(() => { manager?.setHiddenDevices(isHidden); }, [manager, isHidden]);
-  // What is wrong with each device, the villa model's ONE answer (attention.deviceIssues, from the Overview's cards):
-  // the amber "!" on the map, the open window and the room chooser — a fault or late maintenance (owner, 2026-10-22:
-  // badge proposal 2; review L, 2026-10-25: the same answer as the window's sign and the Cockpit's card).
-  const hasFault = villa.hasFault;
-  useEffect(() => { manager?.setFaultDevices(villa.issues.amber); }, [manager, villa.issues]);
   const openPanel = useOpenPanelActions({
-    screen, go, panelFor, readingsOf: identity.readingsOf, doors, isCritical, isHidden, hasFault,
+    screen, go, panelFor, readingsOf: identity.readingsOf, doors, marks,
   });
   const linkedAsk = openPanel.linkedAsk;
 
@@ -623,14 +611,14 @@ export default function Dashboard() {
     (room: string, entityIds: string[], roomNames: string[]) => {
       const merged = chipRooms(roomNames, room);
       if (merged.length > 1) {
-        const looks = storeLookSource(entities, { ...config, isCritical, isHidden, hasFault });
+        const looks = storeLookSource(entities, { ...config, ...lookMarks(marks) });
         setRoomChoices(roomChoicesFor(merged, entityIds, (id) => deviceRoom(resolvedRooms, id),
           (id) => (entities[id] ? deviceLook(id, looks) : undefined)));
         return;
       }
       go({ type: "openList", list: { kind: "room", room, entityIds } });
     },
-    [resolvedRooms, entities, config, isCritical, isHidden, hasFault, go],
+    [resolvedRooms, entities, config, marks, go],
   );
 
   const handleClusterTapped = useCallback(

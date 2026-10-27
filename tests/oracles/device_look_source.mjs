@@ -10,10 +10,11 @@
 // the map's adapter (mapLookSource — EntityVisuals' live cache) and the store's
 // (storeLookSource — every React surface) and asserts identical looks.
 import { register } from "node:module";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { deviceLook, mapLookSource, storeLookSource } = await import("@/utils/deviceActivity");
+const { deviceLook, lookMarks, mapLookSource, NO_MARKS, sameMarks, storeLookSource } = await import("@/utils/deviceActivity");
 
 const ent = (id, state, attributes = {}) => ({ entity_id: id, state, attributes });
 
@@ -134,24 +135,42 @@ console.log("\n  the callers ask it (pin the caller):");
      (ev.match(/deviceLook\([^)]*this\.lookSource\)/g) ?? []).length >= 4 && /mapLookSource\(this\.lastState, this\.mapping/.test(ev));
   ck("the device-list rows and the panel header ask deviceLook through the store",
      // the header since 2.496.305 in components/panels/panelHeader (driven by value in panel_header.mjs)
-     /deviceLook\(id, looks\)/.test(sg) && /storeLookSource\(entities, \{\s+\.\.\.config, isCritical: villaDevices\.isCritical, isHidden: villaDevices\.isHidden, hasFault,\s+\}\)/.test(sg) && /deviceLook\(entityId, storeLookSource\(/.test(ph)
-     && /panelHeader\(\{/.test(db));
-  // A CRITICAL device that lost contact is red on every one of them (2.496.428): each hands deviceLook the villa's
-  // folded critical list — the map through the page's push, the header through the page, the list through the model.
-  ck("the map, the open window's header, the room chooser and the list rows all read the critical list",
-     /isCritical: \(id: string\) => crit\.has\(id\), isHidden: hidden/.test(ev) && /manager\?\.setCriticalDevices\(critical\)/.test(db)
-     && /config: \{ \.\.\.config, isCritical, isHidden, hasFault \}/.test(db) && /storeLookSource\(entities, \{ \.\.\.config, isCritical, isHidden, hasFault \}\)/.test(db)
-     && /manager\?\.setHiddenDevices\(isHidden\)/.test(db)
-     && /isCritical: villaDevices\.isCritical/.test(sg));
-  // ...and the open faults the same way (owner, 2026-10-22: badge proposal 2): the map through the page's push, the
-  // header and the room chooser through the page, the list rows through the villa model
-  // review L (2026-10-25): ONE answer, the villa model's (attention.deviceIssues, from the cards), built once by the page
-  ck("the map, the open window's header, the room chooser and the list rows all read the villa model's one answer",
-     /hasFault: \(id: string\) => faults\.has\(id\)/.test(ev) && /manager\?\.setFaultDevices\(villa\.issues\.amber\)/.test(db)
-     && /const hasFault = villa\.hasFault;/.test(db) && /const villa = useVillaModelValue\(villaSets\);/.test(db)
-     && /<VillaModelProvider value=\{villa\}>/.test(db) && !/faultDevices\(/.test(db)
-     && /hasFault: \(id\) => issues\.amber\.has\(id\)/.test(src("config/VillaModel.tsx"))
-     && /deviceIssues\(groupAttention\(attention\.attentionItems\)\)/.test(src("config/VillaModel.tsx")));
+     /deviceLook\(id, looks\)/.test(sg) && /deviceLook\(entityId, storeLookSource\(/.test(ph) && /panelHeader\(\{/.test(db));
+  // ONE VALUE, THE VILLA MODEL'S (architecture review N, 2026-10-27): critical, hidden and an amber issue were gathered
+  // by each drawing itself (six releases each repaired one that had forgotten one). Each now takes VillaModel `marks`.
+  const vm = src("config/VillaModel.tsx");
+  ck("the map, the open window's header, the room chooser and the list rows all take the villa model's marks, as they are",
+     /marks: \{ critical: criticalSet, isHidden, faults: issues\.amber \}/.test(vm) && /deviceIssues\(groupAttention\(attention\.attentionItems\)\)/.test(vm)
+     && /const villa = useVillaModelValue\(villaSets\);/.test(db) && /<VillaModelProvider value=\{villa\}>/.test(db)
+     && /const marks = villa\.marks;/.test(db) && /manager\?\.setDeviceMarks\(marks\)/.test(db)
+     && /useOpenPanelActions\(\{[^}]*\bmarks,/.test(db) && /config: \{ \.\.\.config, \.\.\.lookMarks\(marks\) \}/.test(db)
+     && /storeLookSource\(entities, \{ \.\.\.config, \.\.\.lookMarks\(marks\) \}\)/.test(db)
+     && /const \{ mappedEntityIds, marks \} = useVillaModel\(\);/.test(sg) && /storeLookSource\(entities, \{ \.\.\.config, \.\.\.lookMarks\(marks\) \}\)/.test(sg)
+     && /\.\.\.lookMarks\(this\.marks\)/.test(ev) && /setDeviceMarks\(marks: DeviceMarks\): void \{\s+if \(sameMarks\(marks, this\.marks\)\) return;/.test(ev));
+  // ...and no drawing gathers them itself: every file that names the critical or fault test is one of these, each for
+  // its reason; a new one fails until someone says why it is not a drawing gathering the marks by hand
+  const NAMES = {
+    "utils/deviceActivity.ts": "THE look rule and its config, and lookMarks (the marks as the look reads them)",
+    "config/deviceGroups.ts": "VillaDevices' own critical predicate, folded (the villa's devices)",
+    "config/attention.ts": "the cards' alert scan over the villa's devices (the faults are what it builds)",
+    "fm/readiness.ts": "the readiness checks' critical device lines, from the villa's devices",
+  };
+  const all = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? all(join(d, e.name)) : /\.tsx?$/.test(e.name) ? [join(d, e.name)] : []);
+  const root = new URL("../../src/", import.meta.url).pathname;
+  const naming = all(root).filter((f) => /\b(isCritical|hasFault)\b/.test(src(relative(root, f)))).map((f) => relative(root, f)).sort();
+  const hid = (id) => id === "light.h";
+  const m = { critical: new Set(["lock.c"]), isHidden: hid, faults: new Set(["pump.f"]) };
+  const L = lookMarks(m);
+  ck("the marks as the look reads them: critical, hidden and a fault each from its own list",
+     L.isCritical("lock.c") && !L.isCritical("pump.f") && L.isHidden("light.h") && !L.isHidden("lock.c") && L.hasFault("pump.f") && !L.hasFault("lock.c"));
+  ck("  ...a drawing repaints only when one really changed: the same lists rebuilt are the same marks; a fault more, another hidden test, are not",
+     sameMarks(m, { critical: new Set(["lock.c"]), isHidden: hid, faults: new Set(["pump.f"]) })
+       && !sameMarks(m, { ...m, faults: new Set(["pump.f", "pump.g"]) }) && !sameMarks(m, { ...m, faults: new Set(["pump.g"]) })
+       && !sameMarks(m, { ...m, critical: new Set() }) && !sameMarks(m, { ...m, isHidden: (id) => hid(id) }));
+  const N = lookMarks(NO_MARKS);
+  ck("  ...before the villa is read nothing is marked", !N.isCritical("lock.c") && !N.isHidden("light.h") && !N.hasFault("pump.f"));
+  ck("no drawing gathers the marks itself: the files naming the critical or fault test are the classified ones",
+     JSON.stringify(naming) === JSON.stringify(Object.keys(NAMES).sort()), naming);
   ck("no caller builds a reading by hand any more (badgeFaceAndRing / linkedOn / alertStateFor)",
      ![ev, sg, db, ph].some((s) => /badgeFaceAndRing\(|linkedOn:|alertStateFor\(|linkActiveIds/.test(s)));
 }

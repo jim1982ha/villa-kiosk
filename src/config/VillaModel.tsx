@@ -18,7 +18,8 @@ import { useStateSince } from "@/hooks/useStateSince";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCriticalDevices } from "@/ha/criticalDevices";
-import { villaDevices, deviceFolding, deviceOf, deviceReadings, recordDeviceOf, type VillaDevices } from "./deviceGroups";
+import { villaDevices, criticalDevices, deviceFolding, deviceOf, deviceReadings, hiddenIn, recordDeviceOf, type VillaDevices } from "./deviceGroups";
+import type { DeviceMarks } from "@/utils/deviceActivity";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
@@ -78,8 +79,9 @@ export interface VillaModel extends VillaSets {
   /** What is wrong with each device, from the Overview's own cards (attention.deviceIssues): the ONE answer the map's
    *  badges, the room chips, the open window and the lists read (review L, owner 2026-10-25). */
   issues: DeviceIssues;
-  /** An amber issue in the Cockpit on this device — a fault or late maintenance (issues.amber): a badge's amber "!". */
-  hasFault: (entityId: string) => boolean;
+  /** Each device's marks, critical, hidden and an amber Cockpit issue (a fault or late maintenance, issues.amber): THE
+   *  value every drawing of a device is handed (the map, the room lists, the open window, the room chooser). */
+  marks: DeviceMarks;
 }
 
 const Ctx = createContext<VillaModel | null>(null);
@@ -112,6 +114,11 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
       entityDeviceIds, folding, critical, deviceUnits }),
     [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical, deviceUnits],
   );
+  // the marks' two lists change only with the registry, the critical list and the cards, never per state push (the map
+  // repaints on them): folded as `devices` folds them
+  const criticalSet = useMemo(() => criticalDevices(critical, folding, entityDeviceIds, deviceUnits),
+    [critical, folding, entityDeviceIds, deviceUnits]);
+  const isHidden = useMemo(() => hiddenIn(hidden, folding), [hidden, folding]);
   // since when a device waiting to close reads as it does: its history, never its last_changed (useStateSince)
   const closingIds = useMemo(() => closingEntities(fmData, entities), [fmData, entities]);
   const sinceOf = useStateSince(closingIds);
@@ -141,9 +148,9 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
     (): VillaModel => ({
       ...sets, devices, visibleDevices, attention, settings, issues,
       visibleTo: (role) => visibleTo(role, { mapped: mappedEntityIds, entityMap, entities }),
-      hasFault: (id) => issues.amber.has(id),
+      marks: { critical: criticalSet, isHidden, faults: issues.amber },
     }),
-    [sets, mappedEntityIds, devices, visibleDevices, attention, settings, entityMap, entities, issues],
+    [sets, mappedEntityIds, devices, visibleDevices, attention, settings, entityMap, entities, issues, criticalSet, isHidden],
   );
 }
 

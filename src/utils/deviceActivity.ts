@@ -406,6 +406,34 @@ export interface LookSource {
   pendingPower?(entityId: string): boolean | undefined;
 }
 
+/**
+ * What the villa says of each device besides its state, folded onto its device: on the critical list, hidden in the
+ * villa's system, an amber Cockpit issue. ONE value, built by the villa model (VillaModel `marks`) and handed as it is
+ * to every drawing of a device: the map, the room lists, the open window, the room chooser (architecture review N,
+ * 2026-10-27: each gathered the three itself, and six releases each repaired one that had forgotten one).
+ * The two lists are sets, so a drawing repaints only when one really changed (sameMarks).
+ */
+export interface DeviceMarks {
+  critical: ReadonlySet<string>;
+  isHidden: (entityId: string) => boolean;
+  faults: ReadonlySet<string>;
+}
+
+/** The marks as a LookSource reads them (`config` with its entity map: `{ entityMap, ...lookMarks(marks) }`). */
+export function lookMarks(m: DeviceMarks): Pick<LookSource["config"], "isCritical" | "isHidden" | "hasFault"> {
+  return { isCritical: (id) => m.critical.has(id), isHidden: m.isHidden, hasFault: (id) => m.faults.has(id) };
+}
+
+const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>) => a === b || (a.size === b.size && [...a].every((id) => b.has(id)));
+
+/** Two marks that draw the same: the same lists, the same hidden test. */
+export function sameMarks(a: DeviceMarks, b: DeviceMarks): boolean {
+  return a.isHidden === b.isHidden && sameSet(a.critical, b.critical) && sameSet(a.faults, b.faults);
+}
+
+/** Before the villa is read: nothing critical, hidden or at fault. */
+export const NO_MARKS: DeviceMarks = { critical: new Set(), isHidden: () => false, faults: new Set() };
+
 /** Everything a device looks like, from one place. */
 export interface DeviceLook {
   type: EntityType;

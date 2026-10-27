@@ -19,7 +19,7 @@
 // a key, and the state that keeps a range per chart while the period changes and forgets it when another reading is
 // opened. Pure: tests/oracles/range_filter.mjs.
 
-import type { HistoryPoint, HistorySeries } from "@/types/ha.types";
+import type { HistoryGap, HistoryPoint, HistorySeries } from "@/types/ha.types";
 import { cellEdges, cellIndex } from "./timelineCells";
 import { knownSpans } from "./trendInterval";
 import { HOUR_MS } from "./localDay";
@@ -39,8 +39,10 @@ export const FINER: Record<StatisticsPeriod, FinerSource> = {
 
 /** A chart's finer values, as the history source answers them (historySource "finer"). */
 export interface FinerSeries {
-  /** The chart period they refine: an answer for another period is not used (a period just changed). */
+  /** The chart period they refine, and the trend window they were read over (historySource "finer"): an answer for
+   *  another period or window is not used (a period just changed). */
   of: StatisticsPeriod;
+  window: { from: number; to: number };
   series: HistorySeries;
   /** Each value lasts this long and counts once (figures). Undefined: readings, each held until the next and weighted
    *  by how long it held. */
@@ -135,6 +137,43 @@ export function keptChart(base: HistorySeries, finer: Pick<FinerSeries, "series"
     series: { ...base, points, gaps: [], window: { from, to: from + Math.max(1, n) * stepMs } },
     realAt, ticks, spanHours: span / HOUR_MS, ribbon, count: n, of: base.points.length,
   };
+}
+
+/** What a one-line chart draws for its range: the line, its x window, the closed-up chart, and where its detail
+ *  stands. */
+export interface RangeChart {
+  points: HistoryPoint[];
+  gaps: HistoryGap[];
+  /** The kept steps' own window; the period's when unfiltered, still loading, or nothing is kept (the frame and the
+   *  slider stay on the period, to widen the range). */
+  window: { from: number; to: number } | undefined;
+  /** The chart closed up, once its detail is in. */
+  kept: KeptChart | null;
+  /** "loading" (drawn unfiltered meanwhile) until the detail for THIS trend is in; "failed" when it could not be read. */
+  state: "ready" | "loading" | "failed";
+}
+
+/**
+ * THE filtered chart (architecture review N, 2026-10-27): `base` (the trend, unfiltered), the range set on it, and its
+ * detail. The detail is used only when it was read for this period over this trend's own window: one read for a
+ * later window would leave the chart's first steps with no detail (they vanished from a filtered chart left open).
+ * Where the detail request stands is not an input: a reload asked for another chart keeps this one as it is (another
+ * chart's range made every filtered chart blink unfiltered).
+ */
+export function rangeChart(base: HistorySeries | undefined, range: ValueRange | null, period: StatisticsPeriod,
+  stepMs: number, detail: { finer?: FinerSeries; failed: boolean }): RangeChart {
+  const on = base ? activeRange(range) : null;
+  const plain = (state: RangeChart["state"]): RangeChart => ({
+    points: base?.points ?? [], gaps: base?.gaps ?? [], window: base?.window, kept: null, state,
+  });
+  if (!on) return plain("ready");
+  const f = detail.finer;
+  if (!f || f.of !== period || f.window.from !== base!.window.from || f.window.to !== base!.window.to) {
+    return plain(detail.failed ? "failed" : "loading");
+  }
+  const kept = keptChart(base!, f, stepMs, on);
+  return { points: kept.series.points, gaps: kept.series.gaps,
+    window: kept.count > 0 ? kept.series.window : base!.window, kept, state: "ready" };
 }
 
 // ── The slider ─────────────────────────────────────────────────────────────

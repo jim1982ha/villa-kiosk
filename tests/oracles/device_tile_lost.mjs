@@ -55,6 +55,6 @@ ck("  ...its reading in red", /color:\s*var\(--status-danger\)/.test(rule(".summ
 const panel = readFileSync(new URL("../../src/components/panels/SummaryGroupPanel.tsx", import.meta.url), "utf8");
 ck("the device lists draw this tile, with the row's own look", /const look = deviceLook\(id, looks\);/.test(panel)
    && /const badge = look;/.test(panel) && /<SummaryEntityRow[\s\S]*?look=\{badge\}/.test(panel)
-   && /storeLookSource\(entities, \{\s+\.\.\.config, isCritical: villaDevices\.isCritical, isHidden: villaDevices\.isHidden, hasFault,\s+\}\)/.test(panel));
+   && /storeLookSource\(entities, \{ \.\.\.config, \.\.\.lookMarks\(marks\) \}\)/.test(panel));
 
 done("✅ a device that lost contact wears the whole tile, a critical one its red ring");

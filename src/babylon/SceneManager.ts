@@ -8,6 +8,7 @@
 // for frames the loop idles at ~0% GPU. (Core 3Dash idea, generalised.)
 
 import { Engine } from "@babylonjs/core/Engines/engine";
+import type { DeviceMarks } from "@/utils/deviceActivity";
 import { Scene } from "@babylonjs/core/scene";
 import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
@@ -2627,20 +2628,10 @@ export class SceneManager {
     this.visuals.setResolvedRooms(rooms);
   }
 
-  /** The villa's critical devices, folded onto their devices (deviceGroups.criticalDevices): a critical device that
-   *  lost contact is red on the map, as on the Cockpit. */
-  setCriticalDevices(ids: ReadonlySet<string>): void {
-    this.visuals.setCriticalDevices(ids);
-  }
-
-  /** The devices with an amber Cockpit issue (attention.deviceIssues: a fault or late maintenance): their badges' amber "!". */
-  setFaultDevices(ids: ReadonlySet<string>): void {
-    this.visuals.setFaultDevices(ids);
-  }
-
-  /** Hidden in the villa's system (deviceGroups.hiddenIn): no badge on the map, its 3D object never red or grey. */
-  setHiddenDevices(isHidden: (entityId: string) => boolean): void {
-    this.visuals.setHiddenDevices(isHidden);
+  /** The villa model's marks of each device (VillaModel `marks`: critical, hidden, an amber Cockpit issue): a
+   *  critical device that lost contact is red, a hidden one has no badge, one with a fault its amber "!". */
+  setDeviceMarks(marks: DeviceMarks): void {
+    this.visuals.setDeviceMarks(marks);
   }
 
   private disposed = false;
