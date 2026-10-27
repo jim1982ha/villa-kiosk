@@ -5,10 +5,9 @@
 // default" reset. Commits on choice (one config write / re-index per pick — the
 // same cost as a label edit), so there's no live-drag re-index storm.
 
+import Window from "@/components/common/Window";
 import { RotateCcw } from "lucide-react";
-import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
-import DialogLayer from "@/components/common/DialogLayer";
 
 // A spread of distinct, pleasant badge colours. Identity swatches (not a data
 // scale), so no ramp/validator needed — just visibly different from each other.
@@ -36,7 +35,6 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
   // app reached 13 separate Escape handlers — and it still had no focus trap
   // and no focus restore, so a keyboard user could Tab out of the picker and
   // landed at the top of the document on close.
-  const dialogRef = useModalA11y(onClose);
   // Swatches are a decision → apply and dismiss. The custom picker and "default"
   // reset apply live but leave the modal open for further tweaking.
   const pickAndClose = (hex: string | null) => { onChange(hex); onClose(); };
@@ -48,51 +46,43 @@ export default function BadgeColorModal({ current, categoryColor, onChange, onCl
     // (Settings/Config Editor): top-anchored, edge-to-edge, square corners.
     // This is a short picker, same category as the device panel itself, so it
     // should get the same small centered rounded card on phones.
-    <DialogLayer className="modal-backdrop panel-modal-backdrop" onClick={onClose} style={{ zIndex: 80 }}>
-      <div
-        ref={dialogRef}
-        className="modal panel-modal badge-color-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Badge colour"
-      >
-        <div className="modal-header">
-          <div className="title"><h2>Icon colour</h2></div>
-        </div>
-
-        <div className="modal-body">
-          <div className="badge-swatch-grid">
-            {SWATCHES.map((hex) => (
-              <button
-                key={hex}
-                className={`badge-swatch${current?.toLowerCase() === hex.toLowerCase() ? " selected" : ""}`}
-                style={{ background: hex }}
-                onClick={() => pickAndClose(hex)}
-                aria-label={`Set colour ${hex}`}
-                title={hex}
-              />
-            ))}
-          </div>
-
-          <div className="row" style={{ gap: 12, marginTop: 16, alignItems: "center" }}>
-            <label className="badge-swatch custom" title="Custom colour">
-              <input
-                type="color"
-                value={current ?? categoryColor}
-                onChange={(e) => onChange(e.target.value)}
-                aria-label="Custom colour"
-              />
-              <span>Custom…</span>
-            </label>
-            <button className="btn ghost" onClick={() => pickAndClose(null)} style={{ marginLeft: "auto" }}>
-              <RotateCcw size={16} /> Category default
-            </button>
-          </div>
-        </div>
-
-        <ModalFooter onClose={onClose} />
+    <Window kind="question" label="Badge colour" onClose={onClose} className="panel-modal badge-color-modal"
+      layer="panel-modal-backdrop" zIndex={80}>
+      <div className="modal-header">
+        <div className="title"><h2>Icon colour</h2></div>
       </div>
-    </DialogLayer>
+
+      <div className="modal-body">
+        <div className="badge-swatch-grid">
+          {SWATCHES.map((hex) => (
+            <button
+              key={hex}
+              className={`badge-swatch${current?.toLowerCase() === hex.toLowerCase() ? " selected" : ""}`}
+              style={{ background: hex }}
+              onClick={() => pickAndClose(hex)}
+              aria-label={`Set colour ${hex}`}
+              title={hex}
+            />
+          ))}
+        </div>
+
+        <div className="row" style={{ gap: 12, marginTop: 16, alignItems: "center" }}>
+          <label className="badge-swatch custom" title="Custom colour">
+            <input
+              type="color"
+              value={current ?? categoryColor}
+              onChange={(e) => onChange(e.target.value)}
+              aria-label="Custom colour"
+            />
+            <span>Custom…</span>
+          </label>
+          <button className="btn ghost" onClick={() => pickAndClose(null)} style={{ marginLeft: "auto" }}>
+            <RotateCcw size={16} /> Category default
+          </button>
+        </div>
+      </div>
+
+      <ModalFooter onClose={onClose} />
+    </Window>
   );
 }

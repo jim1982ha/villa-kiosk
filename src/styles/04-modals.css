@@ -115,14 +115,13 @@
      (680 px), Settings reached 90vh because its content is long, and
      Advanced Settings shrank to its content — three heights for one kind of
      window (owner). One height, here. */
-  /* ⚠️ AND EVERY OTHER WINDOW (owner, 2026-10-20: "all the modal to keep the same height whatever the content is",
-     the baseline a full device list): a device list switching Per Room / Per Floor, a device window, a form — one
-     height. A question box (AskDialog, `.ask-dialog`) and the colour picker are not windows of content: they keep
-     their own size. */
-  /* ⚠️ BUT NOT A DEVICE'S OWN WINDOW (owner, same day: "wrongly applied to the Entity details ones … keep an adjusted
-     height"): a window about one device (`.device-details`: BasePanel with an entityId, and the "Open a ticket" window,
-     FaultStageModal) is as tall as what it shows. */
-  .modal:not(.ask-dialog):not(.badge-color-modal):not(.device-details) { height: 90vh; }
+  /* ⚠️ AND EVERY OTHER WINDOW OF CONTENT (owner, 2026-10-20: "all the modal to keep the same height whatever the
+     content is", the baseline a full device list): a device list switching Per Room / Per Floor, a form — one height.
+     Each window says its kind (components/common/Window): a window about one device (`window-device`: its own window,
+     "Open a ticket") is as tall as what it shows (owner, same day: "keep an adjusted height"), and a question box or the
+     colour picker (`window-question`) keeps its own size. It was a list of exceptions each new window had to join
+     (architecture review O). */
+  .modal.window-content { height: 90vh; }
 }
 /* Header is a row: title left, the icon-only theme selector right. */
 /* min-height: the tallest thing a header holds (a 44px device icon) plus the

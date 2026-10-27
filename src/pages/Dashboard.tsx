@@ -410,6 +410,10 @@ export default function Dashboard() {
   const marks = villa.marks;
   const isHidden = marks.isHidden;
   useEffect(() => { manager?.setDeviceMarks(marks); }, [manager, marks]);
+  // ...and every window (the open one's header, the room chooser) as THIS profile sees the villa: its badge's amber
+  // "!" is a card its own Cockpit lists, as the window's warning sign reads (VillaModel marksFor). The map is the same
+  // for everyone.
+  const windowMarks = useMemo(() => villa.marksFor(role), [villa, role]);
   const categoryGroupEntityIds = useMemo(
     () => (categoryGroup ? categoryMembers(role, categoryGroup, {
       entityMap: config.entityMap, entities, dismissed: dismissedIds,
@@ -418,7 +422,7 @@ export default function Dashboard() {
     }) : []),
     [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds, isHidden, identity.folding]);
   const openPanel = useOpenPanelActions({
-    screen, go, panelFor, readingsOf: identity.readingsOf, doors, marks,
+    screen, go, panelFor, readingsOf: identity.readingsOf, doors, marks: windowMarks,
   });
   const linkedAsk = openPanel.linkedAsk;
 
@@ -611,14 +615,14 @@ export default function Dashboard() {
     (room: string, entityIds: string[], roomNames: string[]) => {
       const merged = chipRooms(roomNames, room);
       if (merged.length > 1) {
-        const looks = storeLookSource(entities, { ...config, ...lookMarks(marks) });
+        const looks = storeLookSource(entities, { ...config, ...lookMarks(windowMarks) });
         setRoomChoices(roomChoicesFor(merged, entityIds, (id) => deviceRoom(resolvedRooms, id),
           (id) => (entities[id] ? deviceLook(id, looks) : undefined)));
         return;
       }
       go({ type: "openList", list: { kind: "room", room, entityIds } });
     },
-    [resolvedRooms, entities, config, marks, go],
+    [resolvedRooms, entities, config, windowMarks, go],
   );
 
   const handleClusterTapped = useCallback(

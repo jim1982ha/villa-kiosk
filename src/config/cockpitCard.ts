@@ -24,9 +24,8 @@ import { confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
 import { faultTitle } from "@/fm/fmEngine";
 import type { HassEntity } from "@/types/ha.types";
 import { labelOf } from "./EntityMap";
-import { deviceRoomOrRecord, firstRoom, roomLabel } from "./devicePlace";
 import { recordEntity, type VillaDevices } from "./deviceGroups";
-import { attentionSeverity, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
+import { attentionSeverity, cardDevice, cardHead, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
 
 /** What a card's buttons do (owner, 2026-10-14) — on its records only (its own fault lines and those folded onto a
  *  live state's line by mergeFaults): fm/deviceWork.overviewActions' answer, in the order drawn. Empty when it holds
@@ -223,14 +222,14 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
     const t = c.ticket;
     const entityId = recordEntity(t.entityId, (x) => x in entities);
     if (entityId && !may(entityId)) return [];
-    const device = entityId ? devices.deviceOf(entityId) : undefined;
+    // its device, title and room as an open issue's card has them (attention cardDevice / cardHead)
+    const device = entityId ? cardDevice(entityId, t.room, { devices, entityMap, entities, resolvedRooms }) : undefined;
     const title = faultTitle(t);
     const said = confirmParts(c);
     return [{
       key: `watched:${t.id}`, look: "watched", watched: said,
-      title: device ? labelOf(device, entityMap, entities) : title,
-      room: roomLabel(device ? deviceRoomOrRecord(resolvedRooms, device, entityId, t.room) : firstRoom(t.room)),
-      entityId: device,
+      ...cardHead(device, title, t.room),
+      entityId: device?.key,
       // ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … the same style and the same
       // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
       // issues' next-check pill (its time, then "within 5 min"), who closed it the line under its fault

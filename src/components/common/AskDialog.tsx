@@ -35,10 +35,9 @@
 // what the user typed and asks them twice. Returning a string keeps the dialog
 // open with the text intact and the reason under the field.
 
+import Window from "@/components/common/Window";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { useModalA11y } from "@/hooks/useModalA11y";
-import DialogLayer from "@/components/common/DialogLayer";
 
 interface Props {
   title: string;
@@ -83,7 +82,6 @@ export default function AskDialog({
   confirmIcon: ConfirmIcon, secondaryIcon: SecondaryIcon,
   cancelIcon: CancelIcon,
 }: Props) {
-  const dialogRef = useModalA11y(onCancel);
   const [value, setValue] = useState(input?.initial ?? "");
   const [error, setError] = useState<string | null>(null);
 
@@ -102,71 +100,62 @@ export default function AskDialog({
     // small centred card on a phone. Without it these fall through to the base
     // `.modal` rules, which are written for long full-screen sheets and would
     // render a two-line question edge-to-edge with square corners.
-    <DialogLayer className="modal-backdrop panel-modal-backdrop" onClick={onCancel} style={{ zIndex: 90 }}>
-      <div
-        ref={dialogRef}
-        className="modal panel-modal ask-dialog"
-        style={{ maxWidth: 420 }}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-      >
-        <div className="modal-header"><div className="title"><h2>{title}</h2></div></div>
-        <div className="modal-body">
-          {message && <p style={{ margin: input ? "0 0 14px" : 0 }}>{message}</p>}
-          {input && (
-            <div className="field" style={{ margin: 0 }}>
-              <label htmlFor="ask-dialog-input">{input.label}</label>
-              <input
-                id="ask-dialog-input"
-                // `data-autofocus` is useModalA11y's OWN way to nominate the
-                // primary control — it prefers a marked element over "the first
-                // focusable" when it focuses into the dialog. The first cut here
-                // added a second `useEffect` doing the same job, which is two
-                // mechanisms racing to focus one field and the shape of drift
-                // /dry-audit exists to catch. A prompt whose field is not
-                // focused costs the user a second tap, and on iOS that tap is
-                // what summons the keyboard.
-                data-autofocus
-                type="text"
-                value={value}
-                placeholder={input.placeholder}
-                onChange={(e) => { setValue(e.target.value); setError(null); }}
-                // Enter submits, because a one-field dialog that needs a mouse
-                // to accept is worse than the prompt it replaced.
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
-              />
-            </div>
-          )}
-          {error && (
-            <p role="alert" style={{ color: "var(--status-danger)", margin: "10px 0 0" }}>
-              {error}
-            </p>
-          )}
-        </div>
-        <div className="modal-footer">
-          <span />
-          <div className="modal-footer-group">
-          {cancelLabel !== null && (
-            <button className="btn ghost" onClick={onCancel}>
-              {CancelIcon && <CancelIcon size={16} aria-hidden />}
-              {cancelLabel}
-            </button>
-          )}
-          {secondaryLabel && onSecondary && (
-            <button className="btn ghost" onClick={onSecondary}>
-              {SecondaryIcon && <SecondaryIcon size={16} aria-hidden />}
-              {secondaryLabel}
-            </button>
-          )}
-          <button className={`btn ${danger ? "danger" : "primary"}`} onClick={submit}>
-            {ConfirmIcon && <ConfirmIcon size={16} aria-hidden />}
-            {confirmLabel}
-          </button>
+    <Window kind="question" label={title} onClose={onCancel} className="panel-modal ask-dialog" layer="panel-modal-backdrop"
+      zIndex={90} style={{ maxWidth: 420 }}>
+      <div className="modal-header"><div className="title"><h2>{title}</h2></div></div>
+      <div className="modal-body">
+        {message && <p style={{ margin: input ? "0 0 14px" : 0 }}>{message}</p>}
+        {input && (
+          <div className="field" style={{ margin: 0 }}>
+            <label htmlFor="ask-dialog-input">{input.label}</label>
+            <input
+              id="ask-dialog-input"
+              // `data-autofocus` is useModalA11y's OWN way to nominate the
+              // primary control — it prefers a marked element over "the first
+              // focusable" when it focuses into the dialog. The first cut here
+              // added a second `useEffect` doing the same job, which is two
+              // mechanisms racing to focus one field and the shape of drift
+              // /dry-audit exists to catch. A prompt whose field is not
+              // focused costs the user a second tap, and on iOS that tap is
+              // what summons the keyboard.
+              data-autofocus
+              type="text"
+              value={value}
+              placeholder={input.placeholder}
+              onChange={(e) => { setValue(e.target.value); setError(null); }}
+              // Enter submits, because a one-field dialog that needs a mouse
+              // to accept is worse than the prompt it replaced.
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
+            />
           </div>
+        )}
+        {error && (
+          <p role="alert" style={{ color: "var(--status-danger)", margin: "10px 0 0" }}>
+            {error}
+          </p>
+        )}
+      </div>
+      <div className="modal-footer">
+        <span />
+        <div className="modal-footer-group">
+        {cancelLabel !== null && (
+          <button className="btn ghost" onClick={onCancel}>
+            {CancelIcon && <CancelIcon size={16} aria-hidden />}
+            {cancelLabel}
+          </button>
+        )}
+        {secondaryLabel && onSecondary && (
+          <button className="btn ghost" onClick={onSecondary}>
+            {SecondaryIcon && <SecondaryIcon size={16} aria-hidden />}
+            {secondaryLabel}
+          </button>
+        )}
+        <button className={`btn ${danger ? "danger" : "primary"}`} onClick={submit}>
+          {ConfirmIcon && <ConfirmIcon size={16} aria-hidden />}
+          {confirmLabel}
+        </button>
         </div>
       </div>
-    </DialogLayer>
+    </Window>
   );
 }

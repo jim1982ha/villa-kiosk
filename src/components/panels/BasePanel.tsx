@@ -11,6 +11,7 @@
 // .modal-header .title h2 in styles.css) instead of fighting a footer button
 // for room.
 
+import Window from "@/components/common/Window";
 import { useState, type ReactNode } from "react";
 import { TriangleAlert, Wrench } from "lucide-react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
@@ -18,7 +19,6 @@ import { linkedStateWords } from "./panelHeader";
 import { badgeImage } from "@/babylon/badgeIcons";
 import { useDeviceIssue } from "@/components/cockpit/useVillaAttention";
 import type { AttentionSeverity } from "@/config/attention";
-import { useModalA11y } from "@/hooks/useModalA11y";
 import DeviceReadings from "./DeviceReadings";
 import { useConfig } from "@/config/ConfigContext";
 import { categorySurface } from "@/config/EntityCategories";
@@ -32,7 +32,6 @@ import BackButton from "@/components/common/BackButton";
 import { useHA } from "@/ha/HAStateStore";
 import { missingFromHa } from "@/utils/stateColors";
 import { deviceRoom } from "@/config/devicePlace";
-import DialogLayer from "@/components/common/DialogLayer";
 
 interface Props {
   title: string;
@@ -99,7 +98,6 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
   // scrim.
   // With somewhere to go back to, Escape and the phone's back gesture go back
   // (one step), as the Back button does; Close and a tap outside close.
-  const dialogRef = useModalA11y(back ? back.go : onClose);
   // The header badge is a PNG baked from the theme's tokens and the tint below
   // is composited in JS, so neither re-themes through the cascade — a panel
   // left open across a dusk theme flip would keep its old-theme colours.
@@ -147,128 +145,12 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
     : icon && <div className="panel-icon">{icon}</div>;
 
   return (
-    <DialogLayer className="modal-backdrop panel-modal-backdrop" onClick={onClose}>
-      <div
-        ref={dialogRef}
-        // `device-details`: a window about ONE device fits its content (owner, 2026-10-20: the one height of 2.496.447
-        // "wrongly applied to the Entity details ones … keep an adjusted height"); a list of devices keeps the one height
-        className={`modal panel-modal${entityId ? " device-details" : ""}${className ? ` ${className}` : ""}`}
-        style={deviceTint ? {
-          ["--device-fill" as string]: deviceTint.fill,
-          ["--device-ink" as string]: deviceTint.ink,
-          ["--device-ring" as string]: deviceTint.ring,
-        } : undefined}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={room ? `${title}, ${room}` : title}
-      >
-        <div className="modal-header">
-          <div className="title">
-            {headerIcon}
-            <div style={{ minWidth: 0 }}>
-              {/* The window's first focus (useModalA11y's data-autofocus), not the
-                  badge: the badge is the Owner's recolour BUTTON, and focusing it on
-                  open drew the phone's own focus ring round it — an amber border
-                  that read as a device state (owner, 2026-10-05). The heading is the
-                  conventional dialog-open target; tabIndex={-1} keeps it out of Tab. */}
-              <h2 title={title} tabIndex={-1} data-autofocus>{title}</h2>
-              {room && <div className="room">{room}</div>}
-            </div>
-          </div>
-          {(headerActions || back || warning) && (
-            <div className="modal-header-actions">
-              {/* ⚠️ ITS OPEN ISSUES, ONE TAP AWAY (owner, 2026-10-24, top right: "not top left"): while the Cockpit's
-                  Overview lists an issue for the device or its linked entity (useDeviceIssue: a fault, an offline
-                  device, an alarm, late maintenance), the Cockpit's own warning sign, in that issue's colour, opens the
-                  Overview with that card marked. Gone once it leaves the Overview. */}
-              {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} />}
-              {headerActions}
-              {back && <BackButton onClick={back.go} label={back.label} />}
-            </div>
-          )}
-        </div>
-        <div className="modal-body">
-          {/* one range for the window's bands: the device's and its linked sensor's (HistoryRangeShare) */}
-          <HistoryRangeShare device={entityId}
-            follow={[linkedSensor?.entityId, motion?.entityId].filter((id): id is string => !!id)}>
-          {/* The device's linked entity, if one is configured (Advanced
-              Settings). Rendered HERE, in the shared chrome, so every panel
-              type gets it identically the moment that field is set — this is
-              what replaced the old camera-only long-press toggle. Reuses the
-              same switch as the group modal's per-device rows rather than a
-              second bespoke control. */}
-          {linked && (
-            <div className="panel-linked-row">
-              <button
-                className={`summary-entity-toggle${linked.isOn ? " on" : ""}`}
-                {...linkedSwitchProps(linked)}
-                title={linked.isOn ? "Turn off" : "Turn on"}
-              >
-                <span className="knob" />
-              </button>
-              <div style={{ minWidth: 0 }}>
-                <div className="panel-linked-label" title={linked.label}>{linked.label}</div>
-                <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>
-                  {linkedStateWords(linked)} · linked entity
-                </div>
-              </div>
-            </div>
-          )}
-          {children}
-          {/* The "last N hours" history section — rendered HERE, in the shared
-              chrome, for the same reason the linked-entity switch above is:
-              so every panel about a device gets it identically and a NEW panel
-              type cannot ship without it.
-
-              It used to be opt-in, added per panel, and that is exactly how
-              climate and media ended up as the only two device panels with no
-              history at all — reported from a screenshot of an AC panel. The
-              range-picker work that touched this area twice could not have
-              caught it either, because it audited the panels that already HAD
-              a timeline; a panel with none is invisible to that check. Made
-              structural rather than fixed twice. A panel's own chart comes in
-              through the same slot (the `history` prop), so it sits at the
-              same place. */}
-          {/* Not for an entity Home Assistant does not have: it has no history to wait for (its notice says why). */}
-          {history !== false && entityId && !missingFromHa(entities, entityId)
-            && (history ?? <LastDayTimeline entityId={entityId} />)}
-          {/* A linked SENSOR has nothing to switch: its band, under the device's own, at its width and over its range
-              (owner, 2026-10-21) — LinkedSensorRow */}
-          {linkedSensor && <LinkedSensorRow entityId={linkedSensor.entityId} label={linkedSensor.label} role="linked entity" />}
-          {/* a camera's motion sensor: the same band, the same place (owner, 2026-10-21: "apply consistently the same
-              layout for motion sensor linked to camera") — it was a dot and "Clear · motion sensor" at the top */}
-          {motion && <LinkedSensorRow entityId={motion.entityId} label={motion.label} role="motion sensor" />}
-          {/* The device's other readings — the same physical device, one place
-              (2.496.260), always UNDER the history. A grouped lock kept only a
-              read-only summary, and a pump plug's energy meter had no panel of
-              its own to be found in. */}
-          {deviceReadings !== false && <DeviceReadings />}
-          </HistoryRangeShare>
-        </div>
-        {/* The shared footer (ModalFooter): the left group is always there,
-            empty or not, so Close sits right as in every dialog. */}
-        <ModalFooter onClose={onClose} leading={
-          <div className="modal-footer-group">
-            {footerLeading}
-            {may.edit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
-            {/* Icon-only, sitting beside Edit: this is a shortcut for a
-                device you are already looking at, not a primary action, and
-                a second worded button next to "Edit" would compete with it.
-                The title/aria-label carry the meaning. */}
-            {may.reportFault && (
-              <button
-                className="btn ghost icon-only"
-                onClick={onReportFault}
-                title="Report a fault for this device"
-                aria-label="Report a fault for this device"
-              ><Wrench size={16} /></button>
-            )}
-          </div>
-        } />
-      </div>
-
-      {colorOpen && badge && may.edit && (
+    // `device`: a window about ONE device fits its content (owner, 2026-10-20: the one height of 2.496.447 "wrongly
+    // applied to the Entity details ones … keep an adjusted height"); a list of devices keeps the one height. Escape /
+    // Back goes back to the window it was opened from, when there is one.
+    <Window kind={entityId ? "device" : "content"} label={room ? `${title}, ${room}` : title} onClose={onClose}
+      onEscape={back ? back.go : undefined} className={`panel-modal${className ? ` ${className}` : ""}`}
+      layer="panel-modal-backdrop" outside={colorOpen && badge && may.edit && (
         <BadgeColorModal
           current={badge.color}
           categoryColor={badge.categoryColor}
@@ -276,6 +158,114 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
           onClose={() => setColorOpen(false)}
         />
       )}
-    </DialogLayer>
+      style={deviceTint ? {
+        ["--device-fill" as string]: deviceTint.fill,
+        ["--device-ink" as string]: deviceTint.ink,
+        ["--device-ring" as string]: deviceTint.ring,
+      } : undefined}>
+      <div className="modal-header">
+        <div className="title">
+          {headerIcon}
+          <div style={{ minWidth: 0 }}>
+            {/* The window's first focus (useModalA11y's data-autofocus), not the
+                badge: the badge is the Owner's recolour BUTTON, and focusing it on
+                open drew the phone's own focus ring round it — an amber border
+                that read as a device state (owner, 2026-10-05). The heading is the
+                conventional dialog-open target; tabIndex={-1} keeps it out of Tab. */}
+            <h2 title={title} tabIndex={-1} data-autofocus>{title}</h2>
+            {room && <div className="room">{room}</div>}
+          </div>
+        </div>
+        {(headerActions || back || warning) && (
+          <div className="modal-header-actions">
+            {/* ⚠️ ITS OPEN ISSUES, ONE TAP AWAY (owner, 2026-10-24, top right: "not top left"): while the Cockpit's
+                Overview lists an issue for the device or its linked entity (useDeviceIssue: a fault, an offline
+                device, an alarm, late maintenance), the Cockpit's own warning sign, in that issue's colour, opens the
+                Overview with that card marked. Gone once it leaves the Overview. */}
+            {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} />}
+            {headerActions}
+            {back && <BackButton onClick={back.go} label={back.label} />}
+          </div>
+        )}
+      </div>
+      <div className="modal-body">
+        {/* one range for the window's bands: the device's and its linked sensor's (HistoryRangeShare) */}
+        <HistoryRangeShare device={entityId}
+          follow={[linkedSensor?.entityId, motion?.entityId].filter((id): id is string => !!id)}>
+        {/* The device's linked entity, if one is configured (Advanced
+            Settings). Rendered HERE, in the shared chrome, so every panel
+            type gets it identically the moment that field is set — this is
+            what replaced the old camera-only long-press toggle. Reuses the
+            same switch as the group modal's per-device rows rather than a
+            second bespoke control. */}
+        {linked && (
+          <div className="panel-linked-row">
+            <button
+              className={`summary-entity-toggle${linked.isOn ? " on" : ""}`}
+              {...linkedSwitchProps(linked)}
+              title={linked.isOn ? "Turn off" : "Turn on"}
+            >
+              <span className="knob" />
+            </button>
+            <div style={{ minWidth: 0 }}>
+              <div className="panel-linked-label" title={linked.label}>{linked.label}</div>
+              <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>
+                {linkedStateWords(linked)} · linked entity
+              </div>
+            </div>
+          </div>
+        )}
+        {children}
+        {/* The "last N hours" history section — rendered HERE, in the shared
+            chrome, for the same reason the linked-entity switch above is:
+            so every panel about a device gets it identically and a NEW panel
+            type cannot ship without it.
+
+            It used to be opt-in, added per panel, and that is exactly how
+            climate and media ended up as the only two device panels with no
+            history at all — reported from a screenshot of an AC panel. The
+            range-picker work that touched this area twice could not have
+            caught it either, because it audited the panels that already HAD
+            a timeline; a panel with none is invisible to that check. Made
+            structural rather than fixed twice. A panel's own chart comes in
+            through the same slot (the `history` prop), so it sits at the
+            same place. */}
+        {/* Not for an entity Home Assistant does not have: it has no history to wait for (its notice says why). */}
+        {history !== false && entityId && !missingFromHa(entities, entityId)
+          && (history ?? <LastDayTimeline entityId={entityId} />)}
+        {/* A linked SENSOR has nothing to switch: its band, under the device's own, at its width and over its range
+            (owner, 2026-10-21) — LinkedSensorRow */}
+        {linkedSensor && <LinkedSensorRow entityId={linkedSensor.entityId} label={linkedSensor.label} role="linked entity" />}
+        {/* a camera's motion sensor: the same band, the same place (owner, 2026-10-21: "apply consistently the same
+            layout for motion sensor linked to camera") — it was a dot and "Clear · motion sensor" at the top */}
+        {motion && <LinkedSensorRow entityId={motion.entityId} label={motion.label} role="motion sensor" />}
+        {/* The device's other readings — the same physical device, one place
+            (2.496.260), always UNDER the history. A grouped lock kept only a
+            read-only summary, and a pump plug's energy meter had no panel of
+            its own to be found in. */}
+        {deviceReadings !== false && <DeviceReadings />}
+        </HistoryRangeShare>
+      </div>
+      {/* The shared footer (ModalFooter): the left group is always there,
+          empty or not, so Close sits right as in every dialog. */}
+      <ModalFooter onClose={onClose} leading={
+        <div className="modal-footer-group">
+          {footerLeading}
+          {may.edit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
+          {/* Icon-only, sitting beside Edit: this is a shortcut for a
+              device you are already looking at, not a primary action, and
+              a second worded button next to "Edit" would compete with it.
+              The title/aria-label carry the meaning. */}
+          {may.reportFault && (
+            <button
+              className="btn ghost icon-only"
+              onClick={onReportFault}
+              title="Report a fault for this device"
+              aria-label="Report a fault for this device"
+            ><Wrench size={16} /></button>
+          )}
+        </div>
+      } />
+    </Window>
   );
 }

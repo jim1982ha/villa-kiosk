@@ -26,6 +26,7 @@ globalThis.addEventListener = (type, fn) => { if (type === "focus") focus.add(fn
 globalThis.removeEventListener = (type, fn) => { if (type === "focus") focus.delete(fn); };
 
 const { storeSaveResult, saveProblemLine, UNSAVED_LINE } = await import("@/utils/storeSave");
+const { landPush } = await import("@/utils/syncedDocument");
 const D = await import("@/config/deviceConfig");
 const F = await import("@/fm/fmApi");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
@@ -133,9 +134,48 @@ console.log("\n  the wiring:");
   ck("both adapters hand the answer to the one mapping, and read no status themselves",
      /return await storeSaveResult\(resp\);/.test(saves) && /return await storeSaveResult\(r\);/.test(saves) && !/\.status\b/.test(saves));
   ck("both stores say a save's problem with the one line",
-     /setSaveProblem\(line\)/.test(src("config/DeviceConfigSync.tsx")) && (src("fm/FmDataContext.tsx").match(/setSaveError\(saveProblemLine\(outcome\)\)/g) ?? []).length === 2);
+     /const \{ line \} = landPush\(outcome, \{/.test(src("config/DeviceConfigSync.tsx")) && /setSaveProblem\(line\)/.test(src("config/DeviceConfigSync.tsx"))
+       && /const \{ verdict, line \} = landPush\(outcome, \{/.test(src("fm/FmDataContext.tsx")) && /if \(line !== null\) setSaveError\(line\);/.test(src("fm/FmDataContext.tsx"))
+       // a delete under its single-use code is the write that cannot be sent again (landPush `once`)
+       && /once: elevation \? \{ undo, what: "deleted" \} : undefined,/.test(src("fm/FmDataContext.tsx"))
+       && ![src("config/DeviceConfigSync.tsx"), src("fm/FmDataContext.tsx")].some((t) => /saveProblemLine|refused by the add-on|outcome\.takeBack/.test(t)));
   ck("Advanced Settings shows it above its footer",
      /<SaveProblemNote line=\{saveProblem\} onDismiss=\{\(\) => setSaveProblem\(null\)\} \/>\s*<ModalFooter/.test(src("components/settings/ConfigEditorModal.tsx")));
+}
+
+console.log("\n  what a save's answer means for a screen, decided once for both stores (landPush, architecture review O)");
+{
+  const run = (outcome, once) => {
+    const calls = [];
+    const r = landPush(outcome, {
+      landed: (o) => { calls.push(["landed", o.rev]); return o.rev === "7" ? "Changed on another tablet" : null; },
+      takeBack: (d) => calls.push(["takeBack", d]),
+      once: once ? { undo: () => calls.push(["undo"]), what: "deleted" } : undefined,
+    });
+    return { ...r, calls };
+  };
+  const landed = run({ ok: true, rev: "7", next: {}, attempts: 1, synced: {}, others: {} });
+  ck("landed: the store's merge runs on the screen copy, and what it says is the line", landed.verdict === "saved"
+     && landed.line === "Changed on another tablet" && JSON.stringify(landed.calls) === '[["landed","7"]]', landed);
+  for (const reason of ["nothing-to-push", "not-allowed", "not-pulled"]) {
+    const r = run({ ok: false, reason }, true);
+    ck(`  ...${reason}: nothing said, nothing undone (even a single-use delete)`, r.verdict === "unchanged" && r.line === null && r.calls.length === 0, r);
+  }
+  const no = run({ ok: false, reason: "refused", message: "Not allowed for a guest", takeBack: { tickets: 1 } }, true);
+  ck("refused: what was sent taken back, said with the add-on's reason", no.verdict === "refused"
+     && JSON.stringify(no.calls) === '[["takeBack",{"tickets":1}]]' && no.line === "The add-on refused this change: Not allowed for a guest", no);
+  const wifi = run({ ok: false, reason: "transport" });
+  ck("not reached: kept on this device, said as unsaved, nothing undone", wifi.verdict === "unsent" && wifi.line === UNSAVED_LINE && wifi.calls.length === 0, wifi);
+  const del = run({ ok: false, reason: "transport" }, true);
+  ck("a delete under its single-use code, not reached: put back and said with its TRUE cause, never 'refused'",
+     del.verdict === "undone" && JSON.stringify(del.calls) === '[["undo"]]'
+       && del.line === "Not deleted: the add-on could not be reached, nothing was changed. Try again." && !/refused/.test(del.line), del);
+  const clash = run({ ok: false, reason: "conflict-retries-exhausted" }, true);
+  ck("  ...another tablet saving at the same moment: said so", clash.verdict === "undone"
+     && clash.line === "Not deleted: another tablet was saving at the same moment, nothing was changed. Try again.", clash.line);
+  const refusedDelete = run({ ok: false, reason: "refused", takeBack: {} }, true);
+  ck("  ...the add-on's own no: taken back as any refusal, said as refused", refusedDelete.verdict === "refused"
+     && JSON.stringify(refusedDelete.calls) === '[["takeBack",{}]]' && /refused/.test(refusedDelete.line), refusedDelete);
 }
 
 done("✅ one reading of the add-on's answer for both stores; a refused device-setup change is undone and said");

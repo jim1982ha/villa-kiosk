@@ -439,9 +439,10 @@
     padding: 0;
   }
 
-  /* ...and every other window the full screen, like Settings; a question box and the colour picker keep their size */
-  .modal:not(.panel-modal):not(.ask-dialog):not(.badge-color-modal):not(.device-details) { height: 100dvh; }
-  .modal.panel-modal.ask-dialog, .modal.panel-modal.badge-color-modal, .modal.panel-modal.device-details { height: auto; }
+  /* ...and every other window of content the full screen, like Settings; a window about one device, a question box
+     and the colour picker keep their size (components/common/Window: each says its kind) */
+  .modal.window-content:not(.panel-modal) { height: 100dvh; }
+  .modal.panel-modal.window-device, .modal.panel-modal.window-question { height: auto; }
 
   /* (Config table is card-styled at all widths now — see the base rules.) */
 

@@ -240,7 +240,7 @@ console.log("\n  the wiring:");
   const src = (p) => strip(readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8"));
   const fm = src("fm/FmDataContext.tsx"), sync = src("config/DeviceConfigSync.tsx"), dc = src("config/deviceConfig.ts");
   ck("both stores lay the push's `others`, never the store's copy: the Facility store under its own records",
-     /const \{ doc: merged, changedOnBoth, removedElsewhere \} = foldOthers\(ref\.current, outcome\);/.test(fm) && /mergeRemote\(pushedChange\(outcome\)\)/.test(sync)
+     /const \{ doc: merged, changedOnBoth, removedElsewhere \} = foldOthers\(ref\.current, o\);/.test(fm) && /mergeRemote\(pushedChange\(o\)\)/.test(sync)
      && !/outcome\.base/.test(fm + sync));
   ck("one rule for 'this tablet's own edit wins', in both stores (keyedSync mineWins)",
      /mineWins\(change\.diff, diffSharedConfig\(change\.synced, local\)\)/.test(dc) && /const mine = diffFmData\(pushed\.synced, screen\);[\s\S]*applyFmDiff\(screen, mineWins\(pushed\.others, mine\)\)/.test(src("fm/fmApi.ts")));

@@ -9,7 +9,7 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
-const { buildAttentionItems, attentionFor, deviceIssues, issueSeverity } = await import("@/config/attention");
+const { buildAttentionItems, attentionFor, deviceIssues, issueSeverity, faultsFor } = await import("@/config/attention");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { devicesOf } = await import("../consistency/devices.mjs");
@@ -75,6 +75,24 @@ ck("  ...nothing wrong: no mark, no sign, no card", E.mark === null && E.sign ==
   ck("a hidden device: no Cockpit card, no count, no sign — hidden everywhere",
      att.attentionGroups.length === 0 && att.health.level === "ok" && issueSeverity(att.attentionGroups, [id], (x) => x) === null,
      att.attentionGroups.map((g) => g.title));
+}
+
+console.log("\n  every window as its profile sees the villa (architecture review N, card 5)");
+{
+  const id = "sensor.cellar_temp";
+  const entities = { [id]: ent(id, "on") };
+  const entityMap = { [id]: { entityId: id, type: "sensor" } };
+  const devices = devicesOf({ ids: [id], unavailable: [] });
+  const fmData = { ...EMPTY_FM_DATA, tickets: [ticket("t9", id, "Cellar temp reads wrong")] };
+  const problems = { devices, attentionItems: buildAttentionItems({ devices, entities, entityMap, resolvedRooms: {}, fmData }) };
+  const guest = (x) => x !== id, owner = () => true;
+  const sign = (may) => issueSeverity(attentionFor(problems, may).attentionGroups, [id], (x) => x);
+  ck("a profile that may see the device: its window's badge carries the \"!\" and its sign is amber",
+     faultsFor(problems, owner).has(id) && sign(owner) === "warn");
+  ck("  ...one that may not: no \"!\" in its windows, as no sign and no card in its Cockpit (they disagreed)",
+     !faultsFor(problems, guest).has(id) && sign(guest) === null);
+  ck("  ...the map, the same for everyone, still carries it",
+     deviceIssues(attentionFor(problems, owner).attentionGroups).amber.has(id));
 }
 
 done("✅ one answer per device: the badge, the window's sign and the Cockpit's card agree");

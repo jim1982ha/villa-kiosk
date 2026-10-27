@@ -23,7 +23,7 @@ import type { DeviceMarks } from "@/utils/deviceActivity";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
-import { buildAttentionItems, closingEntities, deviceIssues, groupAttention, type DeviceIssues, type VillaProblems } from "./attention";
+import { buildAttentionItems, closingEntities, deviceIssues, faultsFor, groupAttention, type DeviceIssues, type VillaProblems } from "./attention";
 import { deviceRows, type DeviceRow } from "./deviceRecord";
 import { dismissedEntitySet, inventoryGaps } from "./dismissedEntities";
 
@@ -82,6 +82,11 @@ export interface VillaModel extends VillaSets {
   /** Each device's marks, critical, hidden and an amber Cockpit issue (a fault or late maintenance, issues.amber): THE
    *  value every drawing of a device is handed (the map, the room lists, the open window, the room chooser). */
   marks: DeviceMarks;
+  /** The marks as one profile sees the villa: its amber issues are the cards ITS Cockpit lists (attentionFor), the
+   *  same answer as a device window's warning sign (useDeviceIssue). Every window takes these — a device's own window,
+   *  a device list, the room chooser — so a guest's badge never shows a problem its window, and its Cockpit, do not
+   *  (architecture review N, card 5). The map is drawn the same for everyone (`marks`). */
+  marksFor: (role: Role | null) => DeviceMarks;
 }
 
 const Ctx = createContext<VillaModel | null>(null);
@@ -149,6 +154,10 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
       ...sets, devices, visibleDevices, attention, settings, issues,
       visibleTo: (role) => visibleTo(role, { mapped: mappedEntityIds, entityMap, entities }),
       marks: { critical: criticalSet, isHidden, faults: issues.amber },
+      marksFor: (role) => {
+        const sees = visibleTo(role, { mapped: mappedEntityIds, entityMap, entities });
+        return { critical: criticalSet, isHidden, faults: faultsFor(attention, (id) => sees.has(id)) };
+      },
     }),
     [sets, mappedEntityIds, devices, visibleDevices, attention, settings, entityMap, entities, issues, criticalSet, isHidden],
   );
