@@ -93,4 +93,11 @@ reporter.
 A visual or placement change is measured on the real villa model before the owner checks it: the model can be loaded
 headless in Node through the app's real scene modules. Those probes name the villa's model and stay gitignored.
 
+For badge placement, measure on the owner's own pose: with `?debug=place`, the debug box's "Copy placement report"
+copies the last layout pass (its whole input and the check's findings), and a failing pass reaches Settings ›
+Advanced › Device telemetry as a `placement` row (copy it from there on any device). Save it under `.scratch/` and
+replay it with `node tools/placement-probe.mjs <report.json>`: the real pass and check on the device's values;
+`--focus`, `--no-focus` and `--suppress` test another tapped room.
+
 **Why:** validation steps written for a case the villa barely had could not be done; a probe showed nothing changed.
+Two overlap fixes (2.496.552-553) were made without the phone's pose, the second cause still an inference.

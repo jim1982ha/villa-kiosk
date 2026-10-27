@@ -80,7 +80,9 @@ let history: string[] = [];
 
 let box: HTMLDivElement | null = null;
 let bodyEl: HTMLDivElement | null = null;
-let copyBtn: HTMLButtonElement | null = null;
+let headerEl: HTMLDivElement | null = null;
+/** The box's extra Copy buttons (debugCopyButton), drawn when the box is. */
+const copySources: { label: string; get: () => string | undefined }[] = [];
 
 // Where the reader last dragged/resized the panel. Persisted because the
 // panel's default corner is over the villa's own controls on some layouts,
@@ -163,16 +165,40 @@ function clearAll(): void {
   if (bodyEl) bodyEl.textContent = "";
 }
 
-function copyAll(): void {
-  const text = history.join("\n");
-  const flash = (label: string) => {
-    if (!copyBtn) return;
-    copyBtn.textContent = label;
-    setTimeout(() => {
-      if (copyBtn) copyBtn.textContent = "Copy all";
-    }, 1500);
+/** Copy `text` from the tap on `btn`, and say on the button whether it landed (clipboard.copyText: the Clipboard
+ *  API, else the textarea route iOS Safari needs). */
+function copyFrom(btn: HTMLButtonElement, label: string, text: string | undefined): void {
+  const flash = (what: string) => {
+    btn.textContent = what;
+    setTimeout(() => { btn.textContent = label; }, 1500);
   };
+  if (text === undefined) { flash("Nothing yet"); return; }
   void copyText(text).then((ok) => flash(ok ? "Copied!" : "Copy failed"));
+}
+
+/** pointer-events:auto + a real <button> so these are reliably tappable on a
+ *  kiosk tablet with no devtools, and one factory so a second control cannot
+ *  drift out of style with the first. */
+function headerButton(label: string, bg: string, onTap: (b: HTMLButtonElement) => void): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = label;
+  b.style.cssText =
+    `font:11px monospace;background:${bg};color:#eafff0;border:none;` +
+    "border-radius:4px;padding:3px 10px;cursor:pointer;pointer-events:auto;";
+  b.addEventListener("click", (e) => { e.stopPropagation(); onTap(b); });
+  headerEl?.appendChild(b);
+  return b;
+}
+
+/**
+ * A Copy button in the debug box for one subsystem's own report (EntityVisuals: "Copy placement report", the
+ * last pass's placementReport as JSON). `get` runs at the tap, so the copy is the latest; undefined: nothing yet.
+ */
+export function debugCopyButton(label: string, get: () => string | undefined): void {
+  if (copySources.some((c) => c.label === label)) return;
+  copySources.push({ label, get });
+  if (headerEl) headerButton(label, "#1e3a8a", (b) => copyFrom(b, label, get()));
 }
 
 function ensureBox(): HTMLDivElement {
@@ -190,35 +216,22 @@ function ensureBox(): HTMLDivElement {
     "padding:8px 10px;border-radius:8px;pointer-events:auto;";
 
   const header = document.createElement("div");
-  header.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex:0 0 auto;";
+  headerEl = header;
+  header.style.cssText = "display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex:0 0 auto;";
 
   const title = document.createElement("span");
   title.textContent = "villa:debug";
   title.style.cssText = "color:#86efac;font-weight:bold;";
   header.appendChild(title);
 
-  // pointer-events:auto + a real <button> so these are reliably tappable on a
-  // kiosk tablet with no devtools, and one factory so a second control cannot
-  // drift out of style with the first.
-  const headerBtn = (label: string, bg: string, onTap: () => void) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = label;
-    b.style.cssText =
-      `font:11px monospace;background:${bg};color:#eafff0;border:none;` +
-      "border-radius:4px;padding:3px 10px;cursor:pointer;pointer-events:auto;";
-    b.addEventListener("click", (e) => { e.stopPropagation(); onTap(); });
-    header.appendChild(b);
-    return b;
-  };
-
   // Clear before Copy, in reading order: narrow the log to the thing being
   // investigated, THEN copy it. Sharing the whole page load every time is
   // what this pair exists to avoid.
-  headerBtn("Clear", "#3f3f46", clearAll);
+  headerButton("Clear", "#3f3f46", clearAll);
   // Copies the FULL history, not just the 40 visible lines — during model
   // load they scroll past faster than they can be read.
-  copyBtn = headerBtn("Copy all", "#166534", copyAll);
+  headerButton("Copy all", "#166534", (b) => copyFrom(b, "Copy all", history.join("\n")));
+  for (const c of copySources) headerButton(c.label, "#1e3a8a", (b) => copyFrom(b, c.label, c.get()));
   box.appendChild(header);
 
   bodyEl = document.createElement("div");

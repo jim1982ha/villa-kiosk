@@ -68,6 +68,10 @@ export type TelemetryKind =
   // the open question about `calibrateRooms`. See perfSpans' census notes —
   // this kind goes away with them.
   | "spans"
+  // `?debug=place`: a layout pass that broke a placement rule, as its whole report (babylon/placementReport),
+  // throttled by PlacementTelemetry. Read from Settings › Advanced › Device telemetry, replayed by
+  // tools/placement-probe.mjs.
+  | "placement"
   | "csp";            // a Content-Security-Policy violation the BROWSER posted (csp.conf report-uri)
   // "roomzoom" lived here from 2.361.0 and is GONE (2.427.0). It asked whether a
   // room shot was the WALL fit or a tighter badge-spread, and it got its answer:

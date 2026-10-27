@@ -9,7 +9,7 @@
 // the check to say so — and a clean one to stay silent.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
-const { PlacementCheck } = await import("@/babylon/placementCheck");
+const { PlacementCheck, ALLOWED_FINDINGS } = await import("@/babylon/placementCheck");
 
 let fail = 0;
 const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
@@ -68,11 +68,38 @@ ck("hidden with no card and no chip: an ORPHAN; behind a wall counted apart; cov
 const items = [0, 1, 2].map((i) => ({ sx: i * 200, sy: 0, sz: 0, reach: 20, reachY: 20, rank: 0, sortKey: `b${i}`, category: "", room: "r", exempt: false }));
 ck("a pure solve accepts the same badges reversed", check({ solve: { items, gap: 2, mode: "priority", drawableMax: 6 } }).orderDependent === false);
 
+// ── NO HIDDEN EXCEPTIONS (owner, 2026-10-27) ──────────────────────────────
+// Every count is a failure unless ALLOWED_FINDINGS names the owner's decision in rules/decided.md. The old check
+// called an overhung badge "allowed" and a focused room's overlaps "expected", which no owner ever decided.
+const { readFileSync } = await import("node:fs");
+const decided = readFileSync(new URL("../../rules/decided.md", import.meta.url), "utf8");
+const anchors = new Set([...decided.matchAll(/^## (.+)$/gm)].map((m) => m[1].toLowerCase().replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-")));
+const unanchored = Object.entries(ALLOWED_FINDINGS).filter(([, a]) => !anchors.has(a));
+ck("every allowed finding names an entry in rules/decided.md", Object.keys(ALLOWED_FINDINGS).length > 0 && unanchored.length === 0, unanchored);
+ck("  ...and the owner allowed one category only: a badge behind a wall while walking",
+   JSON.stringify(ALLOWED_FINDINGS) === JSON.stringify({ byWall: "badges-behind-a-wall-hide-while-walking" }), ALLOWED_FINDINGS);
+const every = [clean, ov, foc, mixed, bur, hang, cc, ch, cp, est, moved, leak, orph,
+  check({ cards: [card(200, 200, 40, 20, true), card(230, 200, 40, 20)] }),
+  check({ badges: [badge("a", 200, 200, { exempt: true })], cards: [card(200, 200, 80, 20)] }),
+  check({ badges: [badge("a", 500, 300, { exempt: true })], chips: [chip("kitchen", 500, 315)] })];
+const [focCards, focCardHit, focChip] = every.slice(-3);
+ck("a focused room's own overlaps are FAILURES, in their buckets", foc.failures === 1 && focCards.summaryFocusOverlaps === 1
+   && focCards.failures === 1 && focCardHit.focusCardHits === 1 && focCardHit.failures === 1 && focChip.chipHitsFocused === 1 && focChip.failures === 1,
+   [foc.failures, focCards.failures, focCardHit.failures, focChip.failures]);
+ck("  ...as are a card's end, two cards, a chip, a moved or leaked badge and a chip estimate off by more than the gap",
+   hang.failures === 1 && cc.failures === 1 && ch.failures === 1 && cp.failures === 1 && moved.failures === 1
+   && leak.failures === 1 && est.failures === 1, [hang, cc, ch, cp, moved, leak, est].map((f) => f.failures));
+ck("  ...a badge behind a wall is the one count that is not; an orphan beside it is", orph.byWall === 1 && orph.failures === 1, orph.failures);
+ck("  ...and a clean layout has none", clean.failures === 0);
+const said = every.flatMap((f) => f.lines).filter((l) => /expected|accepted|harmless|deliberately/i.test(l));
+ck("no line calls an overlap expected or accepted", said.length === 0, said);
+ck("every overlapping pair is named, by id", JSON.stringify(ov.pairs) === JSON.stringify([{ kind: "overlaps", a: "a", b: "b" }])
+   && hang.pairs[0]?.kind === "overhung" && hang.pairs[0]?.b === "a" && cp.pairs[0]?.a === "chip:a", [ov.pairs, hang.pairs, cp.pairs]);
+
 {
-  const { readFileSync } = await import("node:fs");
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("EntityVisuals only paints the snapshot; the rules are the check's",
-     /const found = this\.placementCheck\.check\(\{/.test(ev) && !/let overlaps = 0|let buried = 0|debugScratchA/.test(ev));
+     /const found = this\.placementCheck\.check\(snapshot\);/.test(ev) && !/let overlaps = 0|let buried = 0|debugScratchA/.test(ev));
 }
 
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the self-check can fail, on every rule");

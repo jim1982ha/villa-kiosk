@@ -246,7 +246,9 @@ console.log("\n  the caller:");
   ck("EntityVisuals holds one pass with NO host, and runs it once per layout with a frame",
      /private readonly pass = new PlacementPass\(\);/.test(ev)
      && (ev.match(/this\.pass\.run\(/g) ?? []).length === 1
-     && /this\.pass\.run\(\s*this\.placementFrame\(shown\), shown, boxes, clearance, suppressOthers\)/.test(ev));
+     && /const placeFrame = this\.placementFrame\(shown\);\s*const \{ pending, chips, solved \} = this\.pass\.run\(placeFrame, shown, boxes, clearance, suppressOthers\)/.test(ev)
+     // the check reads the SAME frame the pass ran with (placementReport.passSnapshot)
+     && /this\.assertPlacementInvariants\(placeFrame, shown, boxes, clearance, suppressOthers, pending, chips, tm, vp\)/.test(ev));
   ck("  ...and never sequences its steps itself",
      !/this\.pass\.(chipRoom|groupsFromBuckets|pairFocusedRoom|placeEntityGroups|settleChips|deriveChips)\(/.test(ev)
      && (ev.match(/this\.pass\.begin\(\);/g) ?? []).length === 1);
