@@ -1,3 +1,18 @@
+## 2.496.549
+
+What you will see:
+- A delete in Facility that fails now says why: "Not deleted: the add-on could not be reached, nothing was changed.
+  Try again." or "Not deleted: another tablet was saving at the same moment, …". It used to say the add-on refused it,
+  even when only the Wi-Fi had dropped.
+- A device's window, a device list and the room chooser show a problem's amber "!" only when the person signed in can
+  see that problem in their own Cockpit, as the window's warning sign already did. The map is drawn the same for
+  everyone, as before.
+- A room glow or a camera cone always matches the sensors as they are now, whatever happened first (the map loaded,
+  the rooms were fitted, the cones were built, the setting switched).
+- Nothing else changes on screen: every window now has one shared frame (its height chosen by what kind of window it
+  is), saving from two tablets follows one rule for device setup and Facility, and the Watched cards name and place
+  their device exactly as the open issues do.
+
 ## 2.496.548
 
 What you will see:
