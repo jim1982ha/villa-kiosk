@@ -1,3 +1,17 @@
+## 0.12.362
+
+What you will see:
+- A device that goes offline and is then taken up by one of the villa's own alerts no longer shows twice in the
+  Cockpit's Open issues until 02:00: within 5 minutes its fault closes as "Followed by alert #41, which says when it is
+  back.", and its Telegram message says the same.
+- A night-check message (a critical device offline, a battery at 10%) no longer says a bare "Back to normal" while the
+  Cockpit still watches the problem: it says "✅ Back to normal at 14:05, watched until 02:00". At that night check the
+  same line becomes "✅ Closed at 02:00: it did not come back", or "⚠️ Back again at 02:00".
+- When such a problem is still there after a close, or is reopened in the Cockpit, you still get the message that asks
+  to look again, and the first message is updated too ("⚠️ Still there after the close at 14:45"), so it never still
+  says "Back to normal".
+- These words are in the maintenance skill's settings, as before.
+
 ## 0.12.361
 
 What you will see:
