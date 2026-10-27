@@ -11,6 +11,11 @@
 // Not here, on purpose: fmEngine.localStamp ("2026-10-03 14:05"), a SORTABLE
 // stamp for the report's tables, and the energy charts' weekday buckets,
 // which name a day of the week rather than a moment.
+//
+// ⚠️ IN THE VILLA'S TIME ZONE (owner, 2026-10-28): every form here is written on the villa's clock (utils/villaClock),
+// never the reading device's, so a card says the time Telegram says wherever the phone is.
+
+import { inVillaZone, wallClock } from "./villaClock";
 
 const at = (t: string | number | Date): Date => (t instanceof Date ? t : new Date(t));
 const valid = (d: Date) => !Number.isNaN(d.getTime());
@@ -20,37 +25,37 @@ const two = (n: number) => String(n).padStart(2, "0");
 /** "14:05" — a time today, a chart's axis. */
 export function clockTime(t: string | number | Date): string {
   const d = at(t);
-  return valid(d) ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  return valid(d) ? d.toLocaleTimeString([], inVillaZone({ hour: "2-digit", minute: "2-digit" })) : "";
 }
 
 /** "3 Oct" — a day, no year (a chart's axis beyond two days). */
 export function dayMonth(t: string | number | Date): string {
   const d = at(t);
-  return valid(d) ? d.toLocaleDateString([], { day: "numeric", month: "short" }) : "";
+  return valid(d) ? d.toLocaleDateString([], inVillaZone({ day: "numeric", month: "short" })) : "";
 }
 
 /** "3 Oct, 14:05" — a recent moment (the Agent's activity, a history window's end). */
 export function dayTime(t: string | number | Date): string {
   const d = at(t);
-  return valid(d) ? d.toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  return valid(d) ? d.toLocaleString([], inVillaZone({ day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) : "";
 }
 
 /** "03 Oct 2026" — a date on its own (a due date, a report row). */
 export function fullDate(t: string | number | Date): string {
   const d = at(t);
-  return valid(d) ? d.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" }) : "";
+  return valid(d) ? d.toLocaleDateString([], inVillaZone({ day: "2-digit", month: "short", year: "numeric" })) : "";
 }
 
 /** "Oct 2026" — a month as one value of a chart (a year drawn a month a bar). */
 export function monthShort(t: string | number | Date): string {
   const d = at(t);
-  return valid(d) ? d.toLocaleDateString([], { month: "short", year: "numeric" }) : "";
+  return valid(d) ? d.toLocaleDateString([], inVillaZone({ month: "short", year: "numeric" })) : "";
 }
 
 /** "October 2026" — the month a report covers, spelled for a heading. */
 export function monthYear(t: string | number | Date): string {
   const d = at(t);
-  return valid(d) ? d.toLocaleDateString([], { month: "long", year: "numeric" }) : "";
+  return valid(d) ? d.toLocaleDateString([], inVillaZone({ month: "long", year: "numeric" })) : "";
 }
 
 /** "3 Oct 2026, 14:05" — when something was changed or taken, which may be
@@ -58,18 +63,20 @@ export function monthYear(t: string | number | Date): string {
 export function stampText(t: string | number | Date): string {
   const d = at(t);
   return valid(d)
-    ? d.toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    ? d.toLocaleString([], inVillaZone({ day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }))
     : "";
 }
 
-/** "2026-10-03" — a date inside a SAVED DOCUMENT (a recap's or statement's row, a snapshot): the reader's local day,
+/** "2026-10-03" — a date inside a SAVED DOCUMENT (a recap's or statement's row, a snapshot): the villa's day,
  *  in the one fixed form the documents' "Generated:" stamp already uses (fmEngine.localStamp), whatever the phone's
  *  language. ⚠️ A document is archived and read years later, possibly on another device: a row written in the
  *  generating phone's locale ("05 Sept 2026" / "Sep 5, 2026") changed shape with the browser, and one check comparing
  *  such a row died on the build server (2.496.424). Screens keep the reader's locale (fullDate). */
 export function docDate(t: string | number | Date): string {
   const d = at(t);
-  return valid(d) ? `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}` : "";
+  if (!valid(d)) return "";
+  const w = wallClock(d);
+  return `${w.year}-${two(w.month)}-${two(w.day)}`;
 }
 
 /** "20/10/2026 02:00" — a moment as the VESTA Agent's messages write it on Telegram (its timeutil.moment_label): day,
@@ -77,5 +84,7 @@ export function docDate(t: string | number | Date): string {
  *  "Next check" tooltip, "20/10/2026 02:00"). */
 export function momentText(t: string | number | Date): string {
   const d = at(t);
-  return valid(d) ? `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()} ${two(d.getHours())}:${two(d.getMinutes())}` : "";
+  if (!valid(d)) return "";
+  const w = wallClock(d);
+  return `${two(w.day)}/${two(w.month)}/${w.year} ${two(w.hour)}:${two(w.minute)}`;
 }

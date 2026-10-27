@@ -7,6 +7,7 @@
 // or not". The tile under the floors draws presenceOf; its panel draws presenceWhy.
 
 import type { HassEntity } from "@/types/ha.types";
+import { labelOf } from "./EntityMap";
 import type { StateSince } from "@/ha/historySource";
 import { STATUS_COLOR, UNKNOWN_STATES, type StatusKey } from "@/utils/stateColors";
 import { fmtDuration } from "@/components/panels/chartUtils";
@@ -173,7 +174,6 @@ export interface PresenceWhy {
   stages: PresenceStages | null;
 }
 
-const nameOf = (e: HassEntity) => String(e.attributes?.friendly_name ?? e.entity_id);
 /** An attribute that lists entity ids, as the sensor states it; null when it states none. */
 const listed = (v: unknown): string[] | null => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : null);
 
@@ -191,7 +191,12 @@ export function presenceWatched(sensorId: string, entities: Readonly<Record<stri
  * its own lists ("people", "sensors" attributes); the window reads those, and names nothing itself.
  */
 export function presenceWhy(sensorId: string, entities: Readonly<Record<string, HassEntity>>,
-  sinceOf: (id: string) => Since): PresenceWhy {
+  sinceOf: (id: string) => Since, entityMap: Parameters<typeof labelOf>[1]): PresenceWhy {
+  // a person, a sensor or a setting, as every screen names it (labelOf). ⚠️ IT READ THE PLATFORM'S NAME (owner,
+  // 2026-10-28: one owner of a device's name): a sensor renamed in VESTA kept its old name in this window. The (i)
+  // still says the villa's system's own name (fullNames: "In the villa's system: …"), where to find it there.
+  const nameOf = (e: HassEntity) => labelOf(e.entity_id, entityMap, entities);
+  const systemName = (e: HassEntity) => String(e.attributes?.friendly_name ?? e.entity_id);
   const all = Object.values(entities);
   const attrs = entities[sensorId]?.attributes ?? {};
   const peopleIds = listed(attrs.people), sensorIds = listed(attrs.sensors);
@@ -208,8 +213,10 @@ export function presenceWhy(sensorId: string, entities: Readonly<Record<string, 
   // the latest by when its state really began; while that is read, by what the villa's system says
   const began = (e: HassEntity) => { const s = sinceOf(e.entity_id); return s && s !== "loading" ? s.at : Date.parse(e.last_changed ?? ""); };
   const latest = (moving.length ? moving : watched).sort((a, b) => began(b) - began(a))[0];
-  const owner = nameOf(entities[sensorId] ?? ({ entity_id: sensorId, attributes: {} } as HassEntity));
-  const named = (id: string) => (entities[id] ? nameOf(entities[id]) : id);
+  // a name without the sensor's own in front ("Villa empty - away grace" → "Away grace"): the villa's system's name
+  // for it, as those names are written there
+  const owner = systemName(entities[sensorId] ?? ({ entity_id: sensorId, attributes: {} } as HassEntity));
+  const named = (id: string) => (entities[id] ? systemName(entities[id]) : id);
   const stageId = typeof attrs.stage_sensor === "string" ? attrs.stage_sensor : "";
   const order = (Array.isArray(entities[stageId]?.attributes?.stages) ? entities[stageId].attributes.stages as unknown[] : [])
     .filter((x): x is [string, string] => Array.isArray(x) && typeof x[0] === "string" && typeof x[1] === "string")
@@ -228,11 +235,11 @@ export function presenceWhy(sensorId: string, entities: Readonly<Record<string, 
       })
     : prefix ? all.filter((e) => e.entity_id.startsWith(prefix))
       .map((e) => ({ entityId: e.entity_id, entityIds: [e.entity_id], name: shortName(nameOf(e), owner), said: said(e),
-        explain: fullNames([nameOf(e)]) }))
+        explain: fullNames([systemName(e)]) }))
       .sort((a, b) => a.name.localeCompare(b.name)) : [];
   return {
     people,
-    lastActivity: latest ? { entityId: latest.entity_id, name: shortName(nameOf(latest), owner), full: fullNames([nameOf(latest)]),
+    lastActivity: latest ? { entityId: latest.entity_id, name: shortName(nameOf(latest), owner), full: fullNames([systemName(latest)]),
       moving: latest.state === "on", at: sinceOf(latest.entity_id) } : null,
     listsSensors: sensorIds !== null,
     settings,

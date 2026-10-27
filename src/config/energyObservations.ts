@@ -10,6 +10,7 @@
 // that each rounded and guarded differently. No test reached any of them.
 // PURE; tests/oracles/energy_observations.mjs.
 
+import { inVillaZone } from "@/utils/villaClock";
 import {
   typicalDay, standoutDay, risers, deviceRanking, todayHeadline, fmtKwh,
   type EnergyPeriod, type EnergySetup, type EnergySplit,
@@ -80,7 +81,7 @@ export function energyToday(
     const dayCost = week.buckets[standout.index].cost;
     cards.push({
       tone: "caution",
-      title: `${new Date(t).toLocaleDateString(locale, { weekday: "short" })}: ${standout.ratio.toFixed(1)}× usual`,
+      title: `${new Date(t).toLocaleDateString(locale, inVillaZone({ weekday: "short" }))}: ${standout.ratio.toFixed(1)}× usual`,
       detail: `${fmtKwh(daily[standout.index] ?? 0)} kWh${dayCost !== undefined && dayCost > 0 ? `, ${formatMoney(dayCost, costUnit, locale)}` : ""}.`
         + (rose.length ? ` ${rose.join(" and ")} ran more than usual.` : " No device meter shows why."),
     });

@@ -47,17 +47,17 @@ const ents = {
   "input_number.example_empty_grace": e("input_number.example_empty_grace", "5", { friendly_name: "Grace", unit_of_measurement: "min" }),
   "input_number.other": e("input_number.other", "1"),
 };
-const why = P.presenceWhy(S, ents, () => "loading");
+const why = P.presenceWhy(S, ents, () => "loading", {});
 ck("the people it lists, home or away, by name — never another person of the villa's system",
    why.people.map((p) => `${p.name}:${p.place}`).join() === "Ana:Away,Bea:Home", why.people);
 ck("  ...the latest movement among ITS sensors — never a motion it does not read, moving or not",
    why.lastActivity?.entityId === "binary_sensor.hall_motion" && !why.lastActivity.moving && why.listsSensors, why.lastActivity);
 ck("  ...a sensor that lists nothing: no people, no movement — said so, never everyone",
-   (() => { const n = P.presenceWhy(S, { ...ents, [S]: e(S, "off") }, () => "loading"); return n.people === null && n.lastActivity === null && !n.listsSensors; })());
+   (() => { const n = P.presenceWhy(S, { ...ents, [S]: e(S, "off") }, () => "loading", {}); return n.people === null && n.lastActivity === null && !n.listsSensors; })());
 {
   const began = { "person.a": { at: 5, before: false }, "binary_sensor.server_activity": { at: Date.parse("2026-10-18T09:00:00Z"), before: false },
     "binary_sensor.hall_motion": { at: Date.parse("2026-10-18T07:00:00Z"), before: true } };
-  const w = P.presenceWhy(S, ents, (id) => began[id] ?? null);
+  const w = P.presenceWhy(S, ents, (id) => began[id] ?? null, {});
   ck("  ...each person and the movement say when their state REALLY began (the history's answer), not last_changed",
      w.people.find((p) => p.name === "Ana").since === began["person.a"] && w.people.find((p) => p.name === "Bea").since === null
      && w.lastActivity.at === began["binary_sensor.server_activity"], w);
@@ -121,7 +121,7 @@ ck("the presence band says the villa's words, as its 'now' does: on Empty, off O
   ck("the screens say THAT since: the tile, the window and the Recap through usePresence; people and movement through usePresenceWhy — no last_changed",
      /const history = useStateSince\(presence && presence\.stated === null \? \[config\.presenceSensor\] : \[\]\);/.test(up)
      && /sinceWords\(presenceSince\(presence, history\(config\.presenceSensor\)\)\)/.test(up)
-     && /useStateSince\(presenceWatched\(config\.presenceSensor, entities\)\)/.test(up) && /presenceWhy\(config\.presenceSensor, entities, sinceOf\)/.test(up)
+     && /useStateSince\(presenceWatched\(config\.presenceSensor, entities\)\)/.test(up) && /presenceWhy\(config\.presenceSensor, entities, sinceOf, config\.entityMap\)/.test(up)
      && /<PresenceButton presence=\{p\.presence\} when=\{p\.since\}/.test(tl) && /<PresencePanel presence=\{p\.presence\} when=\{p\.since\} why=\{why\}/.test(tl)
      && !/\.last_changed/.test(up + tl));
 }
@@ -149,7 +149,7 @@ const told = { ...ents, [S]: e(S, "off", { ...ents[S].attributes, friendly_name:
   [NP]: e(NP, "3", { friendly_name: "Example empty - noise pulses needed" }),
   [NW]: e(NW, "5", { friendly_name: "Example empty - noise window minutes", unit_of_measurement: "min" }),
   [ST]: e(ST, "wait", { stages: ORDER }) };
-const w2 = P.presenceWhy(S, told, () => "loading");
+const w2 = P.presenceWhy(S, told, () => "loading", {});
 // owner, 2026-10-25: the two noise settings as one line; "Villa empty - " off the names; the full names in the (i)
 ck("  ...the lines the sensor lists (\"settings\"), in its order: its label, its value, its explanation, then the full names",
    w2.settings.map((s) => `${s.name}=${s.said}`).join() === "Away grace=5min,Server room noise=3 pulses in 5min"
@@ -159,7 +159,7 @@ ck("  ...the lines the sensor lists (\"settings\"), in its order: its label, its
    w2.settings);
 {
   const moved = P.presenceWhy(S, { ...told, "binary_sensor.server_activity": e("binary_sensor.server_activity", "on",
-    { device_class: "occupancy", friendly_name: "Example empty - server activity" }) }, () => "loading").lastActivity;
+    { device_class: "occupancy", friendly_name: "Example empty - server activity" }) }, () => "loading", {}).lastActivity;
   ck("  ...the latest movement named without the sensor's name, its full name in its (i)",
      moved?.name === "Server activity" && moved.full === "In the villa's system: Example empty - server activity.", moved);
 }

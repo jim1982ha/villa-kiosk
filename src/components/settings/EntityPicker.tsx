@@ -2,22 +2,17 @@
 // Searchable dropdown over the LIVE Home Assistant entity list. This is what
 // makes binding turnkey — you pick from real entities, not typed IDs.
 //
-// ⚠️ IT READS `friendly_name` RAW, AND DELIBERATELY DOES NOT USE
-// `displayLabelFor` — noted here because /dry-audit correctly flags the shape
-// (every other consumer in the app layers the kiosk's own override on top) and
-// would otherwise eventually converge it. The two pickers search two different
-// namespaces: DeviceSearchPicker searches devices the kiosk has ALREADY
-// configured, so it must call them what the rest of the app calls them; this
-// one searches Home Assistant's world to CREATE that configuration, and the
-// override it would show is the very field the surrounding form edits. Showing
-// the kiosk label here would mean renaming a device made it unfindable by the
-// name HA still knows it by — and would print the new name back at the operator
-// as if it were evidence the entity exists.
+// ⚠️ ONE OWNER OF A DEVICE'S NAME (owner, 2026-10-28): it showed the villa's system's raw name, deliberately (so a
+// device renamed in VESTA stayed findable by the name the villa's system knows), and was the one screen calling a
+// device something else. It SHOWS the name every screen shows (labelOf), and its search matches BOTH names and the id
+// (EntityMap.matchesName), so renaming a device never makes it unfindable.
 
 import { useRef, useMemo, useState } from "react";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { Search, X } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
+import { useConfig } from "@/config/ConfigContext";
+import { labelOf, matchesName } from "@/config/EntityMap";
 import { ENTITY_ID_RE } from "@/utils/sh3dParser";
 import { domainOf } from "@/utils/entityDomain";
 import { deviceRowText } from "@/utils/entityValue";
@@ -51,6 +46,8 @@ export default function EntityPicker({
   value, onChange, domains, placeholder, allowCustom, hideCurrentLabel, onClear, compact,
 }: Props) {
   const { entities } = useHA();
+  const { entityMap } = useConfig().config;
+  const nameOf = (id: string) => labelOf(id, entityMap, entities);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,28 +56,23 @@ export default function EntityPicker({
   useOutsideClose([containerRef], open, () => { setOpen(false); setQuery(""); });
 
   const list = useMemo(() => {
-    const q = query.toLowerCase();
     return Object.values(entities)
       .filter((e) => !domains || domains.includes(domainOf(e.entity_id)))
-      .filter(
-        (e) =>
-          e.entity_id.toLowerCase().includes(q) ||
-          (e.attributes.friendly_name ?? "").toLowerCase().includes(q),
-      )
+      .filter((e) => matchesName(query, e.entity_id, entityMap, entities))
       .sort((a, b) => a.entity_id.localeCompare(b.entity_id))
       .slice(0, 60);
-  }, [entities, query, domains]);
+  }, [entities, entityMap, query, domains]);
 
   const selected = value ? entities[value] : undefined;
   // What to show once a pick has been made and the dropdown is closed —
-  // the live entity's friendly name, or (allowCustom) the raw entity_id
+  // the entity's name as every screen shows it, or (allowCustom) the raw entity_id
   // itself if it doesn't exist in HA yet. This MUST win over a caller-supplied
   // `placeholder` (e.g. "New entity ID…" on the rename picker): `placeholder`
   // is a static hint for the empty state, so `placeholder ?? selectedLabel`
   // always picked the static hint once it was non-null, silently hiding the
   // selection the user just made (the picker looked untouched after clicking
   // a dropdown row, even though `value`/`onChange` had already fired).
-  const selectedLabel = value && !open ? (selected?.attributes.friendly_name ?? value) : undefined;
+  const selectedLabel = value && !open ? (selected ? nameOf(value) : value) : undefined;
 
   return (
     <div ref={containerRef} className="picker">
@@ -140,7 +132,7 @@ export default function EntityPicker({
               onClick={() => { onChange(e.entity_id); setOpen(false); setQuery(""); }}
             >
               <span style={{ flex: 1, textAlign: "left" }}>
-                {e.attributes.friendly_name ?? e.entity_id}
+                {nameOf(e.entity_id)}
                 <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>{e.entity_id}</div>
               </span>
               {/* Worded as every other row (deviceRowText): "Normal", "21.4 °C" — not "off", "21.4" */}

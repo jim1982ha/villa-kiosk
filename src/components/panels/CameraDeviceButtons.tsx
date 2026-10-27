@@ -14,6 +14,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import { cameraControlsOf } from "@/utils/panelRules";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 
 /** The moves in the order drawn, each with its icon and words. */
 const MOVES = [
@@ -31,6 +32,7 @@ export default function CameraDeviceButtons({ cameraId, order }: {
   const { entities, entityDeviceIds, callService } = useHA();
   const { role } = useProfile();
   const { ask, dialog } = useConfirmDialog();
+  const labelOf = useEntityLabel();
   const controls = roleCan(role, "controlCameras") ? cameraControlsOf(cameraId, entityDeviceIds) : null;
   if (!controls) return null;
   const siren = controls.siren;
@@ -52,7 +54,7 @@ export default function CameraDeviceButtons({ cameraId, order }: {
           aria-pressed={sounding} style={order(10)}
           onClick={() => {
             if (sounding) { void callService("siren", "turn_off", {}, { entity_id: siren }); return; }
-            const name = String(entities[cameraId]?.attributes.friendly_name ?? "this camera");
+            const name = labelOf(cameraId);   // as every screen names the camera, its title above included
             ask({
               title: "Sound the siren?",
               message: `The siren of “${name}” sounds out loud where the camera is.`,

@@ -14,6 +14,7 @@ import {
 } from "./fmTypes";
 import { fullDate, monthYear } from "@/utils/dateText";
 import { addLocalDays, DAY_MS, HOUR_MS, localMonthStart } from "@/utils/localDay";
+import { villaTime, wallClock } from "@/utils/villaClock";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import type { Tone } from "./tone";
 import { countOf } from "@/utils/countOf";
@@ -135,8 +136,8 @@ export function scheduleBoard(data: FmData, now = Date.now()): ScheduleStatus[] 
 /** "2026-07" for the month containing `at`, in LOCAL time — the villa's month
  *  boundary is the one the operator and the monthly report both mean. */
 export function monthKey(at: string | number | Date): string {
-  const d = new Date(at);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const w = wallClock(new Date(at));   // the villa's month (utils/villaClock)
+  return `${w.year}-${String(w.month).padStart(2, "0")}`;
 }
 
 /** The first instant of a month key ("2026-09") and of the month after it, in LOCAL time — the one parsing of a
@@ -147,7 +148,7 @@ export function monthBounds(month: string): { start: number; end: number } {
   const m = /^(\d{4})-(\d{2})$/.exec(month);
   const y = Number(m?.[1]), mo = Number(m?.[2]);
   if (!m || mo < 1 || mo > 12) return { start: NaN, end: NaN };
-  const start = localMonthStart(new Date(y, mo - 1, 1).getTime());
+  const start = villaTime(y, mo, 1);
   return { start, end: localMonthStart(start, 1) };
 }
 
@@ -487,10 +488,9 @@ export function completionsInMonth(
  *  toISOString(), which silently shifts a Bali evening into the previous UTC
  *  day and would put a completion in the wrong month at the boundary. */
 export function localStamp(at: string | number | Date = Date.now()): string {
-  const d = new Date(at);
+  const w = wallClock(new Date(at));   // the villa's clock (utils/villaClock), wherever the report is made
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} `
-    + `${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${w.year}-${p(w.month)}-${p(w.day)} ${p(w.hour)}:${p(w.minute)}`;
 }
 
 

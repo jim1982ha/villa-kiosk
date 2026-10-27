@@ -14,6 +14,7 @@
 // stood here whatever the villa had set; an Agent that does not say gets no number. The list's own refresh is this app's
 // (useStoreRefresh: STORE_ACTIVE_MS while the Cockpit is open, else the heartbeat).
 
+import { villaTime, wallClock } from "@/utils/villaClock";
 import { STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { AGENT_SOURCES, ISSUE_SOURCES, type IssueSource } from "./issueSource";
 import type { AgentCadence } from "@/agent/agentApi";
@@ -144,15 +145,15 @@ function clocksOf(problems: readonly CheckedProblem[]): Clock[] {
   return problems.flatMap((p) => [p, ...(p.fault ? [p.fault] : [])]).filter((p) => p.source !== "live").map(clockOf);
 }
 
-/** The next moment after `now` at villa time `hhmm` (today, else tomorrow) — the device's clock, as nightlyAt has
- *  always been read; null for a time that is not HH:MM. */
+/** The next moment after `now` at villa time `hhmm` (today, else tomorrow) — on the villa's clock (utils/villaClock),
+ *  as the Agent reads its nightlyAt; null for a time that is not HH:MM. ⚠️ IT WAS THE DEVICE'S CLOCK (owner,
+ *  2026-10-28): a phone abroad put the nightly check at another hour than Telegram did. */
 function nextAt(hhmm: string, now: Date): Date | null {
   const [h, m] = hhmm.split(":").map(Number);
   if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-  const at = new Date(now);
-  at.setHours(h, m, 0, 0);
-  if (at <= now) at.setDate(at.getDate() + 1);
-  return at;
+  const w = wallClock(now);
+  const today = villaTime(w.year, w.month, w.day, h, m);
+  return new Date(today > now.getTime() ? today : villaTime(w.year, w.month, w.day + 1, h, m));
 }
 
 /** The Agent's next look after `now`: its last look plus whole steps of `checkMinutes` (owner, 2026-10-21: hovering

@@ -2,6 +2,7 @@
 // Shared formatters for every history chart. What the pointer is over is
 // utils/chartGeometry's hover answer, not a helper here.
 
+import { wallClock } from "@/utils/villaClock";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { clockTime, dayMonth, dayTime, monthShort } from "@/utils/dateText";
 import { NOT_KEPT_WORDS } from "@/utils/stateColors";
@@ -113,13 +114,11 @@ export function fmtChartTick(t: number, spanHours: number): string {
  * past).
  */
 export function fmtChartStamp(t: number, spanHours: number): string {
-  const d = new Date(t);
-  const today = new Date();
-  const sameDay = d.getFullYear() === today.getFullYear()
-    && d.getMonth() === today.getMonth()
-    && d.getDate() === today.getDate();
+  // the villa's day (utils/villaClock), as every time on the chart is the villa's
+  const d = wallClock(t), today = wallClock(Date.now());
+  const sameDay = d.year === today.year && d.month === today.month && d.day === today.day;
   if (spanHours <= 24 && sameDay) return fmtChartTime(t);
-  return dayTime(d);
+  return dayTime(t);
 }
 
 /**

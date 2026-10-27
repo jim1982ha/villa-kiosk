@@ -140,6 +140,26 @@ console.log("\n  an alarm makes the villa not ready, as it makes the top bar red
   ck("  ...and attention keeps no class name: it gives the level only", !("healthClass" in (await import("@/config/attention"))));
 }
 
+console.log("\n  a jammed lock is ONE line of the recap, under \"Doors locked\" (owner, 2026-10-28):");
+{
+  const { buildAttentionItems } = await import("@/config/attention");
+  const ents = Object.fromEntries([E("lock.front", "jammed"), E("lock.back", "locked"),
+    E("binary_sensor.kitchen_leak", "on", { device_class: "moisture" })].map((e) => [e.entity_id, e]));
+  const ids = new Set(Object.keys(ents));
+  const devs = { ...devices, ids: [...ids], unavailable: [], has: (id) => ids.has(id) };
+  const items = buildAttentionItems({ devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: EMPTY_FM_DATA });
+  ck("the Cockpit lists the jammed lock and the leak as alarms (the fixture reaches the rule)",
+     items.filter((i) => i.kind === "alarm").map((i) => i.entityId).sort().join() === "binary_sensor.kitchen_leak,lock.front",
+     items.map((i) => `${i.kind}:${i.entityId}`));
+  const rr = buildReadiness(ents, EMPTY_FM_DATA, { devices: devs, attentionItems: items }, {});
+  const named = rr.checks.filter((c) => (c.entityIds ?? []).includes("lock.front")).map((c) => c.id);
+  ck("  ...the recap names the lock in ONE check, \"Doors locked\", as jammed", named.join() === "locks"
+     && rr.checks.find((c) => c.id === "locks").detail === "1 jammed.", rr.checks.map((c) => [c.id, c.detail]));
+  const al = rr.checks.find((c) => c.id === "alarms");
+  ck("  ...and \"Alarms\" keeps every other device in alarm: the leak alone", al.label === "1 alarm" && al.state === "fail"
+     && al.entityIds.join() === "binary_sensor.kitchen_leak", al);
+}
+
 console.log("\n  one word per check state and one verdict, on the tab, in the recap and in the snapshot (review, 2026-10-19):");
 {
   const { CHECK_WORDS, VERDICT_WORDS } = await import("@/fm/readiness");

@@ -22,6 +22,7 @@ import type { ServiceOutcome } from "./serviceOutcome";
 import { UnavailableByDesign, lastReport, type RecordedState } from "./unavailableByDesign";
 import { recordedStates, villaKeptFrom } from "./HAHistoryAPI";
 import { readBackFrom } from "./historySource";
+import { setVillaTimeZone } from "@/utils/villaClock";
 
 /** Subset of HA's `get_config` we use to auto-fill onboarding (location + name). */
 export interface HAConfig {
@@ -33,6 +34,9 @@ export interface HAConfig {
   /** The currency set in Home Assistant (Settings → System → General) —
    *  every Facility money figure is written in it (fm/fmTypes.fmTerms). */
   currency?: string;
+  /** The villa's time zone (Settings → System → General) — every time the Kiosk shows is written in it
+   *  (utils/villaClock). */
+  time_zone?: string;
 }
 
 /** What React renders from. Replaced whole on every change (never mutated),
@@ -301,7 +305,8 @@ export class EntityStore {
     await this.subscribed;
     await this.hydrate().catch(() => {});
     this.ws.sendMessage<HAConfig>("get_config")
-      .then((haConfig) => this.set({ haConfig }))
+      // the zone first, so the render the config causes already writes every time on the villa's clock
+      .then((haConfig) => { setVillaTimeZone(haConfig?.time_zone); this.set({ haConfig }); })
       .catch((err) => devLog("[HA] get_config failed (onboarding auto-fill skipped)", err));
     void this.refreshRegistry();
   }
