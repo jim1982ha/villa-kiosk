@@ -310,8 +310,9 @@ export function field(label, input, hint) {
 }
 
 // A table of many rows, 10 to a page (owner, 2026-10-01): `head` the column titles, `rows` arrays of cells;
-// a cell is a node, a text, or {v, cls}. Newest first is the caller's order.
-export function paged(head, rows, per = 10, { cls = "", widths = null } = {}) {
+// a cell is a node, a text, or {v, cls}. Newest first is the caller's order; `nav`: the pager's words for a list in
+// another order (Rules › Device kinds, by name: "‹ Previous", "Next ›", "devices").
+export function paged(head, rows, per = 10, { cls = "", widths = null, nav = ["‹ Newer", "Older ›", "rows"] } = {}) {
   const body = h("tbody");
   // each cell carries its column's name: on a phone the row becomes a card, every value labelled (app.css);
   // a column whose head says `half` shares its line there with the next half one (owner, 2026-10-05)
@@ -330,7 +331,7 @@ export function paged(head, rows, per = 10, { cls = "", widths = null } = {}) {
   };
   // newest first: the pages go to "older" (the one pager, pagedBlock)
   const pager = pagedBlock(() => rows.length, (from, to) => body.replaceChildren(...rows.slice(from, to).flatMap(drawn)),
-    per, ["‹ Newer", "Older ›", "rows"]);
+    per, nav);
   pager.redraw();
   return h("div", {}, h("div", { class: "tbl" }, table(head, body, { cls: `data ${cls}`.trim(), widths })), pager.nav);
 }

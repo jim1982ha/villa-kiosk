@@ -101,8 +101,9 @@ What an asset is, decided by the knowledge pack: "motor" (a schedule, a runtime
 counter or a power baseline helper, or a name with pump, fan, compressor, jet),
 "lighting" (light, LED, VMC circuits), "meter" (the main meter, its phases,
 template averages), "appliance" (the rest). Only motors get the physics checks
-below; lighting and meters are read by roi-energy and never chased here. To
-force a kind: `input_text.vesta_asset_kinds` = {"slug": "motor"}.
+below; lighting and meters are read by roi-energy and never chased here. The
+owner corrects a guess on the VESTA Agent page (Rules › Device kinds); the pack
+gives every script the kind chosen there.
 
 How a motor is classified, automatically, from its own last `baseline_days`:
 "continuous" (runs in blocks of `night.continuous_full_hours` or more: filtration, circulation), "cycling"

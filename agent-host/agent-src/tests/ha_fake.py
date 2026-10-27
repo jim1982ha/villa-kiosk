@@ -41,6 +41,10 @@ class FakeHA:
     def states(self, entity_ids=None) -> dict[str, dict]:
         return {e: s for e, s in self._states.items() if entity_ids is None or e in entity_ids}
 
+    def not_found(self, entity_ids) -> set[str]:
+        """The ids the villa does not have: every one this stand-in holds no state for."""
+        return {e for e in entity_ids if e not in self._states}
+
     def all_entity_ids(self, fresh: bool = False) -> list[str]:
         return sorted(self._states)
 

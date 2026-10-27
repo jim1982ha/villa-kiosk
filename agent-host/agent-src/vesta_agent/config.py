@@ -71,6 +71,12 @@ class Settings:
         return os.path.join(self.config_dir, "policy.yaml")
 
     @property
+    def asset_kinds_path(self) -> str:
+        """Each device's kind as the owner chose it on the page (vesta_shared.asset_kinds), beside policy.yaml."""
+        from vesta_shared.asset_kinds import FILE
+        return os.path.join(self.config_dir, FILE)
+
+    @property
     def instructions_path(self) -> str:
         return os.path.join(self.config_dir, "instructions.md")
 

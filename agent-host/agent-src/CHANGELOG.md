@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.356 (28 October 2026)
+
+- vesta_shared/asset_kinds.py: each asset's kind as the owner chose it, in asset_kinds.yaml beside policy.yaml (`path`
+  as limits.path; KINDS: motor, appliance, lighting, meter with the page's words). knowledge_pack.guessed_kind (the
+  former name rules) and asset_kind(a, chosen) — the owner's choice, else the guess — are the one answer; build_pack and
+  KnowledgePack.load (kinds_are, `kinds_path`) both apply it, so a choice counts from the next run without a rebuild.
+  build_pack no longer reads input_text.vesta_asset_kinds.
+- Vesta.migrate_asset_kinds at start: the old helper's valid entries moved once into asset_kinds.yaml (asset_kinds.migrate:
+  only while the file does not exist; an empty file when the helper holds nothing; nothing written when the villa's
+  system does not answer), recorded in Page changes as "Release". The engine's pack cache also follows the file.
+- The page: Rules › Device kinds (places "kinds", after Protected devices). ui/kinds.py lists each asset with a power
+  or energy reading (and any chosen), its guess, its kind and who set it; PUT api/kinds {slug, kind|null} saves one
+  through PageFiles (target kind "kinds": checked by asset_kinds.problems, recorded, undoable). core.paged takes `nav`
+  words for a list not in time order. preventive-maintenance SKILL.md names the page instead of the helper.
+  tests/test_asset_kinds.py drives a choice and its way back through the night check, and the migration.
+
 ## 0.6.355 (27 October 2026)
 
 - problems.problem_name(text, again) → {headline, detail}: the one name of a problem. messaging.headline (the former

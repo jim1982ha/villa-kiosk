@@ -1,5 +1,5 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and AI tools.
-import { api, ask, card, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, markDirty, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
+import { api, ask, card, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, markDirty, page, paged, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
 import { fileEditor } from "./viewer.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
@@ -296,10 +296,58 @@ export function rulesForms(doc, jobs = [], tools = null) {
   acting.id = "rules-acting"; services.id = "rules-services";
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
   const canUse = tools ? toolsCard(f, tools, () => rules("forms")) : null;
+  const kinds = doc.kinds ? kindsCard(doc.kinds, probs) : null;
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
     jobsBanner(missing, () => rules("forms")),
-    inOrder("rules", { acting, people, actions: services, protected: devices, ai, tools: canUse }));   // places.ORDER
+    inOrder("rules", { acting, people, actions: services, protected: devices, kinds, ai, tools: canUse }));   // places.ORDER
   if (jumpToTools && canUse) { jumpToTools = false; requestAnimationFrame(() => canUse.scrollIntoView({ block: "start" })); }
+}
+
+// ---------------------------------------------------------------- rules › device kinds
+// ⚠️ A PICKER, NEVER TYPED (owner, 2026-10-28): what each device is (vesta_shared.asset_kinds) was corrected by typing
+// JSON into a helper of the villa's system. Each device the agent reads power or energy for is a row: its kind in a
+// drop-down, whether it is the agent's guess or a choice made here, and a way back to the guess. SAVED AT ONCE, like a
+// switch of the page's own (ui/kinds.py: through the page's one writer, in Page changes, undoable), so it never waits
+// for the bar of the agent rules above, which it does not touch. The kinds' names and words are the agent's.
+let KIND_SEARCH = "";
+export function kindsCard(data, probs) {
+  const names = Object.fromEntries(data.kinds.map(([k, name]) => [k, name]));
+  const info = `What each device is decides what the agent does with its power and energy. ${data.kinds.map(([, name, words]) => `${name}: ${words}`).join(" ")} The agent guesses it from the device's name; a kind chosen here replaces the guess, from the next night check or report.`;
+  const list = h("div");
+  const save = async (r, kind) => {
+    try {
+      Object.assign(data, await api("PUT", "api/kinds", { slug: r.slug, kind }));
+      fill(probs);
+      toast(kind ? `Saved: ${r.name} is ${names[kind]}` : (r.guess ? `Saved: ${r.name} back to its guess, ${names[r.guess]}` : `Removed: ${r.name}`));
+    } catch (e) {
+      fill(probs, problemsBox(reasons(e), `${r.name} not saved:`));
+      probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }
+    draw();
+  };
+  const row = (r) => [
+    [h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null],
+    dropdown(data.kinds.map(([k, name]) => [k, k === r.guess ? `${name} (guess)` : name]), r.kind, (v) => save(r, v), `${r.name}, kind`),
+    h("span", { class: "chips" },
+      r.gone ? h("span", { class: "chip warn" }, "No longer found")
+        : h("span", { class: r.chosen ? "chip" : "chip gray" }, r.chosen ? "Chosen here" : "Guessed"),
+      r.chosen ? h("button", { type: "button", class: "btn ghost", onclick: () => save(r, null) }, r.gone ? "Remove" : "Back to the guess") : null),
+  ];
+  const draw = () => {
+    const q = KIND_SEARCH.trim().toLowerCase();
+    const shown = data.rows.filter((r) => !q || `${r.name} ${r.area} ${r.slug}`.toLowerCase().includes(q));
+    fill(list, data.rows.length
+      ? (shown.length ? paged(["Device", "Kind", "Set by"], shown.map(row), 10,
+          { cls: "kinds", widths: ["44%", "26%", "30%"], nav: ["‹ Previous", "Next ›", "devices"] })
+        : h("p", { class: "muted" }, "No device matches the search."))
+      : h("p", { class: "muted" }, data.built ? "No device with a power or energy reading." : "The agent has not read the villa's devices yet."));
+  };
+  const search = h("input", { type: "search", placeholder: "Search the devices", value: KIND_SEARCH, "aria-label": "Search the devices",
+    oninput: (e) => { KIND_SEARCH = e.target.value; draw(); } });
+  draw();
+  const c = card(place("kinds"), info, data.rows.length ? h("div", { class: "limits-search" }, search) : null, list);
+  c.id = "rules-kinds";
+  return c;
 }
 
 // ---------------------------------------------------------------- rules › what the AI can use

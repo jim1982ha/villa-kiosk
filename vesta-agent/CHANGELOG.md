@@ -1,3 +1,14 @@
+## 0.12.367
+
+What you will see:
+- A new card on the Rules tab, "Device kinds": every device the agent reads power or energy for, with what the agent
+  thinks it is (Motor, Appliance, Lighting or Meter) and a drop-down to change it. Each row says "Guessed" or
+  "Chosen here"; "Back to the guess" undoes a choice. A change is saved at once, listed in Overview › Page changes
+  (with Undo), and counts from the next night check and report: a Motor gets the running checks at night, Lighting and
+  Meters are only counted in the energy figures. 10 devices a page, with a search box.
+- The kinds you had typed into the villa's helper "vesta_asset_kinds" are moved to this card when the agent starts
+  after the update, once (Page changes says how many). The helper is no longer read: you can delete it.
+
 ## 0.12.366
 
 What you will see:

@@ -33,6 +33,8 @@ import re
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
+from . import asset_kinds
+from .asset_kinds import KINDS
 from .limits import limit
 
 SUFFIXES = [
@@ -66,21 +68,33 @@ LIGHT_WORDS = ("light", "led", "lamp", "vmc", "lighting", "spot")
 METER_WORDS = ("main_power", "phase_", "_mean", "total", "grid", "meter", "consumption")
 
 
-def asset_kind(a, overrides: dict[str, str] | None = None) -> str:
-    """motor: pumps, fans, compressors (physics rules apply). lighting: light circuits (ROI only).
+def _field(a, name: str):
+    """One field of an asset, built (Asset) or read back from the pack (its dict)."""
+    return a.get(name) if isinstance(a, dict) else getattr(a, name, None)
+
+
+def guessed_kind(a) -> str:
+    """What the asset is, guessed from its helpers first (a schedule, a runtime counter or a power baseline mark a
+    motor), then its name. motor: pumps, fans, compressors (physics rules apply). lighting: light circuits (ROI only).
     meter: the main meter, its phases, template aggregates (ROI only). appliance: anything else."""
-    if overrides and a.slug in overrides:
-        return str(overrides[a.slug])
-    text = f"{a.slug} {a.name}".lower()
+    text = f"{_field(a, 'slug')} {_field(a, 'name')}".lower()
     if any(w in text for w in METER_WORDS):
         return "meter"
-    if a.schedule or a.counter or a.baseline_helper:
+    if _field(a, "schedule") or _field(a, "counter") or _field(a, "baseline_helper"):
         return "motor"
     if any(w in text for w in MOTOR_WORDS):
         return "motor"
     if any(w in text for w in LIGHT_WORDS):
         return "lighting"
     return "appliance"
+
+
+def asset_kind(a, chosen: dict[str, str] | None = None) -> str:
+    """What the asset is: the owner's choice on the VESTA Agent page (vesta_shared.asset_kinds, `chosen`: {slug: kind}),
+    else the guess. ⚠️ THE ONE ANSWER (owner, 2026-10-28): the pack's build and its every reading (KnowledgePack.load)
+    ask here, so the night check, the reports and the energy figures follow the page's choice alike."""
+    k = (chosen or {}).get(str(_field(a, "slug")))
+    return k if k in KINDS else guessed_kind(a)
 
 
 def family_of(e: dict) -> str | None:
@@ -418,11 +432,17 @@ class KnowledgePack:
         """An entity's name as the pack has it; `default` when the pack does not name it."""
         return (self.row(entity_id) or {}).get("name") or default
 
+    def kinds_are(self, chosen: dict[str, str]) -> None:
+        """Each asset's kind as asset_kind answers it with the owner's choices `chosen` ({slug: kind})."""
+        for a in self.assets.values():
+            if isinstance(a, dict):
+                a["kind"] = asset_kind(a, chosen)
+
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=1, ensure_ascii=False)
 
     @classmethod
-    def load(cls, path: str) -> "KnowledgePack":
+    def load(cls, path: str, kinds_path: str | None = None) -> "KnowledgePack":
         """The pack at `path`, with the VESTA Kiosk's devices unavailable by design kept beside it (vesta_shared.asleep):
         ⚠️ READ WITH THE PACK, ONE WAY (architecture review, 2026-10-21): the checks read the list through an environment
         variable, the agent's tools set it by hand and the Rules page read the file — a fourth reader forgetting it
@@ -431,13 +451,16 @@ class KnowledgePack:
         with open(path, encoding="utf-8") as f:
             pack = cls(**json.load(f))
         pack.asleep_are(listed(path))
+        # ⚠️ THE OWNER'S KINDS, READ WITH THE PACK (owner, 2026-10-28): a kind chosen on the VESTA Agent page counts
+        # from the next run, never only from the next rebuild of the device list (vesta_shared.asset_kinds)
+        pack.kinds_are(asset_kinds.chosen(kinds_path))
         return pack
 
     @classmethod
-    def read(cls, path: str) -> "KnowledgePack | None":
+    def read(cls, path: str, kinds_path: str | None = None) -> "KnowledgePack | None":
         """The pack, or None when it is not built yet or cannot be read (the callers show what they can)."""
         try:
-            return cls.load(path)
+            return cls.load(path, kinds_path)
         except (OSError, ValueError, TypeError):
             return None
 
@@ -512,16 +535,10 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         a.area = a.area or area
         assets[slug] = a
 
+    chosen = asset_kinds.chosen()
     # merge assets whose slug is a longer spelling of another one
     # (sensor.garden_spa_blower_pump_energy belongs to blower_pump, an invented example),
     # plus explicit aliases from input_text.vesta_asset_aliases = {"long": "short"}
-    kind_overrides: dict[str, str] = {}
-    kh = helper_by_obj.get("vesta_asset_kinds")
-    if kh and isinstance(kh.get("state"), str):
-        try:
-            kind_overrides = json.loads(kh["state"])
-        except json.JSONDecodeError:
-            kind_overrides = {}
     aliases: dict[str, str] = {}
     ah = helper_by_obj.get("vesta_asset_aliases")
     if ah and isinstance(ah.get("state"), str):
@@ -556,9 +573,8 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
                     and not obj.endswith(("_power_baseline", "_expected_runtime", "_last_confirmed_run", "_runtime_hours")):
                 a.parameters[obj[len(prefix):]] = h.get("entity_id")
         a.bom = bom_by_slug.get(slug) or bom_by_slug.get(a.name.lower())
-        # kind: what the asset physically is, from its helpers first (a schedule, a runtime counter or a power
-        # baseline mark a motor), then its name. input_text.vesta_asset_kinds = {"slug": "motor"} overrides.
-        a.kind = asset_kind(a, kind_overrides)
+        # kind: what the asset physically is, the owner's choice on the VESTA Agent page, else guessed (asset_kind)
+        a.kind = asset_kind(a, chosen)
 
     # people: from HA persons plus an optional table (roles, chats, language)
     ppl = []

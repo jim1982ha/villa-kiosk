@@ -246,8 +246,8 @@ class Vesta:
         return pol
 
     def pack(self):
-        """The knowledge pack, read again when a rebuild changes it or the Kiosk's list beside it changes (None until it
-        is built)."""
+        """The knowledge pack, read again when a rebuild changes it, the Kiosk's list beside it or the owner's device
+        kinds change (None until it is built)."""
         from vesta_shared.asleep import path_beside
         from vesta_shared.knowledge_pack import KnowledgePack
 
@@ -256,9 +256,9 @@ class Vesta:
                 return os.path.getmtime(path)
             except (OSError, TypeError):
                 return None
-        m = (mtime(self.s.pack_path), mtime(path_beside(self.s.pack_path)))
+        m = (mtime(self.s.pack_path), mtime(path_beside(self.s.pack_path)), mtime(self.s.asset_kinds_path))
         if m != self._pack_mtime:
-            self._pack, self._pack_mtime = KnowledgePack.read(self.s.pack_path), m
+            self._pack, self._pack_mtime = KnowledgePack.read(self.s.pack_path, self.s.asset_kinds_path), m
         return self._pack
 
     def name_of(self, entity_id: str) -> str:
@@ -342,6 +342,7 @@ class Vesta:
             if without:
                 # it works without them (owner, 2026-10-10: who asks decides, never the skill)
                 log.info("Skill %s works without: %s", sk.name, " ".join(b["why"] for b in without))
+        await asyncio.to_thread(self.migrate_asset_kinds)
         if pack_needs_build(self.s.pack_path):
             await asyncio.to_thread(self.build_pack)
         else:
@@ -398,6 +399,37 @@ class Vesta:
         # faults changed (the night check rewrote its findings, a recheck closed one): carry_out brings the Kiosk's in line
         await self._safe(self.outcome.carry_out(res, skill.name, origin))
         return res
+
+    def migrate_asset_kinds(self) -> dict[str, str] | None:
+        """The device kinds a villa typed into its old helper (asset_kinds.OLD_HELPER), moved ONCE into the file the
+        page writes (vesta_shared.asset_kinds.migrate), and recorded in Page changes; the helper is never read after.
+
+        ⚠️ THE OWNER'S VALUE IS KEPT (owner, 2026-10-28: the picker replaces the text box): a kind set there before this
+        version stays the device's kind, now shown and changed on the page. A villa's system that does not answer
+        writes nothing: the next start tries again, never an empty file that would drop the owner's value."""
+        from vesta_shared import asset_kinds
+
+        def state():
+            if asset_kinds.OLD_HELPER in self.reader.not_found([asset_kinds.OLD_HELPER]):
+                return None
+            return (self.reader.states([asset_kinds.OLD_HELPER]).get(asset_kinds.OLD_HELPER) or {}).get("state")
+        try:
+            done = asset_kinds.migrate(self.s.asset_kinds_path, state)
+        except Exception as e:  # noqa: BLE001 — the villa's system not readable now: tried again at the next start
+            log.warning("The device kinds set in the villa's system could not be read (%s): tried again at the next "
+                        "start", type(e).__name__)
+            return None
+        if not done or not done[0]:
+            return None
+        kinds, text = done
+        from .history import History
+        from .places import where
+        History(self.s.history_path).record(
+            "Release", f"{where('kinds')}: {len(kinds)} set in the villa's system before, kept here", {"kind": "kinds"},
+            None, text)
+        log.info("Device kinds moved from %s to %s: %s", asset_kinds.OLD_HELPER, self.s.asset_kinds_path,
+                 ", ".join(f"{k} {v}" for k, v in sorted(kinds.items())))
+        return kinds
 
     def build_pack(self) -> dict:
         with self._pack_lock:

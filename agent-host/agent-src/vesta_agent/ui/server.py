@@ -34,7 +34,7 @@ from ..history import History, file_change
 from ..places import ORDER, PLACES, TABS
 from ..skills import FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES, Skills, switch_command, to_trash
 from ..state import State
-from . import setup_copy
+from . import kinds, setup_copy
 from .changes import PageFiles, Refused, _read, _write, page_policy, rev, rules_problems, undoable
 from .limits_tab import LimitsTab, ref as limits_ref
 from .policy_doc import apply_form, to_form
@@ -128,6 +128,7 @@ class UI:
         r.add_post("/api/translations/forget", self.translations_forget)
         r.add_get("/api/entities", self.entities)
         r.add_get("/api/costs", self.costs)
+        r.add_put("/api/kinds", self.kinds_put)
         r.add_get("/api/limits", self.limits_get)
         r.add_put("/api/limits", self.limits_put)
         r.add_get("/api/skills", self.skills_list)
@@ -340,7 +341,9 @@ class UI:
                                   # the alert cards' translations kept, per language (None: no skill translates)
                                   "translations": self._translations(),
                                   # the VESTA Kiosk's list, as the agent was last told it (shown, never edited here)
-                                  "unavailable_by_design": sorted(listed(self.s.pack_path))})
+                                  "unavailable_by_design": sorted(listed(self.s.pack_path)),
+                                  # Rules › Device kinds: each device's guessed kind and the owner's choice (ui/kinds.py)
+                                  "kinds": kinds.rows(self.s)})
 
     async def policy_get(self, _request):
         return web.json_response(self._policy_doc())
@@ -356,6 +359,15 @@ class UI:
         return {"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
                 "profiles": profile_labels(), "schema": form_schema()}
 
+
+    # ------------------------------------------------------------------ device kinds
+    async def kinds_put(self, request):
+        """Rules › Device kinds: one device's kind chosen, or back to the guess (`kind` null)."""
+        body = await request.json()
+        slug, kind = body.get("slug"), body.get("kind")
+        if not isinstance(slug, str) or not slug or not (kind is None or isinstance(kind, str)):
+            raise Refused(["No device or kind sent."])
+        return web.json_response(kinds.save(self.s, self.files, slug, kind))
 
     # ------------------------------------------------------------------ limits
     async def limits_get(self, _request):
