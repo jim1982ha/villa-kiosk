@@ -40,7 +40,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Report prose rules](talking-to-the-owner.md#report-prose-rules) — units on numbers, apostrophes round names, one glyph per heading, whole sentences
 - [Check notes before listing them](talking-to-the-owner.md#check-notes-before-listing-them) — open the code before saying open, parked, failed or forever
 - [Check an agent's claims](talking-to-the-owner.md#check-an-agents-claims) — verify a sub-agent's cited commits and rules before reporting
-- [Test steps the owner can do](talking-to-the-owner.md#test-steps-the-owner-can-do) — measure on the villa; name the exact place to look, or say nothing is visible
+- [Test steps the owner can do](talking-to-the-owner.md#test-steps-the-owner-can-do) — measure on the villa; a text sketch of the screen first, then the exact place, or say nothing is visible
 
 ## Decided: do not re-propose
 
@@ -49,6 +49,9 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [KTX2 textures are closed](decided.md#ktx2-textures-are-closed) — measured +500% size, no gain; never raise it
 - [Ceilings: the main behaviour stays](decided.md#ceilings-the-main-behaviour-stays) — the eye-level ceiling rule was reverted; per-room plan setting for roofs
 - [Badge placement determinism stays](decided.md#badge-placement-determinism-stays) — order-independent placement fix stays
+- [Nothing on the map overlaps](decided.md#nothing-on-the-map-overlaps) — every overlap is a failure; only the owner allows a category
+- [Badges group only when they touch](decided.md#badges-group-only-when-they-touch) — no margin, no centre floor (2.413.0)
+- [Badges behind a wall hide while walking](decided.md#badges-behind-a-wall-hide-while-walking) — the one allowed placement finding
 - [Sun and moon placement](decided.md#sun-and-moon-placement) — real clock, one placement rule; seen-point turning rejected
 - [The ~1.2 s freeze is not ours](decided.md#the-12-s-freeze-is-not-ours) — measured with no app code running; don't reopen
 - [Intercom calling declined](decided.md#intercom-calling-declined) — no Telegram call to the intercom
@@ -131,7 +134,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [A badge on a chip is an unresolved room](kiosk-code.md#a-badge-on-a-chip-is-an-unresolved-room) — check the room resolver's id set before placement
 - [Rename a key when its default changes](kiosk-code.md#rename-a-key-when-its-default-changes) — saveConfig writes the whole config
 - [Performance instruments](kiosk-code.md#performance-instruments) — probe, freeze spans, leak watch; never an unthrottled reporter
-- [Measure on the real model offline](kiosk-code.md#measure-on-the-real-model-offline) — load the villa model headless before giving check steps
+- [Measure on the real model offline](kiosk-code.md#measure-on-the-real-model-offline) — load the villa model headless; replay a placement report with tools/placement-probe.mjs
 
 ## Agent code
 
