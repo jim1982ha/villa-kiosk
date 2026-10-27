@@ -414,5 +414,5 @@ def test_an_offline_fault_an_alert_now_follows_is_handed_over_within_one_recheck
     assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == "closed" and _open_tasks(tmp_path) == []
     assert _closed_notes(tmp_path) == [note] and out["faults_changed"] is True and out["actions"] == MOVED
     (e,) = out["edits"]
-    assert e["key"] == told["key"] and e["text"] == f"New:\n- Example door has been offline for 1h. {note}", e
+    assert e["key"] == told["key"] and e["text"] == f"New:\n- Example door has been offline for 1h.\nStatus:\n{note}", e
     assert tick()["edits"] == []                                                         # handed over once

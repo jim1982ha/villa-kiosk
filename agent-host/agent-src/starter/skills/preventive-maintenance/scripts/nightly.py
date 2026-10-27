@@ -36,7 +36,7 @@ from vesta_shared import occupancy  # noqa: E402  (the villa's state per day: li
 from vesta_shared.messaging import incident_tag, no_code as _no_code  # noqa: E402
 from vesta_shared.timeutil import clock, day_label, day_time_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
-from vesta_shared.message_format import document, split_title  # noqa: E402  (the one shape of a message)
+from vesta_shared.message_format import STATUS, document, split_title, status_line  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart  # noqa: E402
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.offline import devices_offline, reported_since  # noqa: E402  (offline now; when it last REALLY reported)
@@ -611,14 +611,15 @@ def told_now(res: dict, title: str | None = None, store=None, at: datetime | Non
     ids = [i for _, items in sections for i, _ in items]
     if store is not None and all(isinstance(i, int) for i in ids):
         key = f"{TOLD}{(at or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()}"
-        store.cache_put(key, {"title": title, "sections": sections, "state": {}, "to": "fm"})
+        store.cache_put(key, {"title": title, "sections": sections, "story": [], "to": "fm"})
         for i in ids:
             store.cache_put(f"{TOLD}of:{i}", key)
-    return [result.message("fm", _told_body(title, sections, {}, {}), title=title, key=key)]
+    return [result.message("fm", _told_body(title, sections, [], {}), title=title, key=key)]
 
 
-#: Where an item of a told P2 stands, after its first line (architecture review N, 2026-10-27: one story, as an alert's
-#: card tells it). "watch": cleared, watched until the next night check (told_cleared `line`, {time} {until}); "closed":
+#: How an item of a told P2 moved on, each a line of the message's Status section, the earlier ones of an item struck
+#: (message_format.status_superseded; owner, 2026-10-27: "I don't want a separate message … the previous messages shall
+#: be updated consistently (completed in status section, and the previous line to be struck)"). "watch": cleared, watched until the next night check (told_cleared `line`, {time} {until}); "closed":
 #: that night passed without it (`closed_line`); "back": that night found it again (`back_line`); "handed": an alert
 #: follows its device now (the close note itself); "still": read still there after a person's close
 #: (still_there_after_close `line`); "reopened": a person reopened it in the Cockpit (reopened_in_kiosk `line`, {who}).
@@ -636,30 +637,41 @@ def _told_lines(settings: dict) -> dict[str, str]:
     return {k: v for k, v in words.items() if isinstance(v, str) and v}
 
 
-def _told_body(title: str, sections, state: dict, lines: dict[str, str]) -> str:
-    """The P2 message's text: each item, one that moved on with its state's words (_told_lines) after its first line."""
-    def said(i, text):
-        st = state.get(str(i))
-        if not st or st.get("kind") not in lines:
-            return text
-        first, _, rest = text.partition("\n")
-        words = lines[st["kind"]].format(time=st.get("time") or "", until=st.get("until") or "the night check",
-                                         note=st.get("note") or "", who=st.get("who") or "a person")
-        return f"{first} {words}" + (f"\n{rest}" if rest else "")
-    return split_title(document(title, "", [(label, [said(i, t) for i, t in items]) for label, items in sections
-                                            if items]))[1]
+def _subject(text: str) -> str:
+    """An item as its Status lines name it: its first line, without its dash."""
+    return text.partition("\n")[0].removeprefix("- ").strip()
+
+
+def _told_body(title: str, sections, story: list[dict], lines: dict[str, str]) -> str:
+    """The P2 message's text: its items as told, then its Status section, a line per step of the story (_told_lines'
+    words), each naming its item when the message tells more than one (message_format.status_line)."""
+    said = {str(i): t for _, items in sections for i, t in items}
+    many = len(said) > 1
+    status = [status_line(_subject(said[str(st["id"])]) if many else None,
+                          lines[st["kind"]].format(time=st.get("time") or "", until=st.get("until") or "the night check",
+                                                   note=st.get("note") or "", who=st.get("who") or "a person"))
+              for st in story if st.get("kind") in lines and str(st.get("id")) in said]
+    return split_title(document(title, "", [(label, [t for _, t in items]) for label, items in sections if items]
+                                + [(STATUS, status)]))[1]
+
+
+def _latest(rec: dict) -> dict[str, dict]:
+    """Where each item of a kept message stands: its story's last step, by item."""
+    return {str(st["id"]): st for st in rec.get("story") or []}
 
 
 def _told_rec(store, key: str) -> dict | None:
-    """The kept message `key`, in today's shape. ⚠️ A MESSAGE KEPT BEFORE 0.12.362 holds `cleared` {id: its time}, the
-    only state it had: each is read as watched (its watch's end unknown, "until the night check"), and the message is
-    listed as watched so the next night closes them (format changes need migrations)."""
+    """The kept message `key`, in today's shape (a `story`, its steps in order). ⚠️ FORMATS KEPT BEFORE: 0.12.361 and
+    earlier held `cleared` {id: its time}, read as watched ("until the night check") with the message listed as
+    watched so the next night closes them; 0.12.362 held `state` {id: its last step}, read as a story of one step each
+    (format changes need migrations)."""
     rec = store.cache_get(key) if key else None
     if not rec:
         return None
-    if "state" not in rec:
-        rec["state"] = {i: {"kind": "watch", "time": t} for i, t in (rec.pop("cleared", None) or {}).items()}
-        if rec["state"]:
+    if "story" not in rec:
+        old = rec.pop("state", None) or {i: {"kind": "watch", "time": t} for i, t in (rec.pop("cleared", None) or {}).items()}
+        rec["story"] = [{**st, "id": str(i)} for i, st in old.items()]
+        if any(st.get("kind") == "watch" for st in rec["story"]):
             _watching(store, key, True)
         store.cache_put(key, rec)
     return rec
@@ -671,17 +683,17 @@ def _watching(store, key: str, on: bool) -> None:
 
 
 def _told_mark(store, changes: dict[int, dict]) -> dict[str, list[str]]:
-    """Each finding's item (`changes`: finding id → its new state) marked on the message that told it: {key: the ids
-    marked}. A finding never told (a P3, a message not kept) is left out."""
+    """Each finding's step (`changes`: finding id → how it moved on) added to the story of the message that told it:
+    {key: the ids marked}. A finding never told (a P3, a message not kept) is left out."""
     keys: dict[str, list[str]] = {}
     for fid, st in changes.items():
         key = store.cache_get(f"{TOLD}of:{int(fid)}")
         rec = _told_rec(store, key)
         if not rec:
             continue
-        rec["state"][str(int(fid))] = st
+        rec["story"].append({**st, "id": str(int(fid))})
         store.cache_put(key, rec)
-        _watching(store, key, any(v.get("kind") == "watch" for v in rec["state"].values()))
+        _watching(store, key, any(v.get("kind") == "watch" for v in _latest(rec).values()))
         keys.setdefault(key, []).append(str(int(fid)))
     return keys
 
@@ -694,12 +706,12 @@ def _told_edits(store, keys: dict[str, list[str]], settings: dict, backup: Calla
     out = []
     for key, now_ids in keys.items():
         rec = store.cache_get(key)
-        ids = [str(i) for _, items in rec["sections"] for i, _ in items]
-        done = all((rec["state"].get(i) or {}).get("kind") in TOLD_SETTLED for i in ids)
+        ids, now = [str(i) for _, items in rec["sections"] for i, _ in items], _latest(rec)
+        done = all((now.get(i) or {}).get("kind") in TOLD_SETTLED for i in ids)
         title = words["all_title"].format(title=rec["title"]) if done and words.get("all_title") else rec["title"]
         said = {str(i): t for _, items in rec["sections"] for i, t in items}
         reply = [backup(said[i].partition("\n")[0].removeprefix("- "), i) for i in now_ids if backup and i in said]
-        out.append(result.edit(key, _told_body(rec["title"], rec["sections"], rec["state"], lines), title=title,
+        out.append(result.edit(key, _told_body(rec["title"], rec["sections"], rec["story"], lines), title=title,
                                fallback="\n".join(reply) or None, to=rec.get("to") or "fm", fallback_title=rec["title"]))
     return out
 
@@ -772,28 +784,33 @@ def told_watch_over(store, at: datetime, zone: str, settings: dict) -> list[dict
     when, changes = clock(at, zone or "UTC", days=False), {}
     for key in keys:
         rec = _told_rec(store, key)
-        for i, st in ((rec or {}).get("state") or {}).items():
+        for i, st in (_latest(rec) if rec else {}).items():
             if st.get("kind") == "watch":
                 row = store.finding(int(i))
                 changes[int(i)] = {"kind": "back" if row and row.get("status") == "open" else "closed", "time": when}
     return _told_edits(store, _told_mark(store, changes), settings) if changes else []
 
 
-def told_again(store, tasks: list[dict], kind: str, zone: str, settings: dict) -> list[dict]:
-    """The told items of these tasks (a finding's, told by recheck.py: still there after a person's close, `kind`
-    "still"; reopened by a person in the Cockpit, "reopened") marked on their message, so it no longer says "back to
-    normal" beside the new message that tells it. Its words: `still_there_after_close.line` / `reopened_in_kiosk.line`;
-    without them the message stays as it is."""
+def told_again(store, tasks: list[dict], kind: str, zone: str, settings: dict) -> tuple[list[dict], set[int]]:
+    """These tasks' steps (a finding's, by recheck.py: still there after a person's close, `kind` "still"; reopened by a
+    person in the Cockpit, "reopened") added to the message that told them: its rewrites, and the ids of the tasks
+    said there — no separate message for those (owner, 2026-10-27: "I don't want a separate message"). Its words:
+    `still_there_after_close.line` / `reopened_in_kiosk.line`; without them nothing is marked."""
     if kind not in _told_lines(settings):
-        return []
-    changes = {}
+        return [], set()
+    changes, task_of = {}, {}
     for t in tasks:
         src = str(t.get("source") or "")
         if src.startswith("finding:"):
-            changes[int(src.split(":", 1)[1])] = {"kind": kind, "time": clock(datetime.fromisoformat(
+            fid = int(src.split(":", 1)[1])
+            task_of[str(fid)] = int(t["id"])
+            changes[fid] = {"kind": kind, "time": clock(datetime.fromisoformat(
                 str(t.get("reopened_at") or t.get("done_at") or datetime.now(timezone.utc).isoformat())), zone or "UTC",
                 days=False), "who": t.get("reopened_by")}
-    return _told_edits(store, _told_mark(store, changes), settings) if changes else []
+    if not changes:
+        return [], set()
+    keys = _told_mark(store, changes)
+    return _told_edits(store, keys, settings), {task_of[i] for ids in keys.values() for i in ids}
 
 
 def _device_still_talks(pack, states: dict, entity_id: str, now: datetime, hours: float, history=None,

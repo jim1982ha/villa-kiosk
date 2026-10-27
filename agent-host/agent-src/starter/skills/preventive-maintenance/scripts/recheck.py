@@ -43,7 +43,8 @@ title of settings.yaml `reopened_in_kiosk` — the engine used to send it itself
 fault closed in the Cockpit while it was still unavailable stayed closed, nothing said — this script skipped every
 device with an open finding. Now a device still offline is recorded as SEEN at each reading (Problems.seen); a reading
 settings.yaml `still_there_after_close.minutes` or more after a person's close opens the fault again ("Still there after
-the close."), and its `tell` is told once, under its `title` (still_there_untold — a night check's reopening too).
+the close."), said on the night check's message that told it, else told once to its `tell` under its `title`
+(still_there_untold — a night check's reopening too; owner, 2026-10-27: no separate message for a fault a message told).
 """
 from __future__ import annotations
 
@@ -428,8 +429,9 @@ def reopened_untold(store, zone: str, settings: dict, edits: list | None = None)
     """The messages for the faults a person reopened in the Cockpit that nobody has been told of yet, each told once:
     to settings.yaml `reopened_in_kiosk.tell`, under its `title`, the body the one wording of a reopening
     (kiosk_words.reopened: who, when the Kiosk recorded it, what). Without the two settings nothing is sent and the
-    tasks stay untold — named on stderr, never guessed. `edits`, when given, gets the rewrites of the messages that
-    told them (nightly.told_again: no longer "back to normal")."""
+    tasks stay untold — named on stderr, never guessed. `edits` gets the rewrites of the messages that told them
+    (nightly.told_again): a reopening said there is sent nothing more (owner, 2026-10-27: "I don't want a separate
+    message"); one never told on a message is the only word of it, and is sent."""
     words = settings.get("reopened_in_kiosk") or {}
     to, title = str(words.get("tell") or ""), str(words.get("title") or "")
     rows = store.untold_reopenings()
@@ -439,12 +441,14 @@ def reopened_untold(store, zone: str, settings: dict, edits: list | None = None)
         print("preventive-maintenance settings.yaml: reopened_in_kiosk needs `tell` (a role) and `title`: "
               f"{len(rows)} reopened fault(s) not told", file=sys.stderr)
         return []
-    out = []
+    # said on its message only when its rewrite goes out with this run (`edits`): never marked and left unsaid
+    out, (marked, said) = [], (N.told_again(store, rows, "reopened", zone, settings) if edits is not None else ([], set()))
     if edits is not None:
-        edits += N.told_again(store, rows, "reopened", zone, settings)
+        edits += marked
     for t in rows:
-        out.append(result.message(to, kiosk_words.reopened(t.get("reopened_by") or "", t.get("reopened_at"), zone,
-                                                           t.get("summary") or ""), title=title))
+        if int(t["id"]) not in said:
+            out.append(result.message(to, kiosk_words.reopened(t.get("reopened_by") or "", t.get("reopened_at"), zone,
+                                                               t.get("summary") or ""), title=title))
         store.reopening_told(t["id"])
     return out
 
@@ -463,13 +467,15 @@ def still_there_untold(store, zone: str, settings: dict, edits: list | None = No
         print("preventive-maintenance settings.yaml: still_there_after_close needs `tell` (a role), `title` and `words`: "
               f"{len(rows)} reopened fault(s) not told", file=sys.stderr)
         return []
-    out = []
+    # said on its message only when its rewrite goes out with this run (`edits`): never marked and left unsaid
+    out, (marked, said) = [], (N.told_again(store, rows, "still", zone, settings) if edits is not None else ([], set()))
     if edits is not None:
-        edits += N.told_again(store, rows, "still", zone, settings)
+        edits += marked
     for t in rows:
-        what = Problems(store).current_title(t)
-        out.append(result.message(to, body.replace("{when}", kiosk_words.when(t.get("done_at"), zone))
-                                  .replace("{what}", what.rstrip(".")), title=title))
+        if int(t["id"]) not in said:
+            what = Problems(store).current_title(t)
+            out.append(result.message(to, body.replace("{when}", kiosk_words.when(t.get("done_at"), zone))
+                                      .replace("{what}", what.rstrip(".")), title=title))
         store.reopening_told(t["id"])
     return out
 

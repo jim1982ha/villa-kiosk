@@ -177,6 +177,25 @@ PRESSED_STAGE = "pressed"
 #: (acted, above, writes every such line.)
 #: A pressed button's line, with the engine's placeholders ("{time}": the villa's time then). The villa's own template
 #: no longer draws a press (owner, 2026-10-19: only the agent chases; its task rule sent nothing since 2026-08-25).
+#: Between a Status line's subject and its words, when one message tells several things (a night check's items):
+#: "Hall Sensor battery at 10% · ✅ Back to normal at 14:05". A message about one thing writes its lines bare.
+SUBJECT_SEP = " · "
+
+
+def status_line(subject: str | None, words: str) -> str:
+    """A line of a Status section that tells how `subject` moved on (status_superseded strikes it once a later line of
+    the same subject says where it stands now)."""
+    return f"{subject}{SUBJECT_SEP}{words}" if subject else words
+
+
+def status_superseded(lines: list[str]) -> list[int]:
+    """The Status lines another, later line of the same subject has replaced (the subject before SUBJECT_SEP; a bare
+    line's is the message's one thing): drawn struck, the latest of each plain (owner, 2026-10-27: "the previous line to
+    be struck", as an alert card's Status lines but the last)."""
+    subject = [ln.split(SUBJECT_SEP, 1)[0] if SUBJECT_SEP in ln else "" for ln in lines]
+    return [i for i in range(len(lines)) if subject[i] in subject[i + 1:]]
+
+
 PRESSED = acted("{label}", "{time}", "{name}") + "."
 #: Sections whose items are notes — what happened, said by the agent — rather than the things reported.
 NOTE_SECTIONS = frozenset({STATUS})
@@ -192,7 +211,8 @@ TELEGRAM: dict[str, tuple[str, ...]] = {
     "struck": ("blockquote", "strikethrough"),
     "note": ("blockquote", "italic"),
     # …and its Status lines but the last, over the note's own styles (owner, 2026-10-25: "strike the messages in the
-    # status section, except the last one")
+    # status section, except the last one"); in any other message, its Status lines a later one replaced
+    # (status_superseded, owner 2026-10-27)
     "struck_lines": ("strikethrough",),
 }
 
@@ -382,6 +402,17 @@ def parts(text: str) -> list[tuple[str, int, int]]:
         span = (span[0] if span else starts[i], starts[i] + len(ln))
     if span:
         found.append(("note" if section in NOTE_SECTIONS else "item", *span))
+    # a Status section's lines a later one replaced, struck (status_superseded): the message's story, where each thing
+    # stands now plain. The Status section is the message's last: its lines are those after its label
+    label = next((p for p in reversed(found) if p[0] == "label" and text[p[1]:p[2]].rstrip()[:-1] in _status_labels()),
+                 None)
+    if label and found[-1][0] == "note" and found[-1][1] > label[2]:
+        start, end = found[-1][1], found[-1][2]
+        rows, at = [], start
+        for ln in text[start:end].split("\n"):
+            rows.append((at, at + len(ln), ln))
+            at += len(ln) + 1
+        found += [("struck_lines", rows[i][0], rows[i][1]) for i in status_superseded([r[2] for r in rows])]
     return found
 
 

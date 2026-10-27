@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.352 (27 October 2026)
+
+- message_format: status_line(subject, words) and status_superseded(lines), SUBJECT_SEP " · ": a headed message's
+  Status lines a later line of the same subject replaced are drawn struck (parts: "struck_lines"); an alert card keeps
+  its own rule (_alert_parts). Owner, 2026-10-27: "the previous line to be struck".
+- preventive-maintenance: a told P2 message keeps its `story` (each step {id, kind, time, until, note, who}, in order)
+  drawn as its Status section, a line per step naming its item when the message holds several (_told_body). _told_rec
+  migrates `state` (0.12.362) and `cleared` (0.12.361 and before) into a story.
+- preventive-maintenance: told_again returns (edits, the task ids said on their message); reopened_untold and
+  still_there_untold send their message only for a task no message told (owner: no separate message), and mark none
+  without an `edits` list to carry the rewrite.
+
 ## 0.6.351 (27 October 2026)
 
 - preventive-maintenance: nightly.handed_to_alerts(store, pack, alerted), ONE owner of the offline hand-over; the night

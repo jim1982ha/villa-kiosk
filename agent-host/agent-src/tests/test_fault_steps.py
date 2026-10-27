@@ -169,6 +169,41 @@ def test_a_night_fault_a_person_reopens_is_told_by_its_skill_once_under_the_cock
     assert sent.startswith("Fault reopened in the Cockpit\n") and "Please look again." in sent
 
 
+def test_a_reopening_of_a_fault_told_on_a_message_updates_that_message_and_sends_nothing_new(tmp_path):
+    # owner, 2026-10-27: "I don't want a separate message, if that happen then the previous messages shall be updated
+    # consistently (completed in status section, and the previous line to be struck)"
+    import nightly
+    import recheck
+    from vesta_shared import skill_settings
+    from vesta_shared.message_format import telegram_entities, titled
+    k = FakeKiosk()
+    v, st, tid = _closed_night_fault(tmp_path, k)
+    fid = int(st.task(tid)["source"].split(":", 1)[1])
+    words = skill_settings.load(PM, "settings.yaml")
+    (m,) = nightly.told_now({"villa": "Example", "as_of": "2099-01-01", "again": [],
+                             "new_findings": [{"id": fid, "severity": "P2", "summary": "Pump weak"}]}, store=st)
+    nightly.told_cleared(st, [fid], datetime(2099, 1, 1, 6, 0, tzinfo=timezone.utc), "UTC", words)
+    k.person_reopens("t-pump", by="Owner", at="2099-01-01T07:05:00.000Z")
+    run(v.tickets.repair())
+    edits: list = []
+    assert recheck.reopened_untold(st, "UTC", words, edits) == [] and st.untold_reopenings() == []   # nothing new, told
+    (e,) = edits
+    assert e["key"] == m["key"] and e["text"].endswith("Status:\n✅ Back to normal at 06:00, watched until 02:00\n"
+                                                       "⚠️ Reopened in the Cockpit at 07:05 by Owner")
+    text = titled(m["title"], "FM", e["text"])
+    u = text.encode("utf-16-le")
+    struck = [u[2 * x["offset"]:2 * (x["offset"] + x["length"])].decode("utf-16-le") for x in telegram_entities(text)
+              if x["type"] == "strikethrough"]
+    assert struck == ["✅ Back to normal at 06:00, watched until 02:00"]                # the line it replaced
+    # a fault never told on a message (a P3): its separate message is the only word of it, and goes
+    k2 = FakeKiosk()
+    v2, st2, tid2 = _closed_night_fault(tmp_path / "b", k2)
+    k2.person_reopens("t-pump", by="Owner")
+    run(v2.tickets.repair())
+    (only,) = recheck.reopened_untold(st2, "UTC", words, [])
+    assert only["title"] == "Fault reopened in the Cockpit"
+
+
 def test_who_is_told_of_a_reopening_and_the_title_are_the_skills_settings(tmp_path):
     import recheck
     from vesta_shared import skill_settings

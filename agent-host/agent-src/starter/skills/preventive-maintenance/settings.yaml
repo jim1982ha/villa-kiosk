@@ -45,11 +45,13 @@ behaviour:
 # A fault of the night check's that a person reopened in the Cockpit ("Reopen fault"): who is told and under which
 # title, by recheck.py within 5 minutes. `tell` is a role (fm, owner); the message's body is the one wording of a
 # reopening ("Reopened in the Cockpit on … (Owner): Pump weak. Please look again."). The engine marks the reopening on
-# the task; this skill tells it (an alert's reopening is the alert desk's, told through its own rules).
+# the task; this skill tells it (an alert's reopening is the alert desk's, told through its own rules). A fault told on
+# a night-check message is told THERE, a line of its Status section (`line`), the line before it struck — no separate
+# message (owner, 2026-10-27); `tell` and `title` are for a fault no message told (a P3).
 reopened_in_kiosk:
   tell: fm
   title: "Fault reopened in the Cockpit"
-  # and on the night check's message that told it, after its item ({time}: when, {who}: who reopened it)
+  # its line on the night check's message that told it ({time}: when, {who}: who reopened it)
   line: "⚠️ Reopened in the Cockpit at {time} by {who}"
 
 # A P2 of this skill (a critical device offline, a battery at 10 %) is told to the facility manager at once; as it
@@ -73,13 +75,15 @@ told_cleared:
 # A fault of the night check's a person closed in the Cockpit while its problem was still there (owner, architecture
 # review 2026-10-19: one rule with the alert desk's). The close holds until the device is read again — recheck.py
 # within 5 minutes for the rules this skill reads again (skill.yaml `rechecks`), else the next night check — at least
-# `minutes` after the close and still bad: the fault opens again ("Still there after the close.") and `tell` (a role)
-# is told once under `title`. `words`: the message's body — {when} the close's time, {what} the fault. `minutes` is the
-# alert desk's clear_minutes (rules.yaml); without it a person's close holds.
+# `minutes` after the close and still bad: the fault opens again ("Still there after the close."), said on the night
+# check's message that told it (`line`, a line of its Status section, the one before it struck: no separate message,
+# owner 2026-10-27); a fault no message told (a P3) is told once to `tell` (a role) under `title`, `words` its body —
+# {when} the close's time, {what} the fault. `minutes` is the alert desk's clear_minutes (rules.yaml); without it a
+# person's close holds.
 still_there_after_close:
   minutes: 10
   tell: fm
   title: "Fault still there after the close"
   words: "Closed in the Cockpit on {when}, but still there: {what}. Please look again."
-  # and on the night check's message that told it, after its item ({time}: when it was read still there)
+  # its line on the night check's message that told it ({time}: when it was read still there)
   line: "⚠️ Still there after the close at {time}"

@@ -1,3 +1,15 @@
+## 0.12.363
+
+What you will see:
+- A night-check message (a critical device offline, a battery at 10%) now tells its story in a Status section, as an
+  alert card does: "✅ Back to normal at 14:05, watched until 02:00", then "⚠️ Still there after the close at 14:45"
+  or "⚠️ Reopened in the Cockpit at 14:50 by Owner", then "✅ Closed at 02:00: it did not come back". Each new line
+  strikes the one before it, so only where the problem stands now reads plain. A message about several problems names
+  each one at the start of its lines, and strikes each problem's earlier lines only.
+- No separate "Fault still there after the close" or "Fault reopened in the Cockpit" message any more for a problem a
+  night-check message told: that message is updated instead. A problem no message told (a minor one) still gets its
+  own message, as it is the only word of it.
+
 ## 0.12.362
 
 What you will see:
