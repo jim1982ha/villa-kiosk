@@ -193,17 +193,22 @@ class IncidentThread:
                 n += await self._show(iid, chat, {**rec, "settled": True, "finished": True}, p)
             return n
 
-    async def restate(self, iid: int | str, note: str) -> int:
+    async def restate(self, iid: int | str, note: str, note_in: dict | None = None) -> int:
         """Every copy of incident `iid` shows `note` as where it stands and loses its buttons, WITHOUT settling: the
         incident is open and ends as any does (its close still says how). For an alert someone took on in the VESTA
-        Kiosk (owner, 2026-10-15). Returns how many chats show it now."""
+        Kiosk (owner, 2026-10-15). `note_in`: the same in other languages ({code: text}), each chat showing the one it
+        reads, kept as `close` keeps it so a copy another chat gets later says its own (architecture review O).
+        Returns how many chats show it now."""
         async with self._lock(iid):
-            note = layout.fill_time(note, datetime.now(timezone.utc), self.tz)
+            now = datetime.now(timezone.utc)
             n = 0
             for chat, rec in self.state.incident_chats(iid):
                 if rec.get("settled") or not rec.get("mid"):
                     continue
-                p = layout.changed(layout.of(rec), status=note)
+                p = layout.changed(layout.of(rec), status=layout.fill_time(pick(note, note_in, self._lang(chat)), now, self.tz))
+                if note_in:
+                    p["said"] = {"stage": None, "status": layout.fill_time(note, now, self.tz),
+                                 "status_in": {k: layout.fill_time(v, now, self.tz) for k, v in note_in.items()}}
                 p = self._own_words(iid, chat, {**p, "head": self._head_now(iid, chat, p.get("head") or "")})
                 n += await self._show(iid, chat, {**rec, "buttons": False}, p)
             return n

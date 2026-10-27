@@ -36,7 +36,7 @@ def villa(tmp_path):
         said.append((iid, note))
         return 1
 
-    async def settle(_iid, _note):
+    async def settle(_iid, _note, **_kw):
         return 0
     path = str(tmp_path / "agent.db")
     t = Tickets(kiosk=k, state=_State(), store_path=path, settle_alert=settle, timezone="UTC", restate_alert=restate)

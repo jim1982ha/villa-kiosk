@@ -24,7 +24,7 @@ class _State:
 
 def desk(tmp_path, kiosk):
     path = str(tmp_path / "agent.db")
-    async def settle(_iid, _note):
+    async def settle(_iid, _note, **_kw):
         return 0
     return Tickets(kiosk=kiosk, state=_State(), store_path=path, settle_alert=settle), Store(path)
 

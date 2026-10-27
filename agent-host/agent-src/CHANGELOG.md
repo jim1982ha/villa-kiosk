@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.353 (27 October 2026)
+
+- message_format.COCKPIT: the English of a person's acts in the Cockpit (closed, taken, reopened) and the ask after a
+  reopening; status_words: every other language's (`cockpit` per language), cockpit(), look_again(), colon(), space().
+  A test holds every key in every language of LANGS.
+- kiosk_words: closed/taken/reopened return kiosk_words.Words (English str + `langs`); stored()/read() keep a line in
+  the store with its languages ({code: text}); a note kept before (English text) reads as written.
+- tickets: the close note's languages go to IncidentThread.close (`note_in`); a take-on to IncidentThread.restate,
+  which now picks each chat's language and keeps `said` like close, and to its history (note_step `note_in`).
+- problems: closed_in_kiosk keeps the person's close (alert_watch CHECK) and reopened_in_kiosk the reopening
+  (KIOSK_REOPENED) with their languages; the alert desk reads them (relabel, the reopened branch) as Said.
+
 ## 0.6.352 (27 October 2026)
 
 - message_format: status_line(subject, words) and status_superseded(lines), SUBJECT_SEP " · ": a headed message's

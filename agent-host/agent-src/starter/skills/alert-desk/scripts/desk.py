@@ -174,8 +174,12 @@ def terms(params: VillaParams | None = None) -> dict:
     return W.terms(b("clear_minutes"), b("reopen_hours"))
 
 
-def relabel(who: str) -> Said:
-    """"Done (JM)" — a press as check_quiet kept it — with the button's label in each language."""
+def relabel(who) -> Said:
+    """"Done (JM)" — a press as check_quiet kept it — with the button's label in each language; a close in the
+    Cockpit as kiosk_words kept it, in every language it knows (architecture review O: it read English everywhere)."""
+    if isinstance(who, dict):
+        w = kiosk_words.read(who)
+        return Said(str(w), w.langs)
     for b in BUTTONS.values():
         if str(who).startswith(f"{b['label']} ("):
             rest = str(who)[len(b["label"]):]
@@ -1188,9 +1192,13 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
             # its buttons back — the ladder runs from now
             # who and when the Kiosk recorded, in the one wording (vesta_shared.kiosk_words; review 29) — an older
             # record held only the name
-            # (a record written before 0.12.202 says "in the VESTA Kiosk": kept as written)
-            said = said if said.startswith(("Reopened in the Cockpit", "Reopened in the VESTA Kiosk")) else \
-                kiosk_words.reopened(said, None, "")
+            # (a record written before 0.12.202 says "in the VESTA Kiosk": kept as written); since 0.12.364 it is kept
+            # in every language (kiosk_words.stored), each chat's card saying its own (architecture review O)
+            if isinstance(said, dict):
+                said = kiosk_words.read(said)
+            elif not said.startswith(("Reopened in the Cockpit", "Reopened in the VESTA Kiosk")):
+                said = kiosk_words.reopened(said, None, "")
+            said = Said(str(said), getattr(said, "langs", None))
             out["send"] += tell(inc["severity"], "reopened", incident=inc["id"], chased=True, **about(inc, said))
             continue
         if p.get(Notes.UNREACHED) and inc["state"] in (Incident.ASKED, Incident.REASKED) and \

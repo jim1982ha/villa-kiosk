@@ -27,7 +27,7 @@ def villa(tmp_path):
     k = FakeKiosk()
     path = str(tmp_path / "agent.db")
 
-    async def settle(_iid, _note):
+    async def settle(_iid, _note, **_kw):
         return 0
     return k, Tickets(kiosk=k, state=_State(), store_path=path, settle_alert=settle), Store(path)
 
@@ -115,7 +115,7 @@ def test_repairs_started_together_make_one_fault_per_alert_and_close_older_doubl
     k = _SlowKiosk()
     path = str(tmp_path / "agent.db")
 
-    async def settle(_iid, _note):
+    async def settle(_iid, _note, **_kw):
         return 0
     t, st = Tickets(kiosk=k, state=_State(), store_path=path, settle_alert=settle), Store(path)
     for n, msg in ((1, "One mains phase lost"), (2, "Electrical cabinet overheating")):

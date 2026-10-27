@@ -1,3 +1,13 @@
+## 0.12.364
+
+What you will see:
+- An alert card in a chat set to another language now says what was done in the Cockpit in that language too:
+  "Ticket ouvert dans le Cockpit le 27/10/2026 10:20 (Luc).", "Clôturé dans le Cockpit le …", "Rouvert dans le
+  Cockpit le … Merci de vérifier à nouveau.". These lines came in English before. English chats read as before.
+- The same holds for what follows a close in the Cockpit ("… but still there", "confirmed") and for the line kept in
+  the card's history once a ticket is opened.
+- Night-check messages stay in English for every chat, as the rest of those messages are.
+
 ## 0.12.363
 
 What you will see:

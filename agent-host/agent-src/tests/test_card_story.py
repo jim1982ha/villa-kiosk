@@ -31,7 +31,7 @@ def villa(tmp_path, kiosk=None):
     notices = Notices(state, lambda: Policy({"people": PEOPLE}), "UTC")
     k = kiosk or FakeKiosk()
 
-    async def settle(_iid, _note):
+    async def settle(_iid, _note, **_kw):
         return 0
     t = Tickets(kiosk=k, state=state, store_path=s.store_path, settle_alert=settle, story=notices.story)
     st = Store(s.store_path)

@@ -29,7 +29,7 @@ class _State:
 def villa(tmp_path):
     k, path, settled = FakeKiosk(), str(tmp_path / "agent.db"), []
 
-    async def settle(iid, note):
+    async def settle(iid, note, **_kw):
         settled.append((iid, note))
         return 0
     return k, Tickets(kiosk=k, state=_State(), store_path=path, settle_alert=settle), Store(path), settled

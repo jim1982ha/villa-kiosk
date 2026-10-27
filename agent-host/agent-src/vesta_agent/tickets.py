@@ -25,15 +25,15 @@ from .scheduler import next_slot
 log = logging.getLogger("vesta.outcome")
 
 
-def kiosk_close_note(ticket: dict, zone: str) -> str:
+def kiosk_close_note(ticket: dict, zone: str) -> kiosk_words.Words:
     """The note a fault closed in the VESTA Kiosk leaves on its alert's messages: "Closed in the Cockpit on
     10/10/2026 17:13 (Wayan)." — who (the name typed, else the profile) and when the Kiosk recorded
-    (vesta_shared.kiosk_words, plus the full stop a settle note ends with)."""
-    return kiosk_words.closed(ticket.get("by") or "", ticket.get("resolved_at"), zone) + "."
+    (vesta_shared.kiosk_words, plus the full stop a settle note ends with), in every chat's language (its `langs`)."""
+    return kiosk_words.closed(ticket.get("by") or "", ticket.get("resolved_at"), zone, end=True)
 
 
 class Tickets:
-    def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[[int, str], Awaitable[int]],
+    def __init__(self, *, kiosk, state, store_path: str, settle_alert: Callable[..., Awaitable[int]],
                  timezone: str = "UTC", story: Callable[[int], list[dict]] | None = None,
                  restate_alert: Callable[[int, str], Awaitable[int]] | None = None,
                  rechecked: Callable[[], set[str]] | None = None, nightly_at: Callable[[], str | None] | None = None):
@@ -236,8 +236,10 @@ class Tickets:
                 iid = problems.closed_in_kiosk(t["id"], kiosk_words.closed(card.get("by") or "", card.get("resolved_at"),
                                                                            self.timezone), at=card.get("resolved_at"))
                 if iid:
-                    # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close
-                    await self.settle_alert(iid, kiosk_close_note(card, self.timezone))
+                    # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close,
+                    # each chat's copy in its language (architecture review O)
+                    note = kiosk_close_note(card, self.timezone)
+                    await self.settle_alert(iid, note, note_in=note.langs or None)
                 closed += 1
         # ⚠️ A PERSON'S REOPENING IS THEIRS (architecture review 25), WHATEVER THE FAULT'S AGE (review 29): read from the
         # Kiosk's "Reopen fault" step, never guessed from timings (review 26): its task opens again and someone is told
@@ -261,7 +263,7 @@ class Tickets:
             if not card or card["status"] != "in_progress" or not card.get("taken_at"):
                 continue
             said = kiosk_words.taken(card.get("taken_by") or "", card.get("taken_at"), self.timezone)
-            iid = problems.taken_in_kiosk(t["id"], said)
+            iid = problems.taken_in_kiosk(t["id"], str(said))
             if iid and self.restate_alert:
                 await self.restate_alert(iid, said)
             if iid:

@@ -28,7 +28,7 @@ from . import agreement, result
 from .limits import limit
 from .messaging import no_code as _no_code
 from .store import Incident, Notes, Store, notes_of
-from . import alert_watch
+from . import alert_watch, kiosk_words
 
 DONE = "done"                          # a person answered Done (a button, or "#N done")
 CLEARED = "cleared"                    # its source is gone: the night check no longer sees it, HA cleared it
@@ -376,8 +376,10 @@ class Problems:
                 # desk reads it again once (quiet_after_done), when its rule names its states
                 # the one close of an alert (alert_watch.close): a person's, read again, its watch from the desk's terms
                 when = _moment(at)
+                # `said` kept in every language it knows (kiosk_words.stored): the desk's check after it says it in each
+                # chat's (architecture review O)
                 alert_watch.close(self.store, sid, Incident.DONE, when.isoformat() if when else self.store.now(),
-                                  person=said, reply="Closed in the Cockpit")
+                                  person=kiosk_words.stored(said), reply="Closed in the Cockpit")
                 return sid
         return None
 
@@ -399,7 +401,8 @@ class Problems:
             if inc and inc.get("closed_at"):
                 # kiosk_words.reopened: who and when, said once — mail to the alert desk (store.Notes), which names who
                 # is asked (its chase.asks: a skill's setting, never the engine's)
-                self.store.note(sid, {Notes.KIOSK_REOPENED: said or by or "a person"}, drop=(alert_watch.CHECK,),
+                self.store.note(sid, {Notes.KIOSK_REOPENED: kiosk_words.stored(said) if said else by or "a person"},
+                                drop=(alert_watch.CHECK,),
                                 closed_at=None, reply=None, state=Incident.ASKED, asked_at=self.store.now())
                 self.store.reopening_told(task_id)
                 return sid

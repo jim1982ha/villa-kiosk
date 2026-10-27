@@ -190,7 +190,7 @@ def test_a_fault_the_agent_cleared_and_a_person_renamed_is_never_a_persons_close
     v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
     settled = []
 
-    async def settle(iid, note):
+    async def settle(iid, note, **_kw):
         settled.append(note)
         return 0
     v.tickets.settle_alert = settle

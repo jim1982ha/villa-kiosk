@@ -852,8 +852,9 @@ class Vesta:
     async def _alert_taken(self, iid: int, note: str) -> int:
         """Someone took incident `iid` on in the Kiosk: every copy says so, then the step joins its history — listed in
         every later "Status:" (its close included), never twice beside the status saying it now."""
-        shown = await self.thread.restate(iid, note)
-        note_step(self.state, iid, "taken", note)
+        langs = getattr(note, "langs", None) or None    # kiosk_words.Words: each chat's copy in its language
+        shown = await self.thread.restate(iid, note, note_in=langs)
+        note_step(self.state, iid, "taken", note, langs)
         return shown
 
     async def _tell_owner_siren(self, text: str) -> None:

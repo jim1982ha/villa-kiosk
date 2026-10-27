@@ -108,6 +108,13 @@ def acted(what: str, when: str, who: str = "") -> str:
     return f"{what} on {when}" + (f" ({who})" if who else "")
 
 
+#: What a person did in the VESTA Kiosk's Cockpit, as a line names it (vesta_shared.kiosk_words writes the line; each
+#: other language's in status_words, key for key): closed its fault, took it on ("Open Ticket"), reopened it — and the
+#: ask after a reopening. ⚠️ ONE NAME FOR THE PLACE (architecture review, 2026-10-15): "the Cockpit", where it was done.
+COCKPIT = {"closed": "Closed in the Cockpit", "taken": "Ticket opened in the Cockpit",
+           "reopened": "Reopened in the Cockpit", "look_again": "Please look again."}
+
+
 def closing(tail: str = "") -> str:
     """How an alert that is over says it, with the engine's "{time}" (the villa's time, filled when shown): "Cleared on
     {time}." — or "Cleared on {time}: <tail>." when the end has more to say (what the device reads now, the rule that
