@@ -67,8 +67,10 @@ export type HistoryRequest =
   | { kind: "trend"; ids: readonly string[]; hours: number; period?: StatisticsPeriod }
   /** The finer values a "trend" of `period` is made of, for its range filter (utils/rangeFilter FINER): the readings
    *  for a five-minute step, else the recorder's figures of the finer period (or, for a device it keeps none of, every
-   *  change kept, in that finer step). Asked only while a chart's filter leaves something out. */
-  | { kind: "finer"; ids: readonly string[]; hours: number; period?: StatisticsPeriod }
+   *  change kept, in that finer step). Asked only while a chart's filter leaves something out, over the trend's OWN
+   *  window (its answer's `window`), never one of its own: read minutes later, "the last 24 hours" would start later and
+   *  the chart's first steps would have no detail (architecture review N, 2026-10-27). */
+  | { kind: "finer"; ids: readonly string[]; window: { from: number; to: number }; period?: StatisticsPeriod }
   /** Numeric, every change as reported (the pressure tendency). */
   | { kind: "readings"; id: string; hours: number }
   /** Raw states — no numeric parse — for each id (the camera's status bar). */
@@ -116,6 +118,7 @@ export type HistoryAnswers<Q extends HistoryRequests> = { [K in keyof Q]: Histor
 
 /** The window a request covers at `now`. */
 export function requestWindow(r: HistoryRequest, now: number): { from: number; to: number } {
+  if (r.kind === "finer") return r.window;
   const since = r.kind === "statistics" ? r.since : undefined;
   return { from: since ?? now - (r.hours ?? 0) * HOUR_MS, to: now };
 }
@@ -130,7 +133,8 @@ export function historyKey(q: HistoryRequest | HistoryRequests): string {
     const extra = r.kind === "statistics"
       ? `|${r.period}|${[...r.fields].join(",")}|${r.since ?? ""}`
       : r.kind === "trend" || r.kind === "finer" ? `|${r.period ?? "5minute"}` : "";
-    return `${r.kind}:${ids}|${r.hours ?? ""}${extra}`;
+    const span = r.kind === "finer" ? `${r.window.from}-${r.window.to}` : r.hours ?? "";
+    return `${r.kind}:${ids}|${span}${extra}`;
   };
   if ("kind" in q && typeof q.kind === "string") return one(q as HistoryRequest);
   return Object.keys(q).sort().map((k) => `${k}=${one((q as HistoryRequests)[k])}`).join("&");
@@ -418,14 +422,14 @@ async function finer(port: HistoryPort, ids: readonly string[], period: Statisti
   const source = FINER[period];
   const out: Record<string, FinerSeries> = {};
   if (source === "readings") {
-    for (const id of ids) out[id] = { of: period, series: await readings(port, id, window) };
+    for (const id of ids) out[id] = { of: period, window, series: await readings(port, id, window) };
     return out;
   }
   const stepMs = PERIOD_MS[source];
   const figures = await statistics(port, ids, source, ["mean"], window);
   for (const id of ids) {
     const fig = figures[id]?.mean;
-    out[id] = { of: period, stepMs,
+    out[id] = { of: period, window, stepMs,
       series: fig && fig.points.length ? fig : intervalSeries(await readings(port, id, window), stepMs) };
   }
   return out;

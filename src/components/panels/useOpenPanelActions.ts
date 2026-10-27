@@ -21,6 +21,7 @@ import { patchMapping } from "@/config/mappingEdits";
 import { readingRows } from "@/config/readingRows";
 import { deviceSwitch } from "@/utils/devicePower";
 import { contactOf } from "@/utils/stateColors";
+import { lookMarks, type DeviceMarks } from "@/utils/deviceActivity";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { useAskFirst, type AskFirst } from "@/hooks/useAskFirst";
@@ -39,18 +40,14 @@ export interface OpenPanelInput {
   readingsOf: (entityId: string) => readonly string[];
   /** What this profile may do (auth/doors), decided once by the Dashboard. */
   doors: Doors;
-  /** Is this device on the villa's critical list, folded (deviceGroups.criticalDevices) — the header's look reads it,
-   *  and through it the window's lost pill. */
-  isCritical: (entityId: string) => boolean;
-  /** Hidden in the villa's system (deviceGroups.hiddenIn): the header's look is quiet, as on the map. */
-  isHidden: (entityId: string) => boolean;
-  /** An amber Cockpit issue on this device (VillaModel.hasFault, attention.deviceIssues): the header badge's amber "!", as on the map. */
-  hasFault: (entityId: string) => boolean;
+  /** The villa model's marks (VillaModel `marks`: critical, hidden, an amber Cockpit issue): the header's badge reads
+   *  them as the map does, and through them the window's lost pill. */
+  marks: DeviceMarks;
 }
 
 /** The open panel's actions (null when no panel is open), and the linked
  *  switch's "ask first" question, which the page draws as a dialog. */
-export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, isCritical, isHidden, hasFault }: OpenPanelInput): {
+export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, marks }: OpenPanelInput): {
   actions: PanelActions | null;
   linkedAsk: AskFirst;
 } {
@@ -97,7 +94,7 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, i
   // The device's exact map badge, its linked switch and its motion line —
   // components/panels/panelHeader, from the open panel and live data; the
   // switch's state is the optimistic hook's.
-  const header = panelHeader({ panel: activePanel, entities, config: { ...config, isCritical, isHidden, hasFault }, canControl,
+  const header = panelHeader({ panel: activePanel, entities, config: { ...config, ...lookMarks(marks) }, canControl,
     linkedSwitch: linkedPower && linkedEntityId
       ? { isOn: linkedToggle.isOn, known: linkedPower.position !== "unknown", contact: contactOf(entities[linkedEntityId]?.state) }
       : null });

@@ -16,7 +16,7 @@
 // carry LineChart's slider; the chart on two scales does not (one slider stands on one axis). A range is plain state
 // here, per series, scoped to the readings shown (rangeFilter.filterScope): kept while the period changes, forgotten
 // when the window closes or another reading is opened. Never stored. The finer values are asked only while a range
-// leaves something out; once in, the chart is the kept steps closed up (rangeFilter.keptChart) on their own window.
+// leaves something out, over the trend's own window; what each chart then draws is rangeFilter.rangeChart's.
 
 import { useState } from "react";
 import LineChart, { type ChartFilter } from "./LineChart";
@@ -25,7 +25,7 @@ import { aggregationWords } from "./chartUtils";
 import { useHistorySource } from "@/hooks/useHistorySource";
 import type { TimeWindow } from "@/utils/lineChart";
 import {
-  activeRange, filterOf, filterScope, keptChart, NO_FILTERS, withFilter, type FilterState,
+  activeRange, filterOf, filterScope, rangeChart, NO_FILTERS, withFilter, type FilterState,
 } from "@/utils/rangeFilter";
 
 export interface NumericSeries {
@@ -55,31 +55,24 @@ export default function NumericHistory({ series, named = false }: {
   // the charts with a slider: every one but the chart on two scales
   const slidable = dual ? [] : series;
   const filtering = slidable.filter((s) => activeRange(filterOf(filters, scope, s.id)));
-  const finerIds = filtering.map((s) => s.id);
-  const { data: finer, status: finerStatus } = useHistorySource(
-    finerIds.length ? { finer: { kind: "finer", ids: finerIds, hours: range.hours, period: range.period } } : null);
+  // their detail, over the trend's own window (one clock): only once the trend is in
+  const over = history[filtering[0]?.id]?.window;
+  const { data: finer, status: finerStatus } = useHistorySource(filtering.length && over
+    ? { finer: { kind: "finer", ids: filtering.map((s) => s.id), window: over, period: range.period } } : null);
   const line = (s: NumericSeries, extra: { scale?: "own"; dashed?: boolean } = {}) => ({
     pts: history[s.id]?.points ?? [], gaps: history[s.id]?.gaps ?? [], label: s.label,
     unit: s.unit ? ` ${s.unit}` : "", color: s.color, ...extra,
   });
-  /** A one-line chart's line, window and filter: filtered and closed up once its finer values (for this period) are
-   *  in. */
+  /** A one-line chart's line, window and filter (rangeFilter.rangeChart). */
   const filtered = (s: NumericSeries): { lines: ReturnType<typeof line>[]; window?: TimeWindow; filter: ChartFilter } => {
-    const base = history[s.id];
-    const kept = filterOf(filters, scope, s.id);
-    const on = base ? activeRange(kept) : null;
-    const f = finer?.finer?.[s.id];
-    const ready = on && f && f.of === range.period && finerStatus === "ready" && status === "ready";
-    const done = ready ? keptChart(base!, f, range.grainMs, on) : null;
-    const l = line(s);
+    const base = history[s.id], set = filterOf(filters, scope, s.id);
+    const c = rangeChart(base, set, range.period, range.grainMs, { finer: finer?.finer?.[s.id], failed: finerStatus === "failed" });
     return {
-      lines: [done ? { ...l, pts: done.series.points, gaps: done.series.gaps } : l],
-      // nothing kept: the chart's frame stays on its own window, the slider on it to widen the range
-      window: done && done.count > 0 ? done.series.window : base?.window,
+      lines: [{ ...line(s), pts: c.points, gaps: c.gaps }],
+      window: c.window,
       filter: {
-        base: base?.points ?? [], range: kept, kept: done,
+        base: base?.points ?? [], range: set, kept: c.kept, state: c.state,
         onChange: (r) => setFilters((st) => withFilter(st, scope, s.id, r)),
-        state: done ? "ready" : finerStatus === "failed" ? "failed" : "loading",
       },
     };
   };

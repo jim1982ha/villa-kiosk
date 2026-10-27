@@ -355,32 +355,64 @@ console.log("\n  the finer values come from the one history source, only while a
       return stats ? { [ids[0]]: [{ start: now - 2 * HOUR_MS, end: now - HOUR_MS, mean: 7 }] } : {};
     },
   });
+  // the trend's own window, read an hour before this detail: the detail is read over it, not over "the last 24 hours"
+  const W24 = { from: now - 25 * HOUR_MS, to: now - HOUR_MS };
   const steps = [["5minute", "readings", undefined], ["hour", "5minute", 5 * M], ["day", "hour", HOUR_MS], ["week", "day", DAY_MS]];
   for (const [period, source, stepMs] of steps) {
     asked.length = 0;
-    const a = (await loadOne(port(true), { kind: "finer", ids: ["sensor.q"], hours: 24, period }, now))["sensor.q"];
+    const a = (await loadOne(port(true), { kind: "finer", ids: ["sensor.q"], window: W24, period }, now))["sensor.q"];
     ck(`a ${period} step reads ${source === "readings" ? "the readings themselves (time-weighted)" : `the ${source} figures, once each`}`,
-       asked.join() === source && a.of === period && a.stepMs === stepMs && a.series.points.length > 0, [asked, a.of, a.stepMs]);
+       asked.join() === source && a.of === period && a.stepMs === stepMs && a.series.points.length > 0 && a.window === W24, [asked, a.of, a.stepMs]);
   }
   asked.length = 0;
-  const none = (await loadOne(port(false), { kind: "finer", ids: ["sensor.q"], hours: 24, period: "day" }, now))["sensor.q"];
+  const none = (await loadOne(port(false), { kind: "finer", ids: ["sensor.q"], window: W24, period: "day" }, now))["sensor.q"];
   ck("  ...a device with no figures: every change kept, in the finer step (as its chart is made)",
      asked.join() === "hour,readings" && none.stepMs === HOUR_MS && none.series.points.length > 0
        && none.series.points.slice(1).every((p) => p.t === cellEdges(p.t, p.t + 1, HOUR_MS)[0]), asked);
-  ck("a different period is a different request", historyKey({ kind: "finer", ids: ["a"], hours: 24, period: "day" }) !== historyKey({ kind: "finer", ids: ["a"], hours: 24, period: "week" })
-     && historyKey({ kind: "finer", ids: ["a"], hours: 24, period: "day" }) !== historyKey({ kind: "trend", ids: ["a"], hours: 24, period: "day" }));
+  const fk = (period, window = W24) => historyKey({ kind: "finer", ids: ["a"], window, period });
+  ck("a different period, or another trend's window, is a different request", fk("day") !== fk("week")
+     && fk("day") !== fk("day", { from: W24.from + M, to: W24.to + M }) && fk("day") !== historyKey({ kind: "trend", ids: ["a"], hours: 24, period: "day" }));
+  const seen = [];
+  await loadOne({ stateRows: async (id, from, to) => { seen.push([from, to]); return rows; }, getStatisticsDuringPeriod: async () => ({}) },
+    { kind: "finer", ids: ["sensor.q"], window: W24, period: "5minute" }, now);
+  ck("  ...read over that window exactly, whatever the clock says now", seen.length === 1 && seen[0][0] === W24.from && seen[0][1] === W24.to, seen);
   const tree = parseTsx("components/panels/NumericHistory.tsx");
-  const decl = (name) => { let d = null; const v = (n) => { if (ts.isVariableDeclaration(n) && n.name.getText() === name) d = n; ts.forEachChild(n, v); }; v(tree); return d?.initializer?.getText().replace(/\s+/g, " "); };
-  const calls = []; const vc = (n) => { if (ts.isCallExpression(n) && n.expression.getText() === "keptChart") calls.push(n); ts.forEachChild(n, vc); }; vc(tree);
-  ck("NumericHistory filters each line with the range set on it (the one filter rule, rangeFilter.keptChart)",
-     calls.length === 1 && calls[0].arguments[3]?.getText() === "on" && decl("on") === "base ? activeRange(kept) : null"
-       && decl("kept") === "filterOf(filters, scope, s.id)" && /^ready \? keptChart\(/.test(decl("done") ?? ""), [calls.map((c) => c.getText()), decl("on"), decl("kept")]);
-  ck("NumericHistory draws a filtered chart closed up: its kept line on its own window, no outages (the frame on the period's window when nothing is kept)",
-     /lines: \[done \? \{ \.\.\.l, pts: done\.series\.points, gaps: done\.series\.gaps \} : l\]/.test(tree.text)
-       && /window: done && done\.count > 0 \? done\.series\.window : base\?\.window/.test(tree.text) && /kept: done/.test(tree.text));
-  ck("NumericHistory asks for them only for the charts whose range leaves something out, else nothing",
-     /finerIds\.length \? \{ finer: \{ kind: "finer", ids: finerIds, hours: range\.hours, period: range\.period \} \} : null/.test(tree.text.replace(/\s+/g, " "))
+  const flat = tree.text.replace(/\s+/g, " ");
+  ck("NumericHistory asks for them only for the charts whose range leaves something out, over their trend's own window, else nothing",
+     /useHistorySource\(filtering\.length && over \? \{ finer: \{ kind: "finer", ids: filtering\.map\(\(s\) => s\.id\), window: over, period: range\.period \} \} : null\)/.test(flat)
+       && /const over = history\[filtering\[0\]\?\.id\]\?\.window;/.test(flat)
        && /const filtering = slidable\.filter\(\(s\) => activeRange\(filterOf\(filters, scope, s\.id\)\)\)/.test(tree.text));
+  ck("  ...and draws what rangeChart says, with the series' own detail, never the request's status but its failure",
+     /rangeChart\(base, set, range\.period, range\.grainMs, \{ finer: finer\?\.finer\?\.\[s\.id\], failed: finerStatus === "failed" \}\)/.test(flat)
+       && /lines: \[\{ \.\.\.line\(s\), pts: c\.points, gaps: c\.gaps \}\], window: c\.window,/.test(flat)
+       && /kept: c\.kept, state: c\.state,/.test(flat) && (flat.match(/finerStatus/g) ?? []).length === 2);
+}
+
+console.log("\n  the filtered chart: its detail only for this trend, whatever else is loading");
+{
+  const start = localMidnight(Date.UTC(2026, 5, 1, 12)), window = { from: start, to: start + 24 * HOUR_MS };
+  // a pump at 900 W for its first 3 hours and from 12:00 to 15:00, else 150 W, in five-minute readings
+  const raw = { points: Array.from({ length: 24 * 12 }, (_, i) => ({ t: start + i * 5 * M, v: i < 36 || (i >= 144 && i < 180) ? 900 : 150 })), gaps: [], window };
+  const base = intervalSeries(raw, HOUR_MS);
+  const finerOver = (w) => ({ of: "hour", stepMs: 5 * M, window: w,
+    series: { points: raw.points.filter((p) => p.t >= w.from && p.t < w.to), gaps: [], window: w } });
+  const on = { lo: 600, hi: Infinity };
+  const mine = R.rangeChart(base, on, "hour", HOUR_MS, { finer: finerOver(window), failed: false });
+  ck("its own detail: the 6 running hours kept, the first 3 among them", mine.state === "ready" && mine.kept.count === 6
+     && mine.points.map((p) => mine.kept.realAt(p.t)).slice(0, 3).join() === [0, 1, 2].map((h) => start + h * HOUR_MS).join(), mine.kept?.count);
+  const later = { from: window.from + 3 * HOUR_MS, to: window.to + 3 * HOUR_MS };
+  const old = R.rangeChart(base, on, "hour", HOUR_MS, { finer: finerOver(later), failed: false });
+  ck("a detail read 3 hours later (another window) is never used: the chart waits for its own, drawn in full, nothing dropped",
+     old.state === "loading" && old.kept === null && old.points === base.points && old.window === base.window, old.state);
+  ck("  ...nor one for another period", R.rangeChart(base, on, "day", HOUR_MS, { finer: finerOver(window), failed: false }).state === "loading");
+  ck("  ...and when the detail could not be read: in full, said as failed", R.rangeChart(base, on, "hour", HOUR_MS, { failed: true }).state === "failed");
+  ck("its detail in, a failure of a later reload changes nothing (another chart's range never blinks this one)",
+     R.rangeChart(base, on, "hour", HOUR_MS, { finer: finerOver(window), failed: true }).state === "ready");
+  const none = R.rangeChart(base, null, "hour", HOUR_MS, { failed: false });
+  ck("no range: the trend itself, on its own window", none.state === "ready" && none.points === base.points && none.kept === null && none.window === window);
+  const empty = R.rangeChart(base, { lo: 2000, hi: Infinity }, "hour", HOUR_MS, { finer: finerOver(window), failed: false });
+  ck("nothing kept: the frame stays on the period's window", empty.kept.count === 0 && empty.window === window && empty.points.length === 0);
+  ck("kept: the line on the kept steps' own window", mine.window === mine.kept.series.window && mine.window.to === start + 6 * HOUR_MS);
 }
 
 console.log("\n  kept while the period changes, cleared for another reading");

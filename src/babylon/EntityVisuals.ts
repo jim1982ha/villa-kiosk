@@ -96,7 +96,8 @@ import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, deviceTyp
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, subjectOf, categorySurface } from "@/config/EntityCategories";
 import {
-  badgeOwnerOf, deviceLook, drawsBadge, mapLookSource, meshLookFor, readingOf, type LookSource,
+  badgeOwnerOf, deviceLook, drawsBadge, lookMarks, mapLookSource, meshLookFor, NO_MARKS, readingOf, sameMarks,
+  type DeviceMarks, type LookSource,
 } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { compactValue } from "@/utils/entityValue";
@@ -809,34 +810,17 @@ export class EntityVisuals {
    *  through this — the live cache above, the mesh-resolved mappings, and the
    *  current config (read through a getter: the object is replaced per edit). */
   private readonly lookSource: LookSource = mapLookSource(this.lastState, this.mapping, () => this.lookConfig());
-  /** The villa's critical devices, folded onto their devices (deviceGroups.criticalDevices) — pushed by the page
-   *  (setCriticalDevices). A critical device that lost contact rings red here as on the Cockpit (2.496.428). */
-  private critical: ReadonlySet<string> = new Set();
-  /** Hidden in the villa's system (deviceGroups.hiddenIn over the store's registry facts) — pushed by the page
-   *  (setHiddenDevices). Nothing is, until the villa's registry has been read. */
-  private hidden: (entityId: string) => boolean = () => false;
-  /** The devices with an open Cockpit fault, folded onto their devices (attention.deviceIssues: a fault or late maintenance) — pushed by the page
-   *  (setFaultDevices): their badge's amber "!" (owner, 2026-10-22: badge proposal 2). */
-  private faults: ReadonlySet<string> = new Set();
-  private lookCfg: {
-    from: AppConfig; crit: ReadonlySet<string>; hidden: (entityId: string) => boolean; faults: ReadonlySet<string>;
-    cfg: LookSource["config"];
-  } | null = null;
-  /** What `lookSource` reads as its config: the live config's two slices, the critical list and the faults — rebuilt
-   *  only when one of those objects is replaced, never per badge. */
+  /** The villa model's marks of each device (critical, hidden, an amber Cockpit issue: deviceActivity.DeviceMarks) —
+   *  pushed by the page (setDeviceMarks). Nothing is marked until the villa has been read. */
+  private marks: DeviceMarks = NO_MARKS;
+  private lookCfg: { from: AppConfig; marks: DeviceMarks; cfg: LookSource["config"] } | null = null;
+  /** What `lookSource` reads as its config: the live config's entity map and the marks — rebuilt only when one of
+   *  those objects is replaced, never per badge. */
   private lookConfig(): LookSource["config"] {
     const c = this.lookCfg;
-    if (c && c.from === this.config && c.crit === this.critical && c.hidden === this.hidden && c.faults === this.faults) {
-      return c.cfg;
-    }
-    const crit = this.critical;
-    const hidden = this.hidden;
-    const faults = this.faults;
-    const cfg = {
-      entityMap: this.config.entityMap, isCritical: (id: string) => crit.has(id), isHidden: hidden,
-      hasFault: (id: string) => faults.has(id),
-    };
-    this.lookCfg = { from: this.config, crit, hidden, faults, cfg };
+    if (c && c.from === this.config && c.marks === this.marks) return c.cfg;
+    const cfg = { entityMap: this.config.entityMap, ...lookMarks(this.marks) };
+    this.lookCfg = { from: this.config, marks: this.marks, cfg };
     return cfg;
   }
   /** User size multiplier (Settings slider) and live bird's-eye zoom factor;
@@ -1082,29 +1066,13 @@ export class EntityVisuals {
     this.requestRender();
   }
 
-  /** The villa's critical devices (folded) — every badge, card and room chip repaints when the list changes. */
-  setCriticalDevices(ids: ReadonlySet<string>): void {
-    if (ids.size === this.critical.size && [...ids].every((id) => this.critical.has(id))) return;
-    this.critical = ids;
+  /** The villa model's marks (critical, hidden, an amber issue) — every badge, card and room chip repaints when one
+   *  really changed (sameMarks). A hidden device's badge leaves the map and its room chips (deviceActivity.drawsBadge),
+   *  its mesh repaints quiet — never red, never lost (badgeKindFor). */
+  setDeviceMarks(marks: DeviceMarks): void {
+    if (sameMarks(marks, this.marks)) return;
+    this.marks = marks;
     // a room chip's number takes its colour in the layout pass (summaryLook.roomHealth): redo it
-    this.markLayoutDirty();
-    this.repaintBadges();
-  }
-
-  /** The devices with an open Cockpit fault (folded) — every badge, card and room chip repaints when the set changes. */
-  setFaultDevices(ids: ReadonlySet<string>): void {
-    if (ids.size === this.faults.size && [...ids].every((id) => this.faults.has(id))) return;
-    this.faults = ids;
-    // a room chip's number takes its colour in the layout pass (summaryLook.roomHealth): redo it
-    this.markLayoutDirty();
-    this.repaintBadges();
-  }
-
-  /** Which entities are hidden in the villa's system (deviceGroups.hiddenIn): their badges leave the map and its room
-   *  chips (deviceActivity.drawsBadge); their meshes repaint quiet — never red, never lost (badgeKindFor). */
-  setHiddenDevices(isHidden: (entityId: string) => boolean): void {
-    if (isHidden === this.hidden) return;
-    this.hidden = isHidden;
     this.markLayoutDirty();
     this.repaintBadges();
   }
