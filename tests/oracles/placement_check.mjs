@@ -38,7 +38,8 @@ const card = (cx, cy, hw, hh, focused = false) => ({ box: { cx, cy, hw, hh }, in
 const bur = check({ badges: [badge("a", 200, 200)], cards: [card(200, 200, 80, 20)] });
 ck("a badge under a card's ink: BURIED", bur.buried === 1);
 const hang = check({ badges: [badge("a", 270, 200)], cards: [card(200, 200, 80, 20)] });
-ck("under the overhang only: allowed, and said so", hang.buried === 0 && hang.overhung === 1);
+ck("under the card's end only: counted apart, and never called allowed (2.496.552)",
+   hang.buried === 0 && hang.overhung === 1 && hang.lines.some((l) => /under a card's END$/.test(l)), hang.lines);
 const cc = check({ cards: [card(200, 200, 40, 20), card(230, 200, 40, 20)] });
 ck("two cards on each other: summary OVERLAP", cc.summaryOverlaps === 1);
 

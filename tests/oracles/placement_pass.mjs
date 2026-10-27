@@ -103,6 +103,41 @@ console.log("\n  seating cards:");
   }
 }
 
+console.log("\n  a card is never drawn over a badge (owner's phone screenshot, 2026-10-27):");
+{
+  // A pair card (two devices on one spot) and a badge with a wide reading beside it, swept across: at every
+  // distance the card's whole DRAWN box either clears the badge's box or the badge is one of its cells. To
+  // 2.496.551 the pass measured the card against a badge at ONE badge's box and absorbed only inside its
+  // inscribed square, so the card's end stood over most of the reading.
+  const { badgeBox } = await import("@/babylon/badgeBox");
+  const { badgeMetricsFor } = await import("@/babylon/badgeMetrics");
+  const m = badgeMetricsFor("coarse");
+  const plain = badgeBox({ card: true, type: "light", valueChars: 0, valueShown: false }, m, 1);
+  const wide = badgeBox({ card: true, type: "sensor", valueChars: 6, valueShown: true }, m, 1);
+  const clear = { pxPerWorld: 1, basis: { rx: 1, rz: 0, ax: 0, az: 1, sinPhi: -1, cosPhi: 0, mode: "plane" } };
+  const rooms = { a: "Terrace", b: "Terrace", c: "Terrace" };
+  const covered = [], chipped = [];
+  for (let d = 0; d <= 120; d += 2) {
+    const focus = new RoomFocus();
+    const pass = new PlacementPass();
+    const f = { ...frameOf(rooms, focus), metrics: m, summary: { size: m.cardHeightPx, font: 13, countSize: 11, countFont: 8 } };
+    pass.begin(f);
+    const at = (id, x, b) => ({ ...badge(id, 0, 0), wx: x, sx: x, sy: b.cy });
+    const shown = [at("a", 0, plain), at("b", 0, plain), at("c", -d, wide)];
+    const g = { key: "grp|a", room: "Terrace", roomKeys: ["terrace"], members: [0, 1], wx: 0, wy: 0, wz: 0, sx: 0, sy: 0, sz: 0, grid: 2, focused: false };
+    pass.entityGrouped.add("a"); pass.entityGrouped.add("b");
+    const pending = [g];
+    pass.placeEntityGroups(shown, [plain, plain, wide].map((b) => ({ ...b })), pending, clear);
+    if (pass.roomClustered.get("terrace")) chipped.push(d);
+    if (!pending.includes(g) || g.members.includes(2)) continue;
+    const lay = layoutOf(f, g, g.members.length);
+    if (Math.abs(g.sx - shown[2].sx) < lay.width / 2 + wide.halfW
+      && Math.abs(g.sy - cardLift(lay, 1) - shown[2].sy) < lay.height / 2 + wide.halfH) covered.push(d);
+  }
+  ck("a reading's badge beside a pair card: never under the card's end, clear of it or one of its cells", covered.length === 0, covered);
+  ck("  ...and the room never goes to its chip for it (the badge cannot refuse the card)", chipped.length === 0, chipped);
+}
+
 console.log("\n  the pass's own products (2.496.189):");
 {
   ck("a card spanning rooms reads 'primary +N', one room reads its name",

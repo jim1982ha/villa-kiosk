@@ -126,12 +126,13 @@ export class PlacementCheck {
     if (f.overlaps) lines.push(`PLACEMENT: ${f.overlaps} drawn badge pair(s) OVERLAP on screen`);
     if (f.focusOverlaps) lines.push(`PLACEMENT: ${f.focusOverlaps} overlapping pair(s) inside the FOCUSED room (expected; pairFocusedRoom's leftovers)`);
 
-    // (b) Drawn badge vs summary card, split in two — and the split is what
-    // makes the line actionable. `overhung` is expressly allowed: a card MAY be
-    // drawn over a badge outside its ink, because gating a card's existence on
-    // its full width sends groups to room chips instead (see `fits`). A single
-    // undifferentiated counter would be permanently non-zero for a documented
-    // reason, and a permanently non-zero assertion is a disabled one.
+    // (b) Drawn badge vs summary card, split in two: under the card's middle
+    // (`buried`) or only under its end (`overhung`). The end USED to be allowed —
+    // the pass measured a card against a badge at one badge's box — and that is
+    // how a pair card stood over most of a power reading's badge (owner's
+    // screenshot, 2026-10-27). Since 2.496.552 the pass measures the card's whole
+    // box and absorbs what it would cover, so neither is expected; both remain
+    // the plane-vs-perspective residual described below.
     //
     // ⚠️ `buried` IS NOT AN INVARIANT VIOLATION EITHER, AND CALLING IT ONE COST
     // TWO ROUNDS OF CHASING (2.428.0). It is measured in a DIFFERENT SPACE from
@@ -189,7 +190,7 @@ export class PlacementCheck {
       }
     }
     if (f.buried) lines.push(`PLACEMENT: ${f.buried} drawn badge(s) BURIED under a summary's ink`);
-    if (f.overhung) lines.push(`PLACEMENT: ${f.overhung} drawn badge(s) under a card's overhang (allowed)`);
+    if (f.overhung) lines.push(`PLACEMENT: ${f.overhung} drawn badge(s) under a card's END`);
     if (f.focusCardHits) {
       lines.push(`PLACEMENT: ${f.focusCardHits} badge/card overlap(s) involving a FOCUSED`
         + " object (expected: a focused card skips `fits`, a focused badge blocks"

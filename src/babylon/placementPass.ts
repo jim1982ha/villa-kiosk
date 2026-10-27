@@ -809,8 +809,6 @@ export class PlacementPass {
     // was floored at CLUSTER_MIN_SCALE while badges took the 0.7 far-zoom cap,
     // which made a summary bigger than the badges it replaced AND forced this
     // method to reason in a scale of its own. Both went together.
-    const sm = this.f.summary;
-    const squareHalf = (sm.size / 2) * scale * allow;
     /**
      * The plane Y where the card's INK actually is: its anchor lifted by half
      * its OWN height, exactly as updateEntityGroups sets linkOffsetYInPixels.
@@ -829,30 +827,17 @@ export class PlacementPass {
       const lay = layoutOf(this.f, g, g.members.length);
       return g.sy - cardLift(lay, scale);
     };
-    /**
-     * The largest disc that fits INSIDE the card — "is this badge underneath
-     * my ink", which is a different question from "do we clear each other".
+    /** A group is measured at the box it is actually DRAWN at — the file's
+     *  oldest rule — as separate half-width and half-height, never a radius
+     *  (see the boxes-not-discs block in `fits`): against other groups, against
+     *  badges in `fits`, and in the absorb sweep, ONE box for all three.
      *
-     * It has to be the inscribed radius and not the circumscribed one. A 2x2 card's circumscribed disc is 1.41 units while its ink only
-     * reaches 1.0 on either axis, and `fits` accepts a badge from about 1.0
-     * plus a gap — so absorbing at 1.41 would swallow badges that are visibly
-     * clear of the card. That is deleting devices from the map to fix a bug
-     * about the opposite.
-     *
-     * ⚠️ Inscribed leaves exactly a `gapPx`-wide annulus between this and the
-     * box `fits` refuses at, and the absorb sweep adds `gapPx` back to close
-     * it — see the block there. This comment used to call that annulus "the
-     * right amount of nothing"; a badge in it refused its card and chipped
-     * every room the card covered.
-     */
-    const cardInscribedHalf = (g: PendingEntityGroup) => {
-      const lay = layoutOf(this.f, g, g.members.length);
-      return (Math.min(lay.width, lay.height) / 2) * scale * allow;
-    };
-    /** A group against OTHER GROUPS is measured at the box it is actually
-     *  DRAWN at — the file's oldest rule — as separate half-width and
-     *  half-height, never a circumscribed radius (see the boxes-not-discs
-     *  block in `fits`). Against badges it is ONE badge box (`vsBadge`). */
+     *  ⚠️ AGAINST BADGES IT WAS ONE BADGE'S BOX (to 2.496.551), and absorb took
+     *  only badges inside the card's INSCRIBED square: a badge beside a wide card
+     *  was neither refused nor absorbed, so the card stood drawn over it — a
+     *  pair card covering most of a power reading's badge (owner's phone
+     *  screenshot, 2026-10-27). The self-check counted it as "under a card's
+     *  overhang (allowed)"; the owner's rule is that nothing overlaps. */
     const groupBox = (g: PendingEntityGroup): { hw: number; hh: number } => {
       const lay = layoutOf(this.f, g, g.members.length);
       return { hw: (lay.width / 2) * scale * allow, hh: (lay.height / 2) * scale * allow };
@@ -884,31 +869,16 @@ export class PlacementPass {
       `dx=${dx.toFixed(0)}/${needX.toFixed(0)}(-${(needX - dx).toFixed(0)})`
       + ` dy=${dy.toFixed(0)}/${needY.toFixed(0)}(-${(needY - dy).toFixed(0)})`;
     const fits = (g: PendingEntityGroup, others: PendingEntityGroup[]): boolean => {
-      // ── A SUMMARY MUST CLEAR OTHER SUMMARIES; IT MAY OVERLAP A BADGE ─────
-      // Against BADGES a group is measured at the count's single-badge box,
-      // not at the card it draws. That is a deliberate, stated cost, and it
-      // grew when the card gained a second row: a 2x2 card occupies four badge
-      // boxes and reaches two badge-heights above its anchor, so it can be
-      // drawn over a badge that this test called clear.
-      //
-      // It stays anyway. Gating a card's EXISTENCE on its full box sends
-      // groups to their room's chip that a count would have seated, which is
-      // the outcome this whole tier exists to avoid — one visible regression
-      // traded for a worse one. What makes it survivable is that a covered
-      // badge is still REACHABLE: SceneManager's tap and long-press paths both
-      // ask the badges before answering for a card cell that is empty.
-      //
-      // (An earlier version of this comment justified the asymmetry with "the
-      // card is half as tall, so most of what it refused was a neighbour above
-      // or below it". That was true of a one-row card and is not true of a
-      // square one; it is corrected rather than left standing beside the
-      // opposite fact.)
-      //
-      // Two SUMMARIES on top of each other is a different matter and is still
-      // refused, at the card's circumscribed radius: that is two controls each
-      // claiming to stand for the other's devices, and it is the one thing
-      // this test still promises absolutely.
-      const vsBadge = squareHalf;
+      // ── A SUMMARY CLEARS EVERY BADGE AND EVERY SUMMARY, AT ITS DRAWN BOX ─
+      // Against badges too (2.496.552): the card's whole box, not one badge's.
+      // This used to be one badge's box, on the reasoning that gating a card's
+      // EXISTENCE on its full box would send groups to their room's chip. It
+      // does not, because absorb below now takes every badge the card's whole
+      // box would cover: such a badge becomes a cell of the card before this
+      // runs, so a badge can still never refuse a card (the absorb box
+      // contains this one on every axis) — it is either clear of the drawn
+      // card or inside it. Nothing is left drawn underneath.
+      const mine = groupBox(g);
       for (let j = 0; j < shown.length; j++) {
         // Only badges that are actually DRAWN can be in the way, and a drawn
         // badge is always at its own anchor because nothing here moves one —
@@ -934,8 +904,8 @@ export class PlacementPass {
         // horizontal axis on BOTH cameras (see groundOf).
         const dx = groundOf(g.sx - shown[j].sx, g.sz - shown[j].sz);
         const dy = Math.abs(cardCentreY(g) - shown[j].sy);
-        const needX = vsBadge + boxes[j].halfW * allow + gapPx;
-        const needY = vsBadge + boxes[j].halfH * allow + gapPx;
+        const needX = mine.hw + boxes[j].halfW * allow + gapPx;
+        const needY = mine.hh + boxes[j].halfH * allow + gapPx;
         if (dx < needX && dy < needY) {
           why = `badge ${shown[j].id} ${shortfall(dx, needX, dy, needY)}`;
           return false;
@@ -977,7 +947,7 @@ export class PlacementPass {
         // width, height against height). Two rules for one question: a badge
         // in the gap between them was refused by `fits` and absorbed by
         // nobody, so its card's rooms went to their chip (2.496.187).
-        const mine = groupBox(g), theirs = groupBox(o);
+        const theirs = groupBox(o);
         const dx = groundOf(g.sx - o.sx, g.sz - o.sz);
         const dy = Math.abs(cardCentreY(g) - cardCentreY(o));
         const needX = mine.hw + theirs.hw + gapPx;
@@ -1005,15 +975,6 @@ export class PlacementPass {
     // corner of the villa happened to be, which is not a distinction anybody
     // reading a floor plan can act on. Reported exactly that way, with both
     // forms on screen at once.
-    //
-    // The cost is stated rather than hidden: a pair card may now OVERLAP a
-    // badge where the clearance test would have shrunk it. That test is a DISC
-    // of the card's half-WIDTH while the card is half as tall, so most of what
-    // it refused was a neighbour directly above or below — rejected on a
-    // distance the card does not occupy. It has to be a disc: it works in
-    // world distance scaled by the quantised zoom, and knowing which way a
-    // neighbour lies relative to the card's long axis would need the camera,
-    // which is the dependency this whole subsystem exists without.
 
     // ── ABSORB: NOTHING IS LEFT DRAWN UNDERNEATH A SUMMARY ───────────────
     // The bug this closes, in full, because it is not obvious and it survived
@@ -1032,7 +993,9 @@ export class PlacementPass {
     // people expect and were not getting.
     //
     // So: a summary swallows the drawn badges that lie inside its own ink,
-    // and only those (see cardInscribedHalf). It is the same reasoning as the
+    // and only those: every badge its whole DRAWN box (groupBox) would cover,
+    // since 2.496.552 — it used to be its inscribed square only, which left the
+    // card's ends drawn over a neighbour (see groupBox). It is the same reasoning as the
     // solver's lone-deferral pull-back — a summary standing on top of a device
     // it does not represent is a lie — applied at the one place that knows how
     // big the summary is actually drawn.
@@ -1048,7 +1011,7 @@ export class PlacementPass {
       // pile's focused badge is the one thing the focus forbids.
       if (g.focused) continue;
       for (let round = 0; round <= shown.length; round++) {
-        const reach = cardInscribedHalf(g);
+        const box = groupBox(g);
         const inkY = cardCentreY(g);
         const take: number[] = [];
         for (let j = 0; j < shown.length; j++) {
@@ -1095,8 +1058,8 @@ export class PlacementPass {
           // non-monotone chip → entities → chip the tier may not have.
           //
           // With the gap included, the absorb box strictly CONTAINS the refusal
-          // box on every axis (`cardInscribedHalf >= squareHalf` for every
-          // arrangement — a card is at least one unit tall — and `allow <= 1`),
+          // box on every axis (the same card box `groupBox` on both sides, the
+          // badge's box unscaled here and scaled by `allow <= 1` there),
           // so the two regions are one region and the outcome is total: a drawn
           // badge is either clear of a summary or a cell inside it. A
           // `seat REFUSED … blocked by badge` line is therefore now an
@@ -1110,8 +1073,8 @@ export class PlacementPass {
           // with the walker — measured on the villa's model as a card taking
           // in a device at 0°/90°/180°/270° and not in between. Ground
           // distance against width, as `conflicts` has always done.
-          if (dx < reach + boxes[j].halfW + gapPx
-            && dy < reach + boxes[j].halfH + gapPx) take.push(j);
+          if (dx < box.hw + boxes[j].halfW + gapPx
+            && dy < box.hh + boxes[j].halfH + gapPx) take.push(j);
         }
         if (take.length === 0) break;
         for (const j of take) {
