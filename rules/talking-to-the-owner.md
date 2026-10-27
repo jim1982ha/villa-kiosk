@@ -83,6 +83,8 @@ owner's report.
 ## Test steps the owner can do
 
 Before giving the owner steps to check a change, measure the change on the villa and name the exact place to look and
-what changes, or say plainly there is nothing visible to check.
+what changes, or say plainly there is nothing visible to check. When the check is about something on screen, start
+with a small text sketch of that screen with the spot marked, then the steps.
 
-**Why:** steps for a case the villa barely has could not be done ("i don't understand how to validate it").
+**Why:** steps for a case the villa barely has could not be done ("i don't understand how to validate it"); "the
+four new buttons at the top right of the camera window" was not understood until a sketch showed where (2026-10-27).

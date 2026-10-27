@@ -29,6 +29,28 @@ was reverted by the owner (2026-10-08). For a roof outdoors, the answer is the p
 The placement fix that applies each round's room chips after every bucket is judged stays. It is the price of a result
 that does not depend on input order, not a defect. Do not revert it.
 
+## Nothing on the map overlaps
+
+No badge, card or room chip is drawn over another, whatever the pose, zoom or tapped room (owner, 2026-10-27: badges
+overlapping "whereas we already stated that this shall never be the case"). The `?debug=place` check counts every
+overlap as a failure; a category it may skip is listed in its `ALLOWED_FINDINGS` with one of these entries, and only
+the owner adds one.
+
+**Why:** comments called overlaps the "accepted cost" of grouping on contact; the owner never accepted them, and two
+fixes (2.496.552-553) followed.
+
+## Badges group only when they touch
+
+Badges merge into a card, and a room into its chip, only when their drawn boxes meet: no safety margin, no floor on
+the distance between centres (2.413.0, 2026-08-17; owner, 2026-10-14: "a room chip shall only appear when there is
+entity overlap"). Grouping on contact is the rule; an overlap is still a failure (the entry above).
+
+## Badges behind a wall hide while walking
+
+In the walking view a badge whose device stands behind a wall is hidden (owner, 2026-10-08: badges "from non visible
+entity in the FPS view standpoint are still appearing … globally fix it"). The `?debug=place` check counts them apart
+(`byWall`) and allows them.
+
 ## Sun and moon placement
 
 The sun and moon follow the real clock on one placement rule; the preview of day or night only changes lights and

@@ -96,12 +96,10 @@ export const WALK_MIN_MEASURE_DIST = 0.5;
  */
 export const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
 /*
- * ── ZERO BY EXPLICIT DECISION (2.413.0), NOT BY OVERSIGHT ──────────────────
- * The owner was shown the trade in numbers and chose pure contact: nothing
- * groups until the ink actually meets. Do NOT restore the margin because a
- * `PLACEMENT: … OVERLAP` counter fires — that counter firing is the ACCEPTED
- * COST of this setting, not evidence of a regression, and the whole point of
- * the paragraphs below is that the cost was known before the choice was made.
+ * ── ZERO SINCE 2.413.0: rules/decided.md#badges-group-only-when-they-touch ──
+ * An overlap the `?debug=place` check reports is a failure all the same
+ * (rules/decided.md#nothing-on-the-map-overlaps): fix where the pass measures,
+ * never with a margin.
  *
  * What it means in practice, measured from the capture that prompted it: the
  * rule now fires when the visible gap drops under ~9% of a badge height (the
@@ -119,13 +117,6 @@ export const GROUP_OVERLAP_ALLOW_WIDTHS = 0;
  * chip. Those are the pairs that may now reappear, always in the direction of
  * the plane over-estimating separation, and always for objects further from
  * the camera than the zoom rung's reference depth.
- *
- * ⚠️ The honest mitigation if they become a nuisance is NOT to reinstate a
- * blanket margin — it is that a badge drawn under another is still reachable,
- * because SceneManager's tap and long-press both ask `pickBadgeAt` before
- * answering. Set this to -0.075 for half the old margin if the overlaps are
- * worse in practice than the early grouping was; that is the dial, and it is
- * one number.
  *
  * It pays for the one thing 2.287.0 bought its correctness with. Placement is
  * measured on an orthographic view plane at ONE pixels-per-world for the whole
@@ -837,7 +828,7 @@ export class PlacementPass {
      *  was neither refused nor absorbed, so the card stood drawn over it — a
      *  pair card covering most of a power reading's badge (owner's phone
      *  screenshot, 2026-10-27). The self-check counted it as "under a card's
-     *  overhang (allowed)"; the owner's rule is that nothing overlaps. */
+     *  overhang (allowed)"; nothing overlaps (rules/decided.md#nothing-on-the-map-overlaps). */
     const groupBox = (g: PendingEntityGroup): { hw: number; hh: number } => {
       const lay = layoutOf(this.f, g, g.members.length);
       return { hw: (lay.width / 2) * scale * allow, hh: (lay.height / 2) * scale * allow };
@@ -1740,8 +1731,8 @@ export class PlacementPass {
     // ── A FOCUSED ROOM'S DEVICES OUTRANK ANOTHER ROOM'S LABEL (2.431.0) ─────
     // Reported three times, last with a screenshot: focus a room and its badges
     // sit on top of other rooms' chips. 2.430.0 fixed WHICH of them paints in
-    // front and which answers a tap; it could not remove the overlap, and the
-    // owner's rule is that things must not overlap at all.
+    // front and which answers a tap; it could not remove the overlap, and
+    // nothing overlaps (rules/decided.md#nothing-on-the-map-overlaps).
     //
     // Nothing above can resolve it, and that is structural rather than an
     // oversight:

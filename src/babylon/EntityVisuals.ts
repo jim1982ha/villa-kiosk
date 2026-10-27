@@ -105,7 +105,8 @@ import { badgeBox, dropTouchingValues, valuesWithText } from "./badgeBox";
 import { buildCardBadge, growGroupCard, placeGroupCard, setValueParts } from "./badgeControls";
 import { valueAdvanceEm } from "./valueAdvance";
 import { phantomEntity } from "@/utils/phantomEntity";
-import { channelEnabled, tapDebug } from "@/utils/tapDebug";
+import { channelEnabled, debugCopyButton, tapDebug } from "@/utils/tapDebug";
+import { report as reportTelemetry } from "@/utils/telemetry";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { beginSpan } from "@/utils/perfSpans";
 import { boundsXZ } from "@/utils/geometry";
@@ -125,12 +126,13 @@ import { groupCardModel, roomChipModel, type SummaryFrame } from "./summaryLook"
 import { rungAt, referenceDepthAt, iconZoomAt, cssExtent } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
 import { RoomFocus } from "./roomFocus";
-import { PlacementCheck, type ScreenBox } from "./placementCheck";
+import { PlacementCheck } from "./placementCheck";
+import { PlacementTelemetry, passSnapshot, placementReport, type PlacementReport } from "./placementReport";
 import { FanRigs } from "./fanRigs";
 import {
   PlacementPass, GROUP_OVERLAP_ALLOW_WIDTHS, BADGE_PLACEMENT, cardOf as passCardOf, cellMax, drawnCells,
-  layoutOf as passLayoutOf, roomOfEntity, placementItems as passItems, glassScratch, viewportBudget, cellCapFor, drawableMaxOf,
-  type ShownLabel, type PendingEntityGroup, type PlacementFrame, type CardShapeInput,
+  roomOfEntity, placementItems as passItems, glassScratch, viewportBudget, cellCapFor, drawableMaxOf,
+  type ShownLabel, type PendingEntityGroup, type PlacementFrame, type CardShapeInput, type PassClearance,
 } from "./placementPass";
 import { glyphDrawPx, glyphBakePx, type GlassClearance } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
@@ -860,6 +862,10 @@ export class EntityVisuals {
   /** Entities the owner removed as "no longer in HA" — see badgeEligible. */
   /** The `?debug=place` self-check over what a pass painted — placementCheck.ts. */
   private readonly placementCheck = new PlacementCheck();
+  /** The last checked pass as a report (placementReport.ts): "Copy placement report" in the debug box. */
+  private lastPlacementReport: PlacementReport | undefined;
+  /** A failing pass's report to the telemetry ring, throttled. */
+  private readonly placementTelemetry = new PlacementTelemetry((e) => reportTelemetry("placement", { ...e }));
   /** Ceiling fans that spin — the rig, the turn, the teardown: fanRigs.ts. */
   private readonly fans: FanRigs;
   /** Room-cluster chips, keyed by roomKey(). Built lazily the first time a
@@ -991,6 +997,11 @@ export class EntityVisuals {
     this.scene = scene;
     this.config = config;
     this.walker = walker;
+    // `?debug=place`: the last pass's report, for an agent to read and replay (rules/kiosk-code.md).
+    if (channelEnabled("place")) {
+      debugCopyButton("Copy placement report",
+        () => this.lastPlacementReport && JSON.stringify(this.lastPlacementReport));
+    }
     this.requestRender = () => frames.repaint();
     this.requestAnimationRender = () => frames.animate();
     this.probe = new FloorProbe(scene);
@@ -3582,8 +3593,8 @@ export class EntityVisuals {
     // whose order is the pass's rule now, not this method's. It gets one frame
     // of values and hands back the cards and chips; which badges are drawn is
     // its `drawnBadge`.
-    const { pending, chips, solved } = this.pass.run(
-      this.placementFrame(shown), shown, boxes, clearance, suppressOthers);
+    const placeFrame = this.placementFrame(shown);
+    const { pending, chips, solved } = this.pass.run(placeFrame, shown, boxes, clearance, suppressOthers);
 
     for (const s of shown) {
       // ZERO X offset and a FIXED Y lift that centres every badge over its
@@ -3612,7 +3623,7 @@ export class EntityVisuals {
     // (2.436.0) that is pure cost for output nobody sees, and `?debug=place`
     // brings both the work and the lines back together.
     if (channelEnabled("place") && clearance) {
-      this.assertPlacementInvariants(shown, boxes, clearance, pending, chips, tm, vp);
+      this.assertPlacementInvariants(placeFrame, shown, boxes, clearance, suppressOthers, pending, chips, tm, vp);
     }
   }
 
@@ -4355,12 +4366,11 @@ export class EntityVisuals {
    * rewrites of this subsystem died of exactly that class of bug.
    */
   private assertPlacementInvariants(
+    frame: PlacementFrame,
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    clearance: {
-      pxPerWorld: number; gap: number; allow: number; basis: ViewBasis;
-      refDepth: number;
-    },
+    clearance: PassClearance,
+    suppressOthers: boolean,
     /** The summaries that SURVIVED placement — not the ones the solver asked
      *  for. A dropped one still leaves its members marked as covered. */
     groups: readonly PendingEntityGroup[],
@@ -4374,62 +4384,31 @@ export class EntityVisuals {
     tm: Matrix,
     vp: Viewport,
   ): void {
-    // The RULES are placementCheck.ts's; this only says what was painted, in
-    // the TRUE perspective the GUI layer draws through (Vector3.ProjectToRef),
-    // sharing no arithmetic with the solver — the only reason it can disagree.
-    const scale = this.effectiveScale();
-    const focus = this.focus.rooms;
-    const covered = new Set<string>();
-    for (const g of groups) for (const i of g.members) covered.add(shown[i].id);
-    // `container.isVisible` rather than a reconstruction of the same decision
-    // from entityGrouped/roomClustered: the renderer's own answer to "is this
-    // drawn", read after the visibility loop has run.
-    const badges = shown.map((s2, i) => {
-      const room = roomKey(this.roomOf(s2.id));
-      return {
-        id: s2.id,
-        box: { cx: s2.x, cy: s2.y + boxes[i].cy, hw: boxes[i].halfW, hh: boxes[i].halfH },
-        visible: s2.lbl.container.isVisible, inFront: s2.inFront, occluded: s2.occluded,
-        exempt: focus.has(room), roomChipped: !!this.pass.roomClustered.get(room),
-        covered: covered.has(s2.id), offsetX: s2.lbl.container.linkOffsetXInPixels,
-      };
-    });
-    // A card is drawn ENTIRELY ABOVE its anchor — updateEntityGroups sets
-    // linkOffsetYInPixels = -cardLift(lay, scale) so the card's bottom
-    // edge lands on the anchor, exactly as a badge's does. The LAYOUT models
-    // the same card as a disc centred ON the anchor (cardHalfOf), a documented
-    // asymmetry; using the layout's model here would report overlaps nobody
-    // can see and miss the ones they can, which is the whole failure mode this
-    // method just stopped repeating.
-    const cards: { box: ScreenBox; ink: ScreenBox; focused: boolean }[] = [];
-    const p = new Vector3();
-    for (const g of groups) {
-      const lay = this.layoutOf(g, g.members.length);
-      p.set(g.wx, g.wy, g.wz);
-      Vector3.ProjectToRef(p, Matrix.IdentityReadOnly, tm, vp, p);
-      if (!(p.z >= 0 && p.z <= 1)) continue;
-      const hw = (lay.width / 2) * scale;
-      const hh = cardLift(lay, scale);
-      // The square INSCRIBED in the card: a badge under it is BURIED, one under the
-      // rest of the box only under the card's END (the self-check's two counters).
-      // Absorb takes both since 2.496.552 (placementPass groupBox).
-      const inner = Math.min(hw, hh);
-      const box = { cx: p.x, cy: p.y - hh, hw, hh };
-      cards.push({ box, ink: { cx: box.cx, cy: box.cy, hw: inner, hh: inner }, focused: g.focused });
-    }
-    const found = this.placementCheck.check({
-      viewport: vp, badges, cards, chips,
+    // The RULES are placementCheck.ts's and the projection placementReport.passSnapshot's; this only says what was
+    // painted. `container.isVisible` rather than a reconstruction of the same decision: the renderer's own answer to
+    // "is this drawn", read after the visibility loop has run.
+    const snapshot = passSnapshot({
+      shown, boxes, groups, chips, pass: this.pass, frame,
+      drawn: (i) => shown[i].lbl.container.isVisible, offsetX: (i) => shown[i].lbl.container.linkOffsetXInPixels, tm, vp,
       chipDrawnWidth: (key) => (this.clusters.get(key)?.container as unknown as
         { _currentMeasure?: { width: number } } | undefined)?._currentMeasure?.width,
-      chipScale: scale,
-      minGapPx: this.metrics.minGapPx,
       overlapAllow: GROUP_OVERLAP_ALLOW_WIDTHS,
       solve: {
         items: this.placementItems(shown, boxes, clearance), gap: clearance.gap,
         mode: BADGE_PLACEMENT, drawableMax: this.drawableMax(),
       },
     });
+    const found = this.placementCheck.check(snapshot);
     for (const line of found.lines) placeDebug(line);
+    // The report an agent reads (rules/kiosk-code.md#measure-on-the-real-model-offline): the debug box copies the
+    // last one, and a failing pass sends it to the telemetry ring, throttled (placementTelemetry).
+    const report = placementReport({
+      app: typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : undefined,
+      frame, shown, boxes, clearance, suppressOthers, snapshot, found, tm,
+      chipKeys: chips.map((c) => c.key),
+    });
+    this.lastPlacementReport = report;
+    this.placementTelemetry.offer(report, performance.now());
   }
 
 
@@ -4707,12 +4686,6 @@ export class EntityVisuals {
    *  rather than one 2x2, with nothing hidden and no number drawn. */
   private perCardCap(): number {
     return this.isPhoneWidth() ? PHONE_MAX_GRID_CHIPS : MAX_GRID_CHIPS;
-  }
-
-  /** The arrangement a group actually draws — cells and ceiling in one place,
-   *  so no caller can measure a focused card against the ordinary cap. */
-  private layoutOf(g: PendingEntityGroup, memberCount: number): CardArrangement {
-    return passLayoutOf({ ...this.cardShape(), cardBudget: this.cardBudget() }, g, memberCount);
   }
 
   /** Draw (or hide) one badge-sized control per surviving entity group. */

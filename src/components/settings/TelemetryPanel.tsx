@@ -139,6 +139,13 @@ function summarise(e: TelemetryEvent): string {
     }
     case "error":
       return `${e.code}: ${String(e.message ?? "").slice(0, 120)}`;
+    case "placement": {
+      // `?debug=place` on a device: a pass that broke a placement rule (babylon/placementReport). The row's Copy holds
+      // the whole report; tools/placement-probe.mjs replays it.
+      const p = e.placement as { found?: { failures?: number; counts?: Record<string, number> } } | undefined;
+      const counts = Object.entries(p?.found?.counts ?? {}).map(([k, n]) => `${k} ${n}`).join(", ");
+      return `${p?.found?.failures ?? "?"} placement failure(s)${counts ? ` · ${counts}` : ""}${e.whole === false ? " · findings only" : ""}`;
+    }
     case "csp":
       // What the policy WOULD have blocked, were it enforced (it is Report-Only).
       return `${e.directive} would block ${e.blocked}${e.source ? ` · ${e.source}:${e.line ?? "?"}` : ""}`;
