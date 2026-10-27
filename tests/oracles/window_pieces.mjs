@@ -29,7 +29,8 @@ const SRC = new URL("../../src/", import.meta.url).pathname;
 const walk = tsFiles;
 const files = walk(SRC).map((f) => [f.slice(SRC.length), readFileSync(f, "utf8")]);
 const having = (re) => files.filter(([, s]) => re.test(s)).map(([f]) => f);
-ck("local midnight: localDay.ts only", having(/setHours\(0, 0, 0, 0\)/).join() === "utils/localDay.ts", having(/setHours\(0, 0, 0, 0\)/));
+ck("a day's edges on the villa's clock: villaClock.ts alone reads a Date's own hours (localDay cuts the day on it)",
+   having(/\.(getHours|setHours)\(/).join() === "utils/villaClock.ts", having(/\.(getHours|setHours)\(/));
 ck("no unit fold of its own in the Energy window (toBaseUnit is the table)", !/toLowerCase\(\);\s*return u === "kw"/.test(readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx", import.meta.url), "utf8")));
 // The W / kW rule is utils/entityValue's since architecture review 11 — the Energy window's own copy had drifted
 // ("3.00 kW" beside a tile's "3 kW"); fmtPower now hands its watts there (display_numbers.mjs drives both by value).

@@ -9,6 +9,7 @@
 // keyed on the same four strings and agreeing only because they were edited
 // together. Pure; tests/oracles/energy_ranges.mjs.
 
+import { inVillaZone } from "@/utils/villaClock";
 import type { StatisticsPeriod } from "@/utils/statisticsSeries";
 import type { EnergyPeriodKind } from "@/config/energyModel";
 import { fmtChartTime } from "./chartUtils";
@@ -36,15 +37,15 @@ export interface EnergyRange {
 }
 
 const every = (n: number) => Array.from({ length: n }, (_, i) => i);
-const weekday = (t: number) => new Date(t).toLocaleDateString([], { weekday: "short", day: "numeric" });
+const weekday = (t: number) => new Date(t).toLocaleDateString([], inVillaZone({ weekday: "short", day: "numeric" }));
 /** A day's short name alone ("Mon") — the last-seven-days chart's axis. */
-export const weekdayShort = (t: number) => new Date(t).toLocaleDateString([], { weekday: "short" });
+export const weekdayShort = (t: number) => new Date(t).toLocaleDateString([], inVillaZone({ weekday: "short" }));
 
 export const ENERGY_RANGES: readonly EnergyRange[] = [
   { key: "24h", label: "24h", period: "hour", kind: "last24Hours", unit: "hour", bucketLabel: fmtChartTime, ticks: () => [0, 6, 12, 18, 23] },
   { key: "1w", label: "1w", period: "day", kind: "last7", unit: "day", bucketLabel: weekday, ticks: every },
   { key: "1m", label: "1m", period: "day", kind: "last30", unit: "day", bucketLabel: weekday, ticks: () => [0, 7, 14, 21, 29] },
-  { key: "1y", label: "1y", period: "month", kind: "last12Months", unit: "month", bucketLabel: (t) => new Date(t).toLocaleDateString([], { month: "short" }), ticks: every },
+  { key: "1y", label: "1y", period: "month", kind: "last12Months", unit: "month", bucketLabel: (t) => new Date(t).toLocaleDateString([], inVillaZone({ month: "short" })), ticks: every },
 ];
 
 export function energyRange(key: EnergyRangeKey): EnergyRange {

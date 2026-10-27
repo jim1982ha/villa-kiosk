@@ -67,7 +67,7 @@ ck("the top bar draws Settings and the agent's robot from doors — and no Facil
    (hud.match(/\{doors\.facility && \(/g) ?? []).length === 0 && (hud.match(/\{doors\.settings && \(/g) ?? []).length === 1   // ONE Settings row, shared by both menus (accountRows, 2.496.335)
    && !/\{onOpenFacility && \(|\{canOpenSettings && \(/.test(hud));
 ck("the Cockpit's updates count reads doors, not roleCan — and names them in its tooltip (config/updatesWaiting)",
-   /doors\.updates \? updatesWaiting\(entities, hiddenInHaEntityIds\) : \[\]/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit)
+   /doors\.updates \? updatesWaiting\(entities, hiddenInHaEntityIds, config\.entityMap\) : \[\]/.test(cockpit) && !/roleCan\(role, "seeUpdates"\)/.test(cockpit)
    && /<Tip text=\{updatesTip\(updates\)\}>/.test(cockpit));
 
 done("✅ which doors a profile has is said once");

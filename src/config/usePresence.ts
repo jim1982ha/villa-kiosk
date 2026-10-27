@@ -42,5 +42,5 @@ export function usePresenceWhy(): PresenceWhy {
   const { entities } = useHA();
   const { config } = useConfig();
   const sinceOf = useStateSince(presenceWatched(config.presenceSensor, entities));
-  return presenceWhy(config.presenceSensor, entities, sinceOf);
+  return presenceWhy(config.presenceSensor, entities, sinceOf, config.entityMap);
 }

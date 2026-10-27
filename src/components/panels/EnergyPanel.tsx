@@ -40,7 +40,7 @@ import { useHistorySource } from "@/hooks/useHistorySource";
 import { PERIOD_MS } from "@/utils/statisticsSeries";
 import { HOUR_MS, localMidnight } from "@/utils/localDay";
 import {
-  energyPeriod, periodStarts, costUnitOf, fmtKwh, powerKw,
+  energyPeriod, periodStarts, costUnitOf, fmtKwh, powerKw, energyStatName,
   type EnergyBucket, type EnergySplit,
 } from "@/config/energyModel";
 import { formatMoney } from "@/utils/money";
@@ -55,9 +55,8 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
   // Weather window's does — the same control (useSegmentedChoice).
   const { key: range, picker } = useSegmentedChoice(RANGE_OPTIONS, "1w", "Period", "weather-ranges");
   // A statistic's name: the device's own name in HA's Energy settings, else its
-  // entity's, without the trailing "energy" every one of them carries.
-  const nameOf = (id: string) =>
-    String(entities[id]?.attributes.friendly_name ?? id).replace(/\s+energy$/i, "");
+  // entity's as every screen names it (energyStatName).
+  const nameOf = (id: string) => energyStatName(id, config.entityMap, entities);
   const { data: setup, status } = useHistory<EnergyWindowSetup | null>(
     "energy-setup", () => fetchEnergySetup(ws, nameOf), null);
   // Every device's colour, once, from HA's setup (energyFlow.deviceColours).

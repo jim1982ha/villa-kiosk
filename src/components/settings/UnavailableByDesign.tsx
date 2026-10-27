@@ -5,7 +5,7 @@
 
 import type { ReactNode } from "react";
 import { useConfig } from "@/config/ConfigContext";
-import { useHA } from "@/ha/HAStateStore";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import EntityPicker from "./EntityPicker";
 import RemovablePill from "@/components/common/RemovablePill";
 import Fold from "./Fold";
@@ -18,9 +18,9 @@ export function withDevice(list: readonly string[], id: string, on: boolean): st
 
 export default function UnavailableByDesign({ heading }: { heading?: ReactNode } = {}) {
   const { config, update } = useConfig();
-  const { entities } = useHA();
   const ids = config.unavailableByDesign;
-  const name = (id: string) => String(entities[id]?.attributes?.friendly_name ?? id);
+  // as every screen names a device (owner, 2026-10-28: one owner of a device's name; it printed the platform's)
+  const name = useEntityLabel();
   const set = (id: string, on: boolean) => update({ unavailableByDesign: withDevice(ids, id, on) });
   // folded under its title like Grouped devices (owner, 2026-10-22: the same chevron and closed line)
   return (

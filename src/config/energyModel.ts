@@ -18,6 +18,7 @@ import { HOUR_MS, localMidnight, localMonthStart } from "@/utils/localDay";
 import { COMPILE_GRACE_MS } from "@/utils/statisticsSeries";
 import { toBaseUnit } from "./SensorClasses";
 import { formatUnitValue, kwhNumber } from "@/utils/entityValue";
+import { labelOf } from "./EntityMap";
 
 /** One `energy/get_prefs` device-consumption entry. */
 export interface EnergyDevicePref {
@@ -58,6 +59,15 @@ export interface EnergySetup {
   roots: EnergyNode[];
   /** Every device, flat. */
   devices: EnergyNode[];
+}
+
+/** A statistic's name when the Energy settings give its device none: its entity's, as every screen names it
+ *  (labelOf), without the trailing "energy" every one of them carries. ⚠️ IT READ THE PLATFORM'S NAME (owner,
+ *  2026-10-28: one owner of a device's name): a meter renamed in VESTA kept its old name in the Energy window. */
+export function energyStatName(
+  id: string, entityMap: Parameters<typeof labelOf>[1], entities: Parameters<typeof labelOf>[2],
+): string {
+  return labelOf(id, entityMap, entities).replace(/\s+energy$/i, "");
 }
 
 /** HA's hierarchy from its prefs. A device whose upstream is not itself a

@@ -13,6 +13,7 @@
 // service-worker cached, so this comes back fast with no re-login needed —
 // safe to fire unattended overnight.
 
+import { wallClock } from "./villaClock";
 import { readString, writeString } from "./storedJson";
 import { unsentWorkHeld } from "./syncedDocument";
 const RELOAD_HOUR = 4; // 04:00 local device time — a quiet window for a villa kiosk
@@ -41,7 +42,8 @@ const PRESSURE_GUARD_KEY = "villa-kiosk:last-pressure-reload";
 const MIN_INTERVAL_BETWEEN_PRESSURE_RELOADS_MS = 6 * 60 * 60_000; // 6 hours
 
 function todayKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; // local calendar day
+  const w = wallClock(d);
+  return `${w.year}-${w.month - 1}-${w.day}`; // the villa's calendar day (utils/villaClock)
 }
 
 /** Fraction of the JS heap limit currently in use, or null where the browser
@@ -71,7 +73,7 @@ export function installDailyAutoReload(isSafeToReload: () => boolean): () => voi
   const startedAt = Date.now();
 
   const dailyDue = (now: Date): boolean => {
-    if (now.getHours() !== RELOAD_HOUR) return false;
+    if (wallClock(now).hour !== RELOAD_HOUR) return false;   // the villa's quiet hour
     return (readString(GUARD_KEY) ?? "") !== todayKey(now); // not already reloaded today
   };
 

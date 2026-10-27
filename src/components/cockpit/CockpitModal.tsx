@@ -13,6 +13,7 @@ import Window from "@/components/common/Window";
 import { useMemo } from "react";
 import { LayoutDashboard, RefreshCw } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
+import { useConfig } from "@/config/ConfigContext";
 import type { Doors } from "@/auth/doors";
 import { updatesTip, updatesWaiting } from "@/config/updatesWaiting";
 import { formatCountBadge } from "@/utils/countBadge";
@@ -74,9 +75,10 @@ export default function CockpitModal({
   const recordLine = fmRecordLine({ ready, unreachable });
   // Firmware / add-on updates waiting — Home Assistant's own `update` domain counts them, per device and per add-on.
   const { entities, hiddenInHaEntityIds } = useHA();
+  const { config } = useConfig();
   // ...and WHICH, said on hover (owner, 2026-10-20) — still nothing to press (config/updatesWaiting).
-  const updates = useMemo(() => (doors.updates ? updatesWaiting(entities, hiddenInHaEntityIds) : []),
-    [entities, hiddenInHaEntityIds, doors.updates]);
+  const updates = useMemo(() => (doors.updates ? updatesWaiting(entities, hiddenInHaEntityIds, config.entityMap) : []),
+    [entities, hiddenInHaEntityIds, config.entityMap, doors.updates]);
   const updatesAvailable = updates.length;
 
   return (

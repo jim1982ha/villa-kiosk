@@ -24,6 +24,8 @@
 // Both may be combined: `?skyTime=06:00&skySpeed=900` starts at dawn and walks
 // a whole day past the villa in about a minute and a half.
 
+import { inVillaZone, villaTime, wallClock } from "./villaClock";
+
 /** Parsed once. The query string cannot change without a reload. */
 interface SkySim {
   /** Simulated wall-clock at the moment the page loaded. */
@@ -57,14 +59,13 @@ function parse(): SkySim | null {
   let origin = startedAt;
 
   if (timeRaw) {
-    // "HH:MM" means today at that LOCAL time; anything else is handed to Date,
+    // "HH:MM" means today at that time on the VILLA'S clock; anything else is handed to Date,
     // which accepts a full ISO stamp. Local, not UTC, because the whole point
     // is to reason about what the villa looks like at a stated hour.
     const hm = /^(\d{1,2}):(\d{2})$/.exec(timeRaw.trim());
     if (hm) {
-      const d = new Date();
-      d.setHours(Number(hm[1]), Number(hm[2]), 0, 0);
-      origin = d.getTime();
+      const w = wallClock(Date.now());   // the villa's today and clock (utils/villaClock)
+      origin = villaTime(w.year, w.month, w.day, Number(hm[1]), Number(hm[2]));
     } else {
       const parsed = new Date(timeRaw).getTime();
       if (Number.isFinite(parsed)) origin = parsed;
@@ -116,6 +117,6 @@ export function skyTickMs(): number {
  *  mistaken for a broken one. */
 export function skySimLabel(): string {
   if (!sim) return "";
-  const t = new Date(sim.origin).toLocaleTimeString();
+  const t = new Date(sim.origin).toLocaleTimeString([], inVillaZone({}));
   return sim.speed > 1 ? `sky sim from ${t} at ${sim.speed}x` : `sky frozen at ${t}`;
 }

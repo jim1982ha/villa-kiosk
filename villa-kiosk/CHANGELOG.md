@@ -1,3 +1,16 @@
+## 2.496.555
+
+What you will see:
+- A device you renamed in VESTA has that name everywhere: in Settings › Advanced › Devices › "Asleep between reports",
+  in the presence window (the people and the latest movement), in the Energy window, in the Cockpit's "Upgrade(s)
+  available for" tooltip and in the siren's "Sound the siren?" question. The device pickers in Settings show it too,
+  and you can still find a device there by typing the name the villa's system gives it.
+- The morning recap counts a jammed lock once, under "Doors locked" (as "1 jammed"). "No alarm" no longer lists the
+  same lock a second time; it keeps every other device in alarm, a leak for example.
+- Every time and date the Kiosk shows is the villa's own time, wherever the phone or tablet is: a card's next nightly
+  check, a chart's hours, "since" times, the recap's and statement's dates, and where a day or a month begins. A phone
+  abroad now reads the same times as the messages on Telegram.
+
 ## 2.496.554
 
 What you will see:

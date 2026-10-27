@@ -6,6 +6,7 @@
 // driven by value (timeline_cells.mjs) instead of being pinned as source text
 // inside StateTimeline's render (round 12, 2.496.193).
 
+import { wallClock } from "./villaClock";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { DAY_MS, HOUR_MS, localMidnight, localMonthStart } from "@/utils/localDay";
 
@@ -44,7 +45,7 @@ export function firstCellStart(start: number, bucketMs: number): number {
   if (bucketMs < DAY_MS) return Math.floor(start / bucketMs) * bucketMs;
   if (bucketMs >= 28 * DAY_MS) return localMonthStart(start);
   const midnight = localMidnight(start);
-  return bucketMs >= 7 * DAY_MS ? localMidnight(midnight, -((new Date(midnight).getDay() + 6) % 7)) : midnight;
+  return bucketMs >= 7 * DAY_MS ? localMidnight(midnight, -((wallClock(midnight).weekday + 6) % 7)) : midnight;
 }
 
 /** The edge after `edge`: a step under a day is a fixed length; a day ends at the NEXT local midnight, a week at the
