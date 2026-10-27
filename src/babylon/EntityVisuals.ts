@@ -4404,9 +4404,9 @@ export class EntityVisuals {
       if (!(p.z >= 0 && p.z <= 1)) continue;
       const hw = (lay.width / 2) * scale;
       const hh = cardLift(lay, scale);
-      // The square INSCRIBED in the card — "is this badge under my ink", the
-      // question absorb exists to answer, and a different question from "do we
-      // clear each other". Same distinction cardInscribedHalf draws.
+      // The square INSCRIBED in the card: a badge under it is BURIED, one under the
+      // rest of the box only under the card's END (the self-check's two counters).
+      // Absorb takes both since 2.496.552 (placementPass groupBox).
       const inner = Math.min(hw, hh);
       const box = { cx: p.x, cy: p.y - hh, hw, hh };
       cards.push({ box, ink: { cx: box.cx, cy: box.cy, hw: inner, hh: inner }, focused: g.focused });

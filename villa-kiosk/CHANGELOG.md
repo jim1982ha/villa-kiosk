@@ -1,3 +1,10 @@
+## 2.496.552
+
+What you will see:
+- On the map, a card of grouped devices is never drawn over a device beside it. A pair card next to a reading's badge
+  (a power reading, for example) used to cover most of that reading; now that badge either stays clear of the card or
+  joins it as one of its cells. Rooms do not turn into their name chip any sooner because of it.
+
 ## 2.496.551
 
 What you will see:
