@@ -9,6 +9,7 @@ import type { Category } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import type { BadgeMark, LinkPill } from "@/utils/deviceActivity";
 import type { ReadingRow } from "@/config/readingRows";
+import { linkedStateWords } from "./panelHeader";
 
 export interface PanelActions {
   /** The HA entity_id the open panel controls (shown under the title). */
@@ -123,7 +124,9 @@ const PanelActionsContext = createContext<PanelActions>(NO_PANEL_ACTIONS);
  * (CameraPanel). They look different on purpose; they wrote these five
  * attributes out separately (round 11, 2.496.173), where one could drift
  * from the other — the "Unavailable" state reached both only because
- * 2.496.164 edited both.
+ * 2.496.164 edited both. Its spoken state is the row's word (panelHeader.linkedStateWords): Unavailable only when
+ * contact is lost, Unknown when the device answers without a value (architecture review P: it said Unavailable for
+ * both, unlike the card window's line).
  */
 export function linkedSwitchProps(linked: NonNullable<PanelActions["linked"]>) {
   return {
@@ -131,7 +134,7 @@ export function linkedSwitchProps(linked: NonNullable<PanelActions["linked"]>) {
     disabled: !linked.known,
     role: "switch" as const,
     "aria-checked": linked.isOn,
-    "aria-label": `${linked.label}: ${!linked.known ? "unavailable" : linked.isOn ? "on" : "off"}`,
+    "aria-label": `${linked.label}: ${linkedStateWords(linked).toLowerCase()}`,
   };
 }
 

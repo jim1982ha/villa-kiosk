@@ -333,9 +333,8 @@ export interface DeviceGroup {
    *  not have its own entityMap entry / mesh binding — grouping only affects
    *  which badge is shown and which panel opens, not how they're bound. */
   memberEntityIds: string[];
-  /** Optional label override for the detail view's header (defaults to the
-   *  primary's own label). */
-  label?: string;
+  // ⚠️ A group's own name (`label`) was removed (architecture review P, 2026-10-27): nothing could set it and only the
+  // group window's title read it. The window is the primary's name, as the map badge and the Cockpit name it.
 }
 
 // `?? {}`: always defined under Vite; absent under Node, where the oracles

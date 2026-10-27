@@ -11,12 +11,16 @@ import { childTags, elements, parseTsx } from "../consistency/jsx.mjs";
 const { linkedSwitchProps } = await import("@/components/panels/PanelActionsContext");
 
 const toggle = () => {};
-const on = linkedSwitchProps({ label: "Gate", isOn: true, known: true, toggle });
-const lost = linkedSwitchProps({ label: "Gate", isOn: false, known: false, toggle });
+const on = linkedSwitchProps({ label: "Gate", isOn: true, known: true, contact: "ok", toggle });
+const lost = linkedSwitchProps({ label: "Gate", isOn: false, known: false, contact: "lost", toggle });
+const blank = linkedSwitchProps({ label: "Gate", isOn: false, known: false, contact: "no-value", toggle });
 ck("a known linked entity: a switch that throws, its state said aloud",
    on.onClick === toggle && !on.disabled && on.role === "switch" && on["aria-checked"] === true && on["aria-label"] === "Gate: on");
-ck("an UNKNOWN one cannot be thrown, and says 'unavailable' (not 'off')",
+ck("one HA lost cannot be thrown, and says 'unavailable' (not 'off')",
    lost.onClick === undefined && lost.disabled && lost["aria-label"] === "Gate: unavailable", lost);
+// architecture review P (2026-10-27): the camera's linked switch said "unavailable" for a device answering without a
+// value, where the card window's line says Unknown (panelHeader.linkedStateWords, the one word)
+ck("  ...one that answers without a value says 'unknown', as the card window's line", blank.disabled && blank["aria-label"] === "Gate: unknown", blank);
 
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 ck("both linked switches spread linkedSwitchProps, neither writes its own",

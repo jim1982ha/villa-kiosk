@@ -194,9 +194,9 @@ export const MOTION_DEVICE_CLASSES: ReadonlySet<string> = new Set(
 /** The id words that name a motion detector when HA reports no device_class.
  *  Anchored on "." / "_" / the ends ("_" is a word character, so `\b` would
  *  match "motion" inside "promotion_x"). */
-export const MOTION_ID_HINT = /(^|[._])(motion|presence|occupancy|pir)([._]|$)/;
+const MOTION_ID_HINT = /(^|[._])(motion|presence|occupancy|pir)([._]|$)/;
 /** The id words that name a door/window/gate contact with no device_class. */
-export const OPENING_ID_HINT = /(^|[._])(door|window|gate)([._]|$)/;
+const OPENING_ID_HINT = /(^|[._])(door|window|gate)([._]|$)/;
 
 /** Is this binary_sensor a motion/presence detector: by its device_class,
  *  or — only when HA reports none — by its id. */
@@ -204,4 +204,14 @@ export function isMotionSensor(entityId: string, deviceClass: string | undefined
   if (!isDomain(entityId, "binary_sensor")) return false;
   if (deviceClass) return MOTION_DEVICE_CLASSES.has(deviceClass);
   return MOTION_ID_HINT.test(entityId);
+}
+
+/** Is this binary_sensor a door, window or gate contact: by its device_class, or — only when HA reports none — by its
+ *  id. ⚠️ A DECLARED CLASS WINS OVER THE NAME (architecture review P, 2026-10-27): the categoriser tested the id words
+ *  even beside a class, so a "door_battery" sensor took Access control's colour and filter from its name while its
+ *  words and state followed its battery class. */
+export function isOpeningSensor(entityId: string, deviceClass: string | undefined): boolean {
+  if (!isDomain(entityId, "binary_sensor")) return false;
+  if (deviceClass) return OPENING_DEVICE_CLASSES.has(deviceClass);
+  return OPENING_ID_HINT.test(entityId);
 }

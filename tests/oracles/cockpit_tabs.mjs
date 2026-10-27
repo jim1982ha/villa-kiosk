@@ -28,7 +28,7 @@ ck("the Facility window is gone, and nothing opens it",
 ck("a device's 'report a fault' (shown by the profile's door, a value) opens the Overview's Raise a fault, the device filled in",
    /onReportFault: \(\) => go\(\{ type: "reportFault" \}\)/.test(rd("components/panels/useOpenPanelActions.ts"))
    && /may: \{ edit: doors\.editDevices, reportFault: doors\.reportFault \}/.test(rd("components/panels/useOpenPanelActions.ts"))
-   && /\{may\.reportFault && \(/.test(rd("components/panels/BasePanel.tsx"))
+   && /if \(!may\.reportFault\) return null;/.test(rd("components/panels/DeviceWindowPieces.tsx")) && /<ReportFaultButton \/>/.test(rd("components/panels/BasePanel.tsx"))
    && /reportFaultFor=\{screen\.faultFor \?\? undefined\}/.test(dash));
 ck("the top bar opens it on Overview; Back from a device returns to the tab it left (the tab is held by the page)",
    /onOpenCockpit=\{\(\) => go\(\{ type: "openWindow", window: "cockpit", tab: "overview" \}\)\}/.test(dash)

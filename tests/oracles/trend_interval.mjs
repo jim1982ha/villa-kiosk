@@ -74,6 +74,6 @@ ck("a device-group member that is unavailable NOW still gets its chart",
 const { cameraBarState } = await import("@/components/panels/cameraStatusBar");
 ck("the camera bar paints a lost motion sensor as unavailable, not 'online'",
    cameraBarState("idle", "unavailable", true) === "motion-unavailable" && cameraBarState("idle", undefined, true) === "motion-unavailable"
-   && /s === "offline" \|\| s === "motion-unavailable" \? STATUS_COLOR\.unavailable/.test(src("components/panels/CameraPanel.tsx")));
+   && /: s === "motion-unavailable" \? STATUS_COLOR\.unavailable/.test(src("components/panels/CameraPanel.tsx")));
 
 done("✅ one five-minute interval, one unavailable colour");

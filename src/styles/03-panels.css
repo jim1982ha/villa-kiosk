@@ -238,16 +238,31 @@ input[type="range"]::-moz-range-thumb {
   position: absolute; top: 0; left: 0; right: 0; z-index: 2;
   padding: calc(20px + var(--safe-top)) calc(24px + env(safe-area-inset-right, 0px))
            24px calc(24px + env(safe-area-inset-left, 0px));
-  pointer-events: none; /* the label itself re-enables it, nothing else lives here now */
+  pointer-events: none; /* the label and the buttons re-enable it; the scrim between them lets taps reach the feed */
   /* Matches the bottom row's scrim so the two read as one chrome layer that
      comes and goes together (see .chrome-hidden below). */
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
+  /* the title on the left, the device window's pieces (warning, readings, Edit, wrench) at the top right, as in every
+     device window (DeviceWindowPieces) */
+  display: flex; align-items: flex-start; gap: 10px;
 }
+.camera-header-title { min-width: 0; flex: 0 1 auto; }
 .camera-header .label {
   pointer-events: auto;
   font-size: var(--text-lg); background: var(--chip-scrim); color: #fff;
-  padding: 8px 16px; border-radius: 10px; min-width: 0; display: inline-block;
+  padding: 8px 16px; border-radius: 10px; min-width: 0; max-width: 100%; display: inline-block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top;
 }
+.camera-header-actions { display: flex; gap: 8px; margin-left: auto; flex-shrink: 0; }
+/* the header's buttons: the title's chip, square, its height (44 px: a finger's reach) */
+.camera-chip-btn {
+  pointer-events: auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; padding: 0; border-radius: 10px;
+  background: var(--chip-scrim); color: #fff; border: 1px solid rgba(255,255,255,0.25); cursor: pointer;
+}
+.camera-chip-btn:active, .camera-chip-btn.on { background: var(--chip-scrim-strong); }
+/* the warning keeps its issue's colour (.cockpit-attention-*) on the dark chip */
+.camera-chip-btn.panel-faults-btn { border-color: currentColor; }
 /* "Reset zoom" pill, on its own line under the title — replaces a button that
    used to appear in .camera-controls the instant you zoomed in, which shifted
    every other icon in that cluster over. block+margin-top puts it on a new

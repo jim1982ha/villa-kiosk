@@ -51,7 +51,7 @@ console.log("\n  no copies left:");
   const saves = files.filter((f) => /\? "Saved" : "Save /.test(readFileSync(f, "utf8"))).map(rel);
   ck("no component writes the Save…/Saved ternary itself", saves.length === 0, saves);
   const css = ["03-panels", "07-facility"].map((n) => readFileSync(join(SRC, `styles/${n}.css`), "utf8")).join("\n");
-  ck("chip scrims over media are tokens, not literals", !/background: rgba\(0, ?0, ?0, ?(0?\.45|0?\.5|0?\.6|0?\.65|0?\.7|0?\.88)\)/.test(css) && (css.match(/var\(--chip-scrim/g) ?? []).length === 7);
+  ck("chip scrims over media are tokens, not literals", !/background: rgba\(0, ?0, ?0, ?(0?\.45|0?\.5|0?\.6|0?\.65|0?\.7|0?\.88)\)/.test(css) && (css.match(/var\(--chip-scrim/g) ?? []).length === 9);
 }
 {
   // ⚠️ A HOVER LOOK STICKS ON A TOUCHSCREEN. After a tap, Android (and iOS)

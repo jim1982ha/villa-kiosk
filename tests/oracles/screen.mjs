@@ -12,7 +12,7 @@ const { START, screenReducer, backLabel } = await import("@/pages/screen");
 
 const OWNER = { settings: true, facility: true, agent: true, updates: true };
 const GUEST = { settings: false, facility: false, agent: false, updates: false };
-const P = (entityId) => ({ entityId, mapping: { entityId, type: "light", label: entityId } });
+const P = (entityId) => ({ entityId });
 const run = (doors, ...acts) => acts.reduce((s, a) => screenReducer(s, a, doors), START);
 const label = (s) => backLabel(s, (id) => `dev:${id}`, (c) => `cat:${c}`);
 

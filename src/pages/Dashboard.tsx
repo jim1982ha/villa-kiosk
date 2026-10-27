@@ -20,6 +20,7 @@ import SummaryBar from "@/components/hud/SummaryBar";
 import TapRipple, { RIPPLE_LIFETIME_MS, type Ripple } from "@/components/hud/TapRipple";
 import { hasSeenFirstRunTips } from "@/utils/viewPrefs";
 import TeleportMenu from "@/components/teleport/TeleportMenu";
+import { openDevice } from "@/components/panels/openDevice";
 import PanelRouter from "@/components/panels/PanelRouter";
 import { PanelActionsProvider, NO_PANEL_ACTIONS } from "@/components/panels/PanelActionsContext";
 import { useOpenPanelActions } from "@/components/panels/useOpenPanelActions";
@@ -102,7 +103,6 @@ export default function Dashboard() {
     (s: Screen, x: { a: ScreenAction; doors: Doors }) => screenReducer(s, x.a, x.doors), START);
   /** Every move goes through here, with this profile's doors. */
   const go = useCallback((a: ScreenAction) => dispatchScreen({ a, doors }), [doors]);
-  const activePanel = screen.nav.panel;
   const closePanel = useCallback(() => go({ type: "closePanel" }), [go]);
   const openSurface = useCallback((surface: Surface) => go({ type: "openWindow", window: surface }), [go]);
   const closeSurface = useCallback((surface: Surface) => go({ type: "closeWindow", window: surface }), [go]);
@@ -286,7 +286,7 @@ export default function Dashboard() {
       }
 
       // Rich entities (sliders, streams, info) open their control panel as before.
-      go({ type: "openDevice", panel: { entityId, mapping } });
+      go({ type: "openDevice", panel: { entityId } });
     },
     [config.entityMap, entities, ws, role, spawnRipple],
   );
@@ -316,7 +316,7 @@ export default function Dashboard() {
       // distinct quick action, so tap and long-press already land on the same
       // panel with no flag needed — see ActivePanel's docstring for the full
       // reasoning.
-      go({ type: "openDevice", panel: { entityId, mapping, detail: mapping.type === "camera" } });
+      go({ type: "openDevice", panel: { entityId, detail: mapping.type === "camera" } });
     },
     // `entities` is read (the category — and so the permission — can depend
     // on a device's device_class); it was missing, so this judged a stale one.
@@ -370,8 +370,7 @@ export default function Dashboard() {
   // no window closes and no Back step is recorded (panelNav).
   const panelFor = useCallback(
     (entityId: string): ActivePanel | null => {
-      const mapping = panelMapping(entityId, config.entityMap, role, entities[entityId], { control: false });
-      return mapping ? { entityId, mapping } : null;
+      return panelMapping(entityId, config.entityMap, role, entities[entityId], { control: false }) ? { entityId } : null;
     },
     [config.entityMap, entities, role],
   );
@@ -421,8 +420,15 @@ export default function Dashboard() {
       isHidden, deviceOf: (id) => deviceOf(identity.folding, id),
     }) : []),
     [categoryGroup, role, config.entityMap, entities, suppressedEntityIds, mappedEntityIds, dismissedIds, isHidden, identity.folding]);
+  // The open device as it is set NOW (components/panels/openDevice): its window, header and actions all read this, so a
+  // change made in Advanced Settings or on another tablet shows at once. Removed, or no longer this profile's to see:
+  // the window closes.
+  const activePanel = useMemo(
+    () => openDevice(screen.nav.panel, config.entityMap, role, entities), [screen.nav.panel, config.entityMap, role, entities]);
+  const panelGone = !!screen.nav.panel && !activePanel;
+  useEffect(() => { if (panelGone) closePanel(); }, [panelGone, closePanel]);
   const openPanel = useOpenPanelActions({
-    screen, go, panelFor, readingsOf: identity.readingsOf, doors, marks: windowMarks,
+    screen, open: activePanel, go, panelFor, readingsOf: identity.readingsOf, doors, marks: windowMarks,
   });
   const linkedAsk = openPanel.linkedAsk;
 

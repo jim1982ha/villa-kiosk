@@ -74,7 +74,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   const numericRows = rows.filter((r) => historyOf(r.reading) === "numbers" && (r.numeric !== undefined || r.unit !== ""));
   return (
     <BasePanel
-      title={group.label ?? primaryMapping.label}
+      title={primaryMapping.label}
       entityId={primaryMapping.entityId}
       icon={<Layers size={22} />}
       deviceReadings={false}
