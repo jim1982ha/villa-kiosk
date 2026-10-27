@@ -112,8 +112,8 @@ console.log("\n  a card is never drawn over a badge (owner's phone screenshot, 2
   const { badgeBox } = await import("@/babylon/badgeBox");
   const { badgeMetricsFor } = await import("@/babylon/badgeMetrics");
   const m = badgeMetricsFor("coarse");
-  const plain = badgeBox({ card: true, type: "light", valueChars: 0, valueShown: false }, m, 1);
-  const wide = badgeBox({ card: true, type: "sensor", valueChars: 6, valueShown: true }, m, 1);
+  const plain = badgeBox({ card: true, type: "light", valueText: "", valueShown: false }, m, 1);
+  const wide = badgeBox({ card: true, type: "sensor", valueText: "4.2 kW", valueShown: true }, m, 1);
   const clear = { pxPerWorld: 1, basis: { rx: 1, rz: 0, ax: 0, az: 1, sinPhi: -1, cosPhi: 0, mode: "plane" } };
   const rooms = { a: "Terrace", b: "Terrace", c: "Terrace" };
   const covered = [], chipped = [];
@@ -136,6 +136,49 @@ console.log("\n  a card is never drawn over a badge (owner's phone screenshot, 2
   }
   ck("a reading's badge beside a pair card: never under the card's end, clear of it or one of its cells", covered.length === 0, covered);
   ck("  ...and the room never goes to its chip for it (the badge cannot refuse the card)", chipped.length === 0, chipped);
+}
+
+console.log("\n  a focused room's badge is never drawn under another room's (owner's phone screenshot, 2026-10-27):");
+{
+  // The map's own tier sequence (EntityVisuals.cullLabels): every reading shown, a badge touching another drops its
+  // readout (markContacts), then the pass. A "929 W" reading in one room beside a camera in the room tapped last,
+  // swept across: nothing drawn may overlap. To 2.496.552 a focused room's badge blocked nobody and nothing compared
+  // the two, so the reading stood over the camera at every distance closer than its own width.
+  const { badgeBox, valuesWithText, dropTouchingValues } = await import("@/babylon/badgeBox");
+  const { badgeMetricsFor } = await import("@/babylon/badgeMetrics");
+  const { markContacts, createPlacementScratch } = await import("@/babylon/badgePlacement");
+  const { placementItems, glassScratch } = await import("@/babylon/placementPass");
+  const m = badgeMetricsFor("coarse");
+  const clear = { pxPerWorld: 1, allow: 1, refDepth: 0, gap: m.minGapPx, basis: { rx: 1, rz: 0, ax: 0, az: 1, sinPhi: -1, cosPhi: 0, mode: "plane" } };
+  const layout = (badges, rooms, focused) => {
+    const focus = new RoomFocus(); focus.grant(focused);
+    const f = { ...frameOf(rooms, focus), metrics: m, summary: { size: m.cardHeightPx, font: 13, countSize: 11, countFont: 8 } };
+    const shown = badges.map((b) => ({ ...badge(b.id, 0, 0), lbl: { type: b.type, category: b.cat }, wx: b.x, wz: 0 }));
+    const boxesOf = (vs) => badges.map((b, i) => badgeBox({ card: true, type: b.type, valueText: b.value, valueShown: vs[i] }, m, 1));
+    const vs = valuesWithText(badges.map((b) => b.value.length));
+    dropTouchingValues(vs, markContacts(placementItems(shown, boxesOf(vs), clear, rooms, focus.rooms, [], glassScratch()), clear.gap, createPlacementScratch()));
+    const boxes = boxesOf(vs);
+    const pass = new PlacementPass();
+    pass.run(f, shown, boxes, clear, false);
+    const drawn = shown.map((s, i) => i).filter((i) => pass.drawnBadge(shown[i].id));
+    const over = drawn.length === 2 && Math.abs(shown[drawn[0]].sx - shown[drawn[1]].sx) < boxes[drawn[0]].halfW + boxes[drawn[1]].halfW;
+    return { over, vs, drawn: drawn.map((i) => shown[i].id) };
+  };
+  const reading = { id: "meter", type: "sensor", cat: "energy", value: "929 W", x: 0 };
+  const rooms = { meter: "Living", cam: "Patio" };
+  const bad = [], kept = [], dropped = [];
+  for (let d = 0; d <= 80; d += 2) {
+    for (const focused of [["patio"], ["living"]]) {
+      const o = layout([reading, { id: "cam", type: "camera", cat: "camera", value: "", x: d }], rooms, focused);
+      if (o.over) bad.push(`${focused}:${d}`);
+      if (!o.drawn.includes(focused[0] === "patio" ? "cam" : "meter")) kept.push(`${focused}:${d}`);
+      if (focused[0] === "patio" && d === 40 && o.vs[0]) dropped.push(d);
+    }
+  }
+  ck("a reading beside the focused room's camera, either room focused: never drawn overlapping", bad.length === 0, bad);
+  ck("  ...the focused room's device is always the one drawn", kept.length === 0, kept);
+  ck("  ...and the other badge yields its readout first (clear by its icon, it keeps its place)", dropped.length === 0
+     && layout([reading, { id: "cam", type: "camera", cat: "camera", value: "", x: 40 }], rooms, ["patio"]).drawn.join() === "meter,cam");
 }
 
 console.log("\n  the pass's own products (2.496.189):");

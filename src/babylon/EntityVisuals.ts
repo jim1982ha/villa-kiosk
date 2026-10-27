@@ -103,6 +103,7 @@ import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { compactValue } from "@/utils/entityValue";
 import { badgeBox, dropTouchingValues, valuesWithText } from "./badgeBox";
 import { buildCardBadge, growGroupCard, placeGroupCard, setValueParts } from "./badgeControls";
+import { valueAdvanceEm } from "./valueAdvance";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
@@ -3168,7 +3169,7 @@ export class EntityVisuals {
     const lbl = this.labels.get(entityId);
     if (!lbl) return false;
     const prevCategory = lbl.category;
-    const prevLen = lbl.valueText.text.length;
+    const prevText = lbl.valueText.text;
     const prevVisible = lbl.valueWrap.isVisible;
     // Re-resolve the filter category now that this state may carry the
     // device_class (e.g. an enum sensor → Network) — cullLabels reads it live.
@@ -3264,9 +3265,14 @@ export class EntityVisuals {
 
     const value = this.groupedValue(entityId, compactValue(type, entity));
     lbl.valueText.text = value;
-    this.setValueVisible(lbl, value.length > 0);
+    // ⚠️ THE PASS DECIDES WHETHER A READING SHOWS; a new reading only hides an empty one here (2.496.553). This showed
+    // every non-empty reading, so one the pass had dropped for touching a neighbour was drawn over it again until the
+    // next layout. And the layout reran only on a change of LENGTH: "111 W" → "888 W" grew by 0.9 em with nothing
+    // re-measured. It reruns now when a reading's drawn width grows (valueAdvance), or its length changes.
+    if (!value) this.setValueVisible(lbl, false);
     const dirty = lbl.category !== prevCategory
-      || lbl.valueText.text.length !== prevLen
+      || value.length !== prevText.length
+      || valueAdvanceEm(value) > valueAdvanceEm(prevText)
       || lbl.valueWrap.isVisible !== prevVisible;
     if (dirty) this.markLayoutDirty();
     return dirty;
@@ -4602,7 +4608,7 @@ export class EntityVisuals {
       const lbl = shown[i].lbl;
       let bx = pool[i];
       if (!bx) { bx = { halfW: 0, halfH: 0, cy: 0 }; pool[i] = bx; }
-      out[i] = badgeBox({ card, type: lbl.type, valueChars: lbl.valueText.text.length, valueShown: valueShown[i] },
+      out[i] = badgeBox({ card, type: lbl.type, valueText: lbl.valueText.text, valueShown: valueShown[i] },
         this.metrics, scale, bx);
     }
     out.length = shown.length;

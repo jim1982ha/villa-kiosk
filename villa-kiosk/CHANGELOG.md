@@ -1,3 +1,13 @@
+## 2.496.553
+
+What you will see:
+- After you tap a room, its devices are never drawn under a device of the room next to it. The neighbour gives way:
+  first it stops showing its reading, and if its icon still sits on the tapped room's device it joins a card with its
+  neighbours, or its room shows as its name chip. A "929 W" reading drawn over most of a camera was this case.
+- A badge with a reading ("929 W", "100%", "28°") keeps the room it is actually drawn with: its width is measured from
+  the letters it shows, not from an average letter that was up to a third too narrow.
+- A reading that changes no longer flashes back over a neighbour it had been hidden for.
+
 ## 2.496.552
 
 What you will see:

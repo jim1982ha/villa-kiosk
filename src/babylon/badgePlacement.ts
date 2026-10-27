@@ -190,6 +190,8 @@ export interface PlacementScratch {
   chipRooms: string[];
   chipped: Set<string>;
   contacts: Uint8Array;
+  /** Per item: in a focused room's way (focusContacts). */
+  blocked: Uint8Array;
   stats: PlacementStats;
 }
 
@@ -198,6 +200,7 @@ export function createPlacementScratch(): PlacementScratch {
     parent: new Int32Array(0),
     order: new Int32Array(0),
     accepted: new Uint8Array(0),
+    blocked: new Uint8Array(0),
     deferred: new Int32Array(0),
     cells: new Map(),
     piles: [],
@@ -338,7 +341,31 @@ export function markContacts(
   if (n < 2) return out;
 
   forEachConflict(items, gap, scratch.cells, (i, j) => { out[i] = 1; out[j] = 1; });
+  // A badge touching a FOCUSED room's badge drops its readout too, and only it: the focused room's devices are what
+  // was asked for (focusContacts).
+  focusContacts(items, gap, (i) => { out[i] = 1; });
   return out;
+}
+
+/**
+ * Every badge NOT in a focused room that collides with one that is.
+ *
+ * ⚠️ A FOCUSED ROOM'S BADGE BLOCKED NOBODY (to 2.496.552), so a badge of the next room stood on it, value and all: the
+ * owner's phone screenshots (2026-10-27) showed a "929 W" reading drawn over most of a camera, and earlier a pair
+ * card over a "4.x kW" one, each time a few metres from the room tapped last. `forEachConflict` skips exempt items
+ * outright (their own overlaps are pairFocusedRoom's), so nothing ever compared the two. The focused room's devices
+ * OUTRANK the rest (the rule 2.431.0 applied to room chips): the other badge yields, first its readout
+ * (markContacts), then its place (solvePlacement step 4), never the focused one.
+ *
+ * Plain O(n × focused): a focus is one room's badges.
+ */
+export function focusContacts(items: readonly PlacementItem[], gap: number, visit: (i: number) => void): void {
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].exempt) continue;
+    for (let e = 0; e < items.length; e++) {
+      if (items[e].exempt && conflicts(items[i], items[e], gap)) { visit(i); break; }
+    }
+  }
 }
 
 /** Standard 3-prime spatial hash. */
@@ -475,6 +502,9 @@ export function solvePlacement(
   const parent = st.parent;
   const accepted = st.accepted;
   accepted.fill(0, 0, n);
+  if (st.blocked.length < n) st.blocked = new Uint8Array(n * 2);
+  const blocked = st.blocked;
+  blocked.fill(0, 0, n);
   st.chipRooms.length = 0;
   let bucketCount = 0;
   const stats = st.stats;
@@ -505,6 +535,10 @@ export function solvePlacement(
     stats.accepted = n;
     return { accepted, buckets: st.buckets, bucketCount: 0, chipRooms: st.chipRooms, stats };
   }
+
+  // A badge in a focused room's way is never accepted: it defers like any badge that lost, so it summarises with its
+  // pile-mates or, alone, its room goes to its chip (focusContacts).
+  focusContacts(items, gap, (i) => { blocked[i] = 1; });
 
   // ── 3. Components ────────────────────────────────────────────────────────
   const piles = st.piles;
@@ -537,7 +571,11 @@ export function solvePlacement(
   let deferredCount = 0;
   for (let p = 0; p < pileCount; p++) {
     const members = piles[p];
-    if (members.length === 1) { accepted[members[0]] = 1; continue; }
+    if (members.length === 1) {
+      if (blocked[members[0]]) deferred[deferredCount++] = members[0];
+      else accepted[members[0]] = 1;
+      continue;
+    }
 
     if (mode === "legacy") {
       for (const i of members) deferred[deferredCount++] = i;
@@ -550,6 +588,7 @@ export function solvePlacement(
     members.sort(canonicalOrder(items));
     const acceptedHere: number[] = [];
     for (const i of members) {
+      if (blocked[i]) { deferred[deferredCount++] = i; continue; }
       let clear = true;
       for (const a of acceptedHere) {
         if (conflicts(items[i], items[a], gap)) { clear = false; break; }
