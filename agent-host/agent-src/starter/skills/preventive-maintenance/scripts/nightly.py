@@ -39,7 +39,7 @@ from vesta_shared.past import unread  # noqa: E402  (the one "could not be read 
 from vesta_shared.message_format import STATUS, document, split_title, status_line  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart  # noqa: E402
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
-from vesta_shared.offline import devices_offline, reported_since  # noqa: E402  (offline now; when it last REALLY reported)
+from vesta_shared.offline import device_answers, devices_offline, reported_since  # noqa: E402  (offline now; when it last REALLY reported)
 from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 from vesta_shared.problems import Problems, again_title  # noqa: E402  (a problem's lifecycle: one owner)
@@ -118,7 +118,7 @@ def run(args) -> dict:
     findings += battery_findings(pack, states, params, today, bat_stats, store=store, best=best, at=now_ref)
 
     alerted = alerted_offline(store, pack)
-    findings += offline_findings(pack, states, now_ref, params, set(alerted), history=cli.history)
+    findings += offline_findings(pack, states, now_ref, params, set(alerted), history=cli.history, states_of=cli.states)
     # an offline fault open from before its alert: closed as handed over, never "cleared" while the device is still off
     # (Problems.record_night) — the same hand-over recheck.py makes every 5 minutes
     handed_over = handed_to_alerts(store, pack, alerted)
@@ -404,15 +404,10 @@ def unheard_notes(pack, states: dict, now_ref: datetime) -> list[str]:
 
 
 def battery_moved(open_rows, findings) -> dict[tuple[str, str], str]:
-    """(rule, entity) → the close note of each open battery "replace" fault whose battery is now found at the other
-    step: "Now: <the new fault's words>".
-    ⚠️ A STEP IS NOT A CLEAR (architecture review, 2026-10-22): the two steps are two rules, so a battery at 18 % that
-    fell to 9 % closed "Cleared: the check at 14:05 no longer sees it" — and a P2 back at 16 % was marked ✅ cleared on
-    Telegram while still under its line. The old step is handed over (Problems.record_night, record_rechecked)."""
-    now = {f.entity_id: f for f in findings if f.rule_id in battery.REPLACE}
-    return {(o["rule_id"], o["entity_id"]): f"Now: {now[o['entity_id']].summary}"
-            for o in open_rows if o["rule_id"] in battery.REPLACE and o["entity_id"] in now
-            and now[o["entity_id"]].rule_id != o["rule_id"]}
+    """(rule, entity) → the close note of each open battery finding the battery verdict hands to its other step
+    (vesta_shared.battery.judge, the recheck's verdict too)."""
+    return {(o["rule_id"], o["entity_id"]): v.handed for o in open_rows if o["rule_id"] in battery.REPLACE
+            for v in [battery.judge(o, findings)] if v.handed}
 
 
 def battery_findings(pack, states: dict, params, today: date, stats: dict | None = None,
@@ -438,8 +433,7 @@ def battery_findings(pack, states: dict, params, today: date, stats: dict | None
             level = float(v) if (v := last_value(st)) is not None else None
         except ValueError:
             level = None
-        if level is not None and (best or {}).get(row["entity_id"]) is not None:
-            level = max(level, best[row["entity_id"]])
+        level = battery.level(level, (best or {}).get(row["entity_id"]))
         judged[row["entity_id"]] = level
         series = [(str(r["start"]), r["mean"]) for r in (stats or {}).get(row["entity_id"], []) if r.get("mean") is not None]
         out += R.battery_rules(asset, row["entity_id"], row.get("unit"), level, series, params, today,
@@ -551,7 +545,8 @@ def handed_to_alerts(store, pack, alerted: dict[str, int]) -> dict[tuple[str, st
             for dev in [pack.physical_device_of(o["entity_id"]) or o["entity_id"]] if dev in alerted}
 
 
-def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str] = frozenset(), history=None) -> list:
+def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str] = frozenset(), history=None,
+                     states_of=None) -> list:
     """The devices offline now, as PM-UNAVAILABLE findings — for the night check and for recheck.py every 5 minutes,
     from the ONE reading of "offline now" (vesta_shared.offline.devices_offline, the reports' and the concierge's too)
     over this skill's WATCHED_FAMILIES, with its settings: `unavailable_minutes`, `integration_down_devices`. One
@@ -559,13 +554,21 @@ def offline_findings(pack, states: dict, now: datetime, params, alerted: set[str
 
     ⚠️ FOUND AT ONCE, NOT AT 02:00 (owner, 2026-10-18 — architecture review, offline devices #1): Timmerflotte_5969
     dropped at 21:46 and stood "Unavailable" in the Cockpit for 4 h 14 min before the night check opened its fault —
-    the recheck read every 5 minutes whether a device was BACK, never whether one had gone."""
+    the recheck read every 5 minutes whether a device was BACK, never whether one had gone.
+
+    ⚠️ OPENED BY THE QUESTION THAT CLOSES IT (architecture review N card 2, 2026-10-27): `states_of` (the client's
+    states(ids)) asks whether any other entity of the device answers (vesta_shared.offline.device_answers) — the
+    5-minute recheck's close of an offline fault (recheck.OFFLINE_ENDS "answers"). Only the watched families' states
+    were read here, so a door whose Wi-Fi signal reported closed "the device answers" and opened again at the same run,
+    every 5 minutes."""
     out = []
     # since when each is REALLY offline (`history`: the client's, read back past a restart), and an integration down
     # only for its devices gone together (`integration_down_window_minutes`): villa, 2026-10-25
     for g in devices_offline(pack, states, now, WATCHED_FAMILIES, min_minutes=params.behaviour("unavailable_minutes"),
                              alerted=frozenset(alerted), integration_min=params.behaviour("integration_down_devices"),
                              together_minutes=params.behaviour("integration_down_window_minutes"), history=history):
+        if states_of is not None and not g.integration and device_answers(pack, g.entity_ids, states_of):
+            continue
         if g.integration:
             a = {"slug": f"integration_{g.integration}", "name": integration_name(g.integration, len(g.entity_ids)),
                  "critical": g.critical}

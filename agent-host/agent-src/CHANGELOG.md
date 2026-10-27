@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.354 (27 October 2026)
+
+- daily.power_asset(pack, entity_id): the asset whose power reading an entity is; threshold_from_readings(readings,
+  params, pack, entity_id) finds it, so its baseline cap is never left out (the `None` path removed). investigate.threshold
+  and its timeline pass the pack; its flat-spread gate stays (a level, not a run: a question the villa's rule does not
+  ask). A test holds the night, the pages (power_days) and the investigation to one threshold on the same readings.
+- battery.Verdict, battery.seen, battery.judge (handed to the other step "Now: …", raised again at another whole
+  percent), battery.level: the one battery verdict. nightly.battery_moved and battery_findings use it; recheck's
+  Reading carries `judge` and `readable`, recheck_open is rule-agnostic again (battery_restated removed). A test runs
+  18 % → 9 % → 16 % → 26 % through the night and the recheck: fault, Cockpit task and weekly row agree at each step.
+- recheck.OFFLINE_ENDS: every way an offline fault ends (hidden, asleep, back, answers, alert), in its order, each with
+  its sentence; back_online asks it (a device no longer in the villa's system still closes any fault). offline_findings
+  takes `states_of` and opens no fault for a device that answers through any entity (offline.device_answers, the
+  close's question): the night and the recheck pass their client's states. Six endings driven through recheck.main.
+
 ## 0.6.353 (27 October 2026)
 
 - message_format.COCKPIT: the English of a person's acts in the Cockpit (closed, taken, reopened) and the ask after a

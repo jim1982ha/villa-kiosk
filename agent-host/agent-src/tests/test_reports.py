@@ -1345,3 +1345,56 @@ def test_an_undated_record_from_before_neither_crashes_nor_comes_back():
     battery.keep_judged(s, {"sensor.b": 9.0}, now)
     assert s[battery.RESTED] == {"sensor.b": {"level": 9.0, "at": now.isoformat()}}
     assert battery.rested(s, "sensor.a", 8.0, now) == 8.0 and battery.rested(s, "sensor.b", 8.0, now) == 9.0
+
+
+def test_one_battery_through_its_steps_reads_the_same_on_its_fault_its_cockpit_task_and_the_weekly_page(tmp_path):
+    """Architecture review N card 7 (2026-10-27): a battery's level and step were worked out in four places (the
+    night's level, its step hand-over, the recheck's own battery branches, the page). ONE verdict now
+    (vesta_shared.battery.judge, battery.level): 18 % at night, then 9 %, 16 %, 26 % at the 5-minute recheck — at each
+    step the open fault, its Cockpit task and the weekly page say the same level and step; a step is handed over,
+    never "cleared"; above its line by the margin, it clears."""
+    import facts
+    from zoneinfo import ZoneInfo
+    from vesta_shared import battery
+    from vesta_shared.params import VillaParams
+    from vesta_shared.store import Store
+    pack = _battery_night(tmp_path, "2026-10-20", "18", [])
+
+    def page(now, reading):
+        st = Store(str(tmp_path / "s.sqlite"))
+        c = facts.Ctx.__new__(facts.Ctx)
+        c.pack, c.Z, c.end, c.now, c.store = pack, ZoneInfo("UTC"), now.date(), now, st
+        c.need = lambda *p: 8
+        c.tasks = lambda: facts.Ctx.tasks(c)
+        c._states = {"sensor.door_battery": {"state": str(reading)}}
+        c.params = lambda: VillaParams()
+        (row,) = facts.s_batteries(c)["rows"]
+        return row
+
+    def stands():
+        st = Store(str(tmp_path / "s.sqlite"))
+        opened = st.findings("open")
+        tasks = [t for t in st.tasks(None) if t["status"] == "open"]
+        return opened, tasks
+
+    (f,), (t,) = stands()
+    assert f["rule_id"] == battery.LOW and "at 18%" in f["summary"] and "at 18%" in t["summary"]
+    steps = [(9, battery.CRIT, "replace now"), (16, battery.LOW, "within the week")]
+    for k, (pct, rule, words) in enumerate(steps):
+        now = datetime(2026, 10, 21, 9 + k, tzinfo=timezone.utc)
+        was = f
+        out = _recheck_battery(tmp_path, now, pct, float(pct))
+        assert out["faults_changed"] and out["actions"], out
+        (f,), (t,) = stands()
+        assert f["rule_id"] == rule and f"at {pct}%" in f["summary"] and words in f["summary"], f["summary"]
+        assert f"at {pct}%" in t["summary"], t["summary"]                    # the Cockpit's task, the same words
+        old = next(x for x in Store(str(tmp_path / "s.sqlite")).tasks(None) if x["source"] == f"finding:{was['id']}")
+        assert old["status"] != "open" and old["close_note"].startswith("Now: ") and "Cleared" not in old["close_note"]
+        row = page(now + timedelta(minutes=2), pct)
+        assert row["pct"] == pct and f"at {pct}%" in row["night"], row
+    now = datetime(2026, 10, 21, 12, tzinfo=timezone.utc)
+    out = _recheck_battery(tmp_path, now, 26, 26.0)                           # above the 20 % line by its margin
+    opened, tasks = stands()
+    assert opened == [] and tasks == [] and out["faults_changed"]
+    row = page(now + timedelta(minutes=2), 26)
+    assert row["pct"] == 26 and not row.get("night"), row

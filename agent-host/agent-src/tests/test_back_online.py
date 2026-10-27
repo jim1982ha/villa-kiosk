@@ -416,3 +416,56 @@ def test_an_offline_fault_an_alert_now_follows_is_handed_over_within_one_recheck
     (e,) = out["edits"]
     assert e["key"] == told["key"] and e["text"] == f"New:\n- Example door has been offline for 1h.\nStatus:\n{note}", e
     assert tick()["edits"] == []                                                         # handed over once
+
+
+import pytest  # noqa: E402
+
+
+def _door_pack(tmp_path, hidden=(), asleep=False):
+    """The door's pack: its lock and a Wi-Fi signal of the same device; `hidden`: entities hidden in the villa's
+    system; `asleep`: the lock listed as unavailable by design (the Kiosk's list, kept beside the pack)."""
+    (tmp_path / "pack.json").write_text(json.dumps({
+        "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
+        "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
+        "hidden": list(hidden),
+        # a hidden entity is left out of every family (knowledge_pack `hidden`), as the pack is built
+        "families": {"security": [] if "lock.example_door" in hidden else [
+                         {"entity_id": "lock.example_door", "name": "Example door", "area": "Garden",
+                          "family": "security", "asset": "example_door", "device_id": "dev-door"}],
+                     "network": [{"entity_id": "sensor.example_door_signal", "name": "Example door signal",
+                                  "area": "Garden", "family": "network", "asset": "example_door", "device_id": "dev-door"}]},
+        "assets": {}}))
+    if asleep:
+        (tmp_path / "unavailable_by_design.json").write_text(json.dumps({"ids": ["lock.example_door"]}))
+
+
+@pytest.mark.parametrize("ending", ["back", "asleep", "hidden", "gone", "answers", "alert"])
+def test_every_way_an_offline_fault_ends_through_the_recheck_says_its_own_sentence(tmp_path, ending):
+    # architecture review N card 2 (2026-10-27): every way an offline fault ends is one table (recheck.OFFLINE_ENDS),
+    # asked in its order; none of its sentences may be lost — each driven through the 5-minute recheck as it runs
+    sys.path.insert(0, os.path.join(SKILL, "scripts"))
+    import recheck
+    _door_pack(tmp_path, hidden=["lock.example_door"] if ending == "hidden" else (), asleep=ending == "asleep")
+    store = Store(str(tmp_path / "s.sqlite"))
+    fid, _ = store.raise_finding("PM-UNAVAILABLE", "lock.example_door", "security", "2026-10-10", "P2",
+                                 "Example door has been offline for 1h.", {"hours": 1, "entities": ["lock.example_door"]})
+    Problems(store).open_task("finding", fid, "PM-UNAVAILABLE", "lock.example_door", "Example door offline")
+    lock = _st("locked", 70) if ending == "back" else _st("unavailable", 70)
+    signal = _st("-61", 3) if ending == "answers" else _st("unavailable", 70)
+    states = {} if ending == "gone" else {"lock.example_door": lock, "sensor.example_door_signal": signal}
+    iid = store.new_incident("watch|lock.example_door", "automation.example_watchdog", "lock.example_door", "P2",
+                             {"bad_states": ["unavailable"], "entities": ["lock.example_door"]}) if ending == "alert" else None
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": states,
+                                                "not_found": ["lock.example_door"] if ending == "gone" else []}))
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store", str(tmp_path / "s.sqlite"),
+                        "--pack", str(tmp_path / "pack.json"), "--fixture-dir", str(fx), "--now", T0.isoformat()],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
+    assert r.returncode == 0, r.stderr
+    said = {"back": "Cleared: back online.", "asleep": recheck.ASLEEP_NOTE, "hidden": recheck.HIDDEN_NOTE,
+            "gone": recheck.GONE_NOTE, "answers": recheck.ANSWERS_NOTE,
+            "alert": f"Followed by alert #{iid}, which says when it is back."}[ending]
+    assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == "closed", ending
+    assert _closed_notes(tmp_path) == [said] and _open_tasks(tmp_path) == []
+    assert ending in {e.name for e in recheck.OFFLINE_ENDS} | {"gone"}

@@ -1,3 +1,14 @@
+## 0.12.365
+
+What you will see:
+- Asking VESTA how long a pump ran (a chat question, or "Investigate") now counts its running hours by the same rule as
+  the night check, the weekly report and the energy pages, including the pump's own baseline setting. The same pump
+  on the same day no longer gets two different answers.
+- A device that still answers through another of its sensors (a door's Wi-Fi signal while its lock reads
+  "unavailable") no longer has an offline fault opened and closed again every 5 minutes: it is not offline, at night
+  or in between.
+- Batteries and offline faults read exactly as before: their levels, steps and closing sentences are unchanged.
+
 ## 0.12.364
 
 What you will see:

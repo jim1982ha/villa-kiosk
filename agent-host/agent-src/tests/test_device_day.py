@@ -51,7 +51,7 @@ def test_raw_readings_run_by_the_same_rule_as_hourly_figures():
         readings += [(t0 + timedelta(hours=h, minutes=m), v) for m, v in ((0, 2.0), (20, 1000.0), (40, 2.0), (50, None))]
     rows = daily.hour_rows_of(readings)
     assert len(rows) == 6 and rows[0]["max"] == 1000.0 and round(rows[0]["mean"], 6) == round(1004 / 3, 6)
-    assert daily.threshold_from_readings(readings, _params()) == daily.running_threshold(None, rows, _params()) == 200
+    assert daily.threshold_from_readings(readings, _params(), None, "sensor.x") == daily.running_threshold(None, rows, _params()) == 200
     import sys
     sys.path.insert(0, os.path.join(SKILLS, "investigate", "scripts"))
     import investigate                                   # the investigation asks the same rule
@@ -162,3 +162,40 @@ def test_a_phone_the_wifi_saw_is_not_the_villas():
     assert p.device_label("phone") == ""                                    # left out of the villa's devices
     assert p.device_label("kept") == "Gate box"                             # the owner named it: the villa's
     assert p.device_label("plug") == "Unnamed Maker Plug"
+
+
+class _Pack:
+    """A knowledge pack's lookups the readers use: an entity's row, an asset by slug."""
+    def __init__(self, assets: dict, rows: dict):
+        self.assets, self._rows = assets, rows
+
+    def row(self, entity_id):
+        return self._rows.get(entity_id)
+
+    def asset(self, slug):
+        return self.assets.get(slug)
+
+
+def test_every_reader_judges_a_pump_with_its_own_baseline_from_the_same_readings():
+    # architecture review O, 2026-10-27: /investigate (and a chat's answer through it) judged a pump without its own
+    # baseline cap — another run count than the night check's, the weekly page's and the energy figures' for one day
+    import sys
+    from datetime import datetime, timedelta, timezone
+    sys.path.insert(0, os.path.join(SKILLS, "investigate", "scripts"))
+    import investigate
+    pump = {"kind": "motor", "baseline_helper": "input_number.pump_baseline_w",
+            "entities": {"power": "sensor.pump_power", "current": "sensor.pump_current"}}
+    pack = _Pack({"pump": pump}, {"sensor.pump_power": {"asset": "pump"}, "sensor.pump_current": {"asset": "pump"}})
+    params = _params(baseline_w=500)
+    t0 = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    readings = [(t0 + timedelta(hours=h, minutes=m), v) for h in range(6) for m, v in ((0, 2.0), (20, 1000.0), (40, 2.0))]
+    rows = daily.hour_rows_of(readings)
+    capped = 0.2 * 500
+    night = daily.running_threshold(pump, rows, params)                                     # nightly.asset_findings
+    # the pages read the recorder's hourly figures of the same six hours (each hour's maximum 1000 W)
+    pages = daily.power_days(pack.asset(pack.row("sensor.pump_power")["asset"]), _hours([1000] * 6), "UTC", params)[0]  # facts, energy, filtration
+    asked = investigate.threshold([(t, str(v)) for t, v in readings], params, pack, "sensor.pump_power")  # /investigate, a chat
+    assert night == pages == asked == daily.threshold_from_readings(readings, params, pack, "sensor.pump_power") == capped
+    # another reading of the same pump (its current) is not judged by its power's baseline
+    assert daily.threshold_from_readings(readings, params, pack, "sensor.pump_current") == 200
+    assert daily.power_asset(pack, "sensor.unknown") is None and daily.power_asset(None, "sensor.pump_power") is None

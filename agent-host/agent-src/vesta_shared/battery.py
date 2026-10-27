@@ -9,7 +9,9 @@ caller's setting, passed in: none is defaulted here.
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
+from typing import NamedTuple
 
 from .stats import slope_per_hour
 
@@ -41,6 +43,60 @@ def projection(points: list[tuple[float, float]], floor_pct: float, level: float
         return None
     now = points[-1][1] if level is None else level
     return {"per_day": per_day, "days_left": (now - floor_pct) / -per_day if per_day < 0 else None}
+
+
+class Verdict(NamedTuple):
+    """What a rule's reading now says of one of its open findings (preventive-maintenance: the night and the 5-minute
+    recheck): `seen`, still found; `handed`, the close note when another finding follows it now (it closes, never
+    "cleared"); `opens`, the findings to open now in its place; `restate`, the finding to raise again with its new
+    words (the same fault, another level)."""
+    seen: bool
+    handed: str | None = None
+    opens: tuple = ()
+    restate: object | None = None
+
+
+def seen(row: dict, found) -> Verdict:
+    """Every rule's verdict but the battery's: still found, or not."""
+    return Verdict(any(x.rule_id == row["rule_id"] and x.entity_id == row["entity_id"] for x in found))
+
+
+def judge(row: dict, found) -> Verdict:
+    """THE battery verdict on an open finding (`row`, as stored) from what its rule finds now (`found`): ONE place for
+    what the night and the recheck each worked out (architecture review N, 2026-10-27).
+
+    ⚠️ A STEP IS NOT A CLEAR (architecture review, 2026-10-22): the two "replace" steps are two rules, so a battery at
+    18 % that fell to 9 % closed "Cleared: the check at 14:05 no longer sees it" — and a P2 back at 16 % was marked ✅
+    cleared on Telegram while still under its line. Found at the other step: handed to that step's finding ("Now: <its
+    words>"), opened now. ⚠️ ONE LEVEL, ONE TITLE (review, 2026-10-23): at the same step at another WHOLE percent (its
+    words say the level as a whole number), it is raised again, so its title, the Kiosk's fault and the weekly page say
+    the level judged now."""
+    v = seen(row, found)
+    if row["rule_id"] not in REPLACE:
+        return v
+    step = next((x for x in found if x.entity_id == row["entity_id"] and x.rule_id in REPLACE
+                 and x.rule_id != row["rule_id"]), None)
+    if step is not None:
+        return Verdict(False, handed=f"Now: {step.summary}", opens=(step,))
+    same = next((x for x in found if x.rule_id == row["rule_id"] and x.entity_id == row["entity_id"]), None)
+    return Verdict(True, restate=same) if same is not None and _restated(row, same) else v
+
+
+def _restated(row: dict, finding) -> bool:
+    """Whether the stored finding and the one found now say another whole percent."""
+    try:
+        was = json.loads(row.get("detail") or "{}").get("level")
+        now = finding.detail.get("level")
+        return was is not None and now is not None and f"{float(was):.0f}" != f"{float(now):.0f}"
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
+def level(reading: float | None, best: float | None) -> float | None:
+    """The level a battery is judged at: the higher of its reading now and its best of the window (the night's
+    battery_level_window_hours). ⚠️ A BATTERY ONLY EVER READS LOW BY MISTAKE (owner, 2026-10-21): a coin cell's voltage
+    dips under load and comes back at rest. No reading: None (judged with none), whatever its best."""
+    return None if reading is None else (max(reading, best) if best is not None else reading)
 
 
 #: The store's record of each battery's level as the night check last JUDGED it, with when — {entity: {"level": value

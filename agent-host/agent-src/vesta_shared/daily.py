@@ -108,16 +108,29 @@ def hour_rows_of(readings: list[tuple[datetime, float | None]]) -> list[dict]:
     return [{"start": h.isoformat(), "max": max(vs), "mean": sum(vs) / len(vs)} for h, vs in sorted(by_hour.items())]
 
 
-def threshold_from_readings(readings: list[tuple[datetime, float | None]], params) -> float:
-    """Power above which a device counts as running, from its raw readings: the ONE rule (running_threshold) over
-    those readings bucketed per hour (hour_rows_of).
+def power_asset(pack, entity_id: str) -> dict | None:
+    """The asset whose power reading `entity_id` is (the knowledge pack's link, as the night check reads it: the
+    asset's `entities.power`), or None — another reading of an asset (a current, a temperature) is not judged by its
+    power's baseline."""
+    row = pack.row(entity_id) if pack is not None else None
+    asset = pack.asset(row["asset"]) if row and row.get("asset") else None
+    return asset if asset and (asset.get("entities") or {}).get("power") == entity_id else None
+
+
+def threshold_from_readings(readings: list[tuple[datetime, float | None]], params, pack, entity_id: str) -> float:
+    """Power above which `entity_id` counts as running, from its raw readings: the ONE rule (running_threshold) over
+    those readings bucketed per hour (hour_rows_of), with its asset's baseline cap found here (power_asset).
+
+    ⚠️ THE ASSET IS FOUND HERE, NEVER LEFT OUT (architecture review O, 2026-10-27): this read `running_threshold(None,
+    …)`, so /investigate and a chat's answer judged a pump with its own baseline setting without its cap — another run
+    count than the night check's, the weekly page's and the energy figures' for the same day.
 
     ⚠️ ONE "RUNNING" FOR /investigate TOO (owner, 2026-10-19: "the night check owns each number asked twice"): the
     investigation counted a device running above 10 % of its top 0.1 % readings, at least 2 W — its own rule, beside
     the night check's, the energy figures' and the weekly page's. Its settings running_fraction, high_quantile and
     running_min are retired; on_threshold_fraction (a villa helper vesta_on_threshold_fraction for every skill) is the
     share for all of them."""
-    return running_threshold(None, hour_rows_of(readings), params)
+    return running_threshold(power_asset(pack, entity_id), hour_rows_of(readings), params)
 
 
 def power_days(asset: dict | None, hour_rows: list[dict], zone: str, params) -> tuple[float | None, dict[date, dict]]:

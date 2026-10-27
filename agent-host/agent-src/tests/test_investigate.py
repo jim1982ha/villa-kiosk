@@ -1162,3 +1162,35 @@ def test_a_device_unavailable_by_design_never_stops_reporting_in_an_investigatio
     pack.asleep_are(["switch.next_relay"])
     got = investigate.around(_Around(), None, T(9, 2), T(9, 15), ["sensor.heater_power"], Z, pack=pack)["data"]
     assert "Next Relay" not in str(got.get("offline")) and "Next Relay" not in str(got.get("back"))
+
+
+def test_the_timeline_judges_a_device_with_its_own_asset_from_the_pack(monkeypatch):
+    # architecture review O, 2026-10-27: the timeline (/investigate, a chat's answer about a device's past) asked the
+    # villa's "running" without the pack, so a pump's own baseline cap was never found (daily.power_asset)
+    import investigate
+    from vesta_shared import daily
+    asked = []
+    real = daily.threshold_from_readings
+    monkeypatch.setattr(daily, "threshold_from_readings",
+                        lambda readings, params, pack, entity_id: asked.append((pack, entity_id)) or real(readings, params, pack, entity_id))
+
+    class Pack:
+        assets = {"heater": {"entities": {"power": "sensor.heater_power"}}}
+
+        def row(self, eid):
+            return {"asset": "heater"} if eid == "sensor.heater_power" else None
+
+        def asset(self, slug):
+            return self.assets.get(slug)
+
+        def is_asleep(self, _eid):
+            return False
+
+        def standing(self, _eid, _state):
+            return None
+
+        def __getattr__(self, name):          # every other lookup of the pack: nothing known
+            return lambda *a, **k: None
+    pack = Pack()
+    investigate.timeline(_Client(), ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z, pack=pack)
+    assert asked and all(p is pack and e == "sensor.heater_power" for p, e in asked), asked

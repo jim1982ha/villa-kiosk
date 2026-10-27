@@ -552,11 +552,13 @@ def normal(rows: list[tuple[datetime, str]], end: datetime, on_above: float | No
     return out
 
 
-def threshold(rows: list[tuple[datetime, str]], params=None) -> float | None:
+def threshold(rows: list[tuple[datetime, str]], params=None, pack=None, entity_id: str = "") -> float | None:
     """Above this a numeric entity counts as running: the villa's ONE rule (vesta_shared.daily.threshold_from_readings,
     the night check's, the energy figures' and the weekly page's) over its readings bucketed per hour. `params`: the
     villa's settings (script.Context.params; this skill's settings.yaml alone when not given). None for an entity that
-    hardly moves (a temperature): read as levels, not runs (flat_spread).
+    hardly moves (a temperature): read as levels, not runs (flat_spread) — a question the villa's rule does not ask (it
+    judges a power that runs), so it stays here. `pack`, `entity_id`: whose readings — a pump's own baseline cap is
+    the villa's rule's too (daily.power_asset; architecture review O).
 
     ⚠️ ONE "RUNNING" (owner, 2026-10-19): it was a share (running_fraction 0.10) of the top 0.1 % of the readings, at
     least running_min 2 W: a second rule beside the villa's. An hour's MAXIMUM keeps a device that runs a few seconds an
@@ -568,7 +570,8 @@ def threshold(rows: list[tuple[datetime, str]], params=None) -> float | None:
     hi, lo = vals[-1], vals[int(len(vals) * 0.05)]
     if hi <= 0 or (hi - lo) < hi * th("flat_spread"):
         return None
-    return daily.threshold_from_readings([(t, number(s)) for t, s in rows], params or VillaParams(defaults=BEHAVIOUR))
+    return daily.threshold_from_readings([(t, number(s)) for t, s in rows], params or VillaParams(defaults=BEHAVIOUR),
+                                         pack, entity_id)
 
 
 CHART_POINTS = 400                        # a chart's points: each the highest reading of its slice (a surge stays seen)
@@ -716,7 +719,7 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         if sleeps:
             before = before + ["  unavailable by design (it sleeps between its reports): its \"unavailable\" moments are "
                                "left out, each state holds until its next report"]
-        on = threshold(base_rows + rows, params)
+        on = threshold(base_rows + rows, params, pack, eid)
         zero_rest = rests_at_zero(base_rows or rows, on)
         ps = periods(rows, reach, on, zero_rest)
         base_ps = periods(base_rows, base_reach, on, zero_rest) if base_rows else []
