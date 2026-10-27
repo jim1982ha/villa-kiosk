@@ -1,3 +1,13 @@
+## 2.496.548
+
+What you will see:
+- A filtered history chart always covers the whole period its title names. A window left open a while before you set
+  a range no longer loses its first hours (they were missing from the line and from the chip's count).
+- In a window with several charts, setting or clearing a range on one chart no longer makes the other filtered charts
+  flash back to unfiltered for a moment.
+- Nothing else changes on screen: the map, the room lists, the device window and the room chooser now all take a
+  device's "critical", "hidden" and "has a problem" marks from one place, so a new screen cannot forget one.
+
 ## 2.496.547
 
 What you will see:
