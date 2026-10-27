@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.351 (27 October 2026)
+
+- preventive-maintenance: nightly.handed_to_alerts(store, pack, alerted), ONE owner of the offline hand-over; the night
+  check and recheck.back_online both close by it (back_online returns `handed` {finding id: note}, never "closed").
+- preventive-maintenance: the told P2 message keeps a state per item (`state` {id: {kind, time, until, note, who}}:
+  watch, closed, back, handed, still, reopened; TOLD_STATES), drawn with settings.yaml words (told_cleared `line`
+  {time} {until}, `closed_line`, `back_line`; still_there_after_close `line`; reopened_in_kiosk `line` {who}).
+  told_watch_over ends each watch at the night check (pm-told:watching), told_again marks a reopening,
+  one_edit_per_message merges a run's rewrites. Messages kept as `cleared` {id: time} are read as watched and listed
+  (_told_rec: migration).
+
 ## 0.6.350 (26 October 2026)
 
 - vesta_shared.offline.reported_since(history, states, now, over, suspect): when each entity really last reported:

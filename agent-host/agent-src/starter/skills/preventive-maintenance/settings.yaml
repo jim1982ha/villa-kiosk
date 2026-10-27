@@ -49,14 +49,22 @@ behaviour:
 reopened_in_kiosk:
   tell: fm
   title: "Fault reopened in the Cockpit"
+  # and on the night check's message that told it, after its item ({time}: when, {who}: who reopened it)
+  line: "⚠️ Reopened in the Cockpit at {time} by {who}"
 
-# A P2 of this skill (a critical device offline, a battery at 10 %) is told to the facility manager at once; when it
-# clears, that SAME message says so — rewritten, never a new message (owner, 2026-10-20). `line`: added after the
-# cleared item ({time}: the villa's time it cleared); `all_title`: the message's title once every item of it cleared
-# ({title}: its own). `tell: false` leaves the messages as sent. A message Telegram no longer lets be rewritten stays.
+# A P2 of this skill (a critical device offline, a battery at 10 %) is told to the facility manager at once; as it
+# moves on, that SAME message says so — rewritten, never a new message (owner, 2026-10-20), one story as an alert's card
+# tells it (architecture review N, 2026-10-27). `line`: added after the cleared item while the Cockpit watches it
+# ({time}: the villa's time it cleared, {until}: the night check that ends the watch); `closed_line`: that night passed
+# without it ({time}: the night check's); `back_line`: that night found it again; an item an alert took over shows the
+# fault's close note ("Followed by alert #41, …"). `all_title`: the message's title once every item of it is back,
+# closed or taken over ({title}: its own). `tell: false` leaves the messages as sent. A message Telegram no longer lets
+# be rewritten stays.
 told_cleared:
   tell: true
-  line: "✅ Back to normal at {time}"
+  line: "✅ Back to normal at {time}, watched until {until}"
+  closed_line: "✅ Closed at {time}: it did not come back"
+  back_line: "⚠️ Back again at {time}"
   all_title: "{title} All back to normal."
   # when the message cannot be rewritten (Telegram refuses, it was deleted, it was two pages): ONE reply to it, a line
   # per item that cleared — {time} when, {what} the item (owner, 2026-10-20: never a cleared P2 left unsaid)
@@ -73,3 +81,5 @@ still_there_after_close:
   tell: fm
   title: "Fault still there after the close"
   words: "Closed in the Cockpit on {when}, but still there: {what}. Please look again."
+  # and on the night check's message that told it, after its item ({time}: when it was read still there)
+  line: "⚠️ Still there after the close at {time}"

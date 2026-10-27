@@ -116,9 +116,13 @@ def test_the_night_and_the_5_minute_recheck_carry_the_rewrites():
     import inspect
     import recheck
     src = inspect.getsource(nightly.run) + inspect.getsource(nightly.main) + inspect.getsource(recheck.main)
-    assert 'told_cleared(store, [o["id"] for o in closed], now_ref, zone, ctx.settings)' in src
+    assert 'told_cleared(store, [o["id"] for o in closed], now_ref, zone, ctx.settings,' in src
+    assert "told_watch_over(store, now_ref, zone, ctx.settings)" in src           # the night ends the watches it owes
     assert 'out["edits"] = res.get("edits") or []' in src
     assert src.count("N.told_cleared(ctx.store,") == 1                 # one tick: every close of the 5 minutes
+    assert 'handed=res["handed"]' in src and src.count("one_edit_per_message(") == 2
+    # a reopening (a person's, or still there after a close) is marked on the message that told it, in the same tick
+    assert "reopened_untold(ctx.store, ctx.zone, ctx.settings, edits)" in src and "ctx.store, ctx.zone, ctx.settings, edits)" in src.split("still_there_untold(")[-1]
     assert "store=store, at=now)" in inspect.getsource(recheck.gone_offline)
 
 
@@ -239,3 +243,76 @@ def test_the_reply_reaches_telegram_as_a_reply(tmp_path):
     assert asyncio.run(d.send(-2, "backup", reply_to=101)) == 7 and tg.calls[-1].get("reply_to") == 101
     asyncio.run(d.send(-2, "plain"))
     assert "reply_to" not in tg.calls[-1]
+
+
+# ── one story per item, as an alert's card tells it (architecture review N, 2026-10-27) ─────────────────────────────
+
+def _real(tmp_path):
+    """A real store with the night's P2s told, and the skill's own words (settings.yaml)."""
+    from vesta_shared import skill_settings
+    from vesta_shared.store import Store
+    store = Store(str(tmp_path / "s.sqlite"))
+    ids = [store.raise_finding("PM-UNAVAILABLE", f"switch.example_{k}", "power", "2026-10-19", "P2", f"Relay {k} offline",
+                               {})[0] for k in ("a", "b")]
+    night = {"villa": "Example", "as_of": "2026-10-19", "again": [],
+             "new_findings": [{"id": i, "severity": "P2", "summary": f"Relay {k} offline"} for i, k in zip(ids, "ab")]}
+    (m,) = nightly.told_now(night, store=store, at=AT)
+    return store, ids, m, skill_settings.load(os.path.join(HERE, "..", "starter", "skills", "preventive-maintenance"),
+                                              "settings.yaml")
+
+
+def test_a_cleared_p2_says_it_is_watched_until_the_night_check_never_a_bare_back_to_normal(tmp_path):
+    store, (a, b), m, words = _real(tmp_path)
+    assert nightly.night_clock() == "02:00"                     # the skill's own night job (skill.yaml)
+    (e,) = nightly.told_cleared(store, [a], AT, "Asia/Makassar", words)
+    assert e["key"] == m["key"] and e["title"] == m["title"]
+    assert e["text"] == "New:\n- Relay a offline ✅ Back to normal at 12:30, watched until 02:00\n- Relay b offline"
+
+
+def test_the_night_ends_each_watch_closed_or_back_on_the_same_message(tmp_path):
+    store, (a, b), m, words = _real(tmp_path)
+    for fid in (a, b):
+        store.close_finding("PM-UNAVAILABLE", store.finding(fid)["entity_id"], "2026-10-20")
+    nightly.told_cleared(store, [a, b], AT, "Asia/Makassar", words)
+    store.reopen_finding(b, "P2", "Relay b offline", {}, "2026-10-21", ["2026-10-19", "2026-10-21"])   # the night found it again
+    night = datetime(2026, 10, 20, 18, 0, tzinfo=timezone.utc)                       # 02:00 in the villa
+    (e,) = nightly.told_watch_over(store, night, "Asia/Makassar", words)
+    assert e["text"] == ("New:\n- Relay a offline ✅ Closed at 02:00: it did not come back\n"
+                         "- Relay b offline ⚠️ Back again at 02:00") and e["title"] == m["title"]
+    assert "fallback" not in e                                   # nothing new to act on: no reply
+    assert nightly.told_watch_over(store, night, "Asia/Makassar", words) == []         # each watch ends once
+
+
+def test_a_message_kept_before_the_watch_is_read_as_watched_and_closed_at_night(tmp_path):
+    # format changes need migrations: a message kept by 0.12.361 holds only {cleared: {id: time}}
+    store, (a, b), m, words = _real(tmp_path)
+    rec = store.cache_get(m["key"])
+    store.cache_put(m["key"], {k: v for k, v in rec.items() if k != "state"} | {"cleared": {str(a): "12:30", str(b): "12:31"}})
+    for fid in (a, b):
+        store.close_finding("PM-UNAVAILABLE", store.finding(fid)["entity_id"], "2026-10-20")
+    nightly._told_rec(store, m["key"])                            # read once (any rewrite reads it)
+    (e,) = nightly.told_watch_over(store, datetime(2026, 10, 20, 18, 0, tzinfo=timezone.utc), "Asia/Makassar", words)
+    assert e["text"].count("✅ Closed at 02:00") == 2 and e["title"] == f"{m['title']} All back to normal."
+
+
+def test_still_there_and_reopened_are_marked_on_the_message_that_told_them(tmp_path):
+    store, (a, b), m, words = _real(tmp_path)
+    nightly.told_cleared(store, [a], AT, "Asia/Makassar", words)
+    tasks = [{"source": f"finding:{a}", "reopened_at": "2026-10-20T05:00:00+00:00"},
+             {"source": f"finding:{b}", "reopened_at": "2026-10-20T05:10:00+00:00", "reopened_by": "Owner"}]
+    (s,) = nightly.told_again(store, tasks[:1], "still", "Asia/Makassar", words)
+    assert s["text"] == "New:\n- Relay a offline ⚠️ Still there after the close at 13:00\n- Relay b offline"
+    (r,) = nightly.told_again(store, tasks[1:], "reopened", "Asia/Makassar", words)
+    assert r["text"].endswith("- Relay b offline ⚠️ Reopened in the Cockpit at 13:10 by Owner")
+    assert nightly.told_again(store, [{"source": "incident:7"}], "still", "Asia/Makassar", words) == []   # an alert's: the desk's
+    assert nightly.told_again(store, tasks, "still", "Asia/Makassar", {}) == []                          # no words: as it was
+
+
+def test_an_item_an_alert_took_over_says_so_and_two_rewrites_of_one_run_are_one(tmp_path):
+    store, (a, b), m, words = _real(tmp_path)
+    e1 = nightly.told_cleared(store, [a], AT, "Asia/Makassar", words)
+    e2 = nightly.told_cleared(store, [], AT, "Asia/Makassar", words, handed={b: "Followed by alert #9, which says when it is back."})
+    (e,) = nightly.one_edit_per_message(e1 + e2)
+    assert e["text"].endswith("- Relay b offline Followed by alert #9, which says when it is back.")
+    assert "✅ Back to normal at 12:30, watched until 02:00" in e["text"] and e["title"].endswith("All back to normal.")
+    assert e["fallback"].count("\n") == 1                        # both replies kept, for a message it cannot rewrite

@@ -374,3 +374,45 @@ def test_without_its_settle_time_a_persons_close_holds_and_the_missing_setting_i
     assert nightly.still_there_minutes({"still_there_after_close": {"minutes": 10}}) == 10.0
     assert nightly.still_there_minutes({}) is None                                      # never a default of the code
 
+
+
+def test_an_offline_fault_an_alert_now_follows_is_handed_over_within_one_recheck(tmp_path):
+    # architecture review N, 2026-10-27: offline at 5 minutes (its fault, told on Telegram), then the villa's own alert
+    # took the device up at 10 — both stood in the Cockpit's Open issues until 02:00. Now the next 5-minute recheck
+    # closes the fault as followed by the alert (never "cleared": the device is still off), and its message says so.
+    sys.path.insert(0, os.path.join(SKILL, "scripts"))
+    import nightly
+    (tmp_path / "pack.json").write_text(json.dumps({
+        "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
+        "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
+        "families": {"security": [{"entity_id": "lock.example_door", "name": "Example door", "area": "Garden",
+                                   "family": "security", "asset": "example_door", "device_id": "dev-door"}]},
+        "assets": {}}))
+    store = Store(str(tmp_path / "s.sqlite"))
+    fid, _ = store.raise_finding("PM-UNAVAILABLE", "lock.example_door", "security", "2026-10-10", "P2",
+                                 "Example door has been offline for 1h.", {"hours": 1, "entities": ["lock.example_door"]})
+    Problems(store).open_task("finding", fid, "PM-UNAVAILABLE", "lock.example_door", "Example door offline")
+    (told,) = nightly.told_now({"villa": "Example Villa", "as_of": "2026-10-10", "again": [], "new_findings": [
+        {"id": fid, "severity": "P2", "summary": "Example door has been offline for 1h."}]}, store=store, at=T0)
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {"lock.example_door": _st("unavailable", 70)}}))
+
+    def tick():
+        r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store",
+                            str(tmp_path / "s.sqlite"), "--pack", str(tmp_path / "pack.json"), "--fixture-dir", str(fx),
+                            "--now", T0.isoformat()],
+                           capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
+        assert r.returncode == 0, r.stderr
+        return json.loads(r.stdout)
+
+    assert tick()["edits"] == [] and Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == "open"   # no alert
+    iid = store.new_incident("watch|lock.example_door", "automation.example_watchdog", "lock.example_door", "P2",
+                             {"bad_states": ["unavailable"], "entities": ["lock.example_door"]})
+    out = tick()
+    note = f"Followed by alert #{iid}, which says when it is back."
+    assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == "closed" and _open_tasks(tmp_path) == []
+    assert _closed_notes(tmp_path) == [note] and out["faults_changed"] is True and out["actions"] == MOVED
+    (e,) = out["edits"]
+    assert e["key"] == told["key"] and e["text"] == f"New:\n- Example door has been offline for 1h. {note}", e
+    assert tick()["edits"] == []                                                         # handed over once
