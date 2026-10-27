@@ -21,8 +21,19 @@ import type { EntityMapping } from "./scene.types";
  *  skipping the panel entirely. */
 export interface ActivePanel {
   entityId: string;
-  mapping: EntityMapping;
   detail?: boolean;
+}
+
+/** The open device window as the device is set NOW (components/panels/openDevice, resolved on every render from the
+ *  live config and the profile): `mapping` as stored, `label` as every screen names it.
+ *
+ *  ⚠️ THE WINDOW KEPT THE DEVICE AS IT WAS WHEN IT OPENED (architecture review P, 2026-10-27): the open panel held a
+ *  copy of its mapping, so a device renamed or set to "ask before switching" in Advanced Settings came back under its
+ *  old name and switched without asking, while the map already used the new settings; only the badge colour and the
+ *  linked switch looked again, each by its own patch. The screen state holds which device is open, never its settings. */
+export interface OpenDevice extends ActivePanel {
+  mapping: EntityMapping;
+  label: string;
 }
 
 export interface PanelProps {

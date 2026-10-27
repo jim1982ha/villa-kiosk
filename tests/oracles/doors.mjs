@@ -45,8 +45,9 @@ ck("every door is said (none left undefined for a screen to guess)",
   // what a device panel may show is a VALUE from these doors, never whether a callback exists (doors.ts' history):
   // the wrench, Edit and the badge colour are drawn from `may`
   const panel = src("components/panels/BasePanel.tsx"), acts = src("components/panels/useOpenPanelActions.ts");
+  const pieces = src("components/panels/DeviceWindowPieces.tsx");
   ck("a device panel's wrench, Edit and badge colour read `may` (the doors), and its callbacks are always there",
-     /\{may\.reportFault && \(/.test(panel) && /\{may\.edit && <button/.test(panel) && /const canRecolor = badge && may\.edit;/.test(panel)
+     /if \(!may\.reportFault\) return null;/.test(pieces) && /if \(!may\.edit\) return null;/.test(pieces) && /const canRecolor = badge && may\.edit;/.test(panel)
      && !/\? \(\) => go\(\{ type: "(reportFault|editDevice)" \}\) : undefined/.test(acts) && !/roleCan\(role, "(reportFault|editConfig)"\)/.test(acts));
 }
 

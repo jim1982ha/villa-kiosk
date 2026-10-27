@@ -171,6 +171,14 @@ eq("no tiers at all is simply failed", createCameraPlayer([]).getState().mode, "
      && /\.camera-device-controls \{ display: contents; \}/.test(css)
      && /@media \(max-width: 720px\) and \(orientation: portrait\) \{\s*\.camera-device-controls \{\s*display: flex; flex: 0 0 100%; order: -1;/.test(css)
      && /\.camera-device-controls \.icon-btn \{ flex: 0 1 56px;/.test(css), true);
+  // owner, 2026-10-27: on its side, the header's buttons line up with the column under them: one size, one right edge
+  const side = css.slice(css.indexOf("@media (orientation: landscape) and (pointer: coarse) {"));
+  eq("  ...on its side, the header's buttons take the column's size and right edge",
+     /\.camera-controls \{[^}]*padding: 8px var\(--cam-edge\) /.test(side)
+     && /\.camera-controls \.icon-btn \{\s*width: var\(--cam-btn\);\s*height: var\(--cam-btn\);/.test(side)
+     && /\.camera-header \{ padding-right: var\(--cam-edge\); \}/.test(side)
+     && /\.camera-chip-btn \{ width: var\(--cam-btn\); height: var\(--cam-btn\); \}/.test(side)
+     && /\.camera-readings-menu \{ right: var\(--cam-edge\); \}/.test(side), true);
 }
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the fallback chain holds, tier by tier");
 process.exit(fail ? 1 : 0);

@@ -25,7 +25,22 @@ console.log("\n  the callers:");
 const dash = readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8");
 const cats = readFileSync(new URL("../../src/config/EntityCategories.ts", import.meta.url), "utf8");
 ck("the motion toast asks isMotionSensor", /if \(!isMotionSensor\(id, /.test(dash) && !/MOTION_DEVICE_CLASSES|motion\|presence/.test(dash));
-ck("the categoriser reads the same list and hint", /MOTION_DEVICE_CLASSES\.has\(dc\)/.test(cats) && /MOTION_ID_HINT\.test\(id\)/.test(cats) && !/ACCESS_BINARY_DC/.test(cats));
+ck("the categoriser asks the same two questions", /isMotionSensor\(id, dc \|\| undefined\) \|\| isOpeningSensor\(id, dc \|\| undefined\)/.test(cats) && !/ACCESS_BINARY_DC|_ID_HINT/.test(cats));
+// ⚠️ A DECLARED CLASS WINS OVER THE NAME FOR THE COLOUR AND FILTER TOO (architecture review P, 2026-10-27): the
+// categoriser read the id words beside a class, so a "door_battery" took Access control while its words said battery.
+{
+  const { effectiveCategory, subjectOf } = await import("@/config/EntityCategories");
+  const { isOpeningSensor } = await import("@/config/BinarySensorClasses");
+  const cat = (id, dc) => effectiveCategory(subjectOf(id, { entityId: id, type: "binary_sensor", label: "x" }, dc ? { attributes: { device_class: dc } } : undefined));
+  ck("a door contact: by its class, or by its id with none", isOpeningSensor("binary_sensor.x", "garage_door") && isOpeningSensor("binary_sensor.back_gate", undefined)
+     && !isOpeningSensor("binary_sensor.front_door_battery", "battery") && !isOpeningSensor("sensor.door", "door"));
+  ck("  ...the filter: a door or a motion sensor is Access control, by its class or its bare name",
+     ["door", "motion"].every((dc) => cat("binary_sensor.x", dc) === "access_control")
+     && cat("binary_sensor.hall_door", undefined) === "access_control" && cat("binary_sensor.hall_pir", undefined) === "access_control");
+  ck("  ...a sensor that DECLARES another class keeps it, whatever its name (door_battery, pir_leak)",
+     cat("binary_sensor.front_door_battery", "battery") !== "access_control" && cat("binary_sensor.pir_leak", "moisture") !== "access_control",
+     `${cat("binary_sensor.front_door_battery", "battery")} ${cat("binary_sensor.pir_leak", "moisture")}`);
+}
 ck("the list has one definition", MOTION_DEVICE_CLASSES.size === 4);
 
 // ── A CAMERA'S MOTION SENSOR IS ITS LINKED ENTITY (owner, 2026-10-22) ────────────────────────────────────────
@@ -59,7 +74,7 @@ const { cameraMotionId } = await import("@/config/BinarySensorClasses");
   const db = strip(readFileSync(new URL("../../src/pages/Dashboard.tsx", import.meta.url), "utf8"));
   const long = /const onEntityLongPressed = useCallback\(([\s\S]*?)\n  \);/.exec(db)?.[1] ?? "";
   ck("a long press opens the device's details — a camera's too — and never switches anything",
-     /go\(\{ type: "openDevice", panel: \{ entityId, mapping, detail: mapping\.type === "camera" \} \}\);/.test(long)
+     /go\(\{ type: "openDevice", panel: \{ entityId, detail: mapping\.type === "camera" \} \}\);/.test(long)
      && !/HAServices|callService|power\(|toggle/.test(long), long.length);
 }
 

@@ -11,7 +11,7 @@
 // their results in; the actions (edit, report a fault, Back) are
 // pages/screen's.
 
-import type { ActivePanel } from "@/types/panel.types";
+import type { OpenDevice } from "@/types/panel.types";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
@@ -46,7 +46,8 @@ export interface PanelHeader {
 }
 
 export interface HeaderInput {
-  panel: ActivePanel;
+  /** The open device as it is set now (openDevice). */
+  panel: OpenDevice;
   entities: Record<string, HassEntity>;
   config: LookConfig;
   canControl: boolean;
@@ -70,15 +71,13 @@ export function linkedStateWords(l: LinkedState): string {
 }
 
 export function panelHeader({ panel, entities, config, canControl, linkedSwitch }: HeaderInput): PanelHeader {
+  // the device as it is set NOW (openDevice): a just-picked badge colour shows at once
   const { entityId, mapping } = panel;
-  // ⚠️ LIVE config, not panel.mapping (a snapshot taken when the panel
-  // opened): a just-picked badge colour shows at once, not on the next open.
-  const live = config.entityMap[entityId] ?? mapping;
-  const linkedId = live.linkedEntityId;
+  const linkedId = mapping.linkedEntityId;
   // A device's LINKED entity wears that device's badge — pictogram, category, colour (deviceActivity.badgeOwnerOf,
   // owner 2026-10-22: badge proposal 2), as on the map; its face stays its own.
   const ownerId = badgeOwnerOf(entityId, config.entityMap);
-  const ownerMap = ownerId === entityId ? { ...mapping, ...live } : config.entityMap[ownerId];
+  const ownerMap = ownerId === entityId ? mapping : config.entityMap[ownerId];
   const ownerType = ownerId === entityId ? mapping.type : ownerMap.type;
   const ownerEnt = entities[ownerId];
   const category = effectiveCategory(subjectOf(ownerId, ownerMap, ownerEnt, ownerType));
@@ -102,7 +101,7 @@ export function panelHeader({ panel, entities, config, canControl, linkedSwitch 
     badge: {
       category,
       iconKey: iconKeyFor(ownerType, ownerEnt),
-      color: ownerMap.badgeColor ?? live.badgeColor,
+      color: ownerMap.badgeColor ?? mapping.badgeColor,
       categoryColor: categoryColor(category),
       state: look.face,
       mark: look.mark,

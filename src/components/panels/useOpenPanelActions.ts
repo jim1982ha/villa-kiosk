@@ -26,13 +26,15 @@ import { HAServices } from "@/ha/HAServiceCalls";
 import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { useAskFirst, type AskFirst } from "@/hooks/useAskFirst";
 import { backLabel, type Screen, type ScreenAction } from "@/pages/screen";
-import type { ActivePanel } from "@/types/panel.types";
+import type { ActivePanel, OpenDevice } from "@/types/panel.types";
 import type { ReadingRow } from "@/config/readingRows";
 import type { PanelActions } from "./PanelActionsContext";
 import { panelHeader } from "./panelHeader";
 
 export interface OpenPanelInput {
   screen: Screen;
+  /** The open device as it is set now (openDevice), null when none is open. */
+  open: OpenDevice | null;
   go: (a: ScreenAction) => void;
   /** The panel an entity opens to, or null when this profile may not see it. */
   panelFor: (entityId: string) => ActivePanel | null;
@@ -47,7 +49,7 @@ export interface OpenPanelInput {
 
 /** The open panel's actions (null when no panel is open), and the linked
  *  switch's "ask first" question, which the page draws as a dialog. */
-export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, marks }: OpenPanelInput): {
+export function useOpenPanelActions({ screen, open: activePanel, go, panelFor, readingsOf, doors, marks }: OpenPanelInput): {
   actions: PanelActions | null;
   linkedAsk: AskFirst;
 } {
@@ -55,7 +57,6 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, m
   const { entities, ws } = useHA();
   const { role } = useProfile();
   const canControl = roleCan(role, "controlEntities");
-  const activePanel = screen.nav.panel;
 
   /** A device's reading, opened from the device's panel: Back returns to it. */
   const openReading = useCallback(
@@ -73,9 +74,7 @@ export function useOpenPanelActions({ screen, go, panelFor, readingsOf, doors, m
   // when unlocked and is flipped with lock/unlock (it has no toggle); unknown
   // when HA lost it. deviceSwitch adds whether to ask first: a linked lock's
   // unlock, or a linked device the owner set to "ask before switching".
-  const linkedEntityId = activePanel
-    ? (config.entityMap[activePanel.entityId] ?? activePanel.mapping).linkedEntityId
-    : undefined;
+  const linkedEntityId = activePanel?.mapping.linkedEntityId;
   const linkedLabel = linkedEntityId ? labelOf(linkedEntityId, config.entityMap, entities) : "";
   const linkedPower = linkedEntityId
     ? deviceSwitch(entities[linkedEntityId], linkedEntityId,

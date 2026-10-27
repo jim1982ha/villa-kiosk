@@ -11,7 +11,7 @@ const { screenReducer, START } = await import("@/pages/screen");
 const { attentionFor, cardFocused, groupAttention, issueSeverity } = await import("@/config/attention");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
-const { FaultsButton } = await import("@/components/panels/BasePanel");
+const { FaultsButton } = await import("@/components/panels/DeviceWindowPieces");
 
 console.log("  when it shows: any issue the Cockpit's Overview lists for the device or its linked entity:");
 // owner, 2026-10-24: Timmerflotte_5969's "Unavailable" card was in the Cockpit and its window showed no warning —
@@ -83,8 +83,42 @@ const tree = parseTsx("components/panels/BasePanel.tsx");
 const [placed] = elements(tree, "FaultsButton");
 ck("  ...drawn by the device window only while its Overview lists an issue, first of the header's actions (top right)",
    !!placed && guardsOf(placed).join() === "warning" && inside(btnHtml, "btn") !== ""
-   && /const issue = useDeviceIssue\(faults\?\.ids \?\? \[\]\);/.test(tree.text)
+   && /const issue = useDeviceIssue\(faults\?\.ids \?\? \[\]\);/.test(parseTsx("components/panels/DeviceWindowPieces.tsx").text)
+   && /const warning = useDeviceWarning\(\);/.test(tree.text)
    && /<div className="modal-header-actions">\s*\{\/\*[\s\S]*?\*\/\}\s*\{warning && <FaultsButton/.test(tree.text)
    && /\{\(headerActions \|\| back \|\| warning\) &&/.test(tree.text), guardsOf(placed ?? tree));
+
+// ── THE CAMERA WINDOW IS A DEVICE WINDOW TOO (architecture review P, 2026-10-27) ─────────────────────────────────
+// It read four of the window's actions and drew none of these: an offline camera listed in the Cockpit had no warning
+// sign, no Edit and no wrench in its window, and its readings were nowhere. Both frames now draw the ONE set of pieces
+// (DeviceWindowPieces), each placing them where its layout has room.
+console.log("\n  the camera window draws the same pieces:");
+{
+  const { EditButton, ReportFaultButton } = await import("@/components/panels/DeviceWindowPieces");
+  const { PanelActionsProvider, NO_PANEL_ACTIONS } = await import("@/components/panels/PanelActionsContext");
+  const within = (may, el) => draw(h(PanelActionsProvider, { value: { ...NO_PANEL_ACTIONS, may } }, el));
+  const all = { edit: true, reportFault: true }, none = { edit: false, reportFault: false };
+  ck("Edit and the wrench: shown by the profile's doors (a value), named for a screen reader; nothing without them",
+     /<button type="button" class="btn ghost">Edit<\/button>/.test(within(all, h(EditButton)))
+     && /aria-label="Edit this device"/.test(within(all, h(EditButton, { className: "camera-chip-btn", icon: true })))
+     && /aria-label="Report a fault for this device"/.test(within(all, h(ReportFaultButton)))
+     && within(none, h(EditButton)) === "" && within(none, h(ReportFaultButton)) === "");
+  const chip = draw(h(FaultsButton, { onOpen: () => {}, severity: "danger", className: "camera-chip-btn" }));
+  ck("  ...the warning on the camera's dark chip keeps its issue's colour", /class="camera-chip-btn panel-faults-btn cockpit-attention-danger"/.test(chip), chip);
+  const cam = parseTsx("components/panels/CameraPanel.tsx");
+  const [warn] = elements(cam, "FaultsButton");
+  const readingsMenu = elements(cam, "DeviceReadings");
+  ck("the camera window draws the warning (while there is one), Edit, the wrench and \"Also on this device\"",
+     !!warn && guardsOf(warn).join() === "warning" && /const warning = useDeviceWarning\(\);/.test(cam.text)
+     && elements(cam, "EditButton").length === 1 && elements(cam, "ReportFaultButton").length === 1 && readingsMenu.length === 1,
+     guardsOf(warn ?? cam));
+  ck("  ...as the card window does (BasePanel draws the same four)",
+     ["FaultsButton", "EditButton", "ReportFaultButton", "DeviceReadings"].every((t) => elements(tree, t).length === 1));
+  const { lostColor } = await import("@/config/reading");
+  const { STATUS_COLOR } = await import("@/utils/stateColors");
+  ck("a critical camera that lost contact: its bar red, as the Cockpit and the map; any other, the lost colour",
+     lostColor(true) === STATUS_COLOR.alert && lostColor(false) === STATUS_COLOR.unavailable
+     && /: s === "offline" \? lostColor\(badge\?\.critical \?\? false\)/.test(cam.text));
+}
 
 done("✅ a device window's warning opens its issues in the Cockpit");

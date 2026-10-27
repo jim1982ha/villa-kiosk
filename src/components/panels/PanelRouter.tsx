@@ -1,11 +1,10 @@
 // src/components/panels/PanelRouter.tsx
 // Picks the correct control panel for the active entity, based on mapping.type.
 
-import type { ActivePanel } from "@/types/panel.types";
+import type { OpenDevice } from "@/types/panel.types";
 import { useHAEntity } from "@/hooks/useHAEntity";
 import { useConfig } from "@/config/ConfigContext";
 import { groupForPrimary } from "@/config/deviceGroups";
-import { displayLabelFor } from "@/config/EntityMap";
 import LightPanel from "./LightPanel";
 import ACPanel from "./ACPanel";
 import LockPanel from "./LockPanel";
@@ -19,7 +18,8 @@ import GenericPanel from "./GenericPanel";
 import DeviceGroupPanel from "./DeviceGroupPanel";
 
 interface Props {
-  active: ActivePanel;
+  /** The open device as it is set NOW (openDevice): a rename or a change made while it was open shows at once. */
+  active: OpenDevice;
   onClose: () => void;
   pinContinuous?: () => () => void;
   /** Swap the open panel to another entity — used by the camera panel's
@@ -30,16 +30,9 @@ interface Props {
 export default function PanelRouter({ active, onClose, pinContinuous, onOpenEntity }: Props) {
   const entity = useHAEntity(active.entityId);
   const { config } = useConfig();
-  // Every panel's title comes from mapping.label — resolved HERE, once, so
-  // EVERY panel (not just the bottom-bar group modal) stops showing a device
-  // stuck with the ugly all-lowercase raw-id label a mesh binding can leave
-  // behind when it auto-created this mapping before the entity's live
-  // friendly_name had arrived (see displayLabelFor's docstring). A real
-  // stored customisation still always wins.
-  const mapping = {
-    ...active.mapping,
-    label: displayLabelFor(active.entityId, active.mapping.label, entity?.attributes.friendly_name),
-  };
+  // Every panel's title comes from mapping.label: the name every screen gives the device (openDevice, through
+  // displayLabelFor), so no panel shows the raw-id label a mesh binding can leave behind.
+  const mapping = { ...active.mapping, label: active.label };
   const props = { entity, mapping, onClose };
 
   // A group led by a READING (a temperature + humidity combo) opens the

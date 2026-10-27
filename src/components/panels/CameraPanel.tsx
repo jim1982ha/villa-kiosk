@@ -7,10 +7,13 @@
 // camera picker and the status bar.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video, Volume2, VolumeX, ListTree } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
+import { linkedStateWords } from "./panelHeader";
+import { EditButton, FaultsButton, ReportFaultButton, useDeviceWarning } from "./DeviceWindowPieces";
+import DeviceReadings from "./DeviceReadings";
 import { useHA } from "@/ha/HAStateStore";
 import { createCameraPlayer, type CameraPlayer, type CameraPlayerState } from "./cameraPlayer";
 import { cameraTiers } from "./cameraTiers";
@@ -30,7 +33,7 @@ import CameraDeviceButtons from "./CameraDeviceButtons";
 import { cameraChoices } from "@/utils/panelRules";
 import { useVillaModel } from "@/config/VillaModel";
 import { useConfig } from "@/config/ConfigContext";
-import { readingOf, stateWords } from "@/config/reading";
+import { lostColor, readingOf, stateWords } from "@/config/reading";
 import { historyStateColor } from "@/utils/stateColors";
 import { useArrowStep } from "@/hooks/useArrowStep";
 import { feedHasSound } from "./feedSound";
@@ -79,8 +82,13 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // chrome — this panel is the one that doesn't use BasePanel (it's a
   // fullscreen feed, not a modal card), so it reads the identical context and
   // renders the control in its own bottom bar instead of re-deriving anything.
-  // `motion`: its linked entity when that detects presence (panelHeader, BinarySensorClasses.cameraMotionId)
-  const { linked, linkedSensor, motion, back } = usePanelActions();
+  // `motion`: its linked entity when that detects presence (panelHeader, BinarySensorClasses.cameraMotionId).
+  // ⚠️ AND THE SAME PIECES AS EVERY DEVICE WINDOW (architecture review P, 2026-10-27): its warning sign, Edit, the
+  // wrench and "Also on this device" are DeviceWindowPieces', placed in this window's header; a critical camera that
+  // lost contact is red (badge.critical, reading.lostColor), as the Cockpit and the map paint it.
+  const { linked, linkedSensor, motion, back, badge, readings } = usePanelActions();
+  const warning = useDeviceWarning();
+  const [readingsOpen, setReadingsOpen] = useState(false);
   // ── The feed ─────────────────────────────────────────────────────────────
   // One player per camera, made in an EFFECT rather than a memo: StrictMode
   // runs effect cleanups once on mount, and a memoised player would be
@@ -296,6 +304,10 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // it ABOVE the feed on the stack and makes "innermost first" a fact of the
   // registration order rather than a rule either gesture has to remember.
   useBackToClose(closePicker, pickerOpen);
+  const closeReadings = useCallback(() => setReadingsOpen(false), []);
+  useBackToClose(closeReadings, readingsOpen);
+  // a menu over the feed (the camera picker, the readings) holds the chrome up while it is open
+  const menuOpen = pickerOpen || readingsOpen;
 
   // ── Left/Right arrows step cameras — the keyboard's swipe ────────────────
   // Same action as the on-screen prev/next arrows and the same direction as
@@ -436,7 +448,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // identity or every hover/picker change would re-run the effect below and
   // re-show chrome the user had just dismissed.
   const heldRef = useRef(false);
-  heldRef.current = hoveringControls || pickerOpen;
+  heldRef.current = hoveringControls || menuOpen;
   const idleTimer = useRef<number | undefined>(undefined);
 
   /** Show, and (re)start the idle countdown unless something is holding it. */
@@ -460,11 +472,11 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // appear for its first few seconds on every open.
   const wasHeld = useRef(false);
   useEffect(() => {
-    const held = hoveringControls || pickerOpen;
+    const held = hoveringControls || menuOpen;
     if (held) window.clearTimeout(idleTimer.current);
     else if (wasHeld.current) bumpChrome();
     wasHeld.current = held;
-  }, [hoveringControls, pickerOpen, bumpChrome]);
+  }, [hoveringControls, menuOpen, bumpChrome]);
   useEffect(() => () => window.clearTimeout(idleTimer.current), []);
 
   // ── Input-type-specific chrome behaviour (the standard video contract) ──
@@ -563,7 +575,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
 
   return (
     <div
-      className={`camera-fullscreen${chromeVisible || hoveringControls || pickerOpen ? "" : " chrome-hidden"}`}
+      className={`camera-fullscreen${chromeVisible || hoveringControls || menuOpen ? "" : " chrome-hidden"}`}
       ref={rootRef}
       {...chromeActivity}
     >
@@ -584,6 +596,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           the feed in every aspect/orientation, which is the one placement
           that reads the same everywhere. */}
       <div className="camera-header">
+        <div className="camera-header-title">
         <div className="label">{mapping.label}</div>
         {/* Exiting zoom used to add a button to .camera-controls — every
             existing icon there shifted position the instant you zoomed in,
@@ -597,7 +610,29 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             <ZoomOut size={16} /> Zoomed in, tap to reset
           </button>
         )}
+        </div>
+        {/* the device window's own pieces, at its top right as in every device window: the warning first */}
+        <div className="camera-header-actions">
+          {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} className="camera-chip-btn" />}
+          {readings && readings.length > 0 && (
+            <button type="button" className={`camera-chip-btn${readingsOpen ? " on" : ""}`} onClick={() => setReadingsOpen((o) => !o)}
+              title="Also on this device" aria-label="Also on this device" aria-expanded={readingsOpen}>
+              <ListTree size={16} aria-hidden="true" />
+            </button>
+          )}
+          <EditButton className="camera-chip-btn" icon />
+          <ReportFaultButton className="camera-chip-btn" />
+        </div>
       </div>
+      {/* "Also on this device", the list every device window draws, over the feed under its button */}
+      {readingsOpen && readings && readings.length > 0 && (
+        <>
+          <div className="camera-picker-backdrop" onClick={() => setReadingsOpen(false)} />
+          <div className="hud-menu camera-readings-menu" role="dialog" aria-label="Also on this device">
+            <DeviceReadings />
+          </div>
+        </>
+      )}
 
       {/* Ring the feed itself while the sensor is tripped, so someone WATCHING
           the stream is told a detection is happening now — the status bar below
@@ -687,7 +722,9 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             // vocabularies; don't collapse them.
             colorFor={(s) => (
               s === "motion" ? STATUS_COLOR.alert
-                : s === "offline" || s === "motion-unavailable" ? STATUS_COLOR.unavailable
+                // the camera unreachable: red for a critical one, as the Cockpit and the map (reading.lostColor)
+                : s === "offline" ? lostColor(badge?.critical ?? false)
+                : s === "motion-unavailable" ? STATUS_COLOR.unavailable
                   // A camera that is up and recording is ON, which the legend
                   // calls "On / active" and paints green. It is emphatically
                   // not "Off / idle" — that token means a device at rest, and
@@ -751,7 +788,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             <button
               className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
               {...linkedSwitchProps(linked)}
-              title={`${linked.label}, ${linked.isOn ? "turn off" : "turn on"}`}
+              // its word as the card windows say it (linkedStateWords: Unavailable only when lost, else Unknown)
+              title={`${linked.label}: ${linkedStateWords(linked)}${linked.known ? `, ${linked.isOn ? "turn off" : "turn on"}` : ""}`}
               style={vOrder(5)}
             >
               <Power />

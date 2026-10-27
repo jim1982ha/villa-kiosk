@@ -29,7 +29,7 @@ import { binaryLook } from "./binaryLook";
 import { stateLabelFor } from "./BinarySensorClasses";
 import { deviceRowText, formatSensorParts, prettyState } from "@/utils/entityValue";
 import { domainOf } from "@/utils/entityDomain";
-import { contactOf, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paintState, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { contactOf, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paintState, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS } from "@/utils/stateColors";
 
 /** The stretch older than the villa's system keeps, as a history bar reads it (historySource.keptFrom). */
 export { NOT_KEPT, NOT_KEPT_WORDS, NO_RECORD, NO_RECORD_WORDS };
@@ -199,6 +199,13 @@ export function lockButtons(bolt: "thrown" | "open" | "jammed" | "moving" | "unk
  *  reading's, the "UNAVAILABLE" notice's and the lock's. */
 export function lostPillTone(tone: string, critical: boolean): string {
   return critical && tone === STATUS_PILL_CLASS.unavailable ? STATUS_PILL_CLASS.alert : tone;
+}
+
+/** The same rule for a lost device drawn as a colour, not a pill: the camera window's bar, where its camera could not
+ *  be reached (architecture review P, 2026-10-27: a critical camera that lost contact was red in the Cockpit and on
+ *  the map, grey in its own window). */
+export function lostColor(critical: boolean): string {
+  return critical ? STATUS_COLOR.alert : STATUS_COLOR.unavailable;
 }
 
 /** The lock window's pill: the state the lock actually reported, shouted

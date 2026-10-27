@@ -13,12 +13,10 @@
 
 import Window from "@/components/common/Window";
 import { useState, type ReactNode } from "react";
-import { TriangleAlert, Wrench } from "lucide-react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { linkedStateWords } from "./panelHeader";
 import { badgeImage } from "@/babylon/badgeIcons";
-import { useDeviceIssue } from "@/components/cockpit/useVillaAttention";
-import type { AttentionSeverity } from "@/config/attention";
+import { EditButton, FaultsButton, ReportFaultButton, useDeviceWarning } from "./DeviceWindowPieces";
 import DeviceReadings from "./DeviceReadings";
 import { useConfig } from "@/config/ConfigContext";
 import { categorySurface } from "@/config/EntityCategories";
@@ -70,23 +68,10 @@ interface Props {
   children: ReactNode;
 }
 
-/** The device window's warning (header, top right, owner 2026-10-24): the Cockpit's own sign in the colour of the
- *  most serious issue its Overview lists for the device (attention severity: .cockpit-attention-danger red, -warn
- *  amber, -lost grey, as the Overview's cards), an icon button of the footer's size. Pure: a check draws it. */
-export function FaultsButton({ onOpen, severity }: { onOpen: () => void; severity: AttentionSeverity }) {
-  return (
-    <button type="button" className={`btn ghost icon-only panel-faults-btn cockpit-attention-${severity}`} onClick={onOpen}
-      title="Open this device's issues in the Cockpit" aria-label="Open this device's issues in the Cockpit">
-      <TriangleAlert size={18} aria-hidden="true" />
-    </button>
-  );
-}
-
 export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, onClose, children }: Props) {
-  const { may, onEdit, onReportFault, badge, onSetBadgeColor, linked, linkedSensor, motion, faults, back } = usePanelActions();
-  // the Overview's own list, live: the warning appears with the device's first issue and goes with its last
-  const issue = useDeviceIssue(faults?.ids ?? []);
-  const warning = faults && issue ? { open: faults.open, severity: issue } : null;
+  const { may, badge, onSetBadgeColor, linked, linkedSensor, motion, back } = usePanelActions();
+  // the device window's pieces (warning, Edit, wrench, readings) are DeviceWindowPieces', drawn by the camera's too
+  const warning = useDeviceWarning();
   const { resolvedRooms } = useConfig();
   const { entities } = useHA();
   const room = entityId ? deviceRoom(resolvedRooms, entityId) : "";
@@ -251,19 +236,8 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
       <ModalFooter onClose={onClose} leading={
         <div className="modal-footer-group">
           {footerLeading}
-          {may.edit && <button className="btn ghost" onClick={onEdit}>Edit</button>}
-          {/* Icon-only, sitting beside Edit: this is a shortcut for a
-              device you are already looking at, not a primary action, and
-              a second worded button next to "Edit" would compete with it.
-              The title/aria-label carry the meaning. */}
-          {may.reportFault && (
-            <button
-              className="btn ghost icon-only"
-              onClick={onReportFault}
-              title="Report a fault for this device"
-              aria-label="Report a fault for this device"
-            ><Wrench size={16} /></button>
-          )}
+          <EditButton />
+          <ReportFaultButton />
         </div>
       } />
     </Window>

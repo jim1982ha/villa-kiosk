@@ -1,3 +1,25 @@
+## 2.496.551
+
+What you will see:
+- A phone on its side: the camera window's buttons at the top right (warning, "Also on this device", Edit, the fault
+  wrench) are the size of the column of buttons under them and end at the same right edge, and so does the "Also on
+  this device" list. They used to be smaller and sit a little to the left of the column.
+
+## 2.496.550
+
+What you will see:
+- A device window always shows the device as it is set now. Rename a device and turn on "Ask before switching" in
+  Advanced Settings (its window's Edit): the window that comes back has the new name and asks before switching. It
+  used to keep the old name and switch at once until it was closed and opened again. A change made on another tablet
+  shows the same way, and a device removed, or no longer yours to see, closes its window.
+- The camera window has what every other device window has, at its top right: the warning sign while the Cockpit
+  lists an issue for it (a tap opens it there), Edit, the fault wrench, and "Also on this device" when the camera has
+  other readings. A critical camera that lost contact shows its bar red, as the Cockpit and the map do.
+- The camera's linked switch says "Unknown", like the line under it in other windows, when the device answers without
+  a value; "Unavailable" only when contact is lost.
+- A sensor that declares its kind keeps it for its colour and filter, whatever its name: a "door battery" sensor is no
+  longer put under Access control because its name says "door".
+
 ## 2.496.549
 
 What you will see:

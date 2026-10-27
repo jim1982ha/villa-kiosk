@@ -13,7 +13,7 @@
 import type { ComponentType } from "react";
 import { Armchair, Lightbulb, Wifi, Zap, ShieldCheck, Puzzle } from "lucide-react";
 import type { Category, EntityType } from "@/types/scene.types";
-import { OPENING_DEVICE_CLASSES, MOTION_DEVICE_CLASSES, MOTION_ID_HINT, OPENING_ID_HINT } from "./BinarySensorClasses";
+import { isMotionSensor, isOpeningSensor } from "./BinarySensorClasses";
 import type { BadgeMark } from "@/utils/deviceActivity";
 
 /** Fixed display order for the HUD filter buttons and Config Editor dropdown. */
@@ -341,12 +341,10 @@ function categoryForEntity(entityId: string, type: EntityType, deviceClass?: str
     // contact") used to match neither test here and fall all the way through
     // to the pale, near-colourless "others" default, which also made its
     // UNAVAILABLE dim (EntityVisuals' badge alpha) nearly invisible: an
-    // already-pale badge going 50% pale reads as "no change at all". Reuses
-    // OPENING_DEVICE_CLASSES — the SAME set the door/window pose-swap gate
-    // (EntityVisuals) already trusts to mean "this is a physical opening" —
-    // instead of a second, possibly-drifting list of device_classes.
-    if (MOTION_DEVICE_CLASSES.has(dc) || OPENING_DEVICE_CLASSES.has(dc)
-        || MOTION_ID_HINT.test(id) || OPENING_ID_HINT.test(id)) {
+    // already-pale badge going 50% pale reads as "no change at all". The SAME
+    // two questions every other reader asks (BinarySensorClasses): the id
+    // words only when the sensor declares no class.
+    if (isMotionSensor(id, dc || undefined) || isOpeningSensor(id, dc || undefined)) {
       return "access_control";
     }
   }

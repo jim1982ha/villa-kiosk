@@ -257,6 +257,14 @@
   max-height: min(60vh, 420px);
 }
 .camera-picker-list { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+/* "Also on this device" over the camera feed: under the header's buttons it opened from, the readings list every
+   device window draws (DeviceReadings) */
+.camera-readings-menu {
+  position: absolute; z-index: 11;
+  top: calc(76px + var(--safe-top)); right: calc(20px + env(safe-area-inset-right, 0px));
+  width: min(320px, calc(100vw - 40px)); max-height: min(60vh, 420px); overflow-y: auto;
+}
+.camera-readings-menu .panel-readings { margin-top: 0; border-top: none; padding-top: 0; }
 
 /* Scrollable variant of a .hud-group (the category filter): however many
    buttons the profile/config produces, the pill never wraps and never grows
