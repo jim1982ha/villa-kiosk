@@ -1,3 +1,10 @@
+## 2.496.556
+
+What you will see:
+- Nothing changes on the screen. A guest or facility manager signed in on the tablet or a phone can no longer read the
+  messages people send to the villa's bot on Telegram, nor follow what anyone else does in the villa's system: their
+  session now only hears about the devices it shows and the rooms they sit in. Your own profile is unchanged.
+
 ## 2.496.555
 
 What you will see:

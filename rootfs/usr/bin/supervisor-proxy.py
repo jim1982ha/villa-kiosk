@@ -534,8 +534,9 @@ def _relay_to_client(role: str, text: str) -> str | None:
     session: the text to forward — narrowed when it lists entities — or None
     to drop it.
 
-    A state_changed event (or any event naming an entity) for an entity the
-    role may not read is dropped whole. A result that is a list of entities
+    A bus event of a type not in ALLOWED_EVENT_TYPES is dropped whole, and so
+    is a state_changed event (or any event naming an entity) for an entity the
+    role may not read. A result that is a list of entities
     keeps only what the role may read. Anything unreadable as JSON is dropped: Core speaks
     JSON, and a frame this process cannot judge must not pass on its say-so."""
     if _may(role, "administer"):
@@ -548,7 +549,16 @@ def _relay_to_client(role: str, text: str) -> str | None:
         return None
     kind = obj.get("type")
     if kind == "event":
-        data = (obj.get("event") or {}).get("data") if isinstance(obj.get("event"), dict) else None
+        event = obj.get("event")
+        if not isinstance(event, dict):
+            return None
+        # A bus event (it has an event_type or data) only of a type the gate lets
+        # a non-owner subscribe to — the second lock behind _ws_frame_refusal. A
+        # command's own stream (a camera's WebRTC answer) carries neither.
+        et = event.get("event_type")
+        if ("event_type" in event or "data" in event) and not (isinstance(et, str) and et in ALLOWED_EVENT_TYPES):
+            return None
+        data = event.get("data")
         eid = data.get("entity_id") if isinstance(data, dict) else None
         if eid is not None and not _read_allowed(role, str(eid)):
             return None
@@ -877,6 +887,12 @@ CAMERA_WS_TYPES = frozenset(HA_COMMANDS.get("camera", ()))
 
 # Read from the one table (see _load_ha_commands above).
 ALLOWED_WS_TYPES = frozenset({*HA_COMMANDS.get("websocket", ()), *CAMERA_WS_TYPES})
+# The event types a non-owner may subscribe to, and the only bus events relayed
+# to one (ha-commands.json `events`). subscribe_events used to be allowed with
+# ANY event_type, or none (= every event), and the relay forwarded each event
+# that named no entity: a guest could read telegram_text, i.e. people's
+# messages to the villa's bot. Empty table = nothing subscribable: default deny.
+ALLOWED_EVENT_TYPES = frozenset(HA_COMMANDS.get("events", ()))
 
 
 def _ws_frame_refusal(role: str, obj: dict) -> str | None:
@@ -895,6 +911,11 @@ def _ws_frame_refusal(role: str, obj: dict) -> str | None:
         return "This profile may not send this command."
     if msg_type in CAMERA_WS_TYPES and not _may(role, "viewCameras"):
         return "This profile may not view cameras."
+    if msg_type == "subscribe_events" and not (
+        isinstance(obj.get("event_type"), str) and obj["event_type"] in ALLOWED_EVENT_TYPES
+    ):
+        # No event_type means EVERY event on the bus; refused like any other.
+        return "This profile may not subscribe to these events."
     if msg_type == "call_service" and not _service_call_allowed(
         role, str(obj.get("domain", "")), str(obj.get("service", "")), _call_targets(obj),
     ):

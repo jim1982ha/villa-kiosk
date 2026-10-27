@@ -46,6 +46,18 @@ ck("found the socket's own commands (a scan that finds nothing proves nothing)",
 const unlisted = [...sent].filter(([t]) => !types.has(t)).map(([t, f]) => `${t} (${f})`);
 ck("every one is in the table", unlisted.length === 0, unlisted);
 
+// Events: every type the app subscribes to (a literal, or the registry list)
+// must be in the table's `events` — the proxy refuses a non-owner any other.
+const subscribed = new Map();
+for (const { f, src } of files) {
+  for (const m of src.matchAll(/\bsubscribeEvents\(\s*"([a-z_]+)"/g)) subscribed.set(m[1], f);
+  for (const m of src.matchAll(/\bREGISTRY_EVENTS = \[([^\]]*)\]/g)) for (const e of m[1].matchAll(/"([a-z_]+)"/g)) subscribed.set(e[1], f);
+}
+console.log(`  events the app subscribes to: ${[...subscribed.keys()].sort().join(", ")}`);
+ck("found the app's event subscriptions", subscribed.has("state_changed") && subscribed.has("entity_registry_updated"), [...subscribed.keys()]);
+const unlistedEvents = [...subscribed].filter(([e]) => !table.events.includes(e)).map(([e, f]) => `${e} (${f})`);
+ck("every event the app subscribes to is in the table", unlistedEvents.length === 0, unlistedEvents);
+
 // Service calls: every literal domain; and the domains passed as a variable
 // come from quickAction's toggle set, which must be in the table too.
 const calls = new Map();

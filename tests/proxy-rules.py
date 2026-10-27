@@ -429,7 +429,8 @@ ck("the proxy's lists ARE the table's (websocket + camera, domains, homeassistan
    proxy.ALLOWED_WS_TYPES == frozenset(_table["websocket"]) | frozenset(_table["camera"])
    and proxy.CAMERA_WS_TYPES == frozenset(_table["camera"])
    and proxy.ALLOWED_SERVICE_DOMAINS == frozenset(_table["serviceDomains"])
-   and proxy.ALLOWED_HOMEASSISTANT_SERVICES == frozenset(_table["homeassistantServices"]))
+   and proxy.ALLOWED_HOMEASSISTANT_SERVICES == frozenset(_table["homeassistantServices"])
+   and proxy.ALLOWED_EVENT_TYPES == frozenset(_table["events"]))
 ck("a guest's Energy window may read its cost (energy/info)", refuse("guest", "energy/info") is None)
 ck("a guest may run a scene and toggle an input_boolean (the app offers both)",
    refuse("guest", "call_service", domain="scene", service="turn_on") is None
