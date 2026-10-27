@@ -29,8 +29,10 @@ const ov = check({ badges: [badge("a", 100, 100), badge("b", 110, 100)] });
 ck("two badges on the same pixels: OVERLAP reported", ov.overlaps === 1 && ov.lines.some((l) => /OVERLAP on screen/.test(l)));
 const near = check({ badges: [badge("a", 100, 100), badge("b", 142, 100)] });
 ck("clear of each other, however close: nothing to report (no centre floor, 2026-10-14)", near.overlaps === 0 && near.lines.length === 0, near.lines);
-const foc = check({ badges: [badge("a", 100, 100, { exempt: true }), badge("b", 110, 100)] });
-ck("a focused room's overlap is COUNTED in its own bucket, not dropped", foc.overlaps === 0 && foc.focusOverlaps === 1);
+const foc = check({ badges: [badge("a", 100, 100, { exempt: true }), badge("b", 110, 100, { exempt: true })] });
+ck("a focused room's own overlap is COUNTED in its own bucket, not dropped", foc.overlaps === 0 && foc.focusOverlaps === 1);
+const mixed = check({ badges: [badge("a", 100, 100, { exempt: true }), badge("b", 110, 100)] });
+ck("  ...a focused badge under another room's is a plain OVERLAP (2.496.553)", mixed.overlaps === 1 && mixed.focusOverlaps === 0);
 const off = check({ badges: [badge("a", -500, 100), badge("b", -505, 100)] });
 ck("off screen is not something anyone sees", off.overlaps === 0);
 

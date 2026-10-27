@@ -15,6 +15,7 @@
 import { cardStruts } from "./badgeCard";
 import { glyphDrawPx } from "./badgeLayout";
 import type { BadgeMetrics } from "./badgeMetrics";
+import { valueAdvanceEm } from "./valueAdvance";
 import { VALUE_CAPABLE_TYPES } from "@/utils/entityValue";
 
 /** A badge's collision box in screen px, relative to its anchor point. */
@@ -26,8 +27,8 @@ export interface BadgeBoxInput {
   card: boolean;
   /** The mapping type — whether a classic badge can EVER carry a value pill. */
   type: string;
-  /** Characters in its value text. */
-  valueChars: number;
+  /** Its value text: its width is the font's own advance of each character (valueAdvance). */
+  valueText: string;
   /** Whether the value is drawn (the pass's answer, not the control's state). */
   valueShown: boolean;
 }
@@ -44,7 +45,7 @@ export interface BadgeBoxInput {
  */
 export function badgeBox(b: BadgeBoxInput, m: BadgeMetrics, scale: number, out: BadgeBox = { halfW: 0, halfH: 0, cy: 0 }): BadgeBox {
   if (b.card) {
-    const valW = b.valueShown ? b.valueChars * m.cardValueCharPx : 0;
+    const valW = b.valueShown ? valueAdvanceEm(b.valueText) * m.cardValueFontPx : 0;
     const cardW = cardStruts(m.cardHeightPx, glyphDrawPx(m, true), valW).width;
     out.halfW = (cardW / 2) * scale;
     out.halfH = (m.cardHeightPx / 2 + 1) * scale;
@@ -52,7 +53,7 @@ export function badgeBox(b: BadgeBoxInput, m: BadgeMetrics, scale: number, out: 
     return out;
   }
   const pillCapable = (VALUE_CAPABLE_TYPES as ReadonlySet<string>).has(b.type);
-  const pillHalfW = b.valueShown ? (b.valueChars * m.pillValueCharPx + m.pillValuePadPx) / 2 : 0;
+  const pillHalfW = b.valueShown ? (valueAdvanceEm(b.valueText) * m.pillValueFontPx + m.pillValuePadPx) / 2 : 0;
   out.halfW = Math.max(m.badgeDiameterPx / 2, pillHalfW) * scale;
   out.halfH = (pillCapable ? m.classicHalfHWithPillPx : m.classicHalfHPx) * scale;
   out.cy = (pillCapable ? m.classicCyWithPillPx : m.classicCyPx) * scale;

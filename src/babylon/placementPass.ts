@@ -889,15 +889,13 @@ export class PlacementPass {
         // nobody could see. Safe to read both here: every solver decision is
         // final by the time this runs.
         //
-        // And a FOCUSED room's badge blocks nobody — the same contract the `others`
-        // loop below already honours for focused groups, and the one
-        // PlacementItem.exempt states in the solver: "accepted unconditionally,
-        // AND never counted as a blocker for anyone else". This loop was the
-        // one place it was not honoured, so a focused room could push a
-        // NEIGHBOURING room's group to its chip while the focus lasted — the
-        // focus renegotiating the rest of the map, which is exactly what the
-        // exemption exists to prevent. Both questions are canBlock's.
-        if (!this.canBlock(shown[j].id, focus)) continue;
+        // A FOCUSED room's badge DOES stand in the way (2.496.553): it used to
+        // block nobody, so another room's card stood on it. The focused room's
+        // devices outrank the rest of the map (badgePlacement.focusContacts);
+        // absorb still never takes one (canBlock), so a card on one is refused
+        // and its rooms go to their chips. A focused CARD is not this card's
+        // concern here: focused cards skip `fits`, the `others` loop below.
+        if (!this.drawnBadge(shown[j].id)) continue;
         // The SAME rule as everywhere else on the glass since 2.406.0: boxes,
         // per axis, not a radius against a scalar distance — a radius judged a
         // wide badge's vertical clearance by its width. `ground` is the

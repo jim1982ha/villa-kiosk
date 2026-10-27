@@ -112,14 +112,15 @@ export class PlacementCheck {
 
     // (a) Drawn badge vs drawn badge. The headline number.
     //
-    // Focused-room badges get their own bucket rather than being dropped:
-    // their overlap is DELIBERATE (the exemption stacks them, which is exactly
-    // why pairFocusedRoom exists), so mixing them in would poison the number
-    // that matters while hiding the one case where the pairing failed.
+    // Two of the focused room's OWN badges get their own bucket rather than
+    // being dropped: their overlap is DELIBERATE (the exemption stacks them,
+    // which is exactly why pairFocusedRoom exists). A focused badge under
+    // ANOTHER room's is a plain overlap since 2.496.553: the other badge yields
+    // (badgePlacement.focusContacts), so it is no longer expected.
     for (let i = 0; i < bb.length; i++) {
       for (let j = i + 1; j < bb.length; j++) {
         const ink = hits(bb[i], bb[j]);
-        if (bEx[i] || bEx[j]) { if (ink) f.focusOverlaps++; continue; }
+        if (bEx[i] && bEx[j]) { if (ink) f.focusOverlaps++; continue; }
         if (ink) f.overlaps++;
       }
     }
