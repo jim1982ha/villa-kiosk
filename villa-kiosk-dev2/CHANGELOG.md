@@ -1,3 +1,13 @@
+## 2.496.554
+
+What you will see:
+- Nothing changes on the map. With the map's placement check on (`?debug=place` in the address), the debug box has a
+  new "Copy placement report" button: it copies what the last layout drew and what overlapped, by device, so an
+  overlap on your phone can be replayed exactly. A layout where something overlaps also lands, at most once a minute,
+  in Settings › Advanced › Device telemetry as a "placement" row you can copy from any device.
+- The placement check no longer calls any overlap "expected" or "allowed": every badge, card or room name drawn over
+  another counts as a failure. Only a badge hidden behind a wall while walking is set apart, as you asked.
+
 ## 2.496.553
 
 What you will see:
