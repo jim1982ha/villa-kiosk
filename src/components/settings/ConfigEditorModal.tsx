@@ -6,11 +6,11 @@
 // already applies to the live scene through ConfigContext.update(), so there is
 // nothing to reload on the way out.
 
+import Window from "@/components/common/Window";
 import { roleCan } from "@/auth/permissions";
 import { useState, type ReactNode } from "react";
 import { PendingFields, usePendingField, type PendingField } from "@/hooks/usePendingField";
 import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
-import { useModalA11y } from "@/hooks/useModalA11y";
 import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
 import InfoTip, { TipTitle } from "@/components/common/InfoTip";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
@@ -31,7 +31,6 @@ import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
-import DialogLayer from "@/components/common/DialogLayer";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -292,7 +291,6 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   const back = () => { own.flush(); onBack(); };
   const exit = commit ? footerExits(commit, onBack, notice).cancel : back;
   // Focus trap + Escape + focus restore (see useModalA11y).
-  const dialogRef = useModalA11y(exit);
   const { role } = useProfile();
   // ⚠️ FILTERED BEFORE THE INITIAL VALUE IS CHOSEN, so a non-owner can never
   // start on a tab that is not in their strip — which would render an empty
@@ -315,148 +313,139 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   return (
     <DialogEdits>
     <PendingFields pending={own.pending}>
-    <DialogLayer className="modal-backdrop" onClick={exit}>
-      <div
-        ref={dialogRef}
-        className="modal settings-modal config-editor-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Advanced settings"
-      >
-        <div className="modal-header">
-          {/* tabIndex={-1} + data-autofocus: useModalA11y's default (the
-              FIRST focusable descendant) would otherwise land on the header's
-              first button ("Upload Model", "Log Out All", or the (i)) and, for an (i),
-              pop its tooltip on open with no hover at all. The heading is the
-              conventional dialog-open focus target anyway; tabIndex={-1} makes
-              it programmatically focusable without joining the normal Tab
-              order. */}
-          <h2 tabIndex={-1} data-autofocus>Advanced Settings <span className="modal-title-version">v{__APP_VERSION__}</span></h2>
-          {/* ⚠️ BACK WHERE SETTINGS' OPENER IS, "LOG OUT ALL DEVICES" UP HERE (owner, 2026-10-24: "invert the position of
-              Log out all devices and the Back button, so that Back appears at the same position as where Advanced
-              Settings is in the previous menu"): Settings → Advanced Settings → Back is one spot under the finger. The
-              model's upload joined them here (owner, 2026-10-25), with one (i) for both. */}
-          {(canUploadModel || roleCan(role, "editConfig")) && (
-            <HeaderActions glbUpload={canUploadModel ? glbUpload : null} logout={roleCan(role, "editConfig") && <LogoutAll />} />
-          )}
-        </div>
-
-        {/* ⚠️ OUTSIDE `.modal-body`, LIKE FACILITY'S. The strip is chrome and
-            the body scrolls; putting the tabs inside would scroll them out of
-            reach on the long tabs — the entity table is hundreds of rows. */}
-        <ModalTabs
-          tabs={tabs}
-          active={tab}
-          onSelect={setTab}
-          label="Settings sections"
-        />
-
-        <div className="modal-body">
-          {glbUpload.uploadMsg && (
-            <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 0 }}>
-              {glbUpload.uploadMsg.text}
-            </div>
-          )}
-
-          {tab === "villa" && (
-            <>
-              <TipTitle title="Villa location" tip="Drives the sun's position, and day and night, for this villa." />
-              {/* Latitude, Longitude and the north offset on ONE line where there is room; on a phone the two
-                  coordinates share a line and the offset takes the next (owner, 2026-10-22) */}
-              <div className="villa-location-row">
-                <VillaCoordinates />
-                <NorthOffset viewHeadingDeg={viewHeadingDeg} />
-              </div>
-
-              <PresenceSensor />
-
-              {/* No collapse: `BindingsTable` already opens on its three counts
-                  with the lists themselves behind their own toggles, so this
-                  tab states how much is bound without a click. */}
-              <BindingsTable heading={<TipTitle title="Bound 3D objects" tip={<>
-                Each bound 3D object controls a device's entity when tapped in the villa: change which entity here,
-                without reloading the model; its name and display settings are with the device, in Devices. To prepare
-                an entity whose 3D object is not in the model yet, add it here: its settings apply as soon as a model
-                with an object named after its entity ID is uploaded. To bind one, expand the unbound objects and pick
-                an entity for it. The entities not shown on the map have no 3D object: add one in the 3D model, or bind
-                an unbound object to one, to control it from the villa.
-              </>} />} />
-            </>
-          )}
-
-          {tab === "devices" && (
-            <>
-              {/* ⚠️ NO COLLAPSE, AND THE HEADINGS STAY. Both sections used to be
-                  behind a toggle, so this tab would open on two words and
-                  nothing else. Each shows its first few rows with a filter above
-                  and a "Show all" beneath (`common/TruncatedList`), which
-                  answers "how many devices does this villa have" by looking
-                  rather than by clicking. Arriving from a device panel's "edit"
-                  pre-fills the filter, so the row that was come for is one of
-                  the few on screen. */}
-              <TipTitle title="Auto-detected entity settings" tip={<>
-                Entities listed here are auto-detected because their 3D object in the model is already named with the
-                entity ID (e.g. camera.driveway). Edit the display name, room or panel type without reloading the model.
-                Changes here apply to every device that opens the kiosk: this configuration is stored centrally by the
-                add-on, like the 3D model itself, not per browser. With none yet, upload a model whose objects are named
-                after entity IDs, or prepare one in Villa › Bound 3D objects.
-              </>} />
-              <ConfigEditor initialSearch={focusEntityId} />
-
-              <GroupedDevices heading={<TipTitle title="Grouped devices" tip={<>
-                Fold several entities that are really one physical device (e.g. a combo sensor with separate
-                temperature and humidity entities) into a single map badge. Only the primary entity keeps a badge on the
-                map; every other member's value and 24-hour history appear in that badge's detail view instead. To make
-                one, pick the entity that should keep the map badge (e.g. temperature) under New group, then add the rest
-                as members.
-              </>} />} />
-
-              <UnavailableByDesign heading={<TipTitle title="Asleep between reports" tip={<>
-                Devices that sleep between reports, such as a battery door sensor: their "unavailable" is normal. VESTA
-                shows what each one last reported, never "Unavailable", and raises no fault for it; the VESTA Agent skips
-                its offline checks for them too.
-              </>} />} />
-            </>
-          )}
-
-          {/* Owner only: the telemetry endpoint itself 403s other roles (it
-              carries other people's user-agents and error text), and logging
-              every device out is an owner act. The tab is not rendered for
-              other roles rather than rendered-and-403 — see the TABS filter. */}
-          {tab === "system" && roleCan(role, "editConfig") && (
-            <>
-              <TipTitle title="Maintenance records" tip={<>
-                Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
-                task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
-              </>} />
-              <RecordsKept />
-
-              {/* `TelemetryPanel` pages its own log, so there is nothing here
-                  for an outer collapse to save — and hiding the section also
-                  hid the Refresh/Copy/Download/Probe buttons, which are the
-                  reason somebody opens this tab. */}
-              <TipTitle title="Device telemetry" tip={<>
-                What every device that opens this kiosk has reported: load timings, script errors, graphics context
-                losses and page-lifecycle transitions. This is how a problem on someone else's phone becomes
-                diagnosable. Newest first; the add-on keeps the latest events, as many as its options allow. Copy and Download give the raw events
-                (every field, not just the summary shown here); Clear empties the store.
-              </>} />
-              <TelemetryPanel />
-
-
-            </>
-          )}
-        </div>
-
-        {/* Every tab applies LIVE through `ConfigContext`, so a tab switch loses nothing. Over Settings: Close, back to
-            Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
-        <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
-        <SaveProblemNote line={saveProblem} onDismiss={() => setSaveProblem(null)} />
-        <ModalFooter onClose={back} commit={commit} back={{ go: exit, to: withinSettings ? "Settings" : undefined }}
-          actions={withinSettings ? <span /> : undefined} />
+    <Window kind="content" label="Advanced settings" onClose={exit} className="settings-modal config-editor-modal">
+      <div className="modal-header">
+        {/* tabIndex={-1} + data-autofocus: useModalA11y's default (the
+            FIRST focusable descendant) would otherwise land on the header's
+            first button ("Upload Model", "Log Out All", or the (i)) and, for an (i),
+            pop its tooltip on open with no hover at all. The heading is the
+            conventional dialog-open focus target anyway; tabIndex={-1} makes
+            it programmatically focusable without joining the normal Tab
+            order. */}
+        <h2 tabIndex={-1} data-autofocus>Advanced Settings <span className="modal-title-version">v{__APP_VERSION__}</span></h2>
+        {/* ⚠️ BACK WHERE SETTINGS' OPENER IS, "LOG OUT ALL DEVICES" UP HERE (owner, 2026-10-24: "invert the position of
+            Log out all devices and the Back button, so that Back appears at the same position as where Advanced
+            Settings is in the previous menu"): Settings → Advanced Settings → Back is one spot under the finger. The
+            model's upload joined them here (owner, 2026-10-25), with one (i) for both. */}
+        {(canUploadModel || roleCan(role, "editConfig")) && (
+          <HeaderActions glbUpload={canUploadModel ? glbUpload : null} logout={roleCan(role, "editConfig") && <LogoutAll />} />
+        )}
       </div>
-    </DialogLayer>
+
+      {/* ⚠️ OUTSIDE `.modal-body`, LIKE FACILITY'S. The strip is chrome and
+          the body scrolls; putting the tabs inside would scroll them out of
+          reach on the long tabs — the entity table is hundreds of rows. */}
+      <ModalTabs
+        tabs={tabs}
+        active={tab}
+        onSelect={setTab}
+        label="Settings sections"
+      />
+
+      <div className="modal-body">
+        {glbUpload.uploadMsg && (
+          <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 0 }}>
+            {glbUpload.uploadMsg.text}
+          </div>
+        )}
+
+        {tab === "villa" && (
+          <>
+            <TipTitle title="Villa location" tip="Drives the sun's position, and day and night, for this villa." />
+            {/* Latitude, Longitude and the north offset on ONE line where there is room; on a phone the two
+                coordinates share a line and the offset takes the next (owner, 2026-10-22) */}
+            <div className="villa-location-row">
+              <VillaCoordinates />
+              <NorthOffset viewHeadingDeg={viewHeadingDeg} />
+            </div>
+
+            <PresenceSensor />
+
+            {/* No collapse: `BindingsTable` already opens on its three counts
+                with the lists themselves behind their own toggles, so this
+                tab states how much is bound without a click. */}
+            <BindingsTable heading={<TipTitle title="Bound 3D objects" tip={<>
+              Each bound 3D object controls a device's entity when tapped in the villa: change which entity here,
+              without reloading the model; its name and display settings are with the device, in Devices. To prepare
+              an entity whose 3D object is not in the model yet, add it here: its settings apply as soon as a model
+              with an object named after its entity ID is uploaded. To bind one, expand the unbound objects and pick
+              an entity for it. The entities not shown on the map have no 3D object: add one in the 3D model, or bind
+              an unbound object to one, to control it from the villa.
+            </>} />} />
+          </>
+        )}
+
+        {tab === "devices" && (
+          <>
+            {/* ⚠️ NO COLLAPSE, AND THE HEADINGS STAY. Both sections used to be
+                behind a toggle, so this tab would open on two words and
+                nothing else. Each shows its first few rows with a filter above
+                and a "Show all" beneath (`common/TruncatedList`), which
+                answers "how many devices does this villa have" by looking
+                rather than by clicking. Arriving from a device panel's "edit"
+                pre-fills the filter, so the row that was come for is one of
+                the few on screen. */}
+            <TipTitle title="Auto-detected entity settings" tip={<>
+              Entities listed here are auto-detected because their 3D object in the model is already named with the
+              entity ID (e.g. camera.driveway). Edit the display name, room or panel type without reloading the model.
+              Changes here apply to every device that opens the kiosk: this configuration is stored centrally by the
+              add-on, like the 3D model itself, not per browser. With none yet, upload a model whose objects are named
+              after entity IDs, or prepare one in Villa › Bound 3D objects.
+            </>} />
+            <ConfigEditor initialSearch={focusEntityId} />
+
+            <GroupedDevices heading={<TipTitle title="Grouped devices" tip={<>
+              Fold several entities that are really one physical device (e.g. a combo sensor with separate
+              temperature and humidity entities) into a single map badge. Only the primary entity keeps a badge on the
+              map; every other member's value and 24-hour history appear in that badge's detail view instead. To make
+              one, pick the entity that should keep the map badge (e.g. temperature) under New group, then add the rest
+              as members.
+            </>} />} />
+
+            <UnavailableByDesign heading={<TipTitle title="Asleep between reports" tip={<>
+              Devices that sleep between reports, such as a battery door sensor: their "unavailable" is normal. VESTA
+              shows what each one last reported, never "Unavailable", and raises no fault for it; the VESTA Agent skips
+              its offline checks for them too.
+            </>} />} />
+          </>
+        )}
+
+        {/* Owner only: the telemetry endpoint itself 403s other roles (it
+            carries other people's user-agents and error text), and logging
+            every device out is an owner act. The tab is not rendered for
+            other roles rather than rendered-and-403 — see the TABS filter. */}
+        {tab === "system" && roleCan(role, "editConfig") && (
+          <>
+            <TipTitle title="Maintenance records" tip={<>
+              Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
+              task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
+            </>} />
+            <RecordsKept />
+
+            {/* `TelemetryPanel` pages its own log, so there is nothing here
+                for an outer collapse to save — and hiding the section also
+                hid the Refresh/Copy/Download/Probe buttons, which are the
+                reason somebody opens this tab. */}
+            <TipTitle title="Device telemetry" tip={<>
+              What every device that opens this kiosk has reported: load timings, script errors, graphics context
+              losses and page-lifecycle transitions. This is how a problem on someone else's phone becomes
+              diagnosable. Newest first; the add-on keeps the latest events, as many as its options allow. Copy and Download give the raw events
+              (every field, not just the summary shown here); Clear empties the store.
+            </>} />
+            <TelemetryPanel />
+
+
+          </>
+        )}
+      </div>
+
+      {/* Every tab applies LIVE through `ConfigContext`, so a tab switch loses nothing. Over Settings: Close, back to
+          Settings, whose Save / Cancel own these changes; on its own: this dialog's Save / Cancel (`commit`). */}
+      <RemoteReplacedNote replaced={own.replaced} onDismiss={own.dismissReplaced} />
+      <SaveProblemNote line={saveProblem} onDismiss={() => setSaveProblem(null)} />
+      <ModalFooter onClose={back} commit={commit} back={{ go: exit, to: withinSettings ? "Settings" : undefined }}
+        actions={withinSettings ? <span /> : undefined} />
+    </Window>
     </PendingFields>
     </DialogEdits>
   );

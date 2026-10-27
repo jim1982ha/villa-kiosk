@@ -51,7 +51,7 @@ export interface AttentionItem {
   /** The villa DEVICE the entity belongs to (deviceGroups.deviceFolding: the
    *  owner's device groups, then Home Assistant's device registry) — what
    *  groupAttention folds on. Set exactly when `entityId` is. */
-  device?: { key: string; label: string; room?: string };
+  device?: CardDevice;
   /** The open fault about this very entity, when this item is its live state (groupAttention): one problem, not two. */
   fault?: AttentionItem;
   /** Set on a fault whose entity Home Assistant reports "unavailable" right now: its device is offline, and so is
@@ -146,10 +146,8 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
     groups.push({
       key,
       kind: worst.kind,
-      title: worst.device ? worst.device.label : worst.title,
-      // ⚠️ ALWAYS A ROOM LINE (owner, 2026-10-15: a card without one broke the layout): a device no room holds reads as
-      // the By Room list files it, "Other"
-      room: roomLabel(firstRoom(worst.device?.room, worst.room)),
+      // ⚠️ ALWAYS A ROOM LINE (owner, 2026-10-15: a card without one broke the layout): cardHead
+      ...cardHead(worst.device, worst.title, worst.room),
       // The DEVICE, as the map opens it — not the entity the problem names. A
       // ticket on a pump's energy meter opened the meter's chart while the
       // map's pump badge opens its power (2.496.258).
@@ -177,8 +175,6 @@ export interface DeviceIssues {
   /** Every entity a problem names and its device, with an AMBER issue (a fault, merged or not, or late maintenance):
    *  what a badge's amber "!" and a room's amber number read. */
   amber: ReadonlySet<string>;
-  /** The worst severity of each such entity and device. */
-  worst: ReadonlyMap<string, AttentionSeverity>;
 }
 
 /**
@@ -192,12 +188,8 @@ export interface DeviceIssues {
  */
 export function deviceIssues(groups: readonly AttentionGroup[]): DeviceIssues {
   const amber = new Set<string>();
-  const worst = new Map<string, AttentionSeverity>();
   const note = (id: string | undefined, s: AttentionSeverity) => {
-    if (!id) return;
-    const was = worst.get(id);
-    if (was === undefined || SEVERITY_RANK[s] < SEVERITY_RANK[was]) worst.set(id, s);
-    if (s === "warn") amber.add(id);
+    if (id && s === "warn") amber.add(id);
   };
   for (const g of groups) {
     for (const item of g.items) {
@@ -208,7 +200,14 @@ export function deviceIssues(groups: readonly AttentionGroup[]): DeviceIssues {
       }
     }
   }
-  return { amber, worst };
+  return { amber };
+}
+
+/** The amber issues one profile's Cockpit lists (`may`: the devices it may see, villaVisibility.visibleTo): what a
+ *  badge's amber "!" reads in every window that profile opens, the same cards its window's warning sign reads
+ *  (issueSeverity) — a guest's badge never shows a problem its own Cockpit does not (architecture review N, card 5). */
+export function faultsFor(problems: VillaProblems, may: (entityId: string) => boolean): ReadonlySet<string> {
+  return deviceIssues(attentionFor(problems, may).attentionGroups).amber;
 }
 
 /** The most serious issue the Overview lists for the devices of `ids` (a device window: the device and its linked
@@ -318,6 +317,29 @@ function mergeFaults(items: AttentionItem[]): AttentionItem[] {
  * maintenance, and every device the map paints RED (its deviceLook is
  * `alert`).
  */
+/** The device a card stands for, as every card names and places it: the device the entity folds onto (the one fold
+ *  every count uses), its name, and its room (its own, else its entity's, else the record's). */
+export interface CardDevice { key: string; label: string; room?: string }
+
+/** THE way a problem's entity becomes its card's device (architecture review N, card 6): the open issues' cards and
+ *  the Watched cards both (config/cockpitCard confirmingCards), which made the same four steps each — a change to how
+ *  a card names its device or its room reached one list and not the other. */
+export function cardDevice(entityId: string, recordRoom: string | undefined, ctx: {
+  devices: Pick<VillaDevices, "deviceOf">; entityMap: Parameters<typeof labelOf>[1];
+  entities: Record<string, HassEntity>; resolvedRooms: Record<string, string>;
+}): CardDevice {
+  const key = ctx.devices.deviceOf(entityId);
+  // ⚠️ EMPTY MEANS ABSENT (2026-10-16): this was `rooms[key] ?? rooms[entityId] ?? i.room`, and resolveRooms stores ""
+  // for no room, so `??` stopped there — a device with no room whose sensor had one read "Other".
+  return { key, label: labelOf(key, ctx.entityMap, ctx.entities), room: deviceRoomOrRecord(ctx.resolvedRooms, key, entityId, recordRoom) };
+}
+
+/** A card's title and room line: the DEVICE, whatever its problems (a problem with no device stands for itself), and
+ *  ALWAYS a room line (a device no room holds reads as the By Room list files it, "Other"). */
+export function cardHead(device: CardDevice | undefined, title: string, recordRoom: string | undefined): { title: string; room: string } {
+  return { title: device ? device.label : title, room: roomLabel(firstRoom(device?.room, recordRoom)) };
+}
+
 export function buildAttentionItems(opts: {
   /** The villa's devices (deviceGroups.villaDevices) — ASKED, never restated: which are not answering, which may raise
    *  an alarm (its ids), each problem's device (deviceOf, the one fold every count uses), which are critical.
@@ -420,14 +442,7 @@ export function buildAttentionItems(opts: {
   // the worst case is a row of its own, as before grouping. Never by name.
   for (const i of items) {
     if (!i.entityId) continue;
-    const key = devices.deviceOf(i.entityId);   // the one fold every count and the Tickets tab use
-    i.device = {
-      key,
-      label: labelOf(key, entityMap, entities),
-      // ⚠️ EMPTY MEANS ABSENT (2026-10-16): this was `rooms[key] ?? rooms[entityId] ?? i.room`, and resolveRooms
-      // stores "" for no room, so `??` stopped there — a device with no room whose sensor had one read "Other".
-      room: deviceRoomOrRecord(resolvedRooms, key, i.entityId, i.room),
-    };
+    i.device = cardDevice(i.entityId, i.room, { devices, entityMap, entities, resolvedRooms });
   }
 
   // ⚠️ HIDDEN MEANS HIDDEN EVERYWHERE (owner, 2026-10-25): a device hidden in the villa's system had no badge on the

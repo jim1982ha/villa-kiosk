@@ -116,9 +116,9 @@ ck("the list paints the tone, the page builds its rows here, and the tones have 
      && !detectsPresence("binary_sensor.garden_pir", "door"));
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   // the routing is babylon/motionRouting since 2026-10-22 (Advanced Settings' "Room glow and camera cones"), painted
-  // by EntityVisuals.applyMotionRouting — room_glow_switch.mjs drives it by value
+  // by EntityVisuals.relight — room_glow_switch.mjs drives it by value
   const mr = readFileSync(new URL("../../src/babylon/motionRouting.ts", import.meta.url), "utf8");
-  ck("  ...the map's room glow asks exactly that (motionRouting, painted by EntityVisuals.applyMotionRouting)",
+  ck("  ...the map's room glow asks exactly that (motionRouting, painted by EntityVisuals.relight)",
      /if \(i\.type === "binary_sensor" && i\.room && glowsRoom\(i\.entityId, i\.deviceClass\)\) \{\s*return \{ beams: \[\], rooms: \[\{ room: i\.room, on: i\.on \}\] \};/.test(mr)
      // owner, 2026-10-22: an auto-detected sensor (its 3D object named after it, never saved) — its badge red, its room dark
      && /type: this\.mapping\.get\(entity\.entity_id\)\?\.type \?\? this\.config\.entityMap\[entity\.entity_id\]\?\.type,/.test(ev));
@@ -126,9 +126,9 @@ ck("the list paints the tone, the page builds its rows here, and the tones have 
   // reveal; the glow only followed a CHANGE). Each time the rooms or their glows change, every glow is lit again from
   // the sensors as they stand now.
   const body = (name) => ev.slice(ev.indexOf(name), ev.indexOf("\n  }\n", ev.indexOf(name)));
-  ck("  ...and lit again whenever the rooms are known or rebuilt, from the sensors as they stand now",
-     /private reapplyRoomGlows\(\): void \{\s*this\.roomHighlight\.clearActive\(\);\s*for \(const entity of this\.lastState\.values\(\)\) \{\s*if \(entity\.state === "on"\) this\.applyMotionRouting\(entity\);/.test(ev)
-     && ["setResolvedRooms(rooms", "setRoomPoints(points", "setPlan(plan"].every((m) => /this\.reapplyRoomGlows\(\);/.test(body(m))));
+  ck("  ...and lit again whenever the rooms are known or rebuilt, from the sensors as they stand now (room_glow_switch.mjs)",
+     /for \(const entity of this\.lastState\.values\(\)\) this\.routeMotion\(entity\);/.test(ev)
+     && ["setResolvedRooms(rooms", "setRoomPoints(points", "setPlan(plan"].every((m) => /this\.relight\((\"rooms\")?\);/.test(body(m))));
 }
 
 done("✅ a detector finding nothing wrong reads green, on its pill and its history");

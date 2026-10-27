@@ -9,7 +9,7 @@
 // panel) and the shared gradient badge (badgeImage) so it feels native.
 
 import { roleCan } from "@/auth/permissions";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { rowText } from "@/config/reading";
 import { Sparkles, Power, PowerOff, MapPin, Building2 } from "lucide-react";
 import BasePanel from "./BasePanel";
@@ -132,7 +132,7 @@ export default function SummaryGroupPanel({
 }: Props) {
   // Entities on the 3D map; anything else exists only in Home Assistant and
   // is listed last and tinted (config/VillaModel).
-  const { mappedEntityIds, marks } = useVillaModel();
+  const { mappedEntityIds, marksFor } = useVillaModel();
   const { entities, suppressedEntityIds, hiddenInHaEntityIds, callService } = useHA();
   const roomFloors = useRoomFloors();
   const { config, resolvedRooms } = useConfig();
@@ -143,10 +143,11 @@ export default function SummaryGroupPanel({
    *  linked entity through devicePower, its device_class alarm). A
    *  linked entity is frequently not itself in this group (a pump's switch
    *  lives elsewhere), so this reads the whole store, not the group's list. */
-  // ...and the villa model's marks, as the map reads them (VillaModel `marks`): a critical device that lost contact is
-  // red, a hidden row keeps its "hidden" mark (never red or amber), an open fault its amber "!".
-  const looks = storeLookSource(entities, { ...config, ...lookMarks(marks) });
+  // ...and the villa model's marks as THIS profile sees the villa (VillaModel marksFor): a critical device that lost
+  // contact is red, a hidden row keeps its "hidden" mark (never red or amber), a card its own Cockpit lists an amber "!".
   const { role } = useProfile();
+  const marks = useMemo(() => marksFor(role), [marksFor, role]);
+  const looks = storeLookSource(entities, { ...config, ...lookMarks(marks) });
   const entityLabel = useEntityLabel();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
 

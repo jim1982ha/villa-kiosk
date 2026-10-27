@@ -18,9 +18,9 @@ ck("nothing registered: nothing open", overlayOpen() === false);
 const SRC = new URL("../../src/", import.meta.url).pathname;
 const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx$/.test(p) && out.push(p); } return out; };
 const read = (f) => readFileSync(f, "utf8");
-const REGISTERS = /useModalA11y\(|useBackToClose\(|<AskDialog\b|<BasePanel\b/;
+const REGISTERS = /useModalA11y\(|useBackToClose\(|<AskDialog\b|<BasePanel\b|<Window\b/;
 // A surface is anything drawn as a dialog, a modal backdrop or a menu.
-const surfaces = walk(SRC).filter((f) => /className="modal-backdrop|role="dialog"|role="menu"|aria-haspopup="menu"/.test(read(f)));
+const surfaces = walk(SRC).filter((f) => /className="modal-backdrop|role="dialog"|role="menu"|aria-haspopup="menu"|<Window\b/.test(read(f)));
 const unregistered = surfaces.filter((f) => !REGISTERS.test(read(f))).map((f) => f.slice(SRC.length));
 ck(`every surface registers on the stack (${surfaces.length} files)`, surfaces.length >= 10 && unregistered.length === 0, unregistered);
 

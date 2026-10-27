@@ -73,7 +73,7 @@ import { Control } from "@babylonjs/gui/2D/controls/control";
 import type { AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
 import { cameraMotionId } from "@/config/BinarySensorClasses";
-import { motionPaint, motionRouting, type MotionRouting } from "./motionRouting";
+import { motionChanges, motionLit, motionRouting, NOTHING_LIT, type MotionLit, type MotionRouting } from "./motionRouting";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
@@ -803,8 +803,10 @@ export class EntityVisuals {
    *  can repaint badges immediately instead of waiting for the next push. */
   private lastState = new Map<string, HassEntity>();
   /** Each sensor's latest routing (motionRouting), kept while it names a cone or a room: a room or a cone is lit while
-   *  ANY of them lights it (motionPaint), never by the last sensor to report alone. */
+   *  ANY of them lights it (relight, motionLit), never by the last sensor to report alone. */
   private readonly motionRoutes = new Map<string, MotionRouting>();
+  /** The cones and rooms painted on now (relight switches only what differs from it). */
+  private motionPainted: MotionLit = NOTHING_LIT;
   /** The map's LookSource (utils/deviceActivity): every badge, card cell,
    *  room-chip member and mesh here is painted from deviceLook / readingOf
    *  through this — the live cache above, the mesh-resolved mappings, and the
@@ -1132,12 +1134,9 @@ export class EntityVisuals {
     const prevBadgeStyle = this.config.badgeStyle;
     const prevGlows = this.config.roomGlowAndCones;
     this.config = config;
-    // Advanced Settings' "Room glow and camera cones" applies live (owner, 2026-10-22): every glow and cone off, then
-    // — switched on — lit again from the sensors as they stand (reapplyRoomGlows, through motionRouting).
-    if (config.roomGlowAndCones !== prevGlows) {
-      this.beams.clearActive();
-      this.reapplyRoomGlows();
-    }
+    // Advanced Settings' "Room glow and camera cones" applies live (owner, 2026-10-22): off, every glow and cone goes
+    // out; on, they are lit again from the sensors as they stand (relight, through motionRouting).
+    if (config.roomGlowAndCones !== prevGlows) this.relight();
     // hiddenCategories gates the layout pass's first cull and badgeStyle
     // switches labelBoxes to a different geometry entirely — neither is
     // observable through the view-projection matrix.
@@ -1896,6 +1895,7 @@ export class EntityVisuals {
     this.labelsNewestFirst.length = 0;
     this.lastState.clear();
     this.motionRoutes.clear();
+    this.motionPainted = NOTHING_LIT;
     this.labelLayer?.dispose();
     this.labelLayer = null;
   }
@@ -1905,7 +1905,7 @@ export class EntityVisuals {
    *  handed on as-is to the room highlight and the bulbs' pools. */
   setPlan(plan: Storeys<{ name: string; pts: { x: number; z: number }[]; floorY: number; storey?: number; conform?: { positions: number[]; indices: number[] } }>): void {
     this.roomHighlight.setRooms(plan);
-    this.reapplyRoomGlows();
+    this.relight("rooms");
     // Each room's ground WIDTH used to be cached here too, as the "is there
     // space here?" denominator for laying a pile of badges out across a room.
     // Nothing lays badges out any more (2.159.0 — badges sit on their anchors
@@ -1937,8 +1937,8 @@ export class EntityVisuals {
     // Assistant's reconnect or registry change. The mark now asks for the frame
     // itself (layoutGate.ts): one frame per recompute, a few a minute at most.
     this.resolvedRooms = rooms;
-    // a sensor already "on" lights its room now that the room is known (reapplyRoomGlows)
-    this.reapplyRoomGlows();
+    // a sensor already "on" lights its room now that the room is known (relight)
+    this.relight();
     // MUST mark dirty (regression from 2.113.0's frame-skip). roomOf() reads
     // this map, and it is what every grouping/clustering decision keys on —
     // but room resolution only lands AFTER the reveal (calibrateRooms runs in
@@ -2147,19 +2147,35 @@ export class EntityVisuals {
    *  shouldn't need a model reload to start glowing). */
   setRoomPoints(points: { name: string; x: number; z: number; floorY: number }[]): void {
     this.roomHighlight.setPointRooms(points);
-    this.reapplyRoomGlows();
+    this.relight("rooms");
   }
 
-  /** Every room glow from the sensors AS THEY STAND NOW (lastState), after the rooms, or the glows they light, change.
+  /** THE repaint of every cone and room glow (architecture review O, 2026-10-27): the routing of the sensor that just
+   *  reported (`changed`), or of every sensor as it stands now (lastState), then the whole lit set (motionLit), and only
+   *  what differs from what is painted switched (motionChanges). `rebuilt`: the rooms' glows or the cones were just
+   *  built again, dark: all of them are lit again from the sensors.
    *  ⚠️ THE GLOW WAS EVENT-DRIVEN ONLY (owner, 2026-10-22: "why doesn't motion6 highlight the Side Back area"): a
-   *  sensor already "on" when the map loaded was applied while no room was resolved yet — rooms land after the reveal
-   *  — and nothing lit its room until it changed again; a new motion sensor read "Occupied" for three hours with its
-   *  room dark. Off first, then each sensor "on" through the one routing (applyMotionRouting). */
-  private reapplyRoomGlows(): void {
-    this.roomHighlight.clearActive();
-    for (const entity of this.lastState.values()) {
-      if (entity.state === "on") this.applyMotionRouting(entity);
+   *  sensor already "on" when the map loaded was applied while no room was resolved yet — rooms land after the reveal —
+   *  and nothing lit its room until it changed again; a cone built after its sensor's report lit "one toggle late".
+   *  Two replays, called by each event that remembered to: every event now asks for the lit set as it is. */
+  private relight(arg?: HassEntity | "rooms" | "beams"): void {
+    const changed = typeof arg === "object" ? arg : null;
+    if (changed) this.routeMotion(changed);
+    else {
+      this.motionRoutes.clear();
+      for (const entity of this.lastState.values()) this.routeMotion(entity);
     }
+    if (arg === "rooms") {
+      this.roomHighlight.clearActive();
+      this.motionPainted = { ...this.motionPainted, rooms: new Map() };
+    } else if (arg === "beams") {
+      this.motionPainted = { ...this.motionPainted, beams: new Set() };
+    }
+    const lit = motionLit(this.motionRoutes.values());
+    const change = motionChanges(this.motionPainted, lit);
+    for (const b of change.beams) this.setBeamActive(b.cameraId, b.on);
+    for (const r of change.rooms) this.roomHighlight.setActive(r.room, r.on);
+    this.motionPainted = lit;
   }
 
   /** Replace camera facing directions (world-space unit vectors, may include
@@ -2179,7 +2195,7 @@ export class EntityVisuals {
   private buildCameraBeams(): void {
     const { sources, occluders } = this.collectBeamSources();
     this.beams.rebuild(sources, occluders);
-    this.replayBeamMotion();
+    this.relight("beams");
   }
 
   /** WHICH cameras qualify, and what may block their cones — the decision half,
@@ -2260,7 +2276,7 @@ export class EntityVisuals {
       finally { end(); }
     }
     this.beams.saveCache();
-    this.replayBeamMotion();
+    this.relight("beams");
   }
 
   /** Set the directions without building, for a caller that will drive the
@@ -2269,24 +2285,9 @@ export class EntityVisuals {
     this.cameraDirections = dirs;
   }
 
-  private replayBeamMotion(): void {
-    // Re-assert current motion state onto the freshly-built beams. Beams are
-    // (re)built by setCameraDirections, which runs AFTER the first batch of HA
-    // states has already been applied — so a camera whose motion sensor was
-    // already "on" at load fired setBeamActive against a beam that didn't
-    // exist yet (a logged no-op), and without this its beam would stay dark
-    // until the sensor's NEXT state change. Replay from lastState so a beam
-    // built while its sensor is on lights up immediately, not one toggle late.
-    // through the one routing, so the cone obeys Advanced Settings' switch as a live change does
-    for (const sensorId of this.linkedEntityIndex.keys()) {
-      const st = this.lastState.get(sensorId);
-      if (st?.state === "on") this.applyMotionRouting(st);
-    }
-  }
-
   /** Turn a camera's beam on/off (driven by its linked motion sensor state).
    *  Returns whether a beam mesh actually existed to activate — see
-   *  applyMotionRouting's fallback for why callers need to know that. */
+   *  routeMotion's fallback for why callers need to know that. */
   private setBeamActive(entityId: string, on: boolean): boolean {
     if (!this.beams.has(entityId)) {
       // Channel "beam": the `camera beams: N built | skipped: …` summary below
@@ -2323,7 +2324,7 @@ export class EntityVisuals {
     // Motion/presence routing (camera beam or room glow) runs regardless of
     // whether THIS entity has a mesh of its own — a plain HA binary_sensor
     // driving either effect typically isn't a modelled 3D object at all.
-    this.applyMotionRouting(entity);
+    this.relight(entity);
     this.applyLinkedEntityRouting(entity);
     this.applyLinkOwnerRouting(entity);
     const owningGroup = this.config.deviceGroups.find((g) =>
@@ -2494,7 +2495,7 @@ export class EntityVisuals {
    *  so the sensor's own fallback below usually has nothing to work with
    *  either). Still real, still opt-in (only fires when the camera's own
    *  Room is set), never a guess about WHERE the camera is aiming. */
-  private applyMotionRouting(entity: HassEntity): void {
+  private routeMotion(entity: HassEntity): void {
     const deviceClass = entity.attributes.device_class as string | undefined;
     // What lights is motionRouting's (pure, tests/oracles/room_glow_switch.mjs): the cone or the camera's room, or the
     // sensor's own room — nothing for a profile denied motion sensors (the guest's, 2.496.210), nothing when Advanced
@@ -2512,17 +2513,13 @@ export class EntityVisuals {
       denied: !!this.config.deniedTypes?.includes("binary_sensor"),
       enabled: this.config.roomGlowAndCones,
     });
-    // What is painted is every sensor's, not this one's alone (motionPaint): its room or cone stays lit while another
-    // of its sensors still reads "on".
-    const before = this.motionRoutes.get(entity.entity_id);
+    // kept per sensor: what is painted is every sensor's, not this one's alone (relight: a room or cone stays lit while
+    // another of its sensors still reads "on")
     if (route.beams.length > 0 || route.rooms.length > 0) this.motionRoutes.set(entity.entity_id, route);
     else this.motionRoutes.delete(entity.entity_id);
-    const paint = motionPaint(this.motionRoutes.values(), [before, route]);
-    for (const b of paint.beams) this.setBeamActive(b.cameraId, b.on);
-    for (const r of paint.rooms) this.roomHighlight.setActive(r.room, r.on);
   }
 
-  /** Counterpart to applyMotionRouting for EntityMapping.linkedEntityId: when
+  /** Counterpart to routeMotion for EntityMapping.linkedEntityId: when
    *  a linked entity changes state, ring every device that references it
    *  (that device's OWN badge, not the linked entity's — e.g. a camera whose
    *  detection switch was just armed). Fully independent of the beam path

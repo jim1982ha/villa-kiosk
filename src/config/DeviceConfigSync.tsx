@@ -62,9 +62,8 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConfig } from "./ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { useSyncReporter } from "@/utils/syncTelemetry";
-import { SyncedDocument } from "@/utils/syncedDocument";
+import { landPush, SyncedDocument } from "@/utils/syncedDocument";
 import { useStoreRefresh } from "@/hooks/useStoreRefresh";
-import { saveProblemLine } from "@/utils/storeSave";
 import {
   fetchSharedConfig, saveSharedConfig, pickSharedConfig, SHARED_CONFIG_KEYS,
   diffSharedConfig, applySharedConfigDiff, isSharedConfigDiffEmpty, describeSharedConfigDiff,
@@ -175,35 +174,36 @@ export default function DeviceConfigSync() {
     // indistinguishable in a dump from a push driven by a real edit.
     const from = outcome.ok ? outcome.synced : doc.baseline;
     const changed = from ? describeSharedConfigDiff(diffSharedConfig(from, local)) : undefined;
-    if (outcome.ok) {
-      reportSync({
-        op: "push", ok: true, attempts: outcome.attempts, rev: outcome.rev,
-        changed,
-        dismissed: outcome.next.dismissedEntityIds.length,
-        entities: Object.keys(outcome.next.entityMap).length,
-      });
-      // Fold in whatever another device contributed: the copy this device's diff went onto (`base`) against the one
-      // it had synced, item by item, onto the config as it is NOW (mergeRemote → deviceConfig applyRemoteChange).
-      // ⚠️ NEVER `outcome.next` WRITTEN OVER THE CONFIG (to 2.496.497): it is the copy taken when the push began, so
-      // a device edited while the push was out went back, and the next diff (against that same copy) was empty: the
-      // edit was lost. The baseline is `next` (the server's), so that edit is what the next push sends.
-      // ⚠️ AGAINST THE BASELINE THIS PUSH ACTUALLY SENT FROM (`synced`, utils/syncedDocument), never one read before it
-      // waited its turn: that one lacked the push before it, whose edit then came back as another tablet's (to 2.496.498).
-      // ⚠️ `others`, NOT THE STORE'S COPY AGAINST IT (to 2.496.500): a relabel whose push landed after its deadline was
-      // in that copy, read as another tablet's, and an open dialog took it as the value Cancel puts back.
-      mergeRemote(pushedChange(outcome));
-    } else if (outcome.reason !== "nothing-to-push" && outcome.reason !== "not-allowed" && outcome.reason !== "not-pulled") {
+    if (!outcome.ok && outcome.reason !== "nothing-to-push" && outcome.reason !== "not-allowed" && outcome.reason !== "not-pulled") {
       reportSync({ op: "push", ok: false, reason: outcome.reason, changed });
     }
-    // ⚠️ THE ADD-ON'S NO IS UNDONE AND SAID, A SAVE THAT DID NOT LAND IS SAID (architecture review H, 2026-10-23): both
-    // went to the telemetry alone, and a refused change (read as a Wi-Fi blip) was sent again on every refresh for good.
-    // Undone as the Facility store undoes one: the store's copy of every item this push SENT (utils/syncedDocument
-    // `takeBack`), an edit made since kept (deviceConfig applyRemoteChange). NOT through mergeRemote: it is no other
-    // tablet's change, and an open dialog would say "changed on another tablet".
-    if (!outcome.ok && outcome.reason === "refused") {
-      update((prev) => applyRemoteChange(prev, { synced: local, diff: outcome.takeBack }));
-    }
-    const line = saveProblemLine(outcome);
+    // what the answer means for this screen is utils/syncedDocument landPush's, the same for the Facility store
+    const { line } = landPush(outcome, {
+      landed: (o) => {
+        reportSync({
+          op: "push", ok: true, attempts: o.attempts, rev: o.rev, changed,
+          dismissed: o.next.dismissedEntityIds.length,
+          entities: Object.keys(o.next.entityMap).length,
+        });
+        // Fold in whatever another device contributed: the copy this device's diff went onto (`base`) against the one
+        // it had synced, item by item, onto the config as it is NOW (mergeRemote → deviceConfig applyRemoteChange).
+        // ⚠️ NEVER `outcome.next` WRITTEN OVER THE CONFIG (to 2.496.497): it is the copy taken when the push began, so
+        // a device edited while the push was out went back, and the next diff (against that same copy) was empty: the
+        // edit was lost. The baseline is `next` (the server's), so that edit is what the next push sends.
+        // ⚠️ AGAINST THE BASELINE THIS PUSH ACTUALLY SENT FROM (`synced`, utils/syncedDocument), never one read before
+        // it waited its turn: that one lacked the push before it, whose edit then came back as another tablet's (to
+        // 2.496.498). ⚠️ `others`, NOT THE STORE'S COPY AGAINST IT (to 2.496.500): a relabel whose push landed after
+        // its deadline was in that copy, read as another tablet's, and an open dialog took it as the value Cancel puts
+        // back.
+        mergeRemote(pushedChange(o));
+        return null;
+      },
+      // ⚠️ THE ADD-ON'S NO IS UNDONE AND SAID (architecture review H, 2026-10-23): it went to the telemetry alone, and a
+      // refused change (read as a Wi-Fi blip) was sent again on every refresh for good. The store's copy of every item
+      // this push SENT, an edit made since kept (deviceConfig applyRemoteChange). NOT through mergeRemote: it is no
+      // other tablet's change, and an open dialog would say "changed on another tablet".
+      takeBack: (diff) => update((prev) => applyRemoteChange(prev, { synced: local, diff })),
+    });
     if (line !== null || !doc.hasUnsaved) setSaveProblem(line);
   }, [doc, update, mergeRemote, reportSync, setSaveProblem]);
 

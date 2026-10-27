@@ -25,8 +25,13 @@ for (const f of tsFiles(SRC).filter((p) => p.endsWith(".tsx"))) {
   visit(tree);
 }
 const drawnInPlace = carriers.filter((c) => c.tag !== "DialogLayer" && c.f !== "components/common/DialogLayer.tsx");
-ck(`every backdrop is drawn through DialogLayer (${carriers.length} dialogs)`, carriers.length >= 12 && drawnInPlace.length === 0,
-   drawnInPlace);
+// every window draws its backdrop through the one frame (components/common/Window, architecture review O), which draws
+// it through DialogLayer
+const windows = tsFiles(SRC).filter((p) => p.endsWith(".tsx") && !p.endsWith("components/common/Window.tsx"))
+  .flatMap((f) => elements(parseTsx(f), "Window").map(() => f.slice(SRC.length)));
+const frame = elements(parseTsx("components/common/Window.tsx"), "DialogLayer");
+ck(`every backdrop is drawn through DialogLayer (${carriers.length + windows.length} dialogs: ${windows.length} through the window frame)`,
+   carriers.length + windows.length >= 12 && windows.length >= 11 && frame.length === 1 && drawnInPlace.length === 0, drawnInPlace);
 
 // …into the app's shell: the box App.tsx draws, the one sized to the real screen on iOS
 const layer = readFileSync(SRC + "components/common/DialogLayer.tsx", "utf8");

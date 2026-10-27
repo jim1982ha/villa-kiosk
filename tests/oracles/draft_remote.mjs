@@ -121,12 +121,12 @@ console.log("\n  the wiring:");
   const src = (p) => strip(readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8"));
   const sync = src("config/DeviceConfigSync.tsx"), ctx = src("config/ConfigContext.tsx"), hook = src("hooks/useDraftedSlice.ts");
   ck("both merges of the shared store (push and pull) hand on what the others changed, never a copy of the store",
-     /mergeRemote\(pushedChange\(outcome\)\)/.test(sync)
+     /mergeRemote\(pushedChange\(o\)\)/.test(sync)
      && /mergeRemote\(remoteChange\(synced, r\.fetched\.config\)\)/.test(sync)
      && (sync.match(/mergeRemote\(/g) ?? []).length === 2
      // the one other write: a change the add-on refused, undone to the store's copy (no other tablet's: no draft hears it)
      && (sync.match(/\bupdate\(/g) ?? []).length === 1
-     && /if \(!outcome\.ok && outcome\.reason === "refused"\) \{\s*update\(\(prev\) => applyRemoteChange\(prev, \{ synced: local, diff: outcome\.takeBack \}\)\);/.test(sync));
+     && /takeBack: \(diff\) => update\(\(prev\) => applyRemoteChange\(prev, \{ synced: local, diff \}\)\),/.test(sync));
   ck("the drafts hear it before the write, and the write applies it to the config as it is then",
      /for \(const listener of remoteListeners\.current\) listener\(change\);\s*update\(\(prev\) => applyRemoteChange\(prev, change\)\);/.test(ctx));
   ck("the draft says which of its own changes the same change replaced, measured on the ledger before it moves",

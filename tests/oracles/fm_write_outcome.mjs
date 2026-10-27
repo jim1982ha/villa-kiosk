@@ -64,7 +64,10 @@ ck("  ...a 502 is a blip (transport), not a refusal", r502.ok === false && !r502
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const ctx = src("fm/FmDataContext.tsx");
 ck("mutate returns saved / refused / offline / unchanged, and undoes a refusal",
-   /Promise<FmWriteResult>/.test(ctx) && /return "saved";/.test(ctx) && /if \(outcome\.reason === "refused"\) \{[^}]*applyFmDiff\(ref\.current, outcome\.takeBack\)/.test(ctx) && /return "offline";/.test(ctx));
+   // what each answer means is utils/syncedDocument landPush's (driven by value in store_save.mjs); this store says how
+   // its copy takes a refusal back and maps the verdict onto its result
+   /Promise<FmWriteResult>/.test(ctx) && /takeBack: \(diff\) => \{\s+const undone = applyFmDiff\(ref\.current, diff\);/.test(ctx)
+   && /return verdict === "saved" \? "saved" : verdict === "unchanged" \? "unchanged" : verdict === "unsent" \? "offline" : "refused";/.test(ctx));
 // ── What a screen DOES with the result: fmSaveOutcome, one decision (2.496.252) ──
 // Offline is DONE (the write is queued on this device and re-sent on its own):
 // the old "nothing was sent… try again" made a guest file the same report twice.

@@ -21,7 +21,7 @@ const stamp = (): FmStamp => ({ now: new Date().toISOString(), id: fmId });
 import {
   fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff, foldOthers, fmUnsentKeeper,
 } from "./fmApi";
-import { SyncedDocument } from "@/utils/syncedDocument";
+import { landPush, SyncedDocument } from "@/utils/syncedDocument";
 import { useProfile } from "@/auth/ProfileContext";
 import { ROLE_LABELS, type Role } from "@/auth/roles";
 import { useStoreRefresh, STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
@@ -36,7 +36,6 @@ import {
 // so an oracle can drive them); re-exported here for the screens.
 import type { FmRetention } from "./fmEngine";
 import { CHANGED_ON_ANOTHER_DEVICE, removedOnAnotherDevice, fmSaveOutcome, type FmSaveOutcome, type FmWriteResult } from "./fmSave";
-import { saveProblemLine } from "@/utils/storeSave";
 
 /** Whether profile `role` may send the work kept for `other`: it may do all that `other` does (owner, then facility
  *  manager, then guest). Signed out: nobody's. */
@@ -267,60 +266,54 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       // and take the rest of the unsent work with it)
       doc.keepUnsent(undone);
     };
-    if (outcome.ok) {
-      // Fold in whatever another device contributed in the meantime (`others`), onto this screen as it is NOW, under
-      // every record this device has changed itself (keyedSync mineWins: the store holds this device's version of it).
-      // ⚠️ NEVER `outcome.next` (to 2.496.499): that is the store when this push landed, so a record removed while it
-      // was out came back on the screen. ⚠️ NEVER EVERY RECORD THE OTHERS TOUCHED (to 2.496.500): a fault this device
-      // had just marked started and someone retitled meanwhile came back "open" here, and the next refresh sent that
-      // to every device.
-      // ⚠️ A FAULT BOTH DEVICES CHANGED IS MERGED FIELD BY FIELD (architecture review H, 2026-10-23), as the push merged it
-      // in the store (fmApi mergeTicket): a "Started" tapped on a tablet whose copy predated a close on the phone
-      // reopened the fault, and "Closed without action" vanished from its history. A field both changed keeps the
-      // other device's value, and this device says so.
-      const { doc: merged, changedOnBoth, removedElsewhere } = foldOthers(ref.current, outcome);
-      ref.current = merged;
-      setData(merged);
-      setReady(true);
-      setUnreachable(false);
-      if (changedOnBoth.length > 0) setSaveError(CHANGED_ON_ANOTHER_DEVICE);
-      if (removedElsewhere.length > 0) setSaveError(removedOnAnotherDevice(removedElsewhere.map((r) => r.kind)));
-      reportSync({
-        op: "push", ok: true, elevated: Boolean(elevation),
-        tickets: outcome.next.tickets.length,
-        openTickets: outcome.next.tickets.filter(isTicketOpen).length,
-        costs: outcome.next.costs.length,
-      });
-      return "saved";
+    if (!outcome.ok && outcome.reason !== "nothing-to-push" && outcome.reason !== "not-allowed" && outcome.reason !== "not-pulled") {
+      reportSync({ op: "push", ok: false, reason: outcome.reason, elevated: Boolean(elevation) });
     }
-    if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") return "unchanged";
-    reportSync({ op: "push", ok: false, reason: outcome.reason, elevated: Boolean(elevation) });
-    // A rejected DELETE is the one failure that must not be left showing as
-    // applied: the record still exists on the server, and every other device
-    // still sees it. Put it back rather than leaving this screen quietly
-    // disagreeing with the store until the next refresh.
-    // The add-on said NO: final. Undo it here and say why — it will never be
-    // accepted, and keeping it would leave this screen disagreeing with the
-    // store (and, before 2.496.184, re-pushed on every refresh for good).
-    if (outcome.reason === "refused") {
-      // what the push SENT, taken back (utils/syncedDocument `takeBack`): a refresh's retry of held work is this same
-      // call with an action that changes nothing, so undoing the ACTION took nothing back (architecture review J)
-      const undone = applyFmDiff(ref.current, outcome.takeBack);
-      ref.current = undone;
-      setData(undone);
-      doc.keepUnsent(undone);
-      setSaveError(saveProblemLine(outcome));
-      return "refused";
-    }
-    if (elevation) {
-      undo();
-      setSaveError("The delete was refused by the add-on, nothing was removed.");
-      return "refused";
-    }
-    // Local is now ahead of the server; the document has flagged it, so the
-    // next refresh RETRIES this write instead of skipping forever (reload).
-    setSaveError(saveProblemLine(outcome));
-    return "offline";
+    // what the answer means for this screen is utils/syncedDocument landPush's, the same for the device setup store
+    const { verdict, line } = landPush(outcome, {
+      landed: (o) => {
+        // Fold in whatever another device contributed in the meantime (`others`), onto this screen as it is NOW, under
+        // every record this device has changed itself (keyedSync mineWins: the store holds this device's version of
+        // it). ⚠️ NEVER `outcome.next` (to 2.496.499): that is the store when this push landed, so a record removed
+        // while it was out came back on the screen. ⚠️ NEVER EVERY RECORD THE OTHERS TOUCHED (to 2.496.500): a fault
+        // this device had just marked started and someone retitled meanwhile came back "open" here, and the next
+        // refresh sent that to every device.
+        // ⚠️ A FAULT BOTH DEVICES CHANGED IS MERGED FIELD BY FIELD (architecture review H, 2026-10-23), as the push
+        // merged it in the store (fmApi mergeTicket): a "Started" tapped on a tablet whose copy predated a close on the
+        // phone reopened the fault, and "Closed without action" vanished from its history. A field both changed keeps
+        // the other device's value, and this device says so.
+        const { doc: merged, changedOnBoth, removedElsewhere } = foldOthers(ref.current, o);
+        ref.current = merged;
+        setData(merged);
+        setReady(true);
+        setUnreachable(false);
+        reportSync({
+          op: "push", ok: true, elevated: Boolean(elevation),
+          tickets: o.next.tickets.length,
+          openTickets: o.next.tickets.filter(isTicketOpen).length,
+          costs: o.next.costs.length,
+        });
+        return removedElsewhere.length > 0 ? removedOnAnotherDevice(removedElsewhere.map((r) => r.kind))
+          : changedOnBoth.length > 0 ? CHANGED_ON_ANOTHER_DEVICE : null;
+      },
+      // The add-on said NO: final. Undone here and said: it will never be accepted, and keeping it would leave this
+      // screen disagreeing with the store (and, before 2.496.184, re-pushed on every refresh for good). What the push
+      // SENT is taken back (utils/syncedDocument `takeBack`): a refresh's retry of held work is this same call with an
+      // action that changes nothing, so undoing the ACTION took nothing back (architecture review J).
+      takeBack: (diff) => {
+        const undone = applyFmDiff(ref.current, diff);
+        ref.current = undone;
+        setData(undone);
+        doc.keepUnsent(undone);
+      },
+      // A DELETE under its single-use superadmin code cannot be sent again: one that did not land is put back, never
+      // left showing as applied while the record is still in the store and on every other device, and said with its
+      // true cause (storeSave notDoneLine; it said "refused by the add-on" for a dropped Wi-Fi, architecture review O).
+      once: elevation ? { undo, what: "deleted" } : undefined,
+    });
+    // Anything else not sent is kept here and flagged: the next refresh RETRIES it instead of skipping forever (reload).
+    if (line !== null) setSaveError(line);
+    return verdict === "saved" ? "saved" : verdict === "unchanged" ? "unchanged" : verdict === "unsent" ? "offline" : "refused";
   }, [doc, reportSync]);
 
   // Re-pushing is just an identity mutation: the diff is still computed

@@ -9,10 +9,10 @@
 //
 // Every section here is read-only reporting on its own face; a device opens its own window (onOpenEntity).
 
+import Window from "@/components/common/Window";
 import { useMemo } from "react";
 import { LayoutDashboard, RefreshCw } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
-import { useModalA11y } from "@/hooks/useModalA11y";
 import type { Doors } from "@/auth/doors";
 import { updatesTip, updatesWaiting } from "@/config/updatesWaiting";
 import { formatCountBadge } from "@/utils/countBadge";
@@ -22,7 +22,6 @@ import FacilitySections, { FACILITY_TABS, type FacilityTab } from "@/components/
 import { useFacilityLiveView, useFmData } from "@/fm/FmDataContext";
 import { fmRecordLine, heldLine } from "@/fm/fmSave";
 import CockpitOverview from "./CockpitOverview";
-import DialogLayer from "@/components/common/DialogLayer";
 import Tip from "@/components/common/Tip";
 import { countOf } from "@/utils/countOf";
 
@@ -73,7 +72,6 @@ export default function CockpitModal({
   const { ready, unreachable, saveError, heldFor } = useFmData();
   const held = heldLine(heldFor);
   const recordLine = fmRecordLine({ ready, unreachable });
-  const dialogRef = useModalA11y(onClose);
   // Firmware / add-on updates waiting — Home Assistant's own `update` domain counts them, per device and per add-on.
   const { entities, hiddenInHaEntityIds } = useHA();
   // ...and WHICH, said on hover (owner, 2026-10-20) — still nothing to press (config/updatesWaiting).
@@ -82,48 +80,39 @@ export default function CockpitModal({
   const updatesAvailable = updates.length;
 
   return (
-    <DialogLayer className="modal-backdrop" onClick={onClose}>
-      <div
-        ref={dialogRef}
-        className="modal settings-modal cockpit-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Villa Cockpit"
-      >
-        <div className="modal-header">
-          <h2>Cockpit</h2>
-          {/* Updates Home Assistant has waiting (firmware, add-ons — this one included): in the header, drawn like
-              Advanced Settings' header buttons, for the profiles holding `doors.updates` (owner, 2026-10-14). It only
-              SAYS so — nothing to press; it used to be a line at the bottom of the Overview. */}
-          {updatesAvailable > 0 && (
-            <Tip text={updatesTip(updates)}>
-              <span className="icon-btn header-icon-btn header-icon-badge" role="status"
-                aria-label={`${countOf(updatesAvailable, "update")} available`}>
-                <RefreshCw size={18} />
-                <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
-              </span>
-            </Tip>
-          )}
-        </div>
-        {tabs.length > 1 && <ModalTabs tabs={tabs} active={shownTab} onSelect={onTab} label="Cockpit sections" />}
-
-        <div className="modal-body">
-          {saveError && <div className="fm-banner warn">{saveError}</div>}
-          {recordLine && <p className="muted body-text">{recordLine}</p>}
-          {held && <p className="muted body-text">{held}</p>}
-          {shownTab !== "overview" ? (
-            <FacilitySections tab={shownTab} onOpenEntity={onOpenEntity} editTicket={editTicket}
-              onTicketEditOpened={onTicketEditOpened} />
-          ) : (
-            <CockpitOverview onOpenEntity={onOpenEntity} doors={doors} reportFaultFor={reportFaultFor}
-              onFaultFormOpened={onFaultFormOpened} onEditTicket={onEditTicket} onReportProblem={onReportProblem}
-              focusFaults={focusFaults} />
-          )}
-        </div>
-
-        <ModalFooter onClose={onClose} />
+    <Window kind="content" label="Villa Cockpit" onClose={onClose} className="settings-modal cockpit-modal">
+      <div className="modal-header">
+        <h2>Cockpit</h2>
+        {/* Updates Home Assistant has waiting (firmware, add-ons — this one included): in the header, drawn like
+            Advanced Settings' header buttons, for the profiles holding `doors.updates` (owner, 2026-10-14). It only
+            SAYS so — nothing to press; it used to be a line at the bottom of the Overview. */}
+        {updatesAvailable > 0 && (
+          <Tip text={updatesTip(updates)}>
+            <span className="icon-btn header-icon-btn header-icon-badge" role="status"
+              aria-label={`${countOf(updatesAvailable, "update")} available`}>
+              <RefreshCw size={18} />
+              <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
+            </span>
+          </Tip>
+        )}
       </div>
-    </DialogLayer>
+      {tabs.length > 1 && <ModalTabs tabs={tabs} active={shownTab} onSelect={onTab} label="Cockpit sections" />}
+
+      <div className="modal-body">
+        {saveError && <div className="fm-banner warn">{saveError}</div>}
+        {recordLine && <p className="muted body-text">{recordLine}</p>}
+        {held && <p className="muted body-text">{held}</p>}
+        {shownTab !== "overview" ? (
+          <FacilitySections tab={shownTab} onOpenEntity={onOpenEntity} editTicket={editTicket}
+            onTicketEditOpened={onTicketEditOpened} />
+        ) : (
+          <CockpitOverview onOpenEntity={onOpenEntity} doors={doors} reportFaultFor={reportFaultFor}
+            onFaultFormOpened={onFaultFormOpened} onEditTicket={onEditTicket} onReportProblem={onReportProblem}
+            focusFaults={focusFaults} />
+        )}
+      </div>
+
+      <ModalFooter onClose={onClose} />
+    </Window>
   );
 }

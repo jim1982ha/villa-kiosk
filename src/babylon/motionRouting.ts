@@ -6,7 +6,7 @@
 // AppConfig.roomGlowAndCones). Off: no floor glow, no cone — only what the kiosk GENERATES on the map. The devices'
 // own 3D objects keep glowing red (meshLookFor's pulse is not routed here), and badges, pills and lists are unchanged.
 //
-// Pure: tests/oracles/room_glow_switch.mjs drives it (and motionPaint, through EntityVisuals' real painter).
+// Pure: tests/oracles/room_glow_switch.mjs drives it (and motionLit / motionChanges, through EntityVisuals' real painter).
 
 import { glowsRoom } from "@/config/deviceCondition";
 import { roomKey } from "@/config/roomKey";
@@ -58,28 +58,46 @@ export function motionRouting(i: MotionRoutingInput): MotionRouting {
   return none;
 }
 
+/** What is lit on the map: the cameras whose cone is on, and the rooms glowing (by roomKey, with a name to light it by,
+ *  as RoomHighlight matches rooms). */
+export interface MotionLit {
+  beams: ReadonlySet<string>;
+  rooms: ReadonlyMap<string, string>;
+}
+
+export const NOTHING_LIT: MotionLit = { beams: new Set(), rooms: new Map() };
+
 /**
- * What the map paints when one sensor reports: every cone and room its routing named before (`touched[0]`) or names
- * now, each lit while ANY sensor's current routing (`current`, every sensor that names a cone or a room, this one
- * included) lights it. Rooms are matched as RoomHighlight matches them (roomKey).
+ * Everything lit by every sensor's routing as it stands (`current`): a cone or a room is lit while ANY of its sensors
+ * reads "on".
  *
  * ⚠️ THE LAST SENSOR TO REPORT WON (to 2.496.500): each report switched its own room or cone on or off, so a door
  * closing put its room dark while the motion sensor in it still read "on" (and the second detector of a camera put out
- * the cone the first still lit). A room or cone is lit while ANY of its sensors reads "on".
+ * the cone the first still lit).
  */
-export function motionPaint(current: Iterable<MotionRouting>, touched: readonly (MotionRouting | undefined)[]): MotionRouting {
-  const litBeams = new Set<string>();
-  const litRooms = new Set<string>();
+export function motionLit(current: Iterable<MotionRouting>): MotionLit {
+  const beams = new Set<string>();
+  const rooms = new Map<string, string>();
   for (const r of current) {
-    for (const b of r.beams) if (b.on) litBeams.add(b.cameraId);
-    for (const g of r.rooms) if (g.on) litRooms.add(roomKey(g.room));
+    for (const b of r.beams) if (b.on) beams.add(b.cameraId);
+    for (const g of r.rooms) if (g.on && !rooms.has(roomKey(g.room))) rooms.set(roomKey(g.room), g.room);
   }
-  const beams = new Map<string, boolean>();
-  const rooms = new Map<string, { room: string; on: boolean }>();
-  for (const t of touched) {
-    if (!t) continue;
-    for (const b of t.beams) beams.set(b.cameraId, litBeams.has(b.cameraId));
-    for (const g of t.rooms) rooms.set(roomKey(g.room), { room: g.room, on: litRooms.has(roomKey(g.room)) });
-  }
-  return { beams: [...beams].map(([cameraId, on]) => ({ cameraId, on })), rooms: [...rooms.values()] };
+  return { beams, rooms };
+}
+
+/**
+ * What to switch to go from what is painted to what is lit: each cone and room whose state differs, and nothing else.
+ *
+ * ⚠️ THE WHOLE LIT SET, EVERY TIME (architecture review O, 2026-10-27): the map repainted a glow only when a sensor
+ * changed, and every other event had to remember to replay them — a sensor already on when the map loaded left its
+ * room dark for hours, a cone lit "one toggle late". Every event now asks for the lit set as it is now.
+ */
+export function motionChanges(painted: MotionLit, lit: MotionLit): MotionRouting {
+  const beams = [...new Set([...painted.beams, ...lit.beams])]
+    .filter((id) => painted.beams.has(id) !== lit.beams.has(id))
+    .map((cameraId) => ({ cameraId, on: lit.beams.has(cameraId) }));
+  const rooms = [...new Set([...painted.rooms.keys(), ...lit.rooms.keys()])]
+    .filter((k) => painted.rooms.has(k) !== lit.rooms.has(k))
+    .map((k) => ({ room: (lit.rooms.get(k) ?? painted.rooms.get(k))!, on: lit.rooms.has(k) }));
+  return { beams, rooms };
 }

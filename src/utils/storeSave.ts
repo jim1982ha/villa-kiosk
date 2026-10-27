@@ -41,3 +41,16 @@ export function saveProblemLine(outcome: { ok: true } | { ok: false; reason: str
 }
 
 export const UNSAVED_LINE = "Couldn't save to the add-on, the change is only on this device.";
+
+/** What a screen says when a write that cannot be sent again (a delete under its single-use superadmin code) did not
+ *  land and was taken back: its true cause, never "refused" (architecture review O, 2026-10-27: a Wi-Fi drop said "The
+ *  delete was refused by the add-on"). `what`: the action, as done ("deleted"). Null: it landed, or nothing was sent. */
+export function notDoneLine(outcome: { ok: true } | { ok: false; reason: string; message?: string }, what: string): string | null {
+  if (outcome.ok) return null;
+  if (outcome.reason === "refused") return saveProblemLine(outcome);
+  if (outcome.reason === "transport") return `Not ${what}: the add-on could not be reached, nothing was changed. Try again.`;
+  if (outcome.reason === "conflict-retries-exhausted") {
+    return `Not ${what}: another tablet was saving at the same moment, nothing was changed. Try again.`;
+  }
+  return null;
+}

@@ -139,13 +139,15 @@ console.log("\n  the callers ask it (pin the caller):");
   // ONE VALUE, THE VILLA MODEL'S (architecture review N, 2026-10-27): critical, hidden and an amber issue were gathered
   // by each drawing itself (six releases each repaired one that had forgotten one). Each now takes VillaModel `marks`.
   const vm = src("config/VillaModel.tsx");
-  ck("the map, the open window's header, the room chooser and the list rows all take the villa model's marks, as they are",
+  ck("the map takes the villa model's marks; the open window's header, the room chooser and the list rows the same marks as the profile sees the villa",
      /marks: \{ critical: criticalSet, isHidden, faults: issues\.amber \}/.test(vm) && /deviceIssues\(groupAttention\(attention\.attentionItems\)\)/.test(vm)
      && /const villa = useVillaModelValue\(villaSets\);/.test(db) && /<VillaModelProvider value=\{villa\}>/.test(db)
      && /const marks = villa\.marks;/.test(db) && /manager\?\.setDeviceMarks\(marks\)/.test(db)
-     && /useOpenPanelActions\(\{[^}]*\bmarks,/.test(db) && /config: \{ \.\.\.config, \.\.\.lookMarks\(marks\) \}/.test(db)
-     && /storeLookSource\(entities, \{ \.\.\.config, \.\.\.lookMarks\(marks\) \}\)/.test(db)
-     && /const \{ mappedEntityIds, marks \} = useVillaModel\(\);/.test(sg) && /storeLookSource\(entities, \{ \.\.\.config, \.\.\.lookMarks\(marks\) \}\)/.test(sg)
+     && /const sees = visibleTo\(role, \{ mapped: mappedEntityIds, entityMap, entities \}\);\s+return \{ critical: criticalSet, isHidden, faults: faultsFor\(attention, \(id\) => sees\.has\(id\)\) \};/.test(vm)
+     && /const windowMarks = useMemo\(\(\) => villa\.marksFor\(role\), \[villa, role\]\);/.test(db)
+     && /useOpenPanelActions\(\{[^}]*\bmarks: windowMarks,/.test(db) && /config: \{ \.\.\.config, \.\.\.lookMarks\(marks\) \}/.test(db)
+     && /storeLookSource\(entities, \{ \.\.\.config, \.\.\.lookMarks\(windowMarks\) \}\)/.test(db)
+     && /const marks = useMemo\(\(\) => marksFor\(role\), \[marksFor, role\]\);/.test(sg) && /storeLookSource\(entities, \{ \.\.\.config, \.\.\.lookMarks\(marks\) \}\)/.test(sg)
      && /\.\.\.lookMarks\(this\.marks\)/.test(ev) && /setDeviceMarks\(marks: DeviceMarks\): void \{\s+if \(sameMarks\(marks, this\.marks\)\) return;/.test(ev));
   // ...and no drawing gathers them itself: every file that names the critical or fault test is one of these, each for
   // its reason; a new one fails until someone says why it is not a drawing gathering the marks by hand

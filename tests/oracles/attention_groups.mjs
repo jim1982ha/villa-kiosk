@@ -262,4 +262,22 @@ ck("the villa model hands buildAttentionItems its device list (the fold and the 
      cardActions(one).find((a) => a.step.kind === "close")?.label === "Close" && one.items.every((i) => itemActions(one, i).length === 0));
 }
 
+console.log("\n  one way a problem's entity becomes its card's device, for the open issues and the Watched cards (review N, card 6)");
+{
+  const { cardDevice, cardHead } = await import("@/config/attention");
+  const { readFileSync } = await import("node:fs");
+  const ctx = { devices: { deviceOf: (x) => (x === "sensor.pump_power" ? "switch.pump" : x) }, entityMap: {}, entities: {},
+    resolvedRooms: { "switch.pump": "", "sensor.pump_power": "" } };
+  const d = cardDevice("sensor.pump_power", "Pool House", ctx);
+  ck("the device the entity folds onto, and with no room of its own (nor its entity) the record's room",
+     d.key === "switch.pump" && d.room === "Pool House", d);
+  ck("  ...titled by the device; a problem with no device stands for itself, and every card has a room line",
+     cardHead(d, "Pump weak", undefined).title === d.label && cardHead(undefined, "Pump weak", undefined).title === "Pump weak"
+       && cardHead(undefined, "Pump weak", undefined).room === "Other", cardHead(undefined, "Pump weak", undefined));
+  const cc = readFileSync(new URL("../../src/config/cockpitCard.ts", import.meta.url), "utf8");
+  ck("  ...and the Watched cards name and place their device only through it",
+     /cardDevice\(entityId, t\.room, \{ devices, entityMap, entities, resolvedRooms \}\)/.test(cc) && /\.\.\.cardHead\(device, title, t\.room\)/.test(cc)
+       && !/\blabelOf\(|deviceRoomOrRecord\(|roomLabel\(/.test(cc.slice(cc.indexOf("export function confirmingCards"))));
+}
+
 done("✅ one card per device in the Live issues");

@@ -8,11 +8,10 @@
 // tour — dismiss by tapping the backdrop or "Got it", never shown again on
 // this device either way.
 
+import Window from "@/components/common/Window";
 import { Armchair, Compass, Info } from "lucide-react";
 import { markFirstRunTipsSeen } from "@/utils/viewPrefs";
-import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
-import DialogLayer from "@/components/common/DialogLayer";
 
 export default function FirstRunTips({ onClose }: { onClose: () => void }) {
   const dismiss = () => { markFirstRunTipsSeen(); onClose(); };
@@ -38,36 +37,34 @@ export default function FirstRunTips({ onClose }: { onClose: () => void }) {
   // journey one step further along — it composed BasePanel to stop hand-rolling
   // this. Composing the panel shell here too is the tidier end state; the hook
   // is the part that was a defect.
-  const dialogRef = useModalA11y(dismiss);
   return (
     // panel-modal-backdrop/panel-modal: this is short content, so on mobile it
     // gets the same small centered rounded card as the device panel — without
     // these it fell through to the base full-screen top-anchored sheet meant
     // for long forms (Settings), which is why it rendered up at the top with a
     // big empty area below instead of centered like every other popup.
-    <DialogLayer className="modal-backdrop panel-modal-backdrop first-run-backdrop" onClick={dismiss}>
-      <div ref={dialogRef} className="modal panel-modal first-run-tips" role="dialog" aria-modal="true" aria-label="Quick tips" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Quick tips</h2>
-        </div>
-        <div className="modal-body">
-          <ul className="first-run-tip-list">
-            <li>
-              <Armchair size={18} />
-              <span>The colored icons in the top bar filter which devices show on the map, tap one to hide or show that category.</span>
-            </li>
-            <li>
-              <Compass size={18} />
-              <span>A button with a small <span className="first-run-dot-demo" aria-hidden="true" /> dot also does something extra when you press and hold it, try holding the compass button to manage rooms.</span>
-            </li>
-            <li>
-              <Info size={18} />
-              <span>Tap the <strong>?</strong> icon anytime to see what the map's colors mean.</span>
-            </li>
-          </ul>
-        </div>
-        <ModalFooter onClose={dismiss} closeLabel="Got it, thanks" />
+    <Window kind="content" label="Quick tips" onClose={dismiss} className="panel-modal first-run-tips"
+      layer="panel-modal-backdrop first-run-backdrop">
+      <div className="modal-header">
+        <h2>Quick tips</h2>
       </div>
-    </DialogLayer>
+      <div className="modal-body">
+        <ul className="first-run-tip-list">
+          <li>
+            <Armchair size={18} />
+            <span>The colored icons in the top bar filter which devices show on the map, tap one to hide or show that category.</span>
+          </li>
+          <li>
+            <Compass size={18} />
+            <span>A button with a small <span className="first-run-dot-demo" aria-hidden="true" /> dot also does something extra when you press and hold it, try holding the compass button to manage rooms.</span>
+          </li>
+          <li>
+            <Info size={18} />
+            <span>Tap the <strong>?</strong> icon anytime to see what the map's colors mean.</span>
+          </li>
+        </ul>
+      </div>
+      <ModalFooter onClose={dismiss} closeLabel="Got it, thanks" />
+    </Window>
   );
 }

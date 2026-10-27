@@ -322,7 +322,7 @@ export class RoomHighlight {
     this.requestRender();
   }
 
-  /** Every glow off — before EntityVisuals.reapplyRoomGlows lights again the ones its sensors read "on" now. */
+  /** Every glow off — before EntityVisuals.relight lights again the ones its sensors read "on" now. */
   clearActive(): void {
     for (const key of this.active) {
       const entry = this.polyRooms.get(key) ?? this.pointRooms.get(key);

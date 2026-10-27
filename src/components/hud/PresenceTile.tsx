@@ -3,16 +3,15 @@
 // screen, the villa's name in the top bar is not), and a tap tells why (owner, 2026-10-18). WHAT it says is
 // config/presence's (by value, tested); this draws it. No sensor picked in Settings › Villa: no tile.
 
+import Window from "@/components/common/Window";
 import { CircleQuestionMark, House, Users } from "lucide-react";
 import { presenceHeading, presenceStateWords, stageColor, stageWords, type Presence, type PresenceWhy } from "@/config/presence";
 import { sinceWords as since, usePresence, usePresenceWhy } from "@/config/usePresence";
 import { STATUS_COLOR } from "@/utils/stateColors";
-import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useProfile } from "@/auth/ProfileContext";
 import { profileView } from "@/auth/permissions";
 import LastDayTimeline from "@/components/panels/LastDayTimeline";
-import DialogLayer from "@/components/common/DialogLayer";
 import InfoTip from "@/components/common/InfoTip";
 
 const ICON = { occupied: Users, empty: House, unknown: CircleQuestionMark };
@@ -108,59 +107,55 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
    *  movement's, "Clear", read as the villa's) — right under its "now". */
   presenceHistory?: React.ReactNode;
 }) {
-  const dialogRef = useModalA11y(onClose);
   const act = why.lastActivity;
   const head = presenceHeading(p, when, why.stages, since);
   const opener = (id: string) => (canOpen(id) ? onOpenEntity : undefined);
   return (
-    <DialogLayer className="modal-backdrop" onClick={onClose}>
-      <div ref={dialogRef} className="modal settings-modal presence-modal" onClick={(e) => e.stopPropagation()}
-        role="dialog" aria-modal="true" aria-label="Villa presence">
-        <div className="modal-header"><h2>Villa presence</h2></div>
-        <div className="modal-body">
-          <div className="presence-now" style={{ "--tone": head.color } as React.CSSProperties}>
-            <strong>{head.label}</strong>{head.when ? <span className="muted"> · since {head.when}</span> : null}
-          </div>
-          {presenceHistory}
-          {showPeople && (
-            <>
-              <div className="settings-section-title">People</div>
-              {why.people === null ? <p className="muted body-text">This sensor does not list the people it watches.</p>
-                : why.people.length === 0 ? <p className="muted body-text">None of the people this sensor watches is known.</p> : (
-                  <ul className="presence-list">
-                    {why.people.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
-                      said={`${x.place}${since(x.since) ? ` · since ${since(x.since)}` : ""}`} />)}
-                  </ul>
-                )}
-            </>
-          )}
-          {showMovement && (
-            <>
-              <div className="settings-section-title">Latest movement</div>
-              {act ? (
-                <>
-                  {/* ⚠️ NOT A BUTTON, AND NO CHART OF ITS OWN (owner, 2026-10-20: its "Clear" band was read as the
-                      villa's; the villa's Occupied / Empty band replaces it, under "now") */}
-                  <ul className="presence-list">
-                    <Row entityId={act.entityId} name={act.name} tip={act.full || undefined}
-                      said={act.moving ? "moving now" : `quiet since ${since(act.at)}`} />
-                  </ul>
-                </>
-              ) : <p className="muted body-text">{why.listsSensors ? "None of the sensors this one watches reports." : "This sensor does not list the sensors it watches."}</p>}
-            </>
-          )}
-          {why.settings.length > 0 && (
-            <>
-              <div className="settings-section-title">What decides it</div>
-              <ul className="presence-list">
-                {why.settings.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
-                  said={x.said} tip={x.explain || undefined} />)}
-              </ul>
-            </>
-          )}
+    <Window kind="content" label="Villa presence" onClose={onClose} className="settings-modal presence-modal">
+      <div className="modal-header"><h2>Villa presence</h2></div>
+      <div className="modal-body">
+        <div className="presence-now" style={{ "--tone": head.color } as React.CSSProperties}>
+          <strong>{head.label}</strong>{head.when ? <span className="muted"> · since {head.when}</span> : null}
         </div>
-        <ModalFooter onClose={onClose} />
+        {presenceHistory}
+        {showPeople && (
+          <>
+            <div className="settings-section-title">People</div>
+            {why.people === null ? <p className="muted body-text">This sensor does not list the people it watches.</p>
+              : why.people.length === 0 ? <p className="muted body-text">None of the people this sensor watches is known.</p> : (
+                <ul className="presence-list">
+                  {why.people.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
+                    said={`${x.place}${since(x.since) ? ` · since ${since(x.since)}` : ""}`} />)}
+                </ul>
+              )}
+          </>
+        )}
+        {showMovement && (
+          <>
+            <div className="settings-section-title">Latest movement</div>
+            {act ? (
+              <>
+                {/* ⚠️ NOT A BUTTON, AND NO CHART OF ITS OWN (owner, 2026-10-20: its "Clear" band was read as the
+                    villa's; the villa's Occupied / Empty band replaces it, under "now") */}
+                <ul className="presence-list">
+                  <Row entityId={act.entityId} name={act.name} tip={act.full || undefined}
+                    said={act.moving ? "moving now" : `quiet since ${since(act.at)}`} />
+                </ul>
+              </>
+            ) : <p className="muted body-text">{why.listsSensors ? "None of the sensors this one watches reports." : "This sensor does not list the sensors it watches."}</p>}
+          </>
+        )}
+        {why.settings.length > 0 && (
+          <>
+            <div className="settings-section-title">What decides it</div>
+            <ul className="presence-list">
+              {why.settings.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
+                said={x.said} tip={x.explain || undefined} />)}
+            </ul>
+          </>
+        )}
       </div>
-    </DialogLayer>
+      <ModalFooter onClose={onClose} />
+    </Window>
   );
 }

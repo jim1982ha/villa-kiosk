@@ -20,6 +20,7 @@
 // fake store.
 
 import { decidePull, type PullAction } from "./pullDecision";
+import { notDoneLine, saveProblemLine } from "./storeSave";
 import {
   keepItems, names, ownWrites, pushWithRebase, withItems, withoutOwnWrites,
   type KeyedParts, type PushOutcome, type StoreFetch, type StoreSaveResult,
@@ -120,6 +121,48 @@ export type PushResult<D, Diff> =
    *  refused too. */
   | (Extract<PushOutcome<D>, { reason: "refused" }> & { takeBack: Diff })
   | { ok: false; reason: "not-allowed" | "not-pulled" };
+
+/** What a push's answer made of a screen's change (landPush): it landed; there was nothing to send (or this profile
+ *  may not, or the store was never read); the add-on said no (taken back); it is kept on this device and sent again;
+ *  it could not be sent again and was taken back (`once`). */
+export type SaveVerdict = "saved" | "unchanged" | "refused" | "unsent" | "undone";
+
+/** A store's own way of laying a push's answer on its screen copy as it is NOW (each store's copy and its merge are
+ *  its own: the device setup's mergeRemote, the Facility record's foldOthers). */
+export interface ScreenCopy<D, Diff> {
+  /** The push landed: other tablets' changes (`others`, against `synced`) laid under this device's own edits. Returns
+   *  what the screen says of them (a record both changed, one removed elsewhere), or null. */
+  landed: (o: Extract<PushResult<D, Diff>, { ok: true }>) => string | null;
+  /** The add-on said no: what this push SENT, taken back (an edit made since stays). */
+  takeBack: (diff: Diff) => void;
+  /** A write that cannot be sent again (a delete's single-use code): when it did not land, `undo` takes it back and
+   *  the screen says `what` was not done, and why. */
+  once?: { undo: () => void; what: string };
+}
+
+/**
+ * THE meaning of a push's answer for a screen, for both stores (architecture review O, 2026-10-27): which answers say
+ * nothing, which are taken back, which are kept and sent again, and the one line the screen shows. Each store did it
+ * itself and they drifted: eight releases in ten days repaired the same case once per store, and the Facility store
+ * said "refused by the add-on" for a delete the Wi-Fi had dropped.
+ */
+export function landPush<D, Diff>(outcome: PushResult<D, Diff>, screen: ScreenCopy<D, Diff>): {
+  verdict: SaveVerdict; line: string | null;
+} {
+  if (outcome.ok) return { verdict: "saved", line: screen.landed(outcome) };
+  if (outcome.reason === "nothing-to-push" || outcome.reason === "not-allowed" || outcome.reason === "not-pulled") {
+    return { verdict: "unchanged", line: null };
+  }
+  if (outcome.reason === "refused") {
+    screen.takeBack(outcome.takeBack);
+    return { verdict: "refused", line: saveProblemLine(outcome) };
+  }
+  if (screen.once) {
+    screen.once.undo();
+    return { verdict: "undone", line: notDoneLine(outcome, screen.once.what) };
+  }
+  return { verdict: "unsent", line: saveProblemLine(outcome) };
+}
 
 /** One push's own change, from the moment it is sent until the store is known to hold it. */
 interface Unconfirmed<Diff> {

@@ -18,7 +18,7 @@ ck("the panel frame draws Back at the header's right, from the panel actions' `b
    && /\{back && <BackButton onClick=\{back\.go\} label=\{back\.label\} \/>\}/.test(base)
    && /className="btn panel-back" onClick=\{onClick\}/.test(rd("components/common/BackButton.tsx")));
 ck("  ...and Escape / the phone's back gesture go back (one step), not close",
-   /useModalA11y\(back \? back\.go : onClose\)/.test(base));
+   /onEscape=\{back \? back\.go : undefined\}/.test(base) && /useModalA11y\(onEscape \?\? onClose\)/.test(rd("components/common/Window.tsx")));
 ck("the camera panel (its own frame) does the same",
    /const \{ linked, linkedSensor, motion, back \} = usePanelActions\(\);/.test(cam) && /useModalA11y\(back \? back\.go : onClose\)/.test(cam)
    && /\{back && \(\s*<button className="icon-btn" onClick=\{back\.go\}/.test(cam));
