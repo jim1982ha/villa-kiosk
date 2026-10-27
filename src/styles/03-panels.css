@@ -207,9 +207,13 @@ input[type="range"]::-moz-range-thumb {
 :root { --cam-rail-layout: 0; }
 /* --cam-rail: thickness of the side status rail in the phone-landscape
    layout below. One declaration shared by the rail and the bar inside it, so
-   the two can't drift apart across separate edits. */
+   the two can't drift apart across separate edits. --cam-btn / --cam-edge: the
+   control column's button size and its inset from the right edge in that layout,
+   shared by the header's buttons above it so both line up (owner, 2026-10-27). */
 .camera-fullscreen {
   --cam-rail: 22px;
+  --cam-btn: clamp(34px, 12dvh, 56px);
+  --cam-edge: calc(10px + env(safe-area-inset-right, 0px));
   position: absolute; inset: 0; z-index: 60; background: #000;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
@@ -458,13 +462,17 @@ input[type="range"]::-moz-range-thumb {
     justify-content: center; align-items: center;
     gap: clamp(6px, 1.6dvh, 12px);
     margin-left: 0;
-    padding: 8px calc(10px + env(safe-area-inset-right, 0px)) 8px 10px;
+    padding: 8px var(--cam-edge) 8px 10px;
     background: #000;
   }
   .camera-controls .icon-btn {
-    width: clamp(34px, 12dvh, 56px);
-    height: clamp(34px, 12dvh, 56px);
+    width: var(--cam-btn);
+    height: var(--cam-btn);
   }
+  /* the header's buttons (warning, readings, Edit, wrench) right above the column: its size, its right edge */
+  .camera-header { padding-right: var(--cam-edge); }
+  .camera-chip-btn { width: var(--cam-btn); height: var(--cam-btn); }
+  .camera-readings-menu { right: var(--cam-edge); }
   /* svg sizing is the base (non-landscape) rule now — same 55% at every
      button size this cluster ever renders at, so it doesn't need repeating
      here too. */
