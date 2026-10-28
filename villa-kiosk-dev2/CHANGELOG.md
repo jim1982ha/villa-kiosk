@@ -1,3 +1,15 @@
+## 2.496.566
+
+What you will see:
+- A ring you picked for the whole screen no longer takes it again once it is answered or times out, even when the
+  tablet had just reloaded or woken up between the ring and its answer: the answer is a short notice.
+- Unlock pressed on a ring's notice now shows "Sent" in Messages too, on the same ring, and cannot be pressed a second
+  time there.
+- A notification that says only its last line (for example "✅ Done at 10:00") shows that line on its notice too, as
+  Messages does.
+- Nothing else changes on screen: the tablet now reads an alarm's stage from the same list VESTA writes it from, and
+  keeps rings through one shared mechanism that the reports and VESTA's conversation will use next.
+
 ## 2.496.565
 
 What you will see:
