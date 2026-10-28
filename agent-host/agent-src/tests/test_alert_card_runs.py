@@ -202,7 +202,7 @@ def test_every_step_is_one_line_of_the_step_table_and_said_the_same_everywhere()
         assert head_text(n.heading(-1, 7, to="fm")).split("\n")[-1] == f"- {line}", stage
         said = n.bottom(stage, {"fm"}, "why", at)
         assert said == (f"{line.removesuffix(' (to: FM)')}, why (to: FM)" if step.timed else "why"), stage
-        assert [s["note"] for s in n.story(7)] == ([f"{step.sent} (to: Facility Manager)"] if step.noted else []), stage
+        assert [s["note"] for s in n.story(7)] == [f"{step.sent} (to: Facility Manager)"], stage
 
 
 def follows(v, blueprint: str, rule_id: str, mid: int):

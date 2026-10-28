@@ -169,7 +169,7 @@ class IncidentThread:
 
     async def _finish(self, iid: int | str, note: str, note_in: dict | None) -> int:
         """`close` with `final`: the incident's last word (see there). Returns how many chats show it now."""
-        from .notice import note_step
+        from .notice import CLEARED_STAGE, note_step
         async with self._lock(iid):
             now = datetime.now(timezone.utc)
             copies = [(chat, rec) for chat, rec in self.state.incident_chats(iid) if not rec.get("finished")]
@@ -180,7 +180,7 @@ class IncidentThread:
                          if isinstance(layout.of(rec).get("said"), dict) and not layout.of(rec)["said"].get("stage")), None)
             stood = (said or {}).get("status") or (layout.of(copies[0][1]).get("status") or "")
             if stood.strip() and str(iid).isdigit():
-                note_step(self.state, int(iid), "cleared", stood.strip(), (said or {}).get("status_in"))
+                note_step(self.state, int(iid), CLEARED_STAGE, stood.strip(), (said or {}).get("status_in"))
             n = 0
             for chat, rec in copies:
                 words = layout.fill_time(pick(note, note_in, self._lang(chat)), now, self.tz)

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.357 (28 October 2026)
+
+- notice.Notices._line: ONE writer of an incident's history lines, for Telegram's Status (history_lines: with its
+  moment, in the chat's language) and the Kiosk's card (story: English, no moment). story now tells every line
+  Telegram does (ticket 19 of "One inbox"): the first alert, updates, a closing note, a note (cleared); not the "… N
+  earlier notices" count (no moment) nor a ticket taken in the Cockpit (TAKEN_STAGE, the Kiosk's own step). A press
+  reads "🆘 Need help on Telegram (Wayan)". Each line carries its `stage`.
+- tickets._run_start: a fault's story starts at its reopening, else at the run it was made in (the latest "new"/"back"
+  at or before its making), so the alert sent just before the fault is told. The 20-line cap and the agreement are
+  unchanged (the lines are "noted" steps, as before).
+- message_format.Step: its `noted` flag removed (every step is told now).
+
 ## 0.6.356 (28 October 2026)
 
 - vesta_shared/asset_kinds.py: each asset's kind as the owner chose it, in asset_kinds.yaml beside policy.yaml (`path`

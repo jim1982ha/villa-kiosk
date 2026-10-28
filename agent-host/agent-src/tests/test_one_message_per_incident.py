@@ -156,12 +156,12 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     (fm,) = shown(agent, FM_CHAT)
     # the same sentence in every chat (2026-10-11); the owner's copy, the escalation, says its step first (2026-10-16)
     assert status(owner["text"]).endswith(", " + status(fm) + " (to: Owner)")
-    # the Kiosk's card tells the same story, through the wiring the app gives its tickets (owner, 2026-10-14) — and
-    # Telegram's Status the same events in the same words: the press, then the escalation; never an "Update sent"
-    # (architecture review, 2026-10-15)
+    # the Kiosk's card tells the same story, through the wiring the app gives its tickets (owner, 2026-10-14), from the
+    # alert sent on (ticket 19 of "One inbox") — and Telegram's Status the same events in the same words: the press,
+    # then the escalation; never an "Update sent" (architecture review, 2026-10-15)
     notes = [x["note"] for x in agent.tickets.story(int(iid))]
-    assert notes[0] == "Reminder sent (to: Facility Manager)" and notes[-2:] == ["🆘 Need help (Wayan)",
-                                                                               "Escalation sent (to: Owner)"], notes
+    assert notes == ["Alert sent (to: Facility Manager)", "Reminder sent (to: Facility Manager)",
+                     "🆘 Need help on Telegram (Wayan)", "Escalation sent (to: Owner)"], notes
     # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
     # FM's chat lists the FM's steps and the press, never the escalation to the owner; the owner's group the press and
     # its escalation, never the FM's alert or reminder

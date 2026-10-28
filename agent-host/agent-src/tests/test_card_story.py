@@ -1,7 +1,8 @@
 """A fault's card tells what happened on Telegram (owner, 2026-10-14: "how would the fault description update…?"):
-a reminder or an escalation sent, a button pressed — a "noted" step each, from the SAME history Telegram's "Status:" is
-written from (notice.Notices.story), written by tickets.repair within minutes, once, and only to a Kiosk that shows
-them (/agent/v1/info step_kinds). Synthetic villa; ids invented."""
+its whole short story as Telegram's "Status:" tells it (ticket 19 of "One inbox", owner 2026-10-28) — the alert sent,
+reminders, an escalation, a button pressed, a closing note — a "noted" step each, worded by the ONE writer of
+Telegram's lines (notice.Notices.story), written by tickets.repair within minutes, once, and only to a Kiosk that
+shows them (/agent/v1/info step_kinds). Synthetic villa; ids invented."""
 from __future__ import annotations
 
 import asyncio
@@ -50,11 +51,16 @@ def told(notices, state, iid, minutes_after):
     note_press(state, iid, "Done", "Wayan", None, "done")            # Done: the fault's close says it, not a line
 
 
-def test_the_story_is_the_reminders_the_escalation_and_the_presses_not_the_first_alert(tmp_path):
+STORY = ["Alert sent (to: Facility Manager)", "Reminder sent (to: Facility Manager)", "Escalation sent (to: Owner)",
+         "🆘 Need help on Telegram (Wayan)"]
+
+
+def test_the_story_is_every_line_telegram_shows_the_first_alert_too(tmp_path):
     k, t, state, notices, iid, uid = villa(tmp_path)
     told(notices, state, iid, 1)
-    assert [x["note"] for x in notices.story(iid)] == [
-        "Reminder sent (to: Facility Manager)", "Escalation sent (to: Owner)", "🆘 Need help (Wayan)"]
+    assert [x["note"] for x in notices.story(iid)] == STORY
+    # one line per line of Telegram's "Status:", in its order (each its own moment: the Kiosk says when)
+    assert len(notices.story(iid)) == len(notices.history_lines(iid))
     # Telegram's "Status:" tells the press as the card does — once, never also as an "Update sent" (review 2026-10-15)
     head = head_text(notices.heading(FM, iid))
     assert "- 🆘 Need help on " in head and "Update sent" not in head
@@ -66,8 +72,8 @@ def test_the_repair_writes_them_on_the_card_once_without_changing_its_status(tmp
     run(t.repair())
     run(t.repair())
     steps = [u for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
-    assert [u["note"] for u in steps] == ["Reminder sent (to: Facility Manager)", "Escalation sent (to: Owner)",
-                                          "🆘 Need help (Wayan)"]
+    # the alert that started it too, though it was sent before the fault was made: the story of the fault's run
+    assert [u["note"] for u in steps] == STORY
     assert {u["status"] for u in steps} == {"open"} and k.ticket(uid)["status"] == "open"
 
 
@@ -117,3 +123,53 @@ def test_a_reworded_line_is_never_written_on_the_card_again(tmp_path):
         STEPS["reminder"] = saved
     notes = [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
     assert notes.count("Reminder sent (to: Facility Manager)") == 1 and "Reminder posted to Facility Manager" not in notes
+
+
+def test_a_closing_note_a_note_and_a_long_story_say_what_telegram_says(tmp_path):
+    from vesta_agent.notice import note_step
+    k, t, state, notices, iid, uid = villa(tmp_path)
+    told(notices, state, iid, 1)
+    note_step(state, iid, "cleared", "Cleared in the villa's system on 28/10/2026 10:00.")
+    notices.record(iid, "closed", [(FM, "fm")])
+    assert [x["note"] for x in notices.story(iid)][-2:] == [
+        "Cleared in the villa's system on 28/10/2026 10:00", "Closing note sent (to: Facility Manager)"]
+    # a ticket taken on in the Cockpit is the Kiosk's own step already ("in progress since … by …"): never told twice
+    note_step(state, iid, "taken", "Ticket opened in the Cockpit on 28/10/2026 10:05 (JM)")
+    assert "Ticket opened" in notices.history_lines(iid)[-1]
+    assert not [x for x in notices.story(iid) if "Ticket opened" in x["note"]]
+    # past the 20 lines kept, the counted line has no moment of its own: Telegram's alone (the card keeps every line
+    # it was given, so it loses none)
+    for i in range(30):
+        notices.record(iid, "reminder", [(FM, "fm")], at=datetime.now(timezone.utc) + timedelta(minutes=100 + i))
+    assert any("earlier" in x for x in notices.history_lines(iid))
+    told_there = [x for x in notices.history_lines(iid) if "earlier notices" not in x and "Ticket opened" not in x]
+    assert all(x.get("at") for x in notices.story(iid)) and len(notices.story(iid)) == len(told_there)
+
+
+def test_a_reopened_fault_tells_only_its_new_run(tmp_path):
+    k, t, state, notices, iid, uid = villa(tmp_path)
+    now = datetime.now(timezone.utc)
+    # its first run: alerted before the fault was made, chased after it
+    notices.record(iid, "new", [(FM, "fm")], at=now - timedelta(minutes=120))
+    notices.record(iid, "reminder", [(FM, "fm")], at=now + timedelta(minutes=5))
+    from vesta_shared.store import Store
+    from helpers import settings
+    st = Store(settings(str(tmp_path)).store_path)
+    task = st.tasks(None)[0]
+    st.reopen_task(task["id"], task["summary"], at=(now + timedelta(minutes=10)).isoformat())
+    notices.record(iid, "back", [(FM, "fm")], at=now + timedelta(minutes=11))
+    run(t.repair())
+    notes = [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
+    # the first run's lines belong to the fault as it was then
+    assert notes == ["Back: alert sent (to: Facility Manager)"], notes
+
+
+def test_a_fault_made_in_a_later_run_starts_at_that_runs_return(tmp_path):
+    k, t, state, notices, iid, uid = villa(tmp_path)
+    now = datetime.now(timezone.utc)
+    notices.record(iid, "new", [(FM, "fm")], at=now - timedelta(minutes=120))
+    notices.record(iid, "reminder", [(FM, "fm")], at=now - timedelta(minutes=100))
+    notices.record(iid, "back", [(FM, "fm")], at=now - timedelta(minutes=30))         # the run the fault is made in
+    run(t.repair())
+    notes = [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
+    assert notes == ["Back: alert sent (to: Facility Manager)"], notes

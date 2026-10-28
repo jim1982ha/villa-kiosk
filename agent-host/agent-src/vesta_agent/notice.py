@@ -46,6 +46,10 @@ from typing import Callable
 from . import layout
 
 
+#: The steps that are notes, not notices sent (note_step): a ticket someone took on in the Kiosk (app.py) — the Kiosk's
+#: card says it already, as its own step — and an alert's close once its watch is over (incident_thread.py).
+TAKEN_STAGE = "taken"
+CLEARED_STAGE = "cleared"
 #: Between a step's line and the desk's words on the bottom line.
 STEP_SEP = ", "
 EXISTING = "existing"
@@ -273,12 +277,8 @@ class Notices:
                 continue
             # ⚠️ ONE RUN, THEN THE NEXT (owner, 2026-10-16, #43): a second run starts at its "- Back at …" line, which
             # says how many times it came (message_format.STEPS: one line, the shape of every other step)
-            # a step is kept as facts (stage, moment, roles, count) and worded here; a `note` (taken on in the Kiosk) is
-            # the Kiosk's words, kept as written
-            lines.append(f"- {status_words.earlier(h['dropped'], lang)}" if h.get("dropped") else
-                         f"- {(h.get('note_in') or {}).get(lang) or h['note']}" if h.get("note") else
-                         f"- {self._pressed(h, when(datetime.fromisoformat(h['at']), self.tz), lang)}" if h.get("stage") == PRESSED_STAGE else
-                         f"- {self.step(h.get('stage'), self._roles(h), datetime.fromisoformat(h['at']), h.get('run'), h.get('reach'), lang)}")
+            # a step is kept as facts (stage, moment, roles, count) and worded by `_line`, the Kiosk's card's writer too
+            lines.append(f"- {self._line(h, lang)}")
         return lines
 
     def concerns(self, chat: int, roles) -> bool:
@@ -347,25 +347,43 @@ class Notices:
     def _pressed(h: dict, at: str = "", lang: str = "en") -> str:
         """A press as every reader tells it: Telegram's Status "🆘 Need help on 16/10/2026 18:20 (Fabien)" (`at`), in
         the chat's language when the button has a label in it (`labels`; else the whole line in English, never half),
-        the Kiosk card, whose line has its own time, "🆘 Need help (Fabien)" — message_format.acted's order."""
+        the Kiosk card, whose line has its own time, "🆘 Need help on Telegram (Fabien)" — message_format.acted's order.
+        The card names where it was pressed: its own buttons keep the Kiosk's words (decisions of "One inbox")."""
         label = (h.get("labels") or {}).get(lang) if lang != "en" else None
         lang = lang if label else "en"
         what = f"{MARK_ICONS.get(h.get('mark') or '', '')} {label or h.get('label')}".strip()
-        return status_words.acted(what, at, h.get("name") or "", lang) if at else f"{what} ({h.get('name')})"
+        return status_words.acted(what, at, h.get("name") or "", lang) if at else f"{what} on Telegram ({h.get('name')})"
 
     def story(self, incident: int) -> list[dict]:
-        """What a fault's card in the Kiosk tells of incident `incident`'s Telegram life, oldest first: [{at, note}] —
-        "Reminder sent to Facility Manager", "🆘 Need help (Fabien)" — its time is the step's own (the Kiosk
-        writes it). ⚠️ ONE STORY (architecture review, 2026-10-14): the card is told from the history Telegram's
-        "Status:" is written from, never by a second writer."""
+        """What a fault's card in the Kiosk tells of incident `incident`'s Telegram life, oldest first: [{at, note,
+        stage}] — "Alert sent (to: Facility Manager)", "🆘 Need help on Telegram (Fabien)" — every line Telegram's
+        "Status:" shows (ticket 19 of "One inbox", owner 2026-10-28: it told reminders, escalations and presses only),
+        each without its time: the Kiosk says the step's own. ⚠️ ONE STORY (architecture review, 2026-10-14): told by
+        `_line`, the writer of Telegram's lines, never by a second writer."""
         out = []
         for h in self.state.incident_history(incident):
-            if h.get("stage") in STEPS and STEPS[h["stage"]].noted:
-                who = audience(self._roles(h)) or self._reach_words(h.get("reach")) or "nobody"
-                out.append({"at": h["at"], "note": f"{STEPS[h['stage']].sent} (to: {who})"})
-            elif h.get("stage") == PRESSED_STAGE:
-                out.append({"at": h["at"], "note": self._pressed(h)})
+            note = self._line(h, kiosk=True)
+            if note:
+                out.append({"at": h["at"], "note": note, "stage": h.get("stage")})
         return out
+
+    def _line(self, h: dict, lang: str = "en", kiosk: bool = False) -> str | None:
+        """One step of an incident's history as its story tells it: on Telegram (a "Status:" line, with its moment, in
+        the chat's language), or on the Kiosk's card (`kiosk`: English, no moment — the card says the step's own; a
+        press says it was on Telegram). None for what the card does not tell: the "… N earlier notices" count (no
+        moment; the card keeps every line it was given), and a ticket taken on in the Cockpit — the Kiosk's own step."""
+        if h.get("dropped"):
+            return None if kiosk else status_words.earlier(h["dropped"], lang)
+        if h.get("note"):
+            # someone took it on in the Kiosk, its close once its watch is over: kept as written (note_step)
+            return None if kiosk and h.get("stage") == TAKEN_STAGE else (h.get("note_in") or {}).get(lang) or h["note"]
+        if h.get("stage") == PRESSED_STAGE:
+            return self._pressed(h, "" if kiosk else when(datetime.fromisoformat(h["at"]), self.tz), lang)
+        if kiosk:
+            # the step and whom, in the words of its Telegram line ("Reminder sent (to: Facility Manager)")
+            sent = STEPS[h["stage"]].sent if h.get("stage") in STEPS else "Sent"
+            return f"{sent} (to: {audience(self._roles(h)) or self._reach_words(h.get('reach')) or 'nobody'})"
+        return self.step(h.get("stage"), self._roles(h), datetime.fromisoformat(h["at"]), h.get("run"), h.get("reach"), lang)
 
     def word(self, incident: int, stage: str | None = None, history: bool = True) -> str:
         """The title's word for a notice about `incident`: what the notice is (`stage`) — else what the incident is

@@ -78,7 +78,7 @@ from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
 from .turn import Turns
 from .turn_reply import TurnReply
-from .notice import Notices, note_step
+from .notice import TAKEN_STAGE, Notices, note_step
 
 log = logging.getLogger("vesta")
 
@@ -886,7 +886,7 @@ class Vesta:
         every later "Status:" (its close included), never twice beside the status saying it now."""
         langs = getattr(note, "langs", None) or None    # kiosk_words.Words: each chat's copy in its language
         shown = await self.thread.restate(iid, note, note_in=langs)
-        note_step(self.state, iid, "taken", note, langs)
+        note_step(self.state, iid, TAKEN_STAGE, note, langs)
         return shown
 
     async def _tell_owner_siren(self, text: str) -> None:

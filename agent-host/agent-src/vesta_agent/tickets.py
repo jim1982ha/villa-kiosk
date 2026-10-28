@@ -20,6 +20,7 @@ from vesta_shared.problems import Problems
 from .kiosk import MINE, KioskError, closing, confirming, noted, retitled, tagged, todo
 from .kiosk import fault_title_chars
 from vesta_shared.messaging import headline
+from vesta_shared.message_format import STEPS
 from .scheduler import next_slot
 
 log = logging.getLogger("vesta.outcome")
@@ -314,13 +315,14 @@ class Tickets:
                     said = result.fault_note(want["todo"])
                     if said and card.get("note") != said:
                         amends.append(todo(said))
-                    # what happened on Telegram — reminders, escalation, a button pressed (owner, 2026-10-14) — from this
-                    # task's run on (an earlier run's lines belong to the fault as it was then); a Kiosk that shows no
-                    # such line gets none (its gate, Kiosk._gated)
+                    # what happened on Telegram, its whole short story (owner, 2026-10-14; ticket 19 of "One inbox",
+                    # 2026-10-28) — from this task's run on (an earlier run's lines belong to the fault as it was
+                    # then); a Kiosk that shows no such line gets none (its gate, Kiosk._gated)
                     if want["number"]:
-                        since = _moment(t.get("reopened_at") or t.get("created_at"))
+                        story = self.story(want["number"])
+                        since = _run_start(story, t)
                         have = {at for at, _note in card.get("noted") or []}            # by its moment (kiosk.noted)
-                        lines = [x for x in self.story(want["number"]) if (since is None or (_moment(x["at"]) or since) >= since)
+                        lines = [x for x in story if (since is None or (_moment(x["at"]) or since) >= since)
                                  and x["at"] not in have]
                         if lines:
                             amends.append(noted(lines))
@@ -344,6 +346,18 @@ class Tickets:
         if fixed:
             log.info("Kiosk tickets brought up to date: %d", fixed)
         return {"reopened": reopened, "resolved": resolved}
+
+
+def _run_start(story: list[dict], task: dict) -> datetime | None:
+    """Where a fault's story starts: its reopening — its new run's lines only; else the start of the run it was made
+    in, so the alert sent just before the fault was made is told too (ticket 19 of "One inbox": the card read from
+    the first reminder on)."""
+    if task.get("reopened_at"):
+        return _moment(task["reopened_at"])
+    made = _moment(task.get("created_at"))
+    starts = [m for x in story if (s := STEPS.get(x.get("stage") or "")) and s.starts_run
+              and (m := _moment(x["at"])) and (made is None or m <= made)]
+    return max(starts) if starts else made
 
 
 def _moment(iso: str | None) -> datetime | None:

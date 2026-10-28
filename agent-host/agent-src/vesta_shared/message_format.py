@@ -143,7 +143,9 @@ class Step(NamedTuple):
     sent: str               # its history line: "Reminder sent 16/10/2026 18:20 (to: FM)"
     title: str              # the card's title word while it is the latest step ("new", "existing", "closed")
     timed: bool             # its bottom line says what, when and to whom before the desk's words
-    noted: bool             # the fault's card in the Kiosk tells it too (a "noted" step): "{sent} to {who}"
+    #: it starts a run of the alert (its first alert, its return): a fault's story starts at the run it was made in
+    #: (vesta_agent/tickets.py _run_start)
+    starts_run: bool = False
     #: its history line and bottom line: {sent}, {at} (the villa's time), {times} (" (2nd time in 7 days)", or "")
     #: and {who} (the roles, short). ⚠️ EVERY LINE ENDS "(to: …)" (owner, 2026-10-18, #41: "Alert sent … to Owner &
     #: FM" beside "Back at …, 2nd time in 7 days (to: Owner & FM)" — two shapes for whom in one Status).
@@ -160,20 +162,20 @@ class Step(NamedTuple):
 #: two shapes and two words for one moment. It is now "- Back at 17/10/2026 19:44 (2nd time in 7 days), alert sent
 #: to Owner & FM"; the words "came back" / "came-back" are never written. Reworded by the owner on 2026-10-18 (#52):
 #: "- Back at 17/10/2026 20:16, 3rd time in 7 days (to: Owner & FM)" — the count after a comma, whom in brackets.
-#: The Kiosk's card tells what chased, escalated or brought an alert back — never the first alert (the fault itself)
-#: nor the closing (its close step says it).
+#: The Kiosk's card tells every step, as Telegram's "Status:" does (ticket 19 of "One inbox", owner 2026-10-28: it
+#: told only what chased, escalated or brought an alert back).
 STEPS: dict[str, Step] = {
     # a NEW number within the week says it too (architecture review, 2026-10-19): a return after reopen_hours is a new
     # number (owner, 2026-10-18), and its card and the digest said "(again: 3 times in 7 days)" while Telegram said New
-    "new": Step("Alert sent", "new", timed=False, noted=False, line="Alert sent {at}{times} (to: {who})"),
-    "reminder": Step("Reminder sent", "existing", timed=True, noted=True),
-    "escalated": Step("Escalation sent", "existing", timed=True, noted=True),
-    "update": Step("Update sent", "existing", timed=False, noted=False),
-    "back": Step("Back: alert sent", "existing", timed=True, noted=True,
+    "new": Step("Alert sent", "new", timed=False, starts_run=True, line="Alert sent {at}{times} (to: {who})"),
+    "reminder": Step("Reminder sent", "existing", timed=True),
+    "escalated": Step("Escalation sent", "existing", timed=True),
+    "update": Step("Update sent", "existing", timed=False),
+    "back": Step("Back: alert sent", "existing", timed=True, starts_run=True,
                  line="Back at {at}{times} (to: {who})"),
-    "still": Step("Still-there alert sent", "existing", timed=True, noted=True),
-    "reopened": Step("Reopen request sent", "existing", timed=True, noted=True),
-    "closed": Step("Closing note sent", "closed", timed=False, noted=False),
+    "still": Step("Still-there alert sent", "existing", timed=True),
+    "reopened": Step("Reopen request sent", "existing", timed=True),
+    "closed": Step("Closing note sent", "closed", timed=False),
 }
 #: A button pressed on an alert: the answer in its own chat is no step of its own — the press is the story's line
 #: (notice.note_press), never also an "Update sent" (architecture review, 2026-10-15).
