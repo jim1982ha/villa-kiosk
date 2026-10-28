@@ -31,18 +31,18 @@ log = logging.getLogger("vesta.kiosk")
 REMEMBERED = 500
 
 
-def limit(name: str) -> int:
+def agreed_limit(name: str) -> int:
     """The agreement's longest `name` (vestaMessage.limits); 0 when it names none."""
     return int(agreement.section("vestaMessage").get("limits", {}).get(name) or 0)
 
 
 def _cut(text, name: str) -> str:
-    n = limit(name)
+    n = agreed_limit(name)
     return str(text or "").strip()[:n] if n else ""
 
 
 def _lines(lines, list_name: str, line_name: str) -> list[str]:
-    n = limit(list_name)
+    n = agreed_limit(list_name)
     return [x for x in (_cut(line, line_name) for line in lines or ()) if x][:n]
 
 
@@ -63,9 +63,11 @@ def roles_of(to: str) -> list[str]:
     return [r.strip() for r in (to or "").split(AND.strip()) if r.strip()]
 
 
-def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | None = None) -> dict:
+def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | None = None, to: str | None = None,
+             takes: list[str] | None = None) -> dict:
     """The record of a message drawn as `layout` parts `p`: its title and "To:", the Status lines (the history, then where it
-    stands), its stage, the words it was drawn in besides English when the agent holds them, its buttons."""
+    stands), its stage, the words it was drawn in besides English when the agent holds them, its buttons. `to`: the "To:"
+    of every chat's copy together (IncidentThread.tell), else this copy's; `takes`: the villa's runs it stands for."""
     h = layout.head_of(p.get("head"))
     status = layout.stage_line(h, (p.get("status") or "").strip(), p.get("mark")) if h else (p.get("status") or "").strip()
     languages: dict = {}
@@ -77,7 +79,8 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
     if isinstance(tr, dict) and tr.get("lang") and isinstance(tr.get("body"), str) and tr["body"].strip():
         languages.setdefault(tr["lang"], {})["body"] = tr["body"].strip()
     rec = {
-        "key": key, "title": layout.title_line(h) if h else "", "to": h["to"] if h else "",
+        "key": key, "title": layout.title_line(h) if h else "", "to": to if to is not None else (h["to"] if h else ""),
+        "takes": takes or [],
         "lead": p.get("lead"), "body": layout.body_shown(p, h),
         "status": _lines([*(h["history"] if h else []), status], "status", "statusLine"),
         "stage": (h or {}).get("word") or said.get("stage") or "", "mark": p.get("mark") or "",
@@ -120,6 +123,10 @@ def _finished(rec: dict, photo: str | None) -> dict:
     was drawn, its empty fields left out (the Kiosk reads a missing one as none), the photo (base64) added."""
     rec = {**rec, **{f: _cut(rec.get(f), f) for f in ("title", "to", "lead", "body")}}
     rec["roles"] = _lines(roles_of(rec["to"]), "roles", "role")
+    # the villa's runs it stands for: the NEWEST kept when there are more (the older ones' messages are long tidied away
+    # on the tablet; agent-contract.json vestaMessage says so)
+    takes = [str(t) for t in rec.get("takes") or [] if t]
+    rec["takes"] = takes[-agreed_limit("takes"):] if agreed_limit("takes") else []
     rec["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     rec = {k: v for k, v in rec.items() if v not in ("", [], {}, None)}
     return {**rec, "photo": photo} if photo else rec

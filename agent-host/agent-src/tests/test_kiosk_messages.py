@@ -354,3 +354,17 @@ def test_a_ticket_made_before_gets_its_priority_at_the_next_repair(agent, kiosk)
     scenario(agent, lambda v: v.tickets.repair())
     (t,) = [t for t in kiosk.doc["data"]["tickets"] if t.get("alertNumber") == 1]
     assert t.get("alertPriority") == "P2", t
+
+
+def test_one_list_of_priorities_on_both_sides():
+    from vesta_shared import result
+    assert list(result.PRIORITIES) == kiosk_messages.agreement.section("ticket")["priorities"]
+    assert result.priority("P2") == "P2" and result.priority("P9") is None and result.priority(None) is None
+
+
+def test_the_card_keeps_its_newest_runs_and_its_to_line_is_cut_like_every_text():
+    cap = kiosk_messages.agreed_limit("takes")
+    runs = [f"RUN-{n}" for n in range(cap + 5)]
+    rec = kiosk_messages.of_parts("incident:1", {"head": "", "body": "x"}, to="T" * 999, takes=runs)
+    assert rec["takes"] == runs[-cap:], "the newest runs: the villa's messages the tablet still holds"
+    assert len(rec["to"]) == kiosk_messages.agreed_limit("to")

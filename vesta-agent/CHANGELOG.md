@@ -1,3 +1,12 @@
+## 0.12.376
+
+What you will see:
+- A ticket closed as a second copy of an alert's fault, and the investigation report's alert lines, name the alert
+  "#91-P2" too.
+- Nothing else changes: from the review of tickets 26-27, a priority is checked against one list shared with the
+  tablet, an alert's name is read one way everywhere (Telegram's heading included), and a card's "To:" and its list of
+  the villa's messages it stands for are trimmed like every other part.
+
 ## 0.12.375
 
 What you will see:

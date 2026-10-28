@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.365 (29 October 2026)
+
+- Review of tickets 26-27 (standards and spec): result.priority, the one check of a priority (incident_tag,
+  problems.priority_of, Incidents.severity), pinned to the agreement's new ticket.priorities (copied from Kiosk
+  2.496.577); problems.alert_name(store, iid), the one way to name an alert from the store (Incidents.name, the night
+  check); Notices takes `name` (Incidents.name) for its heading instead of `severity`; IncidentThread.tell passes the
+  joined "To:" and the runs into kiosk_messages.of_parts, whose `_finished` cuts every text and keeps the NEWEST
+  `takes` (as the agreement now says); kiosk_messages.limit renamed agreed_limit (it shadowed limits.limit). Two bare
+  "#N" left: tickets' second-copy note, investigate's record lines (skill edited on the owner's word).
+
 ## 0.6.364 (29 October 2026)
 
 - ONE name for an alert everywhere (owner, 2026-10-29: "total consistency between Telegram and KIOSK and in all reports

@@ -8,9 +8,7 @@ desk's, vesta_shared.store); what each chat shows of it is incident_thread.py's 
 """
 from __future__ import annotations
 
-from vesta_shared.problems import Problems, incident_runs
-from vesta_shared.messaging import incident_tag
-from vesta_shared.result import PRIORITIES
+from vesta_shared.problems import Problems, alert_name, incident_runs, priority_of
 from datetime import datetime
 
 from vesta_shared import alert_watch
@@ -52,16 +50,12 @@ class Incidents:
         return incident_runs(dict(inc), store) if inc else None
 
     def name(self, iid: int | str) -> str:
-        """How the alert is named everywhere ("#9-P2": messaging.incident_tag with its priority)."""
-        try:
-            return incident_tag(iid, self.severity(int(iid)))
-        except (TypeError, ValueError):
-            return incident_tag(iid)
+        """How the alert is named everywhere ("#9-P2": problems.alert_name)."""
+        return alert_name(self._store(), iid)
 
     def severity(self, iid: int) -> str | None:
         """Its priority (P1…P4): the notices' heading says it."""
-        sev = str((self._get(iid) or {}).get("severity") or "")
-        return sev if sev in PRIORITIES else None
+        return priority_of(self._get(iid))
 
     def reaches(self, iid: int) -> list[str] | None:
         """Whom its priority reaches, as the alert desk carried it (store.Notes.TO): roles ("owner", "fm"), or what the

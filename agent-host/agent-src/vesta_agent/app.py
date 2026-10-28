@@ -192,7 +192,7 @@ class Vesta:
                            entity_ids=lambda: villa_entity_ids(self.reader))
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
-        self.notices = Notices(self.state, self.policy, settings.timezone, severity=incidents.severity,
+        self.notices = Notices(self.state, self.policy, settings.timezone, name=incidents.name,
                                closed=incidents.closed, runs=incidents.runs, reaches=incidents.reaches,
                                watching=incidents.watching)
         self.thread.name = incidents.name                    # "#9-P2" in a pointer, as the title names it

@@ -508,7 +508,14 @@
     },
     "_alertLabel": "How an alert is named everywhere, Telegram's title and the tablet's lines alike (owner, 2026-10-28: \"consistency everywhere\"): {number} and {priority}; without a priority, `alertLabelNoPriority`.",
     "alertLabel": "#{number}-{priority}",
-    "alertLabelNoPriority": "#{number}"
+    "alertLabelNoPriority": "#{number}",
+    "_priorities": "The priorities an alert can carry, most urgent first: the one list both sides check a priority against (the VESTA Agent's vesta_shared.result.PRIORITIES, pinned equal by its tests).",
+    "priorities": [
+      "P1",
+      "P2",
+      "P3",
+      "P4"
+    ]
   },
   "_duration": "How long something lasted, in the words BOTH apps write (architecture review round 2, 2026-10-16: the Kiosk's chartUtils.fmtDuration and the VESTA Agent's timeutil.lasting each had a rule, and the weekly report's \"Lasted\" column a third: 89s read \"1min\", \"89s\" and \"89s\"; 2h 29min \"2h 29min\", \"2h 29min\" and \"2.5h\"). The rule (owner, 2026-10-24: the unit joined to its number, \"1h 30min\", \"10min\", \"30s\"): rounded to the nearest second; under a minute in seconds, never less than \"1s\"; from a minute on rounded to the nearest minute; from an hour on \"1h 20min\"; from a day on days and WHOLE hours, the minutes dropped (\"1d 9h\" until it is 1d 10h). A half rounds up on both apps. Every case is checked by tests/oracles/duration_words.mjs (Kiosk) and by the VESTA Agent's test_duration_words.py.",
   "duration": {
@@ -648,7 +655,7 @@
     "blueprint": "critical_watchdog",
     "input": "critical_entities"
   },
-  "_vestaMessage": "A message the VESTA Agent wrote on Telegram, kept for the tablet AS IT STANDS NOW (ticket 25 of \"One inbox\", 2026-10-28): POST /agent/v1/vesta-message, one record per thread, added or REPLACED by `key` (never removed by the Agent; the Kiosk tidies it after the records-kept days) and served to every profile at /vesta-messages. `key`: the thread (an incident — `incidentKey` with its number, the one form both sides write and read —, an approval, a snapshot, or one note); `title`, `roles` (who it is for), `to` (the \"To:\" line as Telegram shows it: the tablet shows it as written), `lead`, `body`, `status` (the lines of its Status: the history, then where it stands), `stage` (new, existing, watch, closed, or none), `mark`, `buttons` ([{label, kind, id}]: the Agent's own button kind and id, never a device or a command; a rewrite without buttons withdraws them), `at` (when the Agent drew it), `languages` ({code: {body, status}} where the Agent holds the words in another language) and `takes` (the villa's own messages it took over: the runs of the announcements, their `run`, that this card stands for on the tablet) and `photo` (the picture as base64, JPEG or PNG; a rewrite that sends none keeps the first one's). `limits` are the longest each may be: a longer text is cut, a longer list keeps its first entries; the Agent reads them from here. An older Kiosk has no such route (404) and the Agent drops the record.",
+  "_vestaMessage": "A message the VESTA Agent wrote on Telegram, kept for the tablet AS IT STANDS NOW (ticket 25 of \"One inbox\", 2026-10-28): POST /agent/v1/vesta-message, one record per thread, added or REPLACED by `key` (never removed by the Agent; the Kiosk tidies it after the records-kept days) and served to every profile at /vesta-messages. `key`: the thread (an incident — `incidentKey` with its number, the one form both sides write and read —, an approval, a snapshot, or one note); `title`, `roles` (who it is for), `to` (the \"To:\" line as Telegram shows it: the tablet shows it as written), `lead`, `body`, `status` (the lines of its Status: the history, then where it stands), `stage` (new, existing, watch, closed, or none), `mark`, `buttons` ([{label, kind, id}]: the Agent's own button kind and id, never a device or a command; a rewrite without buttons withdraws them), `at` (when the Agent drew it), `languages` ({code: {body, status}} where the Agent holds the words in another language) and `takes` (the villa's own messages it took over: the runs of the announcements, their `run`, that this card stands for on the tablet) and `photo` (the picture as base64, JPEG or PNG; a rewrite that sends none keeps the first one's). `limits` are the longest each may be: a longer text is cut, a longer list keeps its first entries (`takes`: its newest, the runs the tablet still holds); the Agent reads them from here. An older Kiosk has no such route (404) and the Agent drops the record.",
   "vestaMessage": {
     "limits": {
       "key": 200,

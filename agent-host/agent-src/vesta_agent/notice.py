@@ -107,7 +107,7 @@ def when(at: datetime, zone: str) -> str:
 
 
 class Notices:
-    def __init__(self, state, policy: Callable, timezone_name: str, severity: Callable[[int], str | None] | None = None,
+    def __init__(self, state, policy: Callable, timezone_name: str, name: Callable[[int], str] | None = None,
                  closed: Callable[[int], bool] | None = None, runs: Callable[[int], int | None] | None = None,
                  reaches: Callable[[int], list[str] | None] | None = None,
                  watching: Callable[[int], bool] | None = None):
@@ -118,8 +118,9 @@ class Notices:
         # how many times an incident alerted in AGAIN_DAYS, as its skill stored it (problems.incident_runs): a "back"
         # step's line says it ("- Back at … (2nd time in 7 days), alert sent to …")
         self.runs = runs or (lambda _iid: None)
-        # an incident's priority (P1…P4) as its skill stored it: "P2 Incident: New #18" (owner, 2026-10-10)
-        self.severity = severity or (lambda _iid: None)
+        # how the alert is named, with its priority (incidents.Incidents.name: "#18-P2", the one name everywhere —
+        # owner, 2026-10-29); its number alone without it
+        self.name = name or incident_tag
         # whether an incident is closed as its skill stored it: its copies are headed "Closed" (architecture review 25)
         self.closed = closed or (lambda _iid: False)
         # whom an incident's priority reaches, as its skill carried it (incidents.Incidents.reaches): roles, or the
@@ -238,11 +239,11 @@ class Notices:
         history = history[:len(history) - before] if before else history
         who = self.to_line(int(incident), also, history) or audience(self.roles_for(chat, to), short=True) or "this chat"
         try:
-            p = self.severity(int(incident))
+            label = self.name(int(incident))
         except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
-            p = None
+            label = incident_tag(incident)
         word = self.word(int(incident), stage, bool(history))
-        return layout.head(incident_tag(incident, p), who,
+        return layout.head(label, who,
                            self.history_lines(int(incident), chat, before), word, self.lang(chat))
 
     def to_line(self, incident: int, also=(), history: list[dict] | None = None) -> str | None:

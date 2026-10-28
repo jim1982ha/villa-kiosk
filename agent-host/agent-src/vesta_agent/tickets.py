@@ -19,7 +19,7 @@ from vesta_shared.problems import Problems
 
 from .kiosk import MINE, KioskError, closing, confirming, noted, retitled, tagged, todo
 from .kiosk import fault_title_chars
-from vesta_shared.messaging import headline
+from vesta_shared.messaging import headline, incident_tag
 from vesta_shared.message_format import STEPS
 from .scheduler import next_slot
 
@@ -211,7 +211,7 @@ class Tickets:
             if uid in mine or card.get("status") == "resolved" or n is None or not uid.startswith(MINE):
                 continue
             if by_number.get(str(n)) and by_number[str(n)] != uid:
-                if await self.kiosk.resolve_ticket(uid, note=f"A second copy of #{n}'s fault: closed, the other one says it."):
+                if await self.kiosk.resolve_ticket(uid, note=f"A second copy of {incident_tag(n, card.get('alert_priority'))}'s fault: closed, the other one says it."):
                     closed += 1
         if closed:
             log.info("Closed %d double Kiosk fault(s) of an alert that already had one", closed)

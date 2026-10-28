@@ -191,8 +191,8 @@ def incident_tag(iid: int | str, priority: str | None = None) -> str:
     between Telegram and the Kiosk and in all reports or notifications or alerts"): the title, a replaced copy's
     pointer, the digest, the concierge and the Kiosk's ticket all write it here (or the Kiosk from the same form)."""
     from . import agreement
-    from .result import PRIORITIES
-    priority = priority if priority in PRIORITIES else None      # a severity of another shape is never written
+    from .result import priority as known
+    priority = known(priority)                                    # a severity of another shape is never written
     t = agreement.section("ticket")
     form = (t.get("alertLabel") if priority else t.get("alertLabelNoPriority")) or ("#{number}-{priority}" if priority
                                                                                    else "#{number}")

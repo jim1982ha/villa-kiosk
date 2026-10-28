@@ -33,7 +33,6 @@ sys.path.insert(0, HERE)
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
 from vesta_shared import occupancy  # noqa: E402  (the villa's state per day: like with like)
-from vesta_shared.messaging import incident_tag  # noqa: E402
 from vesta_shared.timeutil import clock, day_label, day_time_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import STATUS, document, split_title, status_line  # noqa: E402  (the one shape of a message)
@@ -42,7 +41,7 @@ from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  
 from vesta_shared.offline import device_answers, devices_offline, reported_since, watched_kinds  # noqa: E402  (offline now; when it last REALLY reported)
 from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
-from vesta_shared.problems import Problems, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import Problems, alert_name, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
 from vesta_shared import battery  # noqa: E402  (a battery's ids and its rested level: one owner)
@@ -536,7 +535,7 @@ def handed_to_alerts(store, pack, alerted: dict[str, int]) -> dict[tuple[str, st
     ⚠️ NOT AT 02:00 ONLY (architecture review N, 2026-10-27): a device offline at 5 minutes got its fault from the
     recheck, the villa's own alert took it up at 10 — and both stood in the Cockpit's Open issues until the night check
     handed the fault over, because only the night did."""
-    return {(o["rule_id"], o["entity_id"]): f"Followed by alert {incident_tag(alerted[dev], (store.incident(alerted[dev]) or {}).get('severity'))}, which says when it is back."
+    return {(o["rule_id"], o["entity_id"]): f"Followed by alert {alert_name(store, alerted[dev])}, which says when it is back."
             for o in store.findings(status="open") if o["rule_id"] == "PM-UNAVAILABLE"
             for dev in [pack.physical_device_of(o["entity_id"]) or o["entity_id"]] if dev in alerted}
 

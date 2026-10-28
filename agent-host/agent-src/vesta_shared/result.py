@@ -31,6 +31,13 @@ FAULTS_CHANGED = "faults_changed"
 PRIORITIES = ("P1", "P2", "P3", "P4")
 PRIORITY_ORDER = {p: i for i, p in enumerate(PRIORITIES)}
 
+
+def priority(value) -> str | None:
+    """`value` when it is one of PRIORITIES, else None — ⚠️ THE ONE CHECK of what a priority is (standards review,
+    2026-10-29: four copies). The Kiosk reads the same list from the agreement (agent-contract.json ticket.priorities;
+    tests/test_kiosk_messages pins the two equal)."""
+    return value if value in PRIORITIES else None
+
 #: The night check's findings about a WHOLE device (offline, silent, keeps dropping: grouped per physical device by the
 #: night, knowledge_pack.device_key); every other finding is about one reading (a pump's power, a battery, a level).
 #: What a report names a problem by follows it (knowledge_pack.subject).

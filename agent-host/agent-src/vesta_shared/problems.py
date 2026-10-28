@@ -149,11 +149,15 @@ def agreed(field: str, word: str) -> str | None:
     return word if word and word in (agreement.section("ticket").get(field) or ()) else None
 
 
-def _priority(incident: dict | None) -> str | None:
-    """An incident's priority (P1…P4), or None when it says none the agreement knows."""
-    from .result import PRIORITIES
-    sev = str((incident or {}).get("severity") or "")
-    return sev if sev in PRIORITIES else None
+def priority_of(incident: dict | None) -> str | None:
+    """An incident's priority (P1…P4), or None when it says none (result.priority)."""
+    return result.priority(str((incident or {}).get("severity") or ""))
+
+
+def alert_name(store: Store, iid: int | str) -> str:
+    """How alert `iid` is named everywhere ("#9-P2"), from the store: its priority read once, here (the night check, the
+    engine's Incidents.name)."""
+    return incident_tag(iid, priority_of(store.incident(int(iid)) if str(iid).isdigit() else None))
 
 
 class Problems:
@@ -622,7 +626,7 @@ class Problems:
                 "number": sid if kind == "incident" else None,
                 # its priority as the alert's title writes it after the number ("#5-P2", owner 2026-10-28): the Kiosk's
                 # ticket is named the same; kept current, as a priority can change
-                "priority": _priority(self.store.incident(sid)) if kind == "incident" else None,
+                "priority": priority_of(self.store.incident(sid)) if kind == "incident" else None,
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
                 "origin": agreed("origins", {"incident": "alert", "finding": "night"}.get(kind or "", "")),
                 # how it is read again, the card's "Next check" (owner, 2026-10-15)

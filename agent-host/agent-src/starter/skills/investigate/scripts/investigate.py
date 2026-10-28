@@ -43,6 +43,8 @@ from vesta_shared.timeutil import clock, lasting  # noqa: E402  (the one clock, 
 from vesta_shared import past  # noqa: E402  (a read of the past with how far it got; the one "could not be read whole")
 from vesta_shared import retention  # noqa: E402  (where the villa's detail ends, and the figures that take over)
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
+from vesta_shared.messaging import incident_tag  # noqa: E402  (an alert's one name, "#9-P2")
+from vesta_shared.problems import priority_of  # noqa: E402  (its priority: one reading)
 
 from vesta_shared import asleep  # noqa: E402  (unavailable by design: its last report holds, now and over a window)
 from vesta_shared.device_state import ASLEEP_NOW, NO_VALUE, OFFLINE, RestartDrops  # noqa: E402  (the one "does this device answer")
@@ -1266,7 +1268,7 @@ def _vesta(store, start: datetime, end: datetime, zone: ZoneInfo, span_days: boo
             if start <= t < end:
                 msg = notes_of(i).get(Notes.MESSAGE) or i["rule_id"]
                 closed = f", closed {at(datetime.fromisoformat(i['closed_at']), zone, True)}" if i.get("closed_at") else ", still open"
-                out.append(f"  {at(t, zone, span_days)}  alert #{i['id']} {i['severity']}: {msg.splitlines()[0][:RECORD_LINE_CHARS]}{closed}")
+                out.append(f"  {at(t, zone, span_days)}  alert {incident_tag(i['id'], priority_of(i))}: {msg.splitlines()[0][:RECORD_LINE_CHARS]}{closed}")
         for f in store.findings(None):
             d = f.get("reopened_day") or f.get("opened_day") or ""
             if start.astimezone(zone).date().isoformat() <= d <= end.astimezone(zone).date().isoformat():
