@@ -1,3 +1,12 @@
+## 2.496.572
+
+What you will see:
+- A doorbell notice with Unlock Gate always goes once the ring has ended (opened at the gate, from Telegram, from a
+  tablet, or nobody answered within 2min), also on a tablet that was asleep or offline at that moment: it goes at the
+  tablet's next read. Before, such a notice could stay until its ✕.
+- VESTA's card replaces the villa's own alarm notice on screen by the same rule that keeps Messages to one line per
+  alert.
+
 ## 2.496.571
 
 What you will see:
