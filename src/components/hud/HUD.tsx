@@ -56,6 +56,8 @@ import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import type { VillaHealthLevel } from "@/config/attention";
 import { formatCountBadge } from "@/utils/countBadge";
 import { useAgent } from "@/agent/AgentContext";
+import { useAnnouncements } from "@/messages/AnnouncementsContext";
+import { countOf } from "@/utils/countOf";
 
 // Label-size stepper (next to the category filter): each click moves
 // entityIconScale by this much, clamped to the shared
@@ -154,6 +156,11 @@ export default function HUD({
   // The agent's presence as the dot on its robot — the top bar's and the
   // phone menu's are this one element (.status-dot, 2.496.247).
   const agentDot = <span className={`status-dot ${agentOnline ? "on" : "warn"}`} aria-hidden="true" />;
+  // What this tablet has not seen in Messages (ticket 18 of "One inbox"): a light mark on the robot, the phone's gear
+  // and the menu's Cockpit row, apart from the amber count of open issues; the robot then opens on it (MessagesTab).
+  const { unread } = useAnnouncements();
+  const unreadSaid = unread > 0 ? `, ${countOf(unread, "unread notification")}` : "";
+  const unreadMark = unread > 0 && <span className="unread-mark" aria-hidden="true" />;
 
   // ── Floor buttons now do double duty, no separate Rooms button any more:
   // a normal tap/click keeps the original behaviour (switch to that floor,
@@ -579,11 +586,12 @@ export default function HUD({
               className={`icon-btn${doors.agent ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
               onClick={onOpenCockpit}
               title={(attentionGroups.length > 0 ? health.summary : "Cockpit, villa status at a glance")
-                + (doors.agent ? ` · ${agentTitle}` : "")}
-              aria-label={`Open Cockpit, villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}`}
+                + (doors.agent ? ` · ${agentTitle}` : "") + unreadSaid}
+              aria-label={`Open Cockpit, villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}${unreadSaid}`}
             >
               {doors.agent ? <Bot size={24} /> : <TriangleAlert size={24} />}
               {doors.agent && agentDot}
+              {unreadMark}
               {attentionGroups.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
                   {formatCountBadge(attentionGroups.length)}
@@ -631,8 +639,8 @@ export default function HUD({
             <button
               className={`icon-btn${menuOpen ? " active" : ""}`}
               onClick={() => setMenuOpen((o) => !o)}
-              title="Menu"
-              aria-label="Menu"
+              title={`Menu${unreadSaid}`}
+              aria-label={`Menu${unreadSaid}`}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
@@ -640,6 +648,7 @@ export default function HUD({
                   roomy screen it is in the role badge's menu, with the same
                   rows — accountRows). */}
               <Settings size={24} />
+              {unreadMark}
             </button>
             {menuOpen && (
               <div className="hud-menu" role="menu" aria-label="Settings and profile">
@@ -664,7 +673,9 @@ export default function HUD({
                   <span>
                     Cockpit{attentionGroups.length > 0 ? ` (${formatCountBadge(attentionGroups.length)})` : ""}
                     {doors.agent && <span className="sr-only">{`, ${agentTitle}`}</span>}
+                    {unreadSaid && <span className="sr-only">{unreadSaid}</span>}
                   </span>
+                  {unreadMark}
                 </button>
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus
                     — one row, not two menu items, since it's a single

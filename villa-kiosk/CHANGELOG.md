@@ -1,3 +1,11 @@
+## 2.496.564
+
+What you will see:
+- When the villa has announced something this tablet has not shown yet, a small dot sits on the robot's upper left. The amber count of open issues on its upper right is unchanged.
+- Tapping the robot then opens the Cockpit on Messages › Notifications, the newest one open. Once a notification has
+  been shown under Notifications, or opened, on this tablet, the dot goes; each tablet keeps its own.
+- On a phone, the same dot sits on the gear, and on the menu's Cockpit row.
+
 ## 2.496.563
 
 What you will see:

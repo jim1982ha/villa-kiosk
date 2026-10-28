@@ -1,8 +1,9 @@
 // src/messages/messagesModel.ts
 // The Cockpit's Messages tab (ticket 17 of "One inbox", owner 2026-10-28): what it lists, its filters' counts and the
 // item open on the right, from the open issues (config/cockpitIssues), the watched faults and the villa's
-// announcements (messages/announcements). One pure model every Messages screen reads; the later tickets add the
-// reports, VESTA's conversation and the unread marks to it. Pure: tests/oracles/messages_model.mjs.
+// announcements (messages/announcements), and what this tablet has not seen yet (ticket 18). One pure model every
+// Messages screen reads; the later tickets add the reports and VESTA's conversation to it. Pure:
+// tests/oracles/messages_model.mjs.
 
 import type { CardView } from "@/config/cockpitCard";
 import type { Announcement } from "./announcements";
@@ -52,6 +53,32 @@ export function mergeAnnouncements(held: readonly Announcement[], incoming: read
     if (!was || a.seq > was.seq) byKey.set(k, a);
   }
   return [...byKey.values()].sort((x, y) => x.seq - y.seq);
+}
+
+/** What this tablet remembers it has shown: one announcement as the add-on stored it, its number and when it came. A
+ *  rewrite (a new number) is news again; so is the first of a store that started again (an old number, a new time). */
+const readId = (a: Announcement) => `${a.seq}@${a.at}`;
+
+/** How many of the kept announcements this tablet has not shown in Messages yet: the light mark on the robot, the
+ *  phone's gear and the menu's Cockpit row. The open issues are not in it: they have their own count. */
+export function unreadOf(kept: readonly Announcement[], read: readonly string[]): number {
+  const seen = new Set(read);
+  return kept.filter((a) => !seen.has(readId(a))).length;
+}
+
+/** What this tablet has shown once Messages showed `shown`: added to what it had, kept only while the add-on still
+ *  keeps it, so the list never outgrows the add-on's. */
+export function markShown(read: readonly string[], shown: readonly Announcement[], kept: readonly Announcement[]): string[] {
+  const still = new Set(kept.map(readId));
+  return [...new Set([...read, ...shown.map(readId)])].filter((id) => still.has(id));
+}
+
+/** The filter Messages opens on: a device window's warning on Open issues, its issue open; the wrench's "Open a ticket"
+ *  on All; else Notifications while something is unread (the robot opens on what was not seen), else All. Decided
+ *  before the first draw: a first draw on Notifications would mark its page read before anyone saw it. */
+export function openingFilter(unread: number, opening: { warning?: boolean; form?: boolean } = {}): MessagesFilter {
+  if (opening.warning) return "issues";
+  return !opening.form && unread > 0 ? "notifications" : "all";
 }
 
 export function messagesView({ open, watched, announcements, filter, selected, focus }: {

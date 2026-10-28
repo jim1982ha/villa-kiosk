@@ -6,7 +6,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { h, draw } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
-const { messagesView, mergeAnnouncements, FILTERS } = await import("@/messages/messagesModel");
+const { messagesView, mergeAnnouncements, FILTERS, unreadOf, markShown, openingFilter } = await import("@/messages/messagesModel");
 
 const card = (key, extra = {}) => ({ key, title: `Device ${key}`, lead: null, nextCheck: null, actions: [], lines: [], ...extra });
 const ann = (seq, extra = {}) => ({ seq, at: `2026-10-28T1${seq % 10}:00:00+08:00`, title: `T${seq}`, to: "", text: "",
@@ -66,6 +66,32 @@ ck("  ...one without a key is its own line, and one already held is not listed t
 ck("  ...an older copy arriving late never replaces the newer",
    mergeAnnouncements([rewrite], [ring])[0].status === "✅ Opened at 14:05:10");
 
+console.log("\n  unread, per tablet (ticket 18 of \"One inbox\"):");
+const kept3 = [ann(1), ann(2), ann(3)];
+const seen = markShown([], kept3, kept3);
+ck("an announcement not yet shown on this tablet is unread; once shown in Messages it is read",
+   unreadOf(kept3, []) === 3 && unreadOf(kept3, seen) === 0, seen);
+const kept4 = [...kept3, ann(4)];
+ck("  ...a new one makes one unread, the ones already shown stay read", unreadOf(kept4, seen) === 1);
+ck("  ...only what was shown is read (a page of ten shows ten, not the eleventh)",
+   unreadOf(kept4, markShown(seen, [ann(4)], kept4)) === 0 && unreadOf(kept4, markShown([], [ann(4)], kept4)) === 3);
+const rung = ann(5, { key: "run-1" });
+const rewritten = ann(7, { key: "run-1", at: "2026-10-28T19:00:00+08:00" });
+ck("  ...a rewrite of one already read is news again (it came with a new number): unread",
+   unreadOf([rewritten], markShown([], [rung], [rung])) === 1);
+const restarted = ann(1, { at: "2026-10-29T08:00:00+08:00" });
+ck("  ...the add-on's store started again: its first new one, with an old number, is unread",
+   unreadOf([restarted], markShown([], [ann(1)], [ann(1)])) === 1);
+const pruned = markShown(seen, [ann(4)], [ann(3), ann(4)]);
+ck("  ...the list keeps only what the add-on still keeps (it never grows past it)", pruned.length === 2, pruned);
+
+ck("something unread: Messages opens on Notifications, its newest open on the right; nothing unread, on All",
+   openingFilter(1) === "notifications" && openingFilter(0) === "all"
+   && messagesView({ ...base, filter: openingFilter(1), selected: null }).selected?.key === "n3");
+ck("  ...opened for something else, never on Notifications, so nothing is read unseen: a warning on its issues, the wrench's form on All",
+   openingFilter(1, { warning: true }) === "issues" && openingFilter(1, { form: true }) === "all"
+   && openingFilter(0, { warning: true }) === "issues");
+
 console.log("\n  one line per item, drawn:");
 const { MessageRow } = await import("@/components/cockpit/MessagesTab");
 const issueLine = draw(h(MessageRow, { item: { kind: "issue", key: "a", card: card("a", { room: "Kitchen",
@@ -79,18 +105,38 @@ ck("  ...a notification: its title, its first words, when it came; not chosen, n
    && !noteLine.includes("Gate A") && /messages-row-time">2026-10-28 \d\d:00</.test(noteLine), noteLine);
 
 console.log("\n  the window and the tab read the model:");
-const { parseTsx, elements, guardsOf } = await import("../consistency/jsx.mjs");
+const { parseTsx, elements, guardsOf, propText } = await import("../consistency/jsx.mjs");
 const modal = parseTsx("components/cockpit/CockpitModal.tsx");
 const strip = elements(modal, "ModalTabs")[0];
 ck("a guest (one tab, Messages) gets no tab strip: the strip is drawn only with more than one tab",
    !!strip && guardsOf(strip).some((g) => /tabs\.length > 1/.test(g)), strip && guardsOf(strip));
 const tab = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
 ck("  ...the tab lists, counts and opens what messagesView says, from the open issues and the page's announcements",
-   /const \{ kept \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, announcements: kept, filter, selected,/.test(tab)
+   /const \{ kept, unread, shown \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, announcements: kept, filter, selected,/.test(tab)
    && /view\.filters\.map\(/.test(tab) && /const item = raising \? null : view\.selected;/.test(tab)
    && /const \{ issues: showsIssues, notifications: showsNotes \} = view\.shows;/.test(tab));
 ck("  ...a phone shows the item someone chose (a line, a warning, the ticket form), else the list",
    /const reading = !!raising \|\| view\.openedBy === "asked" \|\| view\.openedBy === "focus";/.test(tab)
    && /className=\{`messages\$\{reading \? " reading" : ""\}`\}/.test(tab));
+
+console.log("\n  the unread mark, drawn where the model says (ticket 18):");
+const hud = parseTsx("components/hud/HUD.tsx");
+const mark = elements(hud, "span").find((e) => propText(e, "className") === '"unread-mark"');
+ck("the light mark is drawn only while something is unread, the count read from the page's announcements",
+   !!mark && guardsOf(mark).some((g) => /^unread > 0$/.test(g))
+   && /const \{ unread \} = useAnnouncements\(\);/.test(hud.getText()), mark && guardsOf(mark));
+const buttons = elements(hud, "button");
+const holds = (pick) => buttons.filter(pick).some((b) => b.getText().includes("{unreadMark}"));
+ck("  ...on the robot, apart from its count of open issues", holds((b) => propText(b, "onClick") === "onOpenCockpit"));
+ck("  ...on a phone, on the gear and on the menu's Cockpit row",
+   holds((b) => /Menu/.test(propText(b, "aria-label") ?? "")) && holds((b) => propText(b, "role") === '"menuitem"'
+     && /onOpenCockpit\(\)/.test(propText(b, "onClick") ?? "")));
+ck("Messages opens where the model says, and marks read what it shows",
+   /useState<MessagesFilter>\(\s*\(\) => openingFilter\(unread, \{ warning: !!focusFaults\?\.length, form: !!reportFaultFor && canManage \}\)\)/.test(tab) && /if \(onScreen\.length\) shown\(onScreen\);/.test(tab)
+   && /\[\.\.\.\(filter === "notifications" \? paged\.page : \[\]\)/.test(tab));
+
+const ctx = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");
+ck("what this tablet has read is kept through storedJson alone (private mode or a full store never throws)",
+   /readJson\(READ_KEY, isIds\)/.test(ctx) && /writeJson\(READ_KEY, read\)/.test(ctx) && !/localStorage/.test(ctx));
 
 done("✅ the Messages model: what the tab lists, its counts and the item open on the right");

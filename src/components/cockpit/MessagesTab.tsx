@@ -18,7 +18,7 @@ import { cardFocused } from "@/config/attention";
 import type { CardView } from "@/config/cockpitCard";
 import { localStamp } from "@/fm/fmEngine";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
-import { messagesView, type MessageItem, type MessagesFilter } from "@/messages/messagesModel";
+import { messagesView, openingFilter, type MessageItem, type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
@@ -99,8 +99,10 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
     [canManage, devices, config.entityMap, entities, resolvedRooms]);
 
   const { open, watched } = useCockpitIssues();
-  const { kept } = useAnnouncements();
-  const [filter, setFilter] = useState<MessagesFilter>("all");
+  const { kept, unread, shown } = useAnnouncements();
+  // something unread: opened on Notifications, the newest open (ticket 18 of "One inbox"); a warning or the wrench first
+  const [filter, setFilter] = useState<MessagesFilter>(
+    () => openingFilter(unread, { warning: !!focusFaults?.length, form: !!reportFaultFor && canManage }));
   const [selected, setSelected] = useState<string | null>(null);
   // a device window's warning opens its issue until Back (or another line) is chosen
   const [focusDone, setFocusDone] = useState(false);
@@ -134,6 +136,15 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   // A phone shows the item someone chose (a line, a warning, the ticket form), else the list: an item that went (an
   // issue cleared, the form done) never leaves another open in its place.
   const reading = !!raising || view.openedBy === "asked" || view.openedBy === "focus";
+  // Read on this tablet once in view: the Notifications filter's page, and the one open on the right. On All they sit
+  // under the open issues, maybe below the fold: drawn there is not seen.
+  const onScreen = [...(filter === "notifications" ? paged.page : []), ...(item?.kind === "notification" ? [item] : [])]
+    .flatMap((i) => (i.kind === "notification" ? [i.announcement] : []));
+  const onScreenKey = onScreen.map((a) => a.seq).join(",");
+  useEffect(() => {
+    if (onScreen.length) shown(onScreen);
+    // keyed on what is shown: a re-draw showing the same lines marks nothing again
+  }, [onScreenKey, shown]);
 
   return (
     <div className={`messages${reading ? " reading" : ""}`}>
