@@ -1,3 +1,9 @@
+## 2.496.559
+
+What you will see:
+- A guest's tablet now shows a ring's photo too, but only while that ring is the notification on screen (up to 60s
+  after it rang, and only until the next announcement). A guest never sees a past ring's photo.
+
 ## 2.496.558
 
 What you will see:
