@@ -1,3 +1,18 @@
+## 2.496.561
+
+What you will see:
+- Advanced Settings has a new Messages tab, between Devices and System, for the owner only. "Full screen for" lists
+  what the villa has announced; pick one, such as the doorbell's ring, and it takes the whole screen of every tablet
+  for "Ring shown for" (60s until you change it). Nothing is picked at first, so nothing changes until you pick.
+- Settings now has two tabs, General (everything it held before) and Messages. Messages has "Rings full screen on
+  this tablet": switch it off on a tablet that must never be taken over, such as the bedroom's. The Cockpit has a new
+  gear at the top right that opens Settings straight on Messages.
+- A full-screen announcement shows its photo, its words and its buttons (the gate's Unlock). Close, at the bottom,
+  ends it early; once the ring is answered or nobody answered in time, it leaves the screen and what happened shows
+  as a notice.
+- A problem the villa announces ("New alert", "Still open") now stays under the category bar until you close it with
+  its ✕. Everything else (an all-clear, the weekly test) still goes after 10s.
+
 ## 2.496.560
 
 What you will see:
