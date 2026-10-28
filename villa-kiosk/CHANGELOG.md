@@ -1,3 +1,11 @@
+## 2.496.571
+
+What you will see:
+- Messages has four sections at one level, each folded or opened by its arrow: Open issues, Notifications, Watch
+  (was "Watched", now below Notifications) and Closed. Watch and Closed start folded.
+- An alert being watched is listed in Watch only: its card no longer also sits in Notifications.
+- An alert that is over ("#90-P2 (closed)") moves to Closed, and no longer keeps the unread mark lit.
+
 ## 2.496.570
 
 What you will see:

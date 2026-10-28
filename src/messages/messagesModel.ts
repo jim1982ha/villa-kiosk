@@ -29,6 +29,9 @@ export interface MessagesView {
   watched: MessageItem[];
   /** The announcements, newest first. */
   notifications: MessageItem[];
+  /** VESTA's cards of alerts that are over ("#90-P2 (closed)"), newest first: their own folded section, after Watch
+   *  (owner, 2026-10-28), never among the notifications. */
+  closed: MessageItem[];
   /** The item open on the right: the one asked for when listed, else the issue a device window's warning asked
    *  for, else the first listed; null when nothing is listed. */
   selected: MessageItem | null;
@@ -126,7 +129,10 @@ const readId = (a: Announcement) => `${idOf(a)}@${a.at}`;
  *  phone's gear and the menu's Cockpit row. The open issues are not in it: they have their own count. */
 export function unreadOf(kept: readonly Announcement[], read: readonly string[]): number {
   const seen = new Set(read);
-  return kept.filter((a) => !seen.has(readId(a))).length;
+  // ⚠️ AN ALERT THAT IS OVER IS NO UNREAD (owner, 2026-10-28): VESTA's card of a cleared or closed alert is parked in
+  // Watch or Closed, folded — counted, it would keep the mark lit with nothing to read on Notifications
+  const over = (a: Announcement) => a.feed === "vesta" && (a.vestaStage === "watch" || a.vestaStage === "closed");
+  return kept.filter((a) => !over(a) && !seen.has(readId(a))).length;
 }
 
 /** What this tablet has shown once Messages showed `shown`: added to what it had, kept only while the add-on still
@@ -159,10 +165,18 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   const showNotes = filter !== "issues";
   const issues = showIssues ? open.map(issueItem) : [];
   const watchedItems = showIssues ? watched.map(issueItem) : [];
-  const notifications: MessageItem[] = showNotes
-    ? [...announcements].sort((x, y) => timeOf(y) - timeOf(x) || y.seq - x.seq).map((a) => ({ kind: "notification", key: noteKey(a), announcement: a }))
-    : [];
-  const listed = [...issues, ...watchedItems, ...notifications];
+  // ⚠️ A WATCHED ALERT IS LISTED ONCE, IN WATCH (owner, 2026-10-28): its card is open on its Watch line, never also a
+  // notification
+  const inWatch = new Set(watched.flatMap((c) => cardsOfIssue(c, announcements)));
+  const isClosed = (a: Announcement) => a.feed === "vesta" && a.vestaStage === "closed";
+  // newest first, by time (two feeds: their numbers do not compare)
+  const asNotes = (keep: (a: Announcement) => boolean): MessageItem[] => (showNotes
+    ? announcements.filter((a) => !inWatch.has(a) && keep(a)).sort((x, y) => timeOf(y) - timeOf(x) || y.seq - x.seq)
+      .map((a) => ({ kind: "notification", key: noteKey(a), announcement: a }))
+    : []);
+  const closed = asNotes(isClosed);
+  const notifications = asNotes((a) => !isClosed(a));
+  const listed = [...issues, ...notifications, ...watchedItems, ...closed];
   const asked = listed.find((i) => i.key === selected);
   const focused = focus ? issues.find((i) => i.kind === "issue" && focus(i.card)) : undefined;
   const first = listed[0];
@@ -171,6 +185,7 @@ export function messagesView({ open, watched, announcements, filter, selected, f
     issues,
     watched: watchedItems,
     notifications,
+    closed,
     selected: asked ?? focused ?? first ?? null,
     openedBy: asked ? "asked" : focused ? "focus" : first ? "first" : null,
     shows: { issues: showIssues, notifications: showNotes },

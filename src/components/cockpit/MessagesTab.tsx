@@ -9,7 +9,8 @@
 // screen in turn.
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bell, CheckCircle2, Plus } from "lucide-react";
+import { ArrowLeft, Bell, CheckCircle2, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Doors } from "@/auth/doors";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -24,7 +25,7 @@ import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
 import { SourceIcons } from "@/components/fm/sourceIcons";
-import FoldedList from "@/components/common/FoldedList";
+import InfoTip from "@/components/common/InfoTip";
 import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 import type { Announcement } from "@/messages/announcements";
@@ -49,6 +50,45 @@ export function MessageRow({ item, selected, onSelect }: {
       </span>
       {row.time && <span className="messages-row-time">{row.time}</span>}
     </button>
+  );
+}
+
+/** One section of the list — Open issues, Notifications, Watch — its name, count and (i) on one line with its actions,
+ *  folded or open by its chevron (owner, 2026-10-28: the three at one level, each collapsible). */
+export function MessagesSection({ title, count, open, onToggle, tip, actions, children }: {
+  title: string; count?: number; open: boolean; onToggle: () => void; tip?: ReactNode; actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="messages-section">
+      <div className="cockpit-issues-head">
+        <div className="with-tip">
+          <button type="button" className="messages-section-toggle settings-section-title" onClick={onToggle}
+            aria-expanded={open}>
+            {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+            {title}{count ? ` (${count})` : ""}
+          </button>
+          {tip && <InfoTip label={`About ${title}`}>{tip}</InfoTip>}
+        </div>
+        {actions && <div className="cockpit-issues-actions">{actions}</div>}
+      </div>
+      {open && children}
+    </section>
+  );
+}
+
+/** A section that only grows (Watch, Closed): its lines a page at a time; nothing drawn while it is empty. */
+function FoldedRows({ rows, unit, selected, onSelect, ...section }: {
+  title: string; rows: MessageItem[]; unit: string; open: boolean; onToggle: () => void; tip?: ReactNode;
+  selected?: string; onSelect: (key: string) => void;
+}) {
+  const paged = usePaged(rows);
+  if (rows.length === 0) return null;
+  return (
+    <MessagesSection {...section} count={rows.length}>
+      {paged.page.map((r) => <MessageRow key={r.key} item={r} selected={selected === r.key} onSelect={onSelect} />)}
+      <Pager paged={paged} unit={unit} />
+    </MessagesSection>
   );
 }
 
@@ -131,6 +171,9 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
 
   const view = messagesView({ open, watched, announcements: kept, filter, selected, focus: isFocus });
   const paged = usePaged(view.notifications);
+  // which sections are open: Open issues and Notifications open, Watch and Closed folded (owner, 2026-10-25, 2026-10-28)
+  const [folds, setFolds] = useState({ issues: true, notes: true, watch: false, closed: false });
+  const fold = (k: keyof typeof folds) => setFolds((f) => ({ ...f, [k]: !f[k] }));
   const choose = (key: string) => { setSelected(key); setRaising(null); setFocusDone(true); };
   const raise = () => setRaising({});
   // the list again (a phone's Back): nothing asked, the warning's issue let go
@@ -162,38 +205,35 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
         </div>
         <div className="messages-scroll">
           {showsIssues && (
-            <div className="cockpit-issues-head">
-              <div className="settings-section-title">Open issues{open.length > 0 ? ` (${open.length})` : ""}</div>
-              {canManage && (
-                <div className="cockpit-issues-actions">
+            <MessagesSection title="Open issues" count={open.length} open={folds.issues} onToggle={() => fold("issues")}
+              actions={canManage ? (
+                <>
                   <FaultTiming />
                   <button className="btn ghost" onClick={raise}><Plus size={16} /> Open a ticket</button>
-                </div>
-              )}
-              {!canManage && canReport && (
-                <div className="cockpit-issues-actions">
-                  <button className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
-                </div>
-              )}
-            </div>
+                </>
+              ) : canReport ? (
+                <button className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
+              ) : null}>
+              {view.issues.map((i) => <MessageRow key={i.key} item={i} selected={item?.key === i.key} onSelect={choose} />)}
+              {open.length === 0 && <p className="muted body-text messages-empty">Nothing needs attention.</p>}
+            </MessagesSection>
           )}
-          {view.issues.map((i) => <MessageRow key={i.key} item={i} selected={item?.key === i.key} onSelect={choose} />)}
-          {showsIssues && open.length === 0 && <p className="muted body-text messages-empty">Nothing needs attention.</p>}
-          {/* after every open issue, and not in its count: closed, the VESTA Agent confirming it (fm/faultConfirm);
-              folded by default (owner, 2026-10-25) */}
-          <FoldedList title="Watched" rows={view.watched} unit="watched fault"
-            tip="Closed faults VESTA still watches: back before the time on its card, a fault reopens as the same problem; after it, VESTA lets it go.">
-            {(w) => <MessageRow key={w.key} item={w} selected={item?.key === w.key} onSelect={choose} />}
-          </FoldedList>
           {showsNotes && (
-            <>
-              <div className="settings-section-title">Notifications</div>
+            <MessagesSection title="Notifications" open={folds.notes} onToggle={() => fold("notes")}>
               {paged.page.map((n) => <MessageRow key={n.key} item={n} selected={item?.key === n.key} onSelect={choose} />)}
               {view.notifications.length === 0
                 ? <p className="muted body-text messages-empty">Nothing announced yet.</p>
                 : <Pager paged={paged} unit="notification" />}
-            </>
+            </MessagesSection>
           )}
+          {/* last, and not in Open issues' count: closed, the VESTA Agent confirming it (fm/faultConfirm); folded by
+              default (owner, 2026-10-25); a section of its own, below Notifications (owner, 2026-10-28) */}
+          <FoldedRows title="Watch" rows={view.watched} unit="watched fault" open={folds.watch} onToggle={() => fold("watch")}
+            selected={item?.key} onSelect={choose}
+            tip="Closed faults VESTA still watches: back before the time on its card, a fault reopens as the same problem; after it, VESTA lets it go." />
+          {/* alerts that are over, VESTA's cards of them: folded, last (owner, 2026-10-28) */}
+          <FoldedRows title="Closed" rows={view.closed} unit="closed alert" open={folds.closed} onToggle={() => fold("closed")}
+            selected={item?.key} onSelect={choose} />
         </div>
       </div>
 

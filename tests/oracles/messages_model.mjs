@@ -199,6 +199,19 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
   const drawn = draw(h(AnnouncementContent, { announcement: later })).replace(/<[^>]+>/g, "|");
   ck("the card is drawn as Telegram shows it: To:, the alert, Status:, each story line, then where it stands",
      /To: Owner &amp; FM.*🔓 Door unlocked.*Status:.*- Alert sent 19:42.*- Reminder sent 20:02.*✅ Cleared/s.test(drawn), drawn);
+  const watchedCard = card("w90", { look: "watched", lines: [{ key: "fault:t9", text: "", icons: null, story: [], closing: null,
+    actions: [], alertNumber: 90 }] });
+  const withWatch = messagesView({ open: [], watched: [watchedCard], announcements: shown, filter: "all", selected: null });
+  ck("an alert in Watch is listed there only: its card leaves Notifications (owner, 2026-10-28)",
+     J(withWatch.notifications.map((i) => i.key)) === J(["n3"]) && withWatch.watched.length === 1, withWatch.notifications);
+  const closed90 = parseVestaMessage(record(5, { key: "incident:89", title: "#89-P2 (closed)", stage: "closed",
+    status: ["✅ Closed on 28/10/2026 21:58."] }));
+  const withClosed = messagesView({ open: [], watched: [], announcements: [...shown, closed90], filter: "all", selected: null });
+  ck("an alert that is over goes to Closed, after Watch, never among the notifications (owner, 2026-10-28)",
+     J(withClosed.closed.map((i) => i.key)) === J(["v:incident:89"])
+     && !withClosed.notifications.some((i) => i.key === "v:incident:89"), withClosed);
+  ck("  ...and is no unread: the mark never stays lit for a folded card", unreadOf([closed90], []) === 0
+     && unreadOf([later], []) === 1);
   ck("what this tablet read of one feed is not read of the other (two feeds number apart)",
      unreadOf([ann(1), { ...card90, seq: 1, at: ann(1).at }], markShown([], [ann(1)], [ann(1)])) === 1);
 }

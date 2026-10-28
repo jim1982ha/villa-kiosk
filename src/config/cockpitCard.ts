@@ -238,7 +238,8 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
       // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
       // issues' next-check pill (its time, then "within 5 min"), who closed it the line under its fault
       lead: null, nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
-      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, story: [], closing: said.did, actions: [] }],
+      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, story: [], closing: said.did, actions: [],
+        ...(typeof t.alertNumber === "number" && t.alertNumber > 0 ? { alertNumber: t.alertNumber } : {}) }],
     }];
   });
 }

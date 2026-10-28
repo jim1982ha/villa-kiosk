@@ -41,6 +41,8 @@ export interface Announcement {
   takes?: string[];
   /** The villa's own: the automation run that announced it (the add-on reads it from the event). */
   run?: string;
+  /** VESTA's card: its alert's stage as its title says it ("new", "existing", "watch", "closed"); none without one. */
+  vestaStage?: string;
 }
 
 export interface AnnouncementButton { label: string; command: string }
@@ -186,6 +188,7 @@ export function parseVestaMessage(raw: unknown): Announcement | null {
     seq: r.seq, at: atOf(r), title, to: strings(r.roles).join(" & "), text,
     status: lines[lines.length - 1] ?? "", story: lines.slice(0, -1), photo: photoOf(r),
     key: r.key, buttons: [], feed: "vesta", takes: strings(r.takes),
+    ...(typeof r.stage === "string" && r.stage ? { vestaStage: r.stage } : {}),
   };
 }
 
