@@ -65,6 +65,24 @@ export function stageOf(status: string): Stage | null {
   return STAGE_MARKS.find(([mark]) => status.startsWith(mark))?.[1] ?? null;
 }
 
+/** An alert's stage as every screen reads it — ⚠️ ONE READER (owner, 2026-10-28: "the same code … consistently"): VESTA's
+ *  card says it (its title's word: new, existing, watch, closed); the villa's own message by its bottom line's mark
+ *  (stageOf: both ends read "closed"). null: no stage (a weekly test, a ring not answered). */
+export function alertStage(a: Announcement): "new" | "existing" | "watch" | "closed" | null {
+  if (a.feed === "vesta") {
+    const s = a.vestaStage;
+    return s === "new" || s === "existing" || s === "watch" || s === "closed" ? s : null;
+  }
+  return stageOf(a.status);
+}
+
+/** An alert that is over: watched after it cleared, or closed — parked in Watch or Closed, never unread. */
+export const isOver = (a: Announcement): boolean => alertStage(a) === "watch" || alertStage(a) === "closed";
+
+/** VESTA's card key of alert number `n` (agent-contract.json vestaMessage.incidentKey: the form the Agent writes). */
+export const incidentKey = (n: number): string =>
+  String(AGENT_CONTRACT.vestaMessage.incidentKey).replace("{number}", String(n));
+
 /** What "Full screen for" offers (Advanced Settings › Messages): each title the add-on keeps, once, in order, without
  *  the ones already `picked`. The villa's own words, never named in code. Pure: tests/oracles/announcements.mjs. */
 export function announcedTitles(kept: readonly Announcement[], picked: readonly string[]): string[] {
@@ -99,7 +117,7 @@ export interface HowShown { fullScreenMs: number | null; noticeMs: number | null
  */
 export function noticeFor(a: Announcement, s: ShowSettings, { rewrite = false } = {}): HowShown {
   const stays = a.buttons.length > 0;
-  const full = s.ringsFullScreen && !rewrite && stageOf(a.status) !== "closed" && s.fullScreenFor.includes(a.title);
+  const full = s.ringsFullScreen && !rewrite && !isOver(a) && s.fullScreenFor.includes(a.title);
   if (!full) return { fullScreenMs: null, noticeMs: stays ? null : ANNOUNCEMENT_NOTICE_MS };
   return { fullScreenMs: s.ringShownForS * 1000, noticeMs: stays ? null : 0 };
 }
@@ -185,7 +203,7 @@ export function parseVestaMessage(raw: unknown): Announcement | null {
   const title = typeof r.title === "string" ? r.title : "";
   if (!title && !text && !lines.length) return null;
   return {
-    seq: r.seq, at: atOf(r), title, to: strings(r.roles).join(" & "), text,
+    seq: r.seq, at: atOf(r), title, to: typeof r.to === "string" ? r.to : "", text,
     status: lines[lines.length - 1] ?? "", story: lines.slice(0, -1), photo: photoOf(r),
     key: r.key, buttons: [], feed: "vesta", takes: strings(r.takes),
     ...(typeof r.stage === "string" && r.stage ? { vestaStage: r.stage } : {}),

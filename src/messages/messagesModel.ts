@@ -6,7 +6,7 @@
 // tests/oracles/messages_model.mjs.
 
 import type { CardView } from "@/config/cockpitCard";
-import type { Announcement } from "./announcements";
+import { alertStage, incidentKey, isOver, type Announcement } from "./announcements";
 
 export type MessagesFilter = "all" | "issues" | "notifications";
 
@@ -29,8 +29,8 @@ export interface MessagesView {
   watched: MessageItem[];
   /** The announcements, newest first. */
   notifications: MessageItem[];
-  /** VESTA's cards of alerts that are over ("#90-P2 (closed)"), newest first: their own folded section, after Watch
-   *  (owner, 2026-10-28), never among the notifications. */
+  /** Alerts that are closed — VESTA's card "#90-P2 (closed)", the villa's own ✅ message — newest first: their own
+   *  folded section, after Watch (owner, 2026-10-28), never among the notifications (announcements.alertStage). */
   closed: MessageItem[];
   /** The item open on the right: the one asked for when listed, else the issue a device window's warning asked
    *  for, else the first listed; null when nothing is listed. */
@@ -54,7 +54,7 @@ export const idOf = (a: Announcement): string => `${a.feed === "vesta" ? "v" : "
  *  kiosk_messages.thread_key): what the issue shows above its own buttons, as Telegram shows it. Pure. */
 export function cardsOfIssue(card: CardView, kept: readonly Announcement[]): Announcement[] {
   return card.lines.flatMap((l) => kept.filter((a) => a.feed === "vesta" && l.alertNumber !== undefined
-    && a.key === `incident:${l.alertNumber}`));
+    && a.key === incidentKey(l.alertNumber)));
 }
 
 /** When a record came, for the order of the list (two feeds: their numbers do not compare). */
@@ -85,13 +85,9 @@ export function shownTogether(villa: readonly Announcement[], vesta: readonly An
 /** What the page holds after `incoming`: each one added once, a rewrite (same key, a newer number) in place of what
  *  it rewrites, an older copy never over a newer. Ordered by number, oldest first, as the add-on keeps them. */
 export function mergeAnnouncements(held: readonly Announcement[], incoming: readonly Announcement[]): Announcement[] {
-  const byKey = new Map<string, Announcement>();
-  for (const a of [...held, ...incoming]) {
-    const k = noteKey(a);
-    const was = byKey.get(k);
-    if (!was || a.seq > was.seq) byKey.set(k, a);
-  }
-  return [...byKey.values()].sort((x, y) => x.seq - y.seq);
+  // each record once (a re-read brings the same number again), then none another stands in place of (supersedes)
+  const all = [...new Map([...held, ...incoming].map((a) => [idOf(a), a] as const)).values()];
+  return all.filter((a) => !all.some((b) => supersedes(b, a))).sort((x, y) => x.seq - y.seq);
 }
 
 /** What a read of the add-on's feed (messages/feed watchFeed) changes on the page: what it holds now, and what just
@@ -140,8 +136,7 @@ export function unreadOf(kept: readonly Announcement[], read: readonly string[])
   const seen = new Set(read);
   // ⚠️ AN ALERT THAT IS OVER IS NO UNREAD (owner, 2026-10-28): VESTA's card of a cleared or closed alert is parked in
   // Watch or Closed, folded — counted, it would keep the mark lit with nothing to read on Notifications
-  const over = (a: Announcement) => a.feed === "vesta" && (a.vestaStage === "watch" || a.vestaStage === "closed");
-  return kept.filter((a) => !over(a) && !seen.has(readId(a))).length;
+  return kept.filter((a) => !isOver(a) && !seen.has(readId(a))).length;
 }
 
 /** What this tablet has shown once Messages showed `shown`: added to what it had, kept only while the add-on still
@@ -177,7 +172,7 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   // ⚠️ A WATCHED ALERT IS LISTED ONCE, IN WATCH (owner, 2026-10-28): its card is open on its Watch line, never also a
   // notification
   const inWatch = new Set(watched.flatMap((c) => cardsOfIssue(c, announcements)));
-  const isClosed = (a: Announcement) => a.feed === "vesta" && a.vestaStage === "closed";
+  const isClosed = (a: Announcement) => alertStage(a) === "closed";
   // newest first, by time (two feeds: their numbers do not compare)
   const asNotes = (keep: (a: Announcement) => boolean): MessageItem[] => (showNotes
     ? announcements.filter((a) => !inWatch.has(a) && keep(a)).sort((x, y) => timeOf(y) - timeOf(x) || y.seq - x.seq)

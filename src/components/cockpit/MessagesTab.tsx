@@ -231,7 +231,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           <FoldedRows title="Watch" rows={view.watched} unit="watched fault" open={folds.watch} onToggle={() => fold("watch")}
             selected={item?.key} onSelect={choose}
             tip="Closed faults VESTA still watches: back before the time on its card, a fault reopens as the same problem; after it, VESTA lets it go." />
-          {/* alerts that are over, VESTA's cards of them: folded, last (owner, 2026-10-28) */}
+          {/* alerts that are closed: folded, last (owner, 2026-10-28) */}
           <FoldedRows title="Closed" rows={view.closed} unit="closed alert" open={folds.closed} onToggle={() => fold("closed")}
             selected={item?.key} onSelect={choose} />
         </div>

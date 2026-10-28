@@ -495,7 +495,7 @@ async def main() -> None:
     cfg_file.unlink(missing_ok=True)
     msgs = TMP / "data" / "vesta-messages.json"
     msgs.unlink(missing_ok=True)
-    sent = {"key": "incident:90", "title": "#90-P2 (existing)", "roles": ["Owner", "FM"], "lead": "Intrusion suspected",
+    sent = {"key": "incident:90", "title": "#90-P2 (existing)", "roles": ["Owner", "FM"], "to": "Owner & FM", "lead": "Intrusion suspected",
             "body": "Turn on Siren?", "status": ["- Alert sent", "⚠️ Waiting for approval"], "stage": "existing",
             "buttons": [{"label": "Done", "kind": "i", "id": "90:done"}],
             "takes": ["RUN-A"],

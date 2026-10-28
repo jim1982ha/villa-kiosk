@@ -4021,23 +4021,28 @@ async def _current_photos() -> set:
     return {photo} if photo else set()
 
 
-async def announcements_handler(request: web.Request) -> web.Response:
-    """`{"announcements": [...], "last": seq}` — every profile. With `?after=<seq>`, only the newer ones, and the
-    answer waits up to ANNOUNCEMENT_WAIT_S for one to arrive: the tablet hears a ring the moment it is kept. A
-    profile that may not view cameras (the guest's) is told only the current notification's photo (_current_photo;
-    announcement_photo_handler refuses it the others too)."""
-    if (refused := _refuse(request)) is not None:
-        return refused
-    try:
-        after = int(request.query["after"]) if "after" in request.query else None
-    except ValueError:
-        return web.json_response({"error": "after must be a number"}, status=400)
+def _feed_handler(feed: "Feed", field: str):
+    """A page's read of one feed — `{field: [...], "last": seq, "first": seq}`, every profile. With `?after=<seq>`, only
+    the newer ones, the answer waiting up to ANNOUNCEMENT_WAIT_S for one to arrive. ⚠️ ONE READ FOR EVERY FEED (owner,
+    2026-10-28: "the same code … consistently used"): the villa's announcements and VESTA's messages are answered by
+    this one, the guest's photo rule included — a profile that may not view cameras is told only the current
+    notification's photo (_current_photos; announcement_photo_handler refuses it the others too)."""
+    async def handler(request: web.Request) -> web.Response:
+        if (refused := _refuse(request)) is not None:
+            return refused
+        try:
+            after = int(request.query["after"]) if "after" in request.query else None
+        except ValueError:
+            return web.json_response({"error": "after must be a number"}, status=400)
+        items, last, first = await feed.read(after, ANNOUNCEMENT_WAIT_S)
+        if not _may(_role_for(request), "viewCameras"):
+            current = await _current_photos()
+            items = [a if a.get("photo") in current else {k: v for k, v in a.items() if k != "photo"} for a in items]
+        return web.json_response({field: items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
+    return handler
 
-    items, last, first = await ANNOUNCED.read(after, ANNOUNCEMENT_WAIT_S)
-    if not _may(_role_for(request), "viewCameras"):
-        current = await _current_photos()
-        items = [a if a.get("photo") in current else {k: v for k, v in a.items() if k != "photo"} for a in items]
-    return web.json_response({"announcements": items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
+
+announcements_handler = _feed_handler(ANNOUNCED, "announcements")
 
 
 async def announcement_photo_handler(request: web.Request) -> web.StreamResponse:
@@ -4085,7 +4090,7 @@ def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
         return None
     key = _vm_text(body.get("key"), "key")
     rec = {"seq": seq, "key": key, "at": body["at"] if _iso_epoch(body.get("at")) is not None else now_iso}
-    for field in ("title", "lead", "body", "stage", "mark"):
+    for field in ("title", "to", "lead", "body", "stage", "mark"):
         if text := _vm_text(body.get(field), field):
             rec[field] = text
     if roles := _vm_lines(body.get("roles"), "roles", "role"):
@@ -4151,21 +4156,7 @@ async def agent_vesta_message_handler(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "seq": rec["seq"]})
 
 
-async def vesta_messages_handler(request: web.Request) -> web.Response:
-    """`{"messages": [...], "last": seq, "first": seq}` — every profile, as /announcements answers (a read after a number
-    waits up to ANNOUNCEMENT_WAIT_S for the next). The photo rule is the announcements' too: a profile that may not view
-    cameras is told only the current notification's photo."""
-    if (refused := _refuse(request)) is not None:
-        return refused
-    try:
-        after = int(request.query["after"]) if "after" in request.query else None
-    except ValueError:
-        return web.json_response({"error": "after must be a number"}, status=400)
-    items, last, first = await MESSAGED.read(after, ANNOUNCEMENT_WAIT_S)
-    if not _may(_role_for(request), "viewCameras"):
-        current = await _current_photos()
-        items = [a if a.get("photo") in current else {k: v for k, v in a.items() if k != "photo"} for a in items]
-    return web.json_response({"messages": items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
+vesta_messages_handler = _feed_handler(MESSAGED, "messages")
 
 
 # ── A button an announcement offers, pressed on a tablet (ha-commands.json `press`) ─────────────────────────────────

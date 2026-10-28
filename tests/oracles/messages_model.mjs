@@ -153,7 +153,7 @@ ck("Messages opens where the model says, and marks read what it shows",
 console.log("\n  VESTA's card, one per alert, as on Telegram:");
 {
   const record = (seq, extra = {}) => ({ seq, key: "incident:90", at: `2026-10-28T20:${10 + seq}:00+08:00`,
-    title: "#90-P2 (new)", roles: ["Owner", "FM"], lead: "", body: "🔓 Door unlocked\nWhat to do: Check it.",
+    title: "#90-P2 (new)", roles: ["Owner", "FM"], to: "Owner & FM", lead: "", body: "🔓 Door unlocked\nWhat to do: Check it.",
     status: ["⚠️ New alert"], takes: ["RUN-A"], ...extra });
   const card90 = parseVestaMessage(record(1));
   ck("a record reads as Telegram heads it: number and priority, To:, the alert, its bottom line; no button drawn",
@@ -201,6 +201,10 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
      noticeStep(ringing, { type: "kept", kept: [staying, { ...card90, takes: ["RUN-A"] }] }).staying.length === 0);
   const issue = card("d", { lines: [{ key: "fault:t1", text: "#90 · Door", icons: null, story: [], closing: null,
     actions: [], alertNumber: 90 }] });
+  const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
+  const { incidentKey } = await import("@/messages/announcements");
+  ck("the card's key is the agreement's form (vestaMessage.incidentKey), the one the Agent writes",
+     incidentKey(90) === contract.vestaMessage.incidentKey.replace("{number}", "90") && incidentKey(90) === "incident:90");
   ck("an alert's open issue finds VESTA's card of it (its number); one with no alert number none",
      J(cardsOfIssue(issue, shown).map((a) => a.title)) === J(["#90-P2 (watch)"])
      && cardsOfIssue(card("e", { lines: [{ key: "x", text: "", icons: null, story: [], closing: null, actions: [] }] }), shown).length === 0);
@@ -219,6 +223,12 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
   ck("an alert that is over goes to Closed, after Watch, never among the notifications (owner, 2026-10-28)",
      J(withClosed.closed.map((i) => i.key)) === J(["v:incident:89"])
      && !withClosed.notifications.some((i) => i.key === "v:incident:89"), withClosed);
+  const villaClosed = ann(8, { at: "2026-10-28T21:00:00+08:00", title: "Doorbell", status: "✅ Opened at 21:00 at the gate" });
+  const both = messagesView({ open: [], watched: [], announcements: [villaClosed, closed90], filter: "all", selected: null });
+  ck("  ...by ONE reader of the stage (alertStage): the villa's own closed message goes to Closed too, an alert not over stays",
+     J(both.closed.map((i) => i.announcement.title)) === J(["Doorbell", "#89-P2 (closed)"]) && both.notifications.length === 0
+     && messagesView({ open: [], watched: [], announcements: [ann(9, { status: "⚠️ New alert" })], filter: "all", selected: null })
+       .notifications.length === 1, both);
   ck("  ...and is no unread: the mark never stays lit for a folded card", unreadOf([closed90], []) === 0
      && unreadOf([later], []) === 1);
   ck("what this tablet read of one feed is not read of the other (two feeds number apart)",
