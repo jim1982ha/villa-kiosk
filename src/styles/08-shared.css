@@ -153,13 +153,19 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .messages-row-text b, .messages-row-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .messages-row-text span { font-size: var(--text-xs); color: var(--text-secondary); }
+/* a line's title at the size of every other menu's rows (owner, 2026-10-28: the HUD menu's Settings / Logout) */
+.messages-row-text b { font-size: var(--text-base); }
 .messages-row-time { flex: none; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .messages-detail { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 0 0 12px 16px; }
 .messages-back { display: none; }
 .messages-empty { padding: 8px 0; }
 .messages-note { display: flex; flex-direction: column; gap: 10px; }
 .messages-note-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.messages-note-head strong { font-size: var(--text-lg); }
+.messages-note-head strong { font-size: var(--text-md); }
+.messages-note-head .muted { font-size: var(--text-xs); }
+/* the open message reads at the menus' size; the full-screen ring keeps its large text (.announcement-full-text) */
+.messages-note .announcement-full-text, .messages-note .announcement-full-status, .messages-note .announcement-full-to {
+  font-size: var(--text-base); }
 .messages-note .announcement-full-photo { max-height: 320px; align-self: flex-start; }
 @media (max-width: 860px) {
   .messages-list { flex: 1 1 auto; border-right: 0; }

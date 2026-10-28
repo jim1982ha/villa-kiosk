@@ -20,7 +20,7 @@ import { ck, done } from "../consistency/check.mjs";
  *    • two Dashboard handlers that both start by asking panelMapping;
  *    • the Facility forms' useState lists, and placementPass's two box tests
  *      (absorb vs refuse: different margins on purpose — see their comments). */
-const CEILING = Number(process.env.CLONE_CEILING ?? 698);
+const CEILING = Number(process.env.CLONE_CEILING ?? 680);
 const WINDOW = 50;
 
 const ROOT = new URL("../../", import.meta.url).pathname;

@@ -1,3 +1,9 @@
+## 2.496.570
+
+What you will see:
+- Messages reads at the same text size as the other menus (Settings, Logout): a line's title, and the message open on
+  the right, were much larger. A message taking the whole screen keeps its large text.
+
 ## 2.496.569
 
 What you will see:
