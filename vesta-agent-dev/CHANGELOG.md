@@ -1,3 +1,12 @@
+## 0.12.368
+
+What you will see:
+- A ticket on the tablet now tells its alert's whole short story, as Telegram's "Status:" does: the alert sent and to
+  whom, each reminder, an escalation, a button pressed, a note sent when it closed. Until now it started at the first
+  reminder, and only what came after the ticket was made.
+- A button pressed on Telegram says so on the tablet: "🆘 Need help on Telegram", with who pressed it.
+- A ticket taken on in the Cockpit is not told twice: the tablet says it already ("in progress since … by …").
+
 ## 0.12.367
 
 What you will see:
