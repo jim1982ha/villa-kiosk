@@ -6,7 +6,7 @@ import { React, h, draw, inside, btn } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
 const { default: RecordCard } = await import("@/components/fm/RecordCard");
-const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { groupAttention } = await import("@/config/attention");
 const { STAGE_WORDS } = await import("@/fm/fmEngine");
@@ -234,7 +234,7 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   const card = draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {}, lineActions: () => btn("Close") }));
   ck("  ...a problem's words sit in one cut line, whole on hover; its own Close in its own slot beside them",
      card.includes(`<span class="cockpit-attention-sub-title">${words}</span>`)
-     && /<Tip text=\{line\.text\}><span className="cockpit-attention-sub-title">/.test(readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8"))
+     && /<Tip text=\{line\.text\}><span className="cockpit-attention-sub-title">/.test(readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8"))
      && (card.match(/<span class="cockpit-line-act">/g) ?? []).length === 2, card.slice(0, 600));
   const shared = css("08-shared.css"), fac = css("07-facility.css"), base = css("01-base.css");
   ck("  ...cut with \"…\", and the cut words never push a line's Close off its line",

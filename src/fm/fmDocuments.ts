@@ -262,8 +262,8 @@ export function buildMonthlyRecap(input: RecapInput): string {
     L.push(`- **${avail.total - off} of ${avail.total}** devices reporting `
       + `(${pct.toFixed(1)}%)`);
     // ⚠️ "SEE THE FAULTS SECTION ABOVE" POINTED AT NOTHING (architecture review, 2026-10-19): a device not answering is
-    // not a fault record; it is a row of the Overview's Open issues, and the readiness check names it below.
-    if (off > 0) L.push(`- ${off} device(s) currently offline, listed under "Open issues" on the Overview, `
+    // not a fault record; it is a row of Messages' Open issues, and the readiness check names it below.
+    if (off > 0) L.push(`- ${off} device(s) currently offline, listed under "Open issues" in the Cockpit's Messages, `
       + `and under "${AVAILABILITY_CHECK_LABEL}" below.`);
     L.push("");
   }

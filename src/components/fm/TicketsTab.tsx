@@ -1,6 +1,6 @@
 // src/components/fm/TicketsTab.tsx
 // The TICKETS: the work someone took on (owner, 2026-10-14). A fault — opened by the VESTA Agent or raised by a
-// person — waits on the Overview's list; "Open ticket" there makes it a ticket, and the ticket lives here until
+// person — waits in Messages' Open issues; "Open ticket" there makes it a ticket, and the ticket lives here until
 // it is resolved or closed. So this tab holds the tickets in progress (one per device) and the Closed section; raising
 // a fault moved to the Overview, beside the problems it is raised about. It was the Faults tab, a second list of the
 // same open faults the Overview already showed.
@@ -36,7 +36,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   onOpenEntity: (id: string) => void;
   /** The villa's real devices, built once by FacilitySections (the edit form's picker). */
   deviceOptions: DeviceOption[];
-  /** Open this record's edit form (the Overview card's "Edit ticket"); dropped once the form has it. */
+  /** Open this record's edit form (an open issue's "Edit ticket"); dropped once the form has it. */
   editTicket?: string;
   onEditOpened?: () => void;
 }) {
@@ -134,14 +134,14 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         // THE Cockpit card, as every other (owner, 2026-10-22)
         <RecordCard lead={<Wrench size={16} className="muted" aria-hidden="true" />} title={<span className="with-tip">
           No ticket in progress
-          <InfoTip label="About tickets">A fault on the Overview becomes a ticket when you press Open Ticket on its card.</InfoTip>
+          <InfoTip label="About tickets">A fault in Messages becomes a ticket when you press Open Ticket on its card.</InfoTip>
         </span>} />
       )}
       {tickets.length > 0 && <div className="fm-list">{tickets.map(ticket)}</div>}
 
       <FoldedList title="Closed" rows={closed} unit="closed record">
         {(t) => (
-          // reopened, it is a fault again: back on the Overview's list (the VESTA Agent reads it, never guesses)
+          // reopened, it is a fault again: back in Open issues (the VESTA Agent reads it, never guesses)
           record(t, stagePill(t),
             <WorkButtons actions={closedActions(workRecord(t))} cardKey={`closed:${t.id}`} closer={closer} onAction={onAction} />)
         )}

@@ -83,7 +83,7 @@ ck("the store erases a fault through its one command, with the elevation", /run\
 ck("the one-step close is one command, and both screens call it — through the one shared close",
    /run\(\{ type: "closeTickets", ids \}\)/.test(src("fm/FmDataContext.tsx"))
    && /closeTickets\(ids\)/.test(src("components/fm/WorkButtons.tsx"))
-   && ["components/fm/TicketsTab.tsx", "components/cockpit/CockpitOverview.tsx"].every((f) => /useConfirmedClose\(\)/.test(src(f)) && !/closeTickets/.test(src(f)))
+   && ["components/fm/TicketsTab.tsx", "components/cockpit/IssueCard.tsx"].every((f) => /useConfirmedClose\(\)/.test(src(f)) && !/closeTickets/.test(src(f)))
    && /ticketId: t\.id/.test(src("config/attention.ts")));
 
 {

@@ -51,7 +51,7 @@ walk(new URL("../../src", import.meta.url).pathname);
 const handBuilt = tsx.filter((p) => !p.endsWith("common/InfoTip.tsx") && /className="info-tip/.test(readFileSync(p, "utf8")));
 ck("no (i) is hand-built any more", handBuilt.length === 0, handBuilt);
 
-console.log("\n  the Overview's (i) beside Raise a fault — with or without the VESTA Agent:");
+console.log("\n  the Open issues (i) beside Open a ticket — with or without the VESTA Agent:");
 const withAgent = faultTiming(true), alone = faultTiming(false);
 const { ISSUE_SOURCES } = await import("@/fm/issueSource");
 ck("with an Agent: ONE row per icon a card can show, each saying what it is, when it appears and when it goes",
@@ -122,6 +122,6 @@ const card = src("components/fm/FaultTiming.tsx");
 ck("the card shows the Agent's rows when an Agent is connected OR one of its faults is open (its icons are on the list)",
    /faultTiming\(agent, status\?\.cadence \?\? null\)/.test(card) && /groups\.map\(\(g\) =>/.test(card) && /const agent = agentSourcesShown\(status, data\.tickets\.some\(\(t\) => agentOwned\(t\) && stageOf\(t\) !== "closed"\)\);/.test(card)   // the rule by value: agent_view.mjs
    && /rows\.map/.test(card) && /\{note\}/.test(card) && /<table className="info-pop-table">/.test(card));
-ck("it sits just before Open a ticket, on the Overview's title line", /<FaultTiming \/>\s*<button[^>]*>[^<]*<Plus size=\{16\} \/> Open a ticket/.test(src("components/cockpit/CockpitOverview.tsx")));
+ck("it sits just before Open a ticket, on the Open issues title line (Messages)", /<FaultTiming \/>\s*<button[^>]*>[^<]*<Plus size=\{16\} \/> Open a ticket/.test(src("components/cockpit/MessagesTab.tsx")));
 
-done("✅ one (i), tap-opened; the Overview says when faults open and close, with or without the Agent");
+done("✅ one (i), tap-opened; Open issues says when faults open and close, with or without the Agent");

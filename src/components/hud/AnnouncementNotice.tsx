@@ -14,34 +14,11 @@ import { NoticeView } from "./Notice";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useConfig } from "@/config/ConfigContext";
-import { backendFetch } from "@/auth/sessionLost";
+import { announcementPhotoUrl, noticeFor, type Announcement } from "@/messages/announcements";
+import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import {
-  announcementPhotoUrl, fetchAnnouncements, noticeFor, pauseFor, pressButton, watchAnnouncements, PRESS_SAID,
-  type Announcement, type PressOutcome,
-} from "@/messages/announcements";
-
-/** What became of each button pressed on the notice, by command ("sending" until the add-on answers). */
-export type PressState = Record<string, PressOutcome | "sending">;
-
-/** The buttons an announcement offers, and what became of the last press: the same row on the notice and full
- *  screen. */
-function Actions({ announcement, onPress, presses }: {
-  announcement: Announcement; onPress: (command: string) => void; presses: PressState;
-}) {
-  // The latest answer to a press (a failed one leaves its button pressable again).
-  const answer = Object.values(presses).reverse().find((s): s is PressOutcome => s !== "sending");
-  return (
-    <span className="vesta-notice-actions">
-      {announcement.buttons.map((b) => (
-        <button key={b.command} type="button" className="btn primary vesta-notice-action"
-          disabled={presses[b.command] !== undefined && presses[b.command] !== "failed"} onClick={() => onPress(b.command)}>
-          {b.label}
-        </button>
-      ))}
-      {answer && <span className="vesta-notice-said">{PRESS_SAID[answer]}</span>}
-    </span>
-  );
-}
+  AnnouncementActions, AnnouncementContent, useAnnouncementPress, type PressState,
+} from "@/components/messages/AnnouncementContent";
 
 /** One announcement, drawn — pure (a check draws it): its photo above its words when it has one (a ring's snapshot,
  *  the notice then square-cornered: 08-shared.css), its title and the first line of what it says, then the buttons
@@ -60,7 +37,7 @@ export function AnnouncementNoticeView({ announcement, onPress, onDismiss, press
     <NoticeView tone="info" icon={<Bell size={16} />} onDismiss={buttons.length ? onDismiss : undefined}>
       {announcement.photo && <img className="vesta-notice-photo" src={announcementPhotoUrl(announcement.photo)} alt="" />}
       {words}
-      {onPress && buttons.length > 0 && <Actions announcement={announcement} onPress={onPress} presses={presses} />}
+      {onPress && buttons.length > 0 && <AnnouncementActions announcement={announcement} onPress={onPress} presses={presses} />}
     </NoticeView>
   );
 }
@@ -78,10 +55,7 @@ export function AnnouncementFullScreenView({ announcement, onPress, onDismiss, p
     <>
       <div className="modal-header"><h2 className="announcement-full-title">{announcement.title}</h2></div>
       <div className="modal-body announcement-full">
-        {announcement.photo && <img className="announcement-full-photo" src={announcementPhotoUrl(announcement.photo)} alt="" />}
-        {announcement.text && <p className="announcement-full-text">{announcement.text}</p>}
-        {announcement.status && <p className="announcement-full-status">{announcement.status}</p>}
-        {onPress && announcement.buttons.length > 0 && <Actions announcement={announcement} onPress={onPress} presses={presses} />}
+        <AnnouncementContent announcement={announcement} onPress={onPress} presses={presses} />
       </div>
       <ModalFooter onClose={onDismiss} />
     </>
@@ -107,25 +81,20 @@ export default function AnnouncementNotice() {
   const settings = useRef(config);
   settings.current = config;
   const [shown, setShown] = useState<Shown | null>(null);
-  const [presses, setPresses] = useState<PressState>({});
-  // The ring on screen, read when a press is answered: its rewrite may have replaced it meanwhile.
-  const shownKey = useRef<string | null>(null);
-  shownKey.current = shown?.a.key ?? null;
+  const { presses, press } = useAnnouncementPress(shown?.a ?? null);
   // the keys already shown: their rewrite (the ring answered, timed out) never takes the screen again
   const seenKeys = useRef(new Set<string>());
 
+  // what just came, from the page's one watch (messages/AnnouncementsContext)
+  const { fresh } = useAnnouncements();
   useEffect(() => {
-    const stop = new AbortController();
+    if (!fresh) return;
     // The newest of what arrived together: two rings in one read are one notice, the later.
-    void watchAnnouncements(fetchAnnouncements, (items) => {
-      const a = items[items.length - 1];
-      const rewrite = a.key !== null && seenKeys.current.has(a.key);
-      if (a.key) seenKeys.current.add(a.key);
-      setShown({ a, rewrite, full: noticeFor(a, settings.current, { rewrite }).fullScreenMs !== null });
-      setPresses({});
-    }, stop.signal, pauseFor);
-    return () => stop.abort();
-  }, []);
+    const a = fresh.items[fresh.items.length - 1];
+    const rewrite = a.key !== null && seenKeys.current.has(a.key);
+    if (a.key) seenKeys.current.add(a.key);
+    setShown({ a, rewrite, full: noticeFor(a, settings.current, { rewrite }).fullScreenMs !== null });
+  }, [fresh]);
 
   const how = shown ? noticeFor(shown.a, config, { rewrite: shown.rewrite }) : null;
   // full screen ends (its time, Close, this tablet's switch turned off): its notice carries on when that one stays,
@@ -144,14 +113,6 @@ export default function AnnouncementNotice() {
   }, [shown]);
 
   if (!shown || !how) return null;
-  const { key } = shown.a;
-  const press = (command: string) => {
-    if (!key) return;
-    setPresses((p) => ({ ...p, [command]: "sending" }));
-    void pressButton(key, command, backendFetch).then((outcome) => {
-      if (shownKey.current === key) setPresses((p) => ({ ...p, [command]: outcome }));
-    });
-  };
   if (shown.full) return <FullScreen announcement={shown.a} onPress={press} onDismiss={endFull} presses={presses} />;
   return <AnnouncementNoticeView announcement={shown.a} onPress={press} onDismiss={() => setShown(null)} presses={presses} />;
 }

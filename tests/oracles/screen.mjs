@@ -85,8 +85,8 @@ console.log("\n  room and category lists");
 console.log("\n  report a fault, edit this device");
 {
   const fm = run(OWNER, { type: "openDevice", panel: P("light.a") }, { type: "reportFault" });
-  ck("a profile that manages faults: the Cockpit's Overview, \"Raise a fault\" pointed at the device, the panel closed",
-     fm.windows.cockpit && fm.cockpitTab === "overview" && fm.faultFor === "light.a" && fm.nav.panel === null && fm.guestReportFor === null);
+  ck("a profile that manages faults: the Cockpit's Messages, \"Open a ticket\" pointed at the device, the panel closed",
+     fm.windows.cockpit && fm.cockpitTab === "messages" && fm.faultFor === "light.a" && fm.nav.panel === null && fm.guestReportFor === null);
   const opened = screenReducer(fm, { type: "faultFormOpened" }, OWNER);
   ck("  ...the form takes it once; reopening the Cockpit later does not resurrect it", opened.faultFor === null);
   ck("  ...closing the Cockpit forgets it too", screenReducer(fm, { type: "closeWindow", window: "cockpit" }, OWNER).faultFor === null);
@@ -103,12 +103,12 @@ console.log("\n  report a fault, edit this device");
 console.log("\n  the doors");
 {
   ck("a window this profile may not open never opens", !run(GUEST, { type: "openWindow", window: "configEditor" }).windows.configEditor && !run(GUEST, { type: "openWindow", window: "settings" }).windows.settings);
-  ck("the top bar opens the Cockpit on Overview", run(OWNER, { type: "cockpitTab", tab: "faults" }, { type: "openWindow", window: "cockpit", tab: "overview" }).cockpitTab === "overview");
+  ck("the top bar opens the Cockpit on Messages", run(OWNER, { type: "cockpitTab", tab: "faults" }, { type: "openWindow", window: "cockpit", tab: "messages" }).cockpitTab === "messages");
 }
 
 console.log("\n  Settings' tabs (ticket 16 of \"One inbox\"): the profile button opens General, the Cockpit's gear Messages");
 {
-  const gear = run(OWNER, { type: "openWindow", window: "cockpit", tab: "overview" }, { type: "openWindow", window: "settings", settingsTab: "messages" });
+  const gear = run(OWNER, { type: "openWindow", window: "cockpit", tab: "messages" }, { type: "openWindow", window: "settings", settingsTab: "messages" });
   ck("the Cockpit's gear opens Settings on Messages, over the Cockpit", gear.windows.settings && gear.windows.cockpit && gear.settingsTab === "messages", gear);
   const again = run(OWNER, { type: "openWindow", window: "settings", settingsTab: "messages" }, { type: "closeWindow", window: "settings" },
     { type: "openWindow", window: "settings" });

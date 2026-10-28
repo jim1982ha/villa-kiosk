@@ -1,6 +1,6 @@
 // src/components/common/InfoTip.tsx
 // THE (i) button with its explanation card — one for every (i) in the app (the 3D model's details in Advanced
-// Settings, when faults open and close on the Overview).
+// Settings, when faults open and close, above Open issues).
 //
 // ⚠️ A TAP OPENS IT, ON EVERY PHONE (2026-10-14). The card opened on :hover, or on :focus-within for a tap — and
 // iOS Safari does not focus a <button> it taps, so on an iPhone the (i) did nothing. A tap toggles it; a tap outside

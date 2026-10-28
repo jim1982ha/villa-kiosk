@@ -20,7 +20,7 @@ export interface PanelActions {
   /** Open Advanced Settings focused on this entity (shown with may.edit). */
   onEdit: () => void;
   /** Raise a maintenance fault against the open device — opens the Cockpit's
-   *  Overview with "Raise a fault" pointed at this device.
+   *  Messages with "Open a ticket" pointed at this device.
    *
    *  The point is the moment of noticing. Someone walking the villa taps the
    *  badge of a lamp that will not come on; before this, acting on that meant
@@ -106,7 +106,7 @@ export interface PanelActions {
    *  Read-only, so shown whatever the profile, as `motion`. `linked` is then undefined. */
   linkedSensor?: { entityId: string; label: string };
   /** This profile manages faults: the device and its linked entity (`ids`), whose Cockpit issues the header's warning
-   *  shows while the Overview lists any (useDeviceIssue), and opens with their card marked (screen "openFaults").
+   *  shows while Open issues lists any (useDeviceIssue), and opens Messages on that issue (screen "openFaults").
    *  Undefined: no button. */
   faults?: { ids: string[]; open: () => void };
 }

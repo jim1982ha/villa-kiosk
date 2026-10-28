@@ -1,8 +1,8 @@
 // src/components/fm/RecordCard.tsx
-// THE card of every Cockpit list — an open issue on the Overview, a ticket, a closed ticket, a scheduled task, a spend
+// THE card of every Cockpit list — an open issue in Messages, a ticket, a closed ticket, a scheduled task, a spend
 // line, a piece of work done (owner, 2026-10-14/15: "the same style as any other card, fully re-using the same code").
 // Its title with a status pill (and a line under it: the room), the line of pills and when, its notes, photos and
-// reports — or its own lines (`body`: the Overview's problems) — a cost on the right, and its buttons on the right of
+// reports — or its own lines (`body`: an open issue's problems) — a cost on the right, and its buttons on the right of
 // its text, inside the card. Tapping it opens it (`onOpen`); holding it erases it when it can be erased (`erase`:
 // ErasableRow, superadmin) — a scheduled task is removed with its own bin instead.
 //
@@ -10,9 +10,9 @@
 // layout request ("buttons inside, on the right", "a note never runs out of the card") was made up to four times.
 //
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
-// faults of one device: TicketsTab draws the frame). `lead`: what stands before the title (the Overview's source
-// icons); `titlePills`: pills right after the title, on its line (the Overview's room, a spend's device); `check`: a
-// pill at the right of that line, a refresh icon and when (the Overview's next check); `tone`: the card's own tint.
+// faults of one device: TicketsTab draws the frame). `lead`: what stands before the title (an open issue's source
+// icons); `titlePills`: pills right after the title, on its line (an open issue's room, a spend's device); `check`: a
+// pill at the right of that line, a refresh icon and when (an open issue's next check); `tone`: the card's own tint.
 //
 // ⚠️ ONE LINE FOR THE NAME, ITS PLACE AND ITS NEXT CHECK (owner, 2026-10-22: "show the area right after the device name
 // … as the pills in the Spend tab … to save one line"; "instead of `Next check:` a refresh icon, as a pill, on the same
@@ -32,7 +32,7 @@ export interface RecordCardProps {
   /** Its status pill: `tone` is the badge's colour class (ok, due-soon, overdue, never…). */
   status?: { text: string; tone: string };
   lead?: ReactNode;
-  /** Pills right after the title, on its line (the Overview's room, a spend's device). */
+  /** Pills right after the title, on its line (an open issue's room, a spend's device). */
   titlePills?: ReactNode;
   /** The pill at the right of the title's line: a refresh icon, `when` beside it, `tip` on hover (the next check). */
   check?: { when: string; tip: string };
@@ -40,7 +40,7 @@ export interface RecordCardProps {
   pills?: ReactNode;
   when?: ReactNode;
   notes?: (string | undefined | null)[];
-  /** Lines of its own, in place of the pills/when/notes block (the Overview's problems). */
+  /** Lines of its own, in place of the pills/when/notes block (an open issue's problems). */
   body?: ReactNode;
   photoIds?: string[];
   documentIds?: string[];

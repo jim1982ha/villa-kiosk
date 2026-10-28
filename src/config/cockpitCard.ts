@@ -1,7 +1,7 @@
 // src/config/cockpitCard.ts
 // ONE COCKPIT CARD, AS IT IS DRAWN (architecture review scan 1, 2026-10-19): its title and room, the icons before its
 // name, its "Next check" and the date and time behind it, its buttons, and each problem's line — words, icons, what
-// last happened on Telegram, its own Close. Pure; CockpitOverview draws exactly this, a check reads it by value.
+// last happened on Telegram, its own Close. Pure; IssueCard draws exactly this, a check reads it by value.
 //
 // ⚠️ FIVE CALLS, ONE CARD: the page asked attention for a line's words (twice: once for its hover text), its icons,
 // its buttons and the card's, and faultTiming for its next check, and worked out a line's latest Telegram note itself
@@ -75,7 +75,7 @@ function faultStatus(item: AttentionItem): string | undefined {
 }
 
 /** The icons a problem's line shows inside its row: its own sources only where the row's icons do not say them already
- *  — the row's are its first line's (CockpitOverview draws them beside the device's name).
+ *  — the row's are its first line's (IssueCard draws them beside the device's name).
  *  ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon — a red "!"
  *  beside "House & Pool Relay" and again before "Open fault: …". A row mixing kinds (a lock "Unlocked" with a fault on
  *  its battery) still marks the line whose kind is not the row's. */

@@ -213,7 +213,7 @@ console.log("\n  the Recap counts what the profile is shown (architecture review
   const s4 = recap.split("## 4.")[1]?.split("##")[0] ?? "";
   ck("  ...and the recap's §4 is the readiness' devices, pointing where they are listed (no \"faults section\")",
      s4.includes(`**${villa.size - 4} of ${villa.size - 2}** devices reporting`)
-     && s4.includes('2 device(s) currently offline, listed under "Open issues" on the Overview, and under "All devices reporting" below.')
+     && s4.includes('2 device(s) currently offline, listed under "Open issues" in the Cockpit\'s Messages, and under "All devices reporting" below.')
      && !/faults section/.test(recap), s4);
 }
 

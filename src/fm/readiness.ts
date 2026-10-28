@@ -52,8 +52,8 @@ export interface ReadinessCheck {
   detail: string;
   /** Entities behind a failing check, so the UI can jump to them on the map. */
   entityIds?: string[];
-  /** The open faults' sources, in the legend's order — the icons the Overview shows them with, drawn in the line
-   *  ("Check the ⏾ ⚑ faults in Overview…", ReadinessTab). Text stays plain for the saved snapshot. */
+  /** The open faults' sources, in the legend's order — the icons Open issues shows them with, drawn in the line
+   *  ("Check the ⏾ ⚑ faults in Messages…", ReadinessTab). Text stays plain for the saved snapshot. */
   sources?: IssueSource[];
   /** What tapping the check opens: its devices, as a list (SummaryGroupPanel), behind a button with these words.
    *  Shown when the check names devices. Absent for a check about no device (the tickets). */
@@ -83,7 +83,7 @@ export const AVAILABILITY_CHECK_LABEL = "All devices reporting";
 /** What the readiness is built from: ONE profile's view (useVillaAttention — attention.attentionFor): its devices (only
  *  those it may open, with the villa's fold and critical list) and its problems (the alarms; the faults it is shown).
  *  ⚠️ IT TOOK THE ROLE-BLIND DEVICE LIST BESIDE THE PROFILE'S ALARMS (architecture review, 2026-10-19): the Recap counted
- *  devices offline the Overview did not list for the same person, and every fault record, seen or not. */
+ *  devices offline Open issues did not list for the same person, and every fault record, seen or not. */
 export type ReadinessView = Pick<VillaAttention, "devices" | "attentionItems">;
 
 export interface ReadinessResult {
@@ -277,14 +277,14 @@ export function buildReadiness(
   // ── Nothing broken and unresolved ────────────────────────────────────────
   // ⚠️ THE TITLE SAYS WHAT IS FOUND, NOT THE GOAL (owner, 2026-10-14): "No open faults or tickets" stood over "5 still
   // open" — the card contradicted itself. Failing, it counts both and says where each is dealt with.
-  // counted per device, as the Overview and Tickets draw them (openCounts, architecture review 2026-10-15)
-  // ⚠️ THE FAULTS THIS PROFILE IS SHOWN (the Overview's: its fault items), not every record (architecture review,
+  // counted per device, as Open issues and Tickets draw them (openCounts, architecture review 2026-10-15)
+  // ⚠️ THE FAULTS THIS PROFILE IS SHOWN (Open issues': its fault items), not every record (architecture review,
   // 2026-10-19) — the Recap counted faults about devices the Overview did not list for the same person
   const shown = new Set(alarms.flatMap((i) => (i.kind === "fault" && i.ticketId ? [i.ticketId] : [])));
   const records = fm.tickets.filter((t) => shown.has(t.id));
   const open = openCounts(records, devices.deviceOfRecord);
   const faults = records.filter((t) => isTicketOpen(t) && stageOf(t) === "fault");
-  const where = [open.faults ? "the faults in \"Overview\"" : "", open.tickets ? "the open tickets in \"Tickets\"" : ""].filter(Boolean);
+  const where = [open.faults ? "the faults in \"Messages\"" : "", open.tickets ? "the open tickets in \"Tickets\"" : ""].filter(Boolean);
   const found = new Set(faults.map(faultSource));
   checks.push({
     id: "tickets",

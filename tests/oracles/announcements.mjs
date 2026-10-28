@@ -38,18 +38,25 @@ const asked = [];
 const shown = [];
 const stop = new AbortController();
 const pauses = [];
+const reads = [];
 await watchAnnouncements(async (after) => {
   asked.push(after);
   if (!answers.length) { stop.abort(); return null; }
   return answers.shift();
-}, (items) => shown.push(items.map((x) => x.seq)), stop.signal, async (ms) => { pauses.push(ms); });
+}, (items) => shown.push(items.map((x) => x.seq)), stop.signal, async (ms) => { pauses.push(ms); },
+  (items, full) => reads.push([full, items.map((x) => x.seq)]));
 ck("the first read is the baseline (nothing shown); then each read asks for what came after the last",
-   JSON.stringify(asked) === JSON.stringify([null, 2, null, 3, 3, 5, 1, 2]), asked);
+   JSON.stringify(asked) === JSON.stringify([null, 2, null, 3, 3, 5, null, 2]), asked);
 ck("  ...what arrived is shown, together when it came together; nothing when nothing came",
-   JSON.stringify(shown) === JSON.stringify([[4, 5], [2]]), shown);
+   JSON.stringify(shown) === JSON.stringify([[4, 5]]), shown);
+ck("  ...a store started again (a reinstall: its count went back) is read again whole, at once, as a new baseline:"
+   + " what it holds is listed, nothing of it shown as news", asked[6] === null && pauses.length === 1, { asked, pauses });
 ck("  ...an unreachable add-on (or a read a sleeping tablet left open) is asked again after a pause, and what came"
    + " meanwhile is not shown: the next read is a new baseline", pauses.length === 1 && pauses[0] > 0 && asked[2] === null
    && !shown.flat().includes(3), { pauses, asked, shown });
+ck("every read also reaches the page's list (the Cockpit's Notifications): all the add-on keeps on a baseline,"
+   + " only what came after on the others; a store started again is read whole",
+   JSON.stringify(reads) === JSON.stringify([[true, [1, 2]], [true, [3]], [false, []], [false, [4, 5]], [true, [2]]]), reads);
 
 console.log("\n  drawn as every notice, for 10s, in the villa view's column:");
 const html = draw(h(AnnouncementNoticeView, { announcement: { ...a(1), title: "🔔 Visitor", text: "At the door\nmore" } }));

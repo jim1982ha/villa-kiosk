@@ -164,9 +164,9 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         {(headerActions || back || warning) && (
           <div className="modal-header-actions">
             {/* ⚠️ ITS OPEN ISSUES, ONE TAP AWAY (owner, 2026-10-24, top right: "not top left"): while the Cockpit's
-                Overview lists an issue for the device or its linked entity (useDeviceIssue: a fault, an offline
+                Open issues list an issue for the device or its linked entity (useDeviceIssue: a fault, an offline
                 device, an alarm, late maintenance), the Cockpit's own warning sign, in that issue's colour, opens the
-                Overview with that card marked. Gone once it leaves the Overview. */}
+                Messages on that issue. Gone once it leaves Open issues. */}
             {warning && <FaultsButton onOpen={warning.open} severity={warning.severity} />}
             {headerActions}
             {back && <BackButton onClick={back.go} label={back.label} />}

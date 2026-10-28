@@ -57,7 +57,7 @@ ck("  ...and no window of its own any more (2.496.443)", !/AgentModal|shown\("ag
   // Cockpit's footer, behind the same door (doors.agent; HUD hands both on).
   const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
   const hud = strip(src("components/hud/HUD.tsx"));
-  const cockpit = strip((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx")));
+  const cockpit = strip((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/IssueCard.tsx")));
   ck("the agent's presence is the Cockpit button's robot and dot only (no robot button of its own)",
      !/onOpenAgent/.test(hud));
   ck("  ...the Cockpit button shows the robot and the presence dot only with the agent's door, the ⚠ without",

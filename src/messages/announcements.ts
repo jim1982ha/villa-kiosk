@@ -204,12 +204,16 @@ export async function fetchAnnouncements(after: number | null, stop: AbortSignal
 }
 
 /** Calls `onNew` with each announcement kept from now on, until `stop`. What was kept before it started is not new:
- *  a page reloaded does not announce the last ring again, nor a tablet waking up what came while it slept. `read` is fetchAnnouncements (a check passes its own). */
+ *  a page reloaded does not announce the last ring again, nor a tablet waking up what came while it slept. `read` is
+ *  fetchAnnouncements (a check passes its own). `onKept`: every read, for the page's list (the Cockpit's
+ *  Notifications) — `full` when it is everything the add-on keeps (the first read, and after a pause), else only what
+ *  came after the last. */
 export async function watchAnnouncements(
   read: (after: number | null, stop: AbortSignal) => Promise<AnnouncementsRead | null>,
   onNew: (items: Announcement[]) => void,
   stop: AbortSignal,
   pause: (ms: number, stop: AbortSignal) => Promise<void>,
+  onKept?: (items: Announcement[], full: boolean) => void,
 ): Promise<void> {
   let last: number | null = null;
   while (!stop.aborted) {
@@ -222,8 +226,15 @@ export async function watchAnnouncements(
       await pause(RETRY_MS, stop);
       continue;
     }
+    if (last !== null && got.last < last) {
+      // The add-on's store started again (a reinstall: its count went back): this read asked for what came after a
+      // number it never reached, so it holds nothing; read it again whole, at once, as a new baseline.
+      last = null;
+      continue;
+    }
+    // everything the add-on keeps on a baseline (the first read, after a pause); else what came after the last
+    onKept?.(got.items, last === null);
     if (last !== null && got.items.length) onNew(got.items);
-    // The add-on's store started again (a reinstall): its own count from now on.
     last = got.last;
   }
 }

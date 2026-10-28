@@ -1,5 +1,5 @@
 // src/components/fm/FaultTiming.tsx
-// The (i) beside the Overview's "Open a ticket" (owner, 2026-10-14): ONE table — each source's icon (sourceIcons), what
+// The (i) beside Messages' "Open a ticket" (owner, 2026-10-14): ONE table — each source's icon (sourceIcons), what
 // it is, when it appears and when it goes (fm/faultTiming.ts) — then how a fault becomes a ticket and how often the list
 // is read again.
 //

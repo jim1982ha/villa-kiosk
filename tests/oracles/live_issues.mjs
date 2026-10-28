@@ -145,9 +145,9 @@ console.log("\n  where things land:");
 const OWNER = { facility: true }, GUEST = { facility: false };
 const open = { ...START, nav: { ...START.nav, panel: { entityId: "light.a" } } };
 const raised = screenReducer(open, { type: "reportFault" }, OWNER);
-ck("a device's wrench (owner/facility): the Overview, Raise a fault pointed at it", raised.cockpitTab === "overview" && raised.faultFor === "light.a");
+ck("a device's wrench (owner/facility): Messages, Open a ticket pointed at it", raised.cockpitTab === "messages" && raised.faultFor === "light.a");
 const edit = screenReducer(START, { type: "editTicket", id: "b" }, OWNER);
-ck("an Overview card's Edit ticket: the Tickets tab, that record's form", edit.cockpitTab === "tickets" && edit.ticketFor === "b");
+ck("an open issue's Edit ticket: the Tickets tab, that record's form", edit.cockpitTab === "tickets" && edit.ticketFor === "b");
 ck("  ...dropped once the form has it, and when the Cockpit closes",
    screenReducer(edit, { type: "ticketEditOpened" }, OWNER).ticketFor === null
    && screenReducer(edit, { type: "closeWindow", window: "cockpit" }, OWNER).ticketFor === null);
@@ -162,7 +162,8 @@ ck("a fault from a VESTA Agent alert reads \"#5 · …\" on its card; one withou
 ck("  ...and the same in the Tickets tab", /<RecordCard key=\{t\.id\} framed=\{framed\} title=\{faultTitle\(t\)\}/.test(readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8")));
 ck("  ...a number that is not one (0, text) is not shown", E.faultTitle({ title: "x", alertNumber: 0 }) === "x" && E.faultTitle({ title: "x", alertNumber: "5" }) === "x");
 
-const ov = readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8");
+const ov = readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8");
+const msg = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
 console.log("\n  an offline device is ONE line (owner, 2026-10-14: the same Timmerflotte said \"Unavailable\" and \"offline for 9 h\"):");
 const ent = (id, state) => ({ entity_id: id, state, attributes: {}, last_changed: "", last_updated: "" });
 const offlineDevice = (batteryState) => groupAttention(buildAttentionItems({ devices: devicesOf({ unavailable: ["sensor.example_temperature"], folding: new Map([["sensor.example_battery", "sensor.example_temperature"]]) }), entities: { "sensor.example_temperature": ent("sensor.example_temperature", "unavailable"),
@@ -239,7 +240,7 @@ const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night", entityId: "x.
   { ...rec("t", "x.t"), status: "in_progress" }, { ...rec("r", "x.r"), status: "resolved", resolvedAt: "2026-10-14T09:00:00Z" }]);
 ck("4 faults and 1 ticket: \"4 detected faults (1 open ticket)\", where to deal with each, and the faults' source icons",
    mixedOpen.label === "4 detected faults (1 open ticket)"
-   && mixedOpen.detail === 'Check the faults in "Overview", or the open tickets in "Tickets".'
+   && mixedOpen.detail === 'Check the faults in "Messages", or the open tickets in "Tickets".'
    && mixedOpen.sources.join() === "guest,alert,night", mixedOpen);   // the legend's order: the Kiosk's, then the Agent's
 // ⚠️ COUNTED AS DRAWN, PER DEVICE (architecture review, 2026-10-15): the pump's two faults taken on together are ONE
 // ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
@@ -256,8 +257,8 @@ const byRecord = ready([rec("m1", "sensor.gone,sensor.pump_power"), rec("m2", "s
   { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) });
 ck("  ...a fault naming several sensors counts on its device's card", byRecord.label === "1 detected fault (0 open tickets)", byRecord);
 const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
-ck("  ...one fault, no ticket: singular, and only Overview", onlyFaults.label === "1 detected fault (0 open tickets)"
-   && onlyFaults.detail === 'Check the faults in "Overview".', onlyFaults);
+ck("  ...one fault, no ticket: singular, and only Messages", onlyFaults.label === "1 detected fault (0 open tickets)"
+   && onlyFaults.detail === 'Check the faults in "Messages".', onlyFaults);
 const onlyTickets = readyWith([{ ...rec("t", "x.y"), status: "in_progress" }]);
 ck("  ...tickets only: no icon, only Tickets", onlyTickets.detail === 'Check the open tickets in "Tickets".' && onlyTickets.sources.length === 0, onlyTickets);
 const allClear = readyWith([]);
@@ -268,7 +269,7 @@ ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass
   const result = { checks: [mixedOpen], passed: 0, total: 1, overall: "warn" };
   const checks = (startOpen) => draw(h(ReadinessChecks, { readiness: result, label: (id) => id, onOpenEntity: () => {}, onOpenCheck: () => {}, ...(startOpen ? { startOpen } : {}) }));
   ck("  ...the Recap draws those icons in the line, after \"Check the\"",
-     text(checks(true)).includes('|Check the |G|[icon][icon]| faults in "Overview", or the open tickets in "Tickets".|'), text(checks(true)));
+     text(checks(true)).includes('|Check the |G|[icon][icon]| faults in "Messages", or the open tickets in "Tickets".|'), text(checks(true)));
   const folded = checks();   // as the tab draws it: no startOpen
   ck("  ...the checks fold under their verdict, closed at first; a tap on the verdict opens them (owner, 2026-10-14)",
      /class="fm-headline-toggle" aria-expanded="false"/.test(folded) && text(folded).includes("|Ready, with things worth fixing|0 of 1 checks passing|")
@@ -375,7 +376,7 @@ ck("  ...and each one is a note in the Tickets tab, with its time",
    N.faultNoteLines(told, (a) => a.slice(11, 16)).join("|") === "Escalation sent to Owner (08:49)|🆘 Need help pressed by Fabien (09:10)",
    N.faultNoteLines(told, (a) => a.slice(11, 16)));
 {
-  const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+  const { AttentionCard } = await import("@/components/cockpit/IssueCard");
   const card = draw(h(AttentionCard, { card: cockpitCard(groupAttention(withLatest)[0], { checkMinutes: 5, nightlyAt: "02:00" }), onOpenEntity: () => {} }));
   ck("  ...shown on the Overview card, under the fault's line", /fault s[\s\S]*class="cockpit-attention-latest">🆘 Need help pressed by Fabien · /.test(card), text(card));
 }
@@ -387,8 +388,9 @@ const tt = src("components/fm/TicketsTab.tsx");
 // here, that the tab draws it — and counts it (openCounts: the same cards)
 ck("the Tickets tab draws ticketCards — the tickets in progress, by device — and Closed; never a raise form",
    /ticketCards\(data\.tickets, deviceOfRecord\)/.test(tt) && /openCounts\(data\.tickets, deviceOfRecord\)\.tickets/.test(tt) && !/Raise a fault/.test(tt));
-ck("the Overview's title line: the (i) then Open a ticket, for the profiles that manage tickets; a guest reports a problem",
-   /<FaultTiming \/>\s*<button className="btn ghost" onClick=\{\(\) => setRaising\(\{\}\)\}><Plus size=\{16\} \/> Open a ticket<\/button>/.test(ov) && /Report a problem<\/button>/.test(ov) && /<FaultForm /.test(ov));
+ck("the Open issues title line (Messages): the (i) then Open a ticket, for the profiles that manage tickets; a guest reports a problem",
+   /<FaultTiming \/>\s*<button className="btn ghost" onClick=\{raise\}><Plus size=\{16\} \/> Open a ticket<\/button>/.test(msg)
+   && /const raise = \(\) => setRaising\(\{\}\);/.test(msg) && /Report a problem<\/button>/.test(msg) && /<FaultForm /.test(msg));
 // WHAT the buttons are, on which records, with which question: by value at the top and in "the buttons, drawn".
 // Here only the wiring a drawing cannot reach — the Overview hands cardActions to the shared buttons, and acts on
 // what each button names (its stage, its records), with no status or rule of its own
@@ -422,7 +424,7 @@ ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-1
    && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));
 console.log("\n  one line per problem (owner, 2026-10-17: \"#49 · One mains phase lost\" six times):");
 {
-  const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+  const { AttentionCard } = await import("@/components/cockpit/IssueCard");
   const lost = (id) => ({ ...rec(id, "sensor.phase_a_voltage,sensor.phase_b_voltage"), title: "One mains phase lost", alertNumber: 49 });
   const six = ["a", "b", "c", "d", "e", "f"].map(lost);
   const ents = { "sensor.phase_b_voltage": { entity_id: "sensor.phase_b_voltage", state: "230", attributes: { friendly_name: "Phase B Voltage" } } };

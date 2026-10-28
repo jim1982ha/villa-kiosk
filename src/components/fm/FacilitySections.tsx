@@ -69,7 +69,7 @@ export default function FacilitySections({
   /** Jump to a device's panel — a failing check or a fault opens the actual
    *  device instead of leaving the operator to hunt for it. */
   onOpenEntity: (entityId: string) => void;
-  /** Tickets opens this record's form (an Overview card's "Edit ticket"). */
+  /** Tickets opens this record's form (an open issue's "Edit ticket"). */
   editTicket?: string;
   /** Called once the form has it, so reopening the tab later does not spring it again. */
   onTicketEditOpened?: () => void;
@@ -85,8 +85,8 @@ export default function FacilitySections({
 
   // The list a readiness check opens — its own devices (readiness.CheckTarget).
   const [checkList, setCheckList] = useState<CheckTarget | null>(null);
-  // ONE profile view (useVillaAttention): the devices this profile is shown and its problems, the Overview's — so the
-  // Recap counts what the Overview lists for the same person, and readiness and the top bar agree
+  // ONE profile view (useVillaAttention): the devices this profile is shown and its problems, Open issues' — so the
+  // Recap counts what Open issues lists for the same person, and readiness and the top bar agree
   const view = useVillaAttention();
   const readiness = useMemo(() => buildReadiness(entities, data, view, config.entityMap),
     [entities, data, view, config.entityMap]);

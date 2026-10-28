@@ -52,12 +52,12 @@ ck("every door is said (none left undefined for a screen to guess)",
 }
 
 console.log("\n  every surface reads the one answer:");
-const dash = src("pages/Dashboard.tsx"), hud = src("components/hud/HUD.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
+const dash = src("pages/Dashboard.tsx"), hud = src("components/hud/HUD.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/IssueCard.tsx"));
 ck("Dashboard computes it once and mounts every window behind it",
    (dash.match(/doorsFor\(/g) ?? []).length === 1
    && ["settings", "configEditor"].every((s) => new RegExp(`\\{shown\\("${s}"\\) && \\(`).test(dash))
    // 2.496.273: Facility is the Cockpit's tabs, behind the same door
-   && /const tabs: ModalTab<CockpitTab>\[\] = doors\.facility \? \[OVERVIEW_TAB, \.\.\.FACILITY_TABS\] : \[OVERVIEW_TAB\];/.test(cockpit)
+   && /const tabs: ModalTab<CockpitTab>\[\] = doors\.facility \? \[MESSAGES_TAB, \.\.\.FACILITY_TABS\] : \[MESSAGES_TAB\];/.test(cockpit)
    && /const shown = \(surface: Surface\) => surfaceShown\(screen\.windows, surface, doors\);/.test(dash));
 ck("  ...and no longer re-asks those capabilities itself",
    !/roleCan\(role, "(openSettings|manageFacility|viewAgent)"\)/.test(dash) && !/agentVisible \?/.test(dash));

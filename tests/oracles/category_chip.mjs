@@ -18,7 +18,7 @@ ck("on: the category's own tinted surface and glyph colour; at rest: the neutral
 ck("  ...each category its own colour (not one accent for all)",
    new Set(CATEGORY_ORDER.map((c) => categoryChipStyle(c, true).color)).size === CATEGORY_ORDER.length);
 const rd = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
-const hud = rd("components/hud/HUD.tsx"), cockpit = (rd("components/cockpit/CockpitModal.tsx") + rd("components/cockpit/CockpitOverview.tsx"));
+const hud = rd("components/hud/HUD.tsx"), cockpit = (rd("components/cockpit/CockpitModal.tsx") + rd("components/cockpit/IssueCard.tsx"));
 // the Cockpit's category tiles were removed (2.496.442): the top bar's buttons are the chip's one user
 ck("the top bar's category buttons ask categoryChipStyle, and the Cockpit colours no chip of its own",
    /style=\{categoryChipStyle\(cat, !hidden\)\}/.test(hud) && !/categoryChipStyle|categorySurface/.test(cockpit));

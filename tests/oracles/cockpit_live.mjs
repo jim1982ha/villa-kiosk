@@ -18,13 +18,13 @@ const { fmtDuration } = await import("@/components/panels/chartUtils");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const modal = src("components/cockpit/CockpitModal.tsx");
 const body = modal.slice(modal.indexOf("export default function CockpitModal("));
-const branch = body.indexOf('shownTab !== "overview" ?');
+const branch = body.indexOf('shownTab !== "messages" ?');
 ck("the Cockpit window registers the live view itself — once, at the top of its body, before the tab branch: whichever tab shows",
    /\n  useFacilityLiveView\(\);\n/.test(body) && branch > 0 && body.indexOf("useFacilityLiveView();") < branch, body.slice(0, 160));
 const callers = tsFiles(fileURLToPath(new URL("../../src", import.meta.url)))
   .filter((f) => /\buseFacilityLiveView\(\);/.test(readFileSync(f, "utf8")));
 ck("  ...and it is the ONE registrant: no tab registers a second one", callers.length === 1 && /CockpitModal\.tsx$/.test(callers[0]), callers);
-ck("  ...so the (i)'s promise holds on the Overview: its sentence names the window's open cadence, the faster one",
+ck("  ...so the (i)'s promise holds on Messages: its sentence names the window's open cadence, the faster one",
    STORE_ACTIVE_MS < STORE_HEARTBEAT_MS && faultTiming(false).note.includes(`every ${fmtDuration(STORE_ACTIVE_MS)} while it is open`),
    faultTiming(false).note);
 done("✅ the Cockpit's Open issues are read live while the window is open, whichever tab");
