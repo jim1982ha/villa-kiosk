@@ -57,7 +57,8 @@ from .villa_messages import VillaMessages
 from .incident_thread import IncidentThread
 
 from .housekeeping import tidy
-from .kiosk import Kiosk, KioskError
+from .kiosk import Kiosk, KioskError, message_timeout_s
+from .kiosk_messages import KioskMessages
 from .alert_buttons import AlertButtons
 from .outcome import Outcome
 from .voice import Voice
@@ -207,8 +208,13 @@ class Vesta:
         self._villa_tasks: set[asyncio.Task] = set()
         self.villa_messages = VillaMessages(self.state, self.translations, lambda chat: self.notices.lang(chat),
                                             self.delivery.edit, names=lambda: villa_names(self.pack(), self.state.all_entity_names()))
+        # every message written on Telegram is also kept for the tablet, in the background (kiosk_messages.py): the thread
+        # keeps an alert's, an approval's and a snapshot's, the poster a note sent on its own
+        self.messages = KioskMessages(self.kiosk, message_timeout_s)
+        self.thread.mirror = self.messages.keep
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
-                             timezone_name=settings.timezone, edit=self.delivery.edit, translations=self.translations)
+                             timezone_name=settings.timezone, edit=self.delivery.edit, translations=self.translations,
+                             mirror=self.messages.keep)
         # a job asked for in a chat, start to end (chat_jobs.py); what it tells a chat goes titled, through the poster
         self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work, facts=self.chat_facts, poster=self.poster)
         # an approval request from start to end (approvals.py); the siren's gate asks through it too

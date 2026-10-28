@@ -89,6 +89,13 @@ def kiosk_timeout_s() -> float:
                  reached="That exchange fails: a fault not recorded is said so; the next try comes later.",
                  told="person")
 
+def message_timeout_s() -> float:
+    return limit("kiosk.message_timeout_s", 10, unit="seconds", group="run", lo=2, hi=120,
+                 says="How long the agent waits for the VESTA Kiosk to keep a message for the tablet.",
+                 reached="That copy is not kept for the tablet; Telegram's message is unaffected, and the next change "
+                         "of the message tries again.", told="")
+
+
 class KioskError(RuntimeError):
     """What the Kiosk answered, or that it could not be reached. `status`: the answer of a refusal (403: a write its
     proxy forbids, 409: a record that kept changing, 5xx…) — None when the Kiosk could not be reached at all (connection
@@ -469,6 +476,17 @@ class Kiosk:
                     return None
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             raise KioskError(f"POST /agent/v1/fm-document: {type(e).__name__}") from None
+
+    async def keep_message(self, record: dict) -> bool:
+        """One message as it stands now, kept for the tablet (/agent/v1/vesta-message: added, or replacing the record of
+        its key; the Kiosk since 2.496.568). True when kept; False when this Kiosk holds none (an older one answers 404) or
+        refused it. KioskError when it could not be reached. ⚠️ NEVER A REMOVAL: the door only adds or replaces."""
+        status, _ = await self._req("POST", "/agent/v1/vesta-message", record)
+        if status == 200:
+            return True
+        log.warning("The Kiosk did not keep a message for the tablet: it answered %s%s", status,
+                    " (a Kiosk older than 2.496.568 keeps none)" if status == 404 else "")
+        return False
 
     def _ticket_id(self) -> str:
         """A new fault's id ("va-…": written by the VESTA Agent)."""

@@ -40,6 +40,9 @@ class FakeKiosk(Kiosk):
         self.documents: list | None = []
         self._made: list[str] = []
         self._refused: dict[str, tuple[int, str]] = {}   # refuses(): {ticket id: (status, the proxy's sentence)}
+        self.pushed: list[dict] = []           # every message pushed for the tablet, in order (/agent/v1/vesta-message)
+        self.messages: dict[str, dict] = {}    # …and what the tablet holds: the last of each key (the add-on replaces by key)
+        self.keeps_messages = True             # False plays an older Kiosk (404): it keeps none
 
     # ------------------------------------------------------------------ the one thing replaced: the transport
     async def _req(self, method, path, body=None):
@@ -58,6 +61,12 @@ class FakeKiosk(Kiosk):
             return 200, {}
         if path == "/agent/v1/info":
             return 200, dict(self.info)
+        if path == "/agent/v1/vesta-message":
+            if not self.keeps_messages:
+                return 404, {"error": "not found"}
+            self.pushed.append(copy.deepcopy(body))
+            self.messages[body["key"]] = copy.deepcopy(body)
+            return 200, {"ok": True, "seq": len(self.pushed)}
         return 200, {}
 
     def _ticket_id(self) -> str:

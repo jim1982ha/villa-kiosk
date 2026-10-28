@@ -113,7 +113,7 @@ class Outcome:
         fallback = str(e.get("fallback") or "")
         for chat, rec in self.state.kept_messages(key).items():
             title = e.get("title") or rec.get("title") or ""
-            if await self.poster.rewrite(chat, rec["mid"], title, rec.get("to") or "", str(e.get("text") or "")):
+            if await self.poster.rewrite(chat, rec["mid"], title, rec.get("to") or "", str(e.get("text") or ""), key=key):
                 n += 1
                 continue
             if not fallback:
@@ -240,7 +240,10 @@ class Outcome:
                                    thread=int(iid) if iid else None, origin=origin, stage=item.get("stage"),
                                    mark=item.get("mark"), also=going.get(int(iid)) if iid else sent_to.get(id(item)),
                                    title=item.get("title"), told=told.get((int(iid), item.get("stage"))) if iid else None,
-                                   status_in=item.get("status_in") if isinstance(item.get("status_in"), dict) else None)
+                                   status_in=item.get("status_in") if isinstance(item.get("status_in"), dict) else None,
+                                   # ⚠️ KEPT FOR THE TABLET TOO (ticket 25 of "One inbox"): what the agent says on its own
+                                   # (a note, the night check, the digest), not the answer a person asked for in their chat
+                                   keep=(item.get("key") or True) if not (origin and origin.holds) else None)
             # the people the skill asked to answer (result.message first_in_line) — the skill's, never a role named here
             if iid and kb and item.get("first_in_line"):
                 asked.setdefault(int(iid), []).append((chat, bool(mid)))
@@ -309,7 +312,7 @@ class Outcome:
                 # manager's (message_format.ROLES — never the two written out again here)
                 for role in ROLES:
                     if any([bool(await self.poster.post(chat, gate_prompt, status=said, roles={role}, origin=origin,
-                                                        title=SIREN_TITLE)) for chat in route.target(role)]):
+                                                        title=SIREN_TITLE, keep=True)) for chat in route.target(role)]):
                         break
         # ⚠️ ONE HAND MOVES THE CARDS (architecture review, 2026-10-15): a script's fault actions were carried out here,
         # and the repair worked the same cards out from the tasks — two routes, a 2-day "redo the close" window for when

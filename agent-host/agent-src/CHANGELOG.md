@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.359 (28 October 2026)
+
+- kiosk_messages.py (ticket 25 of "One inbox"): Delivery's second sink. Every message the agent writes on Telegram is also
+  kept for the tablet as it stands, one record per thread (`incident:<n>`, `thread:<id>` for an approval or a snapshot,
+  `note:<key or words>` for a note sent on its own), replaced when it is rewritten. Written from the ONE place that draws
+  a copy: IncidentThread (`_post`, `_show`: the incident's own steps; a retry or a redraw in another language is not a
+  step) and Poster (`post` with `keep`, `rewrite` with the skill's `key`); nothing here composes a sentence. In the
+  background with kiosk.message_timeout_s (an alert never waits on it), one push in flight per key, an identical one
+  skipped. Kiosk.keep_message posts /agent/v1/vesta-message (Kiosk 2.496.568; an older one answers 404, the copy is
+  dropped). The agreement gains `vestaMessage` (the record's limits), copied from the Kiosk 2.496.568. Kept even when
+  Telegram took nothing (off, refused). A reply to a person asked in their chat is not kept (ticket 21).
+
 ## 0.6.358 (28 October 2026)
 
 - message_format.STAGE_ICONS read from the agreement (agent-contract.json `stageMarks`, review Q 3): the Kiosk reads an

@@ -14,7 +14,7 @@ from typing import Awaitable, Callable
 from vesta_shared.message_format import UNTITLED, audience, fill_to, pages
 from vesta_shared.status_words import pick
 
-from . import layout
+from . import kiosk_messages, layout
 from .routing import Origin
 from vesta_shared.messaging import telegram_caption_chars, telegram_message_chars
 
@@ -33,9 +33,14 @@ def laid_out(make: Callable[[], object], plain):
         return plain
 
 
+def _b64(photo) -> str | None:
+    """The picture of a message as the tablet's record carries it: the base64 of (base64, mime), else none."""
+    return photo[0] if photo else None
+
+
 class Poster:
     def __init__(self, *, send: Callable[..., Awaitable], thread=None, notices=None, timezone_name: str = "UTC",
-                 edit: Callable[..., Awaitable] | None = None, translations=None):
+                 edit: Callable[..., Awaitable] | None = None, translations=None, mirror: Callable | None = None):
         self.send = send                # delivery.Delivery.send — the message id, or None when nothing arrived
         self.edit = edit                # delivery.Delivery.edit — a message already sent, rewritten (rewrite)
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident or request
@@ -43,19 +48,24 @@ class Poster:
         self.tz = timezone_name         # "{time}" in a message: the villa's time when it is sent
         # translation.Translations: an alert card's own words in the chat's language (owner, 2026-10-23); None: as written
         self.translations = translations
+        # kiosk_messages.KioskMessages.keep (a record): a message sent on its own, kept for the tablet too (ticket 25 of
+        # "One inbox"); None: not kept
+        self.mirror = mirror
 
     async def post(self, chat: int, text: str, *, status: str = "", lead: str = "", roles=(), incident: int | None = None,
                    keyboard: dict | None = None, document: str | None = None, photo=None,
                    thread: int | str | None = None, plain: bool = False, origin: Origin | None = None,
                    stage: str | None = None, mark: str | None = None, also=None,
                    title: str | None = None, told=None, reply_to: int | None = None,
-                   status_in: dict | None = None) -> int | None:
+                   status_in: dict | None = None, keep: str | bool | None = None) -> int | None:
         """The message in `chat`: its heading — who it is for (`roles`), the incident and its history — unless it answers
         the person who asked, in their chat, or is `plain`; its parts laid out (layout.py) to fit ONE Telegram message —
         a photo's or a file's caption included, so the copy recorded is the message sent; then its `thread` (an incident,
         an approval, a snapshot): the earlier copy in this chat goes. `told`: the roles this step of the incident went to
         (its bottom line says them: notice.Notices.bottom). `status_in`: the skill's `status` in other languages
-        ({code: text}) — an alert's copy says the one its chat reads. The message id, or None when nothing arrived."""
+        ({code: text}) — an alert's copy says the one its chat reads. `keep`: a note sent on its own is also kept for the
+        tablet (True; or the skill's own `key`, so a later rewrite replaces it there too) — a reply to a person is not.
+        The message id, or None when nothing arrived."""
         # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
         now = datetime.now(timezone.utc)
         text, status, lead = (layout.fill_time(x, now, self.tz) for x in (text, status, lead))
@@ -76,7 +86,10 @@ class Poster:
         elif incident is None and not plain and (title or (self.notices and not answering)):
             title = title or UNTITLED
             if not (status or lead or thread is not None):
-                return await self._pages(chat, title, to, text, keyboard, document, photo, origin, reply_to)
+                mid = await self._pages(chat, title, to, text, keyboard, document, photo, origin, reply_to)
+                self._keep(keep, kiosk_messages.of_note(kiosk_messages.note_key(keep if isinstance(keep, str) else None, title, text),
+                                                        title, to, text, keyboard=keyboard, photo=_b64(photo)))
+                return mid
             head = layout.head(title, to or "this chat")
         elif incident is not None and self.notices and not plain and not answering:
             head = self.notices.heading(chat, incident, roles, stage, also)
@@ -105,20 +118,37 @@ class Poster:
         mid = await self.send(chat, shown, keyboard=keyboard, document=document, photo=photo,
                               origin=origin, **({"reply_to": reply_to} if reply_to else {}))
         if mid and thread is not None and self.thread is not None:
-            await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard)
+            await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard,
+                                   photo=photo)
             if want:
                 self.translations.later(int(incident), chat, want)
+        elif thread is not None:
+            # ⚠️ THE TABLET TOO WHEN TELEGRAM DID NOT TAKE IT (off, or refused): the thread records only what arrived, and
+            # the tablet is the second place precisely for when Telegram is not there (spec, "Without the internet")
+            self._keep(True, kiosk_messages.of_parts(kiosk_messages.thread_key(thread), p, keyboard=keyboard, photo=_b64(photo)))
+        elif keep:
+            self._keep(keep, kiosk_messages.of_parts(
+                kiosk_messages.note_key(keep if isinstance(keep, str) else None, str((p.get("head") or {}).get("title") or ""),
+                                        text), p, keyboard=keyboard, photo=_b64(photo)))
         return mid
+
+    def _keep(self, keep, record: dict) -> None:
+        """`record` is also kept for the tablet (`mirror`), when `keep` asks for it."""
+        if keep and self.mirror is not None:
+            self.mirror(record)
 
     def to_line(self, chat: int, roles=(), also=None) -> str:
         """The "To:" of a message sent on its own in `chat` — post's, and rewrite's for the same message."""
         return audience(also or (self.notices.roles_for(chat, roles) if self.notices else ()))
 
-    async def rewrite(self, chat: int, message_id: int, title: str, to: str, text: str) -> bool:
+    async def rewrite(self, chat: int, message_id: int, title: str, to: str, text: str, key: str | None = None) -> bool:
         """A titled message already sent, rewritten in place in the same layout (owner, 2026-10-20: a P2 of the night
         check that clears is said on its own message, never a new one). Only a message that was ONE page and still is;
         False when it cannot be (two pages, Telegram off or refusing: an old or deleted message) — the caller says
-        nothing more here: Outcome.rewrite decides the backup."""
+        nothing more here: Outcome.rewrite decides the backup. `key`: the skill's own, under which the message was kept for
+        the tablet: its record is replaced by these words whatever Telegram said."""
+        if key:
+            self._keep(True, kiosk_messages.of_note(kiosk_messages.note_key(key, title, text), title, to, text))
         docs = laid_out(lambda: pages(title, to, text, telegram_message_chars()), [text])
         if self.edit is None or len(docs) != 1:
             return False

@@ -30,7 +30,7 @@ from vesta_shared.limits import limit
 from vesta_shared.messaging import incident_tag
 from vesta_shared.status_words import pick
 
-from . import layout
+from . import kiosk_messages, layout
 
 log = logging.getLogger("vesta.thread")
 
@@ -67,6 +67,10 @@ class IncidentThread:
         # translation.Translations.draw (incident, chat, parts): the alert's own words in the chat's language when they
         # are known, else asked for in the background (owner, 2026-10-23). None: as written
         self.translate = None
+        # kiosk_messages.KioskMessages.keep (a record): the copy as it stands, kept for the tablet too (ticket 25 of "One
+        # inbox"). None: not kept. Called at every change that is the incident's own step, never at a retry or a redraw
+        # in another language (`tell` of _show): the tablet's record is the latest step, not whichever chat was drawn last.
+        self.mirror = None
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock(self, iid: int | str) -> asyncio.Lock:
@@ -74,14 +78,26 @@ class IncidentThread:
         return self._locks.setdefault(str(iid), asyncio.Lock())
 
     async def post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
-                   keyboard: dict | None = None) -> None:
+                   keyboard: dict | None = None, photo=None) -> None:
         """Message `mid`, just sent to `chat` with these `parts` (layout.py), is now incident `iid`'s message there: the
-        earlier one goes."""
+        earlier one goes. `photo`: the picture it carries ((base64, mime): a snapshot), kept for the tablet."""
         async with self._lock(iid):
-            await self._post(iid, chat, mid, parts, buttons=buttons, keyboard=keyboard)
+            await self._post(iid, chat, mid, parts, buttons=buttons, keyboard=keyboard, photo=photo)
+
+    def tell(self, iid: int | str, parts: dict, keyboard: dict | None = None, photo=None) -> None:
+        """Keep the copy as it stands for the tablet (`mirror`): one record per incident, replaced at each step."""
+        if self.mirror is None:
+            return
+        rec = kiosk_messages.of_parts(kiosk_messages.thread_key(iid), parts, keyboard=keyboard,
+                                      photo=photo[0] if photo else None)
+        # ⚠️ WHO IT WENT TO IS EVERY CHAT'S, NOT THE LAST DRAWN'S: each chat's copy says its own "To:" (owner and FM, one
+        # group each); the tablet's one record names them all
+        roles = list(dict.fromkeys(r for _c, copy in self.state.incident_chats(iid)
+                                   for r in kiosk_messages.roles_of((layout.head_of(layout.of(copy).get("head")) or {}).get("to"))))
+        self.mirror({**rec, "roles": roles} if roles else rec)
 
     async def _post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
-                    keyboard: dict | None = None) -> None:
+                    keyboard: dict | None = None, photo=None) -> None:
         old = self.state.incident_message(iid, chat)
         if old and old["mid"] != mid:
             gone = bool(self.delete and await self.delete(chat, old["mid"]))
@@ -95,6 +111,7 @@ class IncidentThread:
         self.state.set_incident_message(iid, chat, {"mid": mid, "parts": parts, "text": layout.render(parts),
                                                     "buttons": buttons, "settled": False,
                                                     **({"kb": keyboard} if buttons and keyboard else {})})
+        self.tell(iid, parts, keyboard if buttons else None, photo)
 
     async def adopt(self, iid: int, chat: int, mid: int, parts: dict, keyboard: dict | None = None) -> None:
         """One of Home Assistant's own messages (a VESTA rule's alert, its all-clear) belongs to incident `iid`: it is
@@ -248,10 +265,12 @@ class IncidentThread:
             for chat, rec in self.state.incident_chats(iid):
                 if chat in skip or not rec.get("mid"):
                     continue
+                tell = True
                 own = layout.of(rec)
                 if chat in quiet:
                     # its own words, its own steps; the title word and "To:" as the incident stands now (retitle)
                     p = {**own, "head": self.retitle(iid, own.get("head") or "", chat) if self.retitle else own.get("head")}
+                    tell = False                                # its own words are not the incident's latest step
                 else:
                     p = {**parts, "limit": own.get("limit")}
                     if head_for:
@@ -267,7 +286,8 @@ class IncidentThread:
                 if layout.render(p) == rec.get("text"):
                     continue
                 live = rec.get("buttons") and not rec.get("settled")
-                n += await self._show(iid, chat, rec, p, keyboard=(keyboard(chat) if live and keyboard else None))
+                n += await self._show(iid, chat, rec, p, keyboard=(keyboard(chat) if live and keyboard else None),
+                                      tell=tell)
             return n
 
     async def translated(self, iid: int | str, chat: int, draw: Callable[[int | str, int, dict], dict]) -> bool:
@@ -282,7 +302,7 @@ class IncidentThread:
             p = draw(iid, chat, layout.of(rec))
             if layout.render(p) == rec.get("text"):
                 return False
-            return await self._show(iid, chat, rec, p)
+            return await self._show(iid, chat, rec, p, tell=False)           # the same step, in another language
 
     async def rewrite(self, iid: int | str, body: str) -> None:
         """Every copy of `iid` says `body` now in its middle part, its heading and status kept (an approved request whose
@@ -291,9 +311,11 @@ class IncidentThread:
             for chat, rec in self.state.incident_chats(iid):
                 await self._show(iid, chat, rec, layout.changed(layout.of(rec), body=body))
 
-    async def _show(self, iid: int | str, chat: int, rec: dict, p: dict, keyboard: dict | None = None) -> bool:
+    async def _show(self, iid: int | str, chat: int, rec: dict, p: dict, keyboard: dict | None = None,
+                    tell: bool = True) -> bool:
         """The copy in `chat` shows `p` now (its buttons gone). The record keeps `p` whatever Telegram said; a copy Telegram
-        did not take is OWED and tried again by `catch_up`.
+        did not take is OWED and tried again by `catch_up`. `tell`: it is the incident's own latest step, so the tablet's
+        record becomes `p` too — whatever Telegram said (the tablet is the second place, not the second try).
 
         ⚠️ RECORDED ONLY WHEN SHOWN (architecture review 21): a refused edit (a network blip) was recorded settled like
         a shown one and never tried again — one chat kept Done / Need help, "Already answered." at every press."""
@@ -314,6 +336,8 @@ class IncidentThread:
             log.info("%s in chat %s: message %s not updated (%s)", iid, chat, rec["mid"],
                      "tried again later" if rec["owed"] else "given up")
         self.state.set_incident_message(iid, chat, rec)
+        if tell:
+            self.tell(iid, p, keyboard)
         return ok
 
     async def catch_up(self) -> int:
@@ -324,7 +348,7 @@ class IncidentThread:
             async with self._lock(iid):
                 rec = self.state.incident_message(iid, chat)        # as it stands now, under its lock
                 if rec and rec.get("owed"):
-                    n += await self._show(iid, chat, rec, layout.of(rec))
+                    n += await self._show(iid, chat, rec, layout.of(rec), tell=False)       # a retry, not a new step
         return n
 
     def shown(self, iid: int | str) -> dict[int, dict]:

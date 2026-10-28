@@ -1,3 +1,13 @@
+## 0.12.370
+
+What you will see:
+- Nothing yet on screen. Every message VESTA writes on Telegram (an alert it took over, its reminders and escalations, a
+  camera snapshot, an approval request, the night check, the morning digest, its notes to you) is now also handed to the
+  tablet's add-on as it stands, and replaced there when VESTA rewrites it. The Messages list shows them in the next
+  tablet release (it needs the tablet's add-on at 2.496.568 or later; an older one simply keeps none).
+- Telegram is not slowed by it: the copy for the tablet goes in the background, and a tablet that is down or slow loses
+  only that copy.
+
 ## 0.12.369
 
 What you will see:
