@@ -34,11 +34,15 @@
 //     roomGlowAndCones whether the map lights a room red and draws a camera's
 //                    cone on a detection: one switch for every tablet (owner,
 //                    2026-10-22)
+//     fullScreenFor, ringShownForS  which announcements take the whole screen
+//                    and for how long: the owner's choice for every tablet
+//                    (ticket 16 of "One inbox"); each tablet may still refuse
+//                    (ringsFullScreen, per device)
 //
 //   PER-DEVICE — describes THIS CLIENT's look/feel, where different answers on
 //   different hardware are correct, not a drift to be reconciled: render
 //   quality (a phone should not inherit a desktop's settings), theme,
-//   eyeHeight/walkSpeed, badgeStyle, showSummaryBar, hiddenCategories,
+//   eyeHeight/walkSpeed, badgeStyle, showSummaryBar, hiddenCategories, ringsFullScreen,
 //   entityIconScale, currentFloor.
 //
 // sh3dRooms/sh3dEntities are excluded: they're DERIVED from the model's
@@ -47,7 +51,8 @@
 // GLB's own payload through a second channel.
 
 import { ingressPath } from "@/ha/ingress";
-import { RECORDS_KEPT_DAYS_DEFAULT, RECORDS_KEPT_DAYS_MAX, type AppConfig, type DeviceGroup } from "./AppConfig";
+import {
+  RECORDS_KEPT_DAYS_DEFAULT, RECORDS_KEPT_DAYS_MAX, RING_SHOWN_FOR_S_DEFAULT, ringShownForOk, type AppConfig, type DeviceGroup } from "./AppConfig";
 import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { backendFetch } from "@/auth/sessionLost";
@@ -86,6 +91,8 @@ interface SharedItems {
   presenceSensor: string;
   recordsKeptDays: number;
   roomGlowAndCones: boolean;
+  fullScreenFor: true;
+  ringShownForS: number;
 }
 
 export type SharedConfigKey = keyof SharedItems;
@@ -144,7 +151,15 @@ const recordsKept: SharedKeyRow<number, number> = {
   empty: RECORDS_KEPT_DAYS_DEFAULT,
 };
 
-/** A plain list of entity ids: its own index — adding one on one device and removing a DIFFERENT one on another must
+/** How long a full-screen announcement holds the screen (AppConfig.ringShownForOk). Its empty is the app's default, so a device on the default proposes nothing. */
+const ringShownFor: SharedKeyRow<number, number> = {
+  index: (v) => ({ value: v }),
+  fromIndex: (items) => items.value ?? RING_SHOWN_FOR_S_DEFAULT,
+  parse: (raw) => (ringShownForOk(raw) ? raw : undefined),
+  empty: RING_SHOWN_FOR_S_DEFAULT,
+};
+
+/** A plain list of entity ids (or of announcement titles): its own index — adding one on one device and removing a DIFFERENT one on another must
  *  not cancel each other out, which is exactly what comparing the two lists wholesale would do. */
 const idList: SharedKeyRow<string[], true> = {
   index: (arr) => Object.fromEntries(arr.map((id) => [id, true as const])),
@@ -190,6 +205,8 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
   presenceSensor: villaText,
   recordsKeptDays: recordsKept,
   roomGlowAndCones: villaSwitchOn,
+  fullScreenFor: idList,
+  ringShownForS: ringShownFor,
 };
 
 /** The AppConfig fields stored centrally, in the one order every document is

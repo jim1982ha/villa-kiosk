@@ -11,7 +11,7 @@
 
 import Window from "@/components/common/Window";
 import { useMemo } from "react";
-import { LayoutDashboard, RefreshCw } from "lucide-react";
+import { LayoutDashboard, RefreshCw, Settings } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import type { Doors } from "@/auth/doors";
@@ -48,6 +48,9 @@ export interface CockpitModalProps {
   onReportProblem: () => void;
   /** The devices whose open faults the Overview marks and scrolls to (a device window's warning). */
   focusFaults?: readonly string[];
+  /** The header's gear: Settings, open on its Messages tab (ticket 16 of "One inbox"); absent for a profile that may
+   *  not open Settings. */
+  onOpenSettings?: () => void;
 }
 
 /** The Cockpit's own view, then the Facility tabs (2.496.273: the Facility
@@ -57,7 +60,7 @@ const OVERVIEW_TAB: ModalTab<CockpitTab> = { id: "overview", label: "Overview", 
 
 export default function CockpitModal({
   onClose, onOpenEntity, doors, tab, onTab, reportFaultFor, onFaultFormOpened,
-  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults,
+  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults, onOpenSettings,
 }: CockpitModalProps) {
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
   const tabs: ModalTab<CockpitTab>[] = doors.facility ? [OVERVIEW_TAB, ...FACILITY_TABS] : [OVERVIEW_TAB];
@@ -88,6 +91,8 @@ export default function CockpitModal({
         {/* Updates Home Assistant has waiting (firmware, add-ons — this one included): in the header, drawn like
             Advanced Settings' header buttons, for the profiles holding `doors.updates` (owner, 2026-10-14). It only
             SAYS so — nothing to press; it used to be a line at the bottom of the Overview. */}
+        {/* the updates waiting and the gear, grouped at the right as Advanced Settings' header buttons are */}
+        <div className="modal-header-actions">
         {updatesAvailable > 0 && (
           <Tip text={updatesTip(updates)}>
             <span className="icon-btn header-icon-btn header-icon-badge" role="status"
@@ -97,6 +102,14 @@ export default function CockpitModal({
             </span>
           </Tip>
         )}
+        {onOpenSettings && (
+          <Tip text="Messages settings">
+            <button type="button" className="icon-btn header-icon-btn" aria-label="Messages settings" onClick={onOpenSettings}>
+              <Settings size={18} aria-hidden />
+            </button>
+          </Tip>
+        )}
+        </div>
       </div>
       {tabs.length > 1 && <ModalTabs tabs={tabs} active={shownTab} onSelect={onTab} label="Cockpit sections" />}
 

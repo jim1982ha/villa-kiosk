@@ -10,18 +10,15 @@ import EntityPicker from "./EntityPicker";
 import RemovablePill from "@/components/common/RemovablePill";
 import Fold from "./Fold";
 import { countOf } from "@/utils/countOf";
+import { withItem } from "@/utils/listToggle";
 
-/** The list with `id` added (once) or removed — the one edit this section makes. */
-export function withDevice(list: readonly string[], id: string, on: boolean): string[] {
-  return on ? (list.includes(id) ? [...list] : [...list, id]) : list.filter((x) => x !== id);
-}
 
 export default function UnavailableByDesign({ heading }: { heading?: ReactNode } = {}) {
   const { config, update } = useConfig();
   const ids = config.unavailableByDesign;
   // as every screen names a device (owner, 2026-10-28: one owner of a device's name; it printed the platform's)
   const name = useEntityLabel();
-  const set = (id: string, on: boolean) => update({ unavailableByDesign: withDevice(ids, id, on) });
+  const set = (id: string, on: boolean) => update({ unavailableByDesign: withItem(ids, id, on) });
   // folded under its title like Grouped devices (owner, 2026-10-22: the same chevron and closed line)
   return (
     <Fold heading={heading} summary={countOf(ids.length, "device")}>

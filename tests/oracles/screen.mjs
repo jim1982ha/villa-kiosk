@@ -105,4 +105,14 @@ console.log("\n  the doors");
   ck("a window this profile may not open never opens", !run(GUEST, { type: "openWindow", window: "configEditor" }).windows.configEditor && !run(GUEST, { type: "openWindow", window: "settings" }).windows.settings);
   ck("the top bar opens the Cockpit on Overview", run(OWNER, { type: "cockpitTab", tab: "faults" }, { type: "openWindow", window: "cockpit", tab: "overview" }).cockpitTab === "overview");
 }
+
+console.log("\n  Settings' tabs (ticket 16 of \"One inbox\"): the profile button opens General, the Cockpit's gear Messages");
+{
+  const gear = run(OWNER, { type: "openWindow", window: "cockpit", tab: "overview" }, { type: "openWindow", window: "settings", settingsTab: "messages" });
+  ck("the Cockpit's gear opens Settings on Messages, over the Cockpit", gear.windows.settings && gear.windows.cockpit && gear.settingsTab === "messages", gear);
+  const again = run(OWNER, { type: "openWindow", window: "settings", settingsTab: "messages" }, { type: "closeWindow", window: "settings" },
+    { type: "openWindow", window: "settings" });
+  ck("  ...the profile button opens it on General, wherever it was left", again.settingsTab === "general", again.settingsTab);
+  ck("  ...a tab chosen in the strip is kept", run(OWNER, { type: "openWindow", window: "settings" }, { type: "settingsTab", tab: "messages" }).settingsTab === "messages");
+}
 done("✅ every move between windows, panels and lists, by value");

@@ -96,6 +96,16 @@
   pointer-events: auto; background: none; border: none; color: var(--text-secondary); cursor: pointer;
   display: flex; padding: 2px; flex: 0 0 auto;
 }
+/* an announcement the owner picked for the whole screen (AnnouncementNotice, ticket 16; its frame the Window kind
+   "screen", its header, body and footer the shell's): the body's words centred, the photo taking what height is left
+   on a phone or a tablet */
+.announcement-full { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; }
+.announcement-full-photo { min-height: 0; max-width: 100%; flex: 0 1 auto; max-height: 60%; border-radius: 12px; object-fit: contain; }
+.announcement-full-title { overflow-wrap: anywhere; }
+.announcement-full-text { margin: 0; font-size: var(--text-xl); white-space: pre-line; overflow-wrap: anywhere; }
+.announcement-full-status { margin: 0; color: var(--text-secondary); }
+.announcement-full .vesta-notice-action { font-size: var(--text-lg); min-height: 56px; padding: 0 28px; }
+@media (max-width: 560px) { .announcement-full-text { font-size: var(--text-lg); } }
 /* a sensor's news belongs to the villa map: never over the fullscreen camera's live picture */
 body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .conn-banner-short { display: none; }

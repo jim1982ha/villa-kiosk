@@ -25,6 +25,10 @@ export interface PendingField<T> {
 }
 
 /** `key`: unique in the dialog (a device's field carries its entity id). */
+/** How long a typed number waits before it is written: long enough to finish typing (a coordinate, a count of
+ *  days, a number of seconds); leaving the field or Enter writes it at once. One pause for every such field. */
+export const FIELD_COMMIT_MS = 1500;
+
 export function usePendingField<T>(key: string, delayMs: number): PendingField<T> {
   const pending = useContext(PendingContext);
   if (!pending) throw new Error("usePendingField must be used inside PendingFields");

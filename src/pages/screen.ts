@@ -14,6 +14,7 @@
 import type { ActivePanel } from "@/types/panel.types";
 import type { Category } from "@/types/scene.types";
 import type { CockpitTab } from "@/components/cockpit/CockpitModal";
+import type { SettingsTab } from "@/components/settings/SettingsModal";
 import type { Doors } from "@/auth/doors";
 import { NO_PANEL, panelNavReducer, reopenOf, type ListRef, type PanelNav } from "./panelNav";
 import { NO_SURFACES, SURFACE_LABEL, mayOpen, surfacesReducer, type Surface, type Surfaces } from "./surfaces";
@@ -28,6 +29,8 @@ export interface Screen {
   /** The Cockpit's tab — kept while it is closed, so Back from a device it
    *  handed over returns to the tab it left. */
   cockpitTab: CockpitTab;
+  /** Settings' tab: General from the profile button, Messages from the Cockpit's gear (ticket 16 of "One inbox"). */
+  settingsTab: SettingsTab;
   /** The device the Overview's "Raise a fault" form should start with (a
    *  device panel's wrench); cleared once the form has opened. */
   faultFor: string | null;
@@ -51,13 +54,14 @@ export interface Screen {
 
 export const START: Screen = {
   nav: NO_PANEL, windows: NO_SURFACES, list: null,
-  cockpitTab: "overview", faultFor: null, ticketFor: null, faultsFocus: null, guestReportFor: null, editorFocus: null,
+  cockpitTab: "overview", settingsTab: "general", faultFor: null, ticketFor: null, faultsFocus: null, guestReportFor: null, editorFocus: null,
   panelReturn: null,
 };
 
 export type ScreenAction =
-  /** Open a window (the Cockpit on `tab`, when given). */
-  | { type: "openWindow"; window: Surface; tab?: CockpitTab }
+  /** Open a window (the Cockpit on `tab`, when given; Settings on `settingsTab`, General when not). */
+  | { type: "openWindow"; window: Surface; tab?: CockpitTab; settingsTab?: SettingsTab }
+  | { type: "settingsTab"; tab: SettingsTab }
   | { type: "closeWindow"; window: Surface }
   | { type: "cockpitTab"; tab: CockpitTab }
   /** A device from the map or the bottom bar: a fresh open, no Back. */
@@ -106,6 +110,7 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
     case "openWindow": {
       if (!mayOpen(a.window, doors)) return s;
       return { ...s, windows: win(s.windows, a.window, true), cockpitTab: a.tab ?? s.cockpitTab,
+        settingsTab: a.window === "settings" ? a.settingsTab ?? "general" : s.settingsTab,
         faultsFocus: a.window === "cockpit" ? null : s.faultsFocus,
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     }
@@ -116,6 +121,7 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
         faultsFocus: a.window === "cockpit" ? null : s.faultsFocus,
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     case "cockpitTab": return { ...s, cockpitTab: a.tab };
+    case "settingsTab": return { ...s, settingsTab: a.tab };
     case "openDevice": return { ...s, nav: panel({ type: "open", panel: a.panel }), panelReturn: a.panel ? null : s.panelReturn };
     case "handOver":
       // ⚠️ THE ORDER IS THE RULE: nothing changes unless a panel opens.

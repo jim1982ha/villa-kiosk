@@ -870,6 +870,7 @@ export default function Dashboard() {
           onTicketEditOpened={() => go({ type: "ticketEditOpened" })}
           onReportProblem={() => go({ type: "reportProblem" })}
           focusFaults={screen.faultsFocus ?? undefined}
+          onOpenSettings={doors.settings ? () => go({ type: "openWindow", window: "settings", settingsTab: "messages" }) : undefined}
         />
       )}
 
@@ -896,6 +897,8 @@ export default function Dashboard() {
           // existed. Nesting is what the stack was built for, so the hazard is
           // deleted rather than worked around.
           onOpenConfigEditor={() => openSurface("configEditor")}
+          tab={screen.settingsTab}
+          onTab={(tab) => go({ type: "settingsTab", tab })}
         />
       )}
 

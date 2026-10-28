@@ -71,6 +71,6 @@ console.log("\n  Maintenance records:");
 ck("its (i) is the section title's, listing everything it deletes; the field's label is the owner's words, with no (i)",
    /<TipTitle title="Maintenance records" tip=\{<>\s*Photos, repaired faults, work done, money spent and messages/.test(advanced)
    && /<label htmlFor="records-kept">How many days tickets, attachments and messages are kept<\/label>/.test(advanced)
-   && !/<InfoTip/.test(advanced.slice(advanced.indexOf("function RecordsKept"), advanced.indexOf("const COORD_COMMIT_MS"))));
+   && !/<InfoTip/.test(advanced.slice(advanced.indexOf("function RecordsKept"), advanced.indexOf("function LogoutAll"))));
 
 done("✅ north under the coordinates, one Bound 3D objects section, one line per telemetry event");

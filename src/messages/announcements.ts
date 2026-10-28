@@ -34,11 +34,57 @@ export interface Announcement {
 
 export interface AnnouncementButton { label: string; command: string }
 
+/** Where a problem is: raised, still open, cleared. null: the announcement says none (a weekly test, a digest). */
+export type Stage = "new" | "existing" | "closed";
+
+/** The mark the layout writes before a stage's status (vesta_message.jinja `vm_icons`, the VESTA Agent's
+ *  message_format.STAGE_ICONS), the longest first: "⚠️ ⚙️" opens with "⚠️". Read from 2026-10-28 on every source that
+ *  fires the announcement (research 01 of "One inbox"): no source without a stage writes one of these marks. */
+const STAGE_MARKS: readonly [string, Stage][] = [["⚠️ ⚙️", "existing"], ["⚠️", "new"], ["✅", "closed"]];
+
+/** An announcement's stage, read from its bottom line; null without one. Pure: tests/oracles/announcements.mjs. */
+export function stageOf(status: string): Stage | null {
+  return STAGE_MARKS.find(([mark]) => status.startsWith(mark))?.[1] ?? null;
+}
+
+/** What "Full screen for" offers (Advanced Settings › Messages): each title the add-on keeps, once, in order, without
+ *  the ones already `picked`. The villa's own words, never named in code. Pure: tests/oracles/announcements.mjs. */
+export function announcedTitles(kept: readonly Announcement[], picked: readonly string[]): string[] {
+  return [...new Set(kept.map((a) => a.title))].filter((t) => t && !picked.includes(t)).sort((x, y) => x.localeCompare(y));
+}
+
 /** How long a new announcement stays on screen as a notice. */
 export const ANNOUNCEMENT_NOTICE_MS = 10_000;
-/** How long a notice stays: one offering a button stays until the villa's rewrite withdraws it (answered, opened,
- *  timed out), or the ✕; any other ANNOUNCEMENT_NOTICE_MS. null = until then. */
-export const noticeLasts = (a: Announcement): number | null => (a.buttons.length ? null : ANNOUNCEMENT_NOTICE_MS);
+/** The settings that decide how an announcement shows (AppConfig: the first two the villa's, Advanced Settings ›
+ *  Messages; the third this tablet's, Settings › Messages). */
+export interface ShowSettings {
+  /** The titles the owner picked to take the whole screen; empty by default. */
+  fullScreenFor: readonly string[];
+  /** How long one of them holds the screen, in seconds ("Ring shown for"). */
+  ringShownForS: number;
+  /** Whether this tablet lets one take the screen ("Rings full screen on this tablet"). */
+  ringsFullScreen: boolean;
+}
+
+/** How an announcement shows: full screen first for `fullScreenMs` (null: not full screen), then a notice for
+ *  `noticeMs` (null: until dismissed or replaced; 0: no notice). */
+export interface HowShown { fullScreenMs: number | null; noticeMs: number | null }
+
+/**
+ * How a new announcement shows (ticket 16 of "One inbox", owner 2026-10-28). A problem (raised or still open, its
+ * stage) or one offering a button (until the villa's rewrite withdraws it) is a notice that stays until dismissed;
+ * anything else a notice for ANNOUNCEMENT_NOTICE_MS. A title the owner picked takes the whole screen first, for "Ring
+ * shown for", on a tablet that allows it; then a notice that stays carries on, any other is gone. A cleared one, or a
+ * `rewrite` of one already shown (a ring answered, timed out, still open), never takes the screen again: it would
+ * hold the screen a second "Ring shown for". Pure: tests/oracles/announcements.mjs.
+ */
+export function noticeFor(a: Announcement, s: ShowSettings, { rewrite = false } = {}): HowShown {
+  const stage = stageOf(a.status);
+  const stays = stage === "new" || stage === "existing" || a.buttons.length > 0;
+  const full = s.ringsFullScreen && !rewrite && stage !== "closed" && s.fullScreenFor.includes(a.title);
+  if (!full) return { fullScreenMs: null, noticeMs: stays ? null : ANNOUNCEMENT_NOTICE_MS };
+  return { fullScreenMs: s.ringShownForS * 1000, noticeMs: stays ? null : 0 };
+}
 
 /** Pause before asking again when the add-on could not be reached. */
 const RETRY_MS = 5_000;

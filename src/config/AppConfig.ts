@@ -170,6 +170,20 @@ export interface AppConfig {
    * their glow either way, and badges, pills and lists are untouched.
    */
   roomGlowAndCones: boolean;
+  /**
+   * The announcements that take the whole screen when they arrive, by their title (messages/announcements noticeFor):
+   * picked by the owner in Advanced Settings › Messages from what the villa has announced, never named in code. The
+   * villa's (owner, 2026-10-28, ticket 16 of "One inbox"). Empty by default: nothing takes the screen until picked.
+   */
+  fullScreenFor: string[];
+  /** How long one of them holds the screen, in seconds ("Ring shown for"); the villa's, RING_SHOWN_FOR_S_DEFAULT. */
+  ringShownForS: number;
+  /**
+   * Whether THIS tablet lets an announcement take the whole screen (Settings › Messages, "Rings full screen on this
+   * tablet"): per tablet, so the bedroom's can refuse at night (owner, 2026-10-28). On by default: "Full screen for"
+   * is empty until the owner picks, so nothing changes before then.
+   */
+  ringsFullScreen: boolean;
   theme: "dark" | "light" | "auto" | "night";
   /** The storey being shown. 1-based; see TeleportPoint.floor for why this
    *  is not a two-value union. */
@@ -346,6 +360,15 @@ export const RECORDS_KEPT_DAYS_DEFAULT = 365;
 /** The longest window the field accepts — ten years, the server's clamp. */
 export const RECORDS_KEPT_DAYS_MAX = 3650;
 
+/** How long a full-screen announcement holds the screen by default, in seconds (owner, 2026-10-28: 60s). */
+export const RING_SHOWN_FOR_S_DEFAULT = 60;
+/** The longest the "Ring shown for" field accepts, in seconds. */
+export const RING_SHOWN_FOR_S_MAX = 600;
+/** A "Ring shown for" the villa may hold: whole seconds from 1 to RING_SHOWN_FOR_S_MAX. The one rule, for the field
+ *  and for what the store holds. */
+export const ringShownForOk = (v: unknown): v is number =>
+  Number.isInteger(v) && (v as number) >= 1 && (v as number) <= RING_SHOWN_FOR_S_MAX;
+
 export const DEFAULT_CONFIG: AppConfig = {
   siteTitle: "",
   latitude: env.VITE_LAT ? Number(env.VITE_LAT) : 0,
@@ -354,6 +377,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   presenceSensor: "",
   recordsKeptDays: RECORDS_KEPT_DAYS_DEFAULT,
   roomGlowAndCones: true,
+  fullScreenFor: [],
+  ringShownForS: RING_SHOWN_FOR_S_DEFAULT,
+  ringsFullScreen: true,
   theme: "auto",
   currentFloor: 1,
   entityMap: ENTITY_MAP,

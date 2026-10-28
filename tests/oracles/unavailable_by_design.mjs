@@ -174,7 +174,7 @@ ck("the list is a shared setting, empty by default — on this device and when t
 const [gate] = elements(parseTsx("App.tsx"), "ProfileGate");
 ck("  ...handed to the store from inside the sign-in gate (the history read needs the session)",
    !!gate && childTags(gate).includes("UnavailableByDesignSync"));
-const { withDevice } = await import("@/components/settings/UnavailableByDesign");
+const { withItem: withDevice } = await import("@/utils/listToggle");
 ck("  ...picked in Advanced Settings: added once, removed",
    withDevice(["a.b"], "a.b", true).join() === "a.b" && withDevice(["a.b"], "c.d", true).join() === "a.b,c.d"
    && withDevice(["a.b", "c.d"], "a.b", false).join() === "c.d");
