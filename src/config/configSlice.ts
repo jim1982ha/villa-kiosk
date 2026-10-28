@@ -136,7 +136,7 @@ export type ReplacedSubject = { device: string } | { setting: string };
 /** The villa's single-value settings, by the name their control shows (Settings, Advanced Settings). */
 const SETTING_NAMES: Partial<Record<SharedConfigKey, string>> = {
   latitude: "The villa's location", longitude: "The villa's location", northOffsetDeg: "Model north offset",
-  presenceSensor: "Villa presence", recordsKeptDays: "Ticket attachment days", roomGlowAndCones: "Room glow",
+  presenceSensor: "Villa presence", recordsKeptDays: "Days records are kept", roomGlowAndCones: "Room glow",
 };
 
 /** The device an item of a shared key is about (its id, or the entity a mesh or group stands for). */

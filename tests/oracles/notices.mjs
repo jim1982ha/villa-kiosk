@@ -30,13 +30,14 @@ const uses = [["components/hud/ConnectionBanner.tsx", /<NoticeView tone="unavail
   ["components/hud/UpdateBanner.tsx", /<NoticeView tone="info"[\s\S]*?onTap=\{applyUpdate\}/],
   ["components/hud/ServiceErrorToast.tsx", /<NoticeView tone="alert" role="alert"/],
   ["components/hud/AppNotice.tsx", /<NoticeView tone=\{message\.tone\}/],
+  ["components/hud/AnnouncementNotice.tsx", /<NoticeView tone="info"/],
   ["components/canvas/BabylonCanvas.tsx", /<Notice tone="alert" role="alert"[\s\S]*?onDismiss=/],
   ["components/settings/TelemetryPanel.tsx", /<NoticeView tone="info"/]];
-ck("the connection, a new version, a failed tap, a sensor, the floor-plan sync and Settings' own all draw the one notice",
+ck("the connection, a new version, a failed tap, an announcement, a sensor, the floor-plan sync and Settings' own all draw the one notice",
    uses.every(([f, re]) => re.test(src(f))), uses.filter(([f, re]) => !re.test(src(f))).map(([f]) => f));
 const dash = src("pages/Dashboard.tsx");
 ck("  ...the villa view's own sit in ONE column, the most lasting first",
-   /<NoticeStack>\s*<ConnectionBanner \/>\s*<UpdateBanner \/>\s*<ServiceErrorToast \/>\s*<AppNotice /.test(dash));
+   /<NoticeStack>\s*<ConnectionBanner \/>\s*<UpdateBanner \/>\s*<ServiceErrorToast \/>\s*<AnnouncementNotice \/>\s*<AppNotice /.test(dash));
 ck("  ...a motion notice is the map's \"active\", news is \"info\"",
    /setNotice\(\{ text: room \? `Motion detected · \$\{room\}` : `Motion detected · \$\{label\}`, tone: "active" \}\)/.test(dash) && /isn't modelled yet, coming soon\.`, tone: "info" \}/.test(dash));
 const css = ["styles/01-base.css", "styles/02-hud.css", "styles/05-layout.css", "styles/08-shared.css"].map(src).join("\n");

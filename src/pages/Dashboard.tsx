@@ -13,6 +13,7 @@ import RoomLabel from "@/components/hud/RoomLabel";
 import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
 import ConnectionBanner from "@/components/hud/ConnectionBanner";
 import UpdateBanner from "@/components/hud/UpdateBanner";
+import AnnouncementNotice from "@/components/hud/AnnouncementNotice";
 import AppNotice, { AppNoticeContext, type AppNoticeMessage } from "@/components/hud/AppNotice";
 import { NoticeStack } from "@/components/hud/Notice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
@@ -725,11 +726,13 @@ export default function Dashboard() {
 
       {/* EVERY notice of the villa view, in one column under the top bar, drawn by one piece (Notice) — the most
           lasting first: the connection (the only signal that survives the phone tier, where the top bar's dot is
-          hidden), a new version, a failed tap, then what just happened. The 3D canvas's own joins it. */}
+          hidden), a new version, a failed tap, what the villa announced, then what just happened. The 3D canvas's
+          own joins it. */}
       <NoticeStack>
         <ConnectionBanner />
         <UpdateBanner />
         <ServiceErrorToast />
+        <AnnouncementNotice />
         <AppNotice message={notice} onExpire={() => setNotice(null)} />
       </NoticeStack>
 

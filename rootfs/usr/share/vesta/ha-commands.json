@@ -10,6 +10,8 @@
   ],
   "_events": "The ONLY event types a non-owner session may subscribe to (subscribe_events), and the only bus events the proxy relays to one: the kiosk listens to state changes and to the registries changing, nothing else. Default deny: any other type, or a subscription to every event (no event_type), is refused, so a guest never reads the messages people send the villa's bot, nor the actions anyone takes.",
   "events": ["state_changed", "entity_registry_updated", "device_registry_updated", "area_registry_updated", "floor_registry_updated"],
+  "_announcement": "The event the villa's automations fire for each announcement (the doorbell, an alarm, the weekly test) beside their Telegram message: its `message` is the finished text. The add-on itself listens to it and keeps each one (supervisor-proxy.py, /announcements); it is NOT in `events`, so no page hears it from the bus.",
+  "announcement": "vesta_message",
   "_camera": "Every command that opens a camera's picture; each also needs the viewCameras capability.",
   "camera": [
     "camera/stream", "camera/capabilities",

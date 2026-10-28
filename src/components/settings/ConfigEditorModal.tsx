@@ -187,8 +187,9 @@ function RecordsKept() {
   // label and field on one line, the field on the right (owner, 2026-10-22)
   return (
     <div className="settings-field-row">
-      {/* the owner's words (2026-10-22); its (i) is the section title's */}
-      <label htmlFor="records-kept">How many days Ticket attachment must be saved (in days)</label>
+      {/* the owner's words (2026-10-22), widened to messages (2026-10-28: one number for every record kept); its (i)
+          is the section title's */}
+      <label htmlFor="records-kept">How many days tickets, attachments and messages are kept</label>
       <input
         id="records-kept" inputMode="numeric" className="field-narrow"
         value={field.shown ?? String(config.recordsKeptDays)}
@@ -417,8 +418,8 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
         {tab === "system" && roleCan(role, "editConfig") && (
           <>
             <TipTitle title="Maintenance records" tip={<>
-              Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
-              task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
+              Photos, repaired faults, work done, money spent and messages older than this are deleted.
+              0 keeps them for ever. A task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
             </>} />
             <RecordsKept />
 

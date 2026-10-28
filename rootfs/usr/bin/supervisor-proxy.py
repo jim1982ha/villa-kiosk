@@ -3651,6 +3651,163 @@ async def agent_status_handler(request: web.Request) -> web.Response:
     return web.json_response(_agent_presence(), headers={"Cache-Control": "no-store"})
 
 
+# ── The villa's announcements (ha-commands.json `announcement`) ─────────────
+# What the villa's automations announce — the doorbell, an alarm, the weekly test — as the one event they fire beside
+# their Telegram message. ⚠️ ONE LISTENER, AND IT IS THIS PROCESS (owner, 2026-10-28, "One inbox"): not each page,
+# which would lose what arrived while no tablet was open and would have to hear the bus event itself (a guest session
+# relayed a raw bus event is the leak 2.496.556 closed); not the VESTA Agent, so a ring reaches the tablet with the
+# Agent stopped. Kept for the villa's records-kept days, like the Facility record; a page reads the store, and waits on
+# it for the next one (ANNOUNCEMENT_WAIT_S), so the event type never joins the non-owner `events` list.
+ANNOUNCEMENT_EVENT = str(HA_COMMANDS.get("announcement") or "")
+#: One announcement's finished text, at most (the layout's HTML; a Telegram message is 4096 characters).
+ANNOUNCEMENT_TEXT_MAX = 16_000
+ANNOUNCEMENTS_MAX_BYTES = 2_000_000
+ANNOUNCEMENTS = JsonStore("announcements.json", [], ANNOUNCEMENTS_MAX_BYTES + ANNOUNCEMENT_TEXT_MAX)
+#: How long a page's read waits for the next announcement before answering "nothing new" (under every proxy's idle
+#: timeout on the way: Ingress, nginx's 60s, a tunnel's 100s).
+ANNOUNCEMENT_WAIT_S = 25
+#: The listener's pause before reconnecting after the villa's system went away, doubled up to the ceiling.
+ANNOUNCEMENT_RETRY_S = (5, 60)
+
+
+def _announcement_record(event, seq: int) -> dict | None:
+    """The record kept for one bus event, or None when it is not an announcement. Pure — tests/store-doors.py
+    drives it. `seq` orders them: a page asks for what came after the last one it holds."""
+    if not ANNOUNCEMENT_EVENT or not isinstance(event, dict) or event.get("event_type") != ANNOUNCEMENT_EVENT:
+        return None
+    data = event.get("data")
+    message = data.get("message") if isinstance(data, dict) else None
+    if not isinstance(message, str) or not message.strip():
+        return None
+    at = event.get("time_fired")
+    return {"seq": seq, "at": at if isinstance(at, str) else _now_iso(), "message": message[:ANNOUNCEMENT_TEXT_MAX]}
+
+
+def _announcements_kept(items: list, now: float, days: int, max_bytes: int) -> list:
+    """The announcements still kept: none older than `days` (0 = for ever), then the newest that fit `max_bytes`.
+    Pure — tests/store-doors.py drives it."""
+    kept = [a for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)]
+    if days > 0:
+        cutoff = now - days * 86400
+        kept = [a for a in kept if (_iso_epoch(a.get("at")) or now) >= cutoff]
+    return _telemetry_ring_after(kept, len(kept), max_bytes)
+
+
+def _announcements_tidy(items) -> list:
+    return _announcements_kept(items if isinstance(items, list) else [], time.time(),
+                               _evidence_retention_days(), ANNOUNCEMENTS_MAX_BYTES)
+
+
+async def _record_announcement(app: web.Application, event) -> dict | None:
+    """Keep one announcement and wake every page waiting for it."""
+    if _announcement_record(event, 0) is None:
+        return None
+    made: dict = {}
+
+    def change(stored):
+        stored = stored if isinstance(stored, list) else []
+        last = max((a["seq"] for a in stored if isinstance(a, dict) and isinstance(a.get("seq"), int)), default=0)
+        made["rec"] = _announcement_record(event, last + 1)
+        return _announcements_tidy(stored + [made["rec"]])
+
+    try:
+        await ANNOUNCEMENTS.update(change)
+    except StoreUnreadable:
+        # Not a record anyone else writes: a corrupt file starts again rather than lose every ring from here on.
+        made["rec"] = _announcement_record(event, 1)
+        await ANNOUNCEMENTS.replace([made["rec"]])
+    woken = app["announced"]
+    app["announced"] = asyncio.Event()
+    woken.set()
+    return made["rec"]
+
+
+async def _listen_announcements(app: web.Application) -> None:
+    """The add-on's own subscription to the announcement event, for its whole life; reconnects when the villa's
+    system restarts. Says each change of state once, never once per retry."""
+    if not ANNOUNCEMENT_EVENT:
+        print("[supervisor-proxy] announcements: no event named in ha-commands.json, none are kept", flush=True)
+        return
+    pause, ceiling = ANNOUNCEMENT_RETRY_S
+    wait, said = pause, None
+    while True:
+        try:
+            async with app["session"].ws_connect(
+                f"ws://{SUPERVISOR}/core/websocket", headers=AUTH, heartbeat=30,
+            ) as ws:
+                await ws.receive_json(timeout=30)                       # auth_required
+                await ws.send_json({"type": "auth", "access_token": TOKEN})
+                if (await ws.receive_json(timeout=30)).get("type") != "auth_ok":
+                    raise ConnectionError("the villa's system refused the add-on's token")
+                await ws.send_json({"id": 1, "type": "subscribe_events", "event_type": ANNOUNCEMENT_EVENT})
+                if not (await ws.receive_json(timeout=30)).get("success"):
+                    raise ConnectionError("the villa's system refused the subscription")
+                if said != "on":
+                    print("[supervisor-proxy] announcements: listening", flush=True)
+                    said = "on"
+                wait = pause
+                async for msg in ws:
+                    if msg.type != WSMsgType.TEXT:
+                        break
+                    try:
+                        obj = json.loads(msg.data)
+                    except ValueError:
+                        continue
+                    if isinstance(obj, dict) and obj.get("type") == "event":
+                        try:
+                            await _record_announcement(app, obj.get("event"))
+                        except (OSError, StoreTooLarge) as exc:
+                            # One not kept, the listener goes on: a full disk must not also lose the next ring.
+                            print(f"[supervisor-proxy] announcements: one not kept ({type(exc).__name__})", flush=True)
+                raise ConnectionError("the villa's system closed the connection")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — any failure here means "reconnect", never "stop listening"
+            if said != "off":
+                print(f"[supervisor-proxy] announcements: not listening ({type(exc).__name__}: {exc}); retrying",
+                      flush=True)
+                said = "off"
+        await asyncio.sleep(wait)
+        wait = min(wait * 2, ceiling)
+
+
+async def announcements_handler(request: web.Request) -> web.Response:
+    """`{"announcements": [...], "last": seq}` — every profile. With `?after=<seq>`, only the newer ones, and the
+    answer waits up to ANNOUNCEMENT_WAIT_S for one to arrive: the tablet hears a ring the moment it is kept."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    try:
+        after = int(request.query["after"]) if "after" in request.query else None
+    except ValueError:
+        return web.json_response({"error": "after must be a number"}, status=400)
+
+    def answer() -> tuple[list, int, bool]:
+        stored = ANNOUNCEMENTS.read()
+        items = _announcements_tidy(stored)
+        last = max((a["seq"] for a in items), default=0)
+        pruned = isinstance(stored, list) and len(items) < len(stored)
+        return [a for a in items if after is None or a["seq"] > after], last, pruned
+
+    # Taken BEFORE the read: one kept between the read and the wait has already set this event, never a newer one.
+    announced = request.app["announced"]
+    items, last, pruned = await asyncio.to_thread(answer)
+    if pruned:
+        # Past the records-kept days: deleted now, under the store's lock, not at the next ring (a "keep for ever"
+        # set afterwards must not bring them back).
+        try:
+            await ANNOUNCEMENTS.update(_announcements_tidy)
+        except (StoreUnreadable, StoreTooLarge, OSError):
+            pass
+    # A stored `last` below the page's own means the store started again (a corrupt file, a reinstall): answer at once.
+    if after is not None and not items and last >= after:
+        try:
+            await asyncio.wait_for(announced.wait(), ANNOUNCEMENT_WAIT_S)
+        except asyncio.TimeoutError:
+            pass
+        items, last, _ = await asyncio.to_thread(answer)
+    return web.json_response({"announcements": items, "last": last}, headers={"Cache-Control": "no-store"})
+
+
 # ── The villa's critical devices (agent-contract.json criticalDevices) ───────
 # ⚠️ ONE LIST (owner, 2026-10-18 — architecture review, offline devices #2): the
 # Kiosk painted every offline device red, the agent's night check called locks,
@@ -3924,11 +4081,14 @@ def build_app(data_dir: str | None = None) -> web.Application:
             print(f"[supervisor-proxy] removed retired file(s): {gone}", flush=True)
         await _learn_own_version(a["session"])
         a["light_scenes"] = asyncio.create_task(_learn_light_scenes(a["session"]))
+        a["announced"] = asyncio.Event()
+        a["announcements"] = asyncio.create_task(_listen_announcements(a))
         if (warning := _agent_config_warning()) is not None:
             print(f"[supervisor-proxy] {warning}", flush=True)
 
     async def on_cleanup(a: web.Application) -> None:
         a["light_scenes"].cancel()
+        a["announcements"].cancel()
         await a["session"].close()
 
     app.on_startup.append(on_start)
@@ -3957,6 +4117,8 @@ def build_app(data_dir: str | None = None) -> web.Application:
     # The Kiosk's side of the VESTA Agent (owner and facility manager).
     app.router.add_get("/critical-devices", critical_devices_handler)
     app.router.add_get("/agent-status", agent_status_handler)
+    # The villa's announcements, kept by this process (every profile).
+    app.router.add_get("/announcements", announcements_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
     app.router.add_get("/agent/v1/info", agent_info_handler)

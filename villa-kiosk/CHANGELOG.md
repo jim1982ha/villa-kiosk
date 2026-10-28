@@ -1,3 +1,13 @@
+## 2.496.557
+
+What you will see:
+- When the villa announces something on Telegram (the doorbell, an alarm, the weekly test), every tablet and phone
+  showing VESTA now shows it too, for 10s, under the top bar: its title and the first line of what it says. It works
+  whatever profile is signed in, and with VESTA's assistant stopped. A page you reload does not show the last one
+  again.
+- Settings › Advanced › System › Maintenance records: the field is now "How many days tickets, attachments and messages
+  are kept". What the villa announces is kept that long too.
+
 ## 2.496.556
 
 What you will see:

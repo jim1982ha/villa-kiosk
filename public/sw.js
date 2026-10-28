@@ -194,7 +194,7 @@ self.addEventListener("activate", (event) => {
 //   asset    — everything else of ours: cache first, refreshed behind.
 const NEVER_CACHE = [
   "/device-config", "/fm-data", "/telemetry", "/addon-config", "/model-upload",
-  "/agent-status", "/kiosk-rooms", "/critical-devices", "/healthz",
+  "/agent-status", "/kiosk-rooms", "/critical-devices", "/healthz", "/announcements",
 ];
 // "/fm-document/": a fault's report — deleted with its fault (2.496.326), so never kept on a device after it
 const NEVER_CACHE_FRAGMENTS = ["/api/", "/auth/", "/agent/v1/", "camera_proxy", "/fm-document/"];

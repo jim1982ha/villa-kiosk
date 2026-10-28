@@ -198,6 +198,62 @@ async def main() -> None:
     ck("  ...and the published window says it: repairs 0 (for ever)", body.get("retention") == {"clearedDays": 90, "repairedDays": 0, "recordsDays": 0},
        body.get("retention"))
 
+    # ── /announcements: the villa's announcements, kept by the add-on (ticket 13, 2026-10-28) ──────────────────────
+    # Driven through the add-on's own recorder (what its listener calls for each bus event) and read over HTTP.
+    print("  /announcements:")
+    app = client.server.app
+    ev = lambda msg, at=None, et=proxy.ANNOUNCEMENT_EVENT: {
+        "event_type": et, "data": {"message": msg}, **({"time_fired": at} if at else {})}
+    status, _ = await call("GET", "/announcements", {})
+    ck("no session: refused", status == 401, status)
+    status, body = await call("GET", "/announcements", guest)
+    ck("never written: a guest reads none, last 0", status == 200 and body == {"announcements": [], "last": 0},
+       (status, body))
+    ck("the event it keeps is named in the one table", proxy.ANNOUNCEMENT_EVENT == proxy.HA_COMMANDS.get("announcement")
+       and bool(proxy.ANNOUNCEMENT_EVENT) and proxy.ANNOUNCEMENT_EVENT not in proxy.ALLOWED_EVENT_TYPES)
+    await proxy._record_announcement(app, ev("<b>One</b>"))
+    await proxy._record_announcement(app, ev("<b>Other</b>", et="telegram_text"))
+    await proxy._record_announcement(app, ev("   "))
+    status, body = await call("GET", "/announcements", ops)
+    ck("an announcement is kept; another event type and an empty text are not",
+       [a["message"] for a in body["announcements"]] == ["<b>One</b>"] and body["last"] == 1, body)
+
+    async def later():
+        await asyncio.sleep(0.3)
+        await proxy._record_announcement(app, ev("<b>Two</b>"))
+    t0 = asyncio.get_running_loop().time()
+    (status, body), _ = await asyncio.gather(call("GET", "/announcements?after=1", guest), later())
+    waited = asyncio.get_running_loop().time() - t0
+    ck("a read after the last one waits for the next and answers it at once",
+       status == 200 and [a["message"] for a in body["announcements"]] == ["<b>Two</b>"] and body["last"] == 2
+       and waited < 5, (status, body, round(waited, 2)))
+    proxy.ANNOUNCEMENT_WAIT_S = 0.2
+    status, body = await call("GET", "/announcements?after=2", guest)
+    ck("  ...and answers none when nothing came", status == 200 and body == {"announcements": [], "last": 2}, body)
+    status, body = await call("GET", "/announcements?after=9", guest)
+    ck("  ...but at once when the page holds more than the store (it started again)", body["announcements"] == []
+       and body["last"] == 2, body)
+    status, _ = await call("GET", "/announcements?after=x", guest)
+    ck("  ...and refuses an after that is no number", status == 400, status)
+    old = "2020-01-01T00:00:00+00:00"
+    await proxy._record_announcement(app, ev("<b>Old</b>", at=old))
+    status, body = await call("PUT", "/device-config", owner, {"config": {"recordsKeptDays": 30}})
+    status, body = await call("GET", "/announcements", guest)
+    ck("one older than the records-kept days is no longer kept",
+       [a["message"] for a in body["announcements"]] == ["<b>One</b>", "<b>Two</b>"], body)
+    status, body = await call("PUT", "/device-config", owner, {"config": {"recordsKeptDays": 0}})
+    status, body = await call("GET", "/announcements", guest)
+    ck("  ...and it is deleted, not hidden: keeping for ever afterwards does not bring it back",
+       "<b>Old</b>" not in [a["message"] for a in body["announcements"]], body)
+    await proxy._record_announcement(app, ev("<b>Old</b>", at=old))
+    status, body = await call("GET", "/announcements", guest)
+    ck("  ...and with records kept for ever, it is", "<b>Old</b>" in [a["message"] for a in body["announcements"]]
+       and body["last"] == 3, body)
+    (DATA / "announcements.json").write_text("{not json")
+    await proxy._record_announcement(app, ev("<b>After</b>"))
+    ck("a corrupt store starts again with the next one", on_disk("announcements.json")[0]["message"] == "<b>After</b>",
+       (DATA / "announcements.json").read_text()[:80])
+
     await client.close()
 
 
