@@ -1,3 +1,9 @@
+## 0.12.369
+
+What you will see:
+- Nothing changes on screen. VESTA now reads its alert icons (⚠️, ⚠️ ⚙️, ✅) from the list it shares with the tablet,
+  so the tablet always reads a cleared alarm as cleared.
+
 ## 0.12.368
 
 What you will see:
