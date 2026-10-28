@@ -69,7 +69,9 @@ def test_an_alert_it_took_over_is_kept_and_a_reminder_replaces_it(agent, kiosk):
     scenario(agent, alert)
     (rec,) = kiosk.messages.values()
     assert rec["key"] == "incident:1" and rec["title"].startswith("#1-P2") and SUMMARY in rec["body"]
-    assert rec["roles"] == ["FM"] and rec["stage"] == "new" and rec["at"], rec
+    assert rec["roles"] == ["FM"] and rec["to"] == "FM" and rec["stage"] == "new" and rec["at"], rec
+    form = kiosk_messages.agreement.section("vestaMessage")["incidentKey"]
+    assert rec["key"] == form.replace("{number}", "1"), "the key in the agreement's form, the one the tablet reads"
     assert {b["kind"] for b in rec["buttons"]} == {"i"} and all(b["label"] and b["id"].startswith("1:") for b in rec["buttons"])
     assert "callback_data" not in str(rec) and "inline_keyboard" not in str(rec), "VESTA's button kind and id, nothing else"
     scenario(agent, tick_20 := (lambda v: tick(v, 20)))

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.362 (28 October 2026)
+
+- DRY scan of "One inbox" (owner, 2026-10-28): kiosk_messages.thread_key reads the agreement's `vestaMessage.incidentKey`
+  (the form the Kiosk reads, copied from 2.496.573); one `_finished` cuts every text, reads the roles from the "To:"
+  and stamps the time for both record kinds; the record carries `to` as Telegram shows it; one `photo_b64` for the
+  thread and the poster (posting._b64 removed).
+
 ## 0.6.361 (28 October 2026)
 
 - Tickets 26-27 of "One inbox": an incident's record for the tablet names the villa's automation runs it took over

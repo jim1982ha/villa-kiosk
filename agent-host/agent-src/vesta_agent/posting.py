@@ -33,11 +33,6 @@ def laid_out(make: Callable[[], object], plain):
         return plain
 
 
-def _b64(photo) -> str | None:
-    """The picture of a message as the tablet's record carries it: the base64 of (base64, mime), else none."""
-    return photo[0] if photo else None
-
-
 class Poster:
     def __init__(self, *, send: Callable[..., Awaitable], thread=None, notices=None, timezone_name: str = "UTC",
                  edit: Callable[..., Awaitable] | None = None, translations=None, mirror: Callable | None = None):
@@ -88,7 +83,7 @@ class Poster:
             if not (status or lead or thread is not None):
                 mid = await self._pages(chat, title, to, text, keyboard, document, photo, origin, reply_to)
                 self._keep(keep, kiosk_messages.of_note(kiosk_messages.note_key(keep if isinstance(keep, str) else None, title, text),
-                                                        title, to, text, keyboard=keyboard, photo=_b64(photo)))
+                                                        title, to, text, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)))
                 return mid
             head = layout.head(title, to or "this chat")
         elif incident is not None and self.notices and not plain and not answering:
@@ -125,11 +120,11 @@ class Poster:
         elif thread is not None:
             # ⚠️ THE TABLET TOO WHEN TELEGRAM DID NOT TAKE IT (off, or refused): the thread records only what arrived, and
             # the tablet is the second place precisely for when Telegram is not there (spec, "Without the internet")
-            self._keep(True, kiosk_messages.of_parts(kiosk_messages.thread_key(thread), p, keyboard=keyboard, photo=_b64(photo)))
+            self._keep(True, kiosk_messages.of_parts(kiosk_messages.thread_key(thread), p, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)))
         elif keep:
             self._keep(keep, kiosk_messages.of_parts(
                 kiosk_messages.note_key(keep if isinstance(keep, str) else None, str((p.get("head") or {}).get("title") or ""),
-                                        text), p, keyboard=keyboard, photo=_b64(photo)))
+                                        text), p, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)))
         return mid
 
     def _keep(self, keep, record: dict) -> None:

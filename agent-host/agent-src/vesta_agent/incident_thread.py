@@ -27,6 +27,7 @@ import asyncio
 import logging
 
 from vesta_shared.limits import limit
+from vesta_shared.message_format import AND
 from vesta_shared.messaging import incident_tag
 from vesta_shared.status_words import pick
 
@@ -97,17 +98,17 @@ class IncidentThread:
             return
         self._told[str(iid)] = (parts, keyboard, photo)
         rec = kiosk_messages.of_parts(kiosk_messages.thread_key(iid), parts, keyboard=keyboard,
-                                      photo=photo[0] if photo else None)
+                                      photo=kiosk_messages.photo_b64(photo))
         # ⚠️ THE VILLA'S OWN MESSAGES IT STANDS FOR (tickets 26-27 of "One inbox", owner 2026-10-28: "update the existing
         # card, the same way it is done on Telegram"): every run of the villa's alert this incident took over, so the
         # tablet shows this one card in place of the villa's alert, its repeat and its all-clear
         if runs := self.state.incident_runs(iid):
             rec["takes"] = runs[-int(kiosk_messages.limit("takes") or len(runs)):]
         # ⚠️ WHO IT WENT TO IS EVERY CHAT'S, NOT THE LAST DRAWN'S: each chat's copy says its own "To:" (owner and FM, one
-        # group each); the tablet's one record names them all
+        # group each); the tablet's one record names them all, in the words a "To:" line uses (message_format.audience)
         roles = list(dict.fromkeys(r for _c, copy in self.state.incident_chats(iid)
                                    for r in kiosk_messages.roles_of((layout.head_of(layout.of(copy).get("head")) or {}).get("to"))))
-        self.mirror({**rec, "roles": roles} if roles else rec)
+        self.mirror({**rec, "roles": roles, "to": AND.join(roles)} if roles else rec)
 
     async def _post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
                     keyboard: dict | None = None, photo=None) -> None:

@@ -77,12 +77,11 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
     if isinstance(tr, dict) and tr.get("lang") and isinstance(tr.get("body"), str) and tr["body"].strip():
         languages.setdefault(tr["lang"], {})["body"] = tr["body"].strip()
     rec = {
-        "key": key, "title": _cut(layout.title_line(h), "title") if h else "",
-        "roles": _lines(roles_of(h["to"]), "roles", "role") if h else [],
-        "lead": _cut(p.get("lead"), "lead"), "body": _cut(layout.body_shown(p, h), "body"),
+        "key": key, "title": layout.title_line(h) if h else "", "to": h["to"] if h else "",
+        "lead": p.get("lead"), "body": layout.body_shown(p, h),
         "status": _lines([*(h["history"] if h else []), status], "status", "statusLine"),
         "stage": (h or {}).get("word") or said.get("stage") or "", "mark": p.get("mark") or "",
-        "buttons": buttons_of(keyboard), "languages": languages, "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "buttons": buttons_of(keyboard), "languages": languages,
     }
     return _finished(rec, photo)
 
@@ -91,9 +90,8 @@ def of_note(key: str, title: str, to: str, text: str, *, status: str = "", lead:
             photo: str | None = None) -> dict:
     """The record of a message sent on its own (a note to the owner, the night check's message, the morning digest): its
     title, who it is for, its words as sent. `key`: the thread it is (the skill's `key`, else its words)."""
-    rec = {"key": key, "title": _cut(title, "title"), "roles": _lines(roles_of(to), "roles", "role"),
-           "lead": _cut(lead, "lead"), "body": _cut(text, "body"), "status": _lines([status], "status", "statusLine"),
-           "buttons": buttons_of(keyboard), "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    rec = {"key": key, "title": title, "to": to, "lead": lead, "body": text,
+           "status": _lines([status], "status", "statusLine"), "buttons": buttons_of(keyboard)}
     return _finished(rec, photo)
 
 
@@ -106,12 +104,23 @@ def note_key(key: str | None, title: str, text: str) -> str:
 
 
 def thread_key(iid) -> str:
-    """The thread of an incident (its number), or of an approval or a snapshot (their own ids)."""
-    return f"incident:{iid}" if str(iid).isdigit() else f"thread:{iid}"
+    """The thread of an incident (its number, in the agreement's form `vestaMessage.incidentKey`, the one the tablet
+    reads), or of an approval or a snapshot (their own ids)."""
+    form = str(agreement.section("vestaMessage").get("incidentKey") or "incident:{number}")
+    return form.replace("{number}", str(iid)) if str(iid).isdigit() else f"thread:{iid}"
+
+
+def photo_b64(photo) -> str | None:
+    """A message's picture ((base64, mime), as Delivery sends it) as the record carries it: its base64; none without."""
+    return photo[0] if photo else None
 
 
 def _finished(rec: dict, photo: str | None) -> dict:
-    """The record without its empty fields (the Kiosk reads a missing one as none), the photo (base64) added."""
+    """⚠️ ONE FINISH FOR EVERY RECORD: its texts cut at the agreement's limits, who it is for read from its "To:", when it
+    was drawn, its empty fields left out (the Kiosk reads a missing one as none), the photo (base64) added."""
+    rec = {**rec, **{f: _cut(rec.get(f), f) for f in ("title", "to", "lead", "body")}}
+    rec["roles"] = _lines(roles_of(rec["to"]), "roles", "role")
+    rec["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     rec = {k: v for k, v in rec.items() if v not in ("", [], {}, None)}
     return {**rec, "photo": photo} if photo else rec
 

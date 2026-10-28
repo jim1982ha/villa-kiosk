@@ -1,3 +1,9 @@
+## 0.12.373
+
+What you will see:
+- On the tablet (VESTA (dev2) 2.496.573 or later), a card's "To:" reads exactly as on Telegram. Nothing else changes:
+  VESTA now names each card and finishes each copy for the tablet through one shared piece each.
+
 ## 0.12.372
 
 What you will see:
