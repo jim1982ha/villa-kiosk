@@ -1,3 +1,12 @@
+## 2.496.573
+
+What you will see:
+- Every closed alert goes to Closed, the villa's own closed messages too (a doorbell "✅ Opened at … at the gate", a
+  cleared alarm VESTA did not take over): before, only VESTA's closed cards did.
+- A card's "To:" reads exactly as on Telegram.
+- Nothing else changes on screen: the tablet now reads an alert's stage, what replaces what, and VESTA's card names
+  through one shared piece each, used by the list, the notice and the add-on alike.
+
 ## 2.496.572
 
 What you will see:
