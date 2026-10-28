@@ -98,6 +98,7 @@ Security notes:
     is the only thing in front of it.
 """
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -3831,10 +3832,32 @@ def _copy_announcement_photo(src: str) -> str | None:
         return None
     if len(body) > ANNOUNCEMENT_PHOTO_MAX_BYTES or not body.startswith(magic):
         return None
+    return _write_announcement_photo(body, kept_as)
+
+
+def _write_announcement_photo(body: bytes, kept_as: str) -> str:
+    """`body` written under a new id ("<hex>.jpg") in the photo folder; its name. ONE FOLDER FOR EVERY KEPT PHOTO (a ring's,
+    a snapshot under VESTA's alert): one sweep, one serving rule. Blocking: called on a worker thread."""
     name = secrets.token_hex(16) + kept_as
     os.makedirs(_data(ANNOUNCEMENT_PHOTO_DIR), exist_ok=True)
     atomic_write(_data(ANNOUNCEMENT_PHOTO_DIR, name), lambda out: out.write(body))
     return name
+
+
+def _keep_pushed_photo(raw) -> str | None:
+    """A photo the VESTA Agent pushed (base64 of a JPEG or a PNG) kept in the photo folder, or None when it is not the
+    picture it says (its first bytes) or is past the contract's cap. Blocking: called on a worker thread."""
+    cap = int(VESTA_MESSAGE_LIMITS.get("photoBytes") or 0)
+    if not isinstance(raw, str) or not raw or len(raw) > cap * 4 // 3 + 8:
+        return None
+    try:
+        body = base64.b64decode(raw, validate=True)
+    except ValueError:
+        return None
+    for kept_as, _ctype, magic in ANNOUNCEMENT_PHOTO_TYPES.values():
+        if len(body) <= cap and body.startswith(magic):
+            return _write_announcement_photo(body, kept_as)
+    return None
 
 
 #: ⚠️ A GUEST SEES ONLY THE CURRENT NOTIFICATION'S PHOTO (owner, 2026-10-28: "a guest shall only see the photo of the
@@ -3860,8 +3883,11 @@ ANNOUNCEMENT_PHOTO_GRACE_S = 120
 
 
 def _sweep_announcement_photos(_stored, kept) -> None:
-    """Delete every copied photo no kept announcement names: its announcement expired, or a rewrite brought its own."""
+    """Delete every kept photo no kept announcement or VESTA message names: its record expired, or a rewrite brought its
+    own."""
     named = {a.get("photo") for a in kept if isinstance(a, dict)} if isinstance(kept, list) else set()
+    for feed in (ANNOUNCED, MESSAGED):          # ⚠️ BOTH FEEDS SHARE THE FOLDER: this one names its own from `kept`
+        named |= {a.get("photo") for a in feed.items() if isinstance(a, dict)}
     try:
         files = os.listdir(_data(ANNOUNCEMENT_PHOTO_DIR))
     except OSError:
@@ -3976,6 +4002,20 @@ async def _listen_announcements(app: web.Application) -> None:
         wait = min(wait * 2, ceiling)
 
 
+async def _current_photos() -> set:
+    """The photo of the current notification now, as a set of one name or none: the newest record of the villa's
+    announcements and VESTA's messages together (a snapshot under VESTA's alert is a notification's photo too, and a newer
+    notice of either kind takes the current place), while it is new (_current_photo). The two feeds number apart, so each
+    gives its newest and the later of the two decides."""
+    newest = []
+    for feed in (ANNOUNCED, MESSAGED):
+        items = [a for a in await asyncio.to_thread(feed.items) if isinstance(a, dict)]
+        newest += [max(items, key=lambda a: a["seq"])] if items else []
+    newest.sort(key=lambda a: _iso_epoch(a.get("at")) or 0)
+    photo = _current_photo(newest[-1:], time.time())
+    return {photo} if photo else set()
+
+
 async def announcements_handler(request: web.Request) -> web.Response:
     """`{"announcements": [...], "last": seq}` — every profile. With `?after=<seq>`, only the newer ones, and the
     answer waits up to ANNOUNCEMENT_WAIT_S for one to arrive: the tablet hears a ring the moment it is kept. A
@@ -3990,8 +4030,8 @@ async def announcements_handler(request: web.Request) -> web.Response:
 
     items, last, first = await ANNOUNCED.read(after, ANNOUNCEMENT_WAIT_S)
     if not _may(_role_for(request), "viewCameras"):
-        current = _current_photo(await asyncio.to_thread(ANNOUNCED.items), time.time())
-        items = [a if a.get("photo") == current else {k: v for k, v in a.items() if k != "photo"} for a in items]
+        current = await _current_photos()
+        items = [a if a.get("photo") in current else {k: v for k, v in a.items() if k != "photo"} for a in items]
     return web.json_response({"announcements": items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
 
 
@@ -4004,11 +4044,121 @@ async def announcement_photo_handler(request: web.Request) -> web.StreamResponse
     path = _data(ANNOUNCEMENT_PHOTO_DIR, name)
     if not ANNOUNCEMENT_PHOTO_RE.match(name) or not os.path.isfile(path):
         return web.json_response({"error": "no such photo"}, status=404)
-    if not _may(_role_for(request), "viewCameras") and name != _current_photo(
-            await asyncio.to_thread(ANNOUNCED.items), time.time()):
+    if not _may(_role_for(request), "viewCameras") and name not in await _current_photos():
         return _forbidden("This profile sees a ring's photo only while it is the current notification.")
     _, ctype, _ = ANNOUNCEMENT_PHOTO_TYPES[os.path.splitext(name)[1]]
     return web.FileResponse(path, headers={"Content-Type": ctype, "Cache-Control": "no-store"})
+
+
+# ── VESTA's messages, as they stand (agent-contract.json `vestaMessage`) ─────────────────────────────────────────────
+# Every message the VESTA Agent writes on Telegram is also kept here for the tablet, as it stands now (ticket 25 of "One
+# inbox", owner 2026-10-28: everything Telegram shows is reproduced on the tablet). ⚠️ THE AGENT WRITES, THE ADD-ON KEEPS:
+# one record per thread (`key`), added or REPLACED when the Agent rewrites it, never removed by the Agent; tidied after the
+# records-kept days like the announcements, and served to every page by the SAME Feed (the second kind it was made for).
+# The Agent's push is in the background with a time limit on its side: an alert never waits on it, and with the Agent down
+# the villa's own first version (an announcement) stays.
+VESTA_MESSAGE_LIMITS: dict = dict((AGENT_CONTRACT_TABLE.get("vestaMessage") or {}).get("limits") or {})
+VESTA_MESSAGES_MAX_BYTES = 2_000_000
+VESTA_MESSAGE_LANGUAGE_RE = re.compile(r"^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$")
+
+
+def _vm_text(value, limit_name: str) -> str:
+    """A text field: a string, stripped, cut at its contract limit; anything else is empty."""
+    return value.strip()[:int(VESTA_MESSAGE_LIMITS.get(limit_name) or 0)] if isinstance(value, str) else ""
+
+
+def _vm_lines(value, list_name: str, line_name: str) -> list:
+    """A list of texts: the first entries up to the contract's count, each cut, none empty."""
+    out = [_vm_text(x, line_name) for x in value] if isinstance(value, list) else []
+    return [x for x in out if x][:int(VESTA_MESSAGE_LIMITS.get(list_name) or 0)]
+
+
+def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
+    """The record kept for one pushed message, or None when it names no key or says nothing. Pure — tests/store-doors.py
+    drives it. The photo is not in it: the picture is kept apart (_keep_pushed_photo). Every limit is the agreement's."""
+    if not VESTA_MESSAGE_LIMITS or not isinstance(body, dict):
+        return None
+    key = _vm_text(body.get("key"), "key")
+    rec = {"seq": seq, "key": key, "at": body["at"] if _iso_epoch(body.get("at")) is not None else now_iso}
+    for field in ("title", "lead", "body", "stage", "mark"):
+        if text := _vm_text(body.get(field), field):
+            rec[field] = text
+    if roles := _vm_lines(body.get("roles"), "roles", "role"):
+        rec["roles"] = roles
+    if status := _vm_lines(body.get("status"), "status", "statusLine"):
+        rec["status"] = status
+    buttons = []
+    for b in body.get("buttons") if isinstance(body.get("buttons"), list) else []:
+        made = {f: _vm_text(b.get(f2), f2) for f, f2 in (("label", "label"), ("kind", "kind"), ("id", "id"))} \
+            if isinstance(b, dict) else {}
+        if all(made.values()) and len(buttons) < int(VESTA_MESSAGE_LIMITS.get("buttons") or 0):
+            buttons.append(made)
+    if buttons:
+        rec["buttons"] = buttons
+    langs = {}
+    for code, words in (body.get("languages") or {}).items() if isinstance(body.get("languages"), dict) else ():
+        if (isinstance(code, str) and VESTA_MESSAGE_LANGUAGE_RE.match(code) and isinstance(words, dict)
+                and len(code) <= int(VESTA_MESSAGE_LIMITS.get("language") or 0)
+                and len(langs) < int(VESTA_MESSAGE_LIMITS.get("languages") or 0)):
+            one = {"body": _vm_text(words.get("body"), "body"), "status": _vm_lines(words.get("status"), "status", "statusLine")}
+            if one["body"] or one["status"]:
+                langs[code] = {k: v for k, v in one.items() if v}
+    if langs:
+        rec["languages"] = langs
+    return rec if key and any(f in rec for f in ("title", "lead", "body", "status")) else None
+
+
+MESSAGES = JsonStore("vesta-messages.json", [], VESTA_MESSAGES_MAX_BYTES + 100_000)
+
+
+def _vesta_messages_tidy(items) -> list:
+    """The records still kept: the announcements' rule (the records-kept days, then the newest that fit the cap)."""
+    return _announcements_kept(items if isinstance(items, list) else [], time.time(), _evidence_retention_days(),
+                               VESTA_MESSAGES_MAX_BYTES)
+
+
+#: VESTA's messages, the feed's second kind: one line per key (a rewrite REPLACES, keeping the first one's photo), a photo
+#: swept with the record that named it.
+MESSAGED = Feed(MESSAGES, _vesta_messages_tidy, after=_sweep_announcement_photos)
+
+
+async def agent_vesta_message_handler(request: web.Request) -> web.Response:
+    """The Agent's push of one message as it stands (token-gated, `agentWrite`): added, or replacing the record of its
+    key. 404 when the agreement names no limits (the door says nothing); 400 for a body with no key or no words."""
+    if (refused := _agent_refuse(request, "agentWrite")) is not None:
+        return refused
+    if not VESTA_MESSAGE_LIMITS:
+        return web.json_response({"error": "not found"}, status=404)
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    if _vesta_message_record(body, 0, _now_iso()) is None:
+        return web.json_response({"error": "a message names a key and says something"}, status=400)
+    photo = await asyncio.to_thread(_keep_pushed_photo, body["photo"]) if body.get("photo") else None
+
+    def record(seq: int) -> dict:
+        rec = _vesta_message_record(body, seq, _now_iso())
+        return {**rec, "photo": photo} if photo else rec
+
+    rec = await MESSAGED.add(record, _announcements_with)
+    return web.json_response({"ok": True, "seq": rec["seq"]})
+
+
+async def vesta_messages_handler(request: web.Request) -> web.Response:
+    """`{"messages": [...], "last": seq, "first": seq}` — every profile, as /announcements answers (a read after a number
+    waits up to ANNOUNCEMENT_WAIT_S for the next). The photo rule is the announcements' too: a profile that may not view
+    cameras is told only the current notification's photo."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    try:
+        after = int(request.query["after"]) if "after" in request.query else None
+    except ValueError:
+        return web.json_response({"error": "after must be a number"}, status=400)
+    items, last, first = await MESSAGED.read(after, ANNOUNCEMENT_WAIT_S)
+    if not _may(_role_for(request), "viewCameras"):
+        current = await _current_photos()
+        items = [a if a.get("photo") in current else {k: v for k, v in a.items() if k != "photo"} for a in items]
+    return web.json_response({"messages": items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
 
 
 # ── A button an announcement offers, pressed on a tablet (ha-commands.json `press`) ─────────────────────────────────
@@ -4370,6 +4520,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     # The villa's announcements, kept by this process (every profile).
     app.router.add_get("/announcements", announcements_handler)
     app.router.add_get("/announcement-photo/{id}", announcement_photo_handler)
+    app.router.add_get("/vesta-messages", vesta_messages_handler)
     app.router.add_post("/announcement-press", announcement_press_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
@@ -4379,6 +4530,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_put("/agent/v1/fm-data", agent_fm_put_handler)
     app.router.add_post("/agent/v1/fm-evidence", agent_fm_evidence_handler)
     app.router.add_post("/agent/v1/fm-document", agent_fm_document_handler)
+    app.router.add_post("/agent/v1/vesta-message", agent_vesta_message_handler)
     app.router.add_post("/agent/v1/heartbeat", agent_heartbeat_handler)
     return app
 

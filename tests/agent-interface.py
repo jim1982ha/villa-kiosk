@@ -488,6 +488,107 @@ async def main() -> None:
        names == [("Living", "floor_plan"), ("Rooftop", "added")], names)
     ck("ha_areas says the areas were read", body.get("ha_areas") is True)
 
+    # ── VESTA's messages as they stand (ticket 25 of "One inbox", 2026-10-28) ────────────────────────────────────
+    print("\n  VESTA's messages, kept for the tablet:")
+    import base64
+    cfg_file = TMP / "data" / "device-config.json"
+    cfg_file.unlink(missing_ok=True)
+    msgs = TMP / "data" / "vesta-messages.json"
+    msgs.unlink(missing_ok=True)
+    sent = {"key": "incident:90", "title": "#90-P2 (existing)", "roles": ["Owner", "FM"], "lead": "Intrusion suspected",
+            "body": "Turn on Siren?", "status": ["- Alert sent", "⚠️ Waiting for approval"], "stage": "existing",
+            "buttons": [{"label": "Done", "kind": "i", "id": "90:done"}],
+            "languages": {"id": {"body": "Nyalakan sirene?", "status": ["- Peringatan terkirim"]}}}
+    r = await post("/agent/v1/vesta-message", json=sent)
+    ck("no token: refused, nothing kept", r.status == 401 and not msgs.exists(), r.status)
+    r = await post("/agent/v1/vesta-message", headers=bearer("wrong-token"), json=sent)
+    ck("  ...a wrong token too", r.status == 401, r.status)
+    r = await post("/agent/v1/vesta-message", headers=cookie("owner"), json=sent)
+    ck("  ...and a signed-in owner's cookie is no token", r.status == 401, r.status)
+    reset_lockout()
+    r = await post("/agent/v1/vesta-message", headers=bearer(), json=sent)
+    answer = await r.json()
+    ck("the Agent's push is kept, numbered", r.status == 200 and answer == {"ok": True, "seq": 1}, answer)
+    status, body = await jget("/vesta-messages", cookie("guest"))
+    got = (body or {}).get("messages", [None])[0] or {}
+    ck("  ...and every profile reads it as it was pushed (a guest too)",
+       status == 200 and body["last"] == 1 and {k: v for k, v in got.items() if k not in ("seq", "at")} == sent, body)
+    status, _ = await jget("/vesta-messages", {})
+    ck("  ...but a page with no session reads nothing", status == 401, status)
+    jpeg = proxy._JPEG_MAGIC + b"snapshot"
+    r = await post("/agent/v1/vesta-message", headers=bearer(),
+                   json={**sent, "body": "Camera snapshot", "photo": base64.b64encode(jpeg).decode()})
+    status, body = await jget("/vesta-messages", cookie("ops"))
+    one = body["messages"]
+    ck("a rewrite of the same key REPLACES the record (one line), numbered anew, with its photo",
+       r.status == 200 and len(one) == 1 and one[0]["body"] == "Camera snapshot" and one[0]["seq"] == 2
+       and (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / one[0].get("photo", "none")).read_bytes() == jpeg, body)
+    r = await post("/agent/v1/vesta-message", headers=bearer(),
+                   json={**sent, "status": ["- Alert sent", "- Reminder sent", "✅ Done"], "buttons": []})
+    status, body = await jget("/vesta-messages", cookie("ops"))
+    one = body["messages"]
+    ck("  ...a later rewrite with no photo keeps the first one's; with no buttons it withdraws them",
+       len(one) == 1 and one[0].get("photo") and "buttons" not in one[0] and one[0]["status"][-1] == "✅ Done", body)
+    status, gbody = await jget("/vesta-messages", cookie("guest"))
+    r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    ck("  ...a guest sees that photo while it is the current notification, as a ring's (owner, 2026-10-28)",
+       gbody["messages"][0].get("photo") == one[0]["photo"] and r.status == 200, (r.status, gbody))
+    proxy.ANNOUNCEMENT_PHOTO_GRACE_S = 0       # the sweep's grace for a copy not yet recorded: none here
+    soon = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() + 5))
+    await proxy._record_announcement(None, {"event_type": proxy.ANNOUNCEMENT_EVENT, "time_fired": soon,
+                                            "data": {"message": "<b>Other</b>"}})
+    ck("  ...a villa announcement's sweep leaves a message's photo alone (one folder, two feeds)",
+       (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / one[0]["photo"]).is_file())
+    r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    ck("  ...and a newer villa announcement takes the current place: the guest's photo is 403", r.status == 403, r.status)
+    await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "note:1", "title": "Morning digest", "body": "New"})
+    status, gbody = await jget("/vesta-messages", cookie("guest"))
+    r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    ck("  ...but not once a newer message came: the list names no photo and the file is 403",
+       r.status == 403 and all("photo" not in m for m in gbody["messages"]), (r.status, gbody))
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    ck("  ...the owner still sees it, and two keys are two lines", len(body["messages"]) == 2
+       and body["messages"][0].get("photo"), body)
+    for bad in ({"title": "no key"}, {"key": "k"}, {"key": "k", "buttons": "x"}, [1], "text"):
+        r = await post("/agent/v1/vesta-message", headers=bearer(), json=bad)
+        ck(f"a push of {str(bad)[:28]!r} is refused (400), nothing kept", r.status == 400, r.status)
+    for photo in ("not base64 !!", base64.b64encode(b"not a picture").decode(), base64.b64encode(b"x" * 10).decode()):
+        await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "bad-photo", "title": "t", "photo": photo})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    bad_photo = next(m for m in body["messages"] if m["key"] == "bad-photo")
+    ck("a photo that is not a picture is dropped, the message kept without it", "photo" not in bad_photo, bad_photo)
+    r = await post("/agent/v1/vesta-message", headers=bearer(), json={
+        "key": "k" * 500, "title": "T" * 900, "roles": ["r"] * 30, "status": ["s"] * 90,
+        "buttons": [{"label": "b", "kind": "i", "id": str(n)} for n in range(20)] + [{"label": "no id"}, "x"]})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    cut = body["messages"][-1]
+    lim = proxy.VESTA_MESSAGE_LIMITS
+    ck("every field is cut at the agreement's limit (key, title, lists)",
+       r.status == 200 and len(cut["key"]) == lim["key"] and len(cut["title"]) == lim["title"]
+       and len(cut["roles"]) == lim["roles"] and len(cut["status"]) == lim["status"]
+       and len(cut["buttons"]) == lim["buttons"], {k: len(v) for k, v in cut.items() if hasattr(v, "__len__")})
+    r = await client.delete("/agent/v1/vesta-message", headers=bearer())
+    r2 = await client.delete("/agent/v1/vesta-message?key=incident:90", headers=bearer())
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    ck("the Agent has no way to remove one: no such route, every record still kept",
+       r.status in (404, 405) and r2.status in (404, 405) and any(m["key"] == "incident:90" for m in body["messages"]),
+       (r.status, r2.status))
+    cfg_file.write_text(json.dumps({"recordsKeptDays": 30}))
+    old = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - 40 * 86400))
+    await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "old-one", "title": "Old", "at": old})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    ck("kept for the records-kept days only: an older one is gone with the next read",
+       "old-one" not in [m["key"] for m in body["messages"]] and "incident:90" in [m["key"] for m in body["messages"]], body)
+    cfg_file.write_text(json.dumps({"recordsKeptDays": 0}))
+    await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "old-one", "title": "Old", "at": old})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    ck("  ...and with records kept for ever, it is kept", "old-one" in [m["key"] for m in body["messages"]], body)
+    cfg_file.unlink(missing_ok=True)
+    agent(enabled="false", token=TOKEN)
+    r = await post("/agent/v1/vesta-message", headers=bearer(), json=sent)
+    ck("with the Agent switched off the door is 404, as every /agent/v1 route", r.status == 404, r.status)
+    agent(enabled="true", token=TOKEN)
+
     await client.close()
     await sup.close()
     print()
