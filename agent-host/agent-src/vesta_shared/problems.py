@@ -142,6 +142,13 @@ def agreed(field: str, word: str) -> str | None:
     return word if word and word in (agreement.section("ticket").get(field) or ()) else None
 
 
+def _priority(incident: dict | None) -> str | None:
+    """An incident's priority (P1…P4), or None when it says none the agreement knows."""
+    from .result import PRIORITIES
+    sev = str((incident or {}).get("severity") or "")
+    return sev if sev in PRIORITIES else None
+
+
 class Problems:
     def __init__(self, store: Store):
         self.store = store
@@ -606,6 +613,9 @@ class Problems:
                 "confirms_by": self.confirms_by(task, next_night),
                 "pattern": pattern, "since": d.get("since") if pattern else None,
                 "number": sid if kind == "incident" else None,
+                # its priority as the alert's title writes it after the number ("#5-P2", owner 2026-10-28): the Kiosk's
+                # ticket is named the same; kept current, as a priority can change
+                "priority": _priority(self.store.incident(sid)) if kind == "incident" else None,
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
                 "origin": agreed("origins", {"incident": "alert", "finding": "night"}.get(kind or "", "")),
                 # how it is read again, the card's "Next check" (owner, 2026-10-15)

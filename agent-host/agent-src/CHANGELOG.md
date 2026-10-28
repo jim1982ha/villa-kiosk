@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.363 (28 October 2026)
+
+- An alert's name in ONE form (owner, 2026-10-28: "consistency everywhere"): vesta_shared.messaging.alert_label reads
+  the agreement's ticket.alertLabel ("#{number}-{priority}", copied from the Kiosk 2.496.574); notice.heading titles
+  with it. Problems.card gives the incident's `priority`; the Kiosk's ticket carries it as `alertPriority` (add_ticket,
+  tagged, kept current by tickets.repair; gated to a Kiosk that lists it in ticket_fields). Not changed: the skills'
+  own "#N" lines (reports' Still open, the concierge), skill folders being hands-off.
+
 ## 0.6.362 (28 October 2026)
 
 - DRY scan of "One inbox" (owner, 2026-10-28): kiosk_messages.thread_key reads the agreement's `vestaMessage.incidentKey`

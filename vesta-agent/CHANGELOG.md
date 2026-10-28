@@ -1,3 +1,10 @@
+## 0.12.374
+
+What you will see:
+- On the tablet (VESTA (dev2) 2.496.574 or later), an alert's ticket, its open issue and its Watch line are named as on
+  Telegram: "#91-P2 · …". A ticket made before gets its priority within 5min; when an alert's priority changes, its
+  ticket follows.
+
 ## 0.12.373
 
 What you will see:

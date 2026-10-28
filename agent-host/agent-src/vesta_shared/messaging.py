@@ -191,6 +191,17 @@ def incident_tag(iid: int | str) -> str:
     return f"#{iid}"
 
 
+def alert_label(iid: int | str, priority: str | None = None) -> str:
+    """How an alert is named in its title — "#10-P2", or "#10" without a priority — in the agreement's one form
+    (agent-contract.json ticket.alertLabel), the form the VESTA Kiosk names its ticket with (owner, 2026-10-28:
+    "consistency everywhere"). Falls back to incident_tag's form when no agreement can be read."""
+    from . import agreement
+    t = agreement.section("ticket")
+    form = (t.get("alertLabel") if priority else t.get("alertLabelNoPriority")) or ("#{number}-{priority}" if priority
+                                                                                   else "#{number}")
+    return str(form).replace("{number}", str(iid)).replace("{priority}", str(priority or ""))
+
+
 def incident_message(status: str, details: str = "") -> str:
     """The text of a notice about an incident written by a skill edited before 0.12.142, which still joins its alert
     (`details`) and where it stands (`status`). Since then a skill gives the status apart (vesta_shared.result.message

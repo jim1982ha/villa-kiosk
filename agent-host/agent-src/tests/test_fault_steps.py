@@ -575,7 +575,7 @@ def _every_write(k: Kiosk) -> dict:
     (the agent's clearing, then a person's Done) and a reopening. Returns the fault as the Kiosk holds it."""
     from vesta_agent.kiosk import closing, noted, retitled, tagged, todo
     tid = run(k.add_ticket("Pump offline for 2h", entity_id="switch.pump", note="What to do: power", document_ids=["d1"],
-                           number=5, origin="alert", check="minutes",
+                           number=5, origin="alert", check="minutes", priority="P2",
                            pattern={"titlePattern": "Pump offline for {since}", "since": "2026-10-19T00:00:00Z"}))
     run(k.amend(tid, retitled("Pump offline for 3h"), tagged(6, "night", "nightly", {"titlePattern": "P {since}",
                                                                                          "since": "2026-10-19T01:00:00Z"}),

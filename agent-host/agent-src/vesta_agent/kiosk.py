@@ -253,7 +253,7 @@ def fault_of(t: dict) -> dict:
             # who: on a closed fault, the person of its last close; on an open one, of its last step (taken on, moved)
             "by": (str(close.get("who") or close.get("by") or "") if close and t.get("status") == "resolved"
                    else last("who") or last("by")),
-            "alert_number": t.get("alertNumber"), "origin": t.get("origin"),
+            "alert_number": t.get("alertNumber"), "alert_priority": t.get("alertPriority"), "origin": t.get("origin"),
             "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
             "closes_at": t.get("closesAt"), "confirms_by": t.get("confirmsBy"),
             "note": str(t.get("note") or ""),                     # what to do on site (the agreement's ticket.fields)
@@ -323,10 +323,11 @@ def todo(note: str) -> Amend:
 
 
 def tagged(number: int | None = None, origin: str | None = None, check: str | None = None,
-           pattern: dict | None = None) -> Amend:
+           pattern: dict | None = None, priority: str | None = None) -> Amend:
     """A fault made before it carried them gets its alert's number ("#5"), where it came from and how it is read again
     (add_ticket). `pattern`: {"titlePattern", "since"} — both None takes them away (a person retitled it)."""
-    tags = {**({"alertNumber": int(number)} if number else {}), **({"origin": origin} if origin else {}),
+    tags = {**({"alertNumber": int(number)} if number else {}),
+            **({"alertPriority": priority} if number and priority else {}), **({"origin": origin} if origin else {}),
             **({"check": check} if check else {}), **(pattern or {})}
 
     def amend(t: dict) -> dict | None:
@@ -494,7 +495,8 @@ class Kiosk:
 
     async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None,
                          document_ids: list[str] | None = None, number: int | None = None,
-                         origin: str | None = None, check: str | None = None, pattern: dict | None = None) -> str:
+                         origin: str | None = None, check: str | None = None, pattern: dict | None = None,
+                         priority: str | None = None) -> str:
         """`number`: the alert's number, as every chat names it ("#5"), when the fault comes from one — the Kiosk's card
         shows it beside the title (owner, 2026-10-14), so the Telegram message and the card are seen to be one problem.
         `origin`: where the agent made it from — "alert", "night" (its nightly check) or "chat" — the card's source icon.
@@ -514,6 +516,8 @@ class Kiosk:
                 t["note"] = note[:fault_note_chars()]
             if number:
                 t["alertNumber"] = int(number)
+                if priority:
+                    t["alertPriority"] = priority          # "#5-P2", as Telegram names it (ticket.alertLabel)
             if origin:
                 t["origin"] = origin
             if check:

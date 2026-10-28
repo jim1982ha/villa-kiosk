@@ -84,6 +84,7 @@ class Tickets:
         want = self._card(Problems(self._store()), task) if task else {"number": None, "origin": "chat", "check": None}
         tid = await self.kiosk.add_ticket(headline(title)[:fault_title_chars()], entity_id=entity_id, note=note, document_ids=docs,
                                           **({"number": want["number"]} if want["number"] else {}),
+                                          **({"priority": want.get("priority")} if want["number"] and want.get("priority") else {}),
                                           **({"origin": want["origin"]} if want["origin"] else {}),
                                           **({"check": want["check"]} if want["check"] else {}),
                                           **({"pattern": self._pattern(want)} if self._pattern(want) else {}))
@@ -300,10 +301,11 @@ class Tickets:
                     pattern = self._pattern(want, card) or (
                         {"titlePattern": None, "since": None} if card.get("title_pattern") else None)
                     if (want["number"] and card.get("alert_number") != want["number"]) \
+                            or (want["number"] and want.get("priority") and card.get("alert_priority") != want["priority"]) \
                             or (want["origin"] and card.get("origin") != want["origin"]) \
                             or (want["check"] and card.get("check") != want["check"]) \
                             or (pattern and (card.get("title_pattern"), card.get("since")) != (pattern["titlePattern"], pattern["since"])):
-                        amends.append(tagged(want["number"], want["origin"], want["check"], pattern))
+                        amends.append(tagged(want["number"], want["origin"], want["check"], pattern, want.get("priority")))
                     # when the agent closes it if it stays over (owner, 2026-10-21), or that line gone when it holds again
                     if card.get("closes_at") != want["closes_at"]:
                         amends.append(closing(want["closes_at"]))

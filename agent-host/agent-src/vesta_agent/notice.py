@@ -36,7 +36,7 @@ from __future__ import annotations
 from vesta_shared.message_format import MARK_ICONS, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED, audience
 from vesta_shared import status_words
 from vesta_shared.limits import limit
-from vesta_shared.messaging import incident_tag
+from vesta_shared.messaging import alert_label
 from vesta_shared.problems import again_days
 from vesta_shared.timeutil import moment_label
 
@@ -242,7 +242,7 @@ class Notices:
         except Exception:  # noqa: BLE001 — the heading is written without its priority, never not at all
             p = None
         word = self.word(int(incident), stage, bool(history))
-        return layout.head(f"{incident_tag(incident)}{f'-{p}' if p else ''}", who,
+        return layout.head(alert_label(incident, p), who,
                            self.history_lines(int(incident), chat, before), word, self.lang(chat))
 
     def to_line(self, incident: int, also=(), history: list[dict] | None = None) -> str | None:
