@@ -68,8 +68,9 @@ def _iso(at: datetime | None) -> str:
 
 class ChatFacts:
     def __init__(self, state, work: InProgress, timezone_name: str = "UTC",
-                 closed: Callable[[int], bool] | None = None):
+                 closed: Callable[[int], bool] | None = None, name: Callable[[int], str] | None = None):
         self.state, self.work, self.tz = state, work, timezone_name
+        self.name = name or incident_tag   # incidents.Incidents.name: "#9-P2", as every message names the alert
         self.closed = closed            # incidents.Incidents.closed: an alert listed is said closed since, if it is
 
     def _at(self, ts: float | str | datetime | None) -> str:
@@ -151,7 +152,7 @@ class ChatFacts:
                 if (h.get("stage") not in STEPS or not h.get("at") or (since and h["at"] <= since)
                         or chat not in {int(c) for c, _roles in h.get("chats") or []}):
                     continue
-                said = f"alert {incident_tag(iid)}: {STEPS[h['stage']].sent} here"
+                said = f"alert {self.name(iid)}: {STEPS[h['stage']].sent} here"
                 if self.closed:
                     try:
                         said += " (it is closed now)" if self.closed(iid) else ""

@@ -50,12 +50,12 @@ from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (pack, store, zone, day: one set-up)
 from vesta_shared.params import MissingParameter  # noqa: E402
-from vesta_shared.messaging import fmt_money, incident_tag, no_platform_name_in  # noqa: E402
+from vesta_shared.messaging import fmt_money, no_platform_name_in  # noqa: E402
 from vesta_shared.result import WHOLE_DEVICE  # noqa: E402  (what a whole device's faults are)
 from vesta_shared.message_format import document, for_the_ai, split_title  # noqa: E402  (the one shape: title, To:, sections)
 from vesta_shared.store import Incident, Store  # noqa: E402
 from vesta_shared.timeutil import day_label, said  # noqa: E402  (the one day format; a stored time in words)
-from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
+from vesta_shared.problems import Problems, alert_line  # noqa: E402  (what is still open: one owner; an alert's line)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
 DIGEST_OPEN_LINES = limit("reports.digest_open_lines", 8, unit="lines", group="text", lo=1, hi=200,
@@ -138,7 +138,7 @@ def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:
         # line "Still open: 6. An alert: press Done … the rest: close it in the VESTA Kiosk" gave no useful indication.)
         alerts = [p for p in open_now if p["incident"]]
         # each problem by its one name (Problems.open_problems: problems.problem_name), already as long as it may be
-        sections.append(("Still open", [f"- {incident_tag(p['incident'])} · {p['title']}" for p in alerts]
+        sections.append(("Still open", [f"- {alert_line(p)}" for p in alerts]
                          + _grouped([{"kind": p["rule_id"], "severity": p["severity"],
                                       "subject": name_of(p), "title": p["title"]}
                                      for p in open_now if not p["incident"]], group_from, words)[:DIGEST_OPEN_LINES]))

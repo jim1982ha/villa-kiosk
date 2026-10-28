@@ -10,7 +10,6 @@ import logging
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import PRESSED
-from vesta_shared.messaging import incident_tag
 from vesta_shared.limits import limit
 from vesta_shared.status_words import pressed
 
@@ -112,7 +111,7 @@ class AlertButtons:
         # ⚠️ TOLD TO THE AI (owner, 2026-10-23): a press goes to the agent, never into the conversation — the AI could
         # say an alert waits for an answer that was given here a minute before
         if self.facts is not None:
-            self.facts.pressed(int(chat), label, f"alert {incident_tag(iid)}", name)
+            self.facts.pressed(int(chat), label, f"alert {self.thread.name(iid)}", name)
         if self.run_job:
             # `text`: the label, for a skill.yaml from before `buttons` (its on_reply reads `--text {text}`)
             await self.run_job(skill, skill.on_reply, limit(

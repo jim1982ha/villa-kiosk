@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.364 (29 October 2026)
+
+- ONE name for an alert everywhere (owner, 2026-10-29: "total consistency between Telegram and KIOSK and in all reports
+  or notification or alerts"): messaging.incident_tag(iid, priority) writes the agreement's ticket.alertLabel
+  ("#9-P2"; "#9" when no priority is known) and replaces alert_label; Incidents.name gives it for an incident number
+  (IncidentThread.name: the pointer to a newer message; ChatFacts.name: what the AI is told; AlertButtons through the
+  thread); problems.alert_line is the one "#9-P2 · title" line of the digest (reports) and the concierge; the night
+  check's hand-over note names its alert so. Skills edited on the owner's word (reports, villa-concierge,
+  preventive-maintenance). Shared rules copied from dev2 2.496.576 ("Telegram and the tablet alike").
+
 ## 0.6.363 (28 October 2026)
 
 - An alert's name in ONE form (owner, 2026-10-28: "consistency everywhere"): vesta_shared.messaging.alert_label reads

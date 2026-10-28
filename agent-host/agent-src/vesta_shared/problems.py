@@ -26,7 +26,7 @@ from typing import Callable
 
 from . import agreement, result
 from .limits import limit
-from .messaging import headline, problem_title_chars
+from .messaging import headline, incident_tag, problem_title_chars
 from .store import Incident, Notes, Store, notes_of
 from . import alert_watch, kiosk_words
 
@@ -38,6 +38,13 @@ TASK_SEVERITIES = ("P2", "P3")
 STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 
 _ORDER = result.PRIORITY_ORDER
+
+def alert_line(p: dict) -> str:
+    """An open alert (Problems.open_problems' row) on one line, as every report lists it: "#9-P2 · Door unlocked" —
+    its name as Telegram titles it (messaging.incident_tag) and its one name (owner, 2026-10-28: the digest's "Still
+    open" and the concierge's "Open alerts" each wrote it)."""
+    return f"{incident_tag(p['incident'], p.get('severity'))} · {p['title']}"
+
 
 def again_days() -> int:
     """A state finding closed this many days ago or less that the night sees again is the SAME problem, back — not a

@@ -114,7 +114,7 @@ def test_a_message_past_telegrams_48_hours_becomes_a_pointer(agent):
     agent.tg.refuse.add("delete")
     tick(agent, 20)
     first_fm = next(n for n, (c, _t, _k) in enumerate(agent.tg.sent, start=1001) if c == FM_CHAT)
-    assert (FM_CHAT, first_fm, "#1 · see the newer message below.") in agent.tg.edits
+    assert (FM_CHAT, first_fm, "#1-P2 · see the newer message below.") in agent.tg.edits
 
 
 def test_the_owner_and_the_fm_in_one_chat_get_one_message_with_the_buttons(agent):

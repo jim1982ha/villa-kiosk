@@ -22,6 +22,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Time matters](owner-rules.md#time-matters) — bundle a release; measure only what a decision needs; say what was skipped
 - [One mechanism per job](owner-rules.md#one-mechanism-per-job) — one store, channel or input per job; widen the existing one before adding; merging designs never keeps both
 - [Defined once](owner-rules.md#defined-once) — every list, value or text in one place; YAML anchors, shared modules
+- [Telegram and the tablet alike](owner-rules.md#telegram-and-the-tablet-alike) — one card per alert, one name ("#91-P2") on Telegram, the tablet and every report; formats in the agreement
 - [Fix the shared piece](owner-rules.md#fix-the-shared-piece) — fix the shared component, never the misbehaving caller (DRY)
 - [No per-caller switch](owner-rules.md#no-per-caller-switch) — a shared window behaves the same from every entry point
 - [The owner verifies by screenshots](owner-rules.md#the-owner-verifies-by-screenshots) — no browser testing; say what to check on which device

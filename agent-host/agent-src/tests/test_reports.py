@@ -925,7 +925,7 @@ def test_the_morning_digest_says_what_is_new_and_still_open_as_problems_answer_i
     assert text.count("Humid cellar") == 1                                         # noted once, not open twice
     still = rest.split("\nStill open:\n")[1]
     # owner, 2026-10-13: one block per section, an item per line
-    assert still.split("\n") == ["- #1 · Leak in the kitchen", "- P3 Door battery low"]
+    assert still.split("\n") == ["- #1-P2 · Leak in the kitchen", "- P3 Door battery low"]
     # owner, 2026-10-11: the one shape — title, "To:" for the agent to fill, labels; no "Still open: N. An alert: press…"
     assert text.startswith("V, daily report on 05/10/2026.\nTo:\n\nNew since yesterday:\n- ") and "press Done" not in text
 

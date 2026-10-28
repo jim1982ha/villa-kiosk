@@ -340,11 +340,11 @@ def test_a_run_whose_telegram_message_never_came_still_gives_way_to_the_card(age
 def test_the_ticket_is_named_as_telegram_names_the_alert(agent, kiosk):
     """Owner, 2026-10-28 ("consistency everywhere"): the ticket carries the alert's priority, so the tablet reads
     "#1-P2 · …" as Telegram's title "#1-P2 (new)" does — one label form, the agreement's ticket.alertLabel."""
-    from vesta_shared.messaging import alert_label
+    from vesta_shared.messaging import incident_tag
     scenario(agent, alert, lambda v: v.tickets.repair())
     (t,) = [t for t in kiosk.doc["data"]["tickets"] if t.get("alertNumber") == 1]
     assert t.get("alertPriority") == "P2", t
-    assert kiosk.messages["incident:1"]["title"].startswith(alert_label(1, "P2") + " "), kiosk.messages["incident:1"]["title"]
+    assert kiosk.messages["incident:1"]["title"].startswith(incident_tag(1, "P2") + " "), kiosk.messages["incident:1"]["title"]
 
 
 def test_a_ticket_made_before_gets_its_priority_at_the_next_repair(agent, kiosk):

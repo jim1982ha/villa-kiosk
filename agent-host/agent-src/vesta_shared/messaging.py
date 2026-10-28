@@ -184,18 +184,15 @@ def fmt_money(amount: float, currency: str) -> str:
 # ways ("Incident #9.", "Reminder, incident #9:", "on incident #9:", "#9", none at all on Home Assistant's own
 # message), and a reminder repeated half of the alert.
 
-def incident_tag(iid: int | str) -> str:
-    """How an incident is named in every chat and report: "#10" — its number as an alert's title writes it ("#10-P2
-    (new)", vesta_agent/notice.py). ⚠️ ONE NAME (owner, 2026-10-12): the title said "#23-P2" and the reports, the
-    concierge and a replaced copy said "Incident #23"."""
-    return f"#{iid}"
-
-
-def alert_label(iid: int | str, priority: str | None = None) -> str:
-    """How an alert is named in its title — "#10-P2", or "#10" without a priority — in the agreement's one form
-    (agent-contract.json ticket.alertLabel), the form the VESTA Kiosk names its ticket with (owner, 2026-10-28:
-    "consistency everywhere"). Falls back to incident_tag's form when no agreement can be read."""
+def incident_tag(iid: int | str, priority: str | None = None) -> str:
+    """How an alert is named in every chat, report, notice and on the VESTA Kiosk: "#10-P2" — or "#10" when its priority
+    is not known (an alert that does not exist) — in the agreement's one form (agent-contract.json ticket.alertLabel).
+    ⚠️ ONE NAME (owner, 2026-10-12: "#23-P2" in the title, "Incident #23" elsewhere; 2026-10-28: "total consistency
+    between Telegram and the Kiosk and in all reports or notifications or alerts"): the title, a replaced copy's
+    pointer, the digest, the concierge and the Kiosk's ticket all write it here (or the Kiosk from the same form)."""
     from . import agreement
+    from .result import PRIORITIES
+    priority = priority if priority in PRIORITIES else None      # a severity of another shape is never written
     t = agreement.section("ticket")
     form = (t.get("alertLabel") if priority else t.get("alertLabelNoPriority")) or ("#{number}-{priority}" if priority
                                                                                    else "#{number}")

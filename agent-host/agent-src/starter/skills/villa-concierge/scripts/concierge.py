@@ -23,9 +23,8 @@ from datetime import datetime, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 from vesta_shared import script  # noqa: E402  (pack, store, client: one set-up)
 from vesta_shared.knowledge_pack import KnowledgePack  # noqa: E402
-from vesta_shared.problems import Problems  # noqa: E402  (what is still open: one owner)
+from vesta_shared.problems import Problems, alert_line  # noqa: E402  (what is still open: one owner; an alert's line)
 from vesta_shared.store import Store  # noqa: E402
-from vesta_shared.messaging import incident_tag  # noqa: E402  ("Incident #N", the same everywhere)
 from vesta_shared.offline import devices_offline, watched_kinds  # noqa: E402  (the one reading of "offline now")
 from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
@@ -78,7 +77,7 @@ def status(pack: KnowledgePack, states: dict, store: Store | None, history=None)
     if offline_names:
         lines.append(f"Offline ({len(offline_names)}): " + _names(offline_names))
     if alerts:
-        lines.append(f"Open alerts ({len(alerts)}): " + _names([f"{incident_tag(p['incident'])} · {p['title']}" for p in alerts]))
+        lines.append(f"Open alerts ({len(alerts)}): " + _names([alert_line(p) for p in alerts]))
     if tasks:
         lines.append(f"Open problems ({len(tasks)}): " + _names([p["title"] for p in tasks]))
     if watch:

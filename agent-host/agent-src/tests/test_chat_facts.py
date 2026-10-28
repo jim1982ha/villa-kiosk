@@ -141,7 +141,7 @@ def test_an_alerts_step_sent_here_is_told(villa):
     iid = _alert(villa)
     say(villa, "what was that?")
     (line,) = [x for x in chat_prompts(villa)[-1].splitlines() if x.startswith("- ")]
-    assert re.fullmatch(rf"- {AT}: alert #{iid}: Reminder sent here\.", line)
+    assert re.fullmatch(rf"- {AT}: alert #{iid}-P2: Reminder sent here\.", line)
     say(villa, "ok", person=Person(OWNER, "Owner", "owner"))
     assert SINCE not in chat_prompts(villa)[-1]                           # never another chat's
 
@@ -155,7 +155,7 @@ def test_a_button_pressed_on_an_alert_here_is_told_with_who(villa):
                                                 "message": {"message_id": mid, "chat": {"id": FM}, "text": "Pump"}}))
     say(villa, "is the pump alert still open?")
     lines = [x for x in chat_prompts(villa)[-1].splitlines() if x.startswith("- ")]
-    assert re.fullmatch(rf"- {AT}: Done pressed on alert #{iid} by Wayan\.", lines[0])
+    assert re.fullmatch(rf"- {AT}: Done pressed on alert #{iid}-P2 by Wayan\.", lines[0])
 
 
 def test_a_fault_offer_decided_by_its_button_is_told(villa):

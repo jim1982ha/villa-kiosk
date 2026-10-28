@@ -410,7 +410,7 @@ def test_an_offline_fault_an_alert_now_follows_is_handed_over_within_one_recheck
     iid = store.new_incident("watch|lock.example_door", "automation.example_watchdog", "lock.example_door", "P2",
                              {"bad_states": ["unavailable"], "entities": ["lock.example_door"]})
     out = tick()
-    note = f"Followed by alert #{iid}, which says when it is back."
+    note = f"Followed by alert #{iid}-P2, which says when it is back."
     assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == "closed" and _open_tasks(tmp_path) == []
     assert _closed_notes(tmp_path) == [note] and out["faults_changed"] is True and out["actions"] == MOVED
     (e,) = out["edits"]
@@ -469,7 +469,7 @@ def test_every_way_an_offline_fault_ends_through_the_recheck_says_its_own_senten
     assert r.returncode == 0, r.stderr
     said = {"back": "Cleared: back online.", "asleep": recheck.ASLEEP_NOTE, "hidden": recheck.HIDDEN_NOTE,
             "gone": recheck.GONE_NOTE, "answers": recheck.ANSWERS_NOTE,
-            "alert": f"Followed by alert #{iid}, which says when it is back."}[ending]
+            "alert": f"Followed by alert #{iid}-P2, which says when it is back."}[ending]
     assert Store(str(tmp_path / "s.sqlite")).finding(fid)["status"] == "closed", ending
     assert _closed_notes(tmp_path) == [said] and _open_tasks(tmp_path) == []
     assert ending in {e.name for e in recheck.OFFLINE_ENDS} | {"gone"}

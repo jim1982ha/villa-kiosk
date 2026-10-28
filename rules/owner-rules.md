@@ -178,6 +178,19 @@ in a YAML package; a YAML anchor shares it).
 **How to apply:** before duplicating, find the sharing mechanism: a shared module, an attribute another entity reads, a
 YAML anchor in the same file. If none truly exists, say so before the work.
 
+## Telegram and the tablet alike
+
+Whatever VESTA shows on Telegram, the tablet shows the same way, and every report, notice and alert names a thing
+the same way: one alert is ONE card updated in place, named "#91-P2" everywhere (Telegram's title, the tablet's card,
+its ticket and open issue, the digest, the assistant, a pointer to a newer message).
+
+**Why:** owner, 2026-10-28/29: "I want total consistency between Telegram and KIOSK and in all reports or notification
+or alerts" (the tablet listed a repeated alert as new lines without "#90-P2"; the ticket and the reports said "#91").
+
+**How to apply:** a name or a format both sides write lives in the agreement (agent-contract.json: `ticket.alertLabel`,
+`vestaMessage.incidentKey`) and in one function per side (`messaging.incident_tag`, `fmEngine.alertLabel`); a new
+place that names an alert calls it. Before shipping a change to how something reads on one side, check the other.
+
 ## Fix the shared piece
 
 When one use of a shared component misbehaves, fix the shared component, not the caller. Never write new code for a

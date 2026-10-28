@@ -166,7 +166,8 @@ class Vesta:
         self.delivery = Delivery(self.tg, self.state, self.policy, self.work)
         self.delivery.on_unreachable = self._tell_unreachable
         # what is happening for a chat beyond its conversation, told to the AI with each message there (chat_facts.py)
-        self.chat_facts = ChatFacts(self.state, self.work, settings.timezone, closed=Incidents(settings.store_path).closed)
+        named = Incidents(settings.store_path)
+        self.chat_facts = ChatFacts(self.state, self.work, settings.timezone, closed=named.closed, name=named.name)
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of,
                                related=lambda ids: related_entities(self.pack(), self.reader, ids),
                                executed=lambda *a: self.siren.executed(*a))
@@ -194,6 +195,7 @@ class Vesta:
         self.notices = Notices(self.state, self.policy, settings.timezone, severity=incidents.severity,
                                closed=incidents.closed, runs=incidents.runs, reaches=incidents.reaches,
                                watching=incidents.watching)
+        self.thread.name = incidents.name                    # "#9-P2" in a pointer, as the title names it
         self.thread.retitle = self.notices.retitle           # a settled copy of a closed incident is headed "Closed"
         self.thread.reheading = self.notices.heading         # a replaced status: every earlier step listed again
         self.thread.language = self.notices.lang             # each chat's Status in its own language (owner, 2026-10-23)

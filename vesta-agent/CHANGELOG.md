@@ -1,3 +1,10 @@
+## 0.12.375
+
+What you will see:
+- Every message, report and notice names an alert as Telegram's title does, "#91-P2": the morning digest's "Still
+  open", the assistant's "Open alerts", the night check's "Followed by alert #41-P2", and the short line left on an
+  older Telegram message ("#91-P2 · see the newer message below").
+
 ## 0.12.374
 
 What you will see:

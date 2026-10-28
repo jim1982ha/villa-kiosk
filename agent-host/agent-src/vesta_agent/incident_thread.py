@@ -72,6 +72,9 @@ class IncidentThread:
         # inbox"). None: not kept. Called at every change that is the incident's own step, never at a retry or a redraw
         # in another language (`tell` of _show): the tablet's record is the latest step, not whichever chat was drawn last.
         self.mirror = None
+        # incidents.Incidents.name: how the incident is named ("#9-P2") in a pointer to its newer message; its number
+        # alone until set
+        self.name = incident_tag
         self._told: dict[str, tuple] = {}       # incident → the last copy told (parts, keyboard, photo): `taken` tells it again
         self._locks: dict[str, asyncio.Lock] = {}
 
@@ -117,7 +120,7 @@ class IncidentThread:
             gone = bool(self.delete and await self.delete(chat, old["mid"]))
             if not gone and self.edit:
                 # past Telegram's 48 hours: the old message cannot go, so it stops repeating the incident
-                await self.edit(chat, old["mid"], f"{incident_tag(iid)} · see the newer message below.")
+                await self.edit(chat, old["mid"], f"{self.name(iid)} · see the newer message below.")
             # what happened to the earlier copy, said (owner, 2026-10-10: two messages of #14 stayed in the group)
             log.info("%s in chat %s: message %s replaced by %s (%s)", iid, chat, old["mid"], mid,
                      "deleted" if gone else "kept, now a pointer" if self.edit else "kept")
@@ -147,7 +150,7 @@ class IncidentThread:
                 return False
             gone = bool(self.delete and await self.delete(chat, mid))
             if not gone and self.edit:
-                await self.edit(chat, mid, f"{incident_tag(iid)} · see the newer message below.")
+                await self.edit(chat, mid, f"{self.name(iid)} · see the newer message below.")
             log.info("%s in chat %s: stray message %s %s (its message is %s)", iid, chat, mid,
                      "deleted" if gone else "now a pointer" if self.edit else "kept", rec.get("mid"))
             return True

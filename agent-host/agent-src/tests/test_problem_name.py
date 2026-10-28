@@ -45,7 +45,7 @@ def test_a_three_line_alert_back_again_has_the_same_name_in_the_cockpit_the_morn
     (p,) = pb.open_problems()
     assert p["title"] == NAME and p["detail"] == "sensor reads off\n10 min, held 12 min"
     still = compose.fm_daily(pack, store, date(2026, 10, 5)).split("\nStill open:\n")[1]
-    assert still.split("\n") == [f"- #1 · {NAME}"]                                          # the morning message
+    assert still.split("\n") == [f"- #1-P2 · {NAME}"]                                          # the morning message
     assert concierge.status(pack, {}, store)["open_alerts"] == [NAME]                     # the chat's villa status
 
 

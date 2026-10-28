@@ -536,7 +536,7 @@ def handed_to_alerts(store, pack, alerted: dict[str, int]) -> dict[tuple[str, st
     ⚠️ NOT AT 02:00 ONLY (architecture review N, 2026-10-27): a device offline at 5 minutes got its fault from the
     recheck, the villa's own alert took it up at 10 — and both stood in the Cockpit's Open issues until the night check
     handed the fault over, because only the night did."""
-    return {(o["rule_id"], o["entity_id"]): f"Followed by alert {incident_tag(alerted[dev])}, which says when it is back."
+    return {(o["rule_id"], o["entity_id"]): f"Followed by alert {incident_tag(alerted[dev], (store.incident(alerted[dev]) or {}).get('severity'))}, which says when it is back."
             for o in store.findings(status="open") if o["rule_id"] == "PM-UNAVAILABLE"
             for dev in [pack.physical_device_of(o["entity_id"]) or o["entity_id"]] if dev in alerted}
 
