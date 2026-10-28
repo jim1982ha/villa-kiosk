@@ -170,7 +170,10 @@ class ChatJobs:
                 self.facts.job_ended(cut, chat_facts.CUT)
             if self.delivery.tg is None:
                 continue
-            await self._say(cut.chat, cut.cut_title(), cut.cut_text(self.work.tz), over=cut.mid, new=True)
+            # a report cut by a restart is told to the tablet too (ticket 25 of "One inbox", inventory 25); a question's
+            # "send it again" is the conversation's (ticket 21)
+            await self._say(cut.chat, cut.cut_title(), cut.cut_text(self.work.tz), over=cut.mid, new=True,
+                            keep=cut.kind == CHAT_JOB)
             n += 1
         return n
 
@@ -218,16 +221,17 @@ class ChatJobs:
             # sentence as its result (ai_jobs.AiJobs.run), which deletes the waiting message like any result
             await self._say(chat, NOT_PREPARED_TITLE, NOT_COME(job, "its work stopped with an error", CHAT), over=mid)
 
-    async def _say(self, chat: int, title: str, text: str, *, over: int | None = None, new: bool = False) -> bool:
+    async def _say(self, chat: int, title: str, text: str, *, over: int | None = None, new: bool = False,
+                   keep: bool = False) -> bool:
         """`text` under `title` in `chat`, in the one layout: written over message `over` (the waiting message), else —
         `new` — sent as a message of its own. False when nothing showed it.
 
         ⚠️ TITLED LIKE ITS TWIN (owner, 2026-10-23): ai_jobs sent "could not be prepared" titled "Report not prepared"
         while these went as bare sentences — a waiting message rewritten in place too (Poster.rewrite: the same
         title and "To:" a new one gets)."""
-        if over and await self.poster.rewrite(chat, int(over), title, self.poster.to_line(chat), text):
+        if over and await self.poster.rewrite(chat, int(over), title, self.poster.to_line(chat), text, key=keep):
             return True
-        return bool(new and await self.poster.post(chat, text, title=title))
+        return bool(new and await self.poster.post(chat, text, title=title, keep=keep or None))
 
     def _typing_on(self, chat: int, name: str) -> None:
         """⚠️ "typing…" UNTIL THE RESULT IS THERE (owner, 2026-10-07): the job holds the chat's one "typing…"

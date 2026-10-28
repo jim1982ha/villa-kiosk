@@ -141,14 +141,15 @@ class Poster:
         """The "To:" of a message sent on its own in `chat` — post's, and rewrite's for the same message."""
         return audience(also or (self.notices.roles_for(chat, roles) if self.notices else ()))
 
-    async def rewrite(self, chat: int, message_id: int, title: str, to: str, text: str, key: str | None = None) -> bool:
+    async def rewrite(self, chat: int, message_id: int, title: str, to: str, text: str, key: str | bool | None = None) -> bool:
         """A titled message already sent, rewritten in place in the same layout (owner, 2026-10-20: a P2 of the night
         check that clears is said on its own message, never a new one). Only a message that was ONE page and still is;
         False when it cannot be (two pages, Telegram off or refusing: an old or deleted message) — the caller says
         nothing more here: Outcome.rewrite decides the backup. `key`: the skill's own, under which the message was kept for
         the tablet: its record is replaced by these words whatever Telegram said."""
         if key:
-            self._keep(True, kiosk_messages.of_note(kiosk_messages.note_key(key, title, text), title, to, text))
+            self._keep(True, kiosk_messages.of_note(
+                kiosk_messages.note_key(key if isinstance(key, str) else None, title, text), title, to, text))
         docs = laid_out(lambda: pages(title, to, text, telegram_message_chars()), [text])
         if self.edit is None or len(docs) != 1:
             return False

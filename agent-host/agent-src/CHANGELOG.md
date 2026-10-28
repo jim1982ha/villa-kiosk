@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.360 (28 October 2026)
+
+- Ticket 25 closed: chat_jobs._say passes `keep` for the notice of a report cut by a restart (a CHAT_JOB; a cut question,
+  ANSWER, is the conversation's, ticket 21), and Poster.rewrite accepts `key=True` for it. Tests in test_kiosk_messages
+  now drive the morning digest (scheduled: kept; asked in a chat: not), an alert a person reopened in the Cockpit
+  (the desk's "reopened" step reaches the record), and the restart-cut notice.
+
 ## 0.6.359 (28 October 2026)
 
 - kiosk_messages.py (ticket 25 of "One inbox"): Delivery's second sink. Every message the agent writes on Telegram is also
