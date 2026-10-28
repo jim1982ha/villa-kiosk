@@ -11,7 +11,7 @@ import { backendFetch } from "@/auth/sessionLost";
 import { readJson, writeJson } from "@/utils/storedJson";
 import { fetchAnnouncements, fetchVestaMessages, pressButton, type Announcement } from "./announcements";
 import { pauseFor, watchFeed, type FeedRead } from "./feed";
-import { afterRead, markShown, shownTogether, unreadOf } from "./messagesModel";
+import { afterRead, isReport, markShown, shownTogether, unreadOf } from "./messagesModel";
 import { pressesOf, type PressState, type Presses } from "./presses";
 
 /** What this tablet has shown in Messages (messagesModel.markShown): per tablet, so in this browser's storage. Private
@@ -35,6 +35,8 @@ interface Announcements {
 interface AnnouncementsAndUnread extends Announcements {
   /** How many kept announcements this tablet has not shown in Messages yet (messagesModel.unreadOf). */
   unread: number;
+  /** How many of them are VESTA's reports (Messages opens on Reports when they are all the unread). */
+  unreadReports: number;
   /** Messages showed these: read on this tablet from now on. */
   shown: (items: readonly Announcement[]) => void;
   /** The page's one record of presses (messages/presses). */
@@ -61,7 +63,7 @@ function useFeed(read: (after: number | null, stop: AbortSignal) => Promise<Feed
   return state;
 }
 const NO_PRESSES = pressesOf(async () => "failed");
-const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, shown: () => {}, presses: NO_PRESSES });
+const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, unreadReports: 0, shown: () => {}, presses: NO_PRESSES });
 
 export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   // ⚠️ TWO FEEDS, ONE LIST (tickets 26-27 of "One inbox"): the villa's announcements and VESTA's cards are read apart
@@ -87,7 +89,8 @@ export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   }), [kept]);
   useEffect(() => { writeJson(READ_KEY, read); }, [read]);
   const presses = useMemo(() => pressesOf((key, command) => pressButton(key, command, backendFetch)), []);
-  const value = useMemo(() => ({ ...state, unread: unreadOf(kept, read), shown, presses }),
+  const value = useMemo(() => ({ ...state, unread: unreadOf(kept, read),
+    unreadReports: unreadOf(kept.filter(isReport), read), shown, presses }),
     [state, kept, read, shown, presses]);
   return <AnnouncementsContext.Provider value={value}>{children}</AnnouncementsContext.Provider>;
 }

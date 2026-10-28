@@ -8,7 +8,7 @@
 import type { CardView } from "@/config/cockpitCard";
 import { alertStage, incidentKey, isOver, type Announcement } from "./announcements";
 
-export type MessagesFilter = "all" | "issues" | "notifications";
+export type MessagesFilter = "all" | "issues" | "notifications" | "reports";
 
 /** The filters, in their order on their one line. */
 export const FILTERS: readonly { id: MessagesFilter; label: string }[] = [
@@ -17,11 +17,14 @@ export const FILTERS: readonly { id: MessagesFilter; label: string }[] = [
   // its count the open ones only
   { id: "issues", label: "Issues" },
   { id: "notifications", label: "Notifications" },
+  // ticket 20 of "One inbox": the facility manager's daily, weekly and monthly reports, the night check's message
+  { id: "reports", label: "Reports" },
 ];
 
 export type MessageItem =
   | { kind: "issue"; key: string; card: CardView }
-  | { kind: "notification"; key: string; announcement: Announcement };
+  | { kind: "notification"; key: string; announcement: Announcement }
+  | { kind: "report"; key: string; announcement: Announcement };
 
 export interface MessagesView {
   /** Each filter with its count (Open issues: the open issues; the others none). */
@@ -34,20 +37,25 @@ export interface MessagesView {
   /** Alerts that are closed — VESTA's card "#90-P2 (closed)", the villa's own ✅ message — newest first: their own
    *  folded section, after Watch (owner, 2026-10-28), never among the notifications (announcements.alertStage). */
   closed: MessageItem[];
+  /** VESTA's reports, newest first: their own filter and section, never among the notifications. */
+  reports: MessageItem[];
   /** The item open on the right: the one asked for when listed, else the issue a device window's warning asked
    *  for, else the first listed; null when nothing is listed. */
   selected: MessageItem | null;
   /** Why it is open: asked for, a warning's, or only the first listed — a phone shows an item someone chose (asked,
    *  a warning) and the list otherwise, so an item that went never leaves another one open by itself. */
   openedBy: "asked" | "focus" | "first" | null;
-  /** Which parts the filter shows: the issues' (Open issues, Watch, Closed) and the notifications'. */
-  shows: { issues: boolean; notifications: boolean };
+  /** Which parts the filter shows: the issues' (Open issues, Watch, Closed), the notifications', the reports'. */
+  shows: { issues: boolean; notifications: boolean; reports: boolean };
 }
 
 /** A notification's key: VESTA's card its thread's (one card per alert, replaced as VESTA rewrites it); an
  *  announcement's own key (a ring and its rewrite are one line, kept while it is rewritten), else its number in the
  *  add-on's store. */
 const noteKey = (a: Announcement) => (a.feed === "vesta" ? `v:${a.key}` : a.key ? `k:${a.key}` : `n${a.seq}`);
+
+/** VESTA's report (the job that sent it is named): listed under Reports, never as a notification. */
+export const isReport = (a: Announcement): boolean => !!a.report;
 
 /** One record's identity on the page: two feeds number apart, so VESTA's numbers are marked. */
 export const idOf = (a: Announcement): string => `${a.feed === "vesta" ? "v" : ""}${a.seq}`;
@@ -122,13 +130,15 @@ export function announcementWords(a: Announcement): { title: string; line: strin
 }
 
 /** The announcements the Messages tab shows as read on this tablet (ticket 18; review Q 5: decided here, not in the
- *  tab): the Notifications filter's page shown, and the one open on the right. On All they sit under the open issues,
- *  maybe below the fold: drawn there is not seen. */
-export function readOnScreen(filter: MessagesFilter, page: readonly MessageItem[], open: MessageItem | null,
+ *  tab): the page shown of the Notifications or the Reports filter (`pages`: each section's page on screen), and the
+ *  one open on the right. On All they sit under the open issues, maybe below the fold: drawn there is not seen. */
+export function readOnScreen(filter: MessagesFilter,
+  pages: { notifications?: readonly MessageItem[]; reports?: readonly MessageItem[] }, open: MessageItem | null,
   kept: readonly Announcement[] = []): Announcement[] {
+  const page = (filter === "notifications" ? pages.notifications : filter === "reports" ? pages.reports : undefined) ?? [];
   // an issue open on the right shows VESTA's card of its alert: read too (its line is the card's only line)
-  return [...(filter === "notifications" ? page : []), ...(open ? [open] : [])]
-    .flatMap((i) => (i.kind === "notification" ? [i.announcement] : cardsOfIssue(i.card, kept)));
+  return [...page, ...(open ? [open] : [])]
+    .flatMap((i) => (i.kind === "issue" ? cardsOfIssue(i.card, kept) : [i.announcement]));
 }
 
 /** What this tablet remembers it has shown: one announcement as the add-on stored it, its number and when it came. A
@@ -154,11 +164,14 @@ export function markShown(read: readonly string[], shown: readonly Announcement[
 }
 
 /** The filter Messages opens on: a device window's warning on Open issues, its issue open; the wrench's "Open a ticket"
- *  on All; else Notifications while something is unread (the robot opens on what was not seen), else All. Decided
- *  before the first draw: a first draw on Notifications would mark its page read before anyone saw it. */
-export function openingFilter(unread: number, opening: { warning?: boolean; form?: boolean } = {}): MessagesFilter {
+ *  on All; else Notifications while something is unread (the robot opens on what was not seen) — Reports when the
+ *  unread are reports only (`unreadReports` of `unread`) —, else All. Decided before the first draw: a first draw on
+ *  Notifications would mark its page read before anyone saw it. */
+export function openingFilter(unread: number, opening: { warning?: boolean; form?: boolean } = {}, unreadReports = 0):
+  MessagesFilter {
   if (opening.warning) return "issues";
-  return !opening.form && unread > 0 ? "notifications" : "all";
+  if (opening.form || unread <= 0) return "all";
+  return unread > unreadReports ? "notifications" : "reports";
 }
 
 export function messagesView({ open, watched, announcements, filter, selected, focus }: {
@@ -172,8 +185,9 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   focus?: (card: CardView) => boolean;
 }): MessagesView {
   const issueItem = (card: CardView): MessageItem => ({ kind: "issue", key: card.key, card });
-  const showIssues = filter !== "notifications";
-  const showNotes = filter !== "issues";
+  const showIssues = filter === "all" || filter === "issues";
+  const showNotes = filter === "all" || filter === "notifications";
+  const showReports = filter === "all" || filter === "reports";
   const issues = showIssues ? open.map(issueItem) : [];
   const watchedItems = showIssues ? watched.map(issueItem) : [];
   // ⚠️ A WATCHED ALERT IS LISTED ONCE, IN WATCH (owner, 2026-10-28): its card is open on its Watch line, never also a
@@ -183,15 +197,18 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   const inWatch = new Set([...open, ...watched].flatMap((c) => cardsOfIssue(c, announcements)));
   const isClosed = (a: Announcement) => alertStage(a) === "closed";
   // newest first, by time (two feeds: their numbers do not compare)
-  const asNotes = (shown: boolean, keep: (a: Announcement) => boolean): MessageItem[] => (shown
+  const asNotes = (shown: boolean, keep: (a: Announcement) => boolean, kind: "notification" | "report" = "notification"):
+    MessageItem[] => (shown
     ? announcements.filter((a) => !inWatch.has(a) && keep(a)).sort((x, y) => byTime(y, x))
-      .map((a) => ({ kind: "notification", key: noteKey(a), announcement: a }))
+      .map((a) => ({ kind, key: noteKey(a), announcement: a }))
     : []);
   // ⚠️ A PROBLEM'S LIFE IS ONE PLACE (owner, 2026-10-28): open, then watched once it cleared, then closed — Watch and
   // Closed are shown with the issues, never with the notifications
-  const closed = asNotes(showIssues, isClosed);
-  const notifications = asNotes(showNotes, (a) => !isClosed(a));
-  const listed = [...issues, ...notifications, ...watchedItems, ...closed];
+  const closed = asNotes(showIssues, (a) => isClosed(a) && !isReport(a));
+  const notifications = asNotes(showNotes, (a) => !isClosed(a) && !isReport(a));
+  // ⚠️ A REPORT IS ONE PLACE TOO (ticket 20): under Reports, never also a notification
+  const reports = asNotes(showReports, isReport, "report");
+  const listed = [...issues, ...notifications, ...reports, ...watchedItems, ...closed];
   const asked = listed.find((i) => i.key === selected);
   const focused = focus ? issues.find((i) => i.kind === "issue" && focus(i.card)) : undefined;
   const first = listed[0];
@@ -201,8 +218,9 @@ export function messagesView({ open, watched, announcements, filter, selected, f
     watched: watchedItems,
     notifications,
     closed,
+    reports,
     selected: asked ?? focused ?? first ?? null,
     openedBy: asked ? "asked" : focused ? "focus" : first ? "first" : null,
-    shows: { issues: showIssues, notifications: showNotes },
+    shows: { issues: showIssues, notifications: showNotes, reports: showReports },
   };
 }

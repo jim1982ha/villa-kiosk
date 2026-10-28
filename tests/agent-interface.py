@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -591,6 +592,62 @@ async def main() -> None:
     status, body = await jget("/vesta-messages", cookie("owner"))
     ck("  ...and with records kept for ever, it is kept", "old-one" in [m["key"] for m in body["messages"]], body)
     cfg_file.unlink(missing_ok=True)
+
+    # ── a report and its page (ticket 20 of "One inbox", 2026-10-29) ─────────────────────────────────────────────
+    print("\n  A report, kept with its page:")
+    page = b"<!DOCTYPE html><html><body>Weekly</body></html>"
+    pages = {}
+    for name in ("page-en-0001", "page-fr-0001", "page-loose-01"):
+        r = await post(f"/agent/v1/fm-document?id={name}", headers=bearer(), data=page)
+        pages[name] = r.status
+    r = await post("/agent/v1/fm-document?id=page-en-0002", data=page)
+    ck("the Agent uploads a page attached to no fault (its token); without the token, refused",
+       set(pages.values()) == {200} and r.status == 401, (pages, r.status))
+    report = {"key": "note:weekly", "title": "Weekly report", "to": "FM", "body": "Two things to look at",
+              "report": "reports:fm-weekly", "page": "page-en-0001", "language": "en",
+              "languages": {"fr": {"body": "Deux choses", "page": "page-fr-0001"}}}
+    r = await post("/agent/v1/vesta-message", headers=bearer(), json=report)
+    status, body = await jget("/vesta-messages", cookie("ops"))
+    got = next((m for m in body["messages"] if m["key"] == "note:weekly"), {})
+    ck("a report is kept with its job, its page, its language and each other language's page",
+       r.status == 200 and {k: v for k, v in got.items() if k not in ("seq", "at")} == report, got)
+    await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "note:weekly", "title": "Weekly report",
+                                                                  "body": "Two things to look at, one done"})
+    status, body = await jget("/vesta-messages", cookie("ops"))
+    got = next((m for m in body["messages"] if m["key"] == "note:weekly"), {})
+    ck("  ...a rewrite naming no job or page keeps the first one's (still a report, still its page)",
+       got.get("report") == "reports:fm-weekly" and got.get("page") == "page-en-0001"
+       and got.get("body") == "Two things to look at, one done", got)
+    await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "note:bad-page", "title": "t",
+                                                                  "page": "../../etc/passwd", "report": 7})
+    status, body = await jget("/vesta-messages", cookie("ops"))
+    got = next((m for m in body["messages"] if m["key"] == "note:bad-page"), {})
+    ck("  ...a page that is no document id, or a job that is no text, is dropped", "page" not in got
+       and "report" not in got, got)
+    await post("/agent/v1/vesta-message", headers=bearer(), json=report)       # the report as it was first sent
+    old_grace = proxy.FM_EVIDENCE_ORPHAN_GRACE_SECONDS
+    proxy.FM_EVIDENCE_ORPHAN_GRACE_SECONDS = 0
+    long_ago = time.time() - 3600
+    try:
+        for name in pages:
+            os.utime(TMP / "data" / proxy.FM_EVIDENCE_NAME / f"{name}.html", (long_ago, long_ago))
+        proxy._fm_after_write([], [])
+    finally:
+        proxy.FM_EVIDENCE_ORPHAN_GRACE_SECONDS = old_grace
+    kept_pages = {n: (TMP / "data" / proxy.FM_EVIDENCE_NAME / f"{n}.html").is_file() for n in pages}
+    ck("a fault's write sweeps a page nothing names, never a page a kept report names (it no longer goes with a ticket)",
+       kept_pages == {"page-en-0001": True, "page-fr-0001": True, "page-loose-01": False}, kept_pages)
+    r = await get("/fm-document/page-en-0001", headers=cookie("ops"))
+    ck("  ...and the facility manager opens it in the document viewer", r.status == 200
+       and (await r.read()) == page, r.status)
+    cfg_file.write_text(json.dumps({"recordsKeptDays": 30}))
+    aged = time.time() - 40 * 86400
+    os.utime(TMP / "data" / proxy.FM_EVIDENCE_NAME / "page-en-0001.html", (aged, aged))
+    proxy._prune_fm_evidence()
+    cfg_file.unlink(missing_ok=True)
+    ck("  ...but past the records-kept days it goes, named or not (its own lifetime)",
+       not (TMP / "data" / proxy.FM_EVIDENCE_NAME / "page-en-0001.html").exists())
+
     agent(enabled="false", token=TOKEN)
     r = await post("/agent/v1/vesta-message", headers=bearer(), json=sent)
     ck("with the Agent switched off the door is 404, as every /agent/v1 route", r.status == 404, r.status)

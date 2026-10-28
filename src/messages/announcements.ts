@@ -43,6 +43,11 @@ export interface Announcement {
   run?: string;
   /** VESTA's card: its alert's stage as its title says it ("new", "existing", "watch", "closed"); none without one. */
   vestaStage?: string;
+  /** VESTA's report (ticket 20 of "One inbox"): the scheduled job that sent it (the morning digest, the weekly and monthly
+   *  reports, the night check's message); listed under Reports, never as a notification. None for anything else. */
+  report?: string;
+  /** A report's page: the add-on's document id, opened in the document viewer (fmApi.documentUrl). */
+  page?: string;
 }
 
 export interface AnnouncementButton { label: string; command: string }
@@ -202,7 +207,8 @@ export function parseVestaMessage(raw: unknown): Announcement | null {
   const r = numbered(raw);
   if (!r || typeof r.key !== "string" || !r.key) return null;
   const lines = strings(r.status);
-  const text = [r.lead, r.body].filter((x): x is string => typeof x === "string" && x.trim() !== "").join("\n");
+  const shown = inTabletLanguage(r);
+  const text = [r.lead, shown.body].filter((x): x is string => typeof x === "string" && x.trim() !== "").join("\n");
   const title = typeof r.title === "string" ? r.title : "";
   if (!title && !text && !lines.length) return null;
   return {
@@ -210,7 +216,24 @@ export function parseVestaMessage(raw: unknown): Announcement | null {
     status: lines[lines.length - 1] ?? "", story: lines.slice(0, -1), photo: photoOf(r),
     key: r.key, buttons: [], feed: "vesta", takes: strings(r.takes),
     ...(typeof r.stage === "string" && r.stage ? { vestaStage: r.stage } : {}),
+    ...(typeof r.report === "string" && r.report ? { report: r.report } : {}),
+    ...(typeof shown.page === "string" && shown.page ? { page: shown.page } : {}),
   };
+}
+
+/** The language the tablet reads: English (a tablet language is ticket 28 of "One inbox", parked: owner 2026-10-28). */
+const TABLET_LANGUAGE = "en";
+
+/** A record's words and page in the tablet's language when VESTA wrote them in it (its `languages`), else as written
+ *  (owner, spec story 38). */
+function inTabletLanguage(r: Record<string, unknown>): { body: unknown; page: unknown } {
+  const langs = r.languages && typeof r.languages === "object" ? (r.languages as Record<string, unknown>) : {};
+  const there = langs[TABLET_LANGUAGE];
+  if (r.language !== TABLET_LANGUAGE && there && typeof there === "object" && typeof (there as { body?: unknown }).body === "string") {
+    const t = there as { body: string; page?: unknown };
+    return { body: t.body, page: t.page };
+  }
+  return { body: r.body, page: r.page };
 }
 
 /** VESTA's cards, a read of the add-on's feed (messages/feed), as the announcements are read. */

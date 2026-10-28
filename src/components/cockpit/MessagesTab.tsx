@@ -9,7 +9,7 @@
 // screen in turn.
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bell, CheckCircle2, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ArrowLeft, Bell, CheckCircle2, ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Doors } from "@/auth/doors";
 import { useHA } from "@/ha/HAStateStore";
@@ -18,6 +18,7 @@ import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
 import type { CardView } from "@/config/cockpitCard";
 import { localStamp } from "@/fm/fmEngine";
+import { documentUrl } from "@/fm/fmApi";
 import { useAnnouncementPress, useAnnouncements } from "@/messages/AnnouncementsContext";
 import { announcementWords, cardsOfIssue, messagesView, openingFilter, readOnScreen, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
@@ -110,7 +111,7 @@ function rowOf(item: MessageItem) {
   // its words as every screen says them (messagesModel.announcementWords)
   const w = announcementWords(item.announcement);
   return {
-    icon: <Bell size={18} aria-hidden="true" />,
+    icon: item.kind === "report" ? <FileText size={18} aria-hidden="true" /> : <Bell size={18} aria-hidden="true" />,
     title: w.title,
     sub: w.line,
     time: w.at ? localStamp(w.at) : "",
@@ -143,10 +144,10 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
     [canManage, devices, config.entityMap, entities, resolvedRooms]);
 
   const { open, watched } = useCockpitIssues();
-  const { kept, unread, shown } = useAnnouncements();
+  const { kept, unread, unreadReports, shown } = useAnnouncements();
   // something unread: opened on Notifications, the newest open (ticket 18 of "One inbox"); a warning or the wrench first
   const [filter, setFilter] = useState<MessagesFilter>(
-    () => openingFilter(unread, { warning: !!focusFaults?.length, form: !!reportFaultFor && canManage }));
+    () => openingFilter(unread, { warning: !!focusFaults?.length, form: !!reportFaultFor && canManage }, unreadReports));
   const [selected, setSelected] = useState<string | null>(null);
   // a device window's warning opens its issue until Back (or another line) is chosen
   const [focusDone, setFocusDone] = useState(false);
@@ -171,20 +172,22 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
 
   const view = messagesView({ open, watched, announcements: kept, filter, selected, focus: isFocus });
   const paged = usePaged(view.notifications);
-  // which sections are open: Open issues and Notifications open, Watch and Closed folded (owner, 2026-10-25, 2026-10-28)
-  const [folds, setFolds] = useState({ issues: true, notes: true, watch: false, closed: false });
+  const reportsPaged = usePaged(view.reports);
+  // which sections are open: Open issues, Notifications and Reports open, Watch and Closed folded (owner, 2026-10-25,
+  // 2026-10-28)
+  const [folds, setFolds] = useState({ issues: true, notes: true, reports: true, watch: false, closed: false });
   const fold = (k: keyof typeof folds) => setFolds((f) => ({ ...f, [k]: !f[k] }));
   const choose = (key: string) => { setSelected(key); setRaising(null); setFocusDone(true); };
   const raise = () => setRaising({});
   // the list again (a phone's Back): nothing asked, the warning's issue let go
   const back = () => { setSelected(null); setRaising(null); setFocusDone(true); };
-  const { issues: showsIssues, notifications: showsNotes } = view.shows;
+  const { issues: showsIssues, notifications: showsNotes, reports: showsReports } = view.shows;
   const item = raising ? null : view.selected;
   // A phone shows the item someone chose (a line, a warning, the ticket form), else the list: an item that went (an
   // issue cleared, the form done) never leaves another open in its place.
   const reading = !!raising || view.openedBy === "asked" || view.openedBy === "focus";
   // read on this tablet once in view, as the model says (messagesModel.readOnScreen)
-  const onScreen = readOnScreen(filter, paged.page, item, kept);
+  const onScreen = readOnScreen(filter, { notifications: paged.page, reports: reportsPaged.page }, item, kept);
   const onScreenKey = onScreen.map((a) => a.seq).join(",");
   useEffect(() => {
     if (onScreen.length) shown(onScreen);
@@ -226,6 +229,15 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
                 : <Pager paged={paged} unit="notification" />}
             </MessagesSection>
           )}
+          {/* VESTA's reports (ticket 20 of "One inbox"): the daily digest, the weekly and monthly reports, the night check */}
+          {showsReports && (
+            <MessagesSection title="Reports" open={folds.reports} onToggle={() => fold("reports")}>
+              {reportsPaged.page.map((r) => <MessageRow key={r.key} item={r} selected={item?.key === r.key} onSelect={choose} />)}
+              {view.reports.length === 0
+                ? <p className="muted body-text messages-empty">No report yet.</p>
+                : <Pager paged={reportsPaged} unit="report" />}
+            </MessagesSection>
+          )}
           {/* last, and not in Open issues' count: closed, the VESTA Agent confirming it (fm/faultConfirm); folded by
               default (owner, 2026-10-25); a section of its own, below Notifications (owner, 2026-10-28) */}
           {/* a problem's later life, with the issues and always there, empty or not (owner, 2026-10-28) */}
@@ -257,6 +269,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           : <CockpitAttentionRow key={item.key} card={item.card} onOpenEntity={onOpenEntity} canManage={canManage}
               onEditTicket={onEditTicket} focused={!!isFocus?.(item.card)} />)}
         {item?.kind === "notification" && <NotificationDetail item={item} />}
+        {item?.kind === "report" && <ReportDetail announcement={item.announcement} canOpenPage={canManage} />}
         {!raising && !item && <p className="muted body-text messages-empty">Nothing to show.</p>}
       </div>
     </div>
@@ -267,6 +280,23 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
 function NotificationDetail({ item }: { item: Extract<MessageItem, { kind: "notification" }> }) {
   const { presses, press } = useAnnouncementPress(item.announcement);
   return <NoteDetail announcement={item.announcement} onPress={press} presses={presses} />;
+}
+
+/** A report, open on the right: what VESTA wrote, then its page in the document viewer — for the profiles the add-on
+ *  serves pages to (the owner and the facility manager: fm-document), so no one is offered a page they cannot open. */
+export function ReportDetail({ announcement: a, canOpenPage }: { announcement: Announcement; canOpenPage: boolean }) {
+  return (
+    <>
+      <NoteDetail announcement={a} />
+      {a.page && canOpenPage && (
+        <div className="fm-documents">
+          <a className="fm-document-link" href={documentUrl(a.page)} target="_blank" rel="noopener noreferrer">
+            <FileText size={15} aria-hidden="true" /> Open the page
+          </a>
+        </div>
+      )}
+    </>
+  );
 }
 
 /** A notification's title, when it came and all it says: on its own, or VESTA's card of an open issue's alert above the

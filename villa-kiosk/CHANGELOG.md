@@ -1,3 +1,16 @@
+## 2.496.579
+
+What you will see:
+- Messages has a fourth filter, Reports (All · Issues · Notifications · Reports, still on one line). It lists VESTA's
+  reports, newest first: the morning digest, the weekly report and the owner's weekly lines, the monthly report, the
+  night check's message. Tap one to read it; a report with a page has an "Open the page" button (owner and facility
+  manager), which opens the same page Telegram attaches, without the internet.
+- A report is no longer also a line in Notifications.
+- A report shows in English when VESTA wrote an English version, otherwise in the language it was written in.
+- A report and its page stay for the "records kept" days (Advanced Settings), whatever happens to any ticket.
+- Messages opens on Reports when the only unread lines are reports.
+- Needs the VESTA Agent 0.12.377 or later; with an older one the Reports filter stays empty.
+
 ## 2.496.578
 
 What you will see:

@@ -2267,7 +2267,8 @@ def _fm_after_write(old, new, baseline_readable: bool = True) -> None:
     except OSError:
         names = []
     for field, ext in FM_EVIDENCE_KINDS:
-        referenced = _fm_referenced_evidence_ids(new, field)
+        # a page a kept report names is referenced too: it no longer goes with a ticket (ticket 20 of "One inbox")
+        referenced = _fm_referenced_evidence_ids(new, field) | (_report_pages() if ext == ".html" else set())
         # 1. Anything this write dropped a reference to goes immediately: it was
         #    referenced a moment ago, so there is no in-flight form to protect.
         for photo_id in _fm_referenced_evidence_ids(old, field) - referenced:
@@ -3529,8 +3530,9 @@ async def agent_fm_evidence_handler(request: web.Request) -> web.Response:
 
 
 async def agent_fm_document_handler(request: web.Request) -> web.Response:
-    """Store a document for a fault (the investigation report a person asked to keep with it: owner, 2026-10-11): one
-    HTML page, then referenced by the fault's documentIds — and deleted with it (_fm_after_write)."""
+    """Store one HTML page: a fault's (the investigation report a person asked to keep with it: owner, 2026-10-11),
+    referenced by its documentIds and deleted with it (_fm_after_write); or a report's (ticket 20 of "One inbox"), named
+    by a kept VESTA message's `page` and kept while that message is (_report_pages), then the records-kept days."""
     if (refused := _agent_refuse(request, "agentWrite")) is not None:
         return refused
     return await _store_evidence(request, ".html")
@@ -3913,13 +3915,12 @@ def _sweep_announcement_photos(_stored, kept) -> None:
 
 def _announcements_with(stored: list, rec: dict) -> list:
     """The store with `rec` added. ⚠️ ONE LINE PER KEY: an announcement naming the key of a kept one REPLACES it (the
-    ring becomes "Opened at …"); a rewrite with no photo keeps the first one's. Pure — tests/store-doors.py drives
-    it."""
+    ring becomes "Opened at …"); a rewrite with no photo keeps the first one's — and VESTA's report its job and page
+    (the night check's message rewritten by a later check stays a report). Pure — tests/store-doors.py drives it."""
     if "key" in rec:
         old = next((a for a in stored if isinstance(a, dict) and a.get("key") == rec["key"]), None)
         if old is not None:
-            if "photo" not in rec and old.get("photo"):
-                rec = {**rec, "photo": old["photo"]}
+            rec = {**{f: old[f] for f in ("photo", "page", "report") if f not in rec and old.get(f)}, **rec}
             stored = [a for a in stored if a is not old]
     return stored + [rec]
 
@@ -4083,6 +4084,27 @@ def _vm_lines(value, list_name: str, line_name: str) -> list:
     return [x for x in out if x][:int(VESTA_MESSAGE_LIMITS.get(list_name) or 0)]
 
 
+def _vm_page(value) -> str:
+    """A report's page: a document id as the upload takes it (FM_EVIDENCE_ID_RE); anything else is none."""
+    return value if isinstance(value, str) and FM_EVIDENCE_ID_RE.fullmatch(value) else ""
+
+
+def _vm_language(code) -> bool:
+    """Whether `code` is a language code the record may name ("fr", "pt-BR")."""
+    return (isinstance(code, str) and bool(VESTA_MESSAGE_LANGUAGE_RE.match(code))
+            and len(code) <= int(VESTA_MESSAGE_LIMITS.get("language") or 0))
+
+
+def _report_pages() -> set:
+    """Every page a kept VESTA message names (a report's, in each of its languages): a fault's write never sweeps them as
+    unattached — a report's page lives with its message, the records-kept days, never with a ticket (ticket 20)."""
+    named = set()
+    for m in MESSAGED.items():
+        if isinstance(m, dict):
+            named |= {m.get("page")} | {w.get("page") for w in (m.get("languages") or {}).values() if isinstance(w, dict)}
+    return {p for p in named if isinstance(p, str) and p}
+
+
 def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
     """The record kept for one pushed message, or None when it names no key or says nothing. Pure — tests/store-doors.py
     drives it. The photo is not in it: the picture is kept apart (_keep_pushed_photo). Every limit is the agreement's."""
@@ -4099,6 +4121,14 @@ def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
         rec["status"] = status
     if takes := _vm_lines(body.get("takes"), "takes", "key"):
         rec["takes"] = takes
+    # a report (ticket 20 of "One inbox"): the scheduled job that sent it, its page (a document id: the add-on serves it
+    # from its own folder, so nothing else is let through) and the language its words are in
+    if report := _vm_text(body.get("report"), "report"):
+        rec["report"] = report
+    if page := _vm_page(body.get("page")):
+        rec["page"] = page
+    if _vm_language(body.get("language")):
+        rec["language"] = body["language"]
     buttons = []
     for b in body.get("buttons") if isinstance(body.get("buttons"), list) else []:
         made = {f: _vm_text(b.get(f2), f2) for f, f2 in (("label", "label"), ("kind", "kind"), ("id", "id"))} \
@@ -4109,10 +4139,10 @@ def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
         rec["buttons"] = buttons
     langs = {}
     for code, words in (body.get("languages") or {}).items() if isinstance(body.get("languages"), dict) else ():
-        if (isinstance(code, str) and VESTA_MESSAGE_LANGUAGE_RE.match(code) and isinstance(words, dict)
-                and len(code) <= int(VESTA_MESSAGE_LIMITS.get("language") or 0)
+        if (_vm_language(code) and isinstance(words, dict)
                 and len(langs) < int(VESTA_MESSAGE_LIMITS.get("languages") or 0)):
-            one = {"body": _vm_text(words.get("body"), "body"), "status": _vm_lines(words.get("status"), "status", "statusLine")}
+            one = {"body": _vm_text(words.get("body"), "body"), "status": _vm_lines(words.get("status"), "status", "statusLine"),
+                   "page": _vm_page(words.get("page"))}
             if one["body"] or one["status"]:
                 langs[code] = {k: v for k, v in one.items() if v}
     if langs:
