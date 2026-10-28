@@ -1,3 +1,11 @@
+## 0.12.371
+
+What you will see:
+- Nothing yet on screen. The tablet's add-on now also receives the message VESTA sends when a report you asked for was
+  cut by a restart ("could not be prepared"), as it does for the morning digest and for an alert a person reopened in the
+  Cockpit (both already did; they are now checked by a test). A question VESTA could not answer after a restart stays
+  in the conversation only.
+
 ## 0.12.370
 
 What you will see:
