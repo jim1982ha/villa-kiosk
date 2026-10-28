@@ -1,3 +1,16 @@
+## 2.496.560
+
+What you will see:
+- A doorbell ring's notice on the tablet now carries the same button as the Telegram message (the gate's Unlock).
+  Anyone at the tablet can press it, whatever profile is signed in, with no PIN. The villa's doorbell automation then
+  opens the gate, and its message, on Telegram and on the tablet, says the gate was opened "from the tablet".
+- The button works only while the doorbell automation is still waiting for an answer. Once the ring is
+  answered on Telegram, opened at the gate, or nobody answered in time, the notice changes to what happened and the
+  button is gone. A press that comes too late says "No longer offered" and opens nothing.
+- A ring's notice with its button stays on screen until then, or until you close it with its ✕; other announcements
+  still go after 10s.
+- The Unlock button on Telegram works exactly as before.
+
 ## 2.496.559
 
 What you will see:
