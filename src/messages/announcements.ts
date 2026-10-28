@@ -68,16 +68,19 @@ export function stageOf(status: string): Stage | null {
 /** An alert's stage as every screen reads it — ⚠️ ONE READER (owner, 2026-10-28: "the same code … consistently"): VESTA's
  *  card says it (its title's word: new, existing, watch, closed); the villa's own message by its bottom line's mark
  *  (stageOf: both ends read "closed"). null: no stage (a weekly test, a ring not answered). */
-export function alertStage(a: Announcement): "new" | "existing" | "watch" | "closed" | null {
-  if (a.feed === "vesta") {
-    const s = a.vestaStage;
-    return s === "new" || s === "existing" || s === "watch" || s === "closed" ? s : null;
-  }
+export type AlertStage = keyof typeof AGENT_CONTRACT.stageMarks;
+const STAGES = Object.keys(AGENT_CONTRACT.stageMarks) as AlertStage[];
+
+export function alertStage(a: Announcement): AlertStage | null {
+  if (a.feed === "vesta") return STAGES.find((s) => s === a.vestaStage) ?? null;
   return stageOf(a.status);
 }
 
 /** An alert that is over: watched after it cleared, or closed — parked in Watch or Closed, never unread. */
-export const isOver = (a: Announcement): boolean => alertStage(a) === "watch" || alertStage(a) === "closed";
+export const isOver = (a: Announcement): boolean => {
+  const s = alertStage(a);
+  return s === "watch" || s === "closed";
+};
 
 /** VESTA's card key of alert number `n` (agent-contract.json vestaMessage.incidentKey: the form the Agent writes). */
 export const incidentKey = (n: number): string =>

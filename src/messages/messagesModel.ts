@@ -61,6 +61,8 @@ export function cardsOfIssue(card: CardView, kept: readonly Announcement[]): Ann
 
 /** When a record came, for the order of the list (two feeds: their numbers do not compare). */
 const timeOf = (a: Announcement) => Date.parse(a.at) || 0;
+/** The list's one order: by time, oldest first, then by number. */
+const byTime = (x: Announcement, y: Announcement) => timeOf(x) - timeOf(y) || x.seq - y.seq;
 
 /**
  * What the tablet lists as notifications (tickets 26-27 of "One inbox", owner 2026-10-28: "update the existing card,
@@ -69,6 +71,10 @@ const timeOf = (a: Announcement) => Date.parse(a.at) || 0;
  * Telegram. Without VESTA (stopped, not installed) nothing is taken over and the villa's own show, so the list never
  * goes blank. Oldest first. Pure: tests/oracles/messages_model.mjs.
  */
+export function shownTogether(villa: readonly Announcement[], vesta: readonly Announcement[]): Announcement[] {
+  return [...villa.filter((a) => !vesta.some((c) => supersedes(c, a))), ...vesta].sort(byTime);
+}
+
 /**
  * Whether `newer` stands in place of `older` — ⚠️ THE ONE RULE (owner, 2026-10-28: "the same code … consistently used"),
  * read by the Messages list (shownTogether) and by the notice (noticeModel), on arrival and against what is kept: its
@@ -78,11 +84,6 @@ const timeOf = (a: Announcement) => Date.parse(a.at) || 0;
 export const supersedes = (newer: Announcement, older: Announcement): boolean => newer !== older
   && ((newer.key !== null && newer.key === older.key && newer.feed === older.feed && newer.seq > older.seq)
     || (!!older.run && (newer.takes ?? []).includes(older.run)));
-
-export function shownTogether(villa: readonly Announcement[], vesta: readonly Announcement[]): Announcement[] {
-  return [...villa.filter((a) => !vesta.some((c) => supersedes(c, a))), ...vesta]
-    .sort((x, y) => timeOf(x) - timeOf(y) || x.seq - y.seq);
-}
 
 /** What the page holds after `incoming`: each one added once, a rewrite (same key, a newer number) in place of what
  *  it rewrites, an older copy never over a newer. Ordered by number, oldest first, as the add-on keeps them. */
@@ -130,7 +131,9 @@ export function readOnScreen(filter: MessagesFilter, page: readonly MessageItem[
 
 /** What this tablet remembers it has shown: one announcement as the add-on stored it, its number and when it came. A
  *  rewrite (a new number) is news again; so is the first of a store that started again (an old number, a new time). */
-const readId = (a: Announcement) => `${idOf(a)}@${a.at}`;
+// ⚠️ VESTA'S CARD BY ITS STEP, NOT ITS NUMBER (spec review, 2026-10-29): a quiet rewrite (its bottom line unchanged)
+// comes under a new number and lit the unread mark again; a new step (reminder, escalation) changes the bottom line
+const readId = (a: Announcement) => (a.feed === "vesta" ? `v:${a.key}@${a.status}` : `${idOf(a)}@${a.at}`);
 
 /** How many of the kept announcements this tablet has not shown in Messages yet: the light mark on the robot, the
  *  phone's gear and the menu's Cockpit row. The open issues are not in it: they have their own count. */
@@ -177,7 +180,7 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   const isClosed = (a: Announcement) => alertStage(a) === "closed";
   // newest first, by time (two feeds: their numbers do not compare)
   const asNotes = (shown: boolean, keep: (a: Announcement) => boolean): MessageItem[] => (shown
-    ? announcements.filter((a) => !inWatch.has(a) && keep(a)).sort((x, y) => timeOf(y) - timeOf(x) || y.seq - x.seq)
+    ? announcements.filter((a) => !inWatch.has(a) && keep(a)).sort((x, y) => byTime(y, x))
       .map((a) => ({ kind: "notification", key: noteKey(a), announcement: a }))
     : []);
   // ⚠️ A PROBLEM'S LIFE IS ONE PLACE (owner, 2026-10-28): open, then watched once it cleared, then closed — Watch and

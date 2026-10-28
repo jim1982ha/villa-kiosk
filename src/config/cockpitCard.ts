@@ -21,7 +21,7 @@ import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, dayMonth, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
 import { confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
-import { faultTitle } from "@/fm/fmEngine";
+import { alertNumberOf, faultTitle } from "@/fm/fmEngine";
 import type { HassEntity } from "@/types/ha.types";
 import { labelOf } from "./EntityMap";
 import { recordEntity, type VillaDevices } from "./deviceGroups";
@@ -159,6 +159,9 @@ export interface CardLine {
   actions: WorkAction[];
 }
 
+/** `{ alertNumber }` when there is one, else nothing (an optional field stays absent). */
+const alertNumberIn = (n: number | undefined) => (n !== undefined ? { alertNumber: n } : {});
+
 export interface CardView {
   key: string;
   /** "watched": a fault a person closed that the VESTA Agent reads again (fm/faultConfirm) — listed LAST among the open
@@ -195,7 +198,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     text: attentionLineIn(group, item),
     icons: lineIcon(group, item),
     story: item.story ?? item.fault?.story ?? [],
-    ...((item.alertNumber ?? item.fault?.alertNumber) ? { alertNumber: item.alertNumber ?? item.fault?.alertNumber } : {}),
+    ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
     closing: closingText(item.closing ?? item.fault?.closing, now),
     actions: itemActions(group, item),
   });
@@ -239,7 +242,7 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
       // issues' next-check pill (its time, then "within 5 min"), who closed it the line under its fault
       lead: null, nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
       lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, story: [], closing: said.did, actions: [],
-        ...(typeof t.alertNumber === "number" && t.alertNumber > 0 ? { alertNumber: t.alertNumber } : {}) }],
+        ...alertNumberIn(alertNumberOf(t)) }],
     }];
   });
 }

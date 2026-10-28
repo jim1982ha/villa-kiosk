@@ -307,10 +307,16 @@ export const STAGE_WORDS: Record<FmStage, { word: string; tone: Tone }> = {
   closed: { word: "Resolved", tone: "ok" },
 };
 
+/** A fault's alert number when it carries a real one (a positive integer), else undefined — the one reading of
+ *  FmTicket.alertNumber (faultTitle, the open issue's and the Watch line's link to VESTA's card). */
+export const alertNumberOf = (t: Pick<FmTicket, "alertNumber">): number | undefined =>
+  typeof t.alertNumber === "number" && Number.isInteger(t.alertNumber) && t.alertNumber > 0 ? t.alertNumber : undefined;
+
 /** An alert's name as Telegram writes it — "#5-P2", or "#5" without a priority — in the agreement's one form
  *  (agent-contract.json ticket.alertLabel, the form the VESTA Agent titles its messages with). Pure. */
 export function alertLabel(number: number, priority?: string): string {
-  const form = priority && /^P\d$/.test(priority) ? AGENT_CONTRACT.ticket.alertLabel : AGENT_CONTRACT.ticket.alertLabelNoPriority;
+  const known = priority !== undefined && (AGENT_CONTRACT.ticket.priorities as readonly string[]).includes(priority);
+  const form = known ? AGENT_CONTRACT.ticket.alertLabel : AGENT_CONTRACT.ticket.alertLabelNoPriority;
   return form.replace("{number}", String(number)).replace("{priority}", priority ?? "");
 }
 
@@ -323,7 +329,8 @@ export function faultTitle(t: Pick<FmTicket, "title" | "alertNumber" | "alertPri
   const from = t.since ? Date.parse(t.since) : NaN;
   const title = t.titlePattern?.includes("{since}") && Number.isFinite(from)
     ? t.titlePattern.replace("{since}", fmtDuration(now - from)) : t.title;
-  return typeof t.alertNumber === "number" && t.alertNumber > 0 ? `${alertLabel(t.alertNumber, t.alertPriority)} · ${title}` : title;
+  const n = alertNumberOf(t);
+  return n !== undefined ? `${alertLabel(n, t.alertPriority)} · ${title}` : title;
 }
 
 /** Who did a piece of work: the person, when someone else recorded it (a VESTA Agent completion for a Done on

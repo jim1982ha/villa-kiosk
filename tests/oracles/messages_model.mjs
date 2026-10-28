@@ -240,6 +240,10 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
        .notifications.length === 1, both);
   ck("  ...and is no unread: the mark never stays lit for a folded card", unreadOf([closed90], []) === 0
      && unreadOf([later], []) === 1);
+  const seenStep = markShown([], [card90], [card90]);
+  const quietAgain = { ...card90, seq: 40, at: "2026-10-28T23:00:00+08:00", title: "#90-P2 (existing)" };
+  ck("a quiet rewrite of a card read already stays read; a new step (its bottom line) is unread (spec review, 2026-10-29)",
+     unreadOf([quietAgain], seenStep) === 0 && unreadOf([{ ...quietAgain, status: "⚠️ ⚙️ Reminder sent" }], seenStep) === 1);
   ck("what this tablet read of one feed is not read of the other (two feeds number apart)",
      unreadOf([ann(1), { ...card90, seq: 1, at: ann(1).at }], markShown([], [ann(1)], [ann(1)])) === 1);
 }

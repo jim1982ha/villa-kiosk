@@ -1,3 +1,11 @@
+## 2.496.577
+
+What you will see:
+- A VESTA card you have seen no longer counts as unread again when VESTA only touches it up (its last line the
+  same); a new step (a reminder, an escalation, cleared) still does.
+- Nothing else changes on screen: from the review of tickets 26-27, the list of priorities is now in the agreement
+  shared with VESTA, and an alert's number, the list's order and an alert's stage are each read in one place.
+
 ## 2.496.576
 
 What you will see:

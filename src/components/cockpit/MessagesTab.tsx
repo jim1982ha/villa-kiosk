@@ -4,7 +4,7 @@
 // counted and open is the Messages model's (messages/messagesModel); this draws it.
 //
 // ⚠️ OPEN ISSUES IS TODAY'S OVERVIEW, MOVED (owner): one line per device in the same order, its card with the same
-// buttons (Open Ticket, Close, Edit ticket) opened on the right, "Open a ticket" and the (i) above the list, Watched
+// buttons (Open Ticket, Close, Edit ticket) opened on the right, "Open a ticket" and the (i) above the list, Watch
 // folded at the end, a device window's warning opening on its issue. On a phone the list and the item take the
 // screen in turn.
 
