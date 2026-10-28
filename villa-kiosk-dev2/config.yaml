@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA (dev2)
-version: "2.496.557"
+version: "2.496.558"
 slug: villa_kiosk_dev2
 description: Interactive 3D map of your property — live devices, energy, security and maintenance at a glance
 url: https://github.com/jim1982ha/villa-kiosk
@@ -32,6 +32,10 @@ ingress: true
 # talks to Home Assistant token-lessly (no long-lived token needed). See
 # rootfs/usr/bin/supervisor-proxy.py.
 homeassistant_api: true
+# The villa's media folder, read-only (a map's default): an announcement's photo, a doorbell ring's snapshot, is copied
+# from it into the add-on's own store when the announcement arrives (supervisor-proxy.py MEDIA_DIR).
+map:
+  - type: media
 panel_icon: mdi:home-plus-outline
 panel_title: VESTA dev2
 # boot: auto and startup: application are the Supervisor's defaults — left
