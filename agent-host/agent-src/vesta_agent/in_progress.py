@@ -59,6 +59,12 @@ _RUN: contextvars.ContextVar["Item | None"] = contextvars.ContextVar("scheduled_
 _JOB: contextvars.ContextVar["Item | None"] = contextvars.ContextVar("chat_job", default=None)
 
 
+def scheduled_run() -> "Item | None":
+    """The scheduled run this task works for (set by `kept`); None outside one. What it sends on its own is a report
+    (kiosk_messages.reported, ticket 20 of "One inbox")."""
+    return _RUN.get()
+
+
 @dataclass(eq=False)
 class Item:
     kind: str

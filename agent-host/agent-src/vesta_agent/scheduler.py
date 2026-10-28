@@ -126,6 +126,11 @@ def job_key(skill: str, schedule: list, i: int) -> str:
     return f"{job_ident(skill, schedule, i)}@{schedule[i]['when']}"
 
 
+def job_of(key: str) -> str:
+    """The job a slot key names, without its time ("reports:fm-daily@07:00" → "reports:fm-daily"): job_ident's."""
+    return key.rsplit("@", 1)[0]
+
+
 def job_ident(skill: str, schedule: list, i: int) -> str:
     """A scheduled job by itself, whatever its place or time: its skill and its name (an AI job's), or its script (a
     code job's) — with its place only when two entries of the skill share both."""

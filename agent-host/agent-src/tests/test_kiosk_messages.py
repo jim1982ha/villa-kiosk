@@ -368,3 +368,79 @@ def test_the_card_keeps_its_newest_runs_and_its_to_line_is_cut_like_every_text()
     rec = kiosk_messages.of_parts("incident:1", {"head": "", "body": "x"}, to="T" * 999, takes=runs)
     assert rec["takes"] == runs[-cap:], "the newest runs: the villa's messages the tablet still holds"
     assert len(rec["to"]) == kiosk_messages.agreed_limit("to")
+
+
+# ── a report and its page (ticket 20 of "One inbox", 2026-10-29) ────────────────────────────────────────────────────
+PAGE = b"<!DOCTYPE html><html><body>The week</body></html>"
+
+
+def scheduled_report(tmp_path, kiosk, people, send):
+    """An agent whose skill `weekly` has one scheduled code job, `d.py`, printing `send` (its pages written in the out
+    folder first); the job run as the app runs it: the scheduler's tick at its time, then every push settled."""
+    import json
+    from zoneinfo import ZoneInfo
+    from helpers import make_skill
+    from vesta_agent.scheduler import Scheduler
+    v = make_agent(tmp_path, {"people": people}, kiosk=kiosk)
+    make_skill(v.s.skills_dir, "weekly", {"tools": [], "schedule": [{"when": "07:00", "run": "d.py", "timeout": 60}]},
+               {"d.py": f"import json\nprint(json.dumps({{'send': {json.dumps(send)!s}}}))\n"})
+    for item in send:
+        for att in ([item["attachment"]] if item.get("attachment") else []):
+            with open(f"{v.s.out_dir}/{att}", "wb") as f:
+                f.write(PAGE + att.encode())
+    at = datetime(2026, 10, 26, 7, 5, tzinfo=ZoneInfo(v.s.timezone))
+
+    async def go():
+        sch = Scheduler(v.s, v.skills, v.state, v.run_code_job, v.jobs.run, lambda: asyncio.sleep(0), None, v.work)
+        await sch.tick(at)
+        await sch.idle()
+        await v.messages.settle()
+    asyncio.run(go())
+    return v
+
+
+def test_a_scheduled_report_is_kept_as_a_report_with_its_page(tmp_path, kiosk):
+    v = scheduled_report(tmp_path, kiosk, [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
+                                           {"telegram_id": FM, "name": "Wayan", "role": "fm"}],
+                         [{"to": "fm", "title": "Weekly report", "text": "Two things to look at", "attachment": "week.html"},
+                          {"to": "owner", "title": "Weekly report", "text": "Two things to look at", "attachment": "week.html"}])
+    reports = [r for r in kiosk.messages.values() if r.get("report")]
+    assert len(reports) == 2 and {r["report"] for r in reports} == {"weekly:d.py"}, kiosk.messages
+    assert all(r["body"] == "Two things to look at" and r.get("page") for r in reports), reports
+    assert set(kiosk.documents) == {PAGE + b"week.html"}, "the page uploaded attached to no fault"
+    assert {r["page"] for r in reports} == {kiosk_messages.page_id(PAGE + b"week.html")}, "one page whatever the chats"
+    assert kiosk.tickets == [], "no ticket was made for it: it lives with its message"
+
+
+def test_a_report_in_two_languages_is_one_record(tmp_path, kiosk):
+    scheduled_report(tmp_path, kiosk, [{"telegram_id": FM, "name": "Wayan", "role": "fm", "language": "en"},
+                                       {"telegram_id": 333, "name": "Made", "role": "fm", "language": "fr"}],
+                     [{"to": "fm", "language": "fr", "title": "Weekly report", "text": "Deux choses", "attachment": "w_fr.html"},
+                      {"to": "fm", "language": "en", "title": "Weekly report", "text": "Two things", "attachment": "w_en.html"}])
+    (rec,) = kiosk.messages.values()
+    page = {lang: kiosk_messages.page_id(PAGE + f"w_{lang}.html".encode()) for lang in ("en", "fr")}
+    assert rec["report"] == "weekly:d.py" and rec["body"] == "Deux choses" and rec["language"] == "fr", rec
+    assert rec["page"] == page["fr"] and rec["languages"]["en"] == {"body": "Two things", "page": page["en"]}, rec
+
+
+def test_only_an_html_page_goes_to_the_tablet(tmp_path, kiosk):
+    scheduled_report(tmp_path, kiosk, [{"telegram_id": FM, "name": "Wayan", "role": "fm"}],
+                     [{"to": "fm", "title": "Weekly figures", "text": "Attached", "attachment": "week.csv"}])
+    (rec,) = kiosk.messages.values()
+    assert rec["report"] == "weekly:d.py" and "page" not in rec and kiosk.documents == [], rec
+
+
+def test_a_note_sent_outside_a_scheduled_run_is_no_report(agent, kiosk):
+    async def note(v):
+        await v.outcome.carry_out({"send": [{"to": "owner", "title": "The AI cannot answer", "text": "No credit left."}]})
+    scenario(agent, note)
+    (rec,) = kiosk.messages.values()
+    assert "report" not in rec and "page" not in rec, rec
+
+
+def test_a_report_whose_page_the_kiosk_cannot_hold_is_kept_without_it(tmp_path, kiosk):
+    kiosk.documents = None                                      # a Kiosk older than 2.496.326: it keeps no page
+    scheduled_report(tmp_path, kiosk, [{"telegram_id": FM, "name": "Wayan", "role": "fm"}],
+                     [{"to": "fm", "title": "Weekly report", "text": "Two things", "attachment": "week.html"}])
+    (rec,) = kiosk.messages.values()
+    assert rec["report"] == "weekly:d.py" and "page" not in rec, rec

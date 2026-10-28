@@ -24,11 +24,15 @@ from vesta_shared import agreement
 from vesta_shared.message_format import AND
 
 from . import button_data, layout
+from .in_progress import scheduled_run
+from .scheduler import job_of
 
 log = logging.getLogger("vesta.kiosk")
 
 #: How many keys' last push are remembered to skip an identical one (a retry that redraws the same copy).
 REMEMBERED = 500
+#: A report's page as a file of the out folder, until the push uploads it and names it by its Kiosk id (`page`).
+PAGE_FILE = "_page"
 
 
 def agreed_limit(name: str) -> int:
@@ -106,6 +110,32 @@ def note_key(key: str | None, title: str, text: str) -> str:
     return "note:" + hashlib.sha1(f"{title}\n{text}".encode("utf-8")).hexdigest()
 
 
+def reported(rec: dict, *, own_key: bool, document: str | None = None, language: str | None = None) -> dict:
+    """`rec`, a note sent on its own, as a REPORT when a scheduled run sends it (ticket 20 of "One inbox": the morning
+    digest, the weekly and monthly reports, the owner's weekly lines, the night check's message): the job that sent it,
+    its page (`document`, an HTML page of the out folder — any other file stays Telegram's —, uploaded by the push) and
+    the language of its words (`language`, when its readers read several). Its key is the run's and its title's — its versions in other languages are ONE record (KioskMessages),
+    and the next run's report is another line — unless the skill named its own (`own_key`: a later result rewrites it).
+    Outside a scheduled run, `rec` as it was: an answer, a note to the owner, a recheck's line are no reports."""
+    run = scheduled_run()
+    if run is None:
+        return rec
+    key = rec["key"] if own_key else "note:" + hashlib.sha1(
+        f"{run.name}\n{run.slot}\n{rec.get('title', '')}\n{rec.get('to', '')}".encode("utf-8")).hexdigest()
+    out = {**rec, "key": key, "report": _cut(job_of(run.name), "report")}
+    if language:
+        out["language"] = language
+    if document and document.lower().endswith(".html"):
+        out[PAGE_FILE] = document
+    return out
+
+
+def page_id(html: bytes) -> str:
+    """A page's id at the Kiosk: its content's, so the same page sent to two chats or again later is the same file,
+    written again (its age starts again) — never an id remembered here for a file the Kiosk may have tidied away."""
+    return hashlib.sha1(html).hexdigest()
+
+
 def thread_key(iid) -> str:
     """The thread of an incident (its number, in the agreement's form `vestaMessage.incidentKey`, the one the tablet
     reads), or of an approval or a snapshot (their own ids)."""
@@ -142,6 +172,7 @@ class KioskMessages:
         self._pending: dict[str, dict] = {}
         self._running: dict[str, asyncio.Task] = {}
         self._last: dict[str, str] = {}        # key → what was last pushed, to skip an identical one
+        self._versions: dict[str, dict] = {}   # key → {language: record}: a report's versions, pushed as one record
         self._unreached = False                # said once per outage
 
     def keep(self, rec: dict) -> None:
@@ -150,6 +181,8 @@ class KioskMessages:
         if not self.kiosk.enabled or not rec.get("key"):
             return
         key = rec["key"]
+        if rec.get("language"):
+            rec = self._merged(key, rec)
         same = hashlib.sha1(json.dumps({k: v for k, v in rec.items() if k != "at"}, sort_keys=True).encode()).hexdigest()
         if self._last.get(key) == same:
             return
@@ -165,10 +198,48 @@ class KioskMessages:
         except RuntimeError:                   # no loop running: nothing to push on (a script, a test)
             self._pending.pop(key, None)
 
+    def _merged(self, key: str, rec: dict) -> dict:
+        """A report's versions in its readers' languages as ONE record: the first version's words, each other one under
+        `languages` with its page — which one a tablet shows is the tablet's (announcements.ts inTabletLanguage, the
+        owner's spec story 38), never decided here too."""
+        versions = self._versions.pop(key, {})
+        versions[rec["language"]] = rec
+        self._versions[key] = versions
+        while len(self._versions) > REMEMBERED:
+            self._versions.pop(next(iter(self._versions)))
+        main = next(iter(versions))
+        others = {code: {"body": r.get("body", ""), **({PAGE_FILE: r[PAGE_FILE]} if r.get(PAGE_FILE) else {})}
+                  for code, r in versions.items() if code != main}
+        merged = dict(versions[main])
+        if others:
+            merged["languages"] = {**merged.get("languages", {}), **others}
+        return merged
+
+    async def _with_pages(self, rec: dict) -> dict:
+        """`rec` with its pages uploaded (kiosk.add_document, its own time limit) and named by their Kiosk ids; a page
+        the Kiosk did not keep (an older one, refused, unreachable, the file gone) is left out, the words kept."""
+        async def page(path):
+            try:
+                html = await asyncio.to_thread(lambda: open(path, "rb").read())
+                return await self.kiosk.add_document(html, page_id(html))
+            except Exception as e:  # noqa: BLE001 — a page not kept never costs the report its words
+                log.warning("A report's page could not be kept for the tablet (%s): its words are", type(e).__name__)
+                return None
+
+        def named(part: dict, did) -> dict:
+            out = {k: v for k, v in part.items() if k != PAGE_FILE}
+            return {**out, "page": did} if did else out
+        out = named(rec, await page(rec[PAGE_FILE]) if rec.get(PAGE_FILE) else None)
+        if isinstance(out.get("languages"), dict):
+            out["languages"] = {code: named(w, await page(w[PAGE_FILE]) if w.get(PAGE_FILE) else None)
+                                for code, w in out["languages"].items()}
+        return out
+
     async def _drain(self, key: str) -> None:
         while key in self._pending:
             rec = self._pending.pop(key)
             try:
+                rec = await self._with_pages(rec)
                 kept = await asyncio.wait_for(self.kiosk.keep_message(rec), self._timeout_s())
                 if self._unreached and kept:
                     log.info("The Kiosk keeps the agent's messages for the tablet again")

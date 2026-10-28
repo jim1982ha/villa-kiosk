@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.366 (29 October 2026)
+
+- Ticket 20 of "One inbox" (reports): a note a scheduled run sends on its own is kept for the tablet as a REPORT
+  (kiosk_messages.reported, from in_progress.scheduled_run, the run the scheduler already records per task; no skill
+  edited): `report` = the job (scheduler.job_of), its key the run's and title's, its HTML page (only an .html
+  attachment) uploaded in the background through kiosk.add_document under its content's id (kiosk_messages.page_id: no
+  id remembered for a file the Kiosk may have tidied) and named `page`, its `language`. KioskMessages merges a report's
+  versions in several languages into one record (the first version's words, the others under `languages` with their
+  page); which one the tablet shows is the Kiosk's.
+  Poster.post takes `language` (Outcome passes the item's). Agreement copied from Kiosk 2.496.579 (vestaMessage
+  report, page, language). Tests: test_kiosk_messages (a scheduled report through the real scheduler, two languages,
+  a Kiosk that keeps no page, a note outside a run).
+
 ## 0.6.365 (29 October 2026)
 
 - Review of tickets 26-27 (standards and spec): result.priority, the one check of a priority (incident_tag,

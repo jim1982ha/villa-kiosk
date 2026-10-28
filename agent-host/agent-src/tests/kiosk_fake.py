@@ -74,12 +74,12 @@ class FakeKiosk(Kiosk):
         self._made.append(tid)
         return tid
 
-    async def add_document(self, html: bytes):
+    async def add_document(self, html: bytes, did: str | None = None):
         """A Kiosk that holds documents (2.496.326+); `self.documents = None` plays an older one (no document kept)."""
         if self.documents is None:
             return None
         self.documents.append(html)
-        return f"d{len(self.documents)}"
+        return did or f"d{len(self.documents)}"
 
     def refuses(self, tid: str, status: int = 403, sentence: str = "this write is not allowed") -> None:
         """The Kiosk's proxy refuses every write that changes fault `tid` (a new one included: its id is the next the

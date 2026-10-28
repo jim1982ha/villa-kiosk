@@ -459,10 +459,12 @@ class Kiosk:
                 raise KioskError(f"writing the Facility records answered {status}: {said}", status=status, said=said)
         raise KioskError("the Facility records kept changing", status=409)
 
-    async def add_document(self, html: bytes) -> str | None:
-        """Store one HTML page for a fault (the VESTA Kiosk 2.496.326 and later: /agent/v1/fm-document) — its id, or None
-        when this Kiosk cannot hold documents (an older one answers 404) or refused it. Kept with the fault, deleted with it."""
-        did = secrets.token_hex(16)
+    async def add_document(self, html: bytes, did: str | None = None) -> str | None:
+        """Store one HTML page (the VESTA Kiosk 2.496.326 and later: /agent/v1/fm-document) — its id, or None when this
+        Kiosk cannot hold documents (an older one answers 404) or refused it. A fault's (tickets.py) is kept with the
+        fault, deleted with it; a report's (kiosk_messages, ticket 20 of "One inbox") while a kept message names it.
+        `did`: its id (a report's is its content's: kiosk_messages.page_id); a fault's is new."""
+        did = did or secrets.token_hex(16)
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=limit(
                     "kiosk.document_timeout_s", 60, unit="seconds", group="run", lo=10, hi=600,

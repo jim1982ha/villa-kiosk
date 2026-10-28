@@ -243,7 +243,9 @@ class Outcome:
                                    status_in=item.get("status_in") if isinstance(item.get("status_in"), dict) else None,
                                    # ⚠️ KEPT FOR THE TABLET TOO (ticket 25 of "One inbox"): what the agent says on its own
                                    # (a note, the night check, the digest), not the answer a person asked for in their chat
-                                   keep=(item.get("key") or True) if not (origin and origin.holds) else None)
+                                   keep=(item.get("key") or True) if not (origin and origin.holds) else None,
+                                   # one version of several (routing.versions): a report's language on the tablet
+                                   language=item.get("language"))
             # the people the skill asked to answer (result.message first_in_line) — the skill's, never a role named here
             if iid and kb and item.get("first_in_line"):
                 asked.setdefault(int(iid), []).append((chat, bool(mid)))

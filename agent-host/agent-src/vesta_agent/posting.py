@@ -52,15 +52,17 @@ class Poster:
                    thread: int | str | None = None, plain: bool = False, origin: Origin | None = None,
                    stage: str | None = None, mark: str | None = None, also=None,
                    title: str | None = None, told=None, reply_to: int | None = None,
-                   status_in: dict | None = None, keep: str | bool | None = None) -> int | None:
+                   status_in: dict | None = None, keep: str | bool | None = None,
+                   language: str | None = None) -> int | None:
         """The message in `chat`: its heading — who it is for (`roles`), the incident and its history — unless it answers
         the person who asked, in their chat, or is `plain`; its parts laid out (layout.py) to fit ONE Telegram message —
         a photo's or a file's caption included, so the copy recorded is the message sent; then its `thread` (an incident,
         an approval, a snapshot): the earlier copy in this chat goes. `told`: the roles this step of the incident went to
         (its bottom line says them: notice.Notices.bottom). `status_in`: the skill's `status` in other languages
         ({code: text}) — an alert's copy says the one its chat reads. `keep`: a note sent on its own is also kept for the
-        tablet (True; or the skill's own `key`, so a later rewrite replaces it there too) — a reply to a person is not.
-        The message id, or None when nothing arrived."""
+        tablet (True; or the skill's own `key`, so a later rewrite replaces it there too) — a reply to a person is not;
+        sent by a scheduled run it is kept as a report, with its `document` and the `language` its words are in (one
+        version of several: kiosk_messages.reported). The message id, or None when nothing arrived."""
         # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
         now = datetime.now(timezone.utc)
         text, status, lead = (layout.fill_time(x, now, self.tz) for x in (text, status, lead))
@@ -82,8 +84,10 @@ class Poster:
             title = title or UNTITLED
             if not (status or lead or thread is not None):
                 mid = await self._pages(chat, title, to, text, keyboard, document, photo, origin, reply_to)
-                self._keep(keep, kiosk_messages.of_note(kiosk_messages.note_key(keep if isinstance(keep, str) else None, title, text),
-                                                        title, to, text, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)))
+                self._keep(keep, kiosk_messages.reported(
+                    kiosk_messages.of_note(kiosk_messages.note_key(keep if isinstance(keep, str) else None, title, text),
+                                           title, to, text, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)),
+                    own_key=isinstance(keep, str), document=document, language=language))
                 return mid
             head = layout.head(title, to or "this chat")
         elif incident is not None and self.notices and not plain and not answering:
@@ -122,9 +126,10 @@ class Poster:
             # the tablet is the second place precisely for when Telegram is not there (spec, "Without the internet")
             self._keep(True, kiosk_messages.of_parts(kiosk_messages.thread_key(thread), p, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)))
         elif keep:
-            self._keep(keep, kiosk_messages.of_parts(
+            self._keep(keep, kiosk_messages.reported(kiosk_messages.of_parts(
                 kiosk_messages.note_key(keep if isinstance(keep, str) else None, str((p.get("head") or {}).get("title") or ""),
-                                        text), p, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)))
+                                        text), p, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)),
+                own_key=isinstance(keep, str), document=document, language=language))
         return mid
 
     def _keep(self, keep, record: dict) -> None:
