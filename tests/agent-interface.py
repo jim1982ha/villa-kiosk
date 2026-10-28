@@ -498,6 +498,7 @@ async def main() -> None:
     sent = {"key": "incident:90", "title": "#90-P2 (existing)", "roles": ["Owner", "FM"], "lead": "Intrusion suspected",
             "body": "Turn on Siren?", "status": ["- Alert sent", "⚠️ Waiting for approval"], "stage": "existing",
             "buttons": [{"label": "Done", "kind": "i", "id": "90:done"}],
+            "takes": ["RUN-A"],
             "languages": {"id": {"body": "Nyalakan sirene?", "status": ["- Peringatan terkirim"]}}}
     r = await post("/agent/v1/vesta-message", json=sent)
     ck("no token: refused, nothing kept", r.status == 401 and not msgs.exists(), r.status)
@@ -573,6 +574,12 @@ async def main() -> None:
     ck("the Agent has no way to remove one: no such route, every record still kept",
        r.status in (404, 405) and r2.status in (404, 405) and any(m["key"] == "incident:90" for m in body["messages"]),
        (r.status, r2.status))
+    # tickets 26-27 of "One inbox": the run that announced a villa message, which VESTA's card names when it takes it over
+    await proxy._record_announcement(None, {"event_type": proxy.ANNOUNCEMENT_EVENT, "context": {"id": "RUN-A"},
+                                            "data": {"message": "<b>Door unlocked</b>"}})
+    status, body = await jget("/announcements", cookie("guest"))
+    ck("the villa's announcement names the run that announced it (the event's context), as VESTA's card names it",
+       body["announcements"][-1].get("run") == "RUN-A", body["announcements"][-1])
     cfg_file.write_text(json.dumps({"recordsKeptDays": 30}))
     old = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - 40 * 86400))
     await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "old-one", "title": "Old", "at": old})

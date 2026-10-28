@@ -39,9 +39,36 @@ export interface MessagesView {
   shows: { issues: boolean; notifications: boolean };
 }
 
-/** A notification's key: its announcement's own (a ring and its rewrite are one line, kept while it is rewritten),
- *  else its number in the add-on's store. */
-const noteKey = (a: Announcement) => (a.key ? `k:${a.key}` : `n${a.seq}`);
+/** A notification's key: VESTA's card its thread's (one card per alert, replaced as VESTA rewrites it); an
+ *  announcement's own key (a ring and its rewrite are one line, kept while it is rewritten), else its number in the
+ *  add-on's store. */
+const noteKey = (a: Announcement) => (a.feed === "vesta" ? `v:${a.key}` : a.key ? `k:${a.key}` : `n${a.seq}`);
+
+/** One record's identity on the page: two feeds number apart, so VESTA's numbers are marked. */
+export const idOf = (a: Announcement): string => `${a.feed === "vesta" ? "v" : ""}${a.seq}`;
+
+/** VESTA's card of each alert an open issue carries, in the order of its lines (its thread `incident:<n>`, the Agent's
+ *  kiosk_messages.thread_key): what the issue shows above its own buttons, as Telegram shows it. Pure. */
+export function cardsOfIssue(card: CardView, kept: readonly Announcement[]): Announcement[] {
+  return card.lines.flatMap((l) => kept.filter((a) => a.feed === "vesta" && l.alertNumber !== undefined
+    && a.key === `incident:${l.alertNumber}`));
+}
+
+/** When a record came, for the order of the list (two feeds: their numbers do not compare). */
+const timeOf = (a: Announcement) => Date.parse(a.at) || 0;
+
+/**
+ * What the tablet lists as notifications (tickets 26-27 of "One inbox", owner 2026-10-28: "update the existing card,
+ * the same way it is done on Telegram"): VESTA's cards, and the villa's own announcements EXCEPT those a card took over —
+ * an alert VESTA took over is ONE card, whatever the villa sent for it (the alert, its repeat, its all-clear), as on
+ * Telegram. Without VESTA (stopped, not installed) nothing is taken over and the villa's own show, so the list never
+ * goes blank. Oldest first. Pure: tests/oracles/messages_model.mjs.
+ */
+export function shownTogether(villa: readonly Announcement[], vesta: readonly Announcement[]): Announcement[] {
+  const taken = new Set(vesta.flatMap((c) => c.takes ?? []));
+  return [...villa.filter((a) => !(a.run && taken.has(a.run))), ...vesta]
+    .sort((x, y) => timeOf(x) - timeOf(y) || x.seq - y.seq);
+}
 
 /** What the page holds after `incoming`: each one added once, a rewrite (same key, a newer number) in place of what
  *  it rewrites, an older copy never over a newer. Ordered by number, oldest first, as the add-on keeps them. */
@@ -68,7 +95,11 @@ export function afterRead(held: readonly Announcement[], items: readonly Announc
   const kept = mergeAnnouncements(full ? [] : held.filter((h) => h.seq >= first), items);
   if (full) return { kept, arrived: [] };
   const arrived = [...items].sort((x, y) => x.seq - y.seq)
-    .map((a) => ({ announcement: a, rewrite: a.key !== null && held.some((h) => h.key === a.key && h.seq < a.seq) }));
+    .map((a) => ({ announcement: a, was: a.key !== null ? held.find((h) => h.key === a.key && h.seq < a.seq) : undefined }))
+    // ⚠️ A QUIET REWRITE IS NO NEWS (ticket 27): VESTA redraws a card whose bottom line stays (a title retouched, its
+    // words translated) — on Telegram a quiet edit, never a ping; a new step (reminder, escalation, cleared) changes it
+    .filter(({ announcement: a, was }) => !(a.feed === "vesta" && was && was.status === a.status))
+    .map(({ announcement, was }) => ({ announcement, rewrite: was !== undefined }));
   return { kept, arrived };
 }
 
@@ -89,7 +120,7 @@ export function readOnScreen(filter: MessagesFilter, page: readonly MessageItem[
 
 /** What this tablet remembers it has shown: one announcement as the add-on stored it, its number and when it came. A
  *  rewrite (a new number) is news again; so is the first of a store that started again (an old number, a new time). */
-const readId = (a: Announcement) => `${a.seq}@${a.at}`;
+const readId = (a: Announcement) => `${idOf(a)}@${a.at}`;
 
 /** How many of the kept announcements this tablet has not shown in Messages yet: the light mark on the robot, the
  *  phone's gear and the menu's Cockpit row. The open issues are not in it: they have their own count. */
@@ -129,7 +160,7 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   const issues = showIssues ? open.map(issueItem) : [];
   const watchedItems = showIssues ? watched.map(issueItem) : [];
   const notifications: MessageItem[] = showNotes
-    ? [...announcements].sort((x, y) => y.seq - x.seq).map((a) => ({ kind: "notification", key: noteKey(a), announcement: a }))
+    ? [...announcements].sort((x, y) => timeOf(y) - timeOf(x) || y.seq - x.seq).map((a) => ({ kind: "notification", key: noteKey(a), announcement: a }))
     : [];
   const listed = [...issues, ...watchedItems, ...notifications];
   const asked = listed.find((i) => i.key === selected);

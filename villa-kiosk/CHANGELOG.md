@@ -1,11 +1,26 @@
+## 2.496.569
+
+What you will see:
+- Messages › Notifications shows VESTA's alerts as Telegram does: one card per alert, headed with its number and
+  priority ("#91-P2 (new)"), "To:", the alert and "What to do", then "Status:" with its whole story (alert sent,
+  reminder, escalation, cleared). When VESTA updates the alert, the same card changes and moves to the top; it is no
+  longer a new line each time the villa repeats it.
+- The villa's own message of an alert VESTA took over is not listed beside it any more: the card stands for it. While
+  VESTA is stopped, the villa's own messages show as before.
+- An open issue raised by an alert shows VESTA's card of it above its Open Ticket and Close.
+- A new step of an alert (a reminder, cleared) appears as a notice and counts as unread; a quiet change to the card
+  does not.
+- VESTA's Done and Need help are not shown on the tablet yet: they are still pressed on Telegram.
+- Needs the VESTA Agent 0.12.372 or later.
+
 ## 2.496.568
 
 What you will see:
 - Nothing yet on screen. The add-on now keeps every message VESTA writes on Telegram (an alert it took over, its
   reminders and escalations, a camera snapshot, an approval request, the night check, the morning digest, its notes to
   you) as it stands now: when VESTA rewrites a message, the kept copy is replaced, not added. They are kept for the
-  same number of days as tickets and messages, and a guest sees a snapshot only while it is the current notification,
-  as with a ring. The Messages list shows them in the next release, once the VESTA Agent is updated too.
+  same number of days as tickets and messages, and a guest sees a camera snapshot only while it is the newest message
+  on the tablet, the same rule as the visitor's photo when the doorbell is pressed. The Messages list shows them in the next release, once the VESTA Agent is updated too.
 
 ## 2.496.567
 

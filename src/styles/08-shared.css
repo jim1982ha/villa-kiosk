@@ -105,7 +105,10 @@
 .announcement-full-photo { min-height: 0; max-width: 100%; flex: 0 1 auto; max-height: 60%; border-radius: 12px; object-fit: contain; }
 .announcement-full-title { overflow-wrap: anywhere; }
 .announcement-full-text { margin: 0; font-size: var(--text-xl); white-space: pre-line; overflow-wrap: anywhere; }
-.announcement-full-status { margin: 0; color: var(--text-secondary); }
+.announcement-full-status { margin: 0; color: var(--text-secondary); display: flex; flex-direction: column; gap: 2px; }
+.announcement-full-to { margin: 0; color: var(--text-secondary); }
+.announcement-status-label { color: var(--text-primary); }
+.announcement-story-line { font-style: italic; }
 .announcement-full .vesta-notice-action { font-size: var(--text-lg); min-height: 56px; padding: 0 28px; }
 @media (max-width: 560px) { .announcement-full-text { font-size: var(--text-lg); } }
 /* a sensor's news belongs to the villa map: never over the fullscreen camera's live picture */

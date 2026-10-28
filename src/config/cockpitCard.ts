@@ -150,6 +150,8 @@ export interface CardLine {
   /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
    *  (ticket 19 of "One inbox"); [] when nothing was told. */
   story: { note: string; at: string }[];
+  /** The alert number of its fault ("#91"), whose VESTA card the open issue shows; absent without one. */
+  alertNumber?: number;
   /** When the VESTA Agent closes it if it stays as it is now — "Locked since 14:38 · closes at about 14:49 if it stays
    *  locked" (closingText); null when it is not waiting to close. */
   closing: string | null;
@@ -193,6 +195,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     text: attentionLineIn(group, item),
     icons: lineIcon(group, item),
     story: item.story ?? item.fault?.story ?? [],
+    ...((item.alertNumber ?? item.fault?.alertNumber) ? { alertNumber: item.alertNumber ?? item.fault?.alertNumber } : {}),
     closing: closingText(item.closing ?? item.fault?.closing, now),
     actions: itemActions(group, item),
   });

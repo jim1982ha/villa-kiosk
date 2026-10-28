@@ -3803,6 +3803,11 @@ def _announcement_record(event, seq: int) -> dict | None:
         rec["key"] = key.strip()[:ANNOUNCEMENT_KEY_MAX]
     if buttons := _announcement_buttons(data.get("buttons")):
         rec["buttons"] = buttons
+    # the automation run that announced it (the bus event's context): the VESTA Agent names the runs it took over
+    # (vestaMessage `takes`), so the tablet shows VESTA's card in place of the villa's own message of that run
+    run = (event.get("context") or {}).get("id") if isinstance(event.get("context"), dict) else None
+    if isinstance(run, str) and run.strip():
+        rec["run"] = run.strip()[:ANNOUNCEMENT_KEY_MAX]
     return rec
 
 
@@ -4087,6 +4092,8 @@ def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
         rec["roles"] = roles
     if status := _vm_lines(body.get("status"), "status", "statusLine"):
         rec["status"] = status
+    if takes := _vm_lines(body.get("takes"), "takes", "key"):
+        rec["takes"] = takes
     buttons = []
     for b in body.get("buttons") if isinstance(body.get("buttons"), list) else []:
         made = {f: _vm_text(b.get(f2), f2) for f, f2 in (("label", "label"), ("kind", "kind"), ("id", "id"))} \

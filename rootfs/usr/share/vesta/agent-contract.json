@@ -644,7 +644,7 @@
     "blueprint": "critical_watchdog",
     "input": "critical_entities"
   },
-  "_vestaMessage": "A message the VESTA Agent wrote on Telegram, kept for the tablet AS IT STANDS NOW (ticket 25 of \"One inbox\", 2026-10-28): POST /agent/v1/vesta-message, one record per thread, added or REPLACED by `key` (never removed by the Agent; the Kiosk tidies it after the records-kept days) and served to every profile at /vesta-messages. `key`: the thread (an incident, an approval, a snapshot, or one note); `title`, `roles` (who it is for), `lead`, `body`, `status` (the lines of its Status: the history, then where it stands), `stage` (new, existing, watch, closed, or none), `mark`, `buttons` ([{label, kind, id}]: the Agent's own button kind and id, never a device or a command; a rewrite without buttons withdraws them), `at` (when the Agent drew it), `languages` ({code: {body, status}} where the Agent holds the words in another language) and `photo` (the picture as base64, JPEG or PNG; a rewrite that sends none keeps the first one's). `limits` are the longest each may be: a longer text is cut, a longer list keeps its first entries; the Agent reads them from here. An older Kiosk has no such route (404) and the Agent drops the record.",
+  "_vestaMessage": "A message the VESTA Agent wrote on Telegram, kept for the tablet AS IT STANDS NOW (ticket 25 of \"One inbox\", 2026-10-28): POST /agent/v1/vesta-message, one record per thread, added or REPLACED by `key` (never removed by the Agent; the Kiosk tidies it after the records-kept days) and served to every profile at /vesta-messages. `key`: the thread (an incident, an approval, a snapshot, or one note); `title`, `roles` (who it is for), `lead`, `body`, `status` (the lines of its Status: the history, then where it stands), `stage` (new, existing, watch, closed, or none), `mark`, `buttons` ([{label, kind, id}]: the Agent's own button kind and id, never a device or a command; a rewrite without buttons withdraws them), `at` (when the Agent drew it), `languages` ({code: {body, status}} where the Agent holds the words in another language) and `takes` (the villa's own messages it took over: the runs of the announcements, their `run`, that this card stands for on the tablet) and `photo` (the picture as base64, JPEG or PNG; a rewrite that sends none keeps the first one's). `limits` are the longest each may be: a longer text is cut, a longer list keeps its first entries; the Agent reads them from here. An older Kiosk has no such route (404) and the Agent drops the record.",
   "vestaMessage": {
     "limits": {
       "key": 200,
@@ -663,7 +663,8 @@
       "id": 64,
       "languages": 12,
       "language": 16,
-      "photoBytes": 3000000
+      "photoBytes": 3000000,
+      "takes": 20
     }
   },
   "_stageMarks": "What starts an alert's bottom line, by its stage (review Q 3, 2026-10-28): the VESTA Agent writes it (vesta_shared/message_format.py STAGE_ICONS, and the villa's message template it generates) and the Kiosk reads an announcement's stage back from it (src/messages/announcements.ts stageOf): new, existing, and the two ends, watch (cleared, still watched) and closed. Read from here by both: a mark changed on one side alone made a cleared alarm read as new on the tablet.",

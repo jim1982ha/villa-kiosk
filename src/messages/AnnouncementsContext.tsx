@@ -5,13 +5,13 @@
 // this tablet has shown in Messages (ticket 18), for the unread mark on the robot, the gear and the menu's Cockpit row,
 // and what became of each button pressed (review Q 2), whichever screen it was pressed on.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore,
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore,
   type ReactNode } from "react";
 import { backendFetch } from "@/auth/sessionLost";
 import { readJson, writeJson } from "@/utils/storedJson";
-import { fetchAnnouncements, pressButton, type Announcement } from "./announcements";
-import { pauseFor, watchFeed } from "./feed";
-import { afterRead, markShown, unreadOf } from "./messagesModel";
+import { fetchAnnouncements, fetchVestaMessages, pressButton, type Announcement } from "./announcements";
+import { pauseFor, watchFeed, type FeedRead } from "./feed";
+import { afterRead, markShown, shownTogether, unreadOf } from "./messagesModel";
 import { pressesOf, type PressState, type Presses } from "./presses";
 
 /** What this tablet has shown in Messages (messagesModel.markShown): per tablet, so in this browser's storage. Private
@@ -20,8 +20,11 @@ const READ_KEY = "villa-kiosk:messages-read";
 const isIds = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
 
 interface Announcements {
-  /** Everything the add-on keeps, a ring and its rewrite one (messagesModel.mergeAnnouncements), oldest first. */
+  /** What the tablet lists (messagesModel.shownTogether): VESTA's cards and the villa's announcements none of them
+   *  took over, a ring and its rewrite one, oldest first. */
   kept: Announcement[];
+  /** The villa's own announcements only, everything the add-on keeps ("Full screen for" offers their titles). */
+  villa: Announcement[];
   /** Whether the add-on has answered once: until then `kept` is empty because nothing was read yet. */
   loaded: boolean;
   /** What came since the page opened, the latest read's (messagesModel.afterRead), each saying whether it rewrites one
@@ -38,20 +41,43 @@ interface AnnouncementsAndUnread extends Announcements {
   presses: Presses;
 }
 
-const NONE: Announcements = { kept: [], loaded: false, fresh: null };
-const NO_PRESSES = pressesOf(async () => "failed");
-const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, shown: () => {}, presses: NO_PRESSES });
+const NONE: Announcements = { kept: [], villa: [], loaded: false, fresh: null };
 
-export function AnnouncementsProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<Announcements>(NONE);
+/** One feed's records on the page and the latest read's arrivals (messagesModel.afterRead). */
+interface FeedState { kept: Announcement[]; loaded: boolean; fresh: Announcements["fresh"] }
+const NO_FEED: FeedState = { kept: [], loaded: false, fresh: null };
+
+/** The page's one watch on one of the add-on's feeds. */
+function useFeed(read: (after: number | null, stop: AbortSignal) => Promise<FeedRead<Announcement> | null>): FeedState {
+  const [state, setState] = useState<FeedState>(NO_FEED);
   useEffect(() => {
     const stop = new AbortController();
-    void watchFeed(fetchAnnouncements, (items, full, first) => setState((s) => {
+    void watchFeed(read, (items, full, first) => setState((s) => {
       const { kept, arrived } = afterRead(s.kept, items, full, first);
       return { kept, loaded: true, fresh: arrived.length ? { arrived, n: (s.fresh?.n ?? 0) + 1 } : s.fresh };
     }), stop.signal, pauseFor);
     return () => stop.abort();
-  }, []);
+  }, [read]);
+  return state;
+}
+const NO_PRESSES = pressesOf(async () => "failed");
+const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, shown: () => {}, presses: NO_PRESSES });
+
+export function AnnouncementsProvider({ children }: { children: ReactNode }) {
+  // ⚠️ TWO FEEDS, ONE LIST (tickets 26-27 of "One inbox"): the villa's announcements and VESTA's cards are read apart
+  // (each its own numbers) and shown together, a card in place of the villa's messages it took over
+  const villa = useFeed(fetchAnnouncements);
+  const vesta = useFeed(fetchVestaMessages);
+  // what just came: the arrivals of the feed whose read is new only — the other feed's last read was shown already
+  const seen = useRef({ villa: 0, vesta: 0, fresh: null as Announcements["fresh"] });
+  const state = useMemo<Announcements>(() => {
+    const was = seen.current;
+    const nv = villa.fresh?.n ?? 0, nm = vesta.fresh?.n ?? 0;
+    const arrived = [...(nv > was.villa ? villa.fresh?.arrived ?? [] : []), ...(nm > was.vesta ? vesta.fresh?.arrived ?? [] : [])];
+    const fresh = arrived.length ? { arrived, n: (was.fresh?.n ?? 0) + 1 } : was.fresh;
+    seen.current = { villa: nv, vesta: nm, fresh };
+    return { kept: shownTogether(villa.kept, vesta.kept), villa: villa.kept, loaded: villa.loaded, fresh };
+  }, [villa, vesta]);
   const [read, setRead] = useState<string[]>(() => readJson(READ_KEY, isIds) ?? []);
   const { kept } = state;
   const shown = useCallback((items: readonly Announcement[]) => setRead((r) => {

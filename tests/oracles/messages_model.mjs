@@ -6,7 +6,10 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { h, draw } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
-const { messagesView, mergeAnnouncements, FILTERS, unreadOf, markShown, openingFilter, readOnScreen } = await import("@/messages/messagesModel");
+const { messagesView, mergeAnnouncements, FILTERS, unreadOf, markShown, openingFilter, readOnScreen, shownTogether,
+  afterRead, cardsOfIssue } = await import("@/messages/messagesModel");
+const { parseVestaMessage } = await import("@/messages/announcements");
+const { noticeStep, NO_NOTICE } = await import("@/messages/noticeModel");
 
 const card = (key, extra = {}) => ({ key, title: `Device ${key}`, lead: null, nextCheck: null, actions: [], lines: [], ...extra });
 const ann = (seq, extra = {}) => ({ seq, at: `2026-10-28T1${seq % 10}:00:00+08:00`, title: `T${seq}`, to: "", text: "",
@@ -142,6 +145,62 @@ ck("Messages opens where the model says, and marks read what it shows",
      seqs(readOnScreen("notifications", page, opened)) === "3,2,1" && seqs(readOnScreen("all", page, opened)) === "1"
      && seqs(readOnScreen("all", page, issue)) === "" && seqs(readOnScreen("issues", [], null)) === "",
      [readOnScreen("notifications", page, opened), readOnScreen("all", page, opened)]);
+}
+
+
+// ── VESTA's card in place of the villa's own message (tickets 26-27 of "One inbox", owner 2026-10-28: "update the
+// existing card, the same way it is done on Telegram") ──────────────────────────────────────────────────────────────
+console.log("\n  VESTA's card, one per alert, as on Telegram:");
+{
+  const record = (seq, extra = {}) => ({ seq, key: "incident:90", at: `2026-10-28T20:${10 + seq}:00+08:00`,
+    title: "#90-P2 (new)", roles: ["Owner", "FM"], lead: "", body: "🔓 Door unlocked\nWhat to do: Check it.",
+    status: ["⚠️ New alert"], takes: ["RUN-A"], ...extra });
+  const card90 = parseVestaMessage(record(1));
+  ck("a record reads as Telegram heads it: number and priority, To:, the alert, its bottom line; no button drawn",
+     card90.title === "#90-P2 (new)" && card90.to === "Owner & FM" && card90.text.startsWith("🔓 Door unlocked")
+     && card90.status === "⚠️ New alert" && J(card90.story) === "[]" && card90.buttons.length === 0 && card90.feed === "vesta",
+     card90);
+  const later = parseVestaMessage(record(2, { title: "#90-P2 (watch)",
+    status: ["- Alert sent 19:42 (to: FM)", "- Reminder sent 20:02 (to: FM)", "✅ Cleared 20:58: back to normal."] }));
+  ck("  ...its Status story above its bottom line, in order",
+     J(later.story) === J(["- Alert sent 19:42 (to: FM)", "- Reminder sent 20:02 (to: FM)"]) && later.status.startsWith("✅"), later);
+  const villa = [ann(1, { run: "RUN-A", title: "Entrance door unlocked", at: "2026-10-28T19:42:00+08:00" }),
+                 ann(2, { run: "RUN-A", title: "Entrance door unlocked", at: "2026-10-28T20:12:00+08:00" }),
+                 ann(3, { run: "RUN-B", title: "Weekly test", at: "2026-10-28T20:30:00+08:00" })];
+  // numbered by its own feed (9), yet listed by time: two feeds' numbers never compare
+  const shown = shownTogether(villa, [{ ...later, seq: 9 }]);
+  ck("the villa's own messages of a run VESTA took over give way to its ONE card; another run's stay; newest last by time",
+     J(shown.map((a) => a.title)) === J(["#90-P2 (watch)", "Weekly test"]), shown.map((a) => a.title));
+  ck("  ...without VESTA's card (VESTA stopped) the villa's own show: never blank",
+     shownTogether(villa, []).length === 3);
+  const view = messagesView({ open: [], watched: [], announcements: shown, filter: "notifications", selected: null });
+  ck("  ...listed newest first by time, VESTA's card keyed by its thread (one line as it is rewritten)",
+     J(view.notifications.map((i) => i.key)) === J(["n3", "v:incident:90"]), view.notifications.map((i) => i.key));
+  const step = afterRead([card90], [later], false, 0);
+  ck("a rewrite that is a new step (cleared) replaces the card and is news", step.kept.length === 1
+     && step.kept[0].title === "#90-P2 (watch)" && step.arrived.length === 1 && step.arrived[0].rewrite, step);
+  const quiet = afterRead([later], [parseVestaMessage(record(3, { title: "#90-P2 (closed)",
+    status: later.story.concat(later.status) }))], false, 0);
+  ck("  ...a quiet rewrite (its bottom line unchanged: a title retouched) replaces it and is no news, as a quiet edit",
+     quiet.kept[0].title === "#90-P2 (closed)" && quiet.arrived.length === 0, quiet);
+  const settings = { fullScreenFor: [], ringShownForS: 60, ringsFullScreen: true };
+  // the villa's alarm offering a button (it stays on screen), then VESTA's card of it
+  const staying = { ...villa[0], key: "k1", buttons: [{ label: "Silence", command: "/silence" }] };
+  let n = noticeStep(NO_NOTICE, { type: "arrived", announcement: staying, rewrite: false, settings });
+  n = noticeStep(n, { type: "arrived", announcement: card90, rewrite: false, settings });
+  ck("the villa's notice of the alert gives way to VESTA's card of it", n.passing?.announcement.feed === "vesta"
+     && n.staying.length === 0, n);
+  const issue = card("d", { lines: [{ key: "fault:t1", text: "#90 · Door", icons: null, story: [], closing: null,
+    actions: [], alertNumber: 90 }] });
+  ck("an alert's open issue finds VESTA's card of it (its number); one with no alert number none",
+     J(cardsOfIssue(issue, shown).map((a) => a.title)) === J(["#90-P2 (watch)"])
+     && cardsOfIssue(card("e", { lines: [{ key: "x", text: "", icons: null, story: [], closing: null, actions: [] }] }), shown).length === 0);
+  const { AnnouncementContent } = await import("@/components/messages/AnnouncementContent");
+  const drawn = draw(h(AnnouncementContent, { announcement: later })).replace(/<[^>]+>/g, "|");
+  ck("the card is drawn as Telegram shows it: To:, the alert, Status:, each story line, then where it stands",
+     /To: Owner &amp; FM.*🔓 Door unlocked.*Status:.*- Alert sent 19:42.*- Reminder sent 20:02.*✅ Cleared/s.test(drawn), drawn);
+  ck("what this tablet read of one feed is not read of the other (two feeds number apart)",
+     unreadOf([ann(1), { ...card90, seq: 1, at: ann(1).at }], markShown([], [ann(1)], [ann(1)])) === 1);
 }
 
 const ctx = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");

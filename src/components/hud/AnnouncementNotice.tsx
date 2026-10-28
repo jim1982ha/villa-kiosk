@@ -17,7 +17,7 @@ import { useConfig } from "@/config/ConfigContext";
 import type { Announcement } from "@/messages/announcements";
 import { NO_NOTICE, noticeStep } from "@/messages/noticeModel";
 import { useAnnouncementPress, useAnnouncements } from "@/messages/AnnouncementsContext";
-import { announcementWords } from "@/messages/messagesModel";
+import { announcementWords, idOf } from "@/messages/messagesModel";
 import type { PressState } from "@/messages/presses";
 import { AnnouncementActions, AnnouncementContent, AnnouncementPhoto } from "@/components/messages/AnnouncementContent";
 
@@ -114,7 +114,7 @@ export default function AnnouncementNotice() {
   useEffect(() => {
     const p = state.passing;
     if (!p) return;
-    const t = setTimeout(() => send({ type: "passingEnded", seq: p.announcement.seq }), p.ms);
+    const t = setTimeout(() => send({ type: "passingEnded", id: idOf(p.announcement) }), p.ms);
     return () => clearTimeout(t);
   }, [state.passing]);
 
@@ -122,8 +122,8 @@ export default function AnnouncementNotice() {
   return (
     <>
       {state.full && <OneFullScreen announcement={state.full.announcement} onDismiss={() => send({ type: "fullEnded" })} />}
-      {state.staying.map((a) => <OneNotice key={a.seq} announcement={a} onDismiss={() => send({ type: "dismissed", seq: a.seq })} />)}
-      {passing && <OneNotice key={passing.seq} announcement={passing} onDismiss={() => send({ type: "dismissed", seq: passing.seq })} />}
+      {state.staying.map((a) => <OneNotice key={idOf(a)} announcement={a} onDismiss={() => send({ type: "dismissed", id: idOf(a) })} />)}
+      {passing && <OneNotice key={idOf(passing)} announcement={passing} onDismiss={() => send({ type: "dismissed", id: idOf(passing) })} />}
     </>
   );
 }

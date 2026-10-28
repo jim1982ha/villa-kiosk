@@ -43,11 +43,21 @@ export function AnnouncementContent({ announcement, onPress, presses = {} }: {
   onPress?: (command: string) => void;
   presses?: PressState;
 }) {
+  const story = announcement.story ?? [];
   return (
     <>
+      {/* who it is for, as Telegram's "To:" line says it */}
+      {announcement.to && <p className="announcement-full-to">To: {announcement.to}</p>}
       {announcement.photo && <AnnouncementPhoto id={announcement.photo} className="announcement-full-photo" />}
       {announcement.text && <p className="announcement-full-text">{announcement.text}</p>}
-      {announcement.status && <p className="announcement-full-status">{announcement.status}</p>}
+      {/* VESTA's card: its Status story, then where it stands, as on Telegram */}
+      {(story.length > 0 || announcement.status) && (
+        <div className="announcement-full-status">
+          {story.length > 0 && <span className="announcement-status-label">Status:</span>}
+          {story.map((line, i) => <span key={i} className="announcement-story-line">{line}</span>)}
+          {announcement.status && <span>{announcement.status}</span>}
+        </div>
+      )}
       {onPress && announcement.buttons.length > 0 && <AnnouncementActions announcement={announcement} onPress={onPress} presses={presses} />}
     </>
   );

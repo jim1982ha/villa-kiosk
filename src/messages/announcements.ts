@@ -31,6 +31,16 @@ export interface Announcement {
   /** The buttons it offers (the doorbell's Unlock), label and command as the villa sent them: the Kiosk names no
    *  device and no command. None without a key: a press names its announcement by it. */
   buttons: AnnouncementButton[];
+  /** Where it comes from: the villa's own announcement (none said), or VESTA's card as it stands on Telegram (ticket 25-27
+   *  of "One inbox": the add-on's /vesta-messages). Two feeds number apart: `vesta` keeps their numbers apart here. */
+  feed?: "vesta";
+  /** VESTA's card: the Status lines above its bottom line (the history: alert sent, reminder, pressed…); none for the
+   *  villa's own. */
+  story?: string[];
+  /** VESTA's card: the automation runs whose villa announcements it stands for (shown in their place). */
+  takes?: string[];
+  /** The villa's own: the automation run that announced it (the add-on reads it from the event). */
+  run?: string;
 }
 
 export interface AnnouncementButton { label: string; command: string }
@@ -136,18 +146,52 @@ function buttonsOf(raw: unknown): AnnouncementButton[] {
 
 /** One stored record, narrowed to what this build shows; null for anything it cannot. */
 export function parseAnnouncement(raw: unknown): Announcement | null {
-  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
-  if (!r || typeof r.seq !== "number" || !Number.isInteger(r.seq) || typeof r.message !== "string") return null;
+  const r = numbered(raw);
+  if (!r || typeof r.message !== "string") return null;
   const parts = readLayout(r.message);
   if (!parts.title && !parts.text) return null;
   const key = typeof r.key === "string" && r.key ? r.key : null;
   return {
-    seq: r.seq, at: typeof r.at === "string" ? r.at : "", ...parts,
-    photo: typeof r.photo === "string" && PHOTO_ID.test(r.photo) ? r.photo : null,
-    key,
+    seq: r.seq, at: atOf(r), ...parts, photo: photoOf(r), key,
     buttons: key ? buttonsOf(r.buttons) : [],
+    ...(typeof r.run === "string" && r.run ? { run: r.run } : {}),
   };
 }
+
+/** A stored record of either feed with its number; null for anything else. */
+function numbered(raw: unknown): (Record<string, unknown> & { seq: number }) | null {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  return r && typeof r.seq === "number" && Number.isInteger(r.seq) ? (r as Record<string, unknown> & { seq: number }) : null;
+}
+const atOf = (r: Record<string, unknown>) => (typeof r.at === "string" ? r.at : "");
+const photoOf = (r: Record<string, unknown>) => (typeof r.photo === "string" && PHOTO_ID.test(r.photo) ? r.photo : null);
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x !== "") : []);
+
+/**
+ * One of VESTA's cards as the add-on keeps it (agent-contract.json `vestaMessage`), read as an announcement so every
+ * screen draws it the way it draws the villa's: its title as Telegram heads it ("#91-P2 (new)"), "To:", its alert and
+ * "What to do", its Status story and bottom line, its snapshot. ⚠️ ITS BUTTONS ARE NOT DRAWN: VESTA's Done and Need help
+ * are pressed on Telegram until the tablet can press them (ticket 22 of "One inbox"); a button that does nothing is not
+ * shown. null for anything this build cannot read. Pure: tests/oracles/messages_model.mjs.
+ */
+export function parseVestaMessage(raw: unknown): Announcement | null {
+  const r = numbered(raw);
+  if (!r || typeof r.key !== "string" || !r.key) return null;
+  const lines = strings(r.status);
+  const text = [r.lead, r.body].filter((x): x is string => typeof x === "string" && x.trim() !== "").join("\n");
+  const title = typeof r.title === "string" ? r.title : "";
+  if (!title && !text && !lines.length) return null;
+  return {
+    seq: r.seq, at: atOf(r), title, to: strings(r.roles).join(" & "), text,
+    status: lines[lines.length - 1] ?? "", story: lines.slice(0, -1), photo: photoOf(r),
+    key: r.key, buttons: [], feed: "vesta", takes: strings(r.takes),
+  };
+}
+
+/** VESTA's cards, a read of the add-on's feed (messages/feed), as the announcements are read. */
+export const fetchVestaMessages = (after: number | null, stop: AbortSignal): Promise<FeedRead<Announcement> | null> =>
+  fetchFeed("vesta-messages", "messages", parseVestaMessage, after, stop);
 
 /** Where the add-on serves an announcement's photo. */
 export const announcementPhotoUrl = (id: string): string => ingressPath(`announcement-photo/${id}`);

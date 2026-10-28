@@ -69,6 +69,9 @@ export interface AttentionItem {
   closing?: { at: string; word?: string; since?: Since };
   /** Set on a fault: its short story on Telegram, in time order (faultNotes.notedStory — "Escalation sent to Owner"). */
   story?: { note: string; at: string }[];
+  /** Set on a fault an alert raised: the number its Telegram messages carry ("#91"), which names VESTA's card of it
+   *  (messagesModel.cardsOfIssue). */
+  alertNumber?: number;
   /** Set on a fault: the other open records that say exactly the same thing on the same card (foldTwins) — one line,
    *  "(N times)", and the card's buttons act on every one of them. */
   twins?: string[];
@@ -384,6 +387,7 @@ export function buildAttentionItems(opts: {
       ticketId: t.id,
       stage: stageOf(t),
       story: notedStory(t),
+      ...(typeof t.alertNumber === "number" && t.alertNumber > 0 ? { alertNumber: t.alertNumber } : {}),
       source: faultSource(t),
       check: t.check,
       closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf),

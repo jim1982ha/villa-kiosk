@@ -19,7 +19,7 @@ export function FullScreenFor() {
   const picked = config.fullScreenFor;
   // the page's one list of what the add-on keeps (messages/AnnouncementsContext): never a read of its own (review Q
   // round 2: the tab read the add-on again when it opened)
-  const { kept, loaded } = useAnnouncements();
+  const { villa: kept, loaded } = useAnnouncements();
   const set = (title: string, on: boolean) => update({ fullScreenFor: withItem(picked, title, on) });
   const offered = announcedTitles(kept, picked);
   return (

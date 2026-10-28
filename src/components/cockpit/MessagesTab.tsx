@@ -18,8 +18,8 @@ import { cardFocused } from "@/config/attention";
 import type { CardView } from "@/config/cockpitCard";
 import { localStamp } from "@/fm/fmEngine";
 import { useAnnouncementPress, useAnnouncements } from "@/messages/AnnouncementsContext";
-import { announcementWords, messagesView, openingFilter, readOnScreen, type MessageItem, type MessagesFilter }
-  from "@/messages/messagesModel";
+import { announcementWords, cardsOfIssue, messagesView, openingFilter, readOnScreen, type MessageItem,
+  type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
@@ -27,6 +27,8 @@ import { SourceIcons } from "@/components/fm/sourceIcons";
 import FoldedList from "@/components/common/FoldedList";
 import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
+import type { Announcement } from "@/messages/announcements";
+import type { PressState } from "@/messages/presses";
 import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 
@@ -203,6 +205,8 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
             onDone={() => setRaising(null)} />
         )}
+        {/* an alert's open issue: VESTA's card of it first, as Telegram shows it, then the tablet's own buttons */}
+        {item?.kind === "issue" && cardsOfIssue(item.card, kept).map((a) => <NoteDetail key={a.key} announcement={a} />)}
         {item?.kind === "issue" && (item.card.look === "watched"
           ? <AttentionCard card={item.card} onOpenEntity={onOpenEntity} />
           : <CockpitAttentionRow key={item.key} card={item.card} onOpenEntity={onOpenEntity} canManage={canManage}
@@ -216,15 +220,22 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
 
 /** A notification, open on the right: its title and when it came, then all it says, its photo and its buttons. */
 function NotificationDetail({ item }: { item: Extract<MessageItem, { kind: "notification" }> }) {
-  const a = item.announcement;
-  const { presses, press } = useAnnouncementPress(a);
+  const { presses, press } = useAnnouncementPress(item.announcement);
+  return <NoteDetail announcement={item.announcement} onPress={press} presses={presses} />;
+}
+
+/** A notification's title, when it came and all it says: on its own, or VESTA's card of an open issue's alert above the
+ *  issue's own card (no buttons of its own: announcements.parseVestaMessage). */
+function NoteDetail({ announcement: a, onPress, presses }: {
+  announcement: Announcement; onPress?: (command: string) => void; presses?: PressState;
+}) {
   return (
     <div className="messages-note">
       <div className="messages-note-head">
         <strong>{a.title}</strong>
         {a.at && <span className="muted">{localStamp(a.at)}</span>}
       </div>
-      <AnnouncementContent announcement={a} onPress={press} presses={presses} />
+      <AnnouncementContent announcement={a} onPress={onPress} presses={presses} />
     </div>
   );
 }

@@ -97,8 +97,8 @@ ck("  ...the notice sends each to the notice model and keeps no memory of its ow
      got?.first === 3 && got.last === 4 && got.items.map((x) => x.seq).join() === "4", got);
 }
 const settingsSrc = src("components/settings/MessagesSettings.tsx");
-ck("\"Full screen for\" offers the titles of the page's one list, never a read of its own",
-   /const \{ kept, loaded \} = useAnnouncements\(\);/.test(settingsSrc) && !/fetchAnnouncements/.test(settingsSrc));
+ck("\"Full screen for\" offers the titles of the villa's own announcements the page holds (never VESTA's cards), never a read of its own",
+   /const \{ villa: kept, loaded \} = useAnnouncements\(\);/.test(settingsSrc) && !/fetchAnnouncements/.test(settingsSrc));
 
 console.log("\n  what is on screen, announcement by announcement (review Q round 2: a ring that stays, stays):");
 {
@@ -111,7 +111,7 @@ console.log("\n  what is on screen, announcement by announcement (review Q round
   let st = go(NO_NOTICE, arrive(ringB), arrive(power));
   ck("a ring offering Unlock stays when another arrives; the other passes beside it for 10s",
      st.staying.map((x) => x.seq).join() === "40" && st.passing?.announcement.seq === 41 && st.passing.ms === 10_000, st);
-  st = go(st, { type: "passingEnded", seq: 41 });
+  st = go(st, { type: "passingEnded", id: "41" });
   ck("  ...the other gone, the ring is still there", st.staying.length === 1 && st.passing === null, st);
   st = go(st, arrive({ ...ringB, seq: 42, buttons: [], status: "✅ Opened at 14:05" }, true));
   ck("  ...its rewrite (answered) takes its place: the Unlock is gone, the answer passes",
@@ -132,8 +132,8 @@ console.log("\n  what is on screen, announcement by announcement (review Q round
      && (() => { const t = go(NO_NOTICE, arrive(ringA), arrive({ ...ringA, seq: 51, key: "ring-a2" }));
        return t.full?.announcement.seq === 51 && t.staying.map((x) => x.seq).join() === "50"; })());
   ck("  ...a staying one goes with its ✕; an earlier timer never ends a later passing one",
-     go(NO_NOTICE, arrive(ringB), { type: "dismissed", seq: 40 }).staying.length === 0
-     && go(NO_NOTICE, arrive(power), arrive({ ...power, seq: 43 }), { type: "passingEnded", seq: 41 }).passing?.announcement.seq === 43);
+     go(NO_NOTICE, arrive(ringB), { type: "dismissed", id: "40" }).staying.length === 0
+     && go(NO_NOTICE, arrive(power), arrive({ ...power, seq: 43 }), { type: "passingEnded", id: "41" }).passing?.announcement.seq === 43);
 }
 
 console.log("\n  one record of presses for the page (review Q 2):");

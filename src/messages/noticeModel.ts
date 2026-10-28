@@ -7,6 +7,7 @@
 // it event by event; components/hud/AnnouncementNotice holds the state and its timers.
 
 import { noticeFor, type Announcement, type ShowSettings } from "./announcements";
+import { idOf } from "./messagesModel";
 
 export interface NoticeState {
   /** The one holding the whole screen, for `ms`; `stays`: its notice carries on after (it offers a button). */
@@ -24,21 +25,24 @@ export type NoticeEvent =
   | { type: "arrived"; announcement: Announcement; rewrite: boolean; settings: ShowSettings }
   /** The full screen's time ran out, Close, or this tablet's switch turned off. */
   | { type: "fullEnded" }
-  /** The passing one's time ran out (`seq`: which, a later one never ended by an earlier timer). */
-  | { type: "passingEnded"; seq: number }
+  /** The passing one's time ran out (`id`: which — messagesModel.idOf —, a later one never ended by an earlier timer). */
+  | { type: "passingEnded"; id: string }
   /** Its ✕ (a staying one). */
-  | { type: "dismissed"; seq: number };
+  | { type: "dismissed"; id: string };
 
-const sameKey = (a: Announcement, b: Announcement) => a.key !== null && a.key === b.key;
+/** `b` is gone once `a` came: its rewrite (the same key, the same feed), or VESTA's card that took the villa's own
+ *  message over (its run among the card's `takes`): the villa's alarm notice gives way to VESTA's card of it. */
+const replaces = (a: Announcement, b: Announcement) =>
+  (a.key !== null && a.key === b.key && a.feed === b.feed) || (!!b.run && (a.takes ?? []).includes(b.run));
 
 export function noticeStep(s: NoticeState, e: NoticeEvent): NoticeState {
   switch (e.type) {
     case "arrived": {
       const a = e.announcement;
       // a rewrite takes its first's place wherever it is (the ring answered: its Unlock is withdrawn)
-      const staying = s.staying.filter((x) => !sameKey(x, a));
-      const passing = s.passing && sameKey(s.passing.announcement, a) ? null : s.passing;
-      const full = s.full && sameKey(s.full.announcement, a) ? null : s.full;
+      const staying = s.staying.filter((x) => !replaces(a, x));
+      const passing = s.passing && replaces(a, s.passing.announcement) ? null : s.passing;
+      const full = s.full && replaces(a, s.full.announcement) ? null : s.full;
       const how = noticeFor(a, e.settings, { rewrite: e.rewrite });
       if (how.fullScreenMs !== null) {
         // the screen goes to the newest picked one; one it took it from keeps its notice when that one stays
@@ -52,9 +56,9 @@ export function noticeStep(s: NoticeState, e: NoticeEvent): NoticeState {
       if (!s.full) return s;
       return { ...s, full: null, staying: s.full.stays ? [...s.staying, s.full.announcement] : s.staying };
     case "passingEnded":
-      return s.passing?.announcement.seq === e.seq ? { ...s, passing: null } : s;
+      return s.passing && idOf(s.passing.announcement) === e.id ? { ...s, passing: null } : s;
     case "dismissed":
-      return { ...s, staying: s.staying.filter((x) => x.seq !== e.seq),
-        passing: s.passing?.announcement.seq === e.seq ? null : s.passing };
+      return { ...s, staying: s.staying.filter((x) => idOf(x) !== e.id),
+        passing: s.passing && idOf(s.passing.announcement) === e.id ? null : s.passing };
   }
 }
