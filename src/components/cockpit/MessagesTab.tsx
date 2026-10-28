@@ -77,17 +77,17 @@ export function MessagesSection({ title, count, open, onToggle, tip, actions, ch
   );
 }
 
-/** A section that only grows (Watch, Closed): its lines a page at a time; nothing drawn while it is empty. */
-function FoldedRows({ rows, unit, selected, onSelect, ...section }: {
+/** A section that only grows (Watch, Closed): its lines a page at a time; `empty` said while it has none (it is always
+ *  there: owner, 2026-10-28). */
+function FoldedRows({ rows, unit, selected, onSelect, empty, ...section }: {
   title: string; rows: MessageItem[]; unit: string; open: boolean; onToggle: () => void; tip?: ReactNode;
-  selected?: string; onSelect: (key: string) => void;
+  selected?: string; onSelect: (key: string) => void; empty: string;
 }) {
   const paged = usePaged(rows);
-  if (rows.length === 0) return null;
   return (
     <MessagesSection {...section} count={rows.length}>
       {paged.page.map((r) => <MessageRow key={r.key} item={r} selected={selected === r.key} onSelect={onSelect} />)}
-      <Pager paged={paged} unit={unit} />
+      {rows.length === 0 ? <p className="muted body-text messages-empty">{empty}</p> : <Pager paged={paged} unit={unit} />}
     </MessagesSection>
   );
 }
@@ -228,12 +228,17 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           )}
           {/* last, and not in Open issues' count: closed, the VESTA Agent confirming it (fm/faultConfirm); folded by
               default (owner, 2026-10-25); a section of its own, below Notifications (owner, 2026-10-28) */}
-          <FoldedRows title="Watch" rows={view.watched} unit="watched fault" open={folds.watch} onToggle={() => fold("watch")}
-            selected={item?.key} onSelect={choose}
-            tip="Closed faults VESTA still watches: back before the time on its card, a fault reopens as the same problem; after it, VESTA lets it go." />
-          {/* alerts that are closed: folded, last (owner, 2026-10-28) */}
-          <FoldedRows title="Closed" rows={view.closed} unit="closed alert" open={folds.closed} onToggle={() => fold("closed")}
-            selected={item?.key} onSelect={choose} />
+          {/* a problem's later life, with the issues and always there, empty or not (owner, 2026-10-28) */}
+          {showsIssues && (
+            <>
+              <FoldedRows title="Watch" rows={view.watched} unit="watched fault" open={folds.watch}
+                onToggle={() => fold("watch")} selected={item?.key} onSelect={choose} empty="Nothing is being watched."
+                tip="Closed faults VESTA still watches: back before the time on its card, a fault reopens as the same problem; after it, VESTA lets it go." />
+              {/* alerts that are closed: folded, last */}
+              <FoldedRows title="Closed" rows={view.closed} unit="closed alert" open={folds.closed}
+                onToggle={() => fold("closed")} selected={item?.key} onSelect={choose} empty="Nothing closed yet." />
+            </>
+          )}
         </div>
       </div>
 

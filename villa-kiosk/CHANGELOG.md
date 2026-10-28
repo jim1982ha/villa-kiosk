@@ -1,3 +1,12 @@
+## 2.496.575
+
+What you will see:
+- In Messages, the filter "Open issues" is now "Issues": it lists a problem's whole life, Open issues, then Watch,
+  then Closed. Its number still counts the open issues only.
+- Notifications lists only the notifications: Closed moved from there to the issues.
+- Watch and Closed are always shown, saying "Nothing is being watched." or "Nothing closed yet." when empty.
+- All still shows the four sections: Open issues, Notifications, Watch, Closed.
+
 ## 2.496.574
 
 What you will see:

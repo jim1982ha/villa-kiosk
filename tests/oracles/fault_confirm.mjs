@@ -143,6 +143,9 @@ ck("an active fault keeps its look: no marker", /^<div class="fm-record-card">/.
   ck("  ...a section folded shows its name and count, no card; open, its cards",
      /Watch \(2\)/.test(drawn(false)) && !/card 1/.test(drawn(false)) && /aria-expanded="false"/.test(drawn(false))
      && /card 1/.test(drawn(true)), drawn(false));
+  const tabSrc = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
+  ck("  ...Watch and Closed are drawn with the issues, always, empty or not (owner, 2026-10-28)",
+     /\{showsIssues && \(\s*<>\s*<FoldedRows title="Watch"/.test(tabSrc) && !/if \(rows\.length === 0\) return null/.test(tabSrc));
   ck("  ...Watch and Closed start folded; Open issues and Notifications open",
      /useState\(\{ issues: true, notes: true, watch: false, closed: false \}\)/.test(readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8")));
 }

@@ -13,7 +13,9 @@ export type MessagesFilter = "all" | "issues" | "notifications";
 /** The filters, in their order on their one line. */
 export const FILTERS: readonly { id: MessagesFilter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "issues", label: "Open issues" },
+  // ⚠️ "ISSUES", NOT "OPEN ISSUES" (owner, 2026-10-28): it lists a problem's whole life — open, watched, closed —
+  // its count the open ones only
+  { id: "issues", label: "Issues" },
   { id: "notifications", label: "Notifications" },
 ];
 
@@ -38,7 +40,7 @@ export interface MessagesView {
   /** Why it is open: asked for, a warning's, or only the first listed — a phone shows an item someone chose (asked,
    *  a warning) and the list otherwise, so an item that went never leaves another one open by itself. */
   openedBy: "asked" | "focus" | "first" | null;
-  /** Which parts the filter shows. */
+  /** Which parts the filter shows: the issues' (Open issues, Watch, Closed) and the notifications'. */
   shows: { issues: boolean; notifications: boolean };
 }
 
@@ -174,12 +176,14 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   const inWatch = new Set(watched.flatMap((c) => cardsOfIssue(c, announcements)));
   const isClosed = (a: Announcement) => alertStage(a) === "closed";
   // newest first, by time (two feeds: their numbers do not compare)
-  const asNotes = (keep: (a: Announcement) => boolean): MessageItem[] => (showNotes
+  const asNotes = (shown: boolean, keep: (a: Announcement) => boolean): MessageItem[] => (shown
     ? announcements.filter((a) => !inWatch.has(a) && keep(a)).sort((x, y) => timeOf(y) - timeOf(x) || y.seq - x.seq)
       .map((a) => ({ kind: "notification", key: noteKey(a), announcement: a }))
     : []);
-  const closed = asNotes(isClosed);
-  const notifications = asNotes((a) => !isClosed(a));
+  // ⚠️ A PROBLEM'S LIFE IS ONE PLACE (owner, 2026-10-28): open, then watched once it cleared, then closed — Watch and
+  // Closed are shown with the issues, never with the notifications
+  const closed = asNotes(showIssues, isClosed);
+  const notifications = asNotes(showNotes, (a) => !isClosed(a));
   const listed = [...issues, ...notifications, ...watchedItems, ...closed];
   const asked = listed.find((i) => i.key === selected);
   const focused = focus ? issues.find((i) => i.kind === "issue" && focus(i.card)) : undefined;

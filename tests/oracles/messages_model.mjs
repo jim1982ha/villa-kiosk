@@ -17,10 +17,11 @@ const ann = (seq, extra = {}) => ({ seq, at: `2026-10-28T1${seq % 10}:00:00+08:0
 const J = JSON.stringify;
 
 console.log("  the filters, on one line:");
-ck("All · Open issues · Notifications, in that order", J(FILTERS.map((f) => f.label)) === J(["All", "Open issues", "Notifications"]));
+ck("All · Issues · Notifications, in that order (owner, 2026-10-28: \"Issues\" holds open, watched and closed)",
+   J(FILTERS.map((f) => f.label)) === J(["All", "Issues", "Notifications"]));
 const base = { open: [card("a"), card("b")], watched: [card("w", { look: "watched" })], announcements: [ann(1), ann(2), ann(3)] };
 const all = messagesView({ ...base, filter: "all", selected: null });
-ck("  ...Open issues counts the open issues only (the watched never counted); the others no count",
+ck("  ...Issues counts the open issues only (the watched never counted); the others no count",
    J(all.filters.map((f) => [f.id, f.count])) === J([["all", null], ["issues", 2], ["notifications", null]]), all.filters);
 
 console.log("\n  what each filter lists:");
@@ -220,6 +221,14 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
   const closed90 = parseVestaMessage(record(5, { key: "incident:89", title: "#89-P2 (closed)", stage: "closed",
     status: ["✅ Closed on 28/10/2026 21:58."] }));
   const withClosed = messagesView({ open: [], watched: [], announcements: [...shown, closed90], filter: "all", selected: null });
+  const onlyNotes = messagesView({ open: [], watched: [watchedCard], announcements: [...shown, closed90], filter: "notifications",
+    selected: null });
+  const onlyIssues = messagesView({ open: [], watched: [watchedCard], announcements: [...shown, closed90], filter: "issues",
+    selected: null });
+  ck("Watch and Closed are the issues' (a problem's later life), never the notifications' (owner, 2026-10-28)",
+     onlyNotes.closed.length === 0 && onlyNotes.watched.length === 0 && onlyNotes.notifications.length > 0
+     && onlyIssues.closed.length === 1 && onlyIssues.watched.length === 1 && onlyIssues.notifications.length === 0,
+     { notes: onlyNotes, issues: onlyIssues });
   ck("an alert that is over goes to Closed, after Watch, never among the notifications (owner, 2026-10-28)",
      J(withClosed.closed.map((i) => i.key)) === J(["v:incident:89"])
      && !withClosed.notifications.some((i) => i.key === "v:incident:89"), withClosed);
