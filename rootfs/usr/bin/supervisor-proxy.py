@@ -3963,6 +3963,54 @@ async def announcement_photo_handler(request: web.Request) -> web.StreamResponse
     return web.FileResponse(path, headers={"Content-Type": ctype, "Cache-Control": "no-store"})
 
 
+# ── A button an announcement offers, pressed on a tablet (ha-commands.json `press`) ─────────────────────────────────
+# The doorbell's Unlock (ticket 15 of "One inbox", owner 2026-10-28: every profile, no PIN). ⚠️ THE PAGE NEVER FIRES AN
+# EVENT: it names a button by its announcement's key and its command, and this process fires the one press event with
+# exactly those two, only while an announcement it keeps still offers that button — a rewrite without buttons (the
+# ring answered, opened at the gate, or timed out) withdraws it. The opening stays in the villa's automation, which
+# waits for the press as it waits for Telegram's: a press after its wait opens nothing. No websocket fire_event is
+# admitted, so no profile chooses an event's type or its data.
+ANNOUNCEMENT_PRESS = str(HA_COMMANDS.get("press") or "")
+
+
+def _offers_button(items: list, key, command) -> bool:
+    """Whether a kept announcement with this key offers a button with this command. Pure — tests/store-doors.py
+    drives it through the door."""
+    if not isinstance(key, str) or not key or not isinstance(command, str) or not command:
+        return False
+    return any(isinstance(a, dict) and a.get("key") == key
+               and any(b[1] == command for row in a.get("buttons") or [] for b in row)
+               for a in items)
+
+
+async def _fire_press(app: web.Application, data: dict) -> bool:
+    """Fire the press event on the villa's bus with the add-on's own token; whether the villa's system took it."""
+    try:
+        async with app["session"].post(f"http://{SUPERVISOR}/core/api/events/{ANNOUNCEMENT_PRESS}", headers=AUTH,
+                                       json=data, timeout=ClientTimeout(total=10)) as resp:
+            return resp.status == 200
+    except (ClientError, OSError, asyncio.TimeoutError):
+        return False
+
+
+async def announcement_press_handler(request: web.Request) -> web.Response:
+    """`{"key", "command"}` — every profile: 200 once the press is on the villa's bus, 409 when no kept announcement
+    offers that button (any more), 502 when the villa's system was not reached."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    if not ANNOUNCEMENT_PRESS or set(body) != {"key", "command"}:
+        return web.json_response({"error": "a press names a key and a command, nothing else"}, status=400)
+    items = await asyncio.to_thread(lambda: _announcements_tidy(ANNOUNCEMENTS.read()))
+    if not _offers_button(items, body["key"], body["command"]):
+        return web.json_response({"error": "This button is no longer offered."}, status=409)
+    if not await _fire_press(request.app, {"command": body["command"], "key": body["key"]}):
+        return web.json_response({"error": "The villa's system was not reached."}, status=502)
+    return web.json_response({"ok": True})
+
+
 # ── The villa's critical devices (agent-contract.json criticalDevices) ───────
 # ⚠️ ONE LIST (owner, 2026-10-18 — architecture review, offline devices #2): the
 # Kiosk painted every offline device red, the agent's night check called locks,
@@ -4275,6 +4323,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     # The villa's announcements, kept by this process (every profile).
     app.router.add_get("/announcements", announcements_handler)
     app.router.add_get("/announcement-photo/{id}", announcement_photo_handler)
+    app.router.add_post("/announcement-press", announcement_press_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
     app.router.add_get("/agent/v1/info", agent_info_handler)

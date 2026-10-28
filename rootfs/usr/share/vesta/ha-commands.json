@@ -12,6 +12,8 @@
   "events": ["state_changed", "entity_registry_updated", "device_registry_updated", "area_registry_updated", "floor_registry_updated"],
   "_announcement": "The event the villa's automations fire for each announcement (the doorbell, an alarm, the weekly test) beside their Telegram message: its `message` is the finished text. The add-on itself listens to it and keeps each one (supervisor-proxy.py, /announcements); it is NOT in `events`, so no page hears it from the bus.",
   "announcement": "vesta_message",
+  "_press": "The ONE event a page may have the villa's system receive: a button an announcement offers (the doorbell's Unlock), pressed on a tablet. Never sent by a page: the add-on fires it (supervisor-proxy.py, /announcement-press), for every profile, only with the command and key of a button an announcement it keeps still offers. The villa's automation that offered the button waits for it, as it waits for Telegram's own press. NOT in `events` and not a websocket command: no page fires or hears it from the bus.",
+  "press": "vesta_action",
   "_camera": "Every command that opens a camera's picture; each also needs the viewCameras capability.",
   "camera": [
     "camera/stream", "camera/capabilities",

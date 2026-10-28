@@ -317,6 +317,49 @@ async def main() -> None:
     ck("past the records-kept days the announcements go, and their photos with them",
        body["announcements"] == [] and left == [], (body, left))
 
+    # ── a button pressed on the tablet (ticket 15 of "One inbox", 2026-10-28) ──────────────────────────────────────
+    print("  /announcement-press, a ring's button pressed on the tablet:")
+    fired = []
+
+    async def fire(_app, data):
+        fired.append(data)
+        return True
+
+    proxy._fire_press = fire
+    ck("the one event it fires is named in the one table, and no page may subscribe to it",
+       proxy.ANNOUNCEMENT_PRESS == proxy.HA_COMMANDS.get("press") and bool(proxy.ANNOUNCEMENT_PRESS)
+       and proxy.ANNOUNCEMENT_PRESS not in proxy.ALLOWED_EVENT_TYPES)
+    await proxy._record_announcement(app, kev("<b>Ring</b>", key="run-2", buttons=[[["🔓 Unlock", "/unlock_gate"]]]))
+    press = {"key": "run-2", "command": "/unlock_gate"}
+    status, _ = await call("POST", "/announcement-press", {}, press)
+    ck("no session: 401, nothing fired", status == 401 and fired == [], (status, fired))
+    status, body = await call("POST", "/announcement-press", guest, press)
+    ck("a guest presses a button the ring offers: the press signal goes with its command and the ring's key",
+       status == 200 and fired == [press], (status, body, fired))
+    fired.clear()
+    for who, wrong in (("another command", {"key": "run-2", "command": "/open_everything"}),
+                       ("another ring's key", {"key": "run-1", "command": "/unlock_gate"}),
+                       ("a key no ring has", {"key": "run-9", "command": "/unlock_gate"}),
+                       ("no key", {"command": "/unlock_gate"}),
+                       ("a command that is not a string", {"key": "run-2", "command": ["/unlock_gate"]}),
+                       ("more than the button says", {**press, "extra": "x"})):
+        status, _ = await call("POST", "/announcement-press", guest, wrong)
+        ck(f"  ...refused for {who}, nothing fired", status in (400, 409) and fired == [], (status, fired))
+    status, _ = await call("POST", "/announcement-press", owner, {"key": "run-2", "command": "/open_everything"})
+    ck("  ...and the owner too may press only what a ring offers", status == 409 and fired == [], (status, fired))
+    await proxy._record_announcement(app, kev("<b>Opened at 09:05</b>", key="run-2"))
+    status, _ = await call("POST", "/announcement-press", guest, press)
+    ck("once the rewrite withdrew the button (answered, opened, timed out): 409, nothing fired",
+       status == 409 and fired == [], (status, fired))
+    await proxy._record_announcement(app, kev("<b>Ring</b>", key="run-3", buttons=[[["🔓 Unlock", "/unlock_gate"]]]))
+
+    async def unreachable(_app, _data):
+        return False
+
+    proxy._fire_press = unreachable
+    status, _ = await call("POST", "/announcement-press", guest, {"key": "run-3", "command": "/unlock_gate"})
+    ck("the villa's system not reached: 502, so the tablet says it was not sent", status == 502, status)
+
     await client.close()
 
 

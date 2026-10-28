@@ -25,10 +25,21 @@ export interface Announcement {
   /** Its photo's id in the add-on (a ring's snapshot, copied when it arrived; announcementPhotoUrl serves it); null
    *  without one, or for a profile that may not view cameras (the add-on does not name it). */
   photo: string | null;
+  /** What ties it to its rewrite (the add-on keeps one per key); null without one. */
+  key: string | null;
+  /** The buttons it offers (the doorbell's Unlock), label and command as the villa sent them: the Kiosk names no
+   *  device and no command. None without a key: a press names its announcement by it. */
+  buttons: AnnouncementButton[];
 }
+
+export interface AnnouncementButton { label: string; command: string }
 
 /** How long a new announcement stays on screen as a notice. */
 export const ANNOUNCEMENT_NOTICE_MS = 10_000;
+/** How long a notice stays: one offering a button stays until the villa's rewrite withdraws it (answered, opened,
+ *  timed out), or the ✕; any other ANNOUNCEMENT_NOTICE_MS. null = until then. */
+export const noticeLasts = (a: Announcement): number | null => (a.buttons.length ? null : ANNOUNCEMENT_NOTICE_MS);
+
 /** Pause before asking again when the add-on could not be reached. */
 const RETRY_MS = 5_000;
 /** A read the add-on holds open waits at most 25s (ANNOUNCEMENT_WAIT_S); one still open well after that is a
@@ -68,20 +79,60 @@ export function readLayout(message: string): Pick<Announcement, "title" | "to" |
 
 const PHOTO_ID = /^[0-9a-f]{32}\.(?:jpg|png)$/;
 
+/** The add-on's kept buttons ([[label, command], …] per row), in one list; a malformed one left out. */
+function buttonsOf(raw: unknown): AnnouncementButton[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((row) => (Array.isArray(row) ? row : []))
+    .filter((b): b is [string, string] => Array.isArray(b) && b.length === 2 && typeof b[0] === "string"
+      && typeof b[1] === "string" && b[0].trim() !== "" && b[1] !== "")
+    .map(([label, command]) => ({ label, command }));
+}
+
 /** One stored record, narrowed to what this build shows; null for anything it cannot. */
 export function parseAnnouncement(raw: unknown): Announcement | null {
   const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
   if (!r || typeof r.seq !== "number" || !Number.isInteger(r.seq) || typeof r.message !== "string") return null;
   const parts = readLayout(r.message);
   if (!parts.title && !parts.text) return null;
+  const key = typeof r.key === "string" && r.key ? r.key : null;
   return {
     seq: r.seq, at: typeof r.at === "string" ? r.at : "", ...parts,
     photo: typeof r.photo === "string" && PHOTO_ID.test(r.photo) ? r.photo : null,
+    key,
+    buttons: key ? buttonsOf(r.buttons) : [],
   };
 }
 
 /** Where the add-on serves an announcement's photo. */
 export const announcementPhotoUrl = (id: string): string => ingressPath(`announcement-photo/${id}`);
+
+/** What became of a press: the villa's system has it; the button is no longer offered (the ring was answered, opened
+ *  at the gate, or timed out); not sent. */
+export type PressOutcome = "sent" | "withdrawn" | "failed";
+
+/** The words under a pressed button. */
+export const PRESS_SAID: Record<PressOutcome, string> = {
+  sent: "Sent",
+  withdrawn: "No longer offered",
+  failed: "Not sent, try again",
+};
+
+/** Press a button an announcement offers: the add-on fires the villa's one press event with this key and command,
+ *  only while it still offers the button (supervisor-proxy.py /announcement-press). `send` is backendFetch (a check
+ *  passes its own). */
+export async function pressButton(
+  key: string, command: string, send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status">>,
+): Promise<PressOutcome> {
+  try {
+    const r = await send(ingressPath("announcement-press"), {
+      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, command }),
+    });
+    return r.ok ? "sent" : r.status === 409 ? "withdrawn" : "failed";
+  } catch {
+    return "failed";
+  }
+}
 
 export interface AnnouncementsRead { items: Announcement[]; last: number }
 

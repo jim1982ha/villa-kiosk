@@ -5,7 +5,8 @@
 import { readFileSync } from "node:fs";
 import { h, draw } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
-const { readLayout, parseAnnouncement, watchAnnouncements, ANNOUNCEMENT_NOTICE_MS } = await import("@/messages/announcements");
+const { readLayout, parseAnnouncement, watchAnnouncements, ANNOUNCEMENT_NOTICE_MS, noticeLasts, pressButton, PRESS_SAID } =
+  await import("@/messages/announcements");
 const { AnnouncementNoticeView } = await import("@/components/hud/AnnouncementNotice");
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
 
@@ -30,7 +31,7 @@ ck("a stored record becomes an announcement; one this build cannot read is left 
    && parseAnnouncement(null) === null);
 
 console.log("\n  each one kept after the page opened is shown once:");
-const a = (seq) => ({ seq, at: "", title: `T${seq}`, to: "", text: "", status: "", photo: null });
+const a = (seq) => ({ seq, at: "", title: `T${seq}`, to: "", text: "", status: "", photo: null, key: null, buttons: [] });
 const answers = [{ items: [a(1), a(2)], last: 2 }, null, { items: [a(3)], last: 3 }, { items: [], last: 3 },
   { items: [a(4), a(5)], last: 5 }, { items: [], last: 1 }, { items: [a(2)], last: 2 }];
 const asked = [];
@@ -69,5 +70,39 @@ const sly = parseAnnouncement({ seq: 5, message: ring, photo: "../../options.jso
 ck("  ...a photo name that is not one of the add-on's ids is not drawn", sly?.photo === null, sly);
 ck("  ...in the column, before the passing notice (a motion notice never replaces a ring)",
    /<ServiceErrorToast \/>\s*<AnnouncementNotice \/>\s*<AppNotice /.test(src("pages/Dashboard.tsx")));
+
+console.log("\n  a button the announcement offers (ticket 15: the doorbell's Unlock, pressed on the tablet):");
+const offered = parseAnnouncement({ seq: 6, message: ring, key: "run-1", buttons: [[["🔓 Unlock", "/unlock"], ["Later", "/later"]]] });
+ck("its buttons, label and command as the villa sent them, and its key",
+   JSON.stringify(offered?.buttons) === JSON.stringify([{ label: "🔓 Unlock", command: "/unlock" }, { label: "Later", command: "/later" }])
+   && offered?.key === "run-1", offered);
+ck("  ...none without a key: the press must name its ring, or no automation can tell it is for it",
+   parseAnnouncement({ seq: 7, message: ring, buttons: [[["🔓 Unlock", "/unlock"]]] })?.buttons.length === 0);
+ck("  ...a malformed button is left out, never drawn blank",
+   parseAnnouncement({ seq: 8, message: ring, key: "k", buttons: [[["", "/x"], ["ok", 3], "z", ["Fine", "/f"]]] })
+     ?.buttons.map((b) => b.label).join() === "Fine");
+ck("a notice offering a button stays until the rewrite withdraws it; any other goes after 10s",
+   noticeLasts(offered) === null && noticeLasts(parseAnnouncement({ seq: 9, message: ring, key: "run-1" })) === ANNOUNCEMENT_NOTICE_MS);
+const pressed = [];
+const btnHtml = draw(h(AnnouncementNoticeView, { announcement: offered, onPress: () => {}, onDismiss: () => {}, presses: {} }));
+ck("each button drawn with the announcement's own label (the Kiosk names no device and no command)",
+   /<button[^>]*class="[^"]*\bvesta-notice-action\b[^"]*"[^>]*>🔓 Unlock<\/button>/.test(btnHtml) && btnHtml.includes(">Later</button>")
+   && !btnHtml.includes("/unlock"), btnHtml);
+ck("  ...with its ✕ while it stays", btnHtml.includes('aria-label="Dismiss"'), btnHtml);
+const sentHtml = draw(h(AnnouncementNoticeView, { announcement: offered, onPress: () => {}, presses: { "/unlock": "sent" } }));
+ck("  ...a pressed button is not pressed twice, and says what happened",
+   /<button[^>]*disabled=""[^>]*>🔓 Unlock<\/button>/.test(sentHtml) && sentHtml.includes(PRESS_SAID.sent), sentHtml);
+const replies = { 200: "sent", 409: "withdrawn", 502: "failed", 401: "failed" };
+for (const [status, want] of Object.entries(replies)) {
+  const got = await pressButton("run-1", "/unlock", async (url, init) => {
+    pressed.push([url, init.method, init.body]);
+    return { ok: Number(status) === 200, status: Number(status) };
+  });
+  ck(`  ...the add-on's ${status}: ${want}`, got === want, got);
+}
+ck("the press names the ring's key and the button's command, posted to the add-on",
+   JSON.stringify(pressed[0]) === JSON.stringify(["/announcement-press", "POST", JSON.stringify({ key: "run-1", command: "/unlock" })]),
+   pressed[0]);
+ck("  ...a lost connection is not sent", await pressButton("k", "/c", async () => { throw new Error("offline"); }) === "failed");
 
 done("✅ the villa's announcements: read into words, shown once, each in the one notice");
