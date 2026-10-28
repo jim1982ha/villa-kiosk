@@ -30,11 +30,12 @@ export function statusSteps(t: Pick<FmTicket, "updates">): FmTicketUpdate[] {
   return statusChanges(t).filter((u) => titleOf(u) === undefined);
 }
 
-/** What last happened about the fault on Telegram, from the VESTA Agent ("Escalation sent to Owner"), with when — the
- *  Overview card's line under the fault (owner, 2026-10-14: Telegram told the whole story, the card only its start). */
-export function lastNoted(t: Pick<FmTicket, "updates">): { note: string; at: string } | undefined {
-  const u = [...(t.updates ?? [])].reverse().find((x) => x.kind === "noted" && x.note);
-  return u ? { note: u.note as string, at: u.at } : undefined;
+/** What happened about the fault on Telegram, from the VESTA Agent ("Alert sent (to: Facility Manager)", "🆘 Need help
+ *  on Telegram (Wayan)"), each with when, in time order: the short story Telegram's Status tells, under the open issue
+ *  in Messages (owner, 2026-10-14: Telegram told the whole story, the card only its start; ticket 19 of "One inbox",
+ *  2026-10-28: the card told only the last line). A line is written minutes after its moment: in its moment's place. */
+export function notedStory(t: Pick<FmTicket, "updates">): { note: string; at: string }[] {
+  return stepsInTimeOrder(t).filter((x) => x.kind === "noted" && x.note).map((x) => ({ note: x.note as string, at: x.at }));
 }
 
 /** When it happened, in one line: opened, reopened, picked up, resolved — and by whom (the name typed for who does the

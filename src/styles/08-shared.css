@@ -205,6 +205,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    2026-10-18: "use truncation for the description text" */
 .cockpit-attention-sub-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cockpit-attention-latest { display: block; margin-top: 2px; font-size: var(--text-2xs); color: var(--text-dim); }
+/* a problem's short story on Telegram, one line each under it (ticket 19 of "One inbox") */
+.cockpit-attention-story { list-style: none; margin: 0; padding: 0; }
 .cockpit-attention-sub-text {
   /* basis 0: the cut text never claims its full length, so a line's Close stays beside it */
   flex: 1 1 0; min-width: 0; font-size: var(--text-xs); color: var(--text-secondary);

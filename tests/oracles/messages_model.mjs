@@ -95,7 +95,7 @@ ck("  ...opened for something else, never on Notifications, so nothing is read u
 console.log("\n  one line per item, drawn:");
 const { MessageRow } = await import("@/components/cockpit/MessagesTab");
 const issueLine = draw(h(MessageRow, { item: { kind: "issue", key: "a", card: card("a", { room: "Kitchen",
-  lines: [{ key: "l", text: "Too warm", icons: null, latest: null, closing: null, actions: [] }] }) }, selected: true, onSelect() {} }));
+  lines: [{ key: "l", text: "Too warm", icons: null, story: [], closing: null, actions: [] }] }) }, selected: true, onSelect() {} }));
 ck("an open issue: its device, then its room and its first problem on the line under; chosen, marked",
    /class="messages-row on"/.test(issueLine) && issueLine.includes("<b>Device a</b>") && issueLine.includes("<span>Kitchen · Too warm</span>"), issueLine);
 const noteLine = draw(h(MessageRow, { item: { kind: "notification", key: "n1", announcement: ann(1, { title: "🔔 Visitor",

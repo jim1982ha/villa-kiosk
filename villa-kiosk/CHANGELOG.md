@@ -1,3 +1,10 @@
+## 2.496.565
+
+What you will see:
+- In Messages, an open issue with a ticket shows its whole short story under its line, as Telegram's "Status:" tells
+  it: the alert sent and to whom, each reminder, an escalation, a button pressed on Telegram, each with its time, in
+  order. It showed only the last of these. The whole story shows once the VESTA Agent is updated too.
+
 ## 2.496.564
 
 What you will see:

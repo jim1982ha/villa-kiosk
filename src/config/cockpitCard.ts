@@ -147,8 +147,9 @@ export interface CardLine {
   text: string;
   /** Its source icons, only where the card's own do not say them already; null: none. */
   icons: LineSources | null;
-  /** What last happened about it on Telegram — a reminder, an escalation, a button pressed. */
-  latest: { note: string; at: string } | null;
+  /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
+   *  (ticket 19 of "One inbox"); [] when nothing was told. */
+  story: { note: string; at: string }[];
   /** When the VESTA Agent closes it if it stays as it is now — "Locked since 14:38 · closes at about 14:49 if it stays
    *  locked" (closingText); null when it is not waiting to close. */
   closing: string | null;
@@ -191,7 +192,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     key: item.id,
     text: attentionLineIn(group, item),
     icons: lineIcon(group, item),
-    latest: item.latest ?? item.fault?.latest ?? null,
+    story: item.story ?? item.fault?.story ?? [],
     closing: closingText(item.closing ?? item.fault?.closing, now),
     actions: itemActions(group, item),
   });
@@ -234,7 +235,7 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
       // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
       // issues' next-check pill (its time, then "within 5 min"), who closed it the line under its fault
       lead: null, nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
-      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, latest: null, closing: said.did, actions: [] }],
+      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, story: [], closing: said.did, actions: [] }],
     }];
   });
 }

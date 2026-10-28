@@ -367,8 +367,16 @@ const told = { ...rec("s", "switch.pump"), status: "open", updates: [
 const reopenedThenTold = { ...told, updates: [{ at: "2026-10-13T08:00:00.000Z", status: "resolved", photoIds: [] },
   { at: "2026-10-14T07:00:00.000Z", status: "open", photoIds: [], kind: "reopened", by: "Owner" }, ...told.updates.slice(1)] };
 const withLatest = buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([told]) });
-ck("the card's line under the fault: the LAST thing Telegram said, with its time",
-   withLatest[0].latest?.note === "🆘 Need help pressed by Fabien" && withLatest[0].latest.at === "2026-10-14T09:10:00.000Z", withLatest[0].latest);
+ck("under the fault, its short story as Telegram tells it, each line with its time, in time order (ticket 19 of \"One inbox\")",
+   JSON.stringify(withLatest[0].story) === JSON.stringify([{ note: "Escalation sent to Owner", at: "2026-10-14T08:49:00.000Z" },
+     { note: "🆘 Need help pressed by Fabien", at: "2026-10-14T09:10:00.000Z" }]), withLatest[0].story);
+const lateWritten = { ...told, updates: [told.updates[0], told.updates[2], told.updates[1]] };
+ck("  ...a line the Agent wrote late (the repair, minutes after its moment) still in its moment's place",
+   buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([lateWritten]) })[0]
+     .story.map((x) => x.note).join("|") === "Escalation sent to Owner|🆘 Need help pressed by Fabien");
+ck("  ...a fault the Agent told nothing about has none (no line drawn)",
+   buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([{ ...told, updates: [told.updates[0]] }]) })[0]
+     .story.length === 0);
 ck("  ...a noted line is never a status change: \"reopened by Owner\" still read under it",
    N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /reopened .* by Owner/.test(N.faultWhen(reopenedThenTold, (a) => a.slice(11, 16))),
    N.faultWhen(reopenedThenTold, (a) => a.slice(11, 16)));

@@ -100,8 +100,13 @@ function CockpitAttentionSub({ line, actions }: { line: CardLine; actions?: Reac
         {line.icons && <span className="fm-record-gutter-icon"><SourceIcons {...line.icons} size={14} /></span>}
         <span className="cockpit-attention-sub-text">
           <Tip text={line.text}><span className="cockpit-attention-sub-title">{line.text}</span></Tip>
-          {/* what last happened about it on Telegram — a reminder, an escalation, a button pressed (owner, 2026-10-14) */}
-          {line.latest && <span className="cockpit-attention-latest">{line.latest.note} · {localStamp(line.latest.at)}</span>}
+          {/* what happened about it on Telegram — the short story its Status tells: the alert sent, a reminder, an
+              escalation, a button pressed (owner, 2026-10-14; every line since ticket 19 of "One inbox") */}
+          {line.story.length > 0 && (
+            <ul className="cockpit-attention-story">
+              {line.story.map((s) => <li key={`${s.at} ${s.note}`} className="cockpit-attention-latest">{s.note} · {localStamp(s.at)}</li>)}
+            </ul>
+          )}
           {/* when the VESTA Agent closes it if it stays right (owner, 2026-10-21) */}
           {/* ...or, on a fault being confirmed, who closed it and when the Agent confirms it (owner, 2026-10-23) */}
           {line.closing && <span className="cockpit-attention-latest">{line.closing}</span>}

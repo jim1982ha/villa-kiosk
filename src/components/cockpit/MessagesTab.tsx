@@ -61,7 +61,7 @@ function rowOf(item: MessageItem) {
         : card.lead ? <SourceIcons {...card.lead} /> : null,
       title: card.title,
       sub: [card.room, first?.text].filter(Boolean).join(" · "),
-      time: first?.latest ? localStamp(first.latest.at) : "",
+      time: first?.story.length ? localStamp(first.story[first.story.length - 1].at) : "",
     };
   }
   const a = item.announcement;

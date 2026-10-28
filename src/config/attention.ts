@@ -16,7 +16,7 @@ import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
 import { DUE_WORDS, faultTitle, fmAttention, stageOf, type FmStage } from "@/fm/fmEngine";
-import { lastNoted } from "@/fm/faultNotes";
+import { notedStory } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
@@ -67,8 +67,8 @@ export interface AttentionItem {
    *  reads now and since when — "Locked since 14:38 · closes at about 14:49 if it stays locked" (cockpitCard). `since`:
    *  read from its history (useStateSince), never its last_changed. */
   closing?: { at: string; word?: string; since?: Since };
-  /** Set on a fault: what last happened about it on Telegram (faultNotes.lastNoted — "Escalation sent to Owner"). */
-  latest?: { note: string; at: string };
+  /** Set on a fault: its short story on Telegram, in time order (faultNotes.notedStory — "Escalation sent to Owner"). */
+  story?: { note: string; at: string }[];
   /** Set on a fault: the other open records that say exactly the same thing on the same card (foldTwins) — one line,
    *  "(N times)", and the card's buttons act on every one of them. */
   twins?: string[];
@@ -383,7 +383,7 @@ export function buildAttentionItems(opts: {
       entityId,
       ticketId: t.id,
       stage: stageOf(t),
-      latest: lastNoted(t),
+      story: notedStory(t),
       source: faultSource(t),
       check: t.check,
       closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf),
