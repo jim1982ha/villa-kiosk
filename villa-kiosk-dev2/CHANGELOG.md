@@ -1,3 +1,12 @@
+## 2.496.568
+
+What you will see:
+- Nothing yet on screen. The add-on now keeps every message VESTA writes on Telegram (an alert it took over, its
+  reminders and escalations, a camera snapshot, an approval request, the night check, the morning digest, its notes to
+  you) as it stands now: when VESTA rewrites a message, the kept copy is replaced, not added. They are kept for the
+  same number of days as tickets and messages, and a guest sees a snapshot only while it is the current notification,
+  as with a ring. The Messages list shows them in the next release, once the VESTA Agent is updated too.
+
 ## 2.496.567
 
 What you will see:
