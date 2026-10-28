@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.361 (28 October 2026)
+
+- Tickets 26-27 of "One inbox": an incident's record for the tablet names the villa's automation runs it took over
+  (`takes`, agent-contract.json vestaMessage, copied from the Kiosk 2.496.570), so the tablet shows the card in place of
+  the villa's announcement of those runs. Outcome.adopt_ha records the run (State.add_incident_run) before looking for
+  its Telegram message, and IncidentThread.taken tells the card again when it was told without it. No blueprint
+  changes: the Kiosk reads each announcement's run from its event.
+
 ## 0.6.360 (28 October 2026)
 
 - Ticket 25 closed: chat_jobs._say passes `keep` for the notice of a report cut by a restart (a CHAT_JOB; a cut question,

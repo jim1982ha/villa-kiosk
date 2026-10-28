@@ -448,6 +448,19 @@ class State:
     def set_incident_message(self, incident: int | str, chat: int | str, record: dict) -> None:
         self.put(f"incthread:{incident}:{chat}", json.dumps(record))
 
+    def incident_runs(self, incident: int | str) -> list[str]:
+        """The villa's automation runs incident `incident` took over (their context ids), oldest first."""
+        v = self.get(f"incruns:{incident}")
+        return json.loads(v) if v else []
+
+    def add_incident_run(self, incident: int | str, run: str) -> bool:
+        """Run `run` belongs to incident `incident` now; False when it already did."""
+        runs = self.incident_runs(incident)
+        if run in runs:
+            return False
+        self.put(f"incruns:{incident}", json.dumps(runs + [run]))
+        return True
+
     def incident_history(self, incident: int | str) -> list[dict]:
         """Every notice sent about an incident, oldest first: {at, stage, to} (notice.Notices)."""
         v = self.get(f"inchist:{incident}")

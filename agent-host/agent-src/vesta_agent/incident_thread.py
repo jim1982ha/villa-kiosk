@@ -71,6 +71,7 @@ class IncidentThread:
         # inbox"). None: not kept. Called at every change that is the incident's own step, never at a retry or a redraw
         # in another language (`tell` of _show): the tablet's record is the latest step, not whichever chat was drawn last.
         self.mirror = None
+        self._told: dict[str, tuple] = {}       # incident → the last copy told (parts, keyboard, photo): `taken` tells it again
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock(self, iid: int | str) -> asyncio.Lock:
@@ -84,12 +85,24 @@ class IncidentThread:
         async with self._lock(iid):
             await self._post(iid, chat, mid, parts, buttons=buttons, keyboard=keyboard, photo=photo)
 
+    def taken(self, iid: int | str, run: str) -> None:
+        """The villa's automation run `run` (its context id) is incident `iid`'s: its announcement on the tablet gives way
+        to the incident's card. Told again at once when the card was already told without it."""
+        if run and self.state.add_incident_run(iid, run) and str(iid) in self._told:
+            self.tell(iid, *self._told[str(iid)])
+
     def tell(self, iid: int | str, parts: dict, keyboard: dict | None = None, photo=None) -> None:
         """Keep the copy as it stands for the tablet (`mirror`): one record per incident, replaced at each step."""
         if self.mirror is None:
             return
+        self._told[str(iid)] = (parts, keyboard, photo)
         rec = kiosk_messages.of_parts(kiosk_messages.thread_key(iid), parts, keyboard=keyboard,
                                       photo=photo[0] if photo else None)
+        # ⚠️ THE VILLA'S OWN MESSAGES IT STANDS FOR (tickets 26-27 of "One inbox", owner 2026-10-28: "update the existing
+        # card, the same way it is done on Telegram"): every run of the villa's alert this incident took over, so the
+        # tablet shows this one card in place of the villa's alert, its repeat and its all-clear
+        if runs := self.state.incident_runs(iid):
+            rec["takes"] = runs[-int(kiosk_messages.limit("takes") or len(runs)):]
         # ⚠️ WHO IT WENT TO IS EVERY CHAT'S, NOT THE LAST DRAWN'S: each chat's copy says its own "To:" (owner and FM, one
         # group each); the tablet's one record names them all
         roles = list(dict.fromkeys(r for _c, copy in self.state.incident_chats(iid)

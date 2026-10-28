@@ -310,3 +310,26 @@ def test_a_scheduled_digest_is_kept_but_the_same_report_asked_for_in_a_chat_is_n
     kiosk.messages.clear()
     scenario(v, lambda v: run_one(Origin(chat=OWNER, kind=JOB, job="digest", role="owner")))
     assert kiosk.messages == {}
+
+
+def test_the_card_names_the_villa_run_it_took_over(agent, kiosk):
+    """Tickets 26-27 of "One inbox" (owner 2026-10-28: "update the existing card, the same way it is done on Telegram"):
+    the villa's own alert of a run VESTA took over gives way to VESTA's card on the tablet."""
+    scenario(agent, alert)
+    assert kiosk.messages["incident:1"]["takes"] == ["RUN-1"]
+
+    async def again(v):
+        await alert(v, context="RUN-2", mid=501)          # the villa's same alert, a new run (its repeat)
+    scenario(agent, again)
+    assert kiosk.messages["incident:1"]["takes"] == ["RUN-1", "RUN-2"], kiosk.messages["incident:1"]
+
+
+def test_a_run_whose_telegram_message_never_came_still_gives_way_to_the_card(agent, kiosk, monkeypatch):
+    from vesta_agent import outcome as outcome_mod
+    monkeypatch.setattr(outcome_mod, "HA_SENT_WAIT_S", ())
+    scenario(agent, alert)
+
+    async def no_telegram(v):     # the villa announced it, Telegram refused it: nothing to take over there
+        await v.outcome.adopt_ha({"incident_id": 1, "context": "RUN-3", "text": "x"})
+    scenario(agent, no_telegram)
+    assert kiosk.messages["incident:1"]["takes"] == ["RUN-1", "RUN-3"]

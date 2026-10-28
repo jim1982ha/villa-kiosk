@@ -31,13 +31,18 @@ log = logging.getLogger("vesta.kiosk")
 REMEMBERED = 500
 
 
+def limit(name: str) -> int:
+    """The agreement's longest `name` (vestaMessage.limits); 0 when it names none."""
+    return int(agreement.section("vestaMessage").get("limits", {}).get(name) or 0)
+
+
 def _cut(text, name: str) -> str:
-    n = int(agreement.section("vestaMessage").get("limits", {}).get(name) or 0)
+    n = limit(name)
     return str(text or "").strip()[:n] if n else ""
 
 
 def _lines(lines, list_name: str, line_name: str) -> list[str]:
-    n = int(agreement.section("vestaMessage").get("limits", {}).get(list_name) or 0)
+    n = limit(list_name)
     return [x for x in (_cut(line, line_name) for line in lines or ()) if x][:n]
 
 

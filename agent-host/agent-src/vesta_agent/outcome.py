@@ -365,6 +365,9 @@ class Outcome:
         ctx, iid, text = (h or {}).get("context"), (h or {}).get("incident_id"), (h or {}).get("text") or ""
         if not (ctx and str(iid or "").isdigit() and text):
             return []
+        # the villa's announcement of this run gives way to the incident's card on the tablet, whatever Telegram did
+        if self.thread is not None:
+            self.thread.taken(int(iid), str(ctx))
         found = self.state.ha_sent(ctx)
         for wait in HA_SENT_WAIT_S:
             if found:
