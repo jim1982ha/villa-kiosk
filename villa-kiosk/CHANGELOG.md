@@ -1,3 +1,9 @@
+## 2.496.574
+
+What you will see:
+- An alert's open issue, its ticket and its Watch line are named as on Telegram: "#91-P2 · Test lock…" instead of
+  "#91 · Test lock…", once the VESTA Agent is updated too (0.12.374 or later; until then they keep "#91").
+
 ## 2.496.573
 
 What you will see:

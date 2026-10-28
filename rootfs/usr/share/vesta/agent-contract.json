@@ -437,6 +437,7 @@
     ],
     "fields": {
       "alertNumber": "integer: the alert's number as every chat writes it (#5); alerts only",
+      "alertPriority": "its alert's priority (P1…P4) as every chat writes it after the number: the label `alertLabel` (#5-P2); alerts only, kept current by the VESTA Agent",
       "origin": "one of origins",
       "check": "one of checks; absent on a fault only a person closes (chat)",
       "titlePattern": "its title with {since} where a duration goes (\"Pump offline for {since}.\"): the Kiosk words it from `since` each time it shows it; absent when the title holds no duration, or a person retitled it",
@@ -504,7 +505,10 @@
           "by": "Owner"
         }
       ]
-    }
+    },
+    "_alertLabel": "How an alert is named everywhere, Telegram's title and the tablet's lines alike (owner, 2026-10-28: \"consistency everywhere\"): {number} and {priority}; without a priority, `alertLabelNoPriority`.",
+    "alertLabel": "#{number}-{priority}",
+    "alertLabelNoPriority": "#{number}"
   },
   "_duration": "How long something lasted, in the words BOTH apps write (architecture review round 2, 2026-10-16: the Kiosk's chartUtils.fmtDuration and the VESTA Agent's timeutil.lasting each had a rule, and the weekly report's \"Lasted\" column a third: 89s read \"1min\", \"89s\" and \"89s\"; 2h 29min \"2h 29min\", \"2h 29min\" and \"2.5h\"). The rule (owner, 2026-10-24: the unit joined to its number, \"1h 30min\", \"10min\", \"30s\"): rounded to the nearest second; under a minute in seconds, never less than \"1s\"; from a minute on rounded to the nearest minute; from an hour on \"1h 20min\"; from a day on days and WHOLE hours, the minutes dropped (\"1d 9h\" until it is 1d 10h). A half rounds up on both apps. Every case is checked by tests/oracles/duration_words.mjs (Kiosk) and by the VESTA Agent's test_duration_words.py.",
   "duration": {

@@ -18,6 +18,7 @@ import { villaTime, wallClock } from "@/utils/villaClock";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import type { Tone } from "./tone";
 import { countOf } from "@/utils/countOf";
+import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 export type DueState = "never" | "overdue" | "due-soon" | "ok";
 /** Where the month's minor spending stands against its cap. */
@@ -306,15 +307,23 @@ export const STAGE_WORDS: Record<FmStage, { word: string; tone: Tone }> = {
   closed: { word: "Resolved", tone: "ok" },
 };
 
-/** A fault's title as every list shows it: "#5 · House Pump Power …" when it came from a VESTA Agent alert — the
- *  number its Telegram messages carry (FmTicket.alertNumber) — else its title alone. A duration in it is worded now,
+/** An alert's name as Telegram writes it — "#5-P2", or "#5" without a priority — in the agreement's one form
+ *  (agent-contract.json ticket.alertLabel, the form the VESTA Agent titles its messages with). Pure. */
+export function alertLabel(number: number, priority?: string): string {
+  const form = priority && /^P\d$/.test(priority) ? AGENT_CONTRACT.ticket.alertLabel : AGENT_CONTRACT.ticket.alertLabelNoPriority;
+  return form.replace("{number}", String(number)).replace("{priority}", priority ?? "");
+}
+
+/** A fault's title as every list shows it: "#5-P2 · House Pump Power …" when it came from a VESTA Agent alert — its name
+ *  as its Telegram messages carry it (alertLabel) — else its title alone. A duration in it is worded now,
  *  from its `since` ("offline for 6 d 2 h"), in the Kiosk's duration words (chartUtils.fmtDuration): the title the
  *  Agent wrote at 02:00 said "129 h" all day (architecture review, 2026-10-15). */
-export function faultTitle(t: Pick<FmTicket, "title" | "alertNumber" | "titlePattern" | "since">, now: number = Date.now()): string {
+export function faultTitle(t: Pick<FmTicket, "title" | "alertNumber" | "alertPriority" | "titlePattern" | "since">,
+  now: number = Date.now()): string {
   const from = t.since ? Date.parse(t.since) : NaN;
   const title = t.titlePattern?.includes("{since}") && Number.isFinite(from)
     ? t.titlePattern.replace("{since}", fmtDuration(now - from)) : t.title;
-  return typeof t.alertNumber === "number" && t.alertNumber > 0 ? `#${t.alertNumber} · ${title}` : title;
+  return typeof t.alertNumber === "number" && t.alertNumber > 0 ? `${alertLabel(t.alertNumber, t.alertPriority)} · ${title}` : title;
 }
 
 /** Who did a piece of work: the person, when someone else recorded it (a VESTA Agent completion for a Done on
