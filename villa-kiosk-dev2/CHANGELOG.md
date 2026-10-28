@@ -1,3 +1,19 @@
+## 2.496.563
+
+What you will see:
+- The Cockpit's first tab is now Messages, in place of Overview: Messages · Tickets · Schedule · Recap · Spend.
+- Messages has three filters on one line: All, Open issues and Notifications. The list is on the left, and what you
+  tap in it opens on the right.
+- Open issues is the old Overview list: one line per device, in the same order. Tap a line and its card opens on the
+  right with the same buttons (Open Ticket, Close, Edit ticket). "Open a ticket" and the (i) are above the list, and
+  Watched is folded at the end. A device window's warning opens Messages on that device's issue.
+- Notifications lists everything the villa has announced and kept, newest first, 10 a page: tap one to read it whole,
+  with its photo and its buttons (the gate's Unlock while the ring can still be answered). A notice that has gone
+  from the screen can be read here.
+- The Cockpit is wider on the tablet (1080px), on every tab. On a phone, the list and the item take the screen in
+  turn, with a Back to the list.
+- A guest still sees the Cockpit with no tab strip: Messages alone.
+
 ## 2.496.562
 
 What you will see:
