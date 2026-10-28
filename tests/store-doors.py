@@ -198,7 +198,7 @@ async def main() -> None:
     ck("  ...and the published window says it: repairs 0 (for ever)", body.get("retention") == {"clearedDays": 90, "repairedDays": 0, "recordsDays": 0},
        body.get("retention"))
 
-    # ── /announcements: the villa's announcements, kept by the add-on (ticket 13, 2026-10-28) ──────────────────────
+    # ── /announcements: the villa's announcements, kept by the add-on (2.496.557, 2026-10-28) ──────────────────────
     # Driven through the add-on's own recorder (what its listener calls for each bus event) and read over HTTP.
     print("  /announcements:")
     app = client.server.app
@@ -253,6 +253,61 @@ async def main() -> None:
     await proxy._record_announcement(app, ev("<b>After</b>"))
     ck("a corrupt store starts again with the next one", on_disk("announcements.json")[0]["message"] == "<b>After</b>",
        (DATA / "announcements.json").read_text()[:80])
+
+    # ── one line per key, with its photo (2.496.558, 2026-10-28) ────────────────────────────────────────────────────
+    print("  /announcements, one line per key, with its photo:")
+    media = TMP / "media"
+    (media / "cams").mkdir(parents=True)
+    proxy.MEDIA_DIR = str(media)
+    (media / "cams" / "ring1.jpg").write_bytes(proxy._JPEG_MAGIC + b"first ring")
+    kev = lambda msg, **more: {"event_type": proxy.ANNOUNCEMENT_EVENT, "data": {"message": msg, **more}}
+    (DATA / "announcements.json").write_text("[]")
+    await proxy._record_announcement(app, kev("<b>Ring</b>", key="run-1", photo=f"{media}/cams/ring1.jpg",
+                                               buttons=[[["🔓 Unlock", "/unlock_gate"]]]))
+    status, body = await call("GET", "/announcements", owner)
+    ring = body["announcements"][0]
+    photo_file = DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / ring.get("photo", "none")
+    ck("the ring is kept with its key, its button and a copy of its photo",
+       ring.get("key") == "run-1" and ring.get("buttons") == [[["🔓 Unlock", "/unlock_gate"]]]
+       and photo_file.is_file() and photo_file.read_bytes().endswith(b"first ring"), ring)
+    (media / "cams" / "ring1.jpg").write_bytes(proxy._JPEG_MAGIC + b"second ring")
+    r = await client.get(f"/announcement-photo/{ring.get('photo')}", headers=owner)
+    ck("  ...served to the owner as it was when the ring came, even after the file changed",
+       r.status == 200 and (await r.read()).endswith(b"first ring") and r.headers.get("Content-Type") == "image/jpeg",
+       r.status)
+    r = await client.get(f"/announcement-photo/{ring.get('photo')}", headers=guest)
+    status, gbody = await call("GET", "/announcements", guest)
+    ck("  ...never to a profile that may not view cameras: 403, and its list names no photo",
+       r.status == 403 and "photo" not in gbody["announcements"][0], (r.status, gbody))
+    await proxy._record_announcement(app, kev("<b>Opened at 09:03</b>", key="run-1"))
+    status, body = await call("GET", "/announcements", owner)
+    same = [a for a in body["announcements"] if a.get("key") == "run-1"]
+    ck("the rewrite REPLACES the ring (one line), comes as a newer one, has no button, keeps the first photo",
+       len(same) == 1 and same[0]["message"] == "<b>Opened at 09:03</b>" and same[0]["seq"] > ring["seq"]
+       and "buttons" not in same[0] and same[0].get("photo") == ring.get("photo"), body)
+    await proxy._record_announcement(app, kev("<b>Other</b>"))
+    await proxy._record_announcement(app, kev("<b>Other</b>"))
+    status, body = await call("GET", "/announcements", owner)
+    ck("  ...while two announcements with no key stay two lines",
+       [a["message"] for a in body["announcements"]].count("<b>Other</b>") == 2, body)
+    # (A photo path outside the media folder, or not a picture: the private security suite.)
+    pending = DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / ("f" * 32 + ".jpg")
+    pending.write_bytes(proxy._JPEG_MAGIC)
+    proxy._sweep_announcement_photos([], [])
+    ck("a copy made a moment ago, its record not yet written, is not swept as an orphan", pending.exists())
+    pending.unlink()
+    proxy.ANNOUNCEMENT_PHOTO_GRACE_S = 0   # the sweep's grace for a copy not yet recorded: none here
+    (media / "cams" / "ring2.jpg").write_bytes(proxy._JPEG_MAGIC + b"new ring")
+    await proxy._record_announcement(app, kev("<b>Ring again</b>", key="run-1", photo=f"{media}/cams/ring2.jpg"))
+    ck("a rewrite bringing its own photo: the first copy is deleted", not photo_file.exists(),
+       sorted(p.name for p in (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR).iterdir()))
+    (DATA / "announcements.json").write_text(json.dumps(
+        [{**a, "at": old} for a in json.loads((DATA / "announcements.json").read_text())]))
+    status, body = await call("PUT", "/device-config", owner, {"config": {"recordsKeptDays": 30}})
+    status, body = await call("GET", "/announcements", owner)
+    left = sorted(p.name for p in (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR).iterdir())
+    ck("past the records-kept days the announcements go, and their photos with them",
+       body["announcements"] == [] and left == [], (body, left))
 
     await client.close()
 

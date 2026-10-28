@@ -3668,11 +3668,45 @@ ANNOUNCEMENTS = JsonStore("announcements.json", [], ANNOUNCEMENTS_MAX_BYTES + AN
 ANNOUNCEMENT_WAIT_S = 25
 #: The listener's pause before reconnecting after the villa's system went away, doubled up to the ceiling.
 ANNOUNCEMENT_RETRY_S = (5, 60)
+#: What an announcement may say about itself beside its text (2026-10-28): `key` ties a first message to its rewrite
+#: (the doorbell's ring and its "Opened at …"), `buttons` are telegram_bot's own ([[label, command], …]).
+ANNOUNCEMENT_KEY_MAX = 200
+ANNOUNCEMENT_BUTTONS_MAX = 6
+ANNOUNCEMENT_BUTTON_TEXT_MAX = 64
+#: The villa's media folder (config.yaml `map: media`, read-only): where an announcement's `photo` is, a camera's
+#: snapshot taken for it. The add-on copies it into its own store the moment the announcement arrives, so the next
+#: ring cannot change it and it lives exactly as long as its announcement.
+MEDIA_DIR = "/media"
+ANNOUNCEMENT_PHOTO_DIR = "announcement-photos"
+#: A photo's name ending → (the name it is kept under, its type, its first bytes). Its cap is an evidence photo's.
+ANNOUNCEMENT_PHOTO_TYPES = {".jpg": (".jpg", "image/jpeg", _JPEG_MAGIC), ".jpeg": (".jpg", "image/jpeg", _JPEG_MAGIC),
+                            ".png": (".png", "image/png", b"\x89PNG")}
+ANNOUNCEMENT_PHOTO_MAX_BYTES = FM_EVIDENCE_MAX_BYTES
+ANNOUNCEMENT_PHOTO_RE = re.compile(r"^[0-9a-f]{32}\.(?:jpg|png)$")
+
+
+def _announcement_buttons(raw) -> list:
+    """telegram_bot's keyboard ([[label, command], …] per row, or one row) as rows of [label, command] strings."""
+    if not isinstance(raw, list) or not raw:
+        return []
+    rows = raw if all(isinstance(r, list) and r and isinstance(r[0], list) for r in raw) else [raw]
+    out, n = [], 0
+    for row in rows:
+        keep = []
+        for b in row if isinstance(row, list) else []:
+            if (isinstance(b, list) and len(b) == 2 and all(isinstance(x, str) and 0 < len(x) <= ANNOUNCEMENT_BUTTON_TEXT_MAX
+                                                             for x in b) and n < ANNOUNCEMENT_BUTTONS_MAX):
+                keep.append([b[0], b[1]])
+                n += 1
+        if keep:
+            out.append(keep)
+    return out
 
 
 def _announcement_record(event, seq: int) -> dict | None:
     """The record kept for one bus event, or None when it is not an announcement. Pure — tests/store-doors.py
-    drives it. `seq` orders them: a page asks for what came after the last one it holds."""
+    drives it. `seq` orders them: a page asks for what came after the last one it holds. The photo is not in it: the
+    file is copied apart (_announcement_photo_source)."""
     if not ANNOUNCEMENT_EVENT or not isinstance(event, dict) or event.get("event_type") != ANNOUNCEMENT_EVENT:
         return None
     data = event.get("data")
@@ -3680,7 +3714,84 @@ def _announcement_record(event, seq: int) -> dict | None:
     if not isinstance(message, str) or not message.strip():
         return None
     at = event.get("time_fired")
-    return {"seq": seq, "at": at if isinstance(at, str) else _now_iso(), "message": message[:ANNOUNCEMENT_TEXT_MAX]}
+    rec = {"seq": seq, "at": at if isinstance(at, str) else _now_iso(), "message": message[:ANNOUNCEMENT_TEXT_MAX]}
+    key = data.get("key")
+    if isinstance(key, str) and key.strip():
+        rec["key"] = key.strip()[:ANNOUNCEMENT_KEY_MAX]
+    if buttons := _announcement_buttons(data.get("buttons")):
+        rec["buttons"] = buttons
+    return rec
+
+
+def _announcement_photo_source(event) -> str | None:
+    """The announcement's photo as a real file inside the villa's media folder, or None. ⚠️ THE PATH COMES FROM AN
+    EVENT: anything outside the media folder (a `..`, a link out of it, another folder) or of another type is
+    refused, whoever fired it."""
+    data = event.get("data") if isinstance(event, dict) else None
+    raw = data.get("photo") if isinstance(data, dict) else None
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    root = os.path.realpath(MEDIA_DIR)
+    path = os.path.realpath(os.path.join(root, raw.strip().removeprefix(MEDIA_DIR).lstrip("/")))
+    if not path.startswith(root + os.sep) or os.path.splitext(path)[1].lower() not in ANNOUNCEMENT_PHOTO_TYPES:
+        return None
+    return path if os.path.isfile(path) else None
+
+
+def _copy_announcement_photo(src: str) -> str | None:
+    """The photo copied into the add-on's store under a new id ("<hex>.jpg"), or None when it is not the picture its
+    name says (its first bytes) or past the evidence photo's cap. Blocking: called on a worker thread."""
+    kept_as, _, magic = ANNOUNCEMENT_PHOTO_TYPES[os.path.splitext(src)[1].lower()]
+    try:
+        with open(src, "rb") as f:
+            body = f.read(ANNOUNCEMENT_PHOTO_MAX_BYTES + 1)
+    except OSError:
+        return None
+    if len(body) > ANNOUNCEMENT_PHOTO_MAX_BYTES or not body.startswith(magic):
+        return None
+    name = secrets.token_hex(16) + kept_as
+    os.makedirs(_data(ANNOUNCEMENT_PHOTO_DIR), exist_ok=True)
+    atomic_write(_data(ANNOUNCEMENT_PHOTO_DIR, name), lambda out: out.write(body))
+    return name
+
+
+#: A copy younger than this is never swept: it is copied BEFORE its record is written (outside the store's lock, the
+#: copy reads the villa's file), so a sweep running in between must not take it for an orphan.
+ANNOUNCEMENT_PHOTO_GRACE_S = 120
+
+
+def _sweep_announcement_photos(_stored, kept) -> None:
+    """Delete every copied photo no kept announcement names: its announcement expired, or a rewrite brought its own."""
+    named = {a.get("photo") for a in kept if isinstance(a, dict)} if isinstance(kept, list) else set()
+    try:
+        files = os.listdir(_data(ANNOUNCEMENT_PHOTO_DIR))
+    except OSError:
+        return
+    young = time.time() - ANNOUNCEMENT_PHOTO_GRACE_S
+    for name in files:
+        path = _data(ANNOUNCEMENT_PHOTO_DIR, name)
+        try:
+            fresh = os.path.getmtime(path) > young
+        except OSError:
+            continue
+        if name not in named and ANNOUNCEMENT_PHOTO_RE.match(name) and not fresh:
+            try:
+                os.remove(_data(ANNOUNCEMENT_PHOTO_DIR, name))
+            except OSError:
+                pass
+
+
+def _announcements_with(stored: list, rec: dict) -> list:
+    """The store with `rec` added. ⚠️ ONE LINE PER KEY: an announcement naming the key of a kept one REPLACES it (the
+    ring becomes "Opened at …"); a rewrite with no photo keeps the first one's. Pure — tests/store-doors.py drives
+    it."""
+    if "key" in rec:
+        old = next((a for a in stored if isinstance(a, dict) and a.get("key") == rec["key"]), None)
+        if old is not None:
+            if "photo" not in rec and old.get("photo"):
+                rec = {**rec, "photo": old["photo"]}
+            stored = [a for a in stored if a is not old]
+    return stored + [rec]
 
 
 def _announcements_kept(items: list, now: float, days: int, max_bytes: int) -> list:
@@ -3699,22 +3810,28 @@ def _announcements_tidy(items) -> list:
 
 
 async def _record_announcement(app: web.Application, event) -> dict | None:
-    """Keep one announcement and wake every page waiting for it."""
+    """Keep one announcement (its photo copied first) and wake every page waiting for it."""
     if _announcement_record(event, 0) is None:
         return None
+    src = await asyncio.to_thread(_announcement_photo_source, event)
+    photo = await asyncio.to_thread(_copy_announcement_photo, src) if src else None
     made: dict = {}
+
+    def record(seq: int) -> dict:
+        rec = _announcement_record(event, seq)
+        return {**rec, "photo": photo} if photo else rec
 
     def change(stored):
         stored = stored if isinstance(stored, list) else []
         last = max((a["seq"] for a in stored if isinstance(a, dict) and isinstance(a.get("seq"), int)), default=0)
-        made["rec"] = _announcement_record(event, last + 1)
-        return _announcements_tidy(stored + [made["rec"]])
+        made["rec"] = record(last + 1)
+        return _announcements_tidy(_announcements_with(stored, made["rec"]))
 
     try:
-        await ANNOUNCEMENTS.update(change)
+        await ANNOUNCEMENTS.update(change, after=_sweep_announcement_photos)
     except StoreUnreadable:
         # Not a record anyone else writes: a corrupt file starts again rather than lose every ring from here on.
-        made["rec"] = _announcement_record(event, 1)
+        made["rec"] = record(1)
         await ANNOUNCEMENTS.replace([made["rec"]])
     woken = app["announced"]
     app["announced"] = asyncio.Event()
@@ -3773,7 +3890,9 @@ async def _listen_announcements(app: web.Application) -> None:
 
 async def announcements_handler(request: web.Request) -> web.Response:
     """`{"announcements": [...], "last": seq}` — every profile. With `?after=<seq>`, only the newer ones, and the
-    answer waits up to ANNOUNCEMENT_WAIT_S for one to arrive: the tablet hears a ring the moment it is kept."""
+    answer waits up to ANNOUNCEMENT_WAIT_S for one to arrive: the tablet hears a ring the moment it is kept. A
+    profile that may not view cameras (the guest's) is not told a photo exists: a ring's snapshot is a camera's
+    picture (announcement_photo_handler refuses it too)."""
     if (refused := _refuse(request)) is not None:
         return refused
     try:
@@ -3795,7 +3914,7 @@ async def announcements_handler(request: web.Request) -> web.Response:
         # Past the records-kept days: deleted now, under the store's lock, not at the next ring (a "keep for ever"
         # set afterwards must not bring them back).
         try:
-            await ANNOUNCEMENTS.update(_announcements_tidy)
+            await ANNOUNCEMENTS.update(_announcements_tidy, after=_sweep_announcement_photos)
         except (StoreUnreadable, StoreTooLarge, OSError):
             pass
     # A stored `last` below the page's own means the store started again (a corrupt file, a reinstall): answer at once.
@@ -3805,7 +3924,21 @@ async def announcements_handler(request: web.Request) -> web.Response:
         except asyncio.TimeoutError:
             pass
         items, last, _ = await asyncio.to_thread(answer)
+    if not _may(_role_for(request), "viewCameras"):
+        items = [{k: v for k, v in a.items() if k != "photo"} for a in items]
     return web.json_response({"announcements": items, "last": last}, headers={"Cache-Control": "no-store"})
+
+
+async def announcement_photo_handler(request: web.Request) -> web.StreamResponse:
+    """One announcement's photo, by the id its record names — to a profile that may view cameras."""
+    if (refused := _refuse(request, "viewCameras", "This profile may not view camera pictures.")) is not None:
+        return refused
+    name = request.match_info.get("id", "")
+    path = _data(ANNOUNCEMENT_PHOTO_DIR, name)
+    if not ANNOUNCEMENT_PHOTO_RE.match(name) or not os.path.isfile(path):
+        return web.json_response({"error": "no such photo"}, status=404)
+    _, ctype, _ = ANNOUNCEMENT_PHOTO_TYPES[os.path.splitext(name)[1]]
+    return web.FileResponse(path, headers={"Content-Type": ctype, "Cache-Control": "no-store"})
 
 
 # ── The villa's critical devices (agent-contract.json criticalDevices) ───────
@@ -4119,6 +4252,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_get("/agent-status", agent_status_handler)
     # The villa's announcements, kept by this process (every profile).
     app.router.add_get("/announcements", announcements_handler)
+    app.router.add_get("/announcement-photo/{id}", announcement_photo_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
     app.router.add_get("/agent/v1/info", agent_info_handler)

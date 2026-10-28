@@ -307,7 +307,9 @@ ck("  ...and the image creates that account (no home, no shell)", re.search(r"ad
 # Everything the proxy persists is a NAME resolved against DATA_DIR at call
 # time (`_data(...)`, a `*_NAME` constant, a `JsonStore("…")`); an absolute
 # literal handed to open()/os.* is the only other way to reach the disk, and
-# only the read-only table may be one. HTTP routes ("/auth/verify") are not files.
+# only the read-only table may be one — and the villa's media folder, which the
+# manifest maps READ-ONLY (an announcement's photo is copied out of it,
+# 2.496.558). HTTP routes ("/auth/verify") are not files.
 src = PROXY.read_text()
 names = set(re.findall(r'^[A-Z_]+_NAME = "([^"]+)"', src, re.M))
 names |= set(re.findall(r'JsonStore\("([^"]+)"', src))
@@ -318,8 +320,13 @@ ck(f"the data directory is /data, and every name inside it ({len(names)}) is rel
    "; ".join(bad_names))
 fs = set(re.findall(r'(?:open|os\.\w+)\(\s*"(/[^"]+)"', src))
 fs |= set(re.findall(r'^[A-Z_]+(?:_FILE|_DIR|_ROOT) = "(/[^"]+)"', src, re.M))
-outside = sorted(p for p in fs - {"/data"} if not p.startswith("/usr/share/vesta/"))
-ck("no other absolute path reaches the disk (only the read-only table)", not outside, "; ".join(outside))
+outside = sorted(p for p in fs - {"/data", "/media"} if not p.startswith("/usr/share/vesta/"))
+ck("no other absolute path reaches the disk (only the read-only table and media folder)", not outside, "; ".join(outside))
+manifest = (ROOT / "villa-kiosk" / "config.yaml").read_text()
+maps = re.search(r"^map:\n((?:  .*\n)+)", manifest, re.M)
+ck("  ...and the media folder is mapped read-only: never `read_only: false`, nothing else mapped",
+   ("/media" not in fs) or (maps is not None and re.findall(r"type: (\w+)", maps.group(1)) == ["media"]
+                            and "read_only: false" not in maps.group(1)), maps.group(1) if maps else "no map")
 ck("an unreadable options file reads as nothing configured (closed), not a crash",
    "except (OSError, ValueError):\n        return {}" in PROXY.read_text())
 

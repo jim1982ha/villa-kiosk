@@ -30,7 +30,7 @@ ck("a stored record becomes an announcement; one this build cannot read is left 
    && parseAnnouncement(null) === null);
 
 console.log("\n  each one kept after the page opened is shown once:");
-const a = (seq) => ({ seq, at: "", title: `T${seq}`, to: "", text: "", status: "" });
+const a = (seq) => ({ seq, at: "", title: `T${seq}`, to: "", text: "", status: "", photo: null });
 const answers = [{ items: [a(1), a(2)], last: 2 }, null, { items: [a(3)], last: 3 }, { items: [], last: 3 },
   { items: [a(4), a(5)], last: 5 }, { items: [], last: 1 }, { items: [a(2)], last: 2 }];
 const asked = [];
@@ -56,6 +56,17 @@ ck("the one notice, news tone, title then the first line of what it says",
    /class="vesta-notice"/.test(html) && html.includes("--tone:var(--accent)")
    && html.includes("🔔 Visitor · At the door") && !html.includes("more"), html);
 ck("  ...shown for 10s", ANNOUNCEMENT_NOTICE_MS === 10_000, ANNOUNCEMENT_NOTICE_MS);
+globalThis.window = { location: { pathname: "/" } };   // the add-on's own address (no Ingress prefix)
+const photoHtml = draw(h(AnnouncementNoticeView, { announcement: { ...a(1), title: "🔔 Visitor", photo: "x.jpg" } }));
+ck("  ...a ring's photo above its words, served by the add-on; none drawn without one",
+   /<span class="vesta-notice-text"><img class="vesta-notice-photo" src="\/announcement-photo\/x\.jpg" alt=""\/>🔔 Visitor<\/span>/.test(photoHtml)
+   && !html.includes("<img"), photoHtml);
+
+console.log("\n  what a record says about itself:");
+const rec = parseAnnouncement({ seq: 4, message: ring, photo: "0123456789abcdef0123456789abcdef.jpg" });
+ck("its photo, by the add-on's id", rec?.photo === "0123456789abcdef0123456789abcdef.jpg", rec);
+const sly = parseAnnouncement({ seq: 5, message: ring, photo: "../../options.json" });
+ck("  ...a photo name that is not one of the add-on's ids is not drawn", sly?.photo === null, sly);
 ck("  ...in the column, before the passing notice (a motion notice never replaces a ring)",
    /<ServiceErrorToast \/>\s*<AnnouncementNotice \/>\s*<AppNotice /.test(src("pages/Dashboard.tsx")));
 

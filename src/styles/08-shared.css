@@ -85,6 +85,8 @@
 }
 .vesta-notice > svg:first-child { flex: 0 0 auto; color: var(--tone); }
 .vesta-notice-text { min-width: 0; overflow-wrap: anywhere; }
+/* an announcement's photo (a ring's snapshot), above its words */
+.vesta-notice-photo { display: block; max-width: min(240px, 100%); max-height: 160px; margin-bottom: 6px; border-radius: 8px; object-fit: cover; }
 .vesta-notice.tappable { pointer-events: auto; cursor: pointer; min-height: var(--touch-min); }
 .vesta-notice-dismiss {
   pointer-events: auto; background: none; border: none; color: var(--text-secondary); cursor: pointer;

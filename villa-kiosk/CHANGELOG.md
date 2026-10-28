@@ -1,3 +1,13 @@
+## 2.496.558
+
+What you will see:
+- A doorbell ring and what became of it ("Opened at 14:02") are one line on the tablet, not two: the second replaces
+  the first.
+- A ring's notice shows the photo taken for that ring, above its words. It stays that ring's photo even after the next
+  ring. Only profiles that may see cameras get the photo; a guest sees the words without it.
+- A ring's photo is deleted with it, after the number of days set in "How many days tickets, attachments and messages
+  are kept" (Settings › Advanced › System).
+
 ## 2.496.557
 
 What you will see:

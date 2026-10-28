@@ -22,6 +22,9 @@ export interface Announcement {
   text: string;
   /** The layout's bottom line ("⚠️ New alert", "✅ Cleared on 28/10/2026 14:05."); empty when there is none. */
   status: string;
+  /** Its photo's id in the add-on (a ring's snapshot, copied when it arrived; announcementPhotoUrl serves it); null
+   *  without one, or for a profile that may not view cameras (the add-on does not name it). */
+  photo: string | null;
 }
 
 /** How long a new announcement stays on screen as a notice. */
@@ -63,14 +66,22 @@ export function readLayout(message: string): Pick<Announcement, "title" | "to" |
   return { title: plain(title[1]), to: to ? plain(to[1]) : "", text: quotes.filter(Boolean).join("\n"), status: plain(tail) };
 }
 
+const PHOTO_ID = /^[0-9a-f]{32}\.(?:jpg|png)$/;
+
 /** One stored record, narrowed to what this build shows; null for anything it cannot. */
 export function parseAnnouncement(raw: unknown): Announcement | null {
   const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
   if (!r || typeof r.seq !== "number" || !Number.isInteger(r.seq) || typeof r.message !== "string") return null;
   const parts = readLayout(r.message);
   if (!parts.title && !parts.text) return null;
-  return { seq: r.seq, at: typeof r.at === "string" ? r.at : "", ...parts };
+  return {
+    seq: r.seq, at: typeof r.at === "string" ? r.at : "", ...parts,
+    photo: typeof r.photo === "string" && PHOTO_ID.test(r.photo) ? r.photo : null,
+  };
 }
+
+/** Where the add-on serves an announcement's photo. */
+export const announcementPhotoUrl = (id: string): string => ingressPath(`announcement-photo/${id}`);
 
 export interface AnnouncementsRead { items: Announcement[]; last: number }
 
