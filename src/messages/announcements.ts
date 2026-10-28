@@ -71,17 +71,17 @@ export interface ShowSettings {
 export interface HowShown { fullScreenMs: number | null; noticeMs: number | null }
 
 /**
- * How a new announcement shows (ticket 16 of "One inbox", owner 2026-10-28). A problem (raised or still open, its
- * stage) or one offering a button (until the villa's rewrite withdraws it) is a notice that stays until dismissed;
- * anything else a notice for ANNOUNCEMENT_NOTICE_MS. A title the owner picked takes the whole screen first, for "Ring
- * shown for", on a tablet that allows it; then a notice that stays carries on, any other is gone. A cleared one, or a
+ * How a new announcement shows (ticket 16 of "One inbox", owner 2026-10-28). Its notice goes by itself after
+ * ANNOUNCEMENT_NOTICE_MS, a problem included (owner, 2.496.562: "the user shall not have to press the X"); only one
+ * offering a button stays, while the button can still be pressed (until the villa's rewrite withdraws it). A title the
+ * owner picked takes the whole screen first, for "Ring shown for", on a tablet that allows it; then a notice that
+ * stays carries on, any other is gone. A cleared one, or a
  * `rewrite` of one already shown (a ring answered, timed out, still open), never takes the screen again: it would
  * hold the screen a second "Ring shown for". Pure: tests/oracles/announcements.mjs.
  */
 export function noticeFor(a: Announcement, s: ShowSettings, { rewrite = false } = {}): HowShown {
-  const stage = stageOf(a.status);
-  const stays = stage === "new" || stage === "existing" || a.buttons.length > 0;
-  const full = s.ringsFullScreen && !rewrite && stage !== "closed" && s.fullScreenFor.includes(a.title);
+  const stays = a.buttons.length > 0;
+  const full = s.ringsFullScreen && !rewrite && stageOf(a.status) !== "closed" && s.fullScreenFor.includes(a.title);
   if (!full) return { fullScreenMs: null, noticeMs: stays ? null : ANNOUNCEMENT_NOTICE_MS };
   return { fullScreenMs: s.ringShownForS * 1000, noticeMs: stays ? null : 0 };
 }

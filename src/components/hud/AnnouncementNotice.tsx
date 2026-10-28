@@ -1,7 +1,7 @@
 // src/components/hud/AnnouncementNotice.tsx
 // What the villa just announced — "🔔 Visitor at the gate · Someone is at the door." — on every tablet and phone, as
 // messages/announcements noticeFor says (ticket 16 of "One inbox"): full screen for what the owner picked, a notice
-// that stays for a problem, ANNOUNCEMENT_NOTICE_MS for the rest; drawn as every notice is (Notice). Its own place in
+// for ANNOUNCEMENT_NOTICE_MS, a ring's button kept while it can be pressed; drawn as every notice is (Notice). Its own place in
 // the column, above AppNotice's: a motion notice (the visitor walking up) must not replace the ring.
 //
 // A ring offers its buttons here too (ticket 15 of "One inbox", owner 2026-10-28: the doorbell's Unlock, for every
@@ -43,22 +43,23 @@ function Actions({ announcement, onPress, presses }: {
   );
 }
 
-/** One announcement, drawn — pure (a check draws it): its photo when it has one (a ring's snapshot), its title,
- *  then the first line of what it says, then the buttons it offers. A rewrite of the same ring replaces it in place
- *  (the add-on's key). `stays`: a notice that stays until dismissed (a problem, a ring's buttons) carries its ✕. */
-export function AnnouncementNoticeView({ announcement, onPress, onDismiss, presses = {}, stays }: {
+/** One announcement, drawn — pure (a check draws it): its photo above its words when it has one (a ring's snapshot,
+ *  the notice then square-cornered: 08-shared.css), its title and the first line of what it says, then the buttons
+ *  it offers. A rewrite of the same ring replaces it in place (the add-on's key). Only a notice offering a button
+ *  stays, so only it carries a ✕; every other goes by itself. */
+export function AnnouncementNoticeView({ announcement, onPress, onDismiss, presses = {} }: {
   announcement: Announcement;
   onPress?: (command: string) => void;
   onDismiss?: () => void;
   presses?: PressState;
-  stays?: boolean;
 }) {
   const line = announcement.text.split("\n")[0];
   const buttons = onPress ? announcement.buttons : [];
+  const words = line ? `${announcement.title} · ${line}` : announcement.title;
   return (
-    <NoticeView tone="info" icon={<Bell size={16} />} onDismiss={stays || buttons.length ? onDismiss : undefined}>
+    <NoticeView tone="info" icon={<Bell size={16} />} onDismiss={buttons.length ? onDismiss : undefined}>
       {announcement.photo && <img className="vesta-notice-photo" src={announcementPhotoUrl(announcement.photo)} alt="" />}
-      {line ? `${announcement.title} · ${line}` : announcement.title}
+      {words}
       {onPress && buttons.length > 0 && <Actions announcement={announcement} onPress={onPress} presses={presses} />}
     </NoticeView>
   );
@@ -152,6 +153,5 @@ export default function AnnouncementNotice() {
     });
   };
   if (shown.full) return <FullScreen announcement={shown.a} onPress={press} onDismiss={endFull} presses={presses} />;
-  return <AnnouncementNoticeView announcement={shown.a} onPress={press} onDismiss={() => setShown(null)} presses={presses}
-    stays={how.noticeMs === null} />;
+  return <AnnouncementNoticeView announcement={shown.a} onPress={press} onDismiss={() => setShown(null)} presses={presses} />;
 }

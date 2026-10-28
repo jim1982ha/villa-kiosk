@@ -59,8 +59,10 @@ ck("the one notice, news tone, title then the first line of what it says",
 ck("  ...shown for 10s", ANNOUNCEMENT_NOTICE_MS === 10_000, ANNOUNCEMENT_NOTICE_MS);
 globalThis.window = { location: { pathname: "/" } };   // the add-on's own address (no Ingress prefix)
 const photoHtml = draw(h(AnnouncementNoticeView, { announcement: { ...a(1), title: "🔔 Visitor", photo: "x.jpg" } }));
-ck("  ...a ring's photo above its words, served by the add-on; none drawn without one",
+// owner, 2026-10-28 (2.496.562): the pill's round ends around a photo read "pretty much wrong"; the photo keeps its size
+ck("  ...a ring's photo above its words, served by the add-on, the notice then square-cornered; none drawn without one",
    /<span class="vesta-notice-text"><img class="vesta-notice-photo" src="\/announcement-photo\/x\.jpg" alt=""\/>🔔 Visitor<\/span>/.test(photoHtml)
+   && /\.vesta-notice:has\(\.vesta-notice-photo\) \{ border-radius: 12px; \}/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8"))
    && !html.includes("<img"), photoHtml);
 
 console.log("\n  what a record says about itself:");
@@ -123,23 +125,23 @@ ck("  ...none without a mark (the weekly test, a ring not opened) or without a b
 
 const said = (title, status, extra = {}) => ({ ...a(1), title, status, ...extra });
 const picked = { fullScreenFor: ["🔔 Visitor at Gate A"], ringShownForS: 45, ringsFullScreen: true };
-ck("a problem (raised or still open) is a notice that stays until dismissed",
-   [said("🔥 Overload", "⚠️ New alert"), said("🔥 Overload", "⚠️ ⚙️ Still open")]
-     .every((x) => JSON.stringify(noticeFor(x, NONE_FULL)) === JSON.stringify({ fullScreenMs: null, noticeMs: null })),
-   noticeFor(said("🔥 Overload", "⚠️ New alert"), NONE_FULL));
-ck("  ...anything else (cleared, a test, a digest) a 10s notice",
-   [said("🔥 Overload", "✅ Cleared on 28/10/2026 14:05."), said("Weekly test", "Test message: no action needed."), said("Digest", "")]
+// owner, 2026-10-28 (2.496.562): "the notification disappears after 10sec, as the user shall not have to press the X"
+ck("every announcement's notice goes by itself after 10s: a problem (raised, still open), cleared, a test, a digest",
+   [said("🔥 Overload", "⚠️ New alert"), said("🔥 Overload", "⚠️ ⚙️ Still open"), said("🔥 Overload", "✅ Cleared on 28/10/2026 14:05."),
+    said("Weekly test", "Test message: no action needed."), said("Digest", "")]
      .every((x) => JSON.stringify(noticeFor(x, NONE_FULL)) === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 })),
    noticeFor(said("Digest", ""), NONE_FULL));
 ck("a title the owner picked takes the whole screen for \"Ring shown for\" (its own number), then is gone",
    JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", ""), picked)) === JSON.stringify({ fullScreenMs: 45_000, noticeMs: 0 }),
    noticeFor(said("🔔 Visitor at Gate A", ""), picked));
-ck("  ...a problem stays as its notice once the full screen ends",
-   JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "⚠️ New alert"), picked)) === JSON.stringify({ fullScreenMs: 45_000, noticeMs: null }),
+ck("  ...a problem too: no notice once the full screen ends",
+   JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "⚠️ New alert"), picked)) === JSON.stringify({ fullScreenMs: 45_000, noticeMs: 0 }),
    noticeFor(said("🔔 Visitor at Gate A", "⚠️ New alert"), picked));
+ck("  ...a ring offering its button stays as its notice, the button still pressable, until the villa withdraws it",
+   JSON.stringify(noticeFor({ ...offered, title: "🔔 Visitor at Gate A" }, picked)) === JSON.stringify({ fullScreenMs: 45_000, noticeMs: null }));
 ck("  ...never on a tablet that refuses full screen: its notice instead",
    JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "⚠️ New alert"), { ...picked, ringsFullScreen: false }))
-     === JSON.stringify({ fullScreenMs: null, noticeMs: null }));
+     === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 }));
 ck("  ...nor for a title not picked, nor when the ring is answered (its cleared rewrite is a 10s notice)",
    noticeFor(said("🔔 Visitor at Gate B", ""), picked).fullScreenMs === null
    && JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "✅ Opened at 14:05:10 from the tablet"), picked))
@@ -152,19 +154,17 @@ ck("full screen: its title, then its photo large, all it says, its bottom line, 
    /class="announcement-full-photo" src="\/announcement-photo\/x\.jpg"/.test(fullHtml) && fullHtml.includes(">🔔 Visitor at Gate A</h2>")
    && fullHtml.includes("Gate A</p>") && fullHtml.includes("⚠️ New alert") && fullHtml.includes(">🔓 Unlock</button>")
    && /class="modal-footer"[\s\S]*Close/.test(fullHtml), fullHtml);
-const staysHtml = draw(h(AnnouncementNoticeView, { announcement: said("🔥 Overload", "⚠️ New alert"), onDismiss: () => {}, stays: true }));
-ck("a notice that stays carries its ✕ (a problem without a button too); a 10s one none",
-   staysHtml.includes('aria-label="Dismiss"') && !html.includes('aria-label="Dismiss"'), staysHtml);
+const problemHtml = draw(h(AnnouncementNoticeView, { announcement: said("🔥 Overload", "⚠️ New alert"), onDismiss: () => {}, onPress: () => {} }));
+ck("a notice that goes by itself carries no ✕ (a problem included): nothing to press", !problemHtml.includes('aria-label="Dismiss"'), problemHtml);
 ck("  ...the tablet's notice decides by this rule, with the villa's and this tablet's settings",
    /noticeFor\(a, settings\.current, \{ rewrite \}\)/.test(src("components/hud/AnnouncementNotice.tsx"))
-   && /noticeFor\(shown\.a, config, \{ rewrite: shown\.rewrite \}\)/.test(src("components/hud/AnnouncementNotice.tsx"))
-   && /stays=\{how\.noticeMs === null\}/.test(src("components/hud/AnnouncementNotice.tsx")));
+   && /noticeFor\(shown\.a, config, \{ rewrite: shown\.rewrite \}\)/.test(src("components/hud/AnnouncementNotice.tsx")));
 
 ck("a ring's rewrite (its answer, its time out) never takes the screen again: its own notice, in place",
    JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "🔕 Not opened: nobody answered within 2min."), picked, { rewrite: true }))
      === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 })
    && JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "⚠️ ⚙️ Still open"), picked, { rewrite: true }))
-     === JSON.stringify({ fullScreenMs: null, noticeMs: null }));
+     === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 }));
 
 console.log("\n  Advanced Settings › Messages › \"Full screen for\": what the villa has announced, never named in code:");
 const { announcedTitles } = await import("@/messages/announcements");

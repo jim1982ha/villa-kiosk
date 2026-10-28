@@ -1,3 +1,14 @@
+## 2.496.562
+
+What you will see:
+- Every announcement's notice under the category bar goes by itself after 10s, problems ("New alert") included:
+  nothing to close by hand, and no ✕ on it. Only a ring offering the gate's Unlock stays while the button can still be
+  pressed.
+- A notice with a photo (a camera's person alert) has square corners instead of the rounded ends of the bar; the
+  photo keeps its size, above the words.
+- The server room and storage room camera alerts, and the night presence guard's photo, now show their photo on the
+  tablet as on Telegram (a change to those automations on the villa, already saved).
+
 ## 2.496.561
 
 What you will see:

@@ -420,7 +420,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
               The announcements that take the whole screen of every tablet when the villa makes them, such as a ring at
               the gate, for {fmtDuration(config.ringShownForS * 1000)} ("Ring shown for"). Picked from what the villa has
               announced. A tablet can refuse it in its own Settings › Messages. Every other announcement shows under the
-              category bar: a problem stays until dismissed, the rest for {fmtDuration(ANNOUNCEMENT_NOTICE_MS)}.
+              category bar for {fmtDuration(ANNOUNCEMENT_NOTICE_MS)}.
             </>} />
             <FullScreenFor />
             <RingShownFor />
