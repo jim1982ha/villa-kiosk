@@ -234,3 +234,15 @@ def test_the_priority_table_is_read_from_the_alert_desks_settings_never_typed(tm
     alt.write_text(yaml.safe_dump(rules), encoding="utf-8")
     monkeypatch.setattr(mf, "ALERT_DESK_RULES", str(alt))
     assert '"P2": "Owner & FM"' in mf.jinja_words() and '"P4": "digest"' in mf.jinja_words()
+
+
+def test_the_stage_marks_are_the_agreements_one_for_every_title_word():
+    # review Q 3 (2026-10-28): the Kiosk reads an announcement's stage back from these marks; both read the agreement
+    import json
+    from pathlib import Path
+    from vesta_shared.message_format import STAGE_ICONS, STEPS
+    path = Path(__file__).resolve().parents[2] / "rootfs" / "opt" / "vesta" / "host" / "agent-contract.json"
+    marks = {k: v for k, v in json.loads(path.read_text(encoding="utf-8"))["stageMarks"].items() if not k.startswith("_")}
+    assert STAGE_ICONS == marks
+    # every word a title can say has its mark (notice.Notices.word: a step's title word, "existing", "watch", "closed")
+    assert {s.title for s in STEPS.values()} | {"existing", "watch", "closed"} <= set(STAGE_ICONS)

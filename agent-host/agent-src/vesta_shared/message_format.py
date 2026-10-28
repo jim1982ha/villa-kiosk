@@ -31,6 +31,7 @@ import os
 import re
 from typing import NamedTuple
 
+from . import agreement
 from .messaging import tg_len
 
 TO = "To: "
@@ -88,8 +89,11 @@ def _status_labels() -> tuple[str, ...]:
     from .status_words import LABELS
     return LABELS
 #: An alert's bottom line starts with one of these (vesta_agent/layout.py; owner, 2026-10-11): its title's word — new,
-#: existing, closed — or what the skill marked (vesta_shared.result.MARKS).
-STAGE_ICONS = {"new": "⚠️", "existing": "⚠️ ⚙️", "watch": "✅", "closed": "✅"}
+#: existing, closed — or what the skill marked (vesta_shared.result.MARKS). ⚠️ READ FROM THE AGREEMENT
+#: (agent-contract.json `stageMarks`, review Q 3, 2026-10-28): the Kiosk reads an announcement's stage back from these
+#: marks, and kept its own copy, so a mark changed here alone would read a cleared alarm as new on the tablet.
+STAGE_ICONS: dict[str, str] = {k: v for k, v in agreement.section("stageMarks").items()
+                               if not k.startswith("_") and isinstance(v, str)}
 #: ⚠️ AN ALERT ENDS IN TWO STEPS (owner, 2026-10-25: "instead of updating the notification title with (closed), mention
 #: (Watch) … after the watch time expires, strike the content of the first quote … and then update the title with
 #: Closed"): cleared, it is watched — "(watch)", back within it, it reopens as the same alert; its watch over, it is

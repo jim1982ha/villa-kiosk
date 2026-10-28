@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.358 (28 October 2026)
+
+- message_format.STAGE_ICONS read from the agreement (agent-contract.json `stageMarks`, review Q 3): the Kiosk reads an
+  announcement's stage back from the same marks (it kept its own copy). The agreement copied from the Kiosk 2.496.566.
+  test_ha_message_layout pins them to the file and every title word to a mark.
+
 ## 0.6.357 (28 October 2026)
 
 - notice.Notices._line: ONE writer of an incident's history lines, for Telegram's Status (history_lines: with its
