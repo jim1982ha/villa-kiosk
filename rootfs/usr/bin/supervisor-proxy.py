@@ -3755,6 +3755,23 @@ def _copy_announcement_photo(src: str) -> str | None:
     return name
 
 
+#: ⚠️ A GUEST SEES ONLY THE CURRENT NOTIFICATION'S PHOTO (owner, 2026-10-28: "a guest shall only see the photo of the
+#: current notification"). A profile that may not view cameras gets a photo only from the newest announcement, and only
+#: this long after it arrived: the longest a ring stays on a screen as it comes in. Never a past ring's picture.
+ANNOUNCEMENT_CURRENT_S = 60
+
+
+def _current_photo(items: list, now: float) -> str | None:
+    """The photo of the current notification, or None: the newest announcement's, while it is new. Pure —
+    tests/store-doors.py drives it."""
+    newest = max((a for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)),
+                 key=lambda a: a["seq"], default=None)
+    at = _iso_epoch(newest.get("at")) if newest else None
+    if newest is None or at is None or not 0 <= now - at <= ANNOUNCEMENT_CURRENT_S:
+        return None
+    return newest.get("photo") or None
+
+
 #: A copy younger than this is never swept: it is copied BEFORE its record is written (outside the store's lock, the
 #: copy reads the villa's file), so a sweep running in between must not take it for an orphan.
 ANNOUNCEMENT_PHOTO_GRACE_S = 120
@@ -3891,8 +3908,8 @@ async def _listen_announcements(app: web.Application) -> None:
 async def announcements_handler(request: web.Request) -> web.Response:
     """`{"announcements": [...], "last": seq}` — every profile. With `?after=<seq>`, only the newer ones, and the
     answer waits up to ANNOUNCEMENT_WAIT_S for one to arrive: the tablet hears a ring the moment it is kept. A
-    profile that may not view cameras (the guest's) is not told a photo exists: a ring's snapshot is a camera's
-    picture (announcement_photo_handler refuses it too)."""
+    profile that may not view cameras (the guest's) is told only the current notification's photo (_current_photo;
+    announcement_photo_handler refuses it the others too)."""
     if (refused := _refuse(request)) is not None:
         return refused
     try:
@@ -3925,18 +3942,23 @@ async def announcements_handler(request: web.Request) -> web.Response:
             pass
         items, last, _ = await asyncio.to_thread(answer)
     if not _may(_role_for(request), "viewCameras"):
-        items = [{k: v for k, v in a.items() if k != "photo"} for a in items]
+        current = _current_photo(await asyncio.to_thread(lambda: _announcements_tidy(ANNOUNCEMENTS.read())), time.time())
+        items = [a if a.get("photo") == current else {k: v for k, v in a.items() if k != "photo"} for a in items]
     return web.json_response({"announcements": items, "last": last}, headers={"Cache-Control": "no-store"})
 
 
 async def announcement_photo_handler(request: web.Request) -> web.StreamResponse:
-    """One announcement's photo, by the id its record names — to a profile that may view cameras."""
-    if (refused := _refuse(request, "viewCameras", "This profile may not view camera pictures.")) is not None:
+    """One announcement's photo, by the id its record names — to a profile that may view cameras, and to any other
+    only while it is the current notification's (ANNOUNCEMENT_CURRENT_S)."""
+    if (refused := _refuse(request)) is not None:
         return refused
     name = request.match_info.get("id", "")
     path = _data(ANNOUNCEMENT_PHOTO_DIR, name)
     if not ANNOUNCEMENT_PHOTO_RE.match(name) or not os.path.isfile(path):
         return web.json_response({"error": "no such photo"}, status=404)
+    if not _may(_role_for(request), "viewCameras") and name != _current_photo(
+            await asyncio.to_thread(lambda: _announcements_tidy(ANNOUNCEMENTS.read())), time.time()):
+        return _forbidden("This profile sees a ring's photo only while it is the current notification.")
     _, ctype, _ = ANNOUNCEMENT_PHOTO_TYPES[os.path.splitext(name)[1]]
     return web.FileResponse(path, headers={"Content-Type": ctype, "Cache-Control": "no-store"})
 

@@ -277,8 +277,16 @@ async def main() -> None:
        r.status)
     r = await client.get(f"/announcement-photo/{ring.get('photo')}", headers=guest)
     status, gbody = await call("GET", "/announcements", guest)
-    ck("  ...never to a profile that may not view cameras: 403, and its list names no photo",
-       r.status == 403 and "photo" not in gbody["announcements"][0], (r.status, gbody))
+    ck("  ...a guest sees it while it is the current notification (owner, 2026-10-28)",
+       r.status == 200 and gbody["announcements"][0].get("photo") == ring.get("photo"), (r.status, gbody))
+    await proxy._record_announcement(app, kev("<b>Weekly test</b>"))
+    r = await client.get(f"/announcement-photo/{ring.get('photo')}", headers=guest)
+    status, gbody = await call("GET", "/announcements", guest)
+    ck("  ...but not once another notification came after it: 403, and its list names no photo",
+       r.status == 403 and all("photo" not in a for a in gbody["announcements"]), (r.status, gbody))
+    ck("  ...nor once it is older than the current notification's time, even as the newest",
+       proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + proxy.ANNOUNCEMENT_CURRENT_S + 1) is None
+       and proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 1) == ring.get("photo"))
     await proxy._record_announcement(app, kev("<b>Opened at 09:03</b>", key="run-1"))
     status, body = await call("GET", "/announcements", owner)
     same = [a for a in body["announcements"] if a.get("key") == "run-1"]
