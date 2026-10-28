@@ -1,3 +1,10 @@
+## 0.12.378
+
+What you will see (architecture review, 29 October 2026):
+- When Telegram refuses one person's copy of an alert, the tablet still shows ONE card for it, naming everyone it was
+  for, in place of the villa's own message.
+- A message the tablet app refused once (while it restarted) reaches it at VESTA's next try.
+
 ## 0.12.377
 
 What you will see:

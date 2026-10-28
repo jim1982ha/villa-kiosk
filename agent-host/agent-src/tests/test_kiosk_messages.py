@@ -444,3 +444,48 @@ def test_a_report_whose_page_the_kiosk_cannot_hold_is_kept_without_it(tmp_path, 
                      [{"to": "fm", "title": "Weekly report", "text": "Two things", "attachment": "week.html"}])
     (rec,) = kiosk.messages.values()
     assert rec["report"] == "weekly:d.py" and "page" not in rec, rec
+
+
+def test_a_chat_refusing_its_copy_leaves_the_card_whole(agent, kiosk):
+    # architecture review 2026-10-29 #1: the copy Telegram refused in one chat was written to the tablet apart, with
+    # none of the villa's runs the card stands for: the villa's own alert came back beside VESTA's card
+    agent.tg.refuse.add(f"blocked {FM_CHAT}")
+    scenario(agent, alert)
+    rec = kiosk.messages["incident:1"]
+    assert rec.get("takes") == ["RUN-1"], rec
+
+
+def test_a_scheduled_report_rewritten_later_stays_a_report_with_its_page(tmp_path, kiosk):
+    v = scheduled_report(tmp_path, kiosk, [{"telegram_id": FM, "name": "Wayan", "role": "fm"}],
+                         [{"to": "fm", "title": "Night check", "text": "Pump idle", "key": "night-1", "attachment": "n.html"}])
+
+    async def later(v):
+        await v.outcome.carry_out({"edits": [{"key": "night-1", "title": "Night check", "text": "Pump idle, cleared"}]},
+                                  "night-check")
+    scenario(v, later)
+    rec = kiosk.messages["note:night-1"]
+    assert rec["body"] == "Pump idle, cleared" and rec["report"] == "weekly:d.py" and rec.get("page"), rec
+
+
+def test_the_card_names_the_reader_whose_copy_telegram_refused(agent, kiosk):
+    # architecture review 2026-10-29, round 2: "To:" was read from the chats that took a copy only
+    from vesta_agent import layout
+
+    async def told(v):
+        v.state.set_incident_message(7, GROUP, {"mid": 1, "parts": layout.parts(body="x", head=layout.head("#7-P2", "Owner"))})
+        v.thread.tell(7, layout.parts(body="x", head=layout.head("#7-P2", "FM")))
+    scenario(agent, told)
+    assert set(kiosk_messages.roles_of(kiosk.messages["incident:7"]["to"])) == {"Owner", "FM"}, kiosk.messages
+
+
+def test_a_copy_the_kiosk_refused_is_pushed_again_unchanged(agent, kiosk):
+    # architecture review 2026-10-29, round 3: a refused push stayed remembered, so the same copy was skipped after
+    kiosk.message_refusals = 1
+    rec = kiosk_messages.of_note("note:x", "Night check", "Owner", "Pump idle")
+
+    async def twice(v):
+        v.messages.keep(rec)
+        await v.messages.settle()
+        v.messages.keep(rec)
+    scenario(agent, twice)
+    assert kiosk.messages.get("note:x", {}).get("body") == "Pump idle", kiosk.messages

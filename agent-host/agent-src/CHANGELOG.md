@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.367 (29 October 2026)
+
+- Architecture review, three rounds: Poster.post's "Telegram did not take it" branch tells the incident through
+  IncidentThread.tell (the one writer of an incident's tablet record: `takes` and every chat's "To:" kept);
+  IncidentThread.tell's "To:" also joins the told copy's own head (a refused reader is named); KioskMessages forgets a
+  push the Kiosk refused (not only one that failed), so the same copy is pushed again; tests/kiosk_fake keeps on a
+  rewrite what the agreement's new vestaMessage.keptOnRewrite says, as the add-on does (copied from Kiosk 2.496.580).
+
 ## 0.6.366 (29 October 2026)
 
 - Ticket 20 of "One inbox" (reports): a note a scheduled run sends on its own is kept for the tablet as a REPORT

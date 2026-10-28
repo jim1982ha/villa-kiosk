@@ -102,8 +102,10 @@ class IncidentThread:
         self._told[str(iid)] = (parts, keyboard, photo)
         # ⚠️ WHO IT WENT TO IS EVERY CHAT'S, NOT THE LAST DRAWN'S: each chat's copy says its own "To:" (owner and FM, one
         # group each); the tablet's one record names them all, in the words a "To:" line uses (message_format.audience)
-        roles = list(dict.fromkeys(r for _c, copy in self.state.incident_chats(iid)
-                                   for r in kiosk_messages.roles_of((layout.head_of(layout.of(copy).get("head")) or {}).get("to"))))
+        # ⚠️ AND THIS COPY'S OWN (architecture review 2026-10-29, round 2): a copy Telegram refused is in no chat, and its
+        # reader is precisely the one the tablet stands in for
+        heads = [layout.of(copy).get("head") for _c, copy in self.state.incident_chats(iid)] + [parts.get("head")]
+        roles = list(dict.fromkeys(r for h in heads for r in kiosk_messages.roles_of((layout.head_of(h) or {}).get("to"))))
         # ⚠️ THE VILLA'S OWN MESSAGES IT STANDS FOR (tickets 26-27 of "One inbox", owner 2026-10-28: "update the existing
         # card, the same way it is done on Telegram"): every run of the villa's alert this incident took over, so the
         # tablet shows this one card in place of the villa's alert, its repeat and its all-clear

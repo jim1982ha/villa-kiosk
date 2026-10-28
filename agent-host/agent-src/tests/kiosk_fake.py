@@ -29,6 +29,8 @@ _AGREEMENT = json.loads((Path(__file__).resolve().parents[2] / "rootfs/opt/vesta
 STEP_KINDS = _AGREEMENT["ticketUpdate"]["kinds"]
 TICKET_FIELDS = sorted(_AGREEMENT["ticket"]["fields"])
 TICKET_CHECKS = list(_AGREEMENT["ticket"]["checks"])
+#: What a message's rewrite keeps of the record it replaces, as the add-on keeps it (vestaMessage.keptOnRewrite)
+KEPT_ON_REWRITE = tuple(_AGREEMENT["vestaMessage"]["keptOnRewrite"])
 
 
 class FakeKiosk(Kiosk):
@@ -43,6 +45,7 @@ class FakeKiosk(Kiosk):
         self.pushed: list[dict] = []           # every message pushed for the tablet, in order (/agent/v1/vesta-message)
         self.messages: dict[str, dict] = {}    # …and what the tablet holds: the last of each key (the add-on replaces by key)
         self.keeps_messages = True             # False plays an older Kiosk (404): it keeps none
+        self.message_refusals = 0              # how many pushes it answers 500 first (a Kiosk restarting)
 
     # ------------------------------------------------------------------ the one thing replaced: the transport
     async def _req(self, method, path, body=None):
@@ -64,8 +67,14 @@ class FakeKiosk(Kiosk):
         if path == "/agent/v1/vesta-message":
             if not self.keeps_messages:
                 return 404, {"error": "not found"}
+            if self.message_refusals:
+                self.message_refusals -= 1
+                return 500, {"error": "restarting"}
             self.pushed.append(copy.deepcopy(body))
-            self.messages[body["key"]] = copy.deepcopy(body)
+            # the agreement's rule, as the add-on keeps it (_announcements_with): what a rewrite naming none keeps
+            was = self.messages.get(body["key"]) or {}
+            self.messages[body["key"]] = {**{f: was[f] for f in KEPT_ON_REWRITE if f in was and f not in body},
+                                          **copy.deepcopy(body)}
             return 200, {"ok": True, "seq": len(self.pushed)}
         return 200, {}
 

@@ -121,10 +121,13 @@ class Poster:
                                    photo=photo)
             if want:
                 self.translations.later(int(incident), chat, want)
-        elif thread is not None:
+        elif thread is not None and self.thread is not None:
             # ⚠️ THE TABLET TOO WHEN TELEGRAM DID NOT TAKE IT (off, or refused): the thread records only what arrived, and
-            # the tablet is the second place precisely for when Telegram is not there (spec, "Without the internet")
-            self._keep(True, kiosk_messages.of_parts(kiosk_messages.thread_key(thread), p, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)))
+            # the tablet is the second place precisely for when Telegram is not there (spec, "Without the internet").
+            # ⚠️ TOLD BY THE THREAD, THE ONE WRITER OF AN INCIDENT'S RECORD (architecture review 2026-10-29 #1): built here,
+            # one chat's refusal replaced the card with one that named only that chat and none of the villa's runs it
+            # stands for — the villa's own alert came back beside it on the tablet
+            self.thread.tell(thread, p, keyboard, photo)
         elif keep:
             self._keep(keep, kiosk_messages.reported(kiosk_messages.of_parts(
                 kiosk_messages.note_key(keep if isinstance(keep, str) else None, str((p.get("head") or {}).get("title") or ""),

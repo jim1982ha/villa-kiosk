@@ -241,6 +241,10 @@ class KioskMessages:
             try:
                 rec = await self._with_pages(rec)
                 kept = await asyncio.wait_for(self.kiosk.keep_message(rec), self._timeout_s())
+                if not kept:
+                    # ⚠️ REFUSED IS NOT KEPT (architecture review 2026-10-29, round 3): remembered, the same copy told
+                    # again (a retry, a run taken over) was skipped and the tablet kept an earlier step
+                    self._last.pop(key, None)
                 if self._unreached and kept:
                     log.info("The Kiosk keeps the agent's messages for the tablet again")
                 self._unreached = self._unreached and not kept
