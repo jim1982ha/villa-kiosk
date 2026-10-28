@@ -184,7 +184,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   // issue cleared, the form done) never leaves another open in its place.
   const reading = !!raising || view.openedBy === "asked" || view.openedBy === "focus";
   // read on this tablet once in view, as the model says (messagesModel.readOnScreen)
-  const onScreen = readOnScreen(filter, paged.page, item);
+  const onScreen = readOnScreen(filter, paged.page, item, kept);
   const onScreenKey = onScreen.map((a) => a.seq).join(",");
   useEffect(() => {
     if (onScreen.length) shown(onScreen);

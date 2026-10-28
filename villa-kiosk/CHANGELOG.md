@@ -1,3 +1,11 @@
+## 2.496.578
+
+What you will see:
+- An open alert with a ticket is listed once, as its line in Open issues (VESTA's card opens on the right when you tap
+  it), no longer also as a card in Notifications: as on Telegram, one alert, one place. Notifications keeps what has
+  no ticket (the doorbell, the villa's other announcements, VESTA's notes).
+- Opening such an alert's line marks its card read.
+
 ## 2.496.577
 
 What you will see:

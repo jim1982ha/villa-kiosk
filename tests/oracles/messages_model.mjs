@@ -137,7 +137,7 @@ ck("  ...on a phone, on the gear and on the menu's Cockpit row",
      && /onOpenCockpit\(\)/.test(propText(b, "onClick") ?? "")));
 ck("Messages opens where the model says, and marks read what it shows",
    /useState<MessagesFilter>\(\s*\(\) => openingFilter\(unread, \{ warning: !!focusFaults\?\.length, form: !!reportFaultFor && canManage \}\)\)/.test(tab) && /if \(onScreen\.length\) shown\(onScreen\);/.test(tab)
-   && /const onScreen = readOnScreen\(filter, paged\.page, item\);/.test(tab));
+   && /const onScreen = readOnScreen\(filter, paged\.page, item, kept\);/.test(tab));
 // what counts as read, driven by value (review Q 5: it was decided in the tab, pinned by its source text)
 {
   const page = notes.notifications.slice(0, 2), opened = notes.notifications[2], issue = all.issues[0];
@@ -244,6 +244,13 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
   const quietAgain = { ...card90, seq: 40, at: "2026-10-28T23:00:00+08:00", title: "#90-P2 (existing)" };
   ck("a quiet rewrite of a card read already stays read; a new step (its bottom line) is unread (spec review, 2026-10-29)",
      unreadOf([quietAgain], seenStep) === 0 && unreadOf([{ ...quietAgain, status: "⚠️ ⚙️ Reminder sent" }], seenStep) === 1);
+  const openIssue = card("o90", { lines: [{ key: "fault:t1", text: "#90-P2 · Door", icons: null, story: [], closing: null,
+    actions: [], alertNumber: 90 }] });
+  const withOpen = messagesView({ open: [openIssue], watched: [], announcements: shown, filter: "all", selected: null });
+  ck("an OPEN alert with a ticket is listed once, as its open issue: its card leaves Notifications (owner, 2026-10-29)",
+     J(withOpen.notifications.map((i) => i.key)) === J(["n3"]) && withOpen.issues.length === 1, withOpen.notifications);
+  ck("  ...and its card, shown on the right when its line is open, is read there",
+     J(readOnScreen("all", [], withOpen.issues[0], shown).map((a) => a.key)) === J(["incident:90"]));
   ck("what this tablet read of one feed is not read of the other (two feeds number apart)",
      unreadOf([ann(1), { ...card90, seq: 1, at: ann(1).at }], markShown([], [ann(1)], [ann(1)])) === 1);
 }

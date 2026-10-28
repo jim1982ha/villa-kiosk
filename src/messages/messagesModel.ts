@@ -124,9 +124,11 @@ export function announcementWords(a: Announcement): { title: string; line: strin
 /** The announcements the Messages tab shows as read on this tablet (ticket 18; review Q 5: decided here, not in the
  *  tab): the Notifications filter's page shown, and the one open on the right. On All they sit under the open issues,
  *  maybe below the fold: drawn there is not seen. */
-export function readOnScreen(filter: MessagesFilter, page: readonly MessageItem[], open: MessageItem | null): Announcement[] {
+export function readOnScreen(filter: MessagesFilter, page: readonly MessageItem[], open: MessageItem | null,
+  kept: readonly Announcement[] = []): Announcement[] {
+  // an issue open on the right shows VESTA's card of its alert: read too (its line is the card's only line)
   return [...(filter === "notifications" ? page : []), ...(open ? [open] : [])]
-    .flatMap((i) => (i.kind === "notification" ? [i.announcement] : []));
+    .flatMap((i) => (i.kind === "notification" ? [i.announcement] : cardsOfIssue(i.card, kept)));
 }
 
 /** What this tablet remembers it has shown: one announcement as the add-on stored it, its number and when it came. A
@@ -176,7 +178,9 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   const watchedItems = showIssues ? watched.map(issueItem) : [];
   // ⚠️ A WATCHED ALERT IS LISTED ONCE, IN WATCH (owner, 2026-10-28): its card is open on its Watch line, never also a
   // notification
-  const inWatch = new Set(watched.flatMap((c) => cardsOfIssue(c, announcements)));
+  // ⚠️ AN ALERT WITH A TICKET IS LISTED ONCE, WITH ITS ISSUE (owner, 2026-10-29, as Telegram shows one message): its
+  // card opens on its Open issues or Watch line, never also a notification line
+  const inWatch = new Set([...open, ...watched].flatMap((c) => cardsOfIssue(c, announcements)));
   const isClosed = (a: Announcement) => alertStage(a) === "closed";
   // newest first, by time (two feeds: their numbers do not compare)
   const asNotes = (shown: boolean, keep: (a: Announcement) => boolean): MessageItem[] => (shown
