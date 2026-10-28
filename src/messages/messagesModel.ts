@@ -67,9 +67,18 @@ const timeOf = (a: Announcement) => Date.parse(a.at) || 0;
  * Telegram. Without VESTA (stopped, not installed) nothing is taken over and the villa's own show, so the list never
  * goes blank. Oldest first. Pure: tests/oracles/messages_model.mjs.
  */
+/**
+ * Whether `newer` stands in place of `older` — ⚠️ THE ONE RULE (owner, 2026-10-28: "the same code … consistently used"),
+ * read by the Messages list (shownTogether) and by the notice (noticeModel), on arrival and against what is kept: its
+ * rewrite (the same key, the same feed: a ring answered, VESTA's card at its next step), or VESTA's card that took the
+ * villa's own message over (its run among the card's `takes`). Pure.
+ */
+export const supersedes = (newer: Announcement, older: Announcement): boolean => newer !== older
+  && ((newer.key !== null && newer.key === older.key && newer.feed === older.feed && newer.seq > older.seq)
+    || (!!older.run && (newer.takes ?? []).includes(older.run)));
+
 export function shownTogether(villa: readonly Announcement[], vesta: readonly Announcement[]): Announcement[] {
-  const taken = new Set(vesta.flatMap((c) => c.takes ?? []));
-  return [...villa.filter((a) => !(a.run && taken.has(a.run))), ...vesta]
+  return [...villa.filter((a) => !vesta.some((c) => supersedes(c, a))), ...vesta]
     .sort((x, y) => timeOf(x) - timeOf(y) || x.seq - y.seq);
 }
 

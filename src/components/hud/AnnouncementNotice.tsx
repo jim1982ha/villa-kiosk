@@ -96,12 +96,16 @@ export default function AnnouncementNotice() {
   // what just came, from the page's one watch (messages/AnnouncementsContext), each saying whether it rewrites one the
   // page held: a rewrite (the ring answered, timed out) never takes the screen again, a reload or a wake-up between
   // the two included (review Q 1)
-  const { fresh } = useAnnouncements();
+  const { fresh, kept, villa, loaded } = useAnnouncements();
   useEffect(() => {
     for (const { announcement, rewrite } of fresh?.arrived ?? []) {
       send({ type: "arrived", announcement, rewrite, settings: settings.current });
     }
   }, [fresh]);
+  // what the add-on keeps now: a ring that ended while this page was not listening leaves the screen too
+  useEffect(() => {
+    if (loaded) send({ type: "kept", kept: [...villa, ...kept] });
+  }, [kept, villa, loaded]);
   // the full screen ends with its time, Close, or this tablet's switch turned off; the passing one with its own time
   useEffect(() => {
     if (state.full && !config.ringsFullScreen) send({ type: "fullEnded" });

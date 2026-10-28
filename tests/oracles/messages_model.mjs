@@ -190,6 +190,15 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
   n = noticeStep(n, { type: "arrived", announcement: card90, rewrite: false, settings });
   ck("the villa's notice of the alert gives way to VESTA's card of it", n.passing?.announcement.feed === "vesta"
      && n.staying.length === 0, n);
+  // the ring's end never arrived on this page (asleep, offline): the add-on keeps only its end now
+  const ringing = noticeStep(NO_NOTICE, { type: "arrived", announcement: staying, rewrite: false, settings });
+  const ringEnd = { ...staying, seq: 7, buttons: [], status: "🔕 Not opened" };
+  const ended = noticeStep(ringing, { type: "kept", kept: [ringEnd] });
+  ck("a ring that ended while the page was not listening leaves the screen at the next read (owner, 2026-10-28)",
+     ringing.staying.length === 1 && ended.staying.length === 0, ended);
+  ck("  ...and one still kept as it was stays", noticeStep(ringing, { type: "kept", kept: [staying] }).staying.length === 1);
+  ck("  ...and VESTA's card of the villa's alarm takes its place there too, by the same rule as the list (supersedes)",
+     noticeStep(ringing, { type: "kept", kept: [staying, { ...card90, takes: ["RUN-A"] }] }).staying.length === 0);
   const issue = card("d", { lines: [{ key: "fault:t1", text: "#90 · Door", icons: null, story: [], closing: null,
     actions: [], alertNumber: 90 }] });
   ck("an alert's open issue finds VESTA's card of it (its number); one with no alert number none",
