@@ -313,4 +313,40 @@ const ctx = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", 
 ck("what this tablet has read is kept through storedJson alone (private mode or a full store never throws)",
    /readJson\(READ_KEY, isIds\)/.test(ctx) && /writeJson\(READ_KEY, read\)/.test(ctx) && !/localStorage/.test(ctx));
 
+console.log("\n  architecture review 2026-10-29, round 1:");
+const newCard = parseVestaMessage({ seq: 12, at: "2026-10-29T09:00:00+08:00", key: "incident:90", title: "#90-P2 (new)",
+  body: "Door open", status: ["⚠️ New alert"], stage: "new" });
+const withIssue = card("d", { lines: [{ key: "l", text: "Open", icons: null, story: [], closing: null, actions: [], alertNumber: 90 }] });
+ck("a card listed under its open issue lights no unread mark (the issue has its own count); without the issue it does",
+   unreadOf([newCard], [], [withIssue]) === 0 && unreadOf([newCard], []) === 1);
+ck("  ...so Messages opens on Issues' own place, never on an empty Notifications",
+   openingFilter(unreadOf([newCard], [], [withIssue])) === "all");
+const ctxNow = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");
+ck("  ...and the page's unread count is given the open and watched issues",
+   /unreadOf\(kept, read, issueCards\)/.test(ctxNow) && /const \{ open, watched \} = useCockpitIssues\(\);/.test(ctxNow));
+const tabNow = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
+ck("what is marked read is keyed by each record's identity (two feeds number apart), never its number alone",
+   /onScreen\.map\(idOf\)\.join\(","\)/.test(tabNow));
+
+console.log("\n  architecture review 2026-10-29, round 2: one rule places a record and counts it:");
+const { placeOf } = await import("@/messages/messagesModel");
+const stageCard = (seq, stage, n) => parseVestaMessage({ seq, at: `2026-10-29T1${seq % 10}:00:00+08:00`, key: `incident:${n}`,
+  title: `#${n}-P2 (${stage})`, body: "Door", status: ["- Alert sent"], stage });
+const mixes = [];
+for (const stage of ["new", "existing", "watch", "closed"]) {
+  for (const held of [false, true]) {
+    const a = stageCard(40, stage, 77);
+    const iss = held ? [card("h", { lines: [{ key: "l", text: "", icons: null, story: [], closing: null, actions: [], alertNumber: 77 }] })] : [];
+    const v = messagesView({ open: iss, watched: [], announcements: [a], filter: "all", selected: null });
+    const listedNew = [...v.notifications, ...v.reports].length;
+    if (unreadOf([a], [], iss) !== listedNew) mixes.push(`${stage}${held ? "+issue" : ""}: unread ${unreadOf([a], [], iss)}, listed ${listedNew}`);
+  }
+}
+ck("every stage, with or without its issue: the mark counts exactly what Notifications and Reports list", mixes.length === 0, mixes);
+const cleared = messagesView({ open: [], watched: [], announcements: [stageCard(41, "watch", 78)], filter: "all", selected: null });
+ck("  ...an alert that cleared, with no ticket, is parked in Watch (owner, 2026-10-28), never a notification",
+   placeOf(stageCard(41, "watch", 78)) === "watch" && cleared.watched.length === 1 && cleared.notifications.length === 0, cleared);
+ck("  ...a report under Reports, an open alert a notification, a closed one in Closed",
+   placeOf(digest) === "report" && placeOf(stageCard(42, "new", 79)) === "notification" && placeOf(stageCard(43, "closed", 80)) === "closed");
+
 done("✅ the Messages model: what the tab lists, its counts and the item open on the right");

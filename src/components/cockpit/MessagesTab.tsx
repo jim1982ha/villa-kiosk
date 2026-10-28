@@ -20,7 +20,7 @@ import type { CardView } from "@/config/cockpitCard";
 import { localStamp } from "@/fm/fmEngine";
 import { documentUrl } from "@/fm/fmApi";
 import { useAnnouncementPress, useAnnouncements } from "@/messages/AnnouncementsContext";
-import { announcementWords, cardsOfIssue, messagesView, openingFilter, readOnScreen, type MessageItem,
+import { announcementWords, cardsOfIssue, idOf, messagesView, openingFilter, readOnScreen, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -188,7 +188,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   const reading = !!raising || view.openedBy === "asked" || view.openedBy === "focus";
   // read on this tablet once in view, as the model says (messagesModel.readOnScreen)
   const onScreen = readOnScreen(filter, { notifications: paged.page, reports: reportsPaged.page }, item, kept);
-  const onScreenKey = onScreen.map((a) => a.seq).join(",");
+  const onScreenKey = onScreen.map(idOf).join(",");
   useEffect(() => {
     if (onScreen.length) shown(onScreen);
     // keyed on what is shown: a re-draw showing the same lines marks nothing again
@@ -243,9 +243,9 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           {/* a problem's later life, with the issues and always there, empty or not (owner, 2026-10-28) */}
           {showsIssues && (
             <>
-              <FoldedRows title="Watch" rows={view.watched} unit="watched fault" open={folds.watch}
+              <FoldedRows title="Watch" rows={view.watched} unit="watched item" open={folds.watch}
                 onToggle={() => fold("watch")} selected={item?.key} onSelect={choose} empty="Nothing is being watched."
-                tip="Closed faults VESTA still watches: back before the time on its card, a fault reopens as the same problem; after it, VESTA lets it go." />
+                tip="Closed faults and cleared alerts VESTA still watches: a fault back before the time on its card reopens as the same problem; after it, VESTA lets it go." />
               {/* alerts that are closed: folded, last */}
               <FoldedRows title="Closed" rows={view.closed} unit="closed alert" open={folds.closed}
                 onToggle={() => fold("closed")} selected={item?.key} onSelect={choose} empty="Nothing closed yet." />

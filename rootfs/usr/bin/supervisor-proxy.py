@@ -3920,7 +3920,7 @@ def _announcements_with(stored: list, rec: dict) -> list:
     if "key" in rec:
         old = next((a for a in stored if isinstance(a, dict) and a.get("key") == rec["key"]), None)
         if old is not None:
-            rec = {**{f: old[f] for f in ("photo", "page", "report") if f not in rec and old.get(f)}, **rec}
+            rec = {**{f: old[f] for f in KEPT_ON_REWRITE if f not in rec and old.get(f)}, **rec}
             stored = [a for a in stored if a is not old]
     return stored + [rec]
 
@@ -4069,6 +4069,11 @@ async def announcement_photo_handler(request: web.Request) -> web.StreamResponse
 # The Agent's push is in the background with a time limit on its side: an alert never waits on it, and with the Agent down
 # the villa's own first version (an announcement) stays.
 VESTA_MESSAGE_LIMITS: dict = dict((AGENT_CONTRACT_TABLE.get("vestaMessage") or {}).get("limits") or {})
+#: What a rewrite that names none keeps of the record it replaces (agent-contract.json vestaMessage.keptOnRewrite): one
+#: list, read here and by the Agent's test Kiosk (architecture review 2026-10-29, round 2)
+# (the agreement unreadable: the same three, never fewer: a rewritten report would lose its page — review round 3)
+KEPT_ON_REWRITE: tuple = tuple((AGENT_CONTRACT_TABLE.get("vestaMessage") or {}).get("keptOnRewrite")
+                               or ("photo", "page", "report"))
 VESTA_MESSAGES_MAX_BYTES = 2_000_000
 VESTA_MESSAGE_LANGUAGE_RE = re.compile(r"^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$")
 

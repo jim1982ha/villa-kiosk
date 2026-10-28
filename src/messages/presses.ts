@@ -7,12 +7,14 @@
 // drives it; messages/AnnouncementsContext holds the page's one.
 
 import type { Announcement, PressOutcome } from "./announcements";
+import { idOf as versionOf } from "./messagesModel";
 
 /** What became of each button pressed, by command ("sending" until the add-on answers). */
 export type PressState = Record<string, PressOutcome | "sending">;
 
 const NONE: PressState = Object.freeze({}) as PressState;
-const idOf = (a: Announcement) => `${a.key}@${a.seq}`;
+// one stored version (messagesModel.idOf: two feeds number apart), never its number alone
+const idOf = (a: Announcement) => `${a.key}@${versionOf(a)}`;
 
 export interface Presses {
   /** The presses of `a` (the same object until one changes: a screen re-draws only then). */

@@ -6,7 +6,7 @@
 // tests/oracles/messages_model.mjs.
 
 import type { CardView } from "@/config/cockpitCard";
-import { alertStage, incidentKey, isOver, type Announcement } from "./announcements";
+import { alertStage, incidentKey, type Announcement } from "./announcements";
 
 export type MessagesFilter = "all" | "issues" | "notifications" | "reports";
 
@@ -29,7 +29,8 @@ export type MessageItem =
 export interface MessagesView {
   /** Each filter with its count (Open issues: the open issues; the others none). */
   filters: { id: MessagesFilter; label: string; count: number | null }[];
-  /** The open issues, in their order; then the watched faults, folded after them, never counted. */
+  /** The open issues, in their order; then the watched faults and VESTA's cards of alerts that cleared (placeOf
+   *  "watch"), folded after them, never counted. */
   issues: MessageItem[];
   watched: MessageItem[];
   /** The announcements, newest first. */
@@ -56,6 +57,20 @@ const noteKey = (a: Announcement) => (a.feed === "vesta" ? `v:${a.key}` : a.key 
 
 /** VESTA's report (the job that sent it is named): listed under Reports, never as a notification. */
 export const isReport = (a: Announcement): boolean => !!a.report;
+
+/** Where a record no issue holds is listed. */
+export type Place = "notification" | "report" | "watch" | "closed";
+
+/** ⚠️ THE ONE RULE OF WHERE A RECORD IS LISTED (architecture review 2026-10-29, round 2: the list and the unread mark
+ *  each had their own, and they drifted three times — the mark lit for what the list put elsewhere, or not for what it
+ *  showed): a report under Reports; an alert that is over in Watch (cleared, still watched) or Closed — "parked in Watch
+ *  or Closed" (owner, 2026-10-28) —; anything else a notification. messagesView lists by it, unreadOf counts by it.
+ *  VESTA's card of an alert with an issue is the issue's (cardsOfIssue), before this. */
+export function placeOf(a: Announcement): Place {
+  if (isReport(a)) return "report";
+  const s = alertStage(a);
+  return s === "watch" || s === "closed" ? s : "notification";
+}
 
 /** One record's identity on the page: two feeds number apart, so VESTA's numbers are marked. */
 export const idOf = (a: Announcement): string => `${a.feed === "vesta" ? "v" : ""}${a.seq}`;
@@ -148,12 +163,18 @@ export function readOnScreen(filter: MessagesFilter,
 const readId = (a: Announcement) => (a.feed === "vesta" ? `v:${a.key}@${a.status}` : `${idOf(a)}@${a.at}`);
 
 /** How many of the kept announcements this tablet has not shown in Messages yet: the light mark on the robot, the
- *  phone's gear and the menu's Cockpit row. The open issues are not in it: they have their own count. */
-export function unreadOf(kept: readonly Announcement[], read: readonly string[]): number {
+ *  phone's gear and the menu's Cockpit row. The open issues are not in it: they have their own count — nor VESTA's card
+ *  of an alert listed with its issue (`issues`: the open and watched cards, messagesView's own rule, cardsOfIssue). */
+export function unreadOf(kept: readonly Announcement[], read: readonly string[],
+  issues: readonly CardView[] = []): number {
   const seen = new Set(read);
-  // ⚠️ AN ALERT THAT IS OVER IS NO UNREAD (owner, 2026-10-28): VESTA's card of a cleared or closed alert is parked in
-  // Watch or Closed, folded — counted, it would keep the mark lit with nothing to read on Notifications
-  return kept.filter((a) => !isOver(a) && !seen.has(readId(a))).length;
+  // ⚠️ LISTED WITH ITS ISSUE, NO UNREAD (architecture review 2026-10-29 #2): counted, the mark opened Messages on an
+  // empty Notifications and stayed lit until someone opened that issue's line
+  const withIssue = new Set(issues.flatMap((c) => cardsOfIssue(c, kept)));
+  // what Notifications and Reports list (placeOf), not yet shown: an alert that is over is parked in Watch or Closed,
+  // folded (owner, 2026-10-28) — counted, it would keep the mark lit with nothing to read there
+  return kept.filter((a) => !withIssue.has(a) && (placeOf(a) === "notification" || placeOf(a) === "report")
+    && !seen.has(readId(a))).length;
 }
 
 /** What this tablet has shown once Messages showed `shown`: added to what it had, kept only while the add-on still
@@ -195,7 +216,6 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   // ⚠️ AN ALERT WITH A TICKET IS LISTED ONCE, WITH ITS ISSUE (owner, 2026-10-29, as Telegram shows one message): its
   // card opens on its Open issues or Watch line, never also a notification line
   const inWatch = new Set([...open, ...watched].flatMap((c) => cardsOfIssue(c, announcements)));
-  const isClosed = (a: Announcement) => alertStage(a) === "closed";
   // newest first, by time (two feeds: their numbers do not compare)
   const asNotes = (shown: boolean, keep: (a: Announcement) => boolean, kind: "notification" | "report" = "notification"):
     MessageItem[] => (shown
@@ -204,18 +224,20 @@ export function messagesView({ open, watched, announcements, filter, selected, f
     : []);
   // ⚠️ A PROBLEM'S LIFE IS ONE PLACE (owner, 2026-10-28): open, then watched once it cleared, then closed — Watch and
   // Closed are shown with the issues, never with the notifications
-  const closed = asNotes(showIssues, (a) => isClosed(a) && !isReport(a));
-  const notifications = asNotes(showNotes, (a) => !isClosed(a) && !isReport(a));
-  // ⚠️ A REPORT IS ONE PLACE TOO (ticket 20): under Reports, never also a notification
-  const reports = asNotes(showReports, isReport, "report");
-  const listed = [...issues, ...notifications, ...reports, ...watchedItems, ...closed];
+  // each record in ONE place (placeOf): a report under Reports, an alert that is over in Watch or Closed
+  const closed = asNotes(showIssues, (a) => placeOf(a) === "closed");
+  const watchedCards = asNotes(showIssues, (a) => placeOf(a) === "watch");
+  const notifications = asNotes(showNotes, (a) => placeOf(a) === "notification");
+  const reports = asNotes(showReports, (a) => placeOf(a) === "report", "report");
+  const watchedAll = [...watchedItems, ...watchedCards];
+  const listed = [...issues, ...notifications, ...reports, ...watchedAll, ...closed];
   const asked = listed.find((i) => i.key === selected);
   const focused = focus ? issues.find((i) => i.kind === "issue" && focus(i.card)) : undefined;
   const first = listed[0];
   return {
     filters: FILTERS.map((f) => ({ ...f, count: f.id === "issues" ? open.length : null })),
     issues,
-    watched: watchedItems,
+    watched: watchedAll,
     notifications,
     closed,
     reports,

@@ -159,7 +159,7 @@ export default function HUD({
   // What this tablet has not seen in Messages (ticket 18 of "One inbox"): a light mark on the robot, the phone's gear
   // and the menu's Cockpit row, apart from the amber count of open issues; the robot then opens on it (MessagesTab).
   const { unread } = useAnnouncements();
-  const unreadSaid = unread > 0 ? `, ${countOf(unread, "unread notification")}` : "";
+  const unreadSaid = unread > 0 ? `, ${countOf(unread, "unread message")}` : "";
   const unreadMark = unread > 0 && <span className="unread-mark" aria-hidden="true" />;
 
   // ── Floor buttons now do double duty, no separate Rooms button any more:

@@ -1,3 +1,14 @@
+## 2.496.580
+
+What you will see (three rounds of architecture review, 29 October 2026):
+- The unread dot on the robot, the phone's gear and the menu's Cockpit row lights only for what Messages › Notifications
+  and Reports list and you have not seen. It no longer stays lit for an alert already shown on its Open issues line.
+- An alert that cleared with no ticket moves to the folded Watch section, no longer among the notifications.
+- The Watch section counts "watched items" and its (i) says it holds cleared alerts too.
+- A villa announcement and a VESTA message that happen to share a number are no longer mixed up (read marks, a
+  pressed button).
+- A report that VESTA corrects keeps its "Open the page" link.
+
 ## 2.496.579
 
 What you will see:

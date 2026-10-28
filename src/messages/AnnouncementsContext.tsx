@@ -13,6 +13,7 @@ import { fetchAnnouncements, fetchVestaMessages, pressButton, type Announcement 
 import { pauseFor, watchFeed, type FeedRead } from "./feed";
 import { afterRead, isReport, markShown, shownTogether, unreadOf } from "./messagesModel";
 import { pressesOf, type PressState, type Presses } from "./presses";
+import { useCockpitIssues } from "@/components/cockpit/useVillaAttention";
 
 /** What this tablet has shown in Messages (messagesModel.markShown): per tablet, so in this browser's storage. Private
  *  mode or a full store keeps it for the page only: storedJson never throws. */
@@ -89,9 +90,12 @@ export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   }), [kept]);
   useEffect(() => { writeJson(READ_KEY, read); }, [read]);
   const presses = useMemo(() => pressesOf((key, command) => pressButton(key, command, backendFetch)), []);
-  const value = useMemo(() => ({ ...state, unread: unreadOf(kept, read),
+  // the open and watched issues: VESTA's card of an alert listed with its issue is read there, never unread here
+  const { open, watched } = useCockpitIssues();
+  const issueCards = useMemo(() => [...open, ...watched], [open, watched]);
+  const value = useMemo(() => ({ ...state, unread: unreadOf(kept, read, issueCards),
     unreadReports: unreadOf(kept.filter(isReport), read), shown, presses }),
-    [state, kept, read, shown, presses]);
+    [state, kept, read, issueCards, shown, presses]);
   return <AnnouncementsContext.Provider value={value}>{children}</AnnouncementsContext.Provider>;
 }
 
