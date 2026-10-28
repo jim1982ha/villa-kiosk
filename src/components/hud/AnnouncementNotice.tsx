@@ -15,10 +15,10 @@ import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useConfig } from "@/config/ConfigContext";
 import { announcementPhotoUrl, noticeFor, type Announcement } from "@/messages/announcements";
-import { useAnnouncements } from "@/messages/AnnouncementsContext";
-import {
-  AnnouncementActions, AnnouncementContent, useAnnouncementPress, type PressState,
-} from "@/components/messages/AnnouncementContent";
+import { useAnnouncementPress, useAnnouncements } from "@/messages/AnnouncementsContext";
+import { announcementWords } from "@/messages/messagesModel";
+import type { PressState } from "@/messages/presses";
+import { AnnouncementActions, AnnouncementContent } from "@/components/messages/AnnouncementContent";
 
 /** One announcement, drawn — pure (a check draws it): its photo above its words when it has one (a ring's snapshot,
  *  the notice then square-cornered: 08-shared.css), its title and the first line of what it says, then the buttons
@@ -30,9 +30,10 @@ export function AnnouncementNoticeView({ announcement, onPress, onDismiss, press
   onDismiss?: () => void;
   presses?: PressState;
 }) {
-  const line = announcement.text.split("\n")[0];
+  // its words as every screen says them (messagesModel.announcementWords): the title, then its first line or bottom line
+  const { title, line } = announcementWords(announcement);
   const buttons = onPress ? announcement.buttons : [];
-  const words = line ? `${announcement.title} · ${line}` : announcement.title;
+  const words = line ? `${title} · ${line}` : title;
   return (
     <NoticeView tone="info" icon={<Bell size={16} />} onDismiss={buttons.length ? onDismiss : undefined}>
       {announcement.photo && <img className="vesta-notice-photo" src={announcementPhotoUrl(announcement.photo)} alt="" />}
@@ -71,8 +72,8 @@ function FullScreen(props: Parameters<typeof AnnouncementFullScreenView>[0]) {
   );
 }
 
-/** What is on screen: the announcement, whether it is a rewrite of one already shown (its key seen), and whether it
- *  holds the whole screen or its notice. */
+/** What is on screen: the announcement, whether it rewrites one the page already held (messagesModel.afterRead), and
+ *  whether it holds the whole screen or its notice. */
 interface Shown { a: Announcement; rewrite: boolean; full: boolean }
 
 export default function AnnouncementNotice() {
@@ -82,17 +83,13 @@ export default function AnnouncementNotice() {
   settings.current = config;
   const [shown, setShown] = useState<Shown | null>(null);
   const { presses, press } = useAnnouncementPress(shown?.a ?? null);
-  // the keys already shown: their rewrite (the ring answered, timed out) never takes the screen again
-  const seenKeys = useRef(new Set<string>());
-
-  // what just came, from the page's one watch (messages/AnnouncementsContext)
+  // what just came, from the page's one watch (messages/AnnouncementsContext), which says whether it rewrites one the
+  // page held: a rewrite (the ring answered, timed out) never takes the screen again, a reload or a wake-up between
+  // the two included (review Q 1)
   const { fresh } = useAnnouncements();
   useEffect(() => {
     if (!fresh) return;
-    // The newest of what arrived together: two rings in one read are one notice, the later.
-    const a = fresh.items[fresh.items.length - 1];
-    const rewrite = a.key !== null && seenKeys.current.has(a.key);
-    if (a.key) seenKeys.current.add(a.key);
+    const { announcement: a, rewrite } = fresh;
     setShown({ a, rewrite, full: noticeFor(a, settings.current, { rewrite }).fullScreenMs !== null });
   }, [fresh]);
 

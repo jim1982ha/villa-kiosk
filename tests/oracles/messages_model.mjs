@@ -6,7 +6,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { h, draw } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
-const { messagesView, mergeAnnouncements, FILTERS, unreadOf, markShown, openingFilter } = await import("@/messages/messagesModel");
+const { messagesView, mergeAnnouncements, FILTERS, unreadOf, markShown, openingFilter, readOnScreen } = await import("@/messages/messagesModel");
 
 const card = (key, extra = {}) => ({ key, title: `Device ${key}`, lead: null, nextCheck: null, actions: [], lines: [], ...extra });
 const ann = (seq, extra = {}) => ({ seq, at: `2026-10-28T1${seq % 10}:00:00+08:00`, title: `T${seq}`, to: "", text: "",
@@ -133,7 +133,16 @@ ck("  ...on a phone, on the gear and on the menu's Cockpit row",
      && /onOpenCockpit\(\)/.test(propText(b, "onClick") ?? "")));
 ck("Messages opens where the model says, and marks read what it shows",
    /useState<MessagesFilter>\(\s*\(\) => openingFilter\(unread, \{ warning: !!focusFaults\?\.length, form: !!reportFaultFor && canManage \}\)\)/.test(tab) && /if \(onScreen\.length\) shown\(onScreen\);/.test(tab)
-   && /\[\.\.\.\(filter === "notifications" \? paged\.page : \[\]\)/.test(tab));
+   && /const onScreen = readOnScreen\(filter, paged\.page, item\);/.test(tab));
+// what counts as read, driven by value (review Q 5: it was decided in the tab, pinned by its source text)
+{
+  const page = notes.notifications.slice(0, 2), opened = notes.notifications[2], issue = all.issues[0];
+  const seqs = (xs) => xs.map((x) => x.seq).join();
+  ck("  ...read: the Notifications page shown and the one open; on All, only the one open; an open issue is no announcement",
+     seqs(readOnScreen("notifications", page, opened)) === "3,2,1" && seqs(readOnScreen("all", page, opened)) === "1"
+     && seqs(readOnScreen("all", page, issue)) === "" && seqs(readOnScreen("issues", [], null)) === "",
+     [readOnScreen("notifications", page, opened), readOnScreen("all", page, opened)]);
+}
 
 const ctx = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");
 ck("what this tablet has read is kept through storedJson alone (private mode or a full store never throws)",

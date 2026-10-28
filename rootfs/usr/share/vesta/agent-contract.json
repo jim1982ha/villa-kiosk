@@ -643,5 +643,12 @@
   "criticalDevices": {
     "blueprint": "critical_watchdog",
     "input": "critical_entities"
+  },
+  "_stageMarks": "What starts an alert's bottom line, by its stage (review Q 3, 2026-10-28): the VESTA Agent writes it (vesta_shared/message_format.py STAGE_ICONS, and the villa's message template it generates) and the Kiosk reads an announcement's stage back from it (src/messages/announcements.ts stageOf): new, existing, and the two ends, watch (cleared, still watched) and closed. Read from here by both: a mark changed on one side alone made a cleared alarm read as new on the tablet.",
+  "stageMarks": {
+    "new": "⚠️",
+    "existing": "⚠️ ⚙️",
+    "watch": "✅",
+    "closed": "✅"
   }
 }

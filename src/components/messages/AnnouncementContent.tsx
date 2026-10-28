@@ -4,31 +4,8 @@
 // the full screen and the Cockpit's Messages (ticket 17 of "One inbox"). The notice draws its one line with the same
 // buttons (components/hud/AnnouncementNotice).
 
-import { useEffect, useRef, useState } from "react";
-import { backendFetch } from "@/auth/sessionLost";
-import { announcementPhotoUrl, pressButton, PRESS_SAID, type Announcement, type PressOutcome } from "@/messages/announcements";
-
-/** What became of each button pressed, by command ("sending" until the add-on answers). */
-export type PressState = Record<string, PressOutcome | "sending">;
-
-/** Pressing `a`'s buttons: what became of each press, kept for this announcement only (a rewrite starts afresh). */
-export function useAnnouncementPress(a: Announcement | null): { presses: PressState; press: (command: string) => void } {
-  const [presses, setPresses] = useState<PressState>({});
-  // The ring shown, read when a press is answered: its rewrite may have replaced it meanwhile.
-  const current = useRef<string | null>(null);
-  current.current = a?.key ?? null;
-  const seq = a?.seq;
-  useEffect(() => setPresses({}), [seq]);
-  const press = (command: string) => {
-    const key = a?.key;
-    if (!key) return;
-    setPresses((p) => ({ ...p, [command]: "sending" }));
-    void pressButton(key, command, backendFetch).then((outcome) => {
-      if (current.current === key) setPresses((p) => ({ ...p, [command]: outcome }));
-    });
-  };
-  return { presses, press };
-}
+import { announcementPhotoUrl, PRESS_SAID, type Announcement, type PressOutcome } from "@/messages/announcements";
+import type { PressState } from "@/messages/presses";
 
 /** The buttons an announcement offers, and what became of the last press. */
 export function AnnouncementActions({ announcement, onPress, presses }: {

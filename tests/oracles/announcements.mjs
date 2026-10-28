@@ -5,8 +5,11 @@
 import { readFileSync } from "node:fs";
 import { h, draw } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
-const { readLayout, parseAnnouncement, watchAnnouncements, ANNOUNCEMENT_NOTICE_MS, noticeFor, pressButton, PRESS_SAID } =
+const { readLayout, parseAnnouncement, ANNOUNCEMENT_NOTICE_MS, noticeFor, pressButton, PRESS_SAID } =
   await import("@/messages/announcements");
+const { watchFeed } = await import("@/messages/feed");
+const { afterRead, announcementWords } = await import("@/messages/messagesModel");
+const { pressesOf } = await import("@/messages/presses");
 const { AnnouncementNoticeView } = await import("@/components/hud/AnnouncementNotice");
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
 
@@ -39,12 +42,16 @@ const shown = [];
 const stop = new AbortController();
 const pauses = [];
 const reads = [];
-await watchAnnouncements(async (after) => {
+// the add-on's feed, watched as every feed is (messages/feed, review Q 4): what is NEW is a read that is not a baseline
+await watchFeed(async (after) => {
   asked.push(after);
   if (!answers.length) { stop.abort(); return null; }
   return answers.shift();
-}, (items) => shown.push(items.map((x) => x.seq)), stop.signal, async (ms) => { pauses.push(ms); },
-  (items, full) => reads.push([full, items.map((x) => x.seq)]));
+}, (items, full) => {
+  reads.push([full, items.map((x) => x.seq)]);
+  const { arrived } = afterRead([], items, full);
+  if (arrived) shown.push(items.map((x) => x.seq));
+}, stop.signal, async (ms) => { pauses.push(ms); });
 ck("the first read is the baseline (nothing shown); then each read asks for what came after the last",
    JSON.stringify(asked) === JSON.stringify([null, 2, null, 3, 3, 5, null, 2]), asked);
 ck("  ...what arrived is shown, together when it came together; nothing when nothing came",
@@ -57,6 +64,61 @@ ck("  ...an unreachable add-on (or a read a sleeping tablet left open) is asked 
 ck("every read also reaches the page's list (the Cockpit's Notifications): all the add-on keeps on a baseline,"
    + " only what came after on the others; a store started again is read whole",
    JSON.stringify(reads) === JSON.stringify([[true, [1, 2]], [true, [3]], [false, []], [false, [4, 5]], [true, [2]]]), reads);
+
+console.log("\n  a rewrite is known from what the page held (review Q 1):");
+const ringA = { ...a(7), key: "run-1", title: "🔔 Visitor", status: "⚠️ New alert" };
+const answered = { ...a(8), key: "run-1", title: "🔔 Visitor", status: "🔕 Not opened: nobody answered within 2min." };
+const baseline = afterRead([], [a(6), ringA], true);
+const then = afterRead(baseline.kept, [answered], false);
+ck("a ring read in a baseline (a reload, a wake-up), then its rewrite: a rewrite, so it never takes the screen",
+   baseline.arrived === null && then.arrived?.announcement.seq === 8 && then.arrived.rewrite === true
+   && then.kept.map((x) => x.seq).join() === "6,8", then);
+ck("  ...a baseline is what the add-on keeps now: what the page held before is replaced (a store that started again)",
+   afterRead([a(1), a(2)], [a(3)], true).kept.map((x) => x.seq).join() === "3");
+ck("  ...a new ring (no key held) is not; the newest of what arrived together is the one shown",
+   afterRead(baseline.kept, [{ ...a(9), key: "run-2" }], false).arrived?.rewrite === false
+   && afterRead([], [a(10), a(12), a(11)], false).arrived?.announcement.seq === 12);
+const notice = src("components/hud/AnnouncementNotice.tsx");
+ck("  ...the notice takes it from the page's one watch and keeps no memory of its own",
+   /const \{ announcement: a, rewrite \} = fresh;/.test(notice) && !/seenKeys|useRef\(new Set/.test(notice));
+
+console.log("\n  one record of presses for the page (review Q 2):");
+{
+  const sent = [];
+  let answer;
+  const presses = pressesOf((key, command) => { sent.push([key, command]); return new Promise((r) => { answer = r; }); });
+  const ring = { ...a(20), key: "run-9", buttons: [{ label: "Unlock", command: "/unlock" }] };
+  let told = 0;
+  presses.subscribe(() => { told += 1; });
+  presses.press(ring, "/unlock");                                   // pressed on the notice
+  const notice1 = presses.get(ring), messages1 = presses.get({ ...ring });   // read by the notice and by Messages
+  presses.press({ ...ring }, "/unlock");                            // pressed again in Messages while it is sent
+  answer("sent");
+  await new Promise((r) => setTimeout(r, 0));
+  ck("pressed on one screen, every screen shows it: one send, the same outcome", sent.length === 1
+     && notice1 === messages1 && notice1["/unlock"] === "sending" && presses.get(ring)["/unlock"] === "sent" && told >= 2,
+     { sent, state: presses.get(ring) });
+  presses.press(ring, "/unlock");
+  ck("  ...a button already sent is not sent again", sent.length === 1, sent);
+  const failing = pressesOf(async () => "failed");
+  const other = { ...ring, seq: 21 };
+  failing.press(other, "/unlock");
+  await new Promise((r) => setTimeout(r, 0));
+  ck("  ...one that failed may be pressed again; a rewrite (a new number) starts afresh",
+     failing.get(other)["/unlock"] === "failed" && Object.keys(presses.get({ ...ring, seq: 22 })).length === 0);
+  const content = src("components/messages/AnnouncementContent.tsx");
+  ck("  ...no screen keeps its own: the notice and Messages read the page's one (AnnouncementsContext)",
+     !/useState/.test(content) && /useAnnouncementPress\(/.test(src("components/cockpit/MessagesTab.tsx"))
+     && /from "@\/messages\/AnnouncementsContext"/.test(src("components/cockpit/MessagesTab.tsx"))
+     && /useAnnouncementPress, useAnnouncements \} from "@\/messages\/AnnouncementsContext"/.test(notice));
+}
+
+console.log("\n  one wording on every screen (review Q 5):");
+const statusOnly = { ...a(30), title: "Weekly siren test", status: "✅ Done at 10:00" };
+ck("an announcement's line is the first of what it says, else its bottom line",
+   announcementWords(statusOnly).line === "✅ Done at 10:00" && announcementWords({ ...statusOnly, text: "Sirens\nmore" }).line === "Sirens");
+ck("  ...the notice says it so too (it showed the title alone)",
+   draw(h(AnnouncementNoticeView, { announcement: statusOnly })).includes("Weekly siren test · ✅ Done at 10:00"));
 
 console.log("\n  drawn as every notice, for 10s, in the villa view's column:");
 const html = draw(h(AnnouncementNoticeView, { announcement: { ...a(1), title: "🔔 Visitor", text: "At the door\nmore" } }));
@@ -120,12 +182,15 @@ ck("  ...a lost connection is not sent", await pressButton("k", "/c", async () =
 
 console.log("\n  how it shows (ticket 16: full screen for what the owner picked, a problem stays, the rest 10s):");
 const { stageOf } = await import("@/messages/announcements");
-// the layout writes the stage as a mark before the status (vesta_message.jinja: "⚠️" new, "⚠️ ⚙️" still open, "✅"
-// cleared), before the rule's own words when it has some
-ck("its stage, from the mark that opens its bottom line",
-   stageOf("⚠️ New alert") === "new" && stageOf("⚠️ Power dropped") === "new" && stageOf("⚠️ ⚙️ Still open") === "existing"
-   && stageOf("⚠️ ⚙️ Still not clear after 10min") === "existing" && stageOf("✅ Cleared on 28/10/2026 14:05.") === "closed",
-   ["⚠️ New alert", "⚠️ ⚙️ Still open", "✅ Cleared"].map(stageOf));
+// the layout writes the stage as a mark before the status, before the rule's own words when it has some — the marks the
+// agreement lists (agent-contract.json `stageMarks`, review Q 3): read from the file, so a mark the Agent changes
+// there is the one checked here
+const MARKS = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8")).stageMarks;
+const WANT = { new: "new", existing: "existing", watch: "closed", closed: "closed" };
+ck("its stage, from the agreement's mark that opens its bottom line (both ends, watch and closed, an ended problem)",
+   Object.keys(WANT).every((st) => MARKS[st] && stageOf(`${MARKS[st]} Some words`) === WANT[st])
+   && stageOf(`${MARKS.existing} Still not clear after 10min`) === "existing" && stageOf(`${MARKS.new} Power dropped`) === "new",
+   Object.fromEntries(Object.entries(MARKS).filter(([k]) => !k.startsWith("_")).map(([k, m]) => [k, stageOf(`${m} x`)])));
 ck("  ...none without a mark (the weekly test, a ring not opened) or without a bottom line",
    stageOf("Test message: no action needed.") === null && stageOf("🔕 Not opened: nobody answered within 2min.") === null
    && stageOf("") === null, ["Test message", "🔕", ""].map(stageOf));

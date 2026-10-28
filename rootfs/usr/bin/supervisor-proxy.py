@@ -3662,6 +3662,74 @@ ANNOUNCEMENT_EVENT = str(HA_COMMANDS.get("announcement") or "")
 #: One announcement's finished text, at most (the layout's HTML; a Telegram message is 4096 characters).
 ANNOUNCEMENT_TEXT_MAX = 16_000
 ANNOUNCEMENTS_MAX_BYTES = 2_000_000
+class Feed:
+    """A numbered list the add-on keeps for every page, and wakes them on (review Q 4, 2026-10-28): each record one
+    `seq` above the last, tidied under its store's lock (`tidy`: what is still kept; `after`: run once a write landed,
+    a photo sweep), read whole or after a page's last, a read held open until the next one comes. ⚠️ ONE PLACE for the
+    numbering, the tidying, the waking and the answer to a page whose store started again: the announcements are its
+    first kind; the reports and VESTA's conversation (tickets 20-21 of "One inbox") bring only their record, their
+    merge and their tidy."""
+
+    def __init__(self, store: "JsonStore", tidy, after=None):
+        self.store, self.tidy, self.after = store, tidy, after
+        # set when one is kept, then replaced: a read waits on the one current when it read
+        self._kept = asyncio.Event()
+
+    def items(self) -> list:
+        """What is kept now (tidied, records with a number only). Blocking: called on a worker thread."""
+        return self.tidy(self.store.read())
+
+    async def add(self, make, merge=lambda stored, rec: stored + [rec]) -> dict:
+        """Keep the record `make(seq)` makes, numbered one above the last, `merge`d into what is kept (one line per
+        key, for the announcements), and wake every page waiting for it."""
+        made: dict = {}
+
+        def change(stored):
+            stored = stored if isinstance(stored, list) else []
+            last = max((a["seq"] for a in stored if isinstance(a, dict) and isinstance(a.get("seq"), int)), default=0)
+            made["rec"] = make(last + 1)
+            return self.tidy(merge(stored, made["rec"]))
+
+        try:
+            await self.store.update(change, after=self.after)
+        except StoreUnreadable:
+            # Not a record anyone else writes: a corrupt file starts again rather than lose every one from here on.
+            made["rec"] = make(1)
+            await self.store.replace([made["rec"]])
+        woken, self._kept = self._kept, asyncio.Event()
+        woken.set()
+        return made["rec"]
+
+    async def read(self, after: int | None, wait_s: float) -> tuple[list, int]:
+        """(the records after `after` — all with None — and the last number kept). With `after`, an answer with nothing
+        waits up to `wait_s` for the next one. A last number below the page's own means the store started again (a
+        corrupt file, a reinstall): answered at once, so the page reads it whole."""
+        def answer() -> tuple[list, int, bool]:
+            stored = self.store.read()
+            items = self.tidy(stored)
+            last = max((a["seq"] for a in items), default=0)
+            pruned = isinstance(stored, list) and len(items) < len(stored)
+            return [a for a in items if after is None or a["seq"] > after], last, pruned
+
+        # Taken BEFORE the read: one kept between the read and the wait has already set this event, never a newer one.
+        kept = self._kept
+        items, last, pruned = await asyncio.to_thread(answer)
+        if pruned:
+            # Past what is kept (the records-kept days): deleted now, under the store's lock, not at the next one (a
+            # "keep for ever" set afterwards must not bring them back).
+            try:
+                await self.store.update(self.tidy, after=self.after)
+            except (StoreUnreadable, StoreTooLarge, OSError):
+                pass
+        if after is not None and not items and last >= after:
+            try:
+                await asyncio.wait_for(kept.wait(), wait_s)
+            except asyncio.TimeoutError:
+                pass
+            items, last, _ = await asyncio.to_thread(answer)
+        return items, last
+
+
 ANNOUNCEMENTS = JsonStore("announcements.json", [], ANNOUNCEMENTS_MAX_BYTES + ANNOUNCEMENT_TEXT_MAX)
 #: How long a page's read waits for the next announcement before answering "nothing new" (under every proxy's idle
 #: timeout on the way: Ingress, nginx's 60s, a tunnel's 100s).
@@ -3826,34 +3894,23 @@ def _announcements_tidy(items) -> list:
                                _evidence_retention_days(), ANNOUNCEMENTS_MAX_BYTES)
 
 
-async def _record_announcement(app: web.Application, event) -> dict | None:
-    """Keep one announcement (its photo copied first) and wake every page waiting for it."""
+#: The villa's announcements, the feed's first kind: one line per key, kept the records-kept days, a photo swept with
+#: the announcement that named it.
+ANNOUNCED = Feed(ANNOUNCEMENTS, _announcements_tidy, after=_sweep_announcement_photos)
+
+
+async def _record_announcement(_app: web.Application, event) -> dict | None:
+    """Keep one announcement (its photo copied first) and wake every page waiting for it (Feed.add)."""
     if _announcement_record(event, 0) is None:
         return None
     src = await asyncio.to_thread(_announcement_photo_source, event)
     photo = await asyncio.to_thread(_copy_announcement_photo, src) if src else None
-    made: dict = {}
 
     def record(seq: int) -> dict:
         rec = _announcement_record(event, seq)
         return {**rec, "photo": photo} if photo else rec
 
-    def change(stored):
-        stored = stored if isinstance(stored, list) else []
-        last = max((a["seq"] for a in stored if isinstance(a, dict) and isinstance(a.get("seq"), int)), default=0)
-        made["rec"] = record(last + 1)
-        return _announcements_tidy(_announcements_with(stored, made["rec"]))
-
-    try:
-        await ANNOUNCEMENTS.update(change, after=_sweep_announcement_photos)
-    except StoreUnreadable:
-        # Not a record anyone else writes: a corrupt file starts again rather than lose every ring from here on.
-        made["rec"] = record(1)
-        await ANNOUNCEMENTS.replace([made["rec"]])
-    woken = app["announced"]
-    app["announced"] = asyncio.Event()
-    woken.set()
-    return made["rec"]
+    return await ANNOUNCED.add(record, _announcements_with)
 
 
 async def _listen_announcements(app: web.Application) -> None:
@@ -3917,32 +3974,9 @@ async def announcements_handler(request: web.Request) -> web.Response:
     except ValueError:
         return web.json_response({"error": "after must be a number"}, status=400)
 
-    def answer() -> tuple[list, int, bool]:
-        stored = ANNOUNCEMENTS.read()
-        items = _announcements_tidy(stored)
-        last = max((a["seq"] for a in items), default=0)
-        pruned = isinstance(stored, list) and len(items) < len(stored)
-        return [a for a in items if after is None or a["seq"] > after], last, pruned
-
-    # Taken BEFORE the read: one kept between the read and the wait has already set this event, never a newer one.
-    announced = request.app["announced"]
-    items, last, pruned = await asyncio.to_thread(answer)
-    if pruned:
-        # Past the records-kept days: deleted now, under the store's lock, not at the next ring (a "keep for ever"
-        # set afterwards must not bring them back).
-        try:
-            await ANNOUNCEMENTS.update(_announcements_tidy, after=_sweep_announcement_photos)
-        except (StoreUnreadable, StoreTooLarge, OSError):
-            pass
-    # A stored `last` below the page's own means the store started again (a corrupt file, a reinstall): answer at once.
-    if after is not None and not items and last >= after:
-        try:
-            await asyncio.wait_for(announced.wait(), ANNOUNCEMENT_WAIT_S)
-        except asyncio.TimeoutError:
-            pass
-        items, last, _ = await asyncio.to_thread(answer)
+    items, last = await ANNOUNCED.read(after, ANNOUNCEMENT_WAIT_S)
     if not _may(_role_for(request), "viewCameras"):
-        current = _current_photo(await asyncio.to_thread(lambda: _announcements_tidy(ANNOUNCEMENTS.read())), time.time())
+        current = _current_photo(await asyncio.to_thread(ANNOUNCED.items), time.time())
         items = [a if a.get("photo") == current else {k: v for k, v in a.items() if k != "photo"} for a in items]
     return web.json_response({"announcements": items, "last": last}, headers={"Cache-Control": "no-store"})
 
@@ -3957,7 +3991,7 @@ async def announcement_photo_handler(request: web.Request) -> web.StreamResponse
     if not ANNOUNCEMENT_PHOTO_RE.match(name) or not os.path.isfile(path):
         return web.json_response({"error": "no such photo"}, status=404)
     if not _may(_role_for(request), "viewCameras") and name != _current_photo(
-            await asyncio.to_thread(lambda: _announcements_tidy(ANNOUNCEMENTS.read())), time.time()):
+            await asyncio.to_thread(ANNOUNCED.items), time.time()):
         return _forbidden("This profile sees a ring's photo only while it is the current notification.")
     _, ctype, _ = ANNOUNCEMENT_PHOTO_TYPES[os.path.splitext(name)[1]]
     return web.FileResponse(path, headers={"Content-Type": ctype, "Cache-Control": "no-store"})
@@ -4003,7 +4037,7 @@ async def announcement_press_handler(request: web.Request) -> web.Response:
         return body
     if not ANNOUNCEMENT_PRESS or set(body) != {"key", "command"}:
         return web.json_response({"error": "a press names a key and a command, nothing else"}, status=400)
-    items = await asyncio.to_thread(lambda: _announcements_tidy(ANNOUNCEMENTS.read()))
+    items = await asyncio.to_thread(ANNOUNCED.items)
     if not _offers_button(items, body["key"], body["command"]):
         return web.json_response({"error": "This button is no longer offered."}, status=409)
     if not await _fire_press(request.app, {"command": body["command"], "key": body["key"]}):
@@ -4284,7 +4318,6 @@ def build_app(data_dir: str | None = None) -> web.Application:
             print(f"[supervisor-proxy] removed retired file(s): {gone}", flush=True)
         await _learn_own_version(a["session"])
         a["light_scenes"] = asyncio.create_task(_learn_light_scenes(a["session"]))
-        a["announced"] = asyncio.Event()
         a["announcements"] = asyncio.create_task(_listen_announcements(a))
         if (warning := _agent_config_warning()) is not None:
             print(f"[supervisor-proxy] {warning}", flush=True)

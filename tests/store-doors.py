@@ -230,9 +230,13 @@ async def main() -> None:
     proxy.ANNOUNCEMENT_WAIT_S = 0.2
     status, body = await call("GET", "/announcements?after=2", guest)
     ck("  ...and answers none when nothing came", status == 200 and body == {"announcements": [], "last": 2}, body)
+    proxy.ANNOUNCEMENT_WAIT_S = 5
+    t0 = asyncio.get_running_loop().time()
     status, body = await call("GET", "/announcements?after=9", guest)
+    waited = asyncio.get_running_loop().time() - t0
     ck("  ...but at once when the page holds more than the store (it started again)", body["announcements"] == []
-       and body["last"] == 2, body)
+       and body["last"] == 2 and waited < 2, (body, round(waited, 2)))
+    proxy.ANNOUNCEMENT_WAIT_S = 0.2
     status, _ = await call("GET", "/announcements?after=x", guest)
     ck("  ...and refuses an after that is no number", status == 400, status)
     old = "2020-01-01T00:00:00+00:00"
@@ -241,6 +245,9 @@ async def main() -> None:
     status, body = await call("GET", "/announcements", guest)
     ck("one older than the records-kept days is no longer kept",
        [a["message"] for a in body["announcements"]] == ["<b>One</b>", "<b>Two</b>"], body)
+    await proxy._record_announcement(app, ev("<b>Older</b>", at=old))
+    ck("  ...nor written: the store is tidied as each one is kept (review Q 4: the feed's one tidy)",
+       "<b>Older</b>" not in [a.get("message") for a in on_disk("announcements.json")], on_disk("announcements.json"))
     status, body = await call("PUT", "/device-config", owner, {"config": {"recordsKeptDays": 0}})
     status, body = await call("GET", "/announcements", guest)
     ck("  ...and it is deleted, not hidden: keeping for ever afterwards does not bring it back",

@@ -17,15 +17,16 @@ import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
 import type { CardView } from "@/config/cockpitCard";
 import { localStamp } from "@/fm/fmEngine";
-import { useAnnouncements } from "@/messages/AnnouncementsContext";
-import { messagesView, openingFilter, type MessageItem, type MessagesFilter } from "@/messages/messagesModel";
+import { useAnnouncementPress, useAnnouncements } from "@/messages/AnnouncementsContext";
+import { announcementWords, messagesView, openingFilter, readOnScreen, type MessageItem, type MessagesFilter }
+  from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import FoldedList from "@/components/common/FoldedList";
 import { Pager, usePaged } from "@/components/common/Paged";
-import { AnnouncementContent, useAnnouncementPress } from "@/components/messages/AnnouncementContent";
+import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 
@@ -64,12 +65,13 @@ function rowOf(item: MessageItem) {
       time: first?.story.length ? localStamp(first.story[first.story.length - 1].at) : "",
     };
   }
-  const a = item.announcement;
+  // its words as every screen says them (messagesModel.announcementWords)
+  const w = announcementWords(item.announcement);
   return {
     icon: <Bell size={18} aria-hidden="true" />,
-    title: a.title,
-    sub: a.text.split("\n")[0] || a.status,
-    time: a.at ? localStamp(a.at) : "",
+    title: w.title,
+    sub: w.line,
+    time: w.at ? localStamp(w.at) : "",
   };
 }
 
@@ -136,10 +138,8 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   // A phone shows the item someone chose (a line, a warning, the ticket form), else the list: an item that went (an
   // issue cleared, the form done) never leaves another open in its place.
   const reading = !!raising || view.openedBy === "asked" || view.openedBy === "focus";
-  // Read on this tablet once in view: the Notifications filter's page, and the one open on the right. On All they sit
-  // under the open issues, maybe below the fold: drawn there is not seen.
-  const onScreen = [...(filter === "notifications" ? paged.page : []), ...(item?.kind === "notification" ? [item] : [])]
-    .flatMap((i) => (i.kind === "notification" ? [i.announcement] : []));
+  // read on this tablet once in view, as the model says (messagesModel.readOnScreen)
+  const onScreen = readOnScreen(filter, paged.page, item);
   const onScreenKey = onScreen.map((a) => a.seq).join(",");
   useEffect(() => {
     if (onScreen.length) shown(onScreen);

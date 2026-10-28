@@ -55,6 +55,34 @@ export function mergeAnnouncements(held: readonly Announcement[], incoming: read
   return [...byKey.values()].sort((x, y) => x.seq - y.seq);
 }
 
+/** What a read of the add-on's feed (messages/feed watchFeed) changes on the page: what it holds now, and what just
+ *  ARRIVED for the notice — the newest of a read that is not a baseline, and whether it rewrites one the page already
+ *  held (the ring answered, timed out: its notice never takes the screen again). ⚠️ DECIDED FROM WHAT THE PAGE HELD
+ *  (review Q 1, 2026-10-28): the notice kept its own memory of the rings it had shown, empty after a reload or a
+ *  wake-up, so the rewrite of a ring the page had read in its baseline took the whole screen for "Ring shown for". */
+export function afterRead(held: readonly Announcement[], items: readonly Announcement[], full: boolean):
+  { kept: Announcement[]; arrived: { announcement: Announcement; rewrite: boolean } | null } {
+  const kept = mergeAnnouncements(full ? [] : held, items);
+  if (full || items.length === 0) return { kept, arrived: null };
+  const a = items.reduce((x, y) => (y.seq > x.seq ? y : x));
+  return { kept, arrived: { announcement: a, rewrite: a.key !== null && held.some((h) => h.key === a.key && h.seq < a.seq) } };
+}
+
+/** An announcement in words, the same on every screen (review Q 5): its title, the line under it — the first of
+ *  what it says, else its bottom line ("✅ Done at 10:00") — and when it came. The notice draws "title · line", the
+ *  Messages list the two lines. */
+export function announcementWords(a: Announcement): { title: string; line: string; at: string } {
+  return { title: a.title, line: a.text.split("\n")[0] || a.status, at: a.at };
+}
+
+/** The announcements the Messages tab shows as read on this tablet (ticket 18; review Q 5: decided here, not in the
+ *  tab): the Notifications filter's page shown, and the one open on the right. On All they sit under the open issues,
+ *  maybe below the fold: drawn there is not seen. */
+export function readOnScreen(filter: MessagesFilter, page: readonly MessageItem[], open: MessageItem | null): Announcement[] {
+  return [...(filter === "notifications" ? page : []), ...(open ? [open] : [])]
+    .flatMap((i) => (i.kind === "notification" ? [i.announcement] : []));
+}
+
 /** What this tablet remembers it has shown: one announcement as the add-on stored it, its number and when it came. A
  *  rewrite (a new number) is news again; so is the first of a store that started again (an old number, a new time). */
 const readId = (a: Announcement) => `${a.seq}@${a.at}`;

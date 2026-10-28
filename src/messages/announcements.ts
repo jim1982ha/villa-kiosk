@@ -9,7 +9,8 @@
 // </blockquote>" — or plain text when the layout is missing. Read here into its parts, never shown as HTML.
 
 import { ingressPath } from "@/ha/ingress";
-import { backendFetch } from "@/auth/sessionLost";
+import { fetchFeed, type FeedRead } from "./feed";
+import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 export interface Announcement {
   /** Its order in the add-on's store: a page asks for what came after the last one it holds. */
@@ -37,10 +38,15 @@ export interface AnnouncementButton { label: string; command: string }
 /** Where a problem is: raised, still open, cleared. null: the announcement says none (a weekly test, a digest). */
 export type Stage = "new" | "existing" | "closed";
 
-/** The mark the layout writes before a stage's status (vesta_message.jinja `vm_icons`, the VESTA Agent's
- *  message_format.STAGE_ICONS), the longest first: "⚠️ ⚙️" opens with "⚠️". Read from 2026-10-28 on every source that
- *  fires the announcement (research 01 of "One inbox"): no source without a stage writes one of these marks. */
-const STAGE_MARKS: readonly [string, Stage][] = [["⚠️ ⚙️", "existing"], ["⚠️", "new"], ["✅", "closed"]];
+/** The mark the layout writes before a stage's status, READ FROM THE AGREEMENT (agent-contract.json `stageMarks`, the
+ *  one list the VESTA Agent writes them from and generates the villa's template with; review Q 3, 2026-10-28: this
+ *  was a hand-made copy, so a mark changed on the Agent's side read a cleared alarm as new here). The longest first:
+ *  "⚠️ ⚙️" opens with "⚠️". Both ends — watch (cleared, still watched) and closed — are "closed" here: a problem that
+ *  ended; a stage this build does not know is not read. Every source that fires the announcement writes these marks only with a stage (research 01 of "One inbox"). */
+const AS_STAGE: Record<string, Stage> = { new: "new", existing: "existing", watch: "closed", closed: "closed" };
+const STAGE_MARKS: readonly [string, Stage][] = (Object.entries(AGENT_CONTRACT.stageMarks) as [string, string][])
+  .flatMap(([stage, mark]): [string, Stage][] => (AS_STAGE[stage] ? [[mark, AS_STAGE[stage]]] : []))
+  .sort(([x], [y]) => y.length - x.length);
 
 /** An announcement's stage, read from its bottom line; null without one. Pure: tests/oracles/announcements.mjs. */
 export function stageOf(status: string): Stage | null {
@@ -85,12 +91,6 @@ export function noticeFor(a: Announcement, s: ShowSettings, { rewrite = false } 
   if (!full) return { fullScreenMs: null, noticeMs: stays ? null : ANNOUNCEMENT_NOTICE_MS };
   return { fullScreenMs: s.ringShownForS * 1000, noticeMs: stays ? null : 0 };
 }
-
-/** Pause before asking again when the add-on could not be reached. */
-const RETRY_MS = 5_000;
-/** A read the add-on holds open waits at most 25s (ANNOUNCEMENT_WAIT_S); one still open well after that is a
- *  connection a sleeping tablet left behind, given up so the next read can start. */
-const READ_GIVE_UP_MS = 40_000;
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 
@@ -180,74 +180,7 @@ export async function pressButton(
   }
 }
 
-export interface AnnouncementsRead { items: Announcement[]; last: number }
-
-/** The kept announcements; with `after`, only newer ones, the add-on waiting for one to come. null = not reached. */
-export async function fetchAnnouncements(after: number | null, stop: AbortSignal): Promise<AnnouncementsRead | null> {
-  const ctl = new AbortController();
-  const abort = () => ctl.abort();
-  stop.addEventListener("abort", abort);
-  const giveUp = setTimeout(abort, READ_GIVE_UP_MS);
-  try {
-    const r = await backendFetch(ingressPath(after === null ? "announcements" : `announcements?after=${after}`),
-      { credentials: "same-origin", signal: ctl.signal });
-    if (!r.ok) return null;
-    const b = (await r.json()) as { announcements?: unknown; last?: unknown };
-    const items = Array.isArray(b.announcements) ? b.announcements.map(parseAnnouncement) : [];
-    return { items: items.filter((a): a is Announcement => a !== null), last: typeof b.last === "number" ? b.last : 0 };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(giveUp);
-    stop.removeEventListener("abort", abort);
-  }
-}
-
-/** Calls `onNew` with each announcement kept from now on, until `stop`. What was kept before it started is not new:
- *  a page reloaded does not announce the last ring again, nor a tablet waking up what came while it slept. `read` is
- *  fetchAnnouncements (a check passes its own). `onKept`: every read, for the page's list (the Cockpit's
- *  Notifications) — `full` when it is everything the add-on keeps (the first read, and after a pause), else only what
- *  came after the last. */
-export async function watchAnnouncements(
-  read: (after: number | null, stop: AbortSignal) => Promise<AnnouncementsRead | null>,
-  onNew: (items: Announcement[]) => void,
-  stop: AbortSignal,
-  pause: (ms: number, stop: AbortSignal) => Promise<void>,
-  onKept?: (items: Announcement[], full: boolean) => void,
-): Promise<void> {
-  let last: number | null = null;
-  while (!stop.aborted) {
-    const got = await read(last, stop);
-    if (stop.aborted) return;
-    if (got === null) {
-      // Not reached, or a read a sleeping tablet left open: what was kept meanwhile is not news now, and the next
-      // read starts again from what is kept (a ring from an hour ago is never a notice).
-      last = null;
-      await pause(RETRY_MS, stop);
-      continue;
-    }
-    if (last !== null && got.last < last) {
-      // The add-on's store started again (a reinstall: its count went back): this read asked for what came after a
-      // number it never reached, so it holds nothing; read it again whole, at once, as a new baseline.
-      last = null;
-      continue;
-    }
-    // everything the add-on keeps on a baseline (the first read, after a pause); else what came after the last
-    onKept?.(got.items, last === null);
-    if (last !== null && got.items.length) onNew(got.items);
-    last = got.last;
-  }
-}
-
-/** Waits `ms`, or less when `stop` comes first. */
-export function pauseFor(ms: number, stop: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const t = setTimeout(done, ms);
-    function done() {
-      clearTimeout(t);
-      stop.removeEventListener("abort", done);
-      resolve();
-    }
-    stop.addEventListener("abort", done);
-  });
-}
+/** The kept announcements, a read of the add-on's feed (messages/feed); with `after`, only newer ones, the add-on
+ *  waiting for one to come. null = not reached. */
+export const fetchAnnouncements = (after: number | null, stop: AbortSignal): Promise<FeedRead<Announcement> | null> =>
+  fetchFeed("announcements", "announcements", parseAnnouncement, after, stop);
