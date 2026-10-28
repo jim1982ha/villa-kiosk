@@ -4,8 +4,18 @@
 // the full screen and the Cockpit's Messages (ticket 17 of "One inbox"). The notice draws its one line with the same
 // buttons (components/hud/AnnouncementNotice).
 
+import { useState } from "react";
 import { announcementPhotoUrl, PRESS_SAID, type Announcement, type PressOutcome } from "@/messages/announcements";
 import type { PressState } from "@/messages/presses";
+
+/** An announcement's photo, served by the add-on; hidden when the add-on refuses it (review Q round 2): a guest is
+ *  served only the current notification's photo (supervisor-proxy.py _current_photo), so a page that read it while it
+ *  was current drew an empty frame once it was not. The add-on decides; the page only hides what it is refused. */
+export function AnnouncementPhoto({ id, className }: { id: string; className: string }) {
+  const [refused, setRefused] = useState<string | null>(null);
+  if (refused === id) return null;
+  return <img className={className} src={announcementPhotoUrl(id)} alt="" onError={() => setRefused(id)} />;
+}
 
 /** The buttons an announcement offers, and what became of the last press. */
 export function AnnouncementActions({ announcement, onPress, presses }: {
@@ -35,7 +45,7 @@ export function AnnouncementContent({ announcement, onPress, presses = {} }: {
 }) {
   return (
     <>
-      {announcement.photo && <img className="announcement-full-photo" src={announcementPhotoUrl(announcement.photo)} alt="" />}
+      {announcement.photo && <AnnouncementPhoto id={announcement.photo} className="announcement-full-photo" />}
       {announcement.text && <p className="announcement-full-text">{announcement.text}</p>}
       {announcement.status && <p className="announcement-full-status">{announcement.status}</p>}
       {onPress && announcement.buttons.length > 0 && <AnnouncementActions announcement={announcement} onPress={onPress} presses={presses} />}

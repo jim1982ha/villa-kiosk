@@ -4,28 +4,24 @@
 // picked from what the villa has announced) and "Ring shown for". Settings › Messages, this tablet's: "Rings full
 // screen on this tablet".
 
-import { useEffect, useState } from "react";
 import { useConfig } from "@/config/ConfigContext";
 import { FIELD_COMMIT_MS, usePendingField } from "@/hooks/usePendingField";
 import { ringShownForOk } from "@/config/AppConfig";
-import { announcedTitles, fetchAnnouncements, type Announcement } from "@/messages/announcements";
+import { announcedTitles } from "@/messages/announcements";
+import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import RemovablePill from "@/components/common/RemovablePill";
 import SearchPicker from "@/components/common/SearchPicker";
 import { withItem } from "@/utils/listToggle";
 
-/** "Full screen for": the picked titles as pills, and a picker of the titles the add-on keeps (read once when the tab
- *  opens). A title no longer kept stays picked until its ✕: the villa may announce it again. */
+/** "Full screen for": the picked titles as pills, and a picker of the titles the add-on keeps (the page's one list). A title no longer kept stays picked until its ✕: the villa may announce it again. */
 export function FullScreenFor() {
   const { config, update } = useConfig();
   const picked = config.fullScreenFor;
-  const [kept, setKept] = useState<Announcement[] | null>(null);
-  useEffect(() => {
-    const stop = new AbortController();
-    void fetchAnnouncements(null, stop.signal).then((r) => { if (!stop.signal.aborted) setKept(r?.items ?? []); });
-    return () => stop.abort();
-  }, []);
+  // the page's one list of what the add-on keeps (messages/AnnouncementsContext): never a read of its own (review Q
+  // round 2: the tab read the add-on again when it opened)
+  const { kept, loaded } = useAnnouncements();
   const set = (title: string, on: boolean) => update({ fullScreenFor: withItem(picked, title, on) });
-  const offered = announcedTitles(kept ?? [], picked);
+  const offered = announcedTitles(kept, picked);
   return (
     <div className="row" style={{ flexWrap: "wrap", gap: 6, alignItems: "center" }}>
       {picked.map((t) => (
@@ -34,7 +30,7 @@ export function FullScreenFor() {
       <div style={{ flex: "1 1 220px", minWidth: 160 }}>
         <SearchPicker compact placeholder="Add an announcement…" onPick={(t) => set(t, true)}
           rows={(q) => offered.filter((t) => t.toLowerCase().includes(q.trim().toLowerCase())).map((t) => ({ key: t, label: t }))}
-          empty={offered.length > 0 ? undefined : kept === null ? "Reading what the villa has announced…"
+          empty={offered.length > 0 ? undefined : !loaded ? "Reading what the villa has announced…"
             : "Nothing else announced yet: each announcement the villa makes is listed here."} />
       </div>
     </div>

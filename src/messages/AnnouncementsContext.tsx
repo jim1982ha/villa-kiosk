@@ -22,9 +22,11 @@ const isIds = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => 
 interface Announcements {
   /** Everything the add-on keeps, a ring and its rewrite one (messagesModel.mergeAnnouncements), oldest first. */
   kept: Announcement[];
-  /** What came since the page opened, the latest (messagesModel.afterRead): whether it rewrites one the page held, and
-   *  `n` counting arrivals, so the same one is shown once. */
-  fresh: { announcement: Announcement; rewrite: boolean; n: number } | null;
+  /** Whether the add-on has answered once: until then `kept` is empty because nothing was read yet. */
+  loaded: boolean;
+  /** What came since the page opened, the latest read's (messagesModel.afterRead), each saying whether it rewrites one
+   *  the page held; `n` counts the reads, so the same ones are shown once. */
+  fresh: { arrived: { announcement: Announcement; rewrite: boolean }[]; n: number } | null;
 }
 
 interface AnnouncementsAndUnread extends Announcements {
@@ -36,7 +38,7 @@ interface AnnouncementsAndUnread extends Announcements {
   presses: Presses;
 }
 
-const NONE: Announcements = { kept: [], fresh: null };
+const NONE: Announcements = { kept: [], loaded: false, fresh: null };
 const NO_PRESSES = pressesOf(async () => "failed");
 const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, shown: () => {}, presses: NO_PRESSES });
 
@@ -44,9 +46,9 @@ export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Announcements>(NONE);
   useEffect(() => {
     const stop = new AbortController();
-    void watchFeed(fetchAnnouncements, (items, full) => setState((s) => {
-      const { kept, arrived } = afterRead(s.kept, items, full);
-      return { kept, fresh: arrived ? { ...arrived, n: (s.fresh?.n ?? 0) + 1 } : s.fresh };
+    void watchFeed(fetchAnnouncements, (items, full, first) => setState((s) => {
+      const { kept, arrived } = afterRead(s.kept, items, full, first);
+      return { kept, loaded: true, fresh: arrived.length ? { arrived, n: (s.fresh?.n ?? 0) + 1 } : s.fresh };
     }), stop.signal, pauseFor);
     return () => stop.abort();
   }, []);

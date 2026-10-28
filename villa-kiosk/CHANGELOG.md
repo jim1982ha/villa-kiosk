@@ -1,3 +1,14 @@
+## 2.496.567
+
+What you will see:
+- A ring waiting for an answer keeps its notice and its Unlock when something else is announced: the other
+  announcement shows beside it for 10s, then goes. Before, the newer one pushed the ring off the screen.
+- Two announcements arriving together each show; before, only the newer did.
+- A ring holding the whole screen keeps it for "Ring shown for" when something else arrives.
+- A tablet left on for days lists exactly what the add-on keeps: notifications past the records-kept days leave its
+  Messages too, as on a tablet just opened.
+- A photo a guest may no longer see (a past ring's) is no longer an empty frame: it is not shown.
+
 ## 2.496.566
 
 What you will see:

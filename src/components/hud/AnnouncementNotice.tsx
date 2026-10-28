@@ -8,17 +8,18 @@
 // profile, no PIN): their labels and commands are the announcement's, never named in the Kiosk. Such a notice stays
 // until the villa's rewrite of the same ring replaces it (answered, opened at the gate, timed out) or its ✕.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import { Bell } from "lucide-react";
 import { NoticeView } from "./Notice";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 import { useConfig } from "@/config/ConfigContext";
-import { announcementPhotoUrl, noticeFor, type Announcement } from "@/messages/announcements";
+import type { Announcement } from "@/messages/announcements";
+import { NO_NOTICE, noticeStep } from "@/messages/noticeModel";
 import { useAnnouncementPress, useAnnouncements } from "@/messages/AnnouncementsContext";
 import { announcementWords } from "@/messages/messagesModel";
 import type { PressState } from "@/messages/presses";
-import { AnnouncementActions, AnnouncementContent } from "@/components/messages/AnnouncementContent";
+import { AnnouncementActions, AnnouncementContent, AnnouncementPhoto } from "@/components/messages/AnnouncementContent";
 
 /** One announcement, drawn — pure (a check draws it): its photo above its words when it has one (a ring's snapshot,
  *  the notice then square-cornered: 08-shared.css), its title and the first line of what it says, then the buttons
@@ -36,7 +37,7 @@ export function AnnouncementNoticeView({ announcement, onPress, onDismiss, press
   const words = line ? `${title} · ${line}` : title;
   return (
     <NoticeView tone="info" icon={<Bell size={16} />} onDismiss={buttons.length ? onDismiss : undefined}>
-      {announcement.photo && <img className="vesta-notice-photo" src={announcementPhotoUrl(announcement.photo)} alt="" />}
+      {announcement.photo && <AnnouncementPhoto id={announcement.photo} className="vesta-notice-photo" />}
       {words}
       {onPress && buttons.length > 0 && <AnnouncementActions announcement={announcement} onPress={onPress} presses={presses} />}
     </NoticeView>
@@ -72,44 +73,57 @@ function FullScreen(props: Parameters<typeof AnnouncementFullScreenView>[0]) {
   );
 }
 
-/** What is on screen: the announcement, whether it rewrites one the page already held (messagesModel.afterRead), and
- *  whether it holds the whole screen or its notice. */
-interface Shown { a: Announcement; rewrite: boolean; full: boolean }
+/** One notice with its own buttons, pressed through the page's one record (messages/presses). */
+function OneNotice({ announcement, onDismiss }: { announcement: Announcement; onDismiss: () => void }) {
+  const { presses, press } = useAnnouncementPress(announcement);
+  return <AnnouncementNoticeView announcement={announcement} onPress={press} onDismiss={onDismiss} presses={presses} />;
+}
+
+/** The full screen with its own buttons. */
+function OneFullScreen({ announcement, onDismiss }: { announcement: Announcement; onDismiss: () => void }) {
+  const { presses, press } = useAnnouncementPress(announcement);
+  return <FullScreen announcement={announcement} onPress={press} onDismiss={onDismiss} presses={presses} />;
+}
 
 export default function AnnouncementNotice() {
   const { config } = useConfig();
-  // read when an announcement arrives
+  // read when an announcement arrives: "Ring shown for" changed meanwhile applies to the next one
   const settings = useRef(config);
   settings.current = config;
-  const [shown, setShown] = useState<Shown | null>(null);
-  const { presses, press } = useAnnouncementPress(shown?.a ?? null);
-  // what just came, from the page's one watch (messages/AnnouncementsContext), which says whether it rewrites one the
+  // what is on screen, as the notice model says (messages/noticeModel): a ring waiting for its answer stays whatever
+  // else arrives (review Q round 2)
+  const [state, send] = useReducer(noticeStep, NO_NOTICE);
+  // what just came, from the page's one watch (messages/AnnouncementsContext), each saying whether it rewrites one the
   // page held: a rewrite (the ring answered, timed out) never takes the screen again, a reload or a wake-up between
   // the two included (review Q 1)
   const { fresh } = useAnnouncements();
   useEffect(() => {
-    if (!fresh) return;
-    const { announcement: a, rewrite } = fresh;
-    setShown({ a, rewrite, full: noticeFor(a, settings.current, { rewrite }).fullScreenMs !== null });
+    for (const { announcement, rewrite } of fresh?.arrived ?? []) {
+      send({ type: "arrived", announcement, rewrite, settings: settings.current });
+    }
   }, [fresh]);
-
-  const how = shown ? noticeFor(shown.a, config, { rewrite: shown.rewrite }) : null;
-  // full screen ends (its time, Close, this tablet's switch turned off): its notice carries on when that one stays,
-  // else it is gone
-  const endFull = () => setShown((s) => (s && how?.noticeMs !== 0 ? { ...s, full: false } : null));
+  // the full screen ends with its time, Close, or this tablet's switch turned off; the passing one with its own time
   useEffect(() => {
-    if (shown?.full && !config.ringsFullScreen) endFull();
-  });
+    if (state.full && !config.ringsFullScreen) send({ type: "fullEnded" });
+  }, [state.full, config.ringsFullScreen]);
   useEffect(() => {
-    if (!shown || !how) return;
-    const lasts = shown.full ? how.fullScreenMs : how.noticeMs;
-    if (lasts === null) return;
-    const t = setTimeout(shown.full ? endFull : () => setShown(null), lasts);
+    if (!state.full) return;
+    const t = setTimeout(() => send({ type: "fullEnded" }), state.full.ms);
     return () => clearTimeout(t);
-    // once per announcement and per phase: "Ring shown for" changed meanwhile applies to the next announcement
-  }, [shown]);
+  }, [state.full]);
+  useEffect(() => {
+    const p = state.passing;
+    if (!p) return;
+    const t = setTimeout(() => send({ type: "passingEnded", seq: p.announcement.seq }), p.ms);
+    return () => clearTimeout(t);
+  }, [state.passing]);
 
-  if (!shown || !how) return null;
-  if (shown.full) return <FullScreen announcement={shown.a} onPress={press} onDismiss={endFull} presses={presses} />;
-  return <AnnouncementNoticeView announcement={shown.a} onPress={press} onDismiss={() => setShown(null)} presses={presses} />;
+  const passing = state.passing?.announcement;
+  return (
+    <>
+      {state.full && <OneFullScreen announcement={state.full.announcement} onDismiss={() => send({ type: "fullEnded" })} />}
+      {state.staying.map((a) => <OneNotice key={a.seq} announcement={a} onDismiss={() => send({ type: "dismissed", seq: a.seq })} />)}
+      {passing && <OneNotice key={passing.seq} announcement={passing} onDismiss={() => send({ type: "dismissed", seq: passing.seq })} />}
+    </>
+  );
 }

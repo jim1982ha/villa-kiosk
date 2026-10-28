@@ -8,7 +8,8 @@
 import { ingressPath } from "@/ha/ingress";
 import { backendFetch } from "@/auth/sessionLost";
 
-export interface FeedRead<T> { items: T[]; last: number }
+/** One read: the records, the last number given, and the first still kept (a page drops what it holds below it). */
+export interface FeedRead<T> { items: T[]; last: number; first: number }
 
 /** Pause before asking again when the add-on could not be reached. */
 const RETRY_MS = 5_000;
@@ -31,7 +32,9 @@ export async function fetchFeed<T>(path: string, field: string, parse: (raw: unk
     const b = (await r.json()) as Record<string, unknown>;
     const raw = b[field];
     const items = Array.isArray(raw) ? raw.map(parse) : [];
-    return { items: items.filter((x): x is T => x !== null), last: typeof b.last === "number" ? b.last : 0 };
+    const last = typeof b.last === "number" ? b.last : 0;
+    // an add-on before review Q round 2 does not say it: nothing is dropped
+    return { items: items.filter((x): x is T => x !== null), last, first: typeof b.first === "number" ? b.first : 0 };
   } catch {
     return null;
   } finally {
@@ -43,10 +46,11 @@ export async function fetchFeed<T>(path: string, field: string, parse: (raw: unk
 /** Reads the feed until `stop`, calling `onRead` with each read: `full` when it is everything the add-on keeps (the
  *  first read, after a pause, after the store started again), else what came after the last — what is NEW: what was
  *  kept before a full read never is (a page reloaded does not announce the last ring again, nor a tablet waking up what
- *  came while it slept). `read` is a fetchFeed (a check passes its own). */
+ *  came while it slept). `first`: the first number the add-on still keeps — what the page holds below it was tidied
+ *  away. `read` is a fetchFeed (a check passes its own). */
 export async function watchFeed<T>(
   read: (after: number | null, stop: AbortSignal) => Promise<FeedRead<T> | null>,
-  onRead: (items: T[], full: boolean) => void,
+  onRead: (items: T[], full: boolean, first: number) => void,
   stop: AbortSignal,
   pause: (ms: number, stop: AbortSignal) => Promise<void>,
 ): Promise<void> {
@@ -67,7 +71,7 @@ export async function watchFeed<T>(
       last = null;
       continue;
     }
-    onRead(got.items, last === null);
+    onRead(got.items, last === null, got.first);
     last = got.last;
   }
 }

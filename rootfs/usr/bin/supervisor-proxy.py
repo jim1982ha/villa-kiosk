@@ -3672,8 +3672,18 @@ class Feed:
 
     def __init__(self, store: "JsonStore", tidy, after=None):
         self.store, self.tidy, self.after = store, tidy, after
+        # ⚠️ THE LAST NUMBER GIVEN, KEPT APART (review Q round 2): numbered from what is stored, a store tidied empty
+        # (every record past the records-kept days) started again at 1, and an open page took the next one for a store
+        # started again and showed it as no news. Only a reinstall (both files gone) starts again.
+        self.mark = JsonStore(f"{store.name.removesuffix('.json')}-last.json", 0, 64)
         # set when one is kept, then replaced: a read waits on the one current when it read
         self._kept = asyncio.Event()
+
+    def _last(self, items: list) -> int:
+        """The last number given: the highest kept, or the mark when every one since was tidied away."""
+        mark = self.mark.read()
+        return max([a["seq"] for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)]
+                   + [mark if isinstance(mark, int) else 0])
 
     def items(self) -> list:
         """What is kept now (tidied, records with a number only). Blocking: called on a worker thread."""
@@ -3686,34 +3696,38 @@ class Feed:
 
         def change(stored):
             stored = stored if isinstance(stored, list) else []
-            last = max((a["seq"] for a in stored if isinstance(a, dict) and isinstance(a.get("seq"), int)), default=0)
-            made["rec"] = make(last + 1)
+            made["rec"] = make(self._last(stored) + 1)
             return self.tidy(merge(stored, made["rec"]))
 
         try:
             await self.store.update(change, after=self.after)
         except StoreUnreadable:
-            # Not a record anyone else writes: a corrupt file starts again rather than lose every one from here on.
-            made["rec"] = make(1)
+            # Not a record anyone else writes: a corrupt file starts again rather than lose every one from here on,
+            # numbered on from the mark (the pages hold numbers up to it).
+            made["rec"] = make(self._last([]) + 1)
             await self.store.replace([made["rec"]])
+        await self.mark.replace(made["rec"]["seq"])
         woken, self._kept = self._kept, asyncio.Event()
         woken.set()
         return made["rec"]
 
-    async def read(self, after: int | None, wait_s: float) -> tuple[list, int]:
-        """(the records after `after` — all with None — and the last number kept). With `after`, an answer with nothing
-        waits up to `wait_s` for the next one. A last number below the page's own means the store started again (a
-        corrupt file, a reinstall): answered at once, so the page reads it whole."""
-        def answer() -> tuple[list, int, bool]:
+    async def read(self, after: int | None, wait_s: float) -> tuple[list, int, int]:
+        """(the records after `after` — all with None —, the last number given, and the FIRST still kept: a page drops
+        what it holds below it, so a tablet left on lists exactly what the add-on keeps, never a record tidied away
+        long ago — review Q round 2). With `after`, an answer with nothing waits up to `wait_s` for the next one. A
+        last number below the page's own means the store started again (a reinstall): answered at once, so the page
+        reads it whole."""
+        def answer() -> tuple[list, int, int, bool]:
             stored = self.store.read()
             items = self.tidy(stored)
-            last = max((a["seq"] for a in items), default=0)
+            last = self._last(items)
+            first = min((a["seq"] for a in items), default=last + 1)
             pruned = isinstance(stored, list) and len(items) < len(stored)
-            return [a for a in items if after is None or a["seq"] > after], last, pruned
+            return [a for a in items if after is None or a["seq"] > after], last, first, pruned
 
         # Taken BEFORE the read: one kept between the read and the wait has already set this event, never a newer one.
         kept = self._kept
-        items, last, pruned = await asyncio.to_thread(answer)
+        items, last, first, pruned = await asyncio.to_thread(answer)
         if pruned:
             # Past what is kept (the records-kept days): deleted now, under the store's lock, not at the next one (a
             # "keep for ever" set afterwards must not bring them back).
@@ -3726,8 +3740,8 @@ class Feed:
                 await asyncio.wait_for(kept.wait(), wait_s)
             except asyncio.TimeoutError:
                 pass
-            items, last, _ = await asyncio.to_thread(answer)
-        return items, last
+            items, last, first, _ = await asyncio.to_thread(answer)
+        return items, last, first
 
 
 ANNOUNCEMENTS = JsonStore("announcements.json", [], ANNOUNCEMENTS_MAX_BYTES + ANNOUNCEMENT_TEXT_MAX)
@@ -3974,11 +3988,11 @@ async def announcements_handler(request: web.Request) -> web.Response:
     except ValueError:
         return web.json_response({"error": "after must be a number"}, status=400)
 
-    items, last = await ANNOUNCED.read(after, ANNOUNCEMENT_WAIT_S)
+    items, last, first = await ANNOUNCED.read(after, ANNOUNCEMENT_WAIT_S)
     if not _may(_role_for(request), "viewCameras"):
         current = _current_photo(await asyncio.to_thread(ANNOUNCED.items), time.time())
         items = [a if a.get("photo") == current else {k: v for k, v in a.items() if k != "photo"} for a in items]
-    return web.json_response({"announcements": items, "last": last}, headers={"Cache-Control": "no-store"})
+    return web.json_response({"announcements": items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
 
 
 async def announcement_photo_handler(request: web.Request) -> web.StreamResponse:

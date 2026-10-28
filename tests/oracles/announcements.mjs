@@ -50,7 +50,7 @@ await watchFeed(async (after) => {
 }, (items, full) => {
   reads.push([full, items.map((x) => x.seq)]);
   const { arrived } = afterRead([], items, full);
-  if (arrived) shown.push(items.map((x) => x.seq));
+  if (arrived.length) shown.push(arrived.map((x) => x.announcement.seq));
 }, stop.signal, async (ms) => { pauses.push(ms); });
 ck("the first read is the baseline (nothing shown); then each read asks for what came after the last",
    JSON.stringify(asked) === JSON.stringify([null, 2, null, 3, 3, 5, null, 2]), asked);
@@ -71,16 +71,70 @@ const answered = { ...a(8), key: "run-1", title: "🔔 Visitor", status: "🔕 N
 const baseline = afterRead([], [a(6), ringA], true);
 const then = afterRead(baseline.kept, [answered], false);
 ck("a ring read in a baseline (a reload, a wake-up), then its rewrite: a rewrite, so it never takes the screen",
-   baseline.arrived === null && then.arrived?.announcement.seq === 8 && then.arrived.rewrite === true
-   && then.kept.map((x) => x.seq).join() === "6,8", then);
+   baseline.arrived.length === 0 && then.arrived.length === 1 && then.arrived[0].announcement.seq === 8
+   && then.arrived[0].rewrite === true && then.kept.map((x) => x.seq).join() === "6,8", then);
 ck("  ...a baseline is what the add-on keeps now: what the page held before is replaced (a store that started again)",
    afterRead([a(1), a(2)], [a(3)], true).kept.map((x) => x.seq).join() === "3");
-ck("  ...a new ring (no key held) is not; the newest of what arrived together is the one shown",
-   afterRead(baseline.kept, [{ ...a(9), key: "run-2" }], false).arrived?.rewrite === false
-   && afterRead([], [a(10), a(12), a(11)], false).arrived?.announcement.seq === 12);
+ck("  ...what the add-on no longer keeps (below the first number it still keeps) goes from the page (review Q round 2)",
+   afterRead([a(1), a(2), a(3)], [a(4)], false, 3).kept.map((x) => x.seq).join() === "3,4"
+   && afterRead([a(1), a(2)], [], false, 0).kept.length === 2);
+ck("  ...a new ring (no key held) is not; every one of a read arrives, oldest first (one in a read with another is shown)",
+   afterRead(baseline.kept, [{ ...a(9), key: "run-2" }], false).arrived[0]?.rewrite === false
+   && afterRead([], [a(10), a(12), a(11)], false).arrived.map((x) => x.announcement.seq).join() === "10,11,12");
 const notice = src("components/hud/AnnouncementNotice.tsx");
-ck("  ...the notice takes it from the page's one watch and keeps no memory of its own",
-   /const \{ announcement: a, rewrite \} = fresh;/.test(notice) && !/seenKeys|useRef\(new Set/.test(notice));
+ck("  ...the notice sends each to the notice model and keeps no memory of its own",
+   /for \(const \{ announcement, rewrite \} of fresh\?\.arrived \?\? \[\]\)/.test(notice)
+   && /useReducer\(noticeStep, NO_NOTICE\)/.test(notice) && !/seenKeys|useRef\(new Set/.test(notice));
+
+{
+  const { fetchFeed } = await import("@/messages/feed");
+  const saved = globalThis.fetch;
+  globalThis.window = globalThis.window ?? { location: { pathname: "/" } };
+  globalThis.fetch = async () => new Response(JSON.stringify({ announcements: [{ seq: 4, message: "<b>R</b>" }, { seq: "x" }], last: 4, first: 3 }));
+  const got = await fetchFeed("announcements", "announcements", parseAnnouncement, null, new AbortController().signal);
+  globalThis.fetch = saved;
+  ck("a read carries the first number still kept, and leaves out a record it cannot read",
+     got?.first === 3 && got.last === 4 && got.items.map((x) => x.seq).join() === "4", got);
+}
+const settingsSrc = src("components/settings/MessagesSettings.tsx");
+ck("\"Full screen for\" offers the titles of the page's one list, never a read of its own",
+   /const \{ kept, loaded \} = useAnnouncements\(\);/.test(settingsSrc) && !/fetchAnnouncements/.test(settingsSrc));
+
+console.log("\n  what is on screen, announcement by announcement (review Q round 2: a ring that stays, stays):");
+{
+  const { noticeStep, NO_NOTICE } = await import("@/messages/noticeModel");
+  const S = { fullScreenFor: ["🔔 Visitor at Gate A"], ringShownForS: 60, ringsFullScreen: true };
+  const go = (state, ...events) => events.reduce(noticeStep, state);
+  const arrive = (x, rewrite = false, settings = S) => ({ type: "arrived", announcement: x, rewrite, settings });
+  const ringB = { ...a(40), key: "ring-b", title: "🔔 Visitor at Gate B", buttons: [{ label: "Unlock", command: "/u" }] };
+  const power = { ...a(41), title: "⚡ Power dropped", status: "⚠️ New alert" };
+  let st = go(NO_NOTICE, arrive(ringB), arrive(power));
+  ck("a ring offering Unlock stays when another arrives; the other passes beside it for 10s",
+     st.staying.map((x) => x.seq).join() === "40" && st.passing?.announcement.seq === 41 && st.passing.ms === 10_000, st);
+  st = go(st, { type: "passingEnded", seq: 41 });
+  ck("  ...the other gone, the ring is still there", st.staying.length === 1 && st.passing === null, st);
+  st = go(st, arrive({ ...ringB, seq: 42, buttons: [], status: "✅ Opened at 14:05" }, true));
+  ck("  ...its rewrite (answered) takes its place: the Unlock is gone, the answer passes",
+     st.staying.length === 0 && st.passing?.announcement.seq === 42, st);
+  const ringA = { ...a(50), key: "ring-a", title: "🔔 Visitor at Gate A", buttons: [{ label: "Unlock", command: "/u" }] };
+  st = go(NO_NOTICE, arrive(ringA), arrive(power));
+  ck("a picked ring takes the whole screen for \"Ring shown for\"; another arriving passes, the screen stays the ring's",
+     st.full?.announcement.seq === 50 && st.full.ms === 60_000 && st.passing?.announcement.seq === 41, st);
+  st = go(st, { type: "fullEnded" });
+  ck("  ...its time over (or Close, or this tablet's switch off), it carries on as a notice while it offers Unlock",
+     st.full === null && st.staying.map((x) => x.seq).join() === "50", st);
+  ck("  ...not on a tablet that does not let rings take the screen, nor for its rewrite",
+     go(NO_NOTICE, arrive(ringA, false, { ...S, ringsFullScreen: false })).full === null
+     && go(NO_NOTICE, arrive(ringA, true)).full === null);
+  const ringB2 = { ...ringB, seq: 44, key: "ring-b2" };
+  ck("  ...two rings waiting both stay; a second picked ring takes the screen, the first keeps its notice and Unlock",
+     go(NO_NOTICE, arrive(ringB), arrive(ringB2)).staying.map((x) => x.seq).join() === "40,44"
+     && (() => { const t = go(NO_NOTICE, arrive(ringA), arrive({ ...ringA, seq: 51, key: "ring-a2" }));
+       return t.full?.announcement.seq === 51 && t.staying.map((x) => x.seq).join() === "50"; })());
+  ck("  ...a staying one goes with its ✕; an earlier timer never ends a later passing one",
+     go(NO_NOTICE, arrive(ringB), { type: "dismissed", seq: 40 }).staying.length === 0
+     && go(NO_NOTICE, arrive(power), arrive({ ...power, seq: 43 }), { type: "passingEnded", seq: 41 }).passing?.announcement.seq === 43);
+}
 
 console.log("\n  one record of presses for the page (review Q 2):");
 {
@@ -108,7 +162,7 @@ console.log("\n  one record of presses for the page (review Q 2):");
      failing.get(other)["/unlock"] === "failed" && Object.keys(presses.get({ ...ring, seq: 22 })).length === 0);
   const content = src("components/messages/AnnouncementContent.tsx");
   ck("  ...no screen keeps its own: the notice and Messages read the page's one (AnnouncementsContext)",
-     !/useState/.test(content) && /useAnnouncementPress\(/.test(src("components/cockpit/MessagesTab.tsx"))
+     !/function useAnnouncementPress|PressState>\(/.test(content) && /useAnnouncementPress\(/.test(src("components/cockpit/MessagesTab.tsx"))
      && /from "@\/messages\/AnnouncementsContext"/.test(src("components/cockpit/MessagesTab.tsx"))
      && /useAnnouncementPress, useAnnouncements \} from "@\/messages\/AnnouncementsContext"/.test(notice));
 }
@@ -228,9 +282,9 @@ ck("full screen: its title, then its photo large, all it says, its bottom line, 
    && /class="modal-footer"[\s\S]*Close/.test(fullHtml), fullHtml);
 const problemHtml = draw(h(AnnouncementNoticeView, { announcement: said("🔥 Overload", "⚠️ New alert"), onDismiss: () => {}, onPress: () => {} }));
 ck("a notice that goes by itself carries no ✕ (a problem included): nothing to press", !problemHtml.includes('aria-label="Dismiss"'), problemHtml);
-ck("  ...the tablet's notice decides by this rule, with the villa's and this tablet's settings",
-   /noticeFor\(a, settings\.current, \{ rewrite \}\)/.test(src("components/hud/AnnouncementNotice.tsx"))
-   && /noticeFor\(shown\.a, config, \{ rewrite: shown\.rewrite \}\)/.test(src("components/hud/AnnouncementNotice.tsx")));
+ck("  ...the tablet's notice decides by this rule (the notice model calls it), with the villa's and this tablet's settings",
+   /noticeFor\(a, e\.settings, \{ rewrite: e\.rewrite \}\)/.test(src("messages/noticeModel.ts"))
+   && /send\(\{ type: "arrived", announcement, rewrite, settings: settings\.current \}\)/.test(src("components/hud/AnnouncementNotice.tsx")));
 
 ck("a ring's rewrite (its answer, its time out) never takes the screen again: its own notice, in place",
    JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "🔕 Not opened: nobody answered within 2min."), picked, { rewrite: true }))

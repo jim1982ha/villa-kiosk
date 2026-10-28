@@ -207,7 +207,7 @@ async def main() -> None:
     status, _ = await call("GET", "/announcements", {})
     ck("no session: refused", status == 401, status)
     status, body = await call("GET", "/announcements", guest)
-    ck("never written: a guest reads none, last 0", status == 200 and body == {"announcements": [], "last": 0},
+    ck("never written: a guest reads none, last 0", status == 200 and body == {"announcements": [], "last": 0, "first": 1},
        (status, body))
     ck("the event it keeps is named in the one table", proxy.ANNOUNCEMENT_EVENT == proxy.HA_COMMANDS.get("announcement")
        and bool(proxy.ANNOUNCEMENT_EVENT) and proxy.ANNOUNCEMENT_EVENT not in proxy.ALLOWED_EVENT_TYPES)
@@ -229,7 +229,7 @@ async def main() -> None:
        and waited < 5, (status, body, round(waited, 2)))
     proxy.ANNOUNCEMENT_WAIT_S = 0.2
     status, body = await call("GET", "/announcements?after=2", guest)
-    ck("  ...and answers none when nothing came", status == 200 and body == {"announcements": [], "last": 2}, body)
+    ck("  ...and answers none when nothing came", status == 200 and body == {"announcements": [], "last": 2, "first": 1}, body)
     proxy.ANNOUNCEMENT_WAIT_S = 5
     t0 = asyncio.get_running_loop().time()
     status, body = await call("GET", "/announcements?after=9", guest)
@@ -254,12 +254,21 @@ async def main() -> None:
        "<b>Old</b>" not in [a["message"] for a in body["announcements"]], body)
     await proxy._record_announcement(app, ev("<b>Old</b>", at=old))
     status, body = await call("GET", "/announcements", guest)
+    # numbered on from the last number given (4 was the tidied "Older"): never a number a page already holds
     ck("  ...and with records kept for ever, it is", "<b>Old</b>" in [a["message"] for a in body["announcements"]]
-       and body["last"] == 3, body)
+       and body["last"] == 5, body)
     (DATA / "announcements.json").write_text("{not json")
     await proxy._record_announcement(app, ev("<b>After</b>"))
     ck("a corrupt store starts again with the next one", on_disk("announcements.json")[0]["message"] == "<b>After</b>",
        (DATA / "announcements.json").read_text()[:80])
+    # review Q round 2: what a page holds is what the add-on keeps, and a number is never given twice
+    ck("  ...numbered on from the last given, never from 1: an open page takes it as news, not a store started again",
+       on_disk("announcements.json")[0]["seq"] == 6, on_disk("announcements.json"))
+    (DATA / "announcements.json").write_text("[]")                     # every one tidied away
+    await proxy._record_announcement(app, ev("<b>Next</b>"))
+    status, body = await call("GET", "/announcements", guest)
+    ck("  ...nor when every one was tidied away", [a["seq"] for a in body["announcements"]] == [7] and body["last"] == 7, body)
+    ck("each answer says the first number still kept: a page drops what it holds below it", body["first"] == 7, body)
 
     # ── one line per key, with its photo (2.496.558, 2026-10-28) ────────────────────────────────────────────────────
     print("  /announcements, one line per key, with its photo:")
