@@ -1,3 +1,11 @@
+## 0.12.377
+
+What you will see:
+- VESTA's reports (the morning digest, the weekly and monthly reports, the owner's weekly lines, the night check's
+  message) reach the wall tablet's new Messages › Reports, each with its page when it has one. Telegram is unchanged.
+- A report sent in two languages is one line on the tablet, in English when there is an English version.
+- Needs the VESTA Kiosk 2.496.579 or later for the Reports filter.
+
 ## 0.12.376
 
 What you will see:
