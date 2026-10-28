@@ -1,3 +1,9 @@
+## 0.12.372
+
+What you will see:
+- On the tablet (VESTA (dev2) 2.496.569 or later), an alert VESTA took over is one card in Messages, in place of the
+  villa's own message of it: also when the villa repeats the alert, or when Telegram refused the villa's message.
+
 ## 0.12.371
 
 What you will see:
