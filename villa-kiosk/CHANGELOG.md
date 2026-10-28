@@ -1,3 +1,9 @@
+## 2.496.576
+
+What you will see:
+- Nothing changes on screen. The working rules every contributor follows now say it once: Telegram and the tablet
+  show the same thing, and every report, notice and alert names an alert the same way ("#91-P2").
+
 ## 2.496.575
 
 What you will see:
