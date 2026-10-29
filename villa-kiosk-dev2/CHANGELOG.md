@@ -1,3 +1,18 @@
+## 2.496.582
+
+What you will see (talking to VESTA on the tablet, needs VESTA 0.12.380):
+- Cockpit › Messages: VESTA is pinned at the top of the list, on every filter. Tap it to open your conversation: type a
+  question and press Ask (or Enter); VESTA's answer appears under it, with the camera pictures it looked at and, for
+  the owner and the facility manager, an "Open the page" link when it made one (an investigation). /investigate and
+  /proposal work as on Telegram; "New conversation" starts again, as /new does.
+- Each profile has its own conversation, apart from every Telegram chat: a guest never sees what the owner asked. A
+  guest gets answers only: VESTA takes no action and asks for no approval for a guest.
+- "I cannot answer right now…" in the conversation when VESTA cannot reach its AI, as on Telegram.
+- A question VESTA never picked up (it stopped just then) says "No answer came. Ask again." after 10min.
+- On a phone, the menu has an "Ask VESTA" row that opens the conversation.
+- While VESTA is stopped, the robot on the Cockpit button becomes the warning triangle again, and VESTA's line in
+  Messages and "Ask VESTA" are hidden: nothing on screen that cannot answer.
+
 ## 2.496.581
 
 What you will see:
