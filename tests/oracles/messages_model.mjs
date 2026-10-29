@@ -210,6 +210,14 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   ck("an alert's issue is ONE card: the issue's head, VESTA's message inside its line, in place of its short story",
      (drawn.match(/class="fm-record-card/g) ?? []).length === 1 && /fm-record-head[\s\S]*Device p/.test(drawn)
      && drawn.includes("The pool pump stopped.") && !drawn.includes("SHORT STORY"), drawn);
+  const watched = draw(h(AlertIssueCard, { card: { ...issue, look: "watched", lines: [{ ...issue.lines[0],
+    text: "#92-P2 · LINE WORDS", closing: "CLOSING WORDS" }] }, messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} }));
+  ck("  ...each thing said once: the line named by VESTA's title, its words and how it closed in VESTA's message "
+     + "(owner, 2026-10-29 screenshot)", watched.includes("#92-P2 (new)") && !watched.includes("LINE WORDS")
+     && !watched.includes("CLOSING WORDS"), watched);
+  ck("  ...an open issue's \"closes at about …\" kept (VESTA's message does not say it)",
+     draw(h(AlertIssueCard, { card: { ...issue, lines: [{ ...issue.lines[0], closing: "CLOSES SOON" }] },
+       messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} })).includes("CLOSES SOON"));
   ck("  ...a line whose alert VESTA holds no card for keeps its story", messageOfLine(issue.lines[0], []) === null
      && draw(h(AlertIssueCard, { card: issue, messages: () => null, onOpenEntity() {} })).includes("SHORT STORY"));
   const one = elements(parseTsx("components/cockpit/IssueCard.tsx"), "RecordButtons");

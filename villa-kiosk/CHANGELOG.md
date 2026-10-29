@@ -1,3 +1,10 @@
+## 2.496.592
+
+What you will see:
+- An alert's card in the Inbox says each thing once: its line is named by VESTA's title ("#92-P2 (cleared)"), the
+  problem and what to do are in VESTA's message only, and once it went back to normal (under Watch) "Cleared on …" is
+  said by VESTA's status only. An open alert still says when it closes if it stays right.
+
 ## 2.496.591
 
 What you will see:

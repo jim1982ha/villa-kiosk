@@ -161,8 +161,14 @@ export function AlertIssueCard({ card, messages, onOpenEntity, focused }: {
   focused?: boolean;
 }) {
   const shown = card.lines.map(messages).filter((a): a is Announcement => a !== null);
+  // said once (owner, 2026-10-29 screenshot: the problem and "Cleared on …" twice): a line VESTA holds a message for is
+  // named by its title ("#92-P2 (cleared)"), its words in the message; on a watched card its Status says how it closed
+  const said: CardView = { ...card, lines: card.lines.map((l) => {
+    const a = messages(l);
+    return a ? { ...l, text: a.title, closing: card.look === "watched" ? null : l.closing } : l;
+  }) };
   return (
-    <AttentionCard card={card} onOpenEntity={onOpenEntity} focused={focused}
+    <AttentionCard card={said} onOpenEntity={onOpenEntity} focused={focused}
       lineMessage={(line) => {
         const a = messages(line);
         return a ? <div className="messages-card-body"><AnnouncementContent announcement={a} /></div> : undefined;
