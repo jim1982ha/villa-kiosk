@@ -1,4 +1,6 @@
-## 2.496.596
+## 2.496.597
+
+(2.496.596 was never published: its build machine failed to start. This is the same change.)
 
 What you will see (VESTA hears it from VESTA Agent 0.12.393):
 - The VESTA button left of the robot is a microphone now. Tap it: VESTA's conversation opens, as before. Hold it and
