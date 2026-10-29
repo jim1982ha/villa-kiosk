@@ -1,3 +1,9 @@
+## 2.496.603
+
+What you will see:
+- A notification's photo (a visitor at the doorbell) is centred: in its card in the Cockpit, and in the notice that
+  pops up over the villa.
+
 ## 2.496.602
 
 What you will see:
