@@ -1,7 +1,7 @@
 // src/config/cockpitIssues.ts
-// THE COCKPIT'S ISSUES FOR ONE PROFILE, AS DRAWN (architecture review, 2026-10-26): every card of the Overview, the
+// THE COCKPIT'S ISSUES FOR ONE PROFILE, AS DRAWN (architecture review, 2026-10-26): every card of Messages › Open issues, the
 // open issues (one per device, cockpitCard) and the Watched list (the faults a person closed that the VESTA Agent reads
-// again, fm/faultConfirm), from ONE profile's view of the villa (attention.attentionFor). Pure; CockpitOverview only
+// again, fm/faultConfirm), from ONE profile's view of the villa (attention.attentionFor). Pure; Messages only
 // draws what this returns, a check reads it by value.
 //
 // ⚠️ A HIDDEN DEVICE'S CLOSED FAULT STILL SHOWED (owner, 2026-10-25: "hidden means hidden everywhere"): the open issues
@@ -24,7 +24,7 @@ export interface CockpitIssues {
   watched: CardView[];
 }
 
-/** Every card the Overview draws for the profile whose view is `view` (useVillaAttention). `fmData`: the fault
+/** Every card Open issues draws for the profile whose view is `view` (useVillaAttention). `fmData`: the fault
  *  records; `cadence`: the VESTA Agent's own timing (null: it did not say); `now`: the moment the cards are read at. */
 export function cockpitIssues(view: Pick<VillaAttention, "attentionGroups" | "devices" | "shows">, opts: {
   fmData: FmData;

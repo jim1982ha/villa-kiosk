@@ -9,9 +9,10 @@
 import Window from "@/components/common/Window";
 import { roleCan } from "@/auth/permissions";
 import { useState, type ReactNode } from "react";
-import { PendingFields, usePendingField, type PendingField } from "@/hooks/usePendingField";
+import { FIELD_COMMIT_MS, PendingFields, usePendingField, type PendingField } from "@/hooks/usePendingField";
 import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
-import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
+import { Boxes, Home, LogOut, MessageSquare, Upload, Wrench } from "lucide-react";
+import { fmtDuration } from "@/components/panels/chartUtils";
 import InfoTip, { TipTitle } from "@/components/common/InfoTip";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { DialogEdits, useConfig } from "@/config/ConfigContext";
@@ -24,13 +25,16 @@ import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 import UnavailableByDesign from "./UnavailableByDesign";
+import { FullScreenFor, RingShownFor } from "./MessagesSettings";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import MaintenanceMode, { MaintenanceModeExplained } from "./MaintenanceMode";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
 import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
+import { ANNOUNCEMENT_NOTICE_MS } from "@/messages/announcements";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -46,11 +50,13 @@ import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
  *  ⚠️ AND THE NON-OWNER VIEW WAS SIZED TOO. Every System panel is owner-only,
  *  so that whole tab is filtered out rather than rendered empty — a non-owner
  *  gets two tabs holding two panels apiece, which is the same shape. */
-type SettingsTab = "villa" | "devices" | "system";
+type SettingsTab = "villa" | "devices" | "messages" | "system";
 
 const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
   { id: "villa", label: "Villa", icon: Home },
   { id: "devices", label: "Devices", icon: Boxes },
+  // how the villa's announcements show, on every tablet (ticket 16 of "One inbox", owner 2026-10-28: owner only)
+  { id: "messages", label: "Messages", icon: MessageSquare, owner: true },
   { id: "system", label: "System", icon: Wrench, owner: true },
 ];
 
@@ -95,8 +101,8 @@ function VillaCoordinates() {
       />
     </div>
   );
-  const lat = usePendingField<string>("latitude", COORD_COMMIT_MS);
-  const lng = usePendingField<string>("longitude", COORD_COMMIT_MS);
+  const lat = usePendingField<string>("latitude", FIELD_COMMIT_MS);
+  const lng = usePendingField<string>("longitude", FIELD_COMMIT_MS);
   return (
     <>
       {coord("latitude", "villa-lat", "Latitude", lat)}
@@ -179,7 +185,7 @@ function PresenceSensor() {
  *  nothing and the field falls back to the stored one. */
 function RecordsKept() {
   const { config } = useConfig();
-  const field = usePendingField<string>("recordsKeptDays", COORD_COMMIT_MS);
+  const field = usePendingField<string>("recordsKeptDays", FIELD_COMMIT_MS);
   const write = (text: string) => {
     const n = Number(text);
     return text.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= RECORDS_KEPT_DAYS_MAX ? { recordsKeptDays: n } : null;
@@ -187,8 +193,9 @@ function RecordsKept() {
   // label and field on one line, the field on the right (owner, 2026-10-22)
   return (
     <div className="settings-field-row">
-      {/* the owner's words (2026-10-22); its (i) is the section title's */}
-      <label htmlFor="records-kept">How many days Ticket attachment must be saved (in days)</label>
+      {/* the owner's words (2026-10-22), widened to messages (2026-10-28: one number for every record kept); its (i)
+          is the section title's */}
+      <label htmlFor="records-kept">How many days tickets, attachments and messages are kept</label>
       <input
         id="records-kept" inputMode="numeric" className="field-narrow"
         value={field.shown ?? String(config.recordsKeptDays)}
@@ -200,8 +207,6 @@ function RecordsKept() {
   );
 }
 
-/** Long enough to finish typing a coordinate; blur/Enter commit at once. */
-const COORD_COMMIT_MS = 1500;
 
 /** "Log Out All": immediately signs every device out — a lost tablet, a PIN someone saw. Two-tap confirm, same idiom
  *  as Facility's "Delete all" buttons: this signs the person clicking it out too, so it's worth pausing on. At the
@@ -283,7 +288,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   // one's: Save keeps, Cancel (and Escape, and the backdrop) puts them back — the passing notices of every other dialog.
   const own = useDraftedSlice(ADVANCED_SETTINGS_KEYS);
   // why the last device-setup save did not reach the other tablets (DeviceConfigSync), said above the footer
-  const { saveProblem, setSaveProblem } = useConfig();
+  const { config, saveProblem, setSaveProblem } = useConfig();
   const notice = useAppNotice();
   const commit = withinSettings ? undefined : { dirty: own.dirty, save: own.save, discard: () => { own.discard(); } };
   // Over Settings, closing back writes what is still being typed here (as this dialog's): Settings' Save / Cancel then
@@ -410,15 +415,31 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
           </>
         )}
 
+        {tab === "messages" && roleCan(role, "editConfig") && (
+          <>
+            <TipTitle title="Full screen for" tip={<>
+              The announcements that take the whole screen of every tablet when the villa makes them, such as a ring at
+              the gate, for {fmtDuration(config.ringShownForS * 1000)} ("Ring shown for"). Picked from what the villa has
+              announced. A tablet can refuse it in its own Settings › Messages. Every other announcement shows under the
+              category bar for {fmtDuration(ANNOUNCEMENT_NOTICE_MS)}, its buttons too, then stays in the Cockpit's Inbox.
+            </>} />
+            <FullScreenFor />
+            <RingShownFor />
+          </>
+        )}
+
         {/* Owner only: the telemetry endpoint itself 403s other roles (it
             carries other people's user-agents and error text), and logging
             every device out is an owner act. The tab is not rendered for
             other roles rather than rendered-and-403 — see the TABS filter. */}
         {tab === "system" && roleCan(role, "editConfig") && (
           <>
+            {/* the villa's maintenance mode (owner, 2026-10-29): VESTA reads it from here, and the top bar shows it */}
+            <TipTitle title="Maintenance mode" tip={<MaintenanceModeExplained />} />
+            <MaintenanceMode />
             <TipTitle title="Maintenance records" tip={<>
-              Photos, repaired faults, work done and money spent older than this are deleted. 0 keeps them for ever. A
-              task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
+              Photos, repaired faults, work done, money spent and messages older than this are deleted.
+              0 keeps them for ever. A task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
             </>} />
             <RecordsKept />
 

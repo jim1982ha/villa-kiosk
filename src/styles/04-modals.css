@@ -123,6 +123,9 @@
      (architecture review O). */
   .modal.window-content { height: 90vh; }
 }
+/* the whole screen (Window kind "screen"), over every other window and the camera: no card, no gutter */
+.modal-backdrop.backdrop-screen { z-index: 90; padding: 0; }
+.modal.window-screen { max-width: none; max-height: none; width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; background: var(--bg-base); }
 /* Header is a row: title left, the icon-only theme selector right. */
 /* min-height: the tallest thing a header holds (a 44px device icon) plus the
    padding, so every header is the same height whether it carries an icon, the

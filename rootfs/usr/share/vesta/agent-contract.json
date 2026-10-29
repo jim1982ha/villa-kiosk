@@ -1,6 +1,8 @@
 {
   "_what": "The agreement between the VESTA Kiosk and the VESTA Agent (the /agent/v1 interface), declared ONCE. The Kiosk's proxy (rootfs/usr/bin/supervisor-proxy.py) checks against it, the app (src/agent/agentApi.ts) reads its lists, and the VESTA Agent host keeps a copy (agent-host/contract/agent-contract.json) that its CI compares with this file. A change a version-1 agent cannot survive is a new version, not an edit to this one.",
   "version": 1,
+  "_moment": "How a moment and a day are written in text a person reads, by both apps (owner, 2026-10-29: alert #83 said \"24/10/2026 19:05\" on Telegram and \"2026-10-24 19:05\" on the tablet; the owner chose day first, everywhere). strftime directives, only %d %m %Y %H %M: on the villa's clock, the same on every screen whatever the reader's locale.",
+  "moment": {"format": "%d/%m/%Y %H:%M", "date": "%d/%m/%Y"},
   "status": {
     "states": [
       "not_configured",
@@ -402,6 +404,7 @@
     }
   },
   "_heartbeat": "POST /agent/v1/heartbeat: the VESTA Agent says it is alive. `status`: a short text (at most 200 characters). `cadence` (optional): its own timing, which the Kiosk shows in the Overview's (i) instead of a copy of the defaults (architecture review, 2026-10-15) — `checkMinutes` how often it looks at its alerts and faults (1-1440), `nightlyAt` the villa time of its nightly check (HH:MM), anything else in it is dropped. Without it the Kiosk says no number. Shown only while the Agent is online: once its heartbeats stop (/agent-status `offline`) the Kiosk's proxy answers `cadence: null`, and the Kiosk says \"by the VESTA Agent\" and \"it checks regularly\" instead of a stale number. A `cadence` of another shape never refuses the beat: the beat counts (the Agent is online), the timing is dropped (stored null, so the Kiosk gives no number) and the answer carries `\"cadence\": \"refused: <why>\"`.",
+  "_maintenance": "The heartbeat's answer carries `maintenance`: the villa's maintenance mode, switched by the owner in the Kiosk's Advanced Settings › System (owner, 2026-10-29: a switch on the tablet and a mark in its top bar while it is on, so nobody forgets it). While it is true the VESTA Agent sends only urgent (P1) alerts; P2, P3 and P4 are recorded and not sent. The Kiosk owns it, as it owns the devices asleep by design: the Agent keeps the last answer it read, and an answer without the field (an older Kiosk) leaves what it kept. It replaces the villa helper the Agent read before (one switch, one place).",
   "_unavailableByDesign": "The heartbeat's answer carries `unavailableByDesign`: the entity ids the villa's owner marked, in the Kiosk's Advanced Settings › Devices › Asleep between reports, as devices that sleep between reports (a battery door sensor goes \"unavailable\" minutes after each report until it next reports). Their \"unavailable\" is normal: the Kiosk shows their last report and raises nothing, and the VESTA Agent skips its offline checks for them. The Kiosk owns the list (it is always installed; the Agent may not be): sorted, each id once, matching `entityPattern`, an empty list when none is marked — read from the stored device configuration on every beat (owner, 2026-10-21; added within version 1: an agent that does not read it loses nothing).",
   "heartbeat": {
     "fields": {
@@ -411,7 +414,7 @@
     "answer": {
       "ok": "true",
       "offline_after_minutes": "integer: minutes of silence before the Kiosk shows the agent offline",
-      "unavailableByDesign": "list of entity ids, sorted, each once: the devices asleep by design; [] when none",
+      "unavailableByDesign": "list of entity ids, sorted, each once: the devices asleep by design; [] when none", "maintenance": "true while the villa's maintenance mode is on (Advanced Settings › System): the Agent sends only P1 alerts; false otherwise",
       "cadence": "present only when the beat's cadence was dropped: \"refused: <why>\""
     },
     "sample": {
@@ -437,6 +440,7 @@
     ],
     "fields": {
       "alertNumber": "integer: the alert's number as every chat writes it (#5); alerts only",
+      "alertPriority": "its alert's priority (P1…P4) as every chat writes it after the number: the label `alertLabel` (#5-P2); alerts only, kept current by the VESTA Agent",
       "origin": "one of origins",
       "check": "one of checks; absent on a fault only a person closes (chat)",
       "titlePattern": "its title with {since} where a duration goes (\"Pump offline for {since}.\"): the Kiosk words it from `since` each time it shows it; absent when the title holds no duration, or a person retitled it",
@@ -504,7 +508,17 @@
           "by": "Owner"
         }
       ]
-    }
+    },
+    "_alertLabel": "How an alert is named everywhere, Telegram's title and the tablet's lines alike (owner, 2026-10-28: \"consistency everywhere\"): {number} and {priority}; without a priority, `alertLabelNoPriority`.",
+    "alertLabel": "#{number}-{priority}",
+    "alertLabelNoPriority": "#{number}",
+    "_priorities": "The priorities an alert can carry, most urgent first: the one list both sides check a priority against (the VESTA Agent's vesta_shared.result.PRIORITIES, pinned equal by its tests).",
+    "priorities": [
+      "P1",
+      "P2",
+      "P3",
+      "P4"
+    ]
   },
   "_duration": "How long something lasted, in the words BOTH apps write (architecture review round 2, 2026-10-16: the Kiosk's chartUtils.fmtDuration and the VESTA Agent's timeutil.lasting each had a rule, and the weekly report's \"Lasted\" column a third: 89s read \"1min\", \"89s\" and \"89s\"; 2h 29min \"2h 29min\", \"2h 29min\" and \"2.5h\"). The rule (owner, 2026-10-24: the unit joined to its number, \"1h 30min\", \"10min\", \"30s\"): rounded to the nearest second; under a minute in seconds, never less than \"1s\"; from a minute on rounded to the nearest minute; from an hour on \"1h 20min\"; from a day on days and WHOLE hours, the minutes dropped (\"1d 9h\" until it is 1d 10h). A half rounds up on both apps. Every case is checked by tests/oracles/duration_words.mjs (Kiosk) and by the VESTA Agent's test_duration_words.py.",
   "duration": {
@@ -643,5 +657,74 @@
   "criticalDevices": {
     "blueprint": "critical_watchdog",
     "input": "critical_entities"
+  },
+  "_asked": "A kept record that once offered buttons and was rewritten (a villa announcement or a VESTA message, one line per key): the add-on stamps `asked: true` on the rewrite (supervisor-proxy.py _announcements_with; a writer's own `asked` is dropped). The tablet reads it with the buttons it offers now: one that asked and offers none any more is FINISHED (src/messages/messagesModel.ts placeOf: an approval approved, refused or expired, a ring opened or missed; listed under Closed, owner 2026-10-29). An alert is placed by its stage instead.",
+  "_vestaMessage": "A message the VESTA Agent wrote on Telegram, kept for the tablet AS IT STANDS NOW (ticket 25 of \"One inbox\", 2026-10-28): POST /agent/v1/vesta-message, one record per thread, added or REPLACED by `key` (never removed by the Agent; the Kiosk tidies it after the records-kept days) and served to every profile at /vesta-messages. `key`: the thread (an incident — `incidentKey` with its number, the one form both sides write and read —, an approval, a snapshot, or one note); `title`, `roles` (who it is for), `to` (the \"To:\" line as Telegram shows it: the tablet shows it as written), `lead`, `body`, `status` (the lines of its Status: the history, then where it stands), `stage` (new, existing, watch, closed, or none), `mark`, `buttons` ([{label, kind, id}]: the Agent's own button kind and id, never a device or a command; a rewrite without buttons withdraws them), `at` (when the Agent drew it), `languages` ({code: {body, status}} where the Agent holds the words in another language) and `buttonKinds`: each button kind's rules for the tablet, read by both sides: `acts` (it acts or records something: never offered to, and refused from, a guest) and `confirm` (the question the tablet asks before sending it, in the confirmation box it uses for every tap that cannot be taken back). `takes` (the villa's own messages it took over: the runs of the announcements, their `run`, that this card stands for on the tablet) and `photo` (the picture as base64, JPEG or PNG; a rewrite that sends none keeps the first one's). A REPORT (ticket 20 of \"One inbox\": a note the Agent sent on its own from a scheduled job: the morning digest, the weekly and monthly reports, the owner's weekly lines, the night check's message) also names `report` (that job, as the Agent names it: the tablet lists it under Reports, not Notifications), `page` (the id of its HTML page, uploaded first to /agent/v1/fm-document: kept while a kept message names it, then the records-kept days, never with a ticket), `language` (the code of the language its words are in: English when the Agent wrote it in English) and, per other language in `languages`, its `page` too. `keptOnRewrite`: what a rewrite that names none keeps of the record it replaces (the photo, a report's page and job) \u2014 read by the Kiosk and by the Agent's test Kiosk alike; `languages` is not in it: a rewrite drops the words it no longer holds. `limits` are the longest each may be: a longer text is cut, a longer list keeps its first entries (`takes`: its newest, the runs the tablet still holds); the Agent reads them from here. An older Kiosk has no such route (404) and the Agent drops the record.",
+  "vestaMessage": {
+    "limits": {
+      "key": 200,
+      "title": 200,
+      "roles": 8,
+      "role": 60,
+      "lead": 2000,
+      "body": 16000,
+      "status": 40,
+      "statusLine": 1200,
+      "stage": 20,
+      "mark": 20,
+      "buttons": 6,
+      "label": 64,
+      "kind": 8,
+      "id": 64,
+      "languages": 12,
+      "language": 16,
+      "photoBytes": 3000000,
+      "takes": 20,
+      "to": 200,
+      "report": 80
+    },
+    "incidentKey": "incident:{number}",
+    "keptOnRewrite": ["photo", "page", "report"],
+    "buttonKinds": {
+      "a": {"acts": true, "confirm": "Approve or refuse this request? It cannot be taken back."},
+      "c": {"acts": false},
+      "i": {"acts": true},
+      "w": {"acts": true},
+      "t": {"acts": true},
+      "o": {"acts": true},
+      "d": {"acts": true}
+    }
+  },
+  "_conversation": "Talking to VESTA on the tablet (ticket 21 of \"One inbox\", 2026-10-29). ⚠️ THE KIOSK NEVER CALLS THE AGENT: a question typed on a tablet is kept in an inbox the Agent collects (GET /agent/v1/inbox?after=<seq>, held open up to `waitSeconds` until one comes: {asks: [{seq, at, profile, text}], last, first}), and VESTA's answers are written back as conversation turns (POST /agent/v1/conversation-turn), which the tablet reads at /vesta-conversation. `profile` is the signed-in profile, STAMPED BY THE KIOSK'S PROXY from the session, never sent by the page; `profiles` maps each profile to the role the Agent answers it with (owner, fm, or guest: answers only, no tool that acts, no approval). One conversation per profile, apart from every Telegram chat. A question is answered only while it is younger than `askKeptSeconds` (the inbox keeps none longer; the tablet then says no answer came); a profile asks at most `asksPerMinute` questions a minute (each costs an AI answer). A PRESS on one of VESTA's buttons (ticket 22 of \"One inbox\") is collected the same way: an ask with `press` {key, kind, id} instead of `text` (the record it was pressed on: a kept VESTA message, or a turn of the presser's own conversation; the Kiosk accepts only a button that record offers, and from a guest only one whose kind does not act: vestaMessage.buttonKinds), answered by a turn whose `answers` is the press's number (its short answer, as a Telegram toast; the tablet shows it under the button, never as a line of the conversation). A turn: `key` (the Agent's own: one record per key, a rewrite REPLACES it, so a \"being prepared\" answer becomes its result; `ask:` keys are the proxy's, for the person's own questions, and refused from the Agent), `profile`, `text`, `at`, `photos` (the camera pictures the answer carries, base64 JPEG or PNG, at most `limits.photos`), `page` (an HTML page uploaded first to /agent/v1/fm-document), `buttons` (as a VESTA message's: [{label, kind, id}]; a rewrite without them withdraws them), `answers`, `typing` (true: VESTA is answering in this conversation — Telegram's \"typing…\" — one record per profile, key `typing:<profile>`, said again every minute while it works and withdrawn (`gone`) when it stops; a tablet trusts it `typingSeconds` after it was last said) and `gone` (true: the answer was withdrawn, as a deleted Telegram message: the tablet no longer shows it). Kept the records-kept days. A SPOKEN question (ticket 23 of \"One inbox\", hold to talk): the tablet uploads a WAV of `voice.rate` Hz, 16-bit, mono, at most `voice.seconds` long (no other format: the villa's Whisper reads it as it comes); the ask then carries `voice` (the sound's name) instead of `text`, and the person's line `voice: true` with no words yet. The Agent fetches the sound ONCE (GET /agent/v1/voice/<name>, audio/wav: gone after, a voice being the person's; never kept past `askKeptSeconds`) and writes the words it heard onto that line, once: a turn {key: \"ask:<seq>\", profile, heard} (the only write the Agent may make to an `ask:` key, and only to a spoken line of that profile with no words yet). AN ANSWER SPOKEN ALOUD (ticket 24 of \"One inbox\"): the answer to a spoken question carries the villa's own voice, the text-to-speech the villa's voice settings name, asked by the Agent. The Agent uploads the sound first (POST /agent/v1/speech, its type one of `voice.answerTypes`, at most `voice.answerBytes`: {name}), then names it on the answer's turn: `speech` (the name). The tablet that asked plays it as it arrives (/vesta-speech/<name>, the profile's own turns only); the sound is kept while a turn names it. With no text-to-speech in the villa's voice settings the answer is words only, and says so. An older Kiosk has none of these routes (404): the Agent collects nothing, and keeps no sound (an answer then says it could not be spoken).",
+  "conversation": {
+    "profiles": {"owner": "owner", "ops": "fm", "guest": "guest"},
+    "waitSeconds": 25,
+    "askKeptSeconds": 600,
+    "typingSeconds": 180,
+    "asksPerMinute": 6,
+    "limits": {"key": 200, "text": 16000, "question": 2000, "photos": 4, "photoBytes": 3000000},
+    "voice": {"rate": 16000, "seconds": 30, "answerBytes": 4000000, "answerTypes": ["audio/mpeg", "audio/wav"]},
+    "keys": {"ask": "ask:", "turn": "turn:", "press": "press:", "typing": "typing:"},
+    "_turnExamples": "What a turn may hold, by example (architecture review R, 2026-10-29: the add-on's rule, the page's reading and the Agent's test copy of the add-on had each written it down apart). Both apps replay them: the Kiosk through its own door (tests/agent-interface.py), the Agent through its test copy of the add-on (tests/test_contract_turns.py). `kept`: the add-on keeps it (200) or refuses it (400). `keys`: the kinds of key, by their start: `ask` the person's own lines (the add-on's), `turn` an answer, `press` a press's short answer, `typing` VESTA answering. Profile ops: the Kiosk replays them after the checks that read its conversation.",
+    "turnExamples": [
+      {"why": "an answer in words", "kept": true, "turn": {"key": "turn:9001", "profile": "ops", "text": "The pool pump is on."}},
+      {"why": "a rewrite of that answer (a being-prepared answer becomes its result)", "kept": true, "turn": {"key": "turn:9001", "profile": "ops", "text": "Done."}},
+      {"why": "withdrawn, as a deleted Telegram message", "kept": true, "turn": {"key": "turn:9001", "profile": "ops", "gone": true}},
+      {"why": "VESTA is answering (the dots)", "kept": true, "turn": {"key": "typing:ops", "profile": "ops", "typing": true}},
+      {"why": "a press's short answer", "kept": true, "turn": {"key": "press:7", "profile": "ops", "text": "Sent.", "answers": 7}},
+      {"why": "never the person's own line", "kept": false, "turn": {"key": "ask:9", "profile": "ops", "text": "I am the person"}},
+      {"why": "a profile the agreement does not name", "kept": false, "turn": {"key": "turn:9002", "profile": "boss", "text": "x"}},
+      {"why": "nothing said", "kept": false, "turn": {"key": "turn:9003", "profile": "ops"}},
+      {"why": "only spaces", "kept": false, "turn": {"key": "turn:9004", "profile": "ops", "text": "   "}},
+      {"why": "no key", "kept": false, "turn": {"profile": "ops", "text": "x"}},
+      {"why": "a key longer than limits.key", "kept": false, "turn": {"key": "turn:99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", "profile": "ops", "text": "x"}}
+    ]
+  },
+  "_stageMarks": "What starts an alert's bottom line, by its stage (review Q 3, 2026-10-28): the VESTA Agent writes it (vesta_shared/message_format.py STAGE_ICONS, and the villa's message template it generates) and the Kiosk reads an announcement's stage back from it (src/messages/announcements.ts stageOf): new, existing, and the two ends, watch (cleared, still watched) and closed. Read from here by both: a mark changed on one side alone made a cleared alarm read as new on the tablet.",
+  "stageMarks": {
+    "new": "⚠️",
+    "existing": "⚠️ ⚙️",
+    "watch": "✅",
+    "closed": "✅"
   }
 }

@@ -450,8 +450,9 @@ console.log("\n  kept while the period changes, cleared for another reading");
   const attr = (el, k) => props(el).properties.find((p) => ts.isJsxAttribute(p) && p.name.getText() === k)?.initializer?.expression?.getText();
   ck("the chart on two scales has no slider; every one-line chart has one",
      dual.length === 1 && spread(dual[0]).length === 0 && !/filter=/.test(dual[0].getText())
-       && charts.length === 3 && charts.filter((el) => el !== dual[0]).every((el) => ["filter", "lines", "window"].every((k) => attr(el, k) === `f.${k}`))
-       && named("filtered").length === 2 && named("filtered").every((c) => ts.isVariableDeclaration(c.parent) && c.parent.name.getText() === "f"),
+       // one drawing of a one-line chart (oneLine: one series, and each of several), and the chart on two scales
+       && charts.length === 2 && charts.filter((el) => el !== dual[0]).every((el) => ["filter", "lines", "window"].every((k) => attr(el, k) === `f.${k}`))
+       && named("filtered").length === 1 && named("filtered").every((c) => ts.isVariableDeclaration(c.parent) && c.parent.name.getText() === "f"),
      charts.map((el) => ["filter", "lines", "window"].map((k) => attr(el, k))));
 }
 

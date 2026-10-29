@@ -89,13 +89,13 @@ ck("  ...a profile that may not open a device does not count it", some.attention
 ck("a jammed lock alone is 'danger' (red on the map, red here)",
    villaHealthFrom(groupAttention(items.filter((i) => i.entityId === "lock.shed"))).level === "danger");
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
-const hud = src("components/hud/HUD.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
+const hud = src("components/hud/HUD.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/MessagesTab.tsx") + src("components/cockpit/IssueCard.tsx"));
 ck("the top-bar badge, the phone menu's \"Cockpit (N)\" and the Cockpit list all read useVillaAttention's attentionGroups (one row per device, 2.496.246)",
    /const \{ attentionGroups, health \} = useVillaAttention\(\);/.test(hud) && /formatCountBadge\(attentionGroups\.length\)\}/.test(hud)
    && /Cockpit\{attentionGroups\.length > 0 \? ` \(\$\{formatCountBadge\(attentionGroups\.length\)\}\)` : ""\}/.test(hud)
    && !/attentionItems/.test(hud)
    // the Cockpit's list: one card per row of that same view (config/cockpitIssues; its count by value: fault_confirm)
    && /const view = useVillaAttention\(\);/.test(src("components/cockpit/useVillaAttention.ts"))
-   && /const \{ open, watched \} = useCockpitIssues\(\);/.test(cockpit) && /Open issues\{open\.length > 0 \? ` \(\$\{open\.length\}\)` : ""\}/.test(cockpit));
+   && /const \{ open, watched \} = useCockpitIssues\(\);/.test(cockpit) && /title="Open issues" count=\{open\.length\}/.test(cockpit));
 
 done("✅ a red badge is always in Needs attention");

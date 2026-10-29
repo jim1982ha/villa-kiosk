@@ -198,10 +198,249 @@ async def main() -> None:
     ck("  ...and the published window says it: repairs 0 (for ever)", body.get("retention") == {"clearedDays": 90, "repairedDays": 0, "recordsDays": 0},
        body.get("retention"))
 
+    # ── /announcements: the villa's announcements, kept by the add-on (2.496.557, 2026-10-28) ──────────────────────
+    # Driven through the add-on's own recorder (what its listener calls for each bus event) and read over HTTP.
+    print("  /announcements:")
+    app = client.server.app
+    ev = lambda msg, at=None, et=proxy.ANNOUNCEMENT_EVENT: {
+        "event_type": et, "data": {"message": msg}, **({"time_fired": at} if at else {})}
+    status, _ = await call("GET", "/announcements", {})
+    ck("no session: refused", status == 401, status)
+    status, body = await call("GET", "/announcements", guest)
+    ck("never written: a guest reads none, last 0", status == 200 and body == {"announcements": [], "last": 0, "first": 1, "kept": []},
+       (status, body))
+    ck("the event it keeps is named in the one table", proxy.ANNOUNCEMENT_EVENT == proxy.HA_COMMANDS.get("announcement")
+       and bool(proxy.ANNOUNCEMENT_EVENT) and proxy.ANNOUNCEMENT_EVENT not in proxy.ALLOWED_EVENT_TYPES)
+    await proxy._record_announcement(app, ev("<b>One</b>"))
+    await proxy._record_announcement(app, ev("<b>Other</b>", et="telegram_text"))
+    await proxy._record_announcement(app, ev("   "))
+    status, body = await call("GET", "/announcements", ops)
+    ck("an announcement is kept; another event type and an empty text are not",
+       [a["message"] for a in body["announcements"]] == ["<b>One</b>"] and body["last"] == 1, body)
+
+    async def later():
+        await asyncio.sleep(0.3)
+        await proxy._record_announcement(app, ev("<b>Two</b>"))
+    t0 = asyncio.get_running_loop().time()
+    (status, body), _ = await asyncio.gather(call("GET", "/announcements?after=1", guest), later())
+    waited = asyncio.get_running_loop().time() - t0
+    ck("a read after the last one waits for the next and answers it at once",
+       status == 200 and [a["message"] for a in body["announcements"]] == ["<b>Two</b>"] and body["last"] == 2
+       and waited < 5, (status, body, round(waited, 2)))
+    proxy.ANNOUNCEMENT_WAIT_S = 0.2
+    status, body = await call("GET", "/announcements?after=2", guest)
+    ck("  ...and answers none when nothing came", status == 200 and body == {"announcements": [], "last": 2, "first": 1, "kept": [1, 2]}, body)
+    proxy.ANNOUNCEMENT_WAIT_S = 5
+    t0 = asyncio.get_running_loop().time()
+    status, body = await call("GET", "/announcements?after=9", guest)
+    waited = asyncio.get_running_loop().time() - t0
+    ck("  ...but at once when the page holds more than the store (it started again)", body["announcements"] == []
+       and body["last"] == 2 and waited < 2, (body, round(waited, 2)))
+    proxy.ANNOUNCEMENT_WAIT_S = 0.2
+    status, _ = await call("GET", "/announcements?after=x", guest)
+    ck("  ...and refuses an after that is no number", status == 400, status)
+    old = "2020-01-01T00:00:00+00:00"
+    await proxy._record_announcement(app, ev("<b>Old</b>", at=old))
+    status, body = await call("PUT", "/device-config", owner, {"config": {"recordsKeptDays": 30}})
+    status, body = await call("GET", "/announcements", guest)
+    ck("one older than the records-kept days is no longer kept",
+       [a["message"] for a in body["announcements"]] == ["<b>One</b>", "<b>Two</b>"], body)
+    await proxy._record_announcement(app, ev("<b>Older</b>", at=old))
+    ck("  ...nor written: the store is tidied as each one is kept (review Q 4: the feed's one tidy)",
+       "<b>Older</b>" not in [a.get("message") for a in on_disk("announcements.json")], on_disk("announcements.json"))
+    status, body = await call("PUT", "/device-config", owner, {"config": {"recordsKeptDays": 0}})
+    status, body = await call("GET", "/announcements", guest)
+    ck("  ...and it is deleted, not hidden: keeping for ever afterwards does not bring it back",
+       "<b>Old</b>" not in [a["message"] for a in body["announcements"]], body)
+    await proxy._record_announcement(app, ev("<b>Old</b>", at=old))
+    status, body = await call("GET", "/announcements", guest)
+    # numbered on from the last number given (4 was the tidied "Older"): never a number a page already holds
+    ck("  ...and with records kept for ever, it is", "<b>Old</b>" in [a["message"] for a in body["announcements"]]
+       and body["last"] == 5, body)
+    (DATA / "announcements.json").write_text("{not json")
+    await proxy._record_announcement(app, ev("<b>After</b>"))
+    ck("a corrupt store starts again with the next one", on_disk("announcements.json")[0]["message"] == "<b>After</b>",
+       (DATA / "announcements.json").read_text()[:80])
+    # review Q round 2: what a page holds is what the add-on keeps, and a number is never given twice
+    ck("  ...numbered on from the last given, never from 1: an open page takes it as news, not a store started again",
+       on_disk("announcements.json")[0]["seq"] == 6, on_disk("announcements.json"))
+    (DATA / "announcements.json").write_text("[]")                     # every one tidied away
+    await proxy._record_announcement(app, ev("<b>Next</b>"))
+    status, body = await call("GET", "/announcements", guest)
+    ck("  ...nor when every one was tidied away", [a["seq"] for a in body["announcements"]] == [7] and body["last"] == 7, body)
+    ck("each answer says the first number still kept: a page drops what it holds below it", body["first"] == 7, body)
+
+    # ── one line per key, with its photo (2.496.558, 2026-10-28) ────────────────────────────────────────────────────
+    print("  /announcements, one line per key, with its photo:")
+    media = TMP / "media"
+    (media / "cams").mkdir(parents=True)
+    proxy.MEDIA_DIR = str(media)
+    (media / "cams" / "ring1.jpg").write_bytes(proxy._JPEG_MAGIC + b"first ring")
+    kev = lambda msg, **more: {"event_type": proxy.ANNOUNCEMENT_EVENT, "data": {"message": msg, **more}}
+    (DATA / "announcements.json").write_text("[]")
+    await proxy._record_announcement(app, kev("<b>Ring</b>", key="run-1", photo=f"{media}/cams/ring1.jpg",
+                                               buttons=[[["🔓 Unlock", "/unlock_gate"]]]))
+    status, body = await call("GET", "/announcements", owner)
+    ring = body["announcements"][0]
+    photo_file = DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / ring.get("photo", "none")
+    ck("the ring is kept with its key, its button and a copy of its photo",
+       ring.get("key") == "run-1" and ring.get("buttons") == [[["🔓 Unlock", "/unlock_gate"]]]
+       and photo_file.is_file() and photo_file.read_bytes().endswith(b"first ring"), ring)
+    (media / "cams" / "ring1.jpg").write_bytes(proxy._JPEG_MAGIC + b"second ring")
+    r = await client.get(f"/announcement-photo/{ring.get('photo')}", headers=owner)
+    ck("  ...served to the owner as it was when the ring came, even after the file changed",
+       r.status == 200 and (await r.read()).endswith(b"first ring") and r.headers.get("Content-Type") == "image/jpeg",
+       r.status)
+    r = await client.get(f"/announcement-photo/{ring.get('photo')}", headers=guest)
+    status, gbody = await call("GET", "/announcements", guest)
+    ck("  ...a guest sees it while it is the current notification (owner, 2026-10-28)",
+       r.status == 200 and gbody["announcements"][0].get("photo") == ring.get("photo"), (r.status, gbody))
+    await proxy._record_announcement(app, kev("<b>Weekly test</b>"))
+    r = await client.get(f"/announcement-photo/{ring.get('photo')}", headers=guest)
+    status, gbody = await call("GET", "/announcements", guest)
+    ck("  ...but not once another notification came after it: 403, and its list names no photo",
+       r.status == 403 and all("photo" not in a for a in gbody["announcements"]), (r.status, gbody))
+    ck("  ...nor once it is older than the current notification's time, even as the newest",
+       proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + proxy.ANNOUNCEMENT_CURRENT_S + 1) is None
+       and proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 1) == ring.get("photo"))
+    ck("  ...as long as the ring holds the screen: a longer \"Ring shown for\" keeps it current (architecture review 2026-10-30)",
+       proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 90, 120) == ring.get("photo")
+       and proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 121, 120) is None)
+    was = proxy.DEVICE_CONFIG.read
+    for stored, want in (({"ringShownForS": 120}, 120), ({"ringShownForS": 30}, 60), ({"ringShownForS": "x"}, 60), ({}, 60)):
+        proxy.DEVICE_CONFIG.read = lambda stored=stored: stored
+        ck(f"  ...the villa's \"Ring shown for\" read from its settings ({stored}): current for {want}s",
+           proxy._ring_current_s() == want, proxy._ring_current_s())
+    proxy.DEVICE_CONFIG.read = was
+    await proxy._record_announcement(app, kev("<b>Opened at 09:03</b>", key="run-1"))
+    status, body = await call("GET", "/announcements", owner)
+    same = [a for a in body["announcements"] if a.get("key") == "run-1"]
+    ck("the rewrite REPLACES the ring (one line), comes as a newer one, has no button, keeps the first photo",
+       len(same) == 1 and same[0]["message"] == "<b>Opened at 09:03</b>" and same[0]["seq"] > ring["seq"]
+       and "buttons" not in same[0] and same[0].get("photo") == ring.get("photo"), body)
+    await proxy._record_announcement(app, kev("<b>Other</b>"))
+    await proxy._record_announcement(app, kev("<b>Other</b>"))
+    status, body = await call("GET", "/announcements", owner)
+    ck("  ...while two announcements with no key stay two lines",
+       [a["message"] for a in body["announcements"]].count("<b>Other</b>") == 2, body)
+    # (A photo path outside the media folder, or not a picture: the private security suite.)
+    pending = DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / ("f" * 32 + ".jpg")
+    pending.write_bytes(proxy._JPEG_MAGIC)
+    proxy._sweep_announcement_photos([], [])
+    ck("a copy made a moment ago, its record not yet written, is not swept as an orphan", pending.exists())
+    pending.unlink()
+    proxy.ANNOUNCEMENT_PHOTO_GRACE_S = 0   # the sweep's grace for a copy not yet recorded: none here
+    (media / "cams" / "ring2.jpg").write_bytes(proxy._JPEG_MAGIC + b"new ring")
+    await proxy._record_announcement(app, kev("<b>Ring again</b>", key="run-1", photo=f"{media}/cams/ring2.jpg"))
+    ck("a rewrite bringing its own photo: the first copy is deleted", not photo_file.exists(),
+       sorted(p.name for p in (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR).iterdir()))
+    (DATA / "announcements.json").write_text(json.dumps(
+        [{**a, "at": old} for a in json.loads((DATA / "announcements.json").read_text())]))
+    status, body = await call("PUT", "/device-config", owner, {"config": {"recordsKeptDays": 30}})
+    status, body = await call("GET", "/announcements", owner)
+    left = sorted(p.name for p in (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR).iterdir())
+    ck("past the records-kept days the announcements go, and their photos with them",
+       body["announcements"] == [] and left == [], (body, left))
+
+    # ── a button pressed on the tablet (ticket 15 of "One inbox", 2026-10-28) ──────────────────────────────────────
+    print("  /announcement-press, a ring's button pressed on the tablet:")
+    fired = []
+
+    async def fire(_app, data):
+        fired.append(data)
+        return True
+
+    proxy._fire_press = fire
+    ck("the one event it fires is named in the one table, and no page may subscribe to it",
+       proxy.ANNOUNCEMENT_PRESS == proxy.HA_COMMANDS.get("press") and bool(proxy.ANNOUNCEMENT_PRESS)
+       and proxy.ANNOUNCEMENT_PRESS not in proxy.ALLOWED_EVENT_TYPES)
+    await proxy._record_announcement(app, kev("<b>Ring</b>", key="run-2", buttons=[[["🔓 Unlock", "/unlock_gate"]]]))
+    press = {"key": "run-2", "command": "/unlock_gate"}
+    status, _ = await call("POST", "/announcement-press", {}, press)
+    ck("no session: 401, nothing fired", status == 401 and fired == [], (status, fired))
+    status, body = await call("POST", "/announcement-press", guest, press)
+    ck("a guest presses a button the ring offers: the press signal goes with its command and the ring's key",
+       status == 200 and fired == [press], (status, body, fired))
+    fired.clear()
+    for who, wrong in (("another command", {"key": "run-2", "command": "/open_everything"}),
+                       ("another ring's key", {"key": "run-1", "command": "/unlock_gate"}),
+                       ("a key no ring has", {"key": "run-9", "command": "/unlock_gate"}),
+                       ("no key", {"command": "/unlock_gate"}),
+                       ("a command that is not a string", {"key": "run-2", "command": ["/unlock_gate"]}),
+                       ("more than the button says", {**press, "extra": "x"})):
+        status, _ = await call("POST", "/announcement-press", guest, wrong)
+        ck(f"  ...refused for {who}, nothing fired", status in (400, 409) and fired == [], (status, fired))
+    status, _ = await call("POST", "/announcement-press", owner, {"key": "run-2", "command": "/open_everything"})
+    ck("  ...and the owner too may press only what a ring offers", status == 409 and fired == [], (status, fired))
+    await proxy._record_announcement(app, kev("<b>Opened at 09:05</b>", key="run-2"))
+    status, _ = await call("POST", "/announcement-press", guest, press)
+    ck("once the rewrite withdrew the button (answered, opened, timed out): 409, nothing fired",
+       status == 409 and fired == [], (status, fired))
+    await proxy._record_announcement(app, kev("<b>Ring</b>", key="run-3", buttons=[[["🔓 Unlock", "/unlock_gate"]]]))
+
+    async def unreachable(_app, _data):
+        return False
+
+    proxy._fire_press = unreachable
+    status, _ = await call("POST", "/announcement-press", guest, {"key": "run-3", "command": "/unlock_gate"})
+    ck("the villa's system not reached: 502, so the tablet says it was not sent", status == 502, status)
+
+    # ── a message erased: held, then the superadmin code (owner, 2026-10-29: a stale card is removed as a Facility
+    # record is, never by a button) ─────────────────────────────────────────────────────────────────────────────────
+    print("  /message-erase, a kept message removed with the superadmin code:")
+    _, body = await call("GET", "/announcements", owner)
+    gone = body["announcements"][0]["seq"]
+    erase = {"feed": "villa", "seq": gone}
+    proxy._configured_superadmin_pin = lambda: ""
+    status, _ = await call("POST", "/message-erase", owner, {**erase, "elevation": proxy._mint_elevation()})
+    ck("no superadmin code configured: 403 even with a token, nothing removed", status == 403, status)
+    proxy._configured_superadmin_pin = lambda: "123456"
+    status, _ = await call("POST", "/message-erase", {}, {**erase, "elevation": proxy._mint_elevation()})
+    ck("no session: 401", status == 401, status)
+    status, _ = await call("POST", "/message-erase", owner, erase)
+    ck("no fresh authorisation: 403", status == 403, status)
+    status, _ = await call("POST", "/message-erase", owner, {**erase, "elevation": "not-a-token"})
+    ck("  ...nor a made-up one", status == 403, status)
+    _, still = await call("GET", "/announcements", owner)
+    ck("  ...the message is still kept", any(a["seq"] == gone for a in still["announcements"]), still)
+    token = proxy._mint_elevation()
+    status, body = await call("POST", "/message-erase", guest, {**erase, "elevation": token})
+    _, after = await call("GET", "/announcements", owner)
+    ck("with a fresh authorisation (any profile: the code is the gate): 200, and it is no longer kept",
+       status == 200 and all(a["seq"] != gone for a in after["announcements"]), (status, body, after))
+    ck("  ...every read names what is kept, so a page left open drops it too",
+       sorted(after.get("kept") or []) == sorted(a["seq"] for a in after["announcements"]), after)
+    status, _ = await call("POST", "/message-erase", owner, {**erase, "elevation": token})
+    ck("  ...the authorisation is spent: the same token again is 403", status == 403, status)
+    status, _ = await call("POST", "/message-erase", owner, {**erase, "elevation": proxy._mint_elevation()})
+    ck("a message no longer kept: 404", status == 404, status)
+    status, _ = await call("POST", "/message-erase", owner, {"feed": "elsewhere", "seq": 1, "elevation": proxy._mint_elevation()})
+    ck("a feed that is not one of the two: 400", status == 400, status)
+    await proxy.MESSAGED.add(lambda seq: {"seq": seq, "key": "note:1", "at": proxy._now_iso(), "title": "Old report",
+                                          "body": "Still open"}, proxy._announcements_with)
+    _, vm = await call("GET", "/vesta-messages", owner)
+    seq = vm["messages"][-1]["seq"]
+    status, _ = await call("POST", "/message-erase", owner, {"feed": "vesta", "seq": seq, "elevation": proxy._mint_elevation()})
+    _, vm = await call("GET", "/vesta-messages", owner)
+    ck("VESTA's messages are erased the same way", status == 200 and all(m["seq"] != seq for m in vm["messages"]), (status, vm))
+
     await client.close()
 
 
 asyncio.run(main())
+
+# ── a record that asked, rewritten: the add-on remembers it asked (owner, 2026-10-29: finished goes to Closed) ───────
+print("\n  a record that asked, rewritten:")
+ring = {"seq": 1, "key": "R1", "message": "Visitor", "buttons": [["Unlock", "/unlock"]]}
+opened = proxy._announcements_with([ring], {"seq": 2, "key": "R1", "message": "Opened at 14:17"})
+ck("a rewrite of one that offered buttons is stamped `asked` (the ring opened or missed, the approval answered)",
+   opened == [{"seq": 2, "key": "R1", "message": "Opened at 14:17", "asked": True}], opened)
+again = proxy._announcements_with(opened, {"seq": 3, "key": "R1", "message": "Opened (edited)"})
+ck("  ...and keeps it on every later rewrite", again[-1].get("asked") is True, again)
+note = proxy._announcements_with([{"seq": 1, "key": "N1", "message": "Note"}], {"seq": 2, "key": "N1", "message": "Note 2"})
+fresh = proxy._announcements_with([], {"seq": 1, "key": "Q", "message": "Ask", "asked": True, "buttons": [["Ok", "/ok"]]})
+ck("  ...never on a record that never asked, and never taken from the writer",
+   "asked" not in note[-1] and "asked" not in fresh[-1], (note, fresh))
 
 # ── how a closed fault was closed: the agreement's histories (architecture review, 2026-10-15) ───────────────────
 # agent-contract.json `ticketUpdate.histories`: the cases tests/oracles/fault_close.mjs drives through the app's

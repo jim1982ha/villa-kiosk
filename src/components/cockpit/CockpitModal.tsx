@@ -11,7 +11,7 @@
 
 import Window from "@/components/common/Window";
 import { useMemo } from "react";
-import { LayoutDashboard, RefreshCw } from "lucide-react";
+import { Inbox, RefreshCw } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import type { Doors } from "@/auth/doors";
@@ -22,7 +22,7 @@ import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import FacilitySections, { FACILITY_TABS, type FacilityTab } from "@/components/fm/FacilitySections";
 import { useFacilityLiveView, useFmData } from "@/fm/FmDataContext";
 import { fmRecordLine, heldLine } from "@/fm/fmSave";
-import CockpitOverview from "./CockpitOverview";
+import MessagesTab from "./MessagesTab";
 import Tip from "@/components/common/Tip";
 import { countOf } from "@/utils/countOf";
 
@@ -36,32 +36,35 @@ export interface CockpitModalProps {
    *  Tickets and Back from a device returns to the tab it left. */
   tab: CockpitTab;
   onTab: (tab: CockpitTab) => void;
-  /** The Overview opens "Raise a fault" pointed at this device (a device
+  /** Messages opens "Open a ticket" pointed at this device (a device
    *  panel's wrench); the request is dropped once the form has it. */
   reportFaultFor?: string;
   onFaultFormOpened?: () => void;
-  /** The Tickets tab opens this record's form (an Overview card's "Edit ticket"). */
+  /** The Tickets tab opens this record's form (an open issue's "Edit ticket"). */
   editTicket?: string;
   onEditTicket: (ticketId: string) => void;
   onTicketEditOpened?: () => void;
-  /** A guest's "Report a problem" (the Overview). */
+  /** A guest's "Report a problem" (Messages). */
   onReportProblem: () => void;
-  /** The devices whose open faults the Overview marks and scrolls to (a device window's warning). */
+  /** The devices whose open issue Messages opens (a device window's warning). */
   focusFaults?: readonly string[];
 }
 
-/** The Cockpit's own view, then the Facility tabs (2.496.273: the Facility
- *  window merged in — one top-bar button, one window, the same workflows). */
-export type CockpitTab = "overview" | FacilityTab;
-const OVERVIEW_TAB: ModalTab<CockpitTab> = { id: "overview", label: "Overview", icon: LayoutDashboard };
+/** Messages, then the Facility tabs (2.496.273: the Facility window merged in — one top-bar button, one window, the
+ *  same workflows). Messages replaced the Overview (ticket 17 of "One inbox", owner 2026-10-28): its open issues are
+ *  Messages › Open issues. */
+export type CockpitTab = "messages" | FacilityTab;
+// ⚠️ "INBOX" (owner, 2026-10-29: "rename the Messages tab to something more consistent"): one word beside Tickets,
+// Schedule, Recap, Spend — its issues, notifications and reports, VESTA's conversation having its own window
+const MESSAGES_TAB: ModalTab<CockpitTab> = { id: "messages", label: "Inbox", icon: Inbox };
 
 export default function CockpitModal({
   onClose, onOpenEntity, doors, tab, onTab, reportFaultFor, onFaultFormOpened,
   editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults,
 }: CockpitModalProps) {
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
-  const tabs: ModalTab<CockpitTab>[] = doors.facility ? [OVERVIEW_TAB, ...FACILITY_TABS] : [OVERVIEW_TAB];
-  const shownTab: CockpitTab = doors.facility ? tab : "overview";
+  const tabs: ModalTab<CockpitTab>[] = doors.facility ? [MESSAGES_TAB, ...FACILITY_TABS] : [MESSAGES_TAB];
+  const shownTab: CockpitTab = doors.facility ? tab : "messages";
   // The maintenance record is watched live WHILE THIS WINDOW IS OPEN, whichever tab shows (useFacilityLiveView: every
   // STORE_ACTIVE_MS instead of the heartbeat). ⚠️ ONE REGISTRATION, THE WINDOW'S (architecture review, 2026-10-19):
   // it was the Facility tabs' alone, so the Overview's "Open issues" — the list the (i) promised was "read again every
@@ -88,6 +91,9 @@ export default function CockpitModal({
         {/* Updates Home Assistant has waiting (firmware, add-ons — this one included): in the header, drawn like
             Advanced Settings' header buttons, for the profiles holding `doors.updates` (owner, 2026-10-14). It only
             SAYS so — nothing to press; it used to be a line at the bottom of the Overview. */}
+        {/* the updates waiting, at the right as Advanced Settings' header buttons are (the gear to Settings › Messages
+            was removed: owner, 2026-10-29) */}
+        <div className="modal-header-actions">
         {updatesAvailable > 0 && (
           <Tip text={updatesTip(updates)}>
             <span className="icon-btn header-icon-btn header-icon-badge" role="status"
@@ -97,6 +103,7 @@ export default function CockpitModal({
             </span>
           </Tip>
         )}
+        </div>
       </div>
       {tabs.length > 1 && <ModalTabs tabs={tabs} active={shownTab} onSelect={onTab} label="Cockpit sections" />}
 
@@ -104,11 +111,11 @@ export default function CockpitModal({
         {saveError && <div className="fm-banner warn">{saveError}</div>}
         {recordLine && <p className="muted body-text">{recordLine}</p>}
         {held && <p className="muted body-text">{held}</p>}
-        {shownTab !== "overview" ? (
+        {shownTab !== "messages" ? (
           <FacilitySections tab={shownTab} onOpenEntity={onOpenEntity} editTicket={editTicket}
             onTicketEditOpened={onTicketEditOpened} />
         ) : (
-          <CockpitOverview onOpenEntity={onOpenEntity} doors={doors} reportFaultFor={reportFaultFor}
+          <MessagesTab onOpenEntity={onOpenEntity} doors={doors} reportFaultFor={reportFaultFor}
             onFaultFormOpened={onFaultFormOpened} onEditTicket={onEditTicket} onReportProblem={onReportProblem}
             focusFaults={focusFaults} />
         )}

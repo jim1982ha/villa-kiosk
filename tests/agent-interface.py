@@ -16,7 +16,9 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import os
 import shutil
+import struct
 import sys
 import tempfile
 import time
@@ -413,6 +415,18 @@ async def main() -> None:
     ck("  ...and a setting of another shape is an empty list, never a refused beat",
        r.status == 200 and (await r.json()).get("unavailableByDesign") == [])
     cfg_file.unlink(missing_ok=True)
+    # ⚠️ THE KIOSK OWNS THE VILLA'S MAINTENANCE MODE (owner, 2026-10-29): the Agent reads it in every beat's answer
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    unset = (await r.json()).get("maintenance")
+    cfg_file.write_text(json.dumps({"maintenanceMode": True}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    on = (await r.json()).get("maintenance")
+    cfg_file.write_text(json.dumps({"maintenanceMode": "yes"}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    odd = (await r.json()).get("maintenance")
+    ck("the beat's answer carries the villa's maintenance mode, as the agreement declares it: on only when stored true",
+       "maintenance" in contract_answer and on is True and unset is False and odd is False, (unset, on, odd))
+    cfg_file.unlink(missing_ok=True)
     presence = TMP / "data" / "agent-presence.json"
     presence.write_text(json.dumps({"last_seen": time.time() - 6 * 60, "status": None, "cadence": beat["cadence"]}))
     status, body = await jget("/agent-status", cookie("ops"))
@@ -487,6 +501,490 @@ async def main() -> None:
     ck("rooms: the floor plan's and the ones people added; fitted points are not rooms",
        names == [("Living", "floor_plan"), ("Rooftop", "added")], names)
     ck("ha_areas says the areas were read", body.get("ha_areas") is True)
+
+    # ── VESTA's messages as they stand (ticket 25 of "One inbox", 2026-10-28) ────────────────────────────────────
+    print("\n  VESTA's messages, kept for the tablet:")
+    import base64
+    cfg_file = TMP / "data" / "device-config.json"
+    cfg_file.unlink(missing_ok=True)
+    msgs = TMP / "data" / "vesta-messages.json"
+    msgs.unlink(missing_ok=True)
+    sent = {"key": "incident:90", "title": "#90-P2 (existing)", "roles": ["Owner", "FM"], "to": "Owner & FM", "lead": "Intrusion suspected",
+            "body": "Turn on Siren?", "status": ["- Alert sent", "⚠️ Waiting for approval"], "stage": "existing",
+            "buttons": [{"label": "Done", "kind": "i", "id": "90:done"}],
+            "takes": ["RUN-A"],
+            "languages": {"id": {"body": "Nyalakan sirene?", "status": ["- Peringatan terkirim"]}}}
+    r = await post("/agent/v1/vesta-message", json=sent)
+    ck("no token: refused, nothing kept", r.status == 401 and not msgs.exists(), r.status)
+    r = await post("/agent/v1/vesta-message", headers=bearer("wrong-token"), json=sent)
+    ck("  ...a wrong token too", r.status == 401, r.status)
+    r = await post("/agent/v1/vesta-message", headers=cookie("owner"), json=sent)
+    ck("  ...and a signed-in owner's cookie is no token", r.status == 401, r.status)
+    reset_lockout()
+    r = await post("/agent/v1/vesta-message", headers=bearer(), json=sent)
+    answer = await r.json()
+    ck("the Agent's push is kept, numbered", r.status == 200 and answer == {"ok": True, "seq": 1}, answer)
+    status, body = await jget("/vesta-messages", cookie("guest"))
+    got = (body or {}).get("messages", [None])[0] or {}
+    ck("  ...and every profile reads it as it was pushed (a guest too)",
+       status == 200 and body["last"] == 1 and {k: v for k, v in got.items() if k not in ("seq", "at")} == sent, body)
+    status, _ = await jget("/vesta-messages", {})
+    ck("  ...but a page with no session reads nothing", status == 401, status)
+    jpeg = proxy._JPEG_MAGIC + b"snapshot"
+    r = await post("/agent/v1/vesta-message", headers=bearer(),
+                   json={**sent, "body": "Camera snapshot", "photo": base64.b64encode(jpeg).decode()})
+    status, body = await jget("/vesta-messages", cookie("ops"))
+    one = body["messages"]
+    ck("a rewrite of the same key REPLACES the record (one line), numbered anew, with its photo",
+       r.status == 200 and len(one) == 1 and one[0]["body"] == "Camera snapshot" and one[0]["seq"] == 2
+       and (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / one[0].get("photo", "none")).read_bytes() == jpeg, body)
+    r = await post("/agent/v1/vesta-message", headers=bearer(),
+                   json={**sent, "status": ["- Alert sent", "- Reminder sent", "✅ Done"], "buttons": []})
+    status, body = await jget("/vesta-messages", cookie("ops"))
+    one = body["messages"]
+    ck("  ...a later rewrite with no photo keeps the first one's; with no buttons it withdraws them",
+       len(one) == 1 and one[0].get("photo") and "buttons" not in one[0] and one[0]["status"][-1] == "✅ Done", body)
+    status, gbody = await jget("/vesta-messages", cookie("guest"))
+    r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    ck("  ...a guest sees that photo while it is the current notification, as a ring's (owner, 2026-10-28)",
+       gbody["messages"][0].get("photo") == one[0]["photo"] and r.status == 200, (r.status, gbody))
+    # architecture review, 2026-10-30: current as long as the ring holds the screen (the villa's "Ring shown for")
+    held, read = proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read
+    proxy.ANNOUNCEMENT_CURRENT_S = 0
+    proxy.DEVICE_CONFIG.read = lambda: {}
+    await asyncio.sleep(1.1)
+    r_gone = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    proxy.DEVICE_CONFIG.read = lambda: {"ringShownForS": 120}
+    r_held = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read = held, read
+    ck("  ...current for as long as the villa's \"Ring shown for\" holds it on screen (403 past it, 200 within it)",
+       r_gone.status == 403 and r_held.status == 200, (r_gone.status, r_held.status))
+    proxy.ANNOUNCEMENT_PHOTO_GRACE_S = 0       # the sweep's grace for a copy not yet recorded: none here
+    soon = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() + 5))
+    await proxy._record_announcement(None, {"event_type": proxy.ANNOUNCEMENT_EVENT, "time_fired": soon,
+                                            "data": {"message": "<b>Other</b>"}})
+    ck("  ...a villa announcement's sweep leaves a message's photo alone (one folder, two feeds)",
+       (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / one[0]["photo"]).is_file())
+    r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    ck("  ...and a newer villa announcement takes the current place: the guest's photo is 403", r.status == 403, r.status)
+    await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "note:1", "title": "Morning digest", "body": "New"})
+    status, gbody = await jget("/vesta-messages", cookie("guest"))
+    r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    ck("  ...but not once a newer message came: the list names no photo and the file is 403",
+       r.status == 403 and all("photo" not in m for m in gbody["messages"]), (r.status, gbody))
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    ck("  ...the owner still sees it, and two keys are two lines", len(body["messages"]) == 2
+       and body["messages"][0].get("photo"), body)
+    for bad in ({"title": "no key"}, {"key": "k"}, {"key": "k", "buttons": "x"}, [1], "text"):
+        r = await post("/agent/v1/vesta-message", headers=bearer(), json=bad)
+        ck(f"a push of {str(bad)[:28]!r} is refused (400), nothing kept", r.status == 400, r.status)
+    for photo in ("not base64 !!", base64.b64encode(b"not a picture").decode(), base64.b64encode(b"x" * 10).decode()):
+        await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "bad-photo", "title": "t", "photo": photo})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    bad_photo = next(m for m in body["messages"] if m["key"] == "bad-photo")
+    ck("a photo that is not a picture is dropped, the message kept without it", "photo" not in bad_photo, bad_photo)
+    r = await post("/agent/v1/vesta-message", headers=bearer(), json={
+        "key": "k" * 500, "title": "T" * 900, "roles": ["r"] * 30, "status": ["s"] * 90,
+        "buttons": [{"label": "b", "kind": "i", "id": str(n)} for n in range(20)] + [{"label": "no id"}, "x"]})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    cut = body["messages"][-1]
+    lim = proxy.VESTA_MESSAGE_LIMITS
+    ck("every field is cut at the agreement's limit (key, title, lists)",
+       r.status == 200 and len(cut["key"]) == lim["key"] and len(cut["title"]) == lim["title"]
+       and len(cut["roles"]) == lim["roles"] and len(cut["status"]) == lim["status"]
+       and len(cut["buttons"]) == lim["buttons"], {k: len(v) for k, v in cut.items() if hasattr(v, "__len__")})
+    r = await client.delete("/agent/v1/vesta-message", headers=bearer())
+    r2 = await client.delete("/agent/v1/vesta-message?key=incident:90", headers=bearer())
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    ck("the Agent has no way to remove one: no such route, every record still kept",
+       r.status in (404, 405) and r2.status in (404, 405) and any(m["key"] == "incident:90" for m in body["messages"]),
+       (r.status, r2.status))
+    # tickets 26-27 of "One inbox": the run that announced a villa message, which VESTA's card names when it takes it over
+    await proxy._record_announcement(None, {"event_type": proxy.ANNOUNCEMENT_EVENT, "context": {"id": "RUN-A"},
+                                            "data": {"message": "<b>Door unlocked</b>"}})
+    status, body = await jget("/announcements", cookie("guest"))
+    ck("the villa's announcement names the run that announced it (the event's context), as VESTA's card names it",
+       body["announcements"][-1].get("run") == "RUN-A", body["announcements"][-1])
+    cfg_file.write_text(json.dumps({"recordsKeptDays": 30}))
+    old = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - 40 * 86400))
+    await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "old-one", "title": "Old", "at": old})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    ck("kept for the records-kept days only: an older one is gone with the next read",
+       "old-one" not in [m["key"] for m in body["messages"]] and "incident:90" in [m["key"] for m in body["messages"]], body)
+    cfg_file.write_text(json.dumps({"recordsKeptDays": 0}))
+    await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "old-one", "title": "Old", "at": old})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    ck("  ...and with records kept for ever, it is kept", "old-one" in [m["key"] for m in body["messages"]], body)
+    cfg_file.unlink(missing_ok=True)
+
+    # ── a report and its page (ticket 20 of "One inbox", 2026-10-29) ─────────────────────────────────────────────
+    print("\n  A report, kept with its page:")
+    page = b"<!DOCTYPE html><html><body>Weekly</body></html>"
+    pages = {}
+    for name in ("page-en-0001", "page-fr-0001", "page-loose-01"):
+        r = await post(f"/agent/v1/fm-document?id={name}", headers=bearer(), data=page)
+        pages[name] = r.status
+    r = await post("/agent/v1/fm-document?id=page-en-0002", data=page)
+    ck("the Agent uploads a page attached to no fault (its token); without the token, refused",
+       set(pages.values()) == {200} and r.status == 401, (pages, r.status))
+    report = {"key": "note:weekly", "title": "Weekly report", "to": "FM", "body": "Two things to look at",
+              "report": "reports:fm-weekly", "page": "page-en-0001", "language": "en",
+              "languages": {"fr": {"body": "Deux choses", "page": "page-fr-0001"}}}
+    r = await post("/agent/v1/vesta-message", headers=bearer(), json=report)
+    status, body = await jget("/vesta-messages", cookie("ops"))
+    got = next((m for m in body["messages"] if m["key"] == "note:weekly"), {})
+    ck("a report is kept with its job, its page, its language and each other language's page",
+       r.status == 200 and {k: v for k, v in got.items() if k not in ("seq", "at")} == report, got)
+    await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "note:weekly", "title": "Weekly report",
+                                                                  "body": "Two things to look at, one done"})
+    status, body = await jget("/vesta-messages", cookie("ops"))
+    got = next((m for m in body["messages"] if m["key"] == "note:weekly"), {})
+    ck("  ...a rewrite naming no job or page keeps the first one's (still a report, still its page)",
+       got.get("report") == "reports:fm-weekly" and got.get("page") == "page-en-0001"
+       and got.get("body") == "Two things to look at, one done", got)
+    await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "note:bad-page", "title": "t",
+                                                                  "page": "../../etc/passwd", "report": 7})
+    status, body = await jget("/vesta-messages", cookie("ops"))
+    got = next((m for m in body["messages"] if m["key"] == "note:bad-page"), {})
+    ck("  ...a page that is no document id, or a job that is no text, is dropped", "page" not in got
+       and "report" not in got, got)
+    await post("/agent/v1/vesta-message", headers=bearer(), json=report)       # the report as it was first sent
+    old_grace = proxy.FM_EVIDENCE_ORPHAN_GRACE_SECONDS
+    proxy.FM_EVIDENCE_ORPHAN_GRACE_SECONDS = 0
+    long_ago = time.time() - 3600
+    try:
+        for name in pages:
+            os.utime(TMP / "data" / proxy.FM_EVIDENCE_NAME / f"{name}.html", (long_ago, long_ago))
+        proxy._fm_after_write([], [])
+    finally:
+        proxy.FM_EVIDENCE_ORPHAN_GRACE_SECONDS = old_grace
+    kept_pages = {n: (TMP / "data" / proxy.FM_EVIDENCE_NAME / f"{n}.html").is_file() for n in pages}
+    ck("a fault's write sweeps a page nothing names, never a page a kept report names (it no longer goes with a ticket)",
+       kept_pages == {"page-en-0001": True, "page-fr-0001": True, "page-loose-01": False}, kept_pages)
+    r = await get("/fm-document/page-en-0001", headers=cookie("ops"))
+    ck("  ...and the facility manager opens it in the document viewer", r.status == 200
+       and (await r.read()) == page, r.status)
+    cfg_file.write_text(json.dumps({"recordsKeptDays": 30}))
+    aged = time.time() - 40 * 86400
+    os.utime(TMP / "data" / proxy.FM_EVIDENCE_NAME / "page-en-0001.html", (aged, aged))
+    proxy._prune_fm_evidence()
+    cfg_file.unlink(missing_ok=True)
+    ck("  ...but past the records-kept days it goes, named or not (its own lifetime)",
+       not (TMP / "data" / proxy.FM_EVIDENCE_NAME / "page-en-0001.html").exists())
+
+    # ── Talking to VESTA (ticket 21 of "One inbox", 2026-10-29) ─────────────────────────────────────────────────────
+    print("\n  talking to VESTA on the tablet:")
+    asks, turns = TMP / "data" / "vesta-asks.json", TMP / "data" / "vesta-conversation.json"
+    (TMP / "data" / "agent-presence.json").unlink(missing_ok=True)
+    reset_lockout()
+    r = await post("/vesta-ask", headers=cookie("owner"), json={"text": "Is the pool pump on?"})
+    ck("a question while VESTA is not running: 503, nothing kept (nobody would answer)",
+       r.status == 503 and not asks.exists(), r.status)
+    await post("/agent/v1/heartbeat", headers=bearer())
+    status, body = await jget("/vesta-conversation", cookie("guest"))
+    ck("  ...its heartbeat: every profile reads that VESTA runs (a guest too, who may not see its presence)",
+       status == 200 and body["vesta"] == "online" and body["turns"] == [], body)
+    r = await post("/vesta-ask", json={"text": "hello"})
+    ck("no session: refused, nothing kept", r.status == 401 and not asks.exists(), r.status)
+    r = await post("/vesta-ask", headers=cookie("guest"), json={"text": "Open the gate", "profile": "owner"})
+    ck("  ...a page naming its profile is refused: the add-on stamps it (400)", r.status == 400 and not asks.exists(),
+       r.status)
+    for bad in ({"text": ""}, {"text": "  "}, {"text": 3}, {"text": "x" * 2001}, {}):
+        r = await post("/vesta-ask", headers=cookie("guest"), json=bad)
+        ck(f"  ...a question of {str(bad)[:24]!r} is refused (400)", r.status == 400, r.status)
+    r = await post("/vesta-ask", headers=cookie("guest"), json={"text": "  What is the wifi password?  "})
+    ck("a guest's question is kept", r.status == 200, r.status)
+    r = await post("/vesta-ask", headers=cookie("owner"), json={"text": "Is the pool pump on?"})
+    status, body = await jget("/agent/v1/inbox", bearer())
+    ck("the Agent collects both, each stamped with the profile that asked, in order",
+       status == 200 and [(a["profile"], a["text"]) for a in body["asks"]]
+       == [("guest", "What is the wifi password?"), ("owner", "Is the pool pump on?")], body)
+    last = body["last"]
+    status, _ = await jget("/agent/v1/inbox", {})
+    reset_lockout()
+    status2, _ = await jget("/agent/v1/inbox", cookie("owner"))
+    ck("  ...the inbox is the Agent's only: no token, or a signed-in owner's cookie, is 401",
+       status == 401 and status2 == 401, (status, status2))
+    reset_lockout()
+    began = time.monotonic()
+    proxy.CONVERSATION["waitSeconds"] = 1
+    status, body = await jget(f"/agent/v1/inbox?after={last}", bearer())
+    ck("  ...a read after the last waits for the next one, then answers none",
+       status == 200 and body["asks"] == [] and time.monotonic() - began >= 0.9, body)
+    status, body = await jget("/vesta-conversation", cookie("guest"))
+    ck("the guest reads its own question in its conversation, and not the owner's",
+       [(t["from"], t["text"]) for t in body["turns"]] == [("person", "What is the wifi password?")], body)
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "turn:1", "profile": "guest",
+                                                                          "text": "Being prepared"})
+    ck("the Agent's answer is a turn of that profile's conversation", r.status == 200, r.status)
+    r = await post("/agent/v1/conversation-turn", json={"key": "turn:x", "profile": "guest", "text": "x"})
+    ck("  ...written with its token only (401)", r.status == 401, r.status)
+    reset_lockout()
+    jpeg = proxy._JPEG_MAGIC + b"camera"
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:1", "profile": "guest", "text": "The wifi is on the card by the door.",
+        "photos": [base64.b64encode(jpeg).decode()]})
+    r2 = await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:2", "profile": "owner", "text": "The pool pump is on.", "page": "page-en-0001",
+        "photos": [base64.b64encode(jpeg).decode()]})
+    status, body = await jget("/vesta-conversation", cookie("guest"))
+    ck("a rewrite REPLACES the turn of its key (the waiting answer becomes its result), and a guest gets no picture",
+       r.status == 200 and [(t["from"], t.get("text")) for t in body["turns"]]
+       == [("person", "What is the wifi password?"), ("vesta", "The wifi is on the card by the door.")]
+       and all("photos" not in t for t in body["turns"]), body)
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    answer = body["turns"][-1]
+    ck("  ...the owner's answer with its picture and its page, and nothing of the guest's",
+       r2.status == 200 and len(body["turns"]) == 2 and answer.get("page") == "page-en-0001"
+       and (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / answer["photos"][0]).read_bytes() == jpeg, body)
+    status, body = await jget("/vesta-conversation", cookie("ops"))
+    ck("  ...and the facility manager's conversation is its own (empty)", body["turns"] == [], body)
+    # architecture review, 2026-10-30: the conversation's pictures share the photo folder; ops may view cameras too
+    r = await get(f"/announcement-photo/{answer['photos'][0]}", headers=cookie("owner"))
+    r2 = await get(f"/announcement-photo/{answer['photos'][0]}", headers=cookie("ops"))
+    ck("  ...the picture of an answer goes to the profile it answered only (404 for another, cameras or not)",
+       r.status == 200 and r2.status == 404, (r.status, r2.status))
+    # ...and its page (architecture review, 2026-10-30: served to any facility profile by its id)
+    await post("/agent/v1/fm-document?id=conv-page-0001", headers={**bearer(), "Content-Type": "text/html; charset=utf-8"},
+               data=b"<!doctype html><p>The owner's answer</p>")
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "turn:pg", "profile": "owner",
+                                                                      "text": "Here is the page.", "page": "conv-page-0001"})
+    r = await get("/fm-document/conv-page-0001", headers=cookie("owner"))
+    r2 = await get("/fm-document/conv-page-0001", headers=cookie("ops"))
+    ck("  ...the page of an answer too: to the profile it answered only (404 for the facility manager)",
+       r.status == 200 and r2.status == 404, (r.status, r2.status))
+    # what a turn may hold: the agreement's examples, the Agent's test copy of the add-on replays the same ones
+    for ex in proxy.CONVERSATION["turnExamples"]:
+        r = await post("/agent/v1/conversation-turn", headers=bearer(), json=ex["turn"])
+        ck(f"  ...{ex['why']}: {'kept' if ex['kept'] else 'refused (400)'}", r.status == (200 if ex["kept"] else 400),
+           r.status)
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "turn:2", "profile": "owner", "gone": True})
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    ck("a withdrawn answer is kept as withdrawn: no words, no picture", body["turns"][-1].get("gone") is True
+       and "text" not in body["turns"][-1] and "photos" not in body["turns"][-1], body)
+    for _ in range(proxy.ASKS_PER_MINUTE):
+        await post("/vesta-ask", headers=cookie("ops"), json={"text": "again?"})
+    r = await post("/vesta-ask", headers=cookie("ops"), json={"text": "and again?"})
+    ck(f"  ...past {proxy.ASKS_PER_MINUTE} questions a minute a profile is told to wait (429)", r.status == 429, r.status)
+    stored = json.loads(asks.read_text())
+    old = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - proxy.ASK_KEPT_S - 5))
+    asks.write_text(json.dumps([{**stored[0], "at": old}, *stored[1:]]))
+    status, body = await jget("/agent/v1/inbox", bearer())
+    ck("a question older than the agreement's askKeptSeconds is no longer collected",
+       stored[0]["seq"] not in [a["seq"] for a in body["asks"]] and len(body["asks"]) == len(stored) - 1, body)
+    cfg_file.write_text(json.dumps({"recordsKeptDays": 1}))
+    kept = json.loads(turns.read_text())
+    turns.write_text(json.dumps([{**kept[0], "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 2 * 86400))},
+                                 *kept[1:]]))
+    status, body = await jget("/vesta-conversation", cookie("guest"))
+    cfg_file.unlink(missing_ok=True)
+    ck("a turn past the records-kept days goes", [t.get("text") for t in body["turns"]]
+       == ["The wifi is on the card by the door."], body)
+
+    # ── A spoken question (ticket 23 of "One inbox", hold to talk) ─────────────────────────────────────────────────
+    print("\n  a question spoken on the tablet:")
+    reset_lockout()
+    await post("/agent/v1/heartbeat", headers=bearer())
+    voice = proxy.CONVERSATION["voice"]
+
+    def wav(seconds=1.0, rate=voice["rate"], channels=1, bits=16, head=b"RIFF"):
+        pcm = b"\x01\x00" * int(rate * seconds) * channels
+        return (head + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt " + struct.pack(
+            "<IHHIIHH", 16, 1, channels, rate, rate * channels * bits // 8, channels * bits // 8, bits)
+            + b"data" + struct.pack("<I", len(pcm)) + pcm)
+
+    said = wav()
+    # architecture review, 2026-10-30: a voice was swept only when another came — the Agent's every read sweeps it now
+    stale = TMP / "data" / proxy.VOICE_DIR / ("a" * 32)
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_bytes(said)
+    os.utime(stale, (time.time() - proxy.ASK_KEPT_S - 5,) * 2)
+    await jget("/agent/v1/inbox", bearer())
+    ck("a spoken question past the time it is kept goes at the Agent's next read, whoever asks", not stale.exists())
+    asks.unlink(missing_ok=True)
+    r = await post("/vesta-ask", headers={**cookie("owner"), "Content-Type": "audio/wav"}, data=said)
+    status, body = await jget("/agent/v1/inbox", bearer())
+    spoken = body["asks"][-1] if body and body["asks"] else {}
+    ck("a spoken question is kept for the Agent, stamped with the profile, its sound named and no words yet",
+       r.status == 200 and spoken.get("profile") == "owner" and isinstance(spoken.get("voice"), str)
+       and "text" not in spoken, (r.status, body))
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    line = next((t for t in body["turns"] if t["key"] == f"ask:{spoken.get('seq')}"), {})
+    ck("  ...and shown at once in the profile's conversation as a spoken line waiting for its words",
+       line.get("from") == "person" and line.get("voice") is True and "text" not in line, body)
+    for name, bad in (("8 kHz", wav(rate=8000)), ("stereo", wav(channels=2)), ("8-bit", wav(bits=8)),
+                      ("not a WAV", wav(head=b"RIFX")), ("too long", wav(seconds=voice["seconds"] + 1)),
+                      ("empty", wav(seconds=0))):
+        r = await post("/vesta-ask", headers={**cookie("owner"), "Content-Type": "audio/wav"}, data=bad)
+        ck(f"  ...a recording {name} is refused (400)", r.status == 400, r.status)
+    r = await post("/vesta-ask", headers={"Content-Type": "audio/wav"}, data=said)
+    ck("  ...no session: refused", r.status == 401, r.status)
+    reset_lockout()
+    r = await get(f"/agent/v1/voice/{spoken.get('voice')}", headers=cookie("owner"))
+    ck("its sound is the Agent's only: a signed-in owner's cookie is 401", r.status == 401, r.status)
+    reset_lockout()
+    for bad in ("..%2Fvesta-asks.json", "0" * 31, "g" * 32):
+        r = await get(f"/agent/v1/voice/{bad}", headers=bearer())
+        ck(f"  ...a name that is not one of its own ({bad[:12]!r}) is 404", r.status == 404, r.status)
+    r = await get(f"/agent/v1/voice/{spoken.get('voice')}", headers=bearer())
+    got = await r.read()
+    ck("the Agent fetches the WAV as it was recorded", r.status == 200 and got == said
+       and r.content_type == "audio/wav", r.status)
+    r = await get(f"/agent/v1/voice/{spoken.get('voice')}", headers=bearer())
+    ck("  ...once: a voice is the person's, kept no longer than it takes to read it (404 after)", r.status == 404,
+       r.status)
+    key = f"ask:{spoken.get('seq')}"
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": key, "profile": "guest",
+                                                                          "heard": "Is the pool pump on?"})
+    ck("the words heard are refused for another profile's line (400)", r.status == 400, r.status)
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": key, "profile": "owner",
+                                                                          "heard": "  Is the pool pump on?  "})
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    line = next((t for t in body["turns"] if t["key"] == key), {})
+    ck("the words the Agent heard become the person's question in the thread, still a spoken one",
+       r.status == 200 and line.get("text") == "Is the pool pump on?" and line.get("voice") is True
+       and line.get("from") == "person", (r.status, line))
+    ck("  ...the question's own time kept: the page orders the thread by it (feed.byTime), never by the new number",
+       line.get("at") == spoken.get("at"), (line, spoken))
+    ck("  ...written once even when two writes come together: the second, merged under the store's lock, changes nothing",
+       proxy._with_heard([{**line}], {**line, "text": "Something else", "seq": 99}) == [line])
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": key, "profile": "owner",
+                                                                          "heard": "Something else"})
+    typed = next(t for t in body["turns"] if t["from"] == "person" and not t.get("voice"))
+    r2 = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": typed["key"], "profile": "owner",
+                                                                           "heard": "Something else"})
+    ck("  ...once, and never over a typed question: the person's words are the person's (400, 400)",
+       r.status == 400 and r2.status == 400, (r.status, r2.status))
+
+    sound = proxy._recording_line("heldMs=3120;openMs=3001;rate=48000;micRate=24000;blocks=70;missing=2;peakDb=-13",
+                                  said, "owner")
+    ck("what the page measured of a spoken question is one log line beside the sound that came",
+       sound == "[proxy] a spoken question (owner): 1.0s of sound; held 3.1s, microphone open 3.0s; page 48000 Hz, "
+                "microphone 24000 Hz; 2 of 72 blocks missing; loudest -13 dB", sound)
+    import contextlib
+    import io
+    printed = io.StringIO()
+    with contextlib.redirect_stdout(printed):
+        await post("/vesta-ask", headers={**cookie("owner"), "Content-Type": "audio/wav",
+                                          "X-Recording": "heldMs=1500;openMs=1400;rate=48000;micRate=48000;"
+                                                         "blocks=40;missing=0;peakDb=-20"}, data=said)
+    ck("  ...written by the door a spoken question comes through, from the page's X-Recording",
+       "held 1.5s, microphone open 1.4s; page 48000 Hz, microphone 48000 Hz; 0 of 40 blocks" in printed.getvalue(),
+       printed.getvalue())
+    ck("  ...a page that measured nothing, or sent anything else, gives the sound alone",
+       all(proxy._recording_line(h, said, "owner").endswith("1.0s of sound (the page measured nothing)")
+           for h in (None, "", "heldMs=1", "x=1;y=2" * 40, "heldMs=1;rm -rf /")), sound)
+
+    # ── An answer said aloud (ticket 24 of "One inbox") ─────────────────────────────────────────────────────────────
+    print("\n  an answer said aloud:")
+    reset_lockout()
+    mp3 = b"ID3\x04\x00" + b"\x00" * 400
+    r = await post("/agent/v1/speech", headers={**bearer(), "Content-Type": "audio/mpeg"}, data=mp3)
+    sound = (await r.json()).get("name") if r.status == 200 else None
+    ck("the Agent's sound of an answer is kept, under a name of the add-on's", isinstance(sound, str)
+       and proxy.SPEECH_RE.match(sound) is not None and (TMP / "data" / proxy.SPEECH_DIR / sound).read_bytes() == mp3,
+       (r.status, sound))
+    for name, kind, bad in (("of a type the agreement does not name", "audio/ogg", b"OggS" + b"\x00" * 40),
+                            ("that is not the type it says", "audio/mpeg", b"RIFF" + b"\x00" * 40),
+                            ("empty", "audio/wav", b"")):
+        r = await post("/agent/v1/speech", headers={**bearer(), "Content-Type": kind}, data=bad)
+        ck(f"  ...a sound {name} is refused (400)", r.status == 400, r.status)
+    r = await post("/agent/v1/speech", headers={**bearer(), "Content-Type": "audio/mpeg"},
+                   data=mp3 + b"\x00" * voice["answerBytes"])
+    ck("  ...one past the agreement's answerBytes is refused (413)", r.status == 413, r.status)
+    reset_lockout()
+    r = await post("/agent/v1/speech", headers={**cookie("owner"), "Content-Type": "audio/mpeg"}, data=mp3)
+    ck("  ...the door is the Agent's only: a signed-in owner's cookie is 401", r.status == 401, r.status)
+    reset_lockout()
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:aloud", "profile": "owner", "text": "The pool pump is on.", "speech": sound})
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    answer = next((t for t in body["turns"] if t["key"] == "turn:aloud"), {})
+    ck("the answer's turn names its sound", r.status == 200 and answer.get("speech") == sound, (r.status, answer))
+    r = await get(f"/vesta-speech/{sound}", headers=cookie("owner"))
+    ck("  ...which the profile it answered hears, as it was made", r.status == 200 and await r.read() == mp3
+       and r.content_type == "audio/mpeg", r.status)
+    r = await get(f"/vesta-speech/{sound}", headers=cookie("guest"))
+    r2 = await get(f"/vesta-speech/{'0' * 32}.mp3", headers=cookie("owner"))
+    ck("  ...never another profile (a guest never hears the owner's answers), nor a sound no turn names (404, 404)",
+       r.status == 404 and r2.status == 404, (r.status, r2.status))
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:aloud-only", "profile": "owner", "speech": sound})
+    r2 = await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:aloud-bad", "profile": "owner", "text": "x", "speech": "../vesta-asks.json"})
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    bad = next((t for t in body["turns"] if t["key"] == "turn:aloud-bad"), {})
+    ck("  ...a sound is never a turn on its own (400), and a name not the add-on's is not kept",
+       r.status == 400 and r2.status == 200 and "speech" not in bad, (r.status, bad))
+    orphan = TMP / "data" / proxy.SPEECH_DIR / ("1" * 32 + ".mp3")
+    orphan.write_bytes(mp3)
+    os.utime(orphan, (time.time() - proxy.SPEECH_GRACE_S - 5,) * 2)
+    young = TMP / "data" / proxy.SPEECH_DIR / ("2" * 32 + ".mp3")
+    young.write_bytes(mp3)
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "turn:sweep", "profile": "owner", "text": "x"})
+    ck("a sound no turn names is swept at the next write; one just uploaded (its turn on the way) and a named one stay",
+       not orphan.exists() and young.exists() and (TMP / "data" / proxy.SPEECH_DIR / sound).exists(),
+       sorted(p.name for p in (TMP / "data" / proxy.SPEECH_DIR).iterdir()))
+
+    # ── VESTA's buttons pressed on a tablet (ticket 22 of "One inbox") ───────────────────────────────────────────────
+    print("\n  VESTA's buttons pressed on a tablet:")
+    reset_lockout()
+    asks.unlink(missing_ok=True)
+    await post("/agent/v1/heartbeat", headers=bearer())
+    await post("/agent/v1/vesta-message", headers=bearer(), json={
+        "key": "thread:ap1", "title": "Approval request", "body": "Turn on the pool light?",
+        "buttons": [{"label": "Approve", "kind": "a", "id": "ap1:y"}, {"label": "Refuse", "kind": "a", "id": "ap1:n"}]})
+    await post("/agent/v1/vesta-message", headers=bearer(), json={
+        "key": "incident:77", "title": "#77-P2 (new)", "body": "Door open",
+        "buttons": [{"label": "Done", "kind": "i", "id": "77:done", "closes": True},
+                    {"label": "Need help", "kind": "i", "id": "77:need_help"}]})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    card = next(m for m in body["messages"] if m["key"] == "incident:77")
+    ck("an alert's buttons are kept as label, kind and id only (an older Agent's `closes` flag dropped: the tablet draws "
+       "Done · Need help wherever the alert shows, owner 2026-10-29)",
+       card["buttons"] == [{"label": "Done", "kind": "i", "id": "77:done"},
+                           {"label": "Need help", "kind": "i", "id": "77:need_help"}], card["buttons"])
+    r = await post("/vesta-press", json={"key": "thread:ap1", "command": "a:ap1:y"})
+    ck("no session: refused", r.status == 401, r.status)
+    r = await post("/vesta-press", headers=cookie("guest"), json={"key": "thread:ap1", "command": "a:ap1:y"})
+    ck("  ...a guest's press of a button that acts is refused (403): answers only", r.status == 403, r.status)
+    r = await post("/vesta-press", headers=cookie("owner"), json={"key": "thread:ap1", "command": "a:ap1:x"})
+    ck("  ...a button the record does not offer is refused (409)", r.status == 409, r.status)
+    r = await post("/vesta-press", headers=cookie("owner"), json={"key": "thread:ap1", "command": "a:ap1:y", "profile": "x"})
+    ck("  ...a press naming more than its key and command is refused (400)", r.status == 400, r.status)
+    r = await post("/vesta-press", headers=cookie("owner"), json={"key": "thread:ap1", "command": "a:ap1:y"})
+    pressed = await r.json()
+    status, body = await jget("/agent/v1/inbox", bearer())
+    ck("an owner's press is kept for the Agent, stamped owner, with the record and the button, and answered its number",
+       r.status == 200 and [(a["profile"], a.get("press")) for a in body["asks"]]
+       == [("owner", {"key": "thread:ap1", "kind": "a", "id": "ap1:y"})] and pressed["press"] == body["asks"][0]["seq"],
+       (pressed, body))
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:9", "profile": "guest", "text": "Stopped at the limit.",
+        "buttons": [{"label": "Continue", "kind": "c", "id": "k1"}]})
+    r = await post("/vesta-press", headers=cookie("guest"), json={"key": "turn:9", "command": "c:k1"})
+    r2 = await post("/vesta-press", headers=cookie("owner"), json={"key": "turn:9", "command": "c:k1"})
+    ck("a button of a guest's own answer that does not act: pressed by that guest, by no other profile (409)",
+       r.status == 200 and r2.status == 409, (r.status, r2.status))
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "press:1", "profile": "owner",
+                                                                      "text": "Approved.", "answers": 1})
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "typing:owner", "profile": "owner",
+                                                                      "typing": True})
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    ck("VESTA answering (its \"typing…\") is kept for the profile's tablet", any(
+        t["key"] == "typing:owner" and t.get("typing") is True for t in body["turns"]), body)
+    told = next(t for t in body["turns"] if t["key"] == "press:1")
+    ck("  ...a press's short answer comes back in the presser's conversation, naming the press", told.get("answers") == 1,
+       told)
+
+    agent(enabled="false", token=TOKEN)
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "t", "profile": "guest", "text": "x"})
+    r2 = await get("/agent/v1/inbox", headers=bearer())
+    ck("with the Agent switched off the inbox and the turn door are 404", r.status == 404 and r2.status == 404,
+       (r.status, r2.status))
+    r = await post("/agent/v1/vesta-message", headers=bearer(), json=sent)
+    ck("with the Agent switched off the door is 404, as every /agent/v1 route", r.status == 404, r.status)
+    agent(enabled="true", token=TOKEN)
 
     await client.close()
     await sup.close()

@@ -83,7 +83,7 @@ ck("the store erases a fault through its one command, with the elevation", /run\
 ck("the one-step close is one command, and both screens call it — through the one shared close",
    /run\(\{ type: "closeTickets", ids \}\)/.test(src("fm/FmDataContext.tsx"))
    && /closeTickets\(ids\)/.test(src("components/fm/WorkButtons.tsx"))
-   && ["components/fm/TicketsTab.tsx", "components/cockpit/CockpitOverview.tsx"].every((f) => /useConfirmedClose\(\)/.test(src(f)) && !/closeTickets/.test(src(f)))
+   && ["components/fm/TicketsTab.tsx", "components/cockpit/IssueCard.tsx"].every((f) => /useConfirmedClose\(\)/.test(src(f)) && !/closeTickets/.test(src(f)))
    && /ticketId: t\.id/.test(src("config/attention.ts")));
 
 {
@@ -115,8 +115,8 @@ ck("the one-step close is one command, and both screens call it — through the 
   // its Status column in the stage's one word (STAGE_WORDS, the Tickets tab's pill's), as it stood then; its date
   // cells in the document's fixed form (dateText.docDate — owner's decision, 2026-10-19: 2.496.424 died of a cell
   // written in the runner's locale, "05 Sept 2026" here and "Sep 5, 2026" on CI). Midday, so any runner's day is the 5th.
-  ck("a past month's recap tells a fault fixed that month, as it stood then, even reopened since — its dates as 2026-09-05",
-     recap.includes(`| 2026-08-28 | Pool pump seized | ${E.STAGE_WORDS.closed.word} | 2026-09-05 |`), recap.split("## 3.")[1]);
+  ck("a past month's recap tells a fault fixed that month, as it stood then, even reopened since — its dates as 05/09/2026",
+     recap.includes(`| 28/08/2026 | Pool pump seized | ${E.STAGE_WORDS.closed.word} | 05/09/2026 |`), recap.split("## 3.")[1]);
   // ⚠️ THE FIGURES ARE THE MONTH'S (architecture review, 2026-10-19): "Resolved (all time)" and "Closed without action"
   // counted every record the server still kept — September's recap regenerated in January read "Closed without action: 0"
   const blip = (id, at) => ({ id, title: id, status: "resolved", openedAt: at, resolvedAt: at, photoIds: [],
@@ -133,8 +133,8 @@ ck("the one-step close is one command, and both screens call it — through the 
 console.log("\n  a document's dates are locale-free; the month's bounds computed once (owner's decision, 2026-10-19):");
 {
   const { docDate } = await import("@/utils/dateText");
-  ck("docDate: the local day as 2026-09-05, whatever the reader's language; nothing for a date that cannot be read",
-     docDate("2026-09-05T12:00:00Z") === "2026-09-05" && docDate(Date.parse("2026-12-31T12:00:00Z")) === "2026-12-31" && docDate("garbage") === "",
+  ck("docDate: the local day as 05/09/2026 (day first, as Telegram), whatever the reader's language; nothing for a date that cannot be read",
+     docDate("2026-09-05T12:00:00Z") === "05/09/2026" && docDate(Date.parse("2026-12-31T12:00:00Z")) === "31/12/2026" && docDate("garbage") === "",
      [docDate("2026-09-05T12:00:00Z"), docDate("garbage")]);
   const b = E.monthBounds("2026-09");
   ck("monthBounds: local midnight on the 1st, and on the 1st of the month after — NaN for a key that is not a month",

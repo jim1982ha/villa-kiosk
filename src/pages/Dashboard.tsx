@@ -13,6 +13,10 @@ import RoomLabel from "@/components/hud/RoomLabel";
 import ServiceErrorToast from "@/components/hud/ServiceErrorToast";
 import ConnectionBanner from "@/components/hud/ConnectionBanner";
 import UpdateBanner from "@/components/hud/UpdateBanner";
+import AnnouncementNotice from "@/components/hud/AnnouncementNotice";
+import { AnnouncementsProvider } from "@/messages/AnnouncementsContext";
+import { ConversationProvider } from "@/messages/ConversationContext";
+import VestaWindow from "@/components/messages/VestaThread";
 import AppNotice, { AppNoticeContext, type AppNoticeMessage } from "@/components/hud/AppNotice";
 import { NoticeStack } from "@/components/hud/Notice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
@@ -702,6 +706,10 @@ export default function Dashboard() {
   return (
     <VillaModelProvider value={villa}>
     <AppNoticeContext.Provider value={setNotice}>
+    {/* the page's one watch on the villa's announcements: the notice and the Cockpit's Notifications read it */}
+    <AnnouncementsProvider>
+    {/* ...and on this profile's conversation with VESTA: the robot, Messages' pinned thread and "Ask VESTA" read it */}
+    <ConversationProvider>
       <BabylonCanvas
         key={modelKey}
         onManager={setManager}
@@ -725,11 +733,13 @@ export default function Dashboard() {
 
       {/* EVERY notice of the villa view, in one column under the top bar, drawn by one piece (Notice) — the most
           lasting first: the connection (the only signal that survives the phone tier, where the top bar's dot is
-          hidden), a new version, a failed tap, then what just happened. The 3D canvas's own joins it. */}
+          hidden), a new version, a failed tap, what the villa announced, then what just happened. The 3D canvas's
+          own joins it. */}
       <NoticeStack>
         <ConnectionBanner />
         <UpdateBanner />
         <ServiceErrorToast />
+        <AnnouncementNotice />
         <AppNotice message={notice} onExpire={() => setNotice(null)} />
       </NoticeStack>
 
@@ -747,7 +757,8 @@ export default function Dashboard() {
         hasOverviewDefault={hasOverviewDefault}
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
-        onOpenCockpit={() => go({ type: "openWindow", window: "cockpit", tab: "overview" })}
+        onOpenCockpit={() => go({ type: "openWindow", window: "cockpit", tab: "messages" })}
+        onAskVesta={() => openSurface("vesta")}
         onOpenCategory={(category) => go({ type: "openList", list: { kind: "category", category } })}
         onOpenPresence={() => openSurface("presence")}
       />
@@ -760,6 +771,8 @@ export default function Dashboard() {
         scenes={haScenes}
       />
 
+      {/* VESTA's conversation, its own window (owner, 2026-10-29: "a dedicated icon in the top bar, next to the robot") */}
+      {shown("vesta") && <VestaWindow onClose={() => closeSurface("vesta")} canOpenPage={doors.facility} />}
       {shown("presence") && (
         <PresenceWindow onClose={() => closeSurface("presence")} onOpenEntity={(id) => handOver("presence", id)}
           canOpen={(id) => devicePanel(id) !== null} />
@@ -893,6 +906,8 @@ export default function Dashboard() {
           // existed. Nesting is what the stack was built for, so the hazard is
           // deleted rather than worked around.
           onOpenConfigEditor={() => openSurface("configEditor")}
+          tab={screen.settingsTab}
+          onTab={(tab) => go({ type: "settingsTab", tab })}
         />
       )}
 
@@ -911,6 +926,8 @@ export default function Dashboard() {
           viewHeadingDeg={manager ? () => manager.viewHeadingDeg() : undefined}
         />
       )}
+    </ConversationProvider>
+    </AnnouncementsProvider>
     </AppNoticeContext.Provider>
     </VillaModelProvider>
   );

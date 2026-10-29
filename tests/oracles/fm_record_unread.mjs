@@ -92,10 +92,10 @@ console.log("\n  the wiring:");
   const src = (p) => strip(readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8"));
   const cockpit = src("components/cockpit/CockpitModal.tsx"), sections = src("components/fm/FacilitySections.tsx");
   const body = cockpit.slice(cockpit.indexOf('<div className="modal-body">'));
-  ck("the Cockpit window says it over every tab, the Overview's too, before either draws",
+  ck("the Cockpit window says it over every tab, Messages' too, before either draws",
      /const recordLine = fmRecordLine\(\{ ready, unreachable \}\);/.test(cockpit)
      && body.indexOf("{recordLine && <p") >= 0 && body.indexOf("{recordLine && <p") < body.indexOf("<FacilitySections")
-     && body.indexOf("{recordLine && <p") < body.indexOf("<CockpitOverview"));
+     && body.indexOf("{recordLine && <p") < body.indexOf("<MessagesTab"));
   ck("  ...and the Facility tabs draw nothing of the record until it is read",
      (sections.match(/\{ready && tab === "/g) ?? []).length === 4 && !/Loading the maintenance record/.test(sections));
   const ctx = src("fm/FmDataContext.tsx");

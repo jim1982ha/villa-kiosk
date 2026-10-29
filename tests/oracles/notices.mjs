@@ -23,6 +23,14 @@ ck("  ...each status tone IS the map legend's colour (STATUS_COLOR), the news to
 ck("  ...a notice that acts is the same pill as a button; one that stays has its Dismiss",
    /^<button type="button" class="vesta-notice tappable"/.test(draw(h(NoticeView, { tone: "info", icon, onTap: () => {} }, "x")))
    && /aria-label="Dismiss"/.test(draw(h(NoticeView, { tone: "alert", icon, onDismiss: () => {} }, "x"))));
+// ⚠️ ONE SHAPE (owner, 2026-10-29): the squared corners are the notice's own, never a case's (a photo's, a button's)
+{
+  const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  const own = css.match(/\n\.vesta-notice \{([^}]*)\}/)?.[1] ?? "";
+  ck("every notice has the doorbell's squared corners, set once on the shared notice, never per case",
+     /border-radius: 12px;/.test(own) && !/\.vesta-notice(?![-\w])[^{]*\{[^}]*border-radius/.test(css.replace(/\n\.vesta-notice \{[^}]*\}/, "")),
+     own);
+}
 ck("the column holds them, one place", /<div id="vesta-notices" class="notice-stack">/.test(draw(h(NoticeStack, null))));
 
 console.log("\n  every notice goes through it:");
@@ -30,13 +38,14 @@ const uses = [["components/hud/ConnectionBanner.tsx", /<NoticeView tone="unavail
   ["components/hud/UpdateBanner.tsx", /<NoticeView tone="info"[\s\S]*?onTap=\{applyUpdate\}/],
   ["components/hud/ServiceErrorToast.tsx", /<NoticeView tone="alert" role="alert"/],
   ["components/hud/AppNotice.tsx", /<NoticeView tone=\{message\.tone\}/],
+  ["components/hud/AnnouncementNotice.tsx", /<NoticeView tone="info"/],
   ["components/canvas/BabylonCanvas.tsx", /<Notice tone="alert" role="alert"[\s\S]*?onDismiss=/],
   ["components/settings/TelemetryPanel.tsx", /<NoticeView tone="info"/]];
-ck("the connection, a new version, a failed tap, a sensor, the floor-plan sync and Settings' own all draw the one notice",
+ck("the connection, a new version, a failed tap, an announcement, a sensor, the floor-plan sync and Settings' own all draw the one notice",
    uses.every(([f, re]) => re.test(src(f))), uses.filter(([f, re]) => !re.test(src(f))).map(([f]) => f));
 const dash = src("pages/Dashboard.tsx");
 ck("  ...the villa view's own sit in ONE column, the most lasting first",
-   /<NoticeStack>\s*<ConnectionBanner \/>\s*<UpdateBanner \/>\s*<ServiceErrorToast \/>\s*<AppNotice /.test(dash));
+   /<NoticeStack>\s*<ConnectionBanner \/>\s*<UpdateBanner \/>\s*<ServiceErrorToast \/>\s*<AnnouncementNotice \/>\s*<AppNotice /.test(dash));
 ck("  ...a motion notice is the map's \"active\", news is \"info\"",
    /setNotice\(\{ text: room \? `Motion detected · \$\{room\}` : `Motion detected · \$\{label\}`, tone: "active" \}\)/.test(dash) && /isn't modelled yet, coming soon\.`, tone: "info" \}/.test(dash));
 const css = ["styles/01-base.css", "styles/02-hud.css", "styles/05-layout.css", "styles/08-shared.css"].map(src).join("\n");

@@ -33,12 +33,14 @@ const line = src("LineChart.tsx"), num = src("NumericHistory.tsx"), band = src("
 const weather = src("WeatherPanel.tsx"), energy = src("EnergyPanel.tsx"), head = src("historyRange.tsx");
 ck("the line chart's tooltip says the moment at its step (a closed-up chart: its kept step's real time, worded for the period)", /stamp=\{fmtStepStamp\(realAt\(hover\.t\), stepMs, dated\.spanHours\)\}/.test(line) && !/fmtChartStamp\(hover/.test(line));
 ck("every device line chart gives the range's step, its header 'avg'",
-   (num.match(/<LineChart stepMs=\{range\.grainMs\}/g) || []).length === 3 && /aggregationWords\(range\.grainMs, "avg"\)/.test(num)
-   && (num.match(/step=\{step\}/g) || []).length === 3);
+   // two drawings: the one-line chart (oneLine: one series, and each of several) and the chart on two scales
+   (num.match(/<LineChart stepMs=\{range\.grainMs\}/g) || []).length === 2 && /aggregationWords\(range\.grainMs, "avg"\)/.test(num)
+   // one header for every layout, the larger chart's too (owner, 2026-10-29: its window has the same `Last …` line)
+   && /const header = \(title: string\) => <HistoryHeader title=\{title\} picker=\{picker\} step=\{step\} \/>/.test(num));
 ck("the on/off band's header: its step alone", /step=\{aggregationWords\(range\.grainMs, null\)\}/.test(band));
 ck("a history header shows the step beside its title", /\{title\}<ChartStep words=\{step\} \/>/.test(head));
 ck("the Weather charts: their period's step, 'avg', the rain 'sum' at its own bucket",
-   (weather.match(/<ChartTile stepMs=\{PERIOD_MS\[range\.period\]\}/g) || []).length === 5
+   (weather.match(/<ChartTile picker=\{picker\} stepMs=\{PERIOD_MS\[range\.period\]\}/g) || []).length === 5
    && /aggregationWords\(stepMs, "avg"\)/.test(weather) && /aggregationWords\(stepMs, "sum"\)/.test(weather)
    && /stepMs=\{PERIOD_MS\[range\.totalPeriod\]\}/.test(weather) && /const slot = stepMs;/.test(weather));
 ck("the Energy charts: 'sum' at their bucket, tooltips at their step",

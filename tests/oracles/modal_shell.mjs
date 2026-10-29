@@ -70,7 +70,7 @@ const allCss = css.map(([, s]) => noComments(s)).join("\n");
 // (components/common/Window) and its height is that kind's one rule — it was a list of exceptions each window had to
 // join, and "every window drawn over the whole screen" was the same edit in twelve files.
 const KIND = { "components/common/AskDialog.tsx": '"question"', "components/panels/BadgeColorModal.tsx": '"question"',
-  "components/fm/FaultStageModal.tsx": '"device"', "components/panels/BasePanel.tsx": '{entityId ? "device" : "content"}' };
+  "components/fm/FaultStageModal.tsx": '"device"', "components/hud/AnnouncementNotice.tsx": '"screen"', "components/panels/BasePanel.tsx": '{entityId ? "device" : "content"}' };
 const windows = tsx.filter(([f, s]) => /<Window\b/.test(s)).map(([f, s]) => [f.slice(root.length), s]);
 const kindOf = (s) => /<Window kind=(\{[^}]*\}|"\w+")/.exec(s)?.[1];
 const wrongKind = windows.filter(([f, s]) => kindOf(s) !== (KIND[f] ?? '"content"')).map(([f, s]) => [f, kindOf(s)]);

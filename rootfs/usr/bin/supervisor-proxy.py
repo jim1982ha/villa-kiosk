@@ -98,6 +98,7 @@ Security notes:
     is the only thing in front of it.
 """
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -2266,7 +2267,8 @@ def _fm_after_write(old, new, baseline_readable: bool = True) -> None:
     except OSError:
         names = []
     for field, ext in FM_EVIDENCE_KINDS:
-        referenced = _fm_referenced_evidence_ids(new, field)
+        # a page a kept report names is referenced too: it no longer goes with a ticket (ticket 20 of "One inbox")
+        referenced = _fm_referenced_evidence_ids(new, field) | (_report_pages() if ext == ".html" else set())
         # 1. Anything this write dropped a reference to goes immediately: it was
         #    referenced a moment ago, so there is no in-flight form to protect.
         for photo_id in _fm_referenced_evidence_ids(old, field) - referenced:
@@ -3288,6 +3290,9 @@ async def fm_document_get_handler(request: web.Request) -> web.StreamResponse:
     path = os.path.join(_data(FM_EVIDENCE_NAME), f"{doc_id}.html")
     if os.path.realpath(os.path.dirname(path)) != os.path.realpath(_data(FM_EVIDENCE_NAME)) or not os.path.isfile(path):
         return web.json_response({"error": "not found"}, status=404)
+    # an answer's page in another profile's conversation: theirs (as its picture is: _turn_only)
+    if await _turn_only(doc_id, "page", _role_for(request)):
+        return web.json_response({"error": "not found"}, status=404)
     return web.FileResponse(path, headers={
         "Cache-Control": "private, max-age=31536000, immutable",      # a random id, never reused: never changes
         "Content-Type": "text/html; charset=utf-8",
@@ -3528,8 +3533,9 @@ async def agent_fm_evidence_handler(request: web.Request) -> web.Response:
 
 
 async def agent_fm_document_handler(request: web.Request) -> web.Response:
-    """Store a document for a fault (the investigation report a person asked to keep with it: owner, 2026-10-11): one
-    HTML page, then referenced by the fault's documentIds — and deleted with it (_fm_after_write)."""
+    """Store one HTML page: a fault's (the investigation report a person asked to keep with it: owner, 2026-10-11),
+    referenced by its documentIds and deleted with it (_fm_after_write); or a report's (ticket 20 of "One inbox"), named
+    by a kept VESTA message's `page` and kept while that message is (_report_pages), then the records-kept days."""
     if (refused := _agent_refuse(request, "agentWrite")) is not None:
         return refused
     return await _store_evidence(request, ".html")
@@ -3563,7 +3569,7 @@ async def agent_heartbeat_handler(request: web.Request) -> web.Response:
     await AGENT_PRESENCE.replace({"last_seen": time.time(), "status": status,
                                   "cadence": _agent_cadence(cadence)})
     answer = {"ok": True, "offline_after_minutes": _agent_offline_minutes(),
-              "unavailableByDesign": _unavailable_by_design()}
+              "unavailableByDesign": _unavailable_by_design(), "maintenance": _maintenance_mode()}
     global _CADENCE_REFUSAL_LOGGED
     if why is not None:
         answer["cadence"] = f"refused: {why}"
@@ -3584,6 +3590,15 @@ def _unavailable_by_design() -> list[str]:
     cfg = DEVICE_CONFIG.read()
     raw = cfg.get("unavailableByDesign") if isinstance(cfg, dict) else None
     return sorted({e for e in raw if isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e)}) if isinstance(raw, list) else []
+
+
+def _maintenance_mode() -> bool:
+    """The villa's maintenance mode (device-config.json `maintenanceMode`, Advanced Settings › System, owner 2026-10-29):
+    while it is on the VESTA Agent sends only urgent (P1) alerts (agent-contract.json `heartbeat.answer`). ⚠️ THE KIOSK
+    OWNS IT, as it owns the devices asleep by design; only a stored `true` is on — absent, unreadable or anything else is
+    off, never a refused beat."""
+    cfg = DEVICE_CONFIG.read()
+    return isinstance(cfg, dict) and cfg.get("maintenanceMode") is True
 
 
 #: The last malformed-cadence reason logged — one line per new reason, not one per beat (every few minutes).
@@ -3649,6 +3664,1181 @@ async def agent_status_handler(request: web.Request) -> web.Response:
     if (refused := _refuse(request, "viewAgent")) is not None:
         return refused
     return web.json_response(_agent_presence(), headers={"Cache-Control": "no-store"})
+
+
+# ── The villa's announcements (ha-commands.json `announcement`) ─────────────
+# What the villa's automations announce — the doorbell, an alarm, the weekly test — as the one event they fire beside
+# their Telegram message. ⚠️ ONE LISTENER, AND IT IS THIS PROCESS (owner, 2026-10-28, "One inbox"): not each page,
+# which would lose what arrived while no tablet was open and would have to hear the bus event itself (a guest session
+# relayed a raw bus event is the leak 2.496.556 closed); not the VESTA Agent, so a ring reaches the tablet with the
+# Agent stopped. Kept for the villa's records-kept days, like the Facility record; a page reads the store, and waits on
+# it for the next one (ANNOUNCEMENT_WAIT_S), so the event type never joins the non-owner `events` list.
+ANNOUNCEMENT_EVENT = str(HA_COMMANDS.get("announcement") or "")
+#: One announcement's finished text, at most (the layout's HTML; a Telegram message is 4096 characters).
+ANNOUNCEMENT_TEXT_MAX = 16_000
+ANNOUNCEMENTS_MAX_BYTES = 2_000_000
+class Feed:
+    """A numbered list the add-on keeps for every page, and wakes them on (review Q 4, 2026-10-28): each record one
+    `seq` above the last, tidied under its store's lock (`tidy`: what is still kept; `after`: run once a write landed,
+    a photo sweep), read whole or after a page's last, a read held open until the next one comes. ⚠️ ONE PLACE for the
+    numbering, the tidying, the waking and the answer to a page whose store started again: the announcements are its
+    first kind; the reports and VESTA's conversation (tickets 20-21 of "One inbox") bring only their record, their
+    merge and their tidy."""
+
+    def __init__(self, store: "JsonStore", tidy, after=None):
+        self.store, self.tidy, self.after = store, tidy, after
+        # ⚠️ THE LAST NUMBER GIVEN, KEPT APART (review Q round 2): numbered from what is stored, a store tidied empty
+        # (every record past the records-kept days) started again at 1, and an open page took the next one for a store
+        # started again and showed it as no news. Only a reinstall (both files gone) starts again.
+        self.mark = JsonStore(f"{store.name.removesuffix('.json')}-last.json", 0, 64)
+        # set when one is kept, then replaced: a read waits on the one current when it read
+        self._kept = asyncio.Event()
+
+    def _last(self, items: list) -> int:
+        """The last number given: the highest kept, or the mark when every one since was tidied away."""
+        mark = self.mark.read()
+        return max([a["seq"] for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)]
+                   + [mark if isinstance(mark, int) else 0])
+
+    def items(self) -> list:
+        """What is kept now (tidied, records with a number only). Blocking: called on a worker thread."""
+        return self.tidy(self.store.read())
+
+    async def add(self, make, merge=lambda stored, rec: stored + [rec]) -> dict:
+        """Keep the record `make(seq)` makes, numbered one above the last, `merge`d into what is kept (one line per
+        key, for the announcements), and wake every page waiting for it."""
+        made: dict = {}
+
+        def change(stored):
+            stored = stored if isinstance(stored, list) else []
+            made["rec"] = make(self._last(stored) + 1)
+            return self.tidy(merge(stored, made["rec"]))
+
+        try:
+            await self.store.update(change, after=self.after)
+        except StoreUnreadable:
+            # Not a record anyone else writes: a corrupt file starts again rather than lose every one from here on,
+            # numbered on from the mark (the pages hold numbers up to it).
+            made["rec"] = make(self._last([]) + 1)
+            await self.store.replace([made["rec"]])
+        await self.mark.replace(made["rec"]["seq"])
+        woken, self._kept = self._kept, asyncio.Event()
+        woken.set()
+        return made["rec"]
+
+    async def remove(self, seq: int) -> bool:
+        """Remove the record numbered `seq` (a superadmin's erase, message_erase_handler); whether one was kept. Every
+        page waiting is woken: its next read names what is still kept, so it drops the record too."""
+        hit: dict = {}
+
+        def change(stored):
+            stored = stored if isinstance(stored, list) else []
+            left = [a for a in stored if not (isinstance(a, dict) and a.get("seq") == seq)]
+            hit["was"] = len(left) < len(stored)
+            return self.tidy(left)
+
+        await self.store.update(change, after=self.after)
+        if hit.get("was"):
+            woken, self._kept = self._kept, asyncio.Event()
+            woken.set()
+        return bool(hit.get("was"))
+
+    async def read(self, after: int | None, wait_s: float) -> tuple[list, int, int]:
+        """(the records after `after` — all with None —, the last number given, and the FIRST still kept: a page drops
+        what it holds below it, so a tablet left on lists exactly what the add-on keeps, never a record tidied away
+        long ago — review Q round 2). With `after`, an answer with nothing waits up to `wait_s` for the next one. A
+        last number below the page's own means the store started again (a reinstall): answered at once, so the page
+        reads it whole."""
+        def answer() -> tuple[list, int, int, bool]:
+            stored = self.store.read()
+            items = self.tidy(stored)
+            last = self._last(items)
+            first = min((a["seq"] for a in items), default=last + 1)
+            pruned = isinstance(stored, list) and len(items) < len(stored)
+            return [a for a in items if after is None or a["seq"] > after], last, first, pruned
+
+        # Taken BEFORE the read: one kept between the read and the wait has already set this event, never a newer one.
+        kept = self._kept
+        items, last, first, pruned = await asyncio.to_thread(answer)
+        if pruned:
+            # Past what is kept (the records-kept days): deleted now, under the store's lock, not at the next one (a
+            # "keep for ever" set afterwards must not bring them back).
+            try:
+                await self.store.update(self.tidy, after=self.after)
+            except (StoreUnreadable, StoreTooLarge, OSError):
+                pass
+        if after is not None and not items and last >= after:
+            try:
+                await asyncio.wait_for(kept.wait(), wait_s)
+            except asyncio.TimeoutError:
+                pass
+            items, last, first, _ = await asyncio.to_thread(answer)
+        return items, last, first
+
+
+ANNOUNCEMENTS = JsonStore("announcements.json", [], ANNOUNCEMENTS_MAX_BYTES + ANNOUNCEMENT_TEXT_MAX)
+#: How long a page's read waits for the next announcement before answering "nothing new" (under every proxy's idle
+#: timeout on the way: Ingress, nginx's 60s, a tunnel's 100s).
+ANNOUNCEMENT_WAIT_S = 25
+#: The listener's pause before reconnecting after the villa's system went away, doubled up to the ceiling.
+ANNOUNCEMENT_RETRY_S = (5, 60)
+#: What an announcement may say about itself beside its text (2026-10-28): `key` ties a first message to its rewrite
+#: (the doorbell's ring and its "Opened at …"), `buttons` are telegram_bot's own ([[label, command], …]).
+ANNOUNCEMENT_KEY_MAX = 200
+ANNOUNCEMENT_BUTTONS_MAX = 6
+ANNOUNCEMENT_BUTTON_TEXT_MAX = 64
+#: The villa's media folder (config.yaml `map: media`, read-only): where an announcement's `photo` is, a camera's
+#: snapshot taken for it. The add-on copies it into its own store the moment the announcement arrives, so the next
+#: ring cannot change it and it lives exactly as long as its announcement.
+MEDIA_DIR = "/media"
+class KeptFiles:
+    """Files kept for the tablet in one folder of the add-on's: each under a name of the add-on's own (32 hex, then
+    the ending of its kind), written whole (atomic_write), read by that name only, swept by ONE rule — older than
+    `max_age_s`, or, given the names the records still name, named by none and older than `grace_s` (a file is kept
+    BEFORE the record naming it is written: a sweep in between must not take it for an orphan).
+
+    ⚠️ ONE MECHANISM FOR THE TABLET'S FILES (architecture review, 2026-10-30): the spoken questions, the answers' sounds
+    and the photos each named, wrote and swept their own way — a spoken question was swept only when another came, so it
+    outlived the time it is kept for; the sounds' sweep borrowed the photos' grace. Who may READ each kind stays its
+    door's (a photo: viewCameras or the current ring; a sound: the profile its turn answered; a voice: the Agent once).
+    The Facility documents and evidence are not these: their ids are the page's, their life the records-kept days'."""
+
+    def __init__(self, folder: str, endings: tuple[str, ...], grace_s=lambda: 0, max_age_s=lambda: None):
+        self.folder, self.grace_s, self.max_age_s = folder, grace_s, max_age_s
+        self.re = re.compile(r"^[0-9a-f]{32}(?:" + "|".join(re.escape(e) for e in endings) + r")$")
+
+    def path(self, name: str) -> str | None:
+        """Where `name` is kept, or None for a name that is not one of this folder's own."""
+        return _data(self.folder, name) if isinstance(name, str) and self.re.match(name) else None
+
+    def keep(self, data: bytes, ending: str = "") -> str:
+        """`data` kept under a new name; its name. Blocking."""
+        os.makedirs(_data(self.folder), exist_ok=True)
+        name = secrets.token_hex(16) + ending
+        atomic_write(_data(self.folder, name), lambda out: out.write(data))
+        return name
+
+    def take(self, name: str) -> bytes | None:
+        """A kept file read ONCE and deleted; None when there is none by that name. Blocking."""
+        path = self.path(name)
+        if path is None:
+            return None
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            os.remove(path)
+        except OSError:
+            return None
+        return data
+
+    def sweep(self, named: set | None = None) -> None:
+        """Delete what is past its age, and (given `named`) what no record names past the grace. Blocking."""
+        try:
+            names = os.listdir(_data(self.folder))
+        except OSError:
+            return
+        now, age, grace = time.time(), self.max_age_s(), self.grace_s()
+        for name in names:
+            if not self.re.match(name):
+                continue
+            try:
+                kept_for = now - os.path.getmtime(_data(self.folder, name))
+                if (age is not None and kept_for > age) or (named is not None and name not in named and kept_for >= grace):
+                    os.remove(_data(self.folder, name))
+            except OSError:
+                pass
+
+
+ANNOUNCEMENT_PHOTO_DIR = "announcement-photos"
+#: A photo's name ending → (the name it is kept under, its type, its first bytes). Its cap is an evidence photo's.
+ANNOUNCEMENT_PHOTO_TYPES = {".jpg": (".jpg", "image/jpeg", _JPEG_MAGIC), ".jpeg": (".jpg", "image/jpeg", _JPEG_MAGIC),
+                            ".png": (".png", "image/png", b"\x89PNG")}
+ANNOUNCEMENT_PHOTO_MAX_BYTES = FM_EVIDENCE_MAX_BYTES
+#: every kept photo, a ring's, a VESTA message's, a conversation turn's: one folder, one sweep (KeptFiles)
+PHOTOS = KeptFiles(ANNOUNCEMENT_PHOTO_DIR, (".jpg", ".png"), grace_s=lambda: ANNOUNCEMENT_PHOTO_GRACE_S)
+ANNOUNCEMENT_PHOTO_RE = PHOTOS.re
+
+
+def _announcement_buttons(raw) -> list:
+    """telegram_bot's keyboard ([[label, command], …] per row, or one row) as rows of [label, command] strings."""
+    if not isinstance(raw, list) or not raw:
+        return []
+    rows = raw if all(isinstance(r, list) and r and isinstance(r[0], list) for r in raw) else [raw]
+    out, n = [], 0
+    for row in rows:
+        keep = []
+        for b in row if isinstance(row, list) else []:
+            if (isinstance(b, list) and len(b) == 2 and all(isinstance(x, str) and 0 < len(x) <= ANNOUNCEMENT_BUTTON_TEXT_MAX
+                                                             for x in b) and n < ANNOUNCEMENT_BUTTONS_MAX):
+                keep.append([b[0], b[1]])
+                n += 1
+        if keep:
+            out.append(keep)
+    return out
+
+
+def _announcement_record(event, seq: int) -> dict | None:
+    """The record kept for one bus event, or None when it is not an announcement. Pure — tests/store-doors.py
+    drives it. `seq` orders them: a page asks for what came after the last one it holds. The photo is not in it: the
+    file is copied apart (_announcement_photo_source)."""
+    if not ANNOUNCEMENT_EVENT or not isinstance(event, dict) or event.get("event_type") != ANNOUNCEMENT_EVENT:
+        return None
+    data = event.get("data")
+    message = data.get("message") if isinstance(data, dict) else None
+    if not isinstance(message, str) or not message.strip():
+        return None
+    at = event.get("time_fired")
+    rec = {"seq": seq, "at": at if isinstance(at, str) else _now_iso(), "message": message[:ANNOUNCEMENT_TEXT_MAX]}
+    key = data.get("key")
+    if isinstance(key, str) and key.strip():
+        rec["key"] = key.strip()[:ANNOUNCEMENT_KEY_MAX]
+    if buttons := _announcement_buttons(data.get("buttons")):
+        rec["buttons"] = buttons
+    # the automation run that announced it (the bus event's context): the VESTA Agent names the runs it took over
+    # (vestaMessage `takes`), so the tablet shows VESTA's card in place of the villa's own message of that run
+    run = (event.get("context") or {}).get("id") if isinstance(event.get("context"), dict) else None
+    if isinstance(run, str) and run.strip():
+        rec["run"] = run.strip()[:ANNOUNCEMENT_KEY_MAX]
+    return rec
+
+
+def _announcement_photo_source(event) -> str | None:
+    """The announcement's photo as a real file inside the villa's media folder, or None. ⚠️ THE PATH COMES FROM AN
+    EVENT: anything outside the media folder (a `..`, a link out of it, another folder) or of another type is
+    refused, whoever fired it."""
+    data = event.get("data") if isinstance(event, dict) else None
+    raw = data.get("photo") if isinstance(data, dict) else None
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    root = os.path.realpath(MEDIA_DIR)
+    path = os.path.realpath(os.path.join(root, raw.strip().removeprefix(MEDIA_DIR).lstrip("/")))
+    if not path.startswith(root + os.sep) or os.path.splitext(path)[1].lower() not in ANNOUNCEMENT_PHOTO_TYPES:
+        return None
+    return path if os.path.isfile(path) else None
+
+
+def _copy_announcement_photo(src: str) -> str | None:
+    """The photo copied into the add-on's store under a new id ("<hex>.jpg"), or None when it is not the picture its
+    name says (its first bytes) or past the evidence photo's cap. Blocking: called on a worker thread."""
+    kept_as, _, magic = ANNOUNCEMENT_PHOTO_TYPES[os.path.splitext(src)[1].lower()]
+    try:
+        with open(src, "rb") as f:
+            body = f.read(ANNOUNCEMENT_PHOTO_MAX_BYTES + 1)
+    except OSError:
+        return None
+    if len(body) > ANNOUNCEMENT_PHOTO_MAX_BYTES or not body.startswith(magic):
+        return None
+    return _write_announcement_photo(body, kept_as)
+
+
+def _write_announcement_photo(body: bytes, kept_as: str) -> str:
+    """`body` written under a new id ("<hex>.jpg") in the photo folder; its name. ONE FOLDER FOR EVERY KEPT PHOTO (a ring's,
+    a snapshot under VESTA's alert): one sweep, one serving rule. Blocking: called on a worker thread."""
+    return PHOTOS.keep(body, kept_as)
+
+
+def _keep_pushed_photo(raw, cap: int | None = None) -> str | None:
+    """A photo the VESTA Agent pushed (base64 of a JPEG or a PNG) kept in the photo folder, or None when it is not the
+    picture it says (its first bytes) or is past the contract's cap (`cap`: a conversation turn's; a message's by default).
+    Blocking: called on a worker thread."""
+    cap = int(VESTA_MESSAGE_LIMITS.get("photoBytes") or 0) if cap is None else cap
+    if not isinstance(raw, str) or not raw or len(raw) > cap * 4 // 3 + 8:
+        return None
+    try:
+        body = base64.b64decode(raw, validate=True)
+    except ValueError:
+        return None
+    for kept_as, _ctype, magic in ANNOUNCEMENT_PHOTO_TYPES.values():
+        if len(body) <= cap and body.startswith(magic):
+            return _write_announcement_photo(body, kept_as)
+    return None
+
+
+#: ⚠️ A GUEST SEES ONLY THE CURRENT NOTIFICATION'S PHOTO (owner, 2026-10-28: "a guest shall only see the photo of the
+#: current notification"). A profile that may not view cameras gets a photo only from the newest announcement, and only
+#: this long after it arrived: the longest a ring stays on a screen as it comes in. Never a past ring's picture.
+ANNOUNCEMENT_CURRENT_S = 60
+
+
+def _ring_current_s() -> int:
+    """How long a ring is the current notification: ANNOUNCEMENT_CURRENT_S, or the villa's "Ring shown for"
+    (device-config.json `ringShownForS`) when longer. ⚠️ AS LONG AS IT HOLDS THE SCREEN (architecture review,
+    2026-10-30): with "Ring shown for" at 120s, a guest's photo was refused after 60s, the ring still on screen."""
+    cfg = DEVICE_CONFIG.read()
+    shown = cfg.get("ringShownForS") if isinstance(cfg, dict) else None
+    # its range is the page's to keep (AppConfig.ringShownForOk, on save): here a whole number of seconds, nothing else
+    ok = isinstance(shown, int) and not isinstance(shown, bool) and shown > 0
+    return max(ANNOUNCEMENT_CURRENT_S, shown if ok else 0)
+
+
+def _current_photo(items: list, now: float, current_s: int = ANNOUNCEMENT_CURRENT_S) -> str | None:
+    """The photo of the current notification, or None: the newest announcement's, while it is new (`current_s`:
+    _ring_current_s). Pure — tests/store-doors.py drives it."""
+    newest = max((a for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)),
+                 key=lambda a: a["seq"], default=None)
+    at = _iso_epoch(newest.get("at")) if newest else None
+    if newest is None or at is None or not 0 <= now - at <= current_s:
+        return None
+    return newest.get("photo") or None
+
+
+#: A copy younger than this is never swept: it is copied BEFORE its record is written (outside the store's lock, the
+#: copy reads the villa's file), so a sweep running in between must not take it for an orphan.
+ANNOUNCEMENT_PHOTO_GRACE_S = 120
+
+
+def _names_in(records, kind: str) -> set:
+    """Every kept file of `kind` `records` name — "photo": an announcement's or a message's `photo`, a turn's `photos`;
+    "page": a message's or a turn's `page`, in each of its languages; "speech": a turn's sound. ⚠️ ONE READER OF WHAT A
+    RECORD NAMES (architecture review, 2026-10-30): each sweep and each door spelled the fields itself, and a
+    conversation's page, missed by the per-profile rule its photo got, was served to any facility profile. Pure."""
+    named = set()
+    for a in records if isinstance(records, list) else ():
+        if not isinstance(a, dict):
+            continue
+        if kind == "photo":
+            named |= {a.get("photo")} | set(a.get("photos") if isinstance(a.get("photos"), list) else ())
+        elif kind == "page":
+            named |= {a.get("page")} | {w.get("page") for w in (a.get("languages") or {}).values() if isinstance(w, dict)}
+        elif kind == "speech":
+            named.add(a.get("speech"))
+    return {n for n in named if isinstance(n, str) and n}
+
+
+def _photos_named(records) -> set:
+    """Every kept photo `records` name (_names_in)."""
+    return _names_in(records, "photo")
+
+
+async def _turn_only(name: str, kind: str, profile: str) -> bool:
+    """Whether `name` is named by conversation turns only (no announcement nor VESTA message names it) and none of them
+    is `profile`'s: then it is another profile's private answer, never served. ⚠️ A CONVERSATION'S FILES ARE ITS
+    PROFILE'S (architecture review, 2026-10-30): its picture and its page alike."""
+    turns = [t for t in await asyncio.to_thread(CONVERSED.items) if isinstance(t, dict) and name in _names_in([t], kind)]
+    if not turns:
+        return False
+    shared = name in _names_in(await asyncio.to_thread(ANNOUNCED.items), kind) \
+        or name in _names_in(await asyncio.to_thread(MESSAGED.items), kind)
+    return not shared and not any(t.get("profile") == profile for t in turns)
+
+
+def _sweep_announcement_photos(_stored, kept) -> None:
+    """Delete every kept photo no kept announcement, VESTA message or conversation turn names: its record expired, or a
+    rewrite brought its own."""
+    named = _photos_named(kept)
+    for feed in (ANNOUNCED, MESSAGED, CONVERSED):   # ⚠️ THE FEEDS SHARE THE FOLDER: this one names its own from `kept`
+        named |= _photos_named(feed.items())
+    PHOTOS.sweep(named)
+
+
+def _announcements_with(stored: list, rec: dict) -> list:
+    """The store with `rec` added. ⚠️ ONE LINE PER KEY: an announcement naming the key of a kept one REPLACES it (the
+    ring becomes "Opened at …"); a rewrite with no photo keeps the first one's — and VESTA's report its job and page
+    (the night check's message rewritten by a later check stays a report). ⚠️ `asked` (agent-contract.json `asked`):
+    set on a rewrite of one that offered buttons, or had asked before — the one fact a rewrite loses and the tablet needs
+    to tell a request answered (approved, refused, expired, a ring opened or missed) from a note that never asked, so it
+    lists the first under Closed (owner, 2026-10-29). Never taken from the writer. Pure — tests/store-doors.py drives it."""
+    rec = {k: v for k, v in rec.items() if k != "asked"}
+    if "key" in rec:
+        old = next((a for a in stored if isinstance(a, dict) and a.get("key") == rec["key"]), None)
+        if old is not None:
+            rec = {**{f: old[f] for f in KEPT_ON_REWRITE if f not in rec and old.get(f)}, **rec}
+            if old.get("asked") is True or old.get("buttons"):
+                rec["asked"] = True
+            stored = [a for a in stored if a is not old]
+    return stored + [rec]
+
+
+def _announcements_kept(items: list, now: float, days: int, max_bytes: int) -> list:
+    """The announcements still kept: none older than `days` (0 = for ever), then the newest that fit `max_bytes`.
+    Pure — tests/store-doors.py drives it."""
+    kept = [a for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)]
+    if days > 0:
+        cutoff = now - days * 86400
+        kept = [a for a in kept if (_iso_epoch(a.get("at")) or now) >= cutoff]
+    return _telemetry_ring_after(kept, len(kept), max_bytes)
+
+
+def _announcements_tidy(items) -> list:
+    return _announcements_kept(items if isinstance(items, list) else [], time.time(),
+                               _evidence_retention_days(), ANNOUNCEMENTS_MAX_BYTES)
+
+
+#: The villa's announcements, the feed's first kind: one line per key, kept the records-kept days, a photo swept with
+#: the announcement that named it.
+ANNOUNCED = Feed(ANNOUNCEMENTS, _announcements_tidy, after=_sweep_announcement_photos)
+
+
+async def _record_announcement(_app: web.Application, event) -> dict | None:
+    """Keep one announcement (its photo copied first) and wake every page waiting for it (Feed.add)."""
+    if _announcement_record(event, 0) is None:
+        return None
+    src = await asyncio.to_thread(_announcement_photo_source, event)
+    photo = await asyncio.to_thread(_copy_announcement_photo, src) if src else None
+
+    def record(seq: int) -> dict:
+        rec = _announcement_record(event, seq)
+        return {**rec, "photo": photo} if photo else rec
+
+    return await ANNOUNCED.add(record, _announcements_with)
+
+
+async def _listen_announcements(app: web.Application) -> None:
+    """The add-on's own subscription to the announcement event, for its whole life; reconnects when the villa's
+    system restarts. Says each change of state once, never once per retry."""
+    if not ANNOUNCEMENT_EVENT:
+        print("[supervisor-proxy] announcements: no event named in ha-commands.json, none are kept", flush=True)
+        return
+    pause, ceiling = ANNOUNCEMENT_RETRY_S
+    wait, said = pause, None
+    while True:
+        try:
+            async with app["session"].ws_connect(
+                f"ws://{SUPERVISOR}/core/websocket", headers=AUTH, heartbeat=30,
+            ) as ws:
+                await ws.receive_json(timeout=30)                       # auth_required
+                await ws.send_json({"type": "auth", "access_token": TOKEN})
+                if (await ws.receive_json(timeout=30)).get("type") != "auth_ok":
+                    raise ConnectionError("the villa's system refused the add-on's token")
+                await ws.send_json({"id": 1, "type": "subscribe_events", "event_type": ANNOUNCEMENT_EVENT})
+                if not (await ws.receive_json(timeout=30)).get("success"):
+                    raise ConnectionError("the villa's system refused the subscription")
+                if said != "on":
+                    print("[supervisor-proxy] announcements: listening", flush=True)
+                    said = "on"
+                wait = pause
+                async for msg in ws:
+                    if msg.type != WSMsgType.TEXT:
+                        break
+                    try:
+                        obj = json.loads(msg.data)
+                    except ValueError:
+                        continue
+                    if isinstance(obj, dict) and obj.get("type") == "event":
+                        try:
+                            await _record_announcement(app, obj.get("event"))
+                        except (OSError, StoreTooLarge) as exc:
+                            # One not kept, the listener goes on: a full disk must not also lose the next ring.
+                            print(f"[supervisor-proxy] announcements: one not kept ({type(exc).__name__})", flush=True)
+                raise ConnectionError("the villa's system closed the connection")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — any failure here means "reconnect", never "stop listening"
+            if said != "off":
+                print(f"[supervisor-proxy] announcements: not listening ({type(exc).__name__}: {exc}); retrying",
+                      flush=True)
+                said = "off"
+        await asyncio.sleep(wait)
+        wait = min(wait * 2, ceiling)
+
+
+async def _current_photos() -> set:
+    """The photo of the current notification now, as a set of one name or none: the newest record of the villa's
+    announcements and VESTA's messages together (a snapshot under VESTA's alert is a notification's photo too, and a newer
+    notice of either kind takes the current place), while it is new (_current_photo). The two feeds number apart, so each
+    gives its newest and the later of the two decides."""
+    newest = []
+    for feed in (ANNOUNCED, MESSAGED):
+        items = [a for a in await asyncio.to_thread(feed.items) if isinstance(a, dict)]
+        newest += [max(items, key=lambda a: a["seq"])] if items else []
+    newest.sort(key=lambda a: _iso_epoch(a.get("at")) or 0)
+    photo = _current_photo(newest[-1:], time.time(), await asyncio.to_thread(_ring_current_s))
+    return {photo} if photo else set()
+
+
+def _after_of(request: web.Request) -> int | None | web.Response:
+    """A long read's `?after=<seq>` (None without one), or the 400 to answer when it is not a number."""
+    try:
+        return int(request.query["after"]) if "after" in request.query else None
+    except ValueError:
+        return web.json_response({"error": "after must be a number"}, status=400)
+
+
+def _feed_handler(feed: "Feed", field: str, own=None, said=None):
+    """A page's read of one feed — `{field: [...], "last": seq, "first": seq}`, every profile. With `?after=<seq>`, only
+    the newer ones, the answer waiting up to ANNOUNCEMENT_WAIT_S for one to arrive. ⚠️ ONE READ FOR EVERY FEED (owner,
+    2026-10-28: "the same code … consistently used"): the villa's announcements and VESTA's messages are answered by
+    this one, the guest's photo rule included — a profile that may not view cameras is told only the current
+    notification's photo (_current_photos; announcement_photo_handler refuses it the others too), and never a
+    conversation's pictures. `own(record, profile)`: the records this session's profile reads, when a feed holds several
+    profiles' (VESTA's conversation: each its own, never another's); `said()`: what else the read answers."""
+    async def handler(request: web.Request) -> web.Response:
+        if (refused := _refuse(request)) is not None:
+            return refused
+        if isinstance(after := _after_of(request), web.Response):
+            return after
+        profile = _role_for(request)
+        mine = (lambda a: own(a, profile)) if own else (lambda a: True)
+        items, last, first = await feed.read(after, ANNOUNCEMENT_WAIT_S)
+        items = [a for a in items if mine(a)]
+        # every number still kept: a page drops what it holds that is not (one erased: message_erase_handler)
+        kept = [a["seq"] for a in await asyncio.to_thread(feed.items) if mine(a)]
+        if not _may(profile, "viewCameras"):
+            current = await _current_photos()
+            items = [{k: v for k, v in a.items() if k != "photos" and (k != "photo" or v in current)} for a in items]
+        return web.json_response({field: items, "last": last, "first": first, "kept": kept, **(said() if said else {})},
+                                 headers={"Cache-Control": "no-store"})
+    return handler
+
+
+announcements_handler = _feed_handler(ANNOUNCED, "announcements")
+
+
+async def announcement_photo_handler(request: web.Request) -> web.StreamResponse:
+    """One kept photo, by the id its record names — to a profile that may view cameras, and to any other only while it
+    is the current notification's (ANNOUNCEMENT_CURRENT_S). ⚠️ A CONVERSATION'S PICTURE IS ITS PROFILE'S (architecture
+    review, 2026-10-30): the pictures an answer carries share the folder, and any profile that may view cameras could
+    fetch another profile's by its id — guarded only by an id no one can guess. One named by a conversation turn alone
+    (no announcement nor VESTA message names it) goes to the profile whose turn it is, as an answer's sound does."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    name = request.match_info.get("id", "")
+    path = PHOTOS.path(name)
+    if path is None or not os.path.isfile(path):
+        return web.json_response({"error": "no such photo"}, status=404)
+    profile = _role_for(request)
+    if not _may(profile, "viewCameras") and name not in await _current_photos():
+        return _forbidden("This profile sees a ring's photo only while it is the current notification.")
+    if await _turn_only(name, "photo", profile):
+        return web.json_response({"error": "no such photo"}, status=404)
+    _, ctype, _ = ANNOUNCEMENT_PHOTO_TYPES[os.path.splitext(name)[1]]
+    return web.FileResponse(path, headers={"Content-Type": ctype, "Cache-Control": "no-store"})
+
+
+# ── VESTA's messages, as they stand (agent-contract.json `vestaMessage`) ─────────────────────────────────────────────
+# Every message the VESTA Agent writes on Telegram is also kept here for the tablet, as it stands now (ticket 25 of "One
+# inbox", owner 2026-10-28: everything Telegram shows is reproduced on the tablet). ⚠️ THE AGENT WRITES, THE ADD-ON KEEPS:
+# one record per thread (`key`), added or REPLACED when the Agent rewrites it, never removed by the Agent; tidied after the
+# records-kept days like the announcements, and served to every page by the SAME Feed (the second kind it was made for).
+# The Agent's push is in the background with a time limit on its side: an alert never waits on it, and with the Agent down
+# the villa's own first version (an announcement) stays.
+VESTA_MESSAGE_LIMITS: dict = dict((AGENT_CONTRACT_TABLE.get("vestaMessage") or {}).get("limits") or {})
+#: What a rewrite that names none keeps of the record it replaces (agent-contract.json vestaMessage.keptOnRewrite): one
+#: list, read here and by the Agent's test Kiosk (architecture review 2026-10-29, round 2)
+# (the agreement unreadable: the same three, never fewer: a rewritten report would lose its page — review round 3)
+KEPT_ON_REWRITE: tuple = tuple((AGENT_CONTRACT_TABLE.get("vestaMessage") or {}).get("keptOnRewrite")
+                               or ("photo", "page", "report"))
+VESTA_MESSAGES_MAX_BYTES = 2_000_000
+VESTA_MESSAGE_LANGUAGE_RE = re.compile(r"^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$")
+
+
+def _vm_text(value, limit_name: str) -> str:
+    """A text field: a string, stripped, cut at its contract limit; anything else is empty."""
+    return value.strip()[:int(VESTA_MESSAGE_LIMITS.get(limit_name) or 0)] if isinstance(value, str) else ""
+
+
+def _vm_lines(value, list_name: str, line_name: str) -> list:
+    """A list of texts: the first entries up to the contract's count, each cut, none empty."""
+    out = [_vm_text(x, line_name) for x in value] if isinstance(value, list) else []
+    return [x for x in out if x][:int(VESTA_MESSAGE_LIMITS.get(list_name) or 0)]
+
+
+def _vm_buttons(value) -> list:
+    """VESTA's buttons as a record carries them ([{label, kind, id}]: its own kind and id, never a device or a command),
+    the first the agreement allows; one missing a part is left out. ONE reading for a VESTA message and a conversation
+    turn alike."""
+    out = []
+    for b in value if isinstance(value, list) else []:
+        made = {f: _vm_text(b.get(f), f) for f in ("label", "kind", "id")} if isinstance(b, dict) else {}
+        if all(made.values()) and len(out) < int(VESTA_MESSAGE_LIMITS.get("buttons") or 0):
+            out.append(made)
+    return out
+
+
+#: Each button kind's rules for the tablet (agent-contract.json vestaMessage.buttonKinds): `acts`, never a guest's.
+BUTTON_KINDS: dict = dict((AGENT_CONTRACT_TABLE.get("vestaMessage") or {}).get("buttonKinds") or {})
+
+
+def _vm_page(value) -> str:
+    """A report's page: a document id as the upload takes it (FM_EVIDENCE_ID_RE); anything else is none."""
+    return value if isinstance(value, str) and FM_EVIDENCE_ID_RE.fullmatch(value) else ""
+
+
+def _vm_language(code) -> bool:
+    """Whether `code` is a language code the record may name ("fr", "pt-BR")."""
+    return (isinstance(code, str) and bool(VESTA_MESSAGE_LANGUAGE_RE.match(code))
+            and len(code) <= int(VESTA_MESSAGE_LIMITS.get("language") or 0))
+
+
+def _report_pages() -> set:
+    """Every page a kept VESTA message names (a report's, in each of its languages): a fault's write never sweeps them as
+    unattached — a report's page lives with its message, the records-kept days, never with a ticket (ticket 20)."""
+    # ...and an answer's page in the tablet's conversation (ticket 21), the records-kept days too
+    return _names_in([*MESSAGED.items(), *CONVERSED.items()], "page")
+
+
+def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
+    """The record kept for one pushed message, or None when it names no key or says nothing. Pure — tests/store-doors.py
+    drives it. The photo is not in it: the picture is kept apart (_keep_pushed_photo). Every limit is the agreement's."""
+    if not VESTA_MESSAGE_LIMITS or not isinstance(body, dict):
+        return None
+    key = _vm_text(body.get("key"), "key")
+    rec = {"seq": seq, "key": key, "at": body["at"] if _iso_epoch(body.get("at")) is not None else now_iso}
+    for field in ("title", "to", "lead", "body", "stage", "mark"):
+        if text := _vm_text(body.get(field), field):
+            rec[field] = text
+    if roles := _vm_lines(body.get("roles"), "roles", "role"):
+        rec["roles"] = roles
+    if status := _vm_lines(body.get("status"), "status", "statusLine"):
+        rec["status"] = status
+    if takes := _vm_lines(body.get("takes"), "takes", "key"):
+        rec["takes"] = takes
+    # a report (ticket 20 of "One inbox"): the scheduled job that sent it, its page (a document id: the add-on serves it
+    # from its own folder, so nothing else is let through) and the language its words are in
+    if report := _vm_text(body.get("report"), "report"):
+        rec["report"] = report
+    if page := _vm_page(body.get("page")):
+        rec["page"] = page
+    if _vm_language(body.get("language")):
+        rec["language"] = body["language"]
+    if buttons := _vm_buttons(body.get("buttons")):
+        rec["buttons"] = buttons
+    langs = {}
+    for code, words in (body.get("languages") or {}).items() if isinstance(body.get("languages"), dict) else ():
+        if (_vm_language(code) and isinstance(words, dict)
+                and len(langs) < int(VESTA_MESSAGE_LIMITS.get("languages") or 0)):
+            one = {"body": _vm_text(words.get("body"), "body"), "status": _vm_lines(words.get("status"), "status", "statusLine"),
+                   "page": _vm_page(words.get("page"))}
+            if one["body"] or one["status"]:
+                langs[code] = {k: v for k, v in one.items() if v}
+    if langs:
+        rec["languages"] = langs
+    return rec if key and any(f in rec for f in ("title", "lead", "body", "status")) else None
+
+
+MESSAGES = JsonStore("vesta-messages.json", [], VESTA_MESSAGES_MAX_BYTES + 100_000)
+
+
+def _vesta_messages_tidy(items) -> list:
+    """The records still kept: the announcements' rule (the records-kept days, then the newest that fit the cap)."""
+    return _announcements_kept(items if isinstance(items, list) else [], time.time(), _evidence_retention_days(),
+                               VESTA_MESSAGES_MAX_BYTES)
+
+
+#: VESTA's messages, the feed's second kind: one line per key (a rewrite REPLACES, keeping the first one's photo), a photo
+#: swept with the record that named it.
+MESSAGED = Feed(MESSAGES, _vesta_messages_tidy, after=_sweep_announcement_photos)
+
+
+async def agent_vesta_message_handler(request: web.Request) -> web.Response:
+    """The Agent's push of one message as it stands (token-gated, `agentWrite`): added, or replacing the record of its
+    key. 404 when the agreement names no limits (the door says nothing); 400 for a body with no key or no words."""
+    if (refused := _agent_refuse(request, "agentWrite")) is not None:
+        return refused
+    if not VESTA_MESSAGE_LIMITS:
+        return web.json_response({"error": "not found"}, status=404)
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    if _vesta_message_record(body, 0, _now_iso()) is None:
+        return web.json_response({"error": "a message names a key and says something"}, status=400)
+    photo = await asyncio.to_thread(_keep_pushed_photo, body["photo"]) if body.get("photo") else None
+
+    def record(seq: int) -> dict:
+        rec = _vesta_message_record(body, seq, _now_iso())
+        return {**rec, "photo": photo} if photo else rec
+
+    rec = await MESSAGED.add(record, _announcements_with)
+    return web.json_response({"ok": True, "seq": rec["seq"]})
+
+
+vesta_messages_handler = _feed_handler(MESSAGED, "messages")
+
+
+# ── Talking to VESTA on the tablet (agent-contract.json `conversation`) ─────────────────────────────────────────────
+# Ticket 21 of "One inbox" (owner, 2026-10-28): a question typed on a tablet, answered by VESTA in its thread. ⚠️ THE
+# KIOSK NEVER CALLS THE AGENT: the question waits in an inbox the Agent collects (its long read, like a page's), and the
+# Agent writes each answer back as a conversation turn. ⚠️ WHO ASKS IS THE SESSION'S PROFILE, STAMPED HERE: the page sends
+# words only, so no page can speak as the owner; the Agent answers each profile in its own conversation, with its role's
+# rights (a guest: answers only), apart from every Telegram chat — and a page reads its own profile's conversation only.
+CONVERSATION = dict(AGENT_CONTRACT_TABLE.get("conversation") or {})
+CONVERSATION_LIMITS: dict = dict(CONVERSATION.get("limits") or {})
+#: The Kiosk's profiles the Agent answers, each with its role (the agreement's one table).
+CONVERSATION_PROFILES: dict = dict(CONVERSATION.get("profiles") or {})
+#: A question the Agent has not collected by then is dropped: an answer an hour late is no answer.
+ASK_KEPT_S = int(CONVERSATION.get("askKeptSeconds") or 0)
+#: The person's own lines are the add-on's: their key starts so (the agreement's conversation.keys), and the Agent may
+#: not write one. Without an agreement, every key starts so: nothing is written.
+ASK_KEY = str((CONVERSATION.get("keys") or {}).get("ask") or "")
+#: At most this many questions per profile in a minute: each one costs an AI answer, and a guest's tablet is anyone's.
+ASKS_PER_MINUTE = int(CONVERSATION.get("asksPerMinute") or 0)
+ASKS_MAX_BYTES = 200_000
+CONVERSATION_MAX_BYTES = 2_000_000
+# ⚠️ A SPOKEN QUESTION IS A WAV, AND ONLY ONE SHAPE OF IT (ticket 23 of "One inbox", hold to talk): the agreement's rate,
+# 16-bit, mono — what the villa's Whisper reads as it comes, so no page's recorder format (iPad and Android differ)
+# reaches the Agent. Kept as a file apart from the inbox (a 30s question is ~1 MB: the inbox stays small), named by a
+# random id the ask carries, read by the Agent ONCE and gone (a voice is the person's), never kept past askKeptSeconds.
+VOICE: dict = dict(CONVERSATION.get("voice") or {})
+VOICE_DIR = "vesta-voice"
+#: the spoken questions' WAVs: no ending, each kept until the Agent reads it once, never past askKeptSeconds (KeptFiles)
+VOICES = KeptFiles(VOICE_DIR, ("",), max_age_s=lambda: ASK_KEPT_S)
+VOICE_NAME_RE = VOICES.re
+
+
+def _wav_refused(data: bytes) -> str | None:
+    """Why a recording is not a spoken question the add-on keeps, or None when it is one: a RIFF/WAVE of PCM at the
+    agreement's rate, one channel, 16-bit, with sound, at most voice.seconds long. Pure — tests/agent-interface.py."""
+    rate, longest = int(VOICE.get("rate") or 0), int(VOICE.get("seconds") or 0)
+    if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        return "A spoken question is a WAV recording."
+    fmt, sound, at = None, None, 12
+    while at + 8 <= len(data) and sound is None:
+        name, size = data[at:at + 4], int.from_bytes(data[at + 4:at + 8], "little")
+        if name == b"fmt " and size >= 16:
+            fmt = data[at + 8:at + 24]
+        elif name == b"data":
+            sound = data[at + 8:at + 8 + size]
+        at += 8 + size + (size & 1)
+    if fmt is None or int.from_bytes(fmt[0:2], "little") != 1 or int.from_bytes(fmt[2:4], "little") != 1 \
+            or int.from_bytes(fmt[4:8], "little") != rate or int.from_bytes(fmt[14:16], "little") != 16:
+        return f"A spoken question is {rate} Hz, 16-bit, mono."
+    if not sound:
+        return "This recording has no sound."
+    if len(sound) > rate * 2 * longest:
+        return f"A spoken question is at most {longest}s."
+    return None
+
+
+#: What the page measured of a spoken question (messages/voice.ts measureHeader, owner 2026-10-29: tablet questions were
+#: badly understood, the same words from Telegram well): whole numbers only, these names only.
+RECORDING_KEYS = ("heldMs", "openMs", "rate", "micRate", "blocks", "missing", "peakDb")
+RECORDING_RE = re.compile(r"^(?:[A-Za-z]{1,10}=-?\d{1,7})(?:;[A-Za-z]{1,10}=-?\d{1,7}){0,9}$")
+
+
+def _recording_line(header: str | None, data: bytes, profile: str) -> str:
+    """The add-on's log line for a spoken question: what the page measured beside the sound that came (a page that
+    measured nothing, or sent something else: the sound alone). Never the sound. Pure — tests/agent-interface.py."""
+    sound = max(0, len(data) - 44) / 2 / max(1, int(VOICE.get("rate") or 1))
+    line = f"[proxy] a spoken question ({profile}): {sound:.1f}s of sound"
+    m = dict(p.split("=") for p in header.split(";")) if header and RECORDING_RE.match(header) else {}
+    if not all(k in m for k in RECORDING_KEYS):
+        return line + " (the page measured nothing)"
+    n = {k: int(m[k]) for k in RECORDING_KEYS}
+    return (line + f"; held {n['heldMs'] / 1000:.1f}s, microphone open {n['openMs'] / 1000:.1f}s; page {n['rate']} Hz, "
+            f"microphone {n['micRate'] or 'not said'}{' Hz' if n['micRate'] else ''}; {n['missing']} of "
+            f"{n['blocks'] + n['missing']} blocks missing; loudest {n['peakDb']} dB")
+
+
+def _keep_voice(data: bytes) -> str:
+    """Keep a spoken question's WAV for the Agent: its name. Blocking: called on a worker thread."""
+    VOICES.sweep()
+    return VOICES.keep(data)
+
+
+def _take_voice(name: str) -> bytes | None:
+    """A kept WAV, read once and deleted; None when there is none by that name. Blocking."""
+    VOICES.sweep()
+    return VOICES.take(name)
+
+
+# ⚠️ AN ANSWER SPOKEN ALOUD (ticket 24 of "One inbox", owner 2026-10-28: "use piper path only first"): VESTA's answer to a
+# spoken question in the villa's own voice, made by the Agent (the text-to-speech the villa's voice settings name) and
+# uploaded before the turn that names it (`speech`). Kept apart, as a turn's pictures are, while a turn names it; served
+# only to the profile whose turn names it. Only the agreement's voice.answerTypes, each told by its first bytes.
+SPEECH_DIR = "vesta-speech"
+SPEECH_ENDINGS = {"audio/mpeg": ".mp3", "audio/wav": ".wav"}
+#: How long a sound uploaded before its turn may wait for the turn naming it (the Agent writes it at once)
+SPEECH_GRACE_S = 120
+#: the answers' sounds: kept while a turn names them (KeptFiles)
+SPEECHES = KeptFiles(SPEECH_DIR, tuple(SPEECH_ENDINGS.values()), grace_s=lambda: SPEECH_GRACE_S)
+SPEECH_RE = SPEECHES.re
+
+
+def _speech_refused(data: bytes, kind: str) -> str | None:
+    """Why `data` is not an answer's sound the add-on keeps, or None: one of the agreement's voice.answerTypes, its first
+    bytes that type's (an MP3's tag or frame, a WAV's RIFF/WAVE), at most voice.answerBytes. Pure —
+    tests/agent-interface.py."""
+    if kind not in (VOICE.get("answerTypes") or ()) or kind not in SPEECH_ENDINGS:
+        return "An answer's sound is " + " or ".join(VOICE.get("answerTypes") or ["none"]) + "."
+    if not data:
+        return "This sound is empty."
+    if len(data) > int(VOICE.get("answerBytes") or 0):
+        return "This sound is too long."
+    mp3 = data[:3] == b"ID3" or (len(data) > 1 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0)
+    if not (mp3 if kind == "audio/mpeg" else data[:4] == b"RIFF" and data[8:12] == b"WAVE"):
+        return f"This sound is not {kind}."
+    return None
+
+
+def _keep_speech(data: bytes, kind: str) -> str:
+    """Keep an answer's sound for the turn that will name it: its name. Blocking: called on a worker thread."""
+    return SPEECHES.keep(data, SPEECH_ENDINGS[kind])
+
+
+def _sweep_speech(kept) -> None:
+    """Delete every answer's sound no kept turn names (its turn expired, or a rewrite left it), unless younger than
+    SPEECH_GRACE_S: it is uploaded BEFORE the turn that names it. Blocking."""
+    SPEECHES.sweep(_names_in(kept, "speech"))
+
+
+def _after_conversation(stored, kept) -> None:
+    """What a conversation write leaves behind, swept: the pictures and the sounds no kept turn names."""
+    _sweep_announcement_photos(stored, kept)
+    _sweep_speech(kept)
+
+
+def _heard_line(turns: list, body: dict) -> dict | None:
+    """The person's spoken line with the words the Agent heard (`{"key": "ask:<seq>", "profile", "heard"}`), or None
+    when that is not one: ⚠️ THE ONLY WRITE THE AGENT MAKES TO A PERSON'S LINE — a spoken one of that profile, with no
+    words yet. Once: the person's words are never rewritten. Pure — tests/agent-interface.py."""
+    key, heard = body.get("key"), body.get("heard")
+    if set(body) != {"key", "profile", "heard"} or not isinstance(key, str) or not key.startswith(ASK_KEY) \
+            or not isinstance(heard, str) or not heard.strip():
+        return None
+    line = next((t for t in turns if isinstance(t, dict) and t.get("key") == key), None)
+    if line is None or line.get("from") != "person" or line.get("profile") != body.get("profile") \
+            or line.get("voice") is not True or "text" in line:
+        return None
+    return {**line, "text": heard.strip()[:int(CONVERSATION_LIMITS.get("question") or 0)]}
+
+
+def _asks_kept(items, now: float) -> list:
+    """The questions still to collect: none older than the agreement's askKeptSeconds, then the newest that fit. Pure."""
+    kept = [a for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)] if isinstance(items, list) else []
+    kept = [a for a in kept if 0 <= now - (_iso_epoch(a.get("at")) or 0) <= ASK_KEPT_S]
+    return _telemetry_ring_after(kept, len(kept), ASKS_MAX_BYTES)
+
+
+def _with_heard(stored: list, rec: dict) -> list:
+    """The conversation with the words heard on the person's spoken line — unless the line, as stored now, has words
+    already (the person's words are written once). Its `at` stays the question's (the thread's order: feed.byTime). Pure."""
+    now = next((t for t in stored if isinstance(t, dict) and t.get("key") == rec["key"]), None)
+    return stored if now is not None and "text" in now else _turns_with(stored, rec)
+
+
+def _turns_with(stored: list, rec: dict) -> list:
+    """The conversation with `rec` added — or REPLACING the turn of its key, whole (a "being prepared" answer becomes its
+    result; a withdrawn one keeps no picture). Pure — tests/store-doors.py drives it."""
+    return [t for t in stored if not (isinstance(t, dict) and t.get("key") == rec["key"])] + [rec]
+
+
+def _turn_record(body, seq: int, now_iso: str) -> dict | None:
+    """The record kept for one turn the Agent wrote, or None when it is not one: a key that is not a person's line, a
+    profile of the agreement's, and words, a picture, a page or a withdrawal. Pure — tests/store-doors.py drives it. The
+    pictures are not in it: they are kept apart (_keep_turn_photos)."""
+    if not CONVERSATION_LIMITS or not isinstance(body, dict):
+        return None
+    key = body.get("key")
+    if (not isinstance(key, str) or not key.strip() or key.strip().startswith(ASK_KEY)
+            or len(key) > int(CONVERSATION_LIMITS.get("key") or 0) or body.get("profile") not in CONVERSATION_PROFILES):
+        return None
+    rec = {"seq": seq, "key": key.strip(), "profile": body["profile"], "from": "vesta",
+           "at": body["at"] if _iso_epoch(body.get("at")) is not None else now_iso}
+    if body.get("gone") is True:
+        return {**rec, "gone": True}
+    if isinstance(body.get("text"), str) and body["text"].strip():
+        rec["text"] = body["text"].strip()[:int(CONVERSATION_LIMITS.get("text") or 0)]
+    if page := _vm_page(body.get("page")):
+        rec["page"] = page
+    if buttons := _vm_buttons(body.get("buttons")):
+        rec["buttons"] = buttons
+    # a press's short answer (its toast): shown under the button pressed, never as a line of the conversation
+    if isinstance(body.get("answers"), int) and not isinstance(body.get("answers"), bool):
+        rec["answers"] = body["answers"]
+    # VESTA is answering (Telegram's "typing…"): the tablet's dots in its bubble
+    if body.get("typing") is True:
+        rec["typing"] = True
+    # the answer said aloud (ticket 24): a sound uploaded first (/agent/v1/speech); never a turn on its own
+    if isinstance(body.get("speech"), str) and SPEECH_RE.match(body["speech"]):
+        rec["speech"] = body["speech"]
+    photos = body.get("photos")
+    has_photo = isinstance(photos, list) and any(isinstance(p, str) and p for p in photos)
+    return rec if ("text" in rec or "page" in rec or "typing" in rec or has_photo) else None
+
+
+def _keep_turn_photos(raw) -> list:
+    """A turn's pictures (base64) kept in the photo folder, the first the agreement allows; one that is not a picture is
+    left out. Blocking: called on a worker thread."""
+    raws = [p for p in raw if isinstance(p, str) and p] if isinstance(raw, list) else []
+    kept = (_keep_pushed_photo(p, int(CONVERSATION_LIMITS.get("photoBytes") or 0))
+            for p in raws[:int(CONVERSATION_LIMITS.get("photos") or 0)])
+    return [k for k in kept if k]
+
+
+ASKS = JsonStore("vesta-asks.json", [], ASKS_MAX_BYTES + 20_000)
+TURNS = JsonStore("vesta-conversation.json", [], CONVERSATION_MAX_BYTES + 100_000)
+#: The questions waiting for the Agent: collected by its long read, gone after askKeptSeconds.
+ASKED = Feed(ASKS, lambda items: _asks_kept(items, time.time()))
+#: The tablet's conversations, every profile's in one list (each page reads its own): one line per key, kept the
+#: records-kept days, a picture swept with the turn that named it.
+CONVERSED = Feed(TURNS, lambda items: _announcements_kept(items if isinstance(items, list) else [], time.time(),
+                                                          _evidence_retention_days(), CONVERSATION_MAX_BYTES),
+                 after=_after_conversation)
+
+
+def _vesta_online() -> bool:
+    """Whether the VESTA Agent is running now (its heartbeat, _agent_presence): without it, nobody answers."""
+    return _agent_presence().get("state") == "online"
+
+
+def _asked_lately(items: list, profile: str, now: float) -> int:
+    """How many questions this profile asked in the last minute. Pure."""
+    return sum(1 for a in items if isinstance(a, dict) and a.get("profile") == profile
+               and 0 <= now - (_iso_epoch(a.get("at")) or 0) < 60)
+
+
+async def vesta_ask_handler(request: web.Request) -> web.Response:
+    """`{"text"}` — every profile: the question kept for the Agent, stamped with this session's profile, and shown in the
+    profile's conversation at once. Or an `audio/wav` body — a spoken question (ticket 23, hold to talk): the sound kept
+    for the Agent, the line shown as spoken, its words written by the Agent once heard. 503 while VESTA is not running
+    (nobody would answer), 429 past ASKS_PER_MINUTE, 400 for anything but words or such a WAV."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    data = None
+    if request.content_type == "audio/wav":
+        data = await request.read()
+        if not CONVERSATION_PROFILES or not VOICE:
+            return web.json_response({"error": "not found"}, status=404)
+        if why := _wav_refused(data):
+            return web.json_response({"error": why}, status=400)
+        text = ""
+    else:
+        body = await _json_object(request)
+        if isinstance(body, web.Response):
+            return body
+        text = body.get("text")
+        longest = int(CONVERSATION_LIMITS.get("question") or 0)
+        if not CONVERSATION_PROFILES or set(body) != {"text"} or not isinstance(text, str) or not text.strip() \
+                or len(text) > longest:
+            return web.json_response({"error": f"A question is words, at most {longest} characters."}, status=400)
+    profile = _role_for(request)
+    if profile not in CONVERSATION_PROFILES:
+        return _forbidden("This profile does not talk to VESTA.")
+    if not _vesta_online():
+        return web.json_response({"error": "VESTA is not running."}, status=503)
+    if _asked_lately(await asyncio.to_thread(ASKED.items), profile, time.time()) >= ASKS_PER_MINUTE:
+        return web.json_response({"error": "Too many questions at once: wait a minute."}, status=429)
+    at = _now_iso()
+    # a spoken one: the inbox names its sound, the thread shows it as spoken until the Agent writes the words heard
+    if data is not None:
+        print(_recording_line(request.headers.get("X-Recording"), data, profile), flush=True)
+    asked, shown = (({"voice": await asyncio.to_thread(_keep_voice, data)}, {"voice": True}) if data is not None
+                    else ({"text": text.strip()}, {"text": text.strip()}))
+    ask = await ASKED.add(lambda seq: {"seq": seq, "at": at, "profile": profile, **asked})
+    await CONVERSED.add(lambda seq: {"seq": seq, "key": f"{ASK_KEY}{ask['seq']}", "profile": profile, "from": "person",
+                                     "at": at, **shown}, _turns_with)
+    return web.json_response({"ok": True})
+
+
+#: This session's profile's conversation, read as every feed is (_feed_handler): `{"turns", "last", "first", "kept",
+#: "vesta": "online"|"offline"}`, every profile, ⚠️ ONLY ITS OWN (a guest never reads what the owner asked), no picture for
+#: a profile that may not view cameras — and whether VESTA runs, which every profile is told (the top bar's VESTA button).
+vesta_conversation_handler = _feed_handler(
+    CONVERSED, "turns", own=lambda t, profile: t.get("profile") == profile,
+    said=lambda: {"vesta": "online" if _vesta_online() else "offline"})
+
+
+def _offers(records: list, key, command, profile: str) -> bool:
+    """Whether a kept VESTA record with this key offers the button `command` ("<kind>:<id>") — a VESTA message (every
+    profile's) or a turn of the presser's own conversation. Pure: tests/store-doors.py drives it."""
+    if not isinstance(key, str) or not key or not isinstance(command, str) or ":" not in command:
+        return False
+    return any(isinstance(r, dict) and r.get("key") == key and r.get("profile", profile) == profile
+               and any(f"{b.get('kind')}:{b.get('id')}" == command for b in r.get("buttons") or [])
+               for r in records)
+
+
+async def vesta_press_handler(request: web.Request) -> web.Response:
+    """`{"key", "command"}` — one of VESTA's buttons pressed on a tablet (ticket 22 of "One inbox"): kept in the inbox for
+    the Agent, stamped with this session's profile, as a question is. 409 when no kept record offers that button (any
+    more), 403 for a guest's button that acts (agent-contract.json vestaMessage.buttonKinds), 503 while VESTA is not
+    running. Answers the press's number: VESTA's short answer comes back in the conversation as `answers`."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    if not CONVERSATION_PROFILES or set(body) != {"key", "command"} or not isinstance(body.get("command"), str):
+        return web.json_response({"error": "a press names a key and a command, nothing else"}, status=400)
+    profile = _role_for(request)
+    if profile not in CONVERSATION_PROFILES:
+        return _forbidden("This profile does not talk to VESTA.")
+    kind, _, bid = body["command"].partition(":")
+    if (BUTTON_KINDS.get(kind) or {}).get("acts", True) and not _may(profile, "viewAgent"):
+        return _forbidden("A guest gets answers only: this button is for the owner or the facility manager.")
+    held = [*await asyncio.to_thread(MESSAGED.items), *await asyncio.to_thread(CONVERSED.items)]
+    if not _offers(held, body["key"], body["command"], profile):
+        return web.json_response({"error": "This button is no longer offered."}, status=409)
+    if not _vesta_online():
+        return web.json_response({"error": "VESTA is not running."}, status=503)
+    if _asked_lately(await asyncio.to_thread(ASKED.items), profile, time.time()) >= ASKS_PER_MINUTE:
+        return web.json_response({"error": "Too many at once: wait a minute."}, status=429)
+    at = _now_iso()
+    ask = await ASKED.add(lambda seq: {"seq": seq, "at": at, "profile": profile,
+                                       "press": {"key": body["key"], "kind": kind, "id": bid}})
+    return web.json_response({"ok": True, "press": ask["seq"]})
+
+
+async def agent_inbox_handler(request: web.Request) -> web.Response:
+    """The Agent's long read of the tablets' questions (token-gated, `agentRead`): `{"asks": [...], "last", "first"}`,
+    with `?after=<seq>` the newer ones, held open up to the agreement's waitSeconds for one to come. 404 when the agreement
+    names no conversation (the door says nothing)."""
+    if (refused := _agent_refuse(request, "agentRead")) is not None:
+        return refused
+    if not CONVERSATION_PROFILES:
+        return web.json_response({"error": "not found"}, status=404)
+    if isinstance(after := _after_of(request), web.Response):
+        return after
+    # the spoken questions past their time go at each read (KeptFiles): a voice never outlives askKeptSeconds by much,
+    # however long no one asks again
+    await asyncio.to_thread(VOICES.sweep)
+    items, last, first = await ASKED.read(after, min(int(CONVERSATION.get("waitSeconds") or 0), ANNOUNCEMENT_WAIT_S))
+    return web.json_response({"asks": items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
+
+
+async def agent_voice_handler(request: web.Request) -> web.Response:
+    """A spoken question's WAV, for the Agent (token-gated, `agentRead`), ONCE: deleted as it is read. 404 when there is
+    none by that name (read already, older than askKeptSeconds, or not one of the add-on's names)."""
+    if (refused := _agent_refuse(request, "agentRead")) is not None:
+        return refused
+    data = await asyncio.to_thread(_take_voice, request.match_info.get("name", "")) if VOICE else None
+    if data is None:
+        return web.json_response({"error": "not found"}, status=404)
+    return web.Response(body=data, content_type="audio/wav", headers={"Cache-Control": "no-store"})
+
+
+async def agent_speech_handler(request: web.Request) -> web.Response:
+    """An answer's sound (ticket 24 of "One inbox", VESTA answers aloud), from the Agent (token-gated, `agentWrite`):
+    kept for the turn that names it, `{"name"}`. 404 when the agreement names no answer's sound, 413 past its
+    answerBytes, 400 for anything that is not one of its answerTypes."""
+    if (refused := _agent_refuse(request, "agentWrite")) is not None:
+        return refused
+    if not CONVERSATION_LIMITS or not VOICE.get("answerTypes"):
+        return web.json_response({"error": "not found"}, status=404)
+    data = bytearray()
+    async for chunk in request.content.iter_chunked(64 * 1024):
+        data.extend(chunk)
+        if len(data) > int(VOICE.get("answerBytes") or 0):
+            return web.json_response({"error": "This sound is too long."}, status=413)
+    if why := _speech_refused(bytes(data), request.content_type):
+        return web.json_response({"error": why}, status=400)
+    return web.json_response({"ok": True, "name": await asyncio.to_thread(_keep_speech, bytes(data), request.content_type)})
+
+
+async def vesta_speech_handler(request: web.Request) -> web.StreamResponse:
+    """One answer's sound, to the profile whose turn names it (every other is told there is none: a guest never hears
+    the owner's answers)."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    name, profile = request.match_info.get("name", ""), _role_for(request)
+    path = _data(SPEECH_DIR, name)
+    mine = SPEECH_RE.match(name) and any(isinstance(t, dict) and t.get("speech") == name and t.get("profile") == profile
+                                         for t in await asyncio.to_thread(CONVERSED.items))
+    if not mine or not os.path.isfile(path):
+        return web.json_response({"error": "no such sound"}, status=404)
+    kind = next(k for k, e in SPEECH_ENDINGS.items() if name.endswith(e))
+    return web.FileResponse(path, headers={"Content-Type": kind, "Cache-Control": "no-store"})
+
+
+async def agent_conversation_turn_handler(request: web.Request) -> web.Response:
+    """The Agent's answer as a turn (token-gated, `agentWrite`): added, or replacing the turn of its key. 404 when the
+    agreement names no conversation; 400 for a body that is not a turn (a person's key, a profile it does not name, no
+    words)."""
+    if (refused := _agent_refuse(request, "agentWrite")) is not None:
+        return refused
+    if not CONVERSATION_LIMITS:
+        return web.json_response({"error": "not found"}, status=404)
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    if "heard" in body:
+        # the words of a spoken question (ticket 23): onto the person's own line, once (_heard_line)
+        line = _heard_line(await asyncio.to_thread(CONVERSED.items), body)
+        if line is None:
+            return web.json_response({"error": "words heard go onto a spoken question of that profile, once"},
+                                     status=400)
+        # ⚠️ ONCE, UNDER THE STORE'S LOCK (architecture review, 2026-10-30): the check above read the store outside it, so
+        # two writes of the words at once both passed; the merge checks the line as it is when it is written
+        rec = await CONVERSED.add(lambda seq: {**line, "seq": seq}, _with_heard)
+        return web.json_response({"ok": True, "seq": rec["seq"]})
+    said = _turn_record(body, 0, _now_iso())
+    photos = [] if said is None or said.get("gone") else await asyncio.to_thread(_keep_turn_photos, body.get("photos"))
+    if said is None or not (said.get("gone") or "text" in said or "page" in said or said.get("typing") or photos):
+        return web.json_response({"error": "a turn names its key and a profile, and says something"}, status=400)
+
+    def record(seq: int) -> dict:
+        rec = _turn_record(body, seq, _now_iso())
+        return {**rec, "photos": photos} if photos else rec
+
+    rec = await CONVERSED.add(record, _turns_with)
+    return web.json_response({"ok": True, "seq": rec["seq"]})
+
+
+# ── A message erased (owner, 2026-10-29) ─────────────────────────────────────────────────────────────────────────────
+# A card left from an older format — the villa's message a VESTA card already stands for, a report kept as a
+# notification — is removed as a Facility record is: held on the tablet, then the superadmin code (ErasableRow). The
+# code is the gate, not the profile: one fresh elevation removes one record. Nothing else removes a message; the
+# records-kept days still expire them all.
+#: The two feeds a page lists, by the name the page gives them (announcements.ts `feed`).
+ERASABLE_FEEDS = {"villa": ANNOUNCED, "vesta": MESSAGED}
+
+
+async def message_erase_handler(request: web.Request) -> web.Response:
+    """`{"feed": "villa"|"vesta", "seq", "elevation"}` — 200 once removed, 403 without a fresh superadmin authorisation
+    (or none configured), 404 when no such record is kept, 400 for anything else."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    feed, seq = ERASABLE_FEEDS.get(body.get("feed")), body.get("seq")
+    if feed is None or not isinstance(seq, int) or isinstance(seq, bool) or not set(body) <= {"feed", "seq", "elevation"}:
+        return web.json_response({"error": "an erase names a feed, a number and its authorisation"}, status=400)
+    if not _configured_superadmin_pin():
+        return _forbidden("Deleting records requires the superadmin code, which is not configured on this installation.")
+    if not _consume_elevation(body.get("elevation")):
+        return _forbidden("Deleting a record requires a fresh superadmin authorisation for that specific action.")
+    if not await feed.remove(seq):
+        return web.json_response({"error": "This message is no longer kept."}, status=404)
+    return web.json_response({"ok": True})
+
+
+# ── A button an announcement offers, pressed on a tablet (ha-commands.json `press`) ─────────────────────────────────
+# The doorbell's Unlock (ticket 15 of "One inbox", owner 2026-10-28: every profile, no PIN). ⚠️ THE PAGE NEVER FIRES AN
+# EVENT: it names a button by its announcement's key and its command, and this process fires the one press event with
+# exactly those two, only while an announcement it keeps still offers that button — a rewrite without buttons (the
+# ring answered, opened at the gate, or timed out) withdraws it. The opening stays in the villa's automation, which
+# waits for the press as it waits for Telegram's: a press after its wait opens nothing. No websocket fire_event is
+# admitted, so no profile chooses an event's type or its data.
+ANNOUNCEMENT_PRESS = str(HA_COMMANDS.get("press") or "")
+
+
+def _offers_button(items: list, key, command) -> bool:
+    """Whether a kept announcement with this key offers a button with this command. Pure — tests/store-doors.py
+    drives it through the door."""
+    if not isinstance(key, str) or not key or not isinstance(command, str) or not command:
+        return False
+    return any(isinstance(a, dict) and a.get("key") == key
+               and any(b[1] == command for row in a.get("buttons") or [] for b in row)
+               for a in items)
+
+
+async def _fire_press(app: web.Application, data: dict) -> bool:
+    """Fire the press event on the villa's bus with the add-on's own token; whether the villa's system took it."""
+    try:
+        async with app["session"].post(f"http://{SUPERVISOR}/core/api/events/{ANNOUNCEMENT_PRESS}", headers=AUTH,
+                                       json=data, timeout=ClientTimeout(total=10)) as resp:
+            return resp.status == 200
+    except (ClientError, OSError, asyncio.TimeoutError):
+        return False
+
+
+async def announcement_press_handler(request: web.Request) -> web.Response:
+    """`{"key", "command"}` — every profile: 200 once the press is on the villa's bus, 409 when no kept announcement
+    offers that button (any more), 502 when the villa's system was not reached."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    if not ANNOUNCEMENT_PRESS or set(body) != {"key", "command"}:
+        return web.json_response({"error": "a press names a key and a command, nothing else"}, status=400)
+    items = await asyncio.to_thread(ANNOUNCED.items)
+    if not _offers_button(items, body["key"], body["command"]):
+        return web.json_response({"error": "This button is no longer offered."}, status=409)
+    if not await _fire_press(request.app, {"command": body["command"], "key": body["key"]}):
+        return web.json_response({"error": "The villa's system was not reached."}, status=502)
+    return web.json_response({"ok": True})
 
 
 # ── The villa's critical devices (agent-contract.json criticalDevices) ───────
@@ -3924,11 +5114,13 @@ def build_app(data_dir: str | None = None) -> web.Application:
             print(f"[supervisor-proxy] removed retired file(s): {gone}", flush=True)
         await _learn_own_version(a["session"])
         a["light_scenes"] = asyncio.create_task(_learn_light_scenes(a["session"]))
+        a["announcements"] = asyncio.create_task(_listen_announcements(a))
         if (warning := _agent_config_warning()) is not None:
             print(f"[supervisor-proxy] {warning}", flush=True)
 
     async def on_cleanup(a: web.Application) -> None:
         a["light_scenes"].cancel()
+        a["announcements"].cancel()
         await a["session"].close()
 
     app.on_startup.append(on_start)
@@ -3957,6 +5149,17 @@ def build_app(data_dir: str | None = None) -> web.Application:
     # The Kiosk's side of the VESTA Agent (owner and facility manager).
     app.router.add_get("/critical-devices", critical_devices_handler)
     app.router.add_get("/agent-status", agent_status_handler)
+    # The villa's announcements, kept by this process (every profile).
+    app.router.add_get("/announcements", announcements_handler)
+    app.router.add_get("/announcement-photo/{id}", announcement_photo_handler)
+    app.router.add_get("/vesta-messages", vesta_messages_handler)
+    app.router.add_post("/announcement-press", announcement_press_handler)
+    app.router.add_post("/message-erase", message_erase_handler)
+    # Talking to VESTA (every profile, each its own conversation).
+    app.router.add_post("/vesta-ask", vesta_ask_handler)
+    app.router.add_get("/vesta-conversation", vesta_conversation_handler)
+    app.router.add_get("/vesta-speech/{name}", vesta_speech_handler)
+    app.router.add_post("/vesta-press", vesta_press_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
     app.router.add_get("/agent/v1/info", agent_info_handler)
@@ -3965,6 +5168,11 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_put("/agent/v1/fm-data", agent_fm_put_handler)
     app.router.add_post("/agent/v1/fm-evidence", agent_fm_evidence_handler)
     app.router.add_post("/agent/v1/fm-document", agent_fm_document_handler)
+    app.router.add_post("/agent/v1/vesta-message", agent_vesta_message_handler)
+    app.router.add_get("/agent/v1/inbox", agent_inbox_handler)
+    app.router.add_get("/agent/v1/voice/{name}", agent_voice_handler)
+    app.router.add_post("/agent/v1/conversation-turn", agent_conversation_turn_handler)
+    app.router.add_post("/agent/v1/speech", agent_speech_handler)
     app.router.add_post("/agent/v1/heartbeat", agent_heartbeat_handler)
     return app
 

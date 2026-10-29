@@ -34,7 +34,7 @@ export function useVillaAttention(): VillaAttention {
   }, [attention, visibleTo, role]);
 }
 
-/** Every card of the Cockpit's Overview for THIS profile (config/cockpitIssues): the open issues and the Watched
+/** Every card of the Cockpit's Messages › Open issues for THIS profile (config/cockpitIssues): the open issues and the Watched
  *  list, from the same view the top bar counts. Read again every minute: a watched card past its moment goes, a
  *  "closes at about" turns to "at the next check", even when nothing else changes. */
 export function useCockpitIssues(): CockpitIssues {
@@ -49,7 +49,7 @@ export function useCockpitIssues(): CockpitIssues {
     entityMap: config.entityMap, resolvedRooms }), [view, data, cadence, now, entities, config.entityMap, resolvedRooms]);
 }
 
-/** How serious the issues are that the Cockpit's Overview lists for these entities' devices (a device window: the
+/** How serious the issues are that the Cockpit's Open issues list for these entities' devices (a device window: the
  *  device and its linked entity), as this profile sees them; null when it lists none — or outside the villa model (a
  *  window drawn on its own). The window's warning reads it: live, so it appears and goes by itself. */
 export function useDeviceIssue(ids: readonly string[]): AttentionSeverity | null {

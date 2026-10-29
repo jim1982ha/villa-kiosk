@@ -10,7 +10,7 @@ const { panelHeader } = await import("@/components/panels/panelHeader");
 const { screenReducer, START } = await import("@/pages/screen");
 const { attentionFor, cardFocused, groupAttention, issueSeverity } = await import("@/config/attention");
 const { cockpitCard } = await import("@/config/cockpitCard");
-const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 const { FaultsButton } = await import("@/components/panels/DeviceWindowPieces");
 
 console.log("  when it shows: any issue the Cockpit's Overview lists for the device or its linked entity:");
@@ -40,12 +40,12 @@ ck("  ...another device's issue, or none: no warning — it goes by itself", sev
      issueSeverity(seen.attentionGroups, ids, (id) => id) === null);
 }
 
-console.log("\n  a tap: the Cockpit's Overview, this device's card marked, the device back on close:");
+console.log("\n  a tap: the Cockpit's Messages, this device's issue open, the device back on close:");
 const OWNER = { facility: true }, GUEST = { facility: false };
 const open = { ...START, nav: { ...START.nav, panel: pump } };
 const go = screenReducer(open, { type: "openFaults", ids: ["sensor.pump_power", "switch.pump_relay"] }, OWNER);
-ck("the Cockpit open on its Overview, the device window closed, its faults to mark",
-   go.windows.cockpit === true && go.cockpitTab === "overview" && go.nav.panel === null
+ck("the Cockpit open on Messages, the device window closed, its issue to open",
+   go.windows.cockpit === true && go.cockpitTab === "messages" && go.nav.panel === null
    && go.faultsFocus?.join() === "sensor.pump_power,switch.pump_relay", go);
 ck("  ...closing the Cockpit gives the device back and forgets the mark",
    go.panelReturn?.to === "cockpit" && go.panelReturn.nav.panel === pump

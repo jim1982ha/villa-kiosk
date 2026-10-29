@@ -26,7 +26,7 @@ console.log("\n  every surface asks:");
 // config/summaryTiles.ts.
 ck("the Energy tile (and so the Energy window) exists only when the profile may see energy",
    /if \(facts\.power && can\("energy"\)\) \{/.test(src("config/summaryTiles.ts")));
-const cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
+const cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/IssueCard.tsx"));
 ck("the Cockpit does not fetch energy at all (its 'Energy today' block is gone)",
    !/fetchEnergySetup|useHistorySource|usedToday|EnergyPanel/.test(cockpit));
 // what a profile may be shown (auth/permissions.profileView, by value) — and every surface that shows motion asks it

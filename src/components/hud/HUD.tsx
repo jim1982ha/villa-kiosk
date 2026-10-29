@@ -21,6 +21,7 @@
 // Bottom bar: bottom-right shows the first-person movement joystick only.
 
 import PresenceTile from "./PresenceTile";
+import TalkButton from "@/components/messages/TalkButton";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { useNow } from "@/hooks/useInterval";
@@ -30,10 +31,12 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot,
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
+import InfoTip from "@/components/common/InfoTip";
+import { MaintenanceModeExplained } from "@/components/settings/MaintenanceMode";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { ROLE_LABELS, ROLE_INITIALS } from "@/auth/roles";
@@ -55,7 +58,9 @@ import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import type { VillaHealthLevel } from "@/config/attention";
 import { formatCountBadge } from "@/utils/countBadge";
-import { useAgent } from "@/agent/AgentContext";
+import { useConversation } from "@/messages/ConversationContext";
+import { useAnnouncements } from "@/messages/AnnouncementsContext";
+import { countOf } from "@/utils/countOf";
 
 // Label-size stepper (next to the category filter): each click moves
 // entityIconScale by this much, clamped to the shared
@@ -97,6 +102,8 @@ interface Props {
   /** Open the Cockpit — mounted by the Dashboard beside the other windows
    *  (pages/surfaces); with `doors.agent` its button is the robot. */
   onOpenCockpit: () => void;
+  /** "Ask VESTA" (its top-bar button and the phone's menu row, while VESTA runs): VESTA's conversation window. */
+  onAskVesta: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
@@ -126,7 +133,7 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenCockpit, onOpenCategory, onOpenPresence,
+  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -147,13 +154,23 @@ export default function HUD({
 
   // (Facility's own button and count are gone, 2.496.273: its tabs live in the
   // Cockpit, and the Cockpit's count already includes faults and overdue work.)
-  // The VESTA Agent: its presence dot.
-  const { status: agentStatus } = useAgent();
-  const agentOnline = agentStatus?.state === "online";
-  const agentTitle = `VESTA Agent, ${agentOnline ? "online" : "offline"}`;
+  // ⚠️ THE ROBOT ONLY WHILE VESTA RUNS (ticket 21 of "One inbox", owner 2026-10-28: "the robot, microphone and VESTA's
+  // thread hidden while VESTA is not running, so that nothing on screen is dead"): without its heartbeat the Cockpit's
+  // button is the ⚠ again. ⚠️ ONE READING OF "VESTA RUNS" (architecture review 2026-10-29 #5): the robot read the
+  // agent's status (every minute, owner and facility manager) and the VESTA button the conversation's (every read, every
+  // profile), so for up to a minute one showed VESTA and the other did not. Both read the conversation's now: the one
+  // every profile makes. `doors.agent` still says whether this profile is shown the Agent at all.
+  const { thread, talker } = useConversation();
+  const robot = doors.agent && thread.shown;
+  const agentTitle = "VESTA Agent, online";
   // The agent's presence as the dot on its robot — the top bar's and the
-  // phone menu's are this one element (.status-dot, 2.496.247).
-  const agentDot = <span className={`status-dot ${agentOnline ? "on" : "warn"}`} aria-hidden="true" />;
+  // phone menu's are this one element (.status-dot, 2.496.247): shown only while it runs.
+  const agentDot = <span className={`status-dot ${robot ? "on" : "warn"}`} aria-hidden="true" />;
+  // What this tablet has not seen in Messages (ticket 18 of "One inbox"): a light mark on the robot, the phone's gear
+  // and the menu's Cockpit row, apart from the amber count of open issues; the robot then opens on it (MessagesTab).
+  const { unread } = useAnnouncements();
+  const unreadSaid = unread > 0 ? `, ${countOf(unread, "unread message")}` : "";
+  const unreadMark = unread > 0 && <span className="unread-mark" aria-hidden="true" />;
 
   // ── Floor buttons now do double duty, no separate Rooms button any more:
   // a normal tap/click keeps the original behaviour (switch to that floor,
@@ -570,20 +587,37 @@ export default function HUD({
             plus a genuinely-applied has-alert border once it left the old
             category row) can't read as bigger/higher than its neighbours. */}
         <div className="hud-right">
+          {/* ⚠️ THE VILLA'S MAINTENANCE MODE, SEEN WHILE IT IS ON (owner, 2026-10-29: "so nobody forgets it"): only
+              urgent alerts are sent meanwhile. Beside the robot, and on a phone too (outside the inline group a
+              phone hides), for the profiles shown VESTA. */}
+          {doors.agent && config.maintenanceMode && (
+            <span className="maintenance-mark" role="status">
+              <Wrench size={16} aria-hidden="true" /><span className="maintenance-mark-word">Maintenance</span>
+              {/* its (i): a tap opens it on every phone and tablet, the switch's own words */}
+              <InfoTip label="Maintenance mode is on: what it does"><MaintenanceModeExplained /></InfoTip>
+            </span>
+          )}
           <div className="hud-right-inline hud-group">
             {/* ONE button for the Cockpit and the agent (2.496.242): with an
                 agent configured the Cockpit's icon IS the robot — its count
                 (top right) stays the Cockpit's, the agent's presence dot sits
                 bottom right. Without one, the ⚠ as before. */}
+            {/* VESTA's conversation, its own button beside the robot (owner, 2026-10-29), every profile, while VESTA runs:
+                tap to open it, hold to talk where the page can record (ticket 23 of "One inbox") */}
+            {thread.shown && (
+              <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta} className="icon-btn"
+                idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} />
+            )}
             <button
-              className={`icon-btn${doors.agent ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
+              className={`icon-btn${robot ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
               onClick={onOpenCockpit}
               title={(attentionGroups.length > 0 ? health.summary : "Cockpit, villa status at a glance")
-                + (doors.agent ? ` · ${agentTitle}` : "")}
-              aria-label={`Open Cockpit, villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}`}
+                + (robot ? ` · ${agentTitle}` : "") + unreadSaid}
+              aria-label={`Open Cockpit, villa status at a glance${robot ? ` (${agentTitle})` : ""}${unreadSaid}`}
             >
-              {doors.agent ? <Bot size={24} /> : <TriangleAlert size={24} />}
-              {doors.agent && agentDot}
+              {robot ? <Bot size={24} /> : <TriangleAlert size={24} />}
+              {robot && agentDot}
+              {unreadMark}
               {attentionGroups.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
                   {formatCountBadge(attentionGroups.length)}
@@ -631,8 +665,8 @@ export default function HUD({
             <button
               className={`icon-btn${menuOpen ? " active" : ""}`}
               onClick={() => setMenuOpen((o) => !o)}
-              title="Menu"
-              aria-label="Menu"
+              title={`Menu${unreadSaid}`}
+              aria-label={`Menu${unreadSaid}`}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
@@ -640,6 +674,7 @@ export default function HUD({
                   roomy screen it is in the role badge's menu, with the same
                   rows — accountRows). */}
               <Settings size={24} />
+              {unreadMark}
             </button>
             {menuOpen && (
               <div className="hud-menu" role="menu" aria-label="Settings and profile">
@@ -653,19 +688,30 @@ export default function HUD({
                   role="menuitem"
                   className="hud-menu-item"
                   onClick={() => { setMenuOpen(false); onOpenCockpit(); }}
-                  title={doors.agent ? agentTitle : undefined}
+                  title={robot ? agentTitle : undefined}
                 >
                   {/* The agent's presence is the dot on its robot, as in the
                       top bar (owner, 2.496.247) — no "· agent online" text. */}
                   <span className="hud-menu-glyph">
-                    {doors.agent ? <Bot size={18} /> : <TriangleAlert size={18} />}
-                    {doors.agent && agentDot}
+                    {robot ? <Bot size={18} /> : <TriangleAlert size={18} />}
+                    {robot && agentDot}
                   </span>
                   <span>
                     Cockpit{attentionGroups.length > 0 ? ` (${formatCountBadge(attentionGroups.length)})` : ""}
-                    {doors.agent && <span className="sr-only">{`, ${agentTitle}`}</span>}
+                    {robot && <span className="sr-only">{`, ${agentTitle}`}</span>}
+                    {unreadSaid && <span className="sr-only">{unreadSaid}</span>}
                   </span>
+                  {unreadMark}
                 </button>
+                {/* VESTA's thread straight away (spec story 31; ticket 21 of "One inbox"), every profile, while VESTA runs */}
+                {/* ...and held, VESTA listens (ticket 23; owner 2026-10-29: the phone's one way to it): the top bar's own button */}
+                {thread.shown && (
+                  <TalkButton place="menu" className="hud-menu-item"
+                    onOpen={() => { setMenuOpen(false); onAskVesta(); }} onTap={() => { setMenuOpen(false); onAskVesta(); }}
+                    idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"}>
+                    <span>Ask VESTA</span>
+                  </TalkButton>
+                )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus
                     — one row, not two menu items, since it's a single
                     stepper rather than two independent actions. Doesn't

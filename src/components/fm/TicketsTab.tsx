@@ -1,19 +1,20 @@
 // src/components/fm/TicketsTab.tsx
 // The TICKETS: the work someone took on (owner, 2026-10-14). A fault — opened by the VESTA Agent or raised by a
-// person — waits on the Overview's list; "Open ticket" there makes it a ticket, and the ticket lives here until
+// person — waits in Messages' Open issues; "Open ticket" there makes it a ticket, and the ticket lives here until
 // it is resolved or closed. So this tab holds the tickets in progress (one per device) and the Closed section; raising
 // a fault moved to the Overview, beside the problems it is raised about. It was the Faults tab, a second list of the
 // same open faults the Overview already showed.
 //
 // Time-to-resolution is what evidences supervision, so the app stamps the resolution time itself.
 
+import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
-import { faultTitle, keptDays, localStamp, STAGE_WORDS, stageOf, ticketStats, type FmRetention } from "@/fm/fmEngine";
+import { faultTitle, keptDays, STAGE_WORDS, stageOf, ticketStats, type FmRetention } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
 import { closedActions, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork, type WorkAction } from "@/fm/deviceWork";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
@@ -36,7 +37,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   onOpenEntity: (id: string) => void;
   /** The villa's real devices, built once by FacilitySections (the edit form's picker). */
   deviceOptions: DeviceOption[];
-  /** Open this record's edit form (the Overview card's "Edit ticket"); dropped once the form has it. */
+  /** Open this record's edit form (an open issue's "Edit ticket"); dropped once the form has it. */
   editTicket?: string;
   onEditOpened?: () => void;
 }) {
@@ -79,7 +80,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
     return (
       <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={status} actions={actions}
-        when={faultWhen(t, localStamp)} notes={faultNoteLines(t, localStamp)} photoIds={t.photoIds}
+        when={faultWhen(t, momentText)} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
         documentIds={t.documentIds} amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
         erase={{ title: "Erase this record", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => setEditingId(t.id)}
@@ -134,14 +135,14 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         // THE Cockpit card, as every other (owner, 2026-10-22)
         <RecordCard lead={<Wrench size={16} className="muted" aria-hidden="true" />} title={<span className="with-tip">
           No ticket in progress
-          <InfoTip label="About tickets">A fault on the Overview becomes a ticket when you press Open Ticket on its card.</InfoTip>
+          <InfoTip label="About tickets">A fault in Messages becomes a ticket when you press Open Ticket on its card.</InfoTip>
         </span>} />
       )}
       {tickets.length > 0 && <div className="fm-list">{tickets.map(ticket)}</div>}
 
       <FoldedList title="Closed" rows={closed} unit="closed record">
         {(t) => (
-          // reopened, it is a fault again: back on the Overview's list (the VESTA Agent reads it, never guesses)
+          // reopened, it is a fault again: back in Open issues (the VESTA Agent reads it, never guesses)
           record(t, stagePill(t),
             <WorkButtons actions={closedActions(workRecord(t))} cardKey={`closed:${t.id}`} closer={closer} onAction={onAction} />)
         )}

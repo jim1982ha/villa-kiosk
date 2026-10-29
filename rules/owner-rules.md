@@ -80,10 +80,14 @@ new spoken file is added to its list. Comments, logs, the Agent's admin setup pa
 ## Automation, never rule
 
 In any text a person reads, the villa's automations and blueprints are "automations" (or "VESTA automations"). "Rules"
-is only the Agent's own policy file and tab.
+is only the Agent's own policy file and tab, and even then never a word on its own: in a reply, a changelog or a report,
+name the setting itself, as its page names it ("VESTA's Allowed actions", "Acting on the villa"), never "your Rules" or
+"the rules allow".
 
 **Why:** owner, 2026-10-22: "everything that relates to Automation defined in Home Assistant (or Blueprint) shall never
-be replaced by the term Rules, since it's confusing." Code identifiers may keep "rule".
+be replaced by the term Rules, since it's confusing." Owner, 2026-10-29: "your Rules" in a reply about an action VESTA
+may do at once read as the villa's automations ("please adjust your memory so you never use the confusing `Rules` term
+for this"). Code identifiers may keep "rule".
 
 ## Every number is a setting
 
@@ -177,6 +181,19 @@ in a YAML package; a YAML anchor shares it).
 
 **How to apply:** before duplicating, find the sharing mechanism: a shared module, an attribute another entity reads, a
 YAML anchor in the same file. If none truly exists, say so before the work.
+
+## Telegram and the tablet alike
+
+Whatever VESTA shows on Telegram, the tablet shows the same way, and every report, notice and alert names a thing
+the same way: one alert is ONE card updated in place, named "#91-P2" everywhere (Telegram's title, the tablet's card,
+its ticket and open issue, the digest, the assistant, a pointer to a newer message).
+
+**Why:** owner, 2026-10-28/29: "I want total consistency between Telegram and KIOSK and in all reports or notification
+or alerts" (the tablet listed a repeated alert as new lines without "#90-P2"; the ticket and the reports said "#91").
+
+**How to apply:** a name or a format both sides write lives in the agreement (agent-contract.json: `ticket.alertLabel`,
+`vestaMessage.incidentKey`) and in one function per side (`messaging.incident_tag`, `fmEngine.alertLabel`); a new
+place that names an alert calls it. Before shipping a change to how something reads on one side, check the other.
 
 ## Fix the shared piece
 

@@ -1,12 +1,12 @@
 // src/components/fm/FaultForm.tsx
-// THE form for a fault: raising one (the Overview's "Raise a fault", a device panel's wrench) and editing one (a
+// THE form for a fault: raising one (Messages' "Open a ticket", a device panel's wrench) and editing one (a
 // ticket in the Tickets tab). ONE form for both: a fault raised in a hurry from a phone — often a device and four
 // words — is exactly the record someone later corrects or adds photos to, and a second, subtly different edit form is
 // how the two drift apart. Lived inside the Faults tab until the Overview took over raising (owner, 2026-10-14).
 //
 // DeviceSearchPicker reaches every device of the villa, with free text for one that is not in its list (a spare part,
 // something not wired into Home Assistant). The "devices offline" shortlist it once carried is gone: those devices
-// are cards on the same Overview list, just above.
+// are lines of the same Open issues list, beside it.
 
 import { useEffect, useState } from "react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -27,7 +27,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
    *  someone reporting by hand usually describes what Home Assistant cannot see (a dripping tap), and a
    *  pre-written guess tends to be saved as it is. */
   presetEntity?: string;
-  /** The villa's real devices, built once by the caller (FacilitySections / the Overview) — a form deriving its own
+  /** The villa's real devices, built once by the caller (FacilitySections / Messages) — a form deriving its own
    *  list is how a picker came to offer entries no other screen showed. */
   deviceOptions: DeviceOption[];
   onDone: () => void;

@@ -102,6 +102,24 @@ the app's own UI; embedding the platform's own panels is usually wrong (separate
 **Why:** owner, 2026-08-04: "always make sure you never re-code/invent a feature that is already developed and
 maintained in Home Assistant."
 
+## An alert is VESTA's
+
+Every villa message that reports a problem someone must deal with (its bottom line an alert stage: "⚠️ New alert") is
+handed to the VESTA Agent in the same run, after the message: a `vesta_critical_event` (`phase: opened`, its
+`entities`, `mode`/`bad_states`, and a `claim`: a template, written with the automation's own entities and limits,
+`true` while the problem holds). VESTA then numbers it, chases it, takes the message over as its card, and clears it
+once the claim is false. A blueprint does it in its template; a hand-written automation adds the one event step
+(`blueprint:` its alias prefix, e.g. `other`). A notice (a doorbell ring, a person on a camera with its picture, a
+weekly test, a clean-up report) is not an alert: it never uses an alert stage. Audit with `ha_search "vm_stage"`
+against `ha_search "vesta_critical_event"`.
+
+**Why:** owner, 2026-10-29: two "⚠️ off during its schedule" messages sat in the tablet's Notifications for good, the
+pump still off hours later, nobody asked: "i want the existing one to be treated as an issue by the VESTA agent … and
+shall become the new reference (except for notification like doorbell or presence detector with picture)".
+
+**How to apply:** a new or edited automation that sends an alert carries the event and a claim tested with
+`ha_eval_template` on the live villa; a message that only informs sends no alert stage.
+
 ## App packaging facts
 
 - The watchdog switch defaults to off; when on, the Supervisor restarts an app whose container is failed, stopped or

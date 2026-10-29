@@ -28,7 +28,7 @@ export interface Doors {
   agent: boolean;
   /** The Cockpit's count of firmware / add-on updates waiting. */
   updates: boolean;
-  /** Report a problem: a device panel's wrench, the Overview's "Report a problem" / "Raise a fault". Every profile
+  /** Report a problem: a device panel's wrench, Messages' "Report a problem" / "Open a ticket". Every profile
    *  holds it today (guests included); said here so no screen asks the role again. */
   reportFault: boolean;
   /** Change a device's set-up: a device panel's Edit and its badge colour. */

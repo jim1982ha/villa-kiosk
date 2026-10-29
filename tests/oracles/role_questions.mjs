@@ -109,7 +109,7 @@ console.log("\n  the signed-in badge:");
      && /<span className=\{`status-dot \$\{connTone\}`\} \/>/.test(logout), logout.slice(0, 400));
   const cockpitRow = menu.slice(menu.indexOf("onOpenCockpit();"), menu.indexOf("Cockpit{"));
   ck("  ...and the menu's robot wears the top bar's own agentDot, with no 'agent online' text",
-     /\{doors\.agent && agentDot\}/.test(cockpitRow) && !/agent \$\{agentOnline/.test(hud)
+     /\{robot && agentDot\}/.test(cockpitRow) && !/agent \$\{agentOnline/.test(hud)
      && (hud.match(/className=\{`status-dot /g) || []).length === 2 && !/agent-btn-dot/.test(hud), cockpitRow);
 }
 

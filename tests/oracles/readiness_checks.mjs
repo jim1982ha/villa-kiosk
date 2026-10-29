@@ -180,7 +180,7 @@ console.log("\n  one word per check state and one verdict, on the tab, in the re
   }
   const snap = R.buildReadinessSnapshot(one("warn"), "V", "2026-09");
   ck("the snapshot opens with the documents' shared header (its Generated stamp is the moment taken), no \"Taken\" line, nothing shouted",
-     snap.startsWith("# V: readiness snapshot\n**Period:** ") && /^\*\*Generated:\*\* \d{4}-\d{2}-\d{2} \d{2}:\d{2}  $/m.test(snap) && /^\*\*Scope:\*\* /m.test(snap)
+     snap.startsWith("# V: readiness snapshot\n**Period:** ") && /^\*\*Generated:\*\* \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}  $/m.test(snap) && /^\*\*Scope:\*\* /m.test(snap)
      && !/Taken |READY|Attention/.test(snap), snap.split("\n").slice(0, 5));
   const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
   ck("  ...and neither the tab nor the documents spell a verdict or a check word themselves",
@@ -213,7 +213,7 @@ console.log("\n  the Recap counts what the profile is shown (architecture review
   const s4 = recap.split("## 4.")[1]?.split("##")[0] ?? "";
   ck("  ...and the recap's §4 is the readiness' devices, pointing where they are listed (no \"faults section\")",
      s4.includes(`**${villa.size - 4} of ${villa.size - 2}** devices reporting`)
-     && s4.includes('2 device(s) currently offline, listed under "Open issues" on the Overview, and under "All devices reporting" below.')
+     && s4.includes('2 device(s) currently offline, listed under "Open issues" in the Cockpit\'s Messages, and under "All devices reporting" below.')
      && !/faults section/.test(recap), s4);
 }
 

@@ -203,7 +203,7 @@ ck("  ...while a placed entity is never re-folded and a device with nothing plac
 
 console.log("\n  the callers:");
 const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
-const vm = src("config/VillaModel.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx"));
+const vm = src("config/VillaModel.tsx"), cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/MessagesTab.tsx") + src("components/cockpit/IssueCard.tsx"));
 const hud = src("components/hud/HUD.tsx");
 const counted = [...hud.matchAll(/formatCountBadge\(([^)]*)\)/g)].map((m) => m[1]).filter((a) => a !== "facilityAttention");
 ck("every Cockpit count in the top bar and the phone menu is the number of ROWS",
@@ -235,7 +235,9 @@ ck("the villa model hands buildAttentionItems its device list (the fold and the 
        .every((n) => !(n in att2)), Object.keys(att2));
   // ⚠️ THE CARDS ARE config/cockpitIssues' (architecture review, 2026-10-26): one card per group, made there, drawn here
   ck("  ...and the Cockpit draws the cards cockpitIssues made, one per group, asking attention for no part of a card",
-     /open\.map\(\(card\) => \(\s*<CockpitAttentionRow key=\{card\.key\} card=\{card\}/.test(cockpit)
+     // Messages since ticket 17: one line per card, in the model's order, the card itself open on the right
+     /messagesView\(\{\s*open, watched, /.test(cockpit) && /view\.issues\.map\(\(i\) => <MessageRow key=\{i\.key\} item=\{i\}/.test(cockpit)
+     && /<CockpitAttentionRow key=\{item\.key\} card=\{item\.card\}/.test(cockpit)
      && !/cockpitCard\(/.test(cockpit) && /cockpitIssues\(view, /.test(src("components/cockpit/useVillaAttention.ts"))
      && !/(cardActions|itemActions|attentionLineIn|lineIcon|lineSources|nextCheck)\(/.test(cockpit)
      && /actions=\{line\.actions\}/.test(cockpit) && /const acts = card\.actions;/.test(cockpit));

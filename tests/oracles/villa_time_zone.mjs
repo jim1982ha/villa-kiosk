@@ -4,7 +4,7 @@
 // re-runs itself under TZ=America/Los_Angeles), fixed instants through every formatter and every day cut, then the
 // tree audited: nothing else reads a Date's own clock.
 // ⚠️ Dates are locale-shaped (CI is en-US): a locale-formatted text is compared with the same formatter given the
-// villa's zone, never with a written-out string; only the fixed forms (momentText, docDate, localStamp) are spelled.
+// villa's zone, never with a written-out string; only the fixed forms (momentText, docDate) are spelled.
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 const DEVICE = "America/Los_Angeles";
@@ -20,7 +20,8 @@ import { ck, done, tsFiles } from "../consistency/check.mjs";
 const Z = await import("@/utils/villaClock");
 const T = await import("@/utils/dateText");
 const L = await import("@/utils/localDay");
-const { monthKey, localStamp, monthBounds } = await import("@/fm/fmEngine");
+const { monthKey, monthBounds } = await import("@/fm/fmEngine");
+const { momentText } = T;
 const { nextCheckAt } = await import("@/fm/faultTiming");
 const { fmtChartStamp } = await import("@/components/panels/chartUtils");
 const { firstCellStart } = await import("@/utils/timelineCells");
@@ -31,15 +32,15 @@ const nightly = [{ check: "nightly" }], cadence = { checkMinutes: 5, nightlyAt: 
 const evening = new Date("2026-10-27T12:00:00Z");          // 05:00 on the device, 21:00 in Tokyo
 
 console.log("  until the villa's configuration is known: the device's clock");
-ck("the fixed forms on the device's zone", T.momentText(at) === "27/10/2026 10:30" && T.docDate(at) === "2026-10-27", [T.momentText(at), T.docDate(at)]);
+ck("the fixed forms on the device's zone", T.momentText(at) === "27/10/2026 10:30" && T.docDate(at) === "27/10/2026", [T.momentText(at), T.docDate(at)]);
 ck("  ...and the day starts at the device's midnight", L.localMidnight(at) === Date.parse("2026-10-27T07:00:00Z"), new Date(L.localMidnight(at)).toISOString());
 
 console.log("\n  the villa's zone set (as the connection's configuration sets it): every time on the villa's clock");
 Z.setVillaTimeZone("Asia/Tokyo");
 ck("the zone is held in one place", Z.villaTimeZone() === "Asia/Tokyo");
 ck("a Telegram-shaped moment (momentText): the villa's day and time", T.momentText(at) === "28/10/2026 02:30", T.momentText(at));
-ck("  ...a document's date (docDate) and a report's stamp (localStamp)", T.docDate(at) === "2026-10-28" && localStamp(at) === "2026-10-28 02:30",
-   [T.docDate(at), localStamp(at)]);
+ck("  ...a document's date (docDate): the villa's day, day first as Telegram writes it (owner, 2026-10-29)",
+   T.docDate(at) === "28/10/2026", T.docDate(at));
 const fmt = (fn, opts) => new Date(at)[fn]([], { ...opts, timeZone: "Asia/Tokyo" });
 const device = (fn, opts) => new Date(at)[fn]([], opts);
 const forms = [

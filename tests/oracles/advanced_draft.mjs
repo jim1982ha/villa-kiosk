@@ -15,7 +15,7 @@ const { ADVANCED_SETTINGS_KEYS: KEYS, sliceOf, EMPTY_LEDGER, recordEdit, ledgerD
 const { DEFAULT_CONFIG, normaliseConfig } = await import("@/config/AppConfig");
 const E = await import("@/config/mappingEdits");
 const { groupEdit, removeGroup } = await import("@/config/deviceGroups");
-const { withDevice } = await import("@/components/settings/UnavailableByDesign");
+const { withItem: withDevice } = await import("@/utils/listToggle");
 // by content: a reverted map may list its items in another order
 const sorted = (_k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v);
 const J = (v) => JSON.stringify(v, sorted);

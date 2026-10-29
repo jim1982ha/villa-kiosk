@@ -54,7 +54,7 @@ export function SourceIcons({ sources, severities, size = 16 }: {
   );
 }
 
-/** The sources of several faults on one line ("Check the ⏾ ⚑ faults in Overview", the Recap's readiness) — side by
+/** The sources of several faults on one line ("Check the ⏾ ⚑ faults in Messages", the Recap's readiness) — side by
  *  side, each in the line's severity (a fault is a warning: amber, owner 2026-10-18), named for a screen reader. */
 export function SourceIconRow({ sources, severity, size = 15 }: {
   sources: readonly IssueSource[];

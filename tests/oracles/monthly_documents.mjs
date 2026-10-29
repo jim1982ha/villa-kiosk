@@ -7,7 +7,7 @@ import { h, draw, text } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
 const D = await import("@/fm/monthlyDocument");
-const { localStamp } = await import("@/fm/fmEngine");
+const { momentText } = await import("@/utils/dateText");
 const { SavedDocumentRows } = await import("@/components/fm/SavedDocumentsList");
 
 console.log("  each kind, by value:");
@@ -32,13 +32,14 @@ const docs = [doc("a", "readiness", "2026-10", "2026-10-16T09:00:00Z"), doc("b",
   doc("c", "recap", "2026-09", "2026-10-02T09:00:00Z"), doc("d", "spend", "2026-09", "2026-10-02T09:00:00Z")];
 const list = (kind) => draw(h(SavedDocumentRows, { kind, docs, onOpen: () => {}, onRemove: () => {} }));
 // ⚠️ A SNAPSHOT IS OF A MOMENT, NOT A MONTH (architecture review, 2026-10-19): two taken this month were both titled
-// "October 2026". Titled by the moment it was taken, in the documents' fixed form (localStamp, the "Generated:" stamp).
-const at16 = localStamp("2026-10-16T09:00:00Z"), at17 = localStamp("2026-10-17T09:00:00Z");
+// "October 2026". Titled by the moment it was taken, in the documents' fixed form (momentText, the "Generated:" stamp).
+const at16 = momentText("2026-10-16T09:00:00Z"), at17 = momentText("2026-10-17T09:00:00Z");
 ck("the readiness list reads \"Saved snapshots\", newest first, each titled by its moment, to Reopen or delete",
    text(list("readiness")).startsWith(`|Saved snapshots (2)|${at17}|Saved ${at17}`) && text(list("readiness")).includes(`|${at16}|`)
    && !text(list("readiness")).includes("October 2026") && (text(list("readiness")).match(/Reopen/g) ?? []).length === 2,
    text(list("readiness")));
-ck("  ...the moment in the fixed form, never a locale's", /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(at17), at17);
+ck("  ...the moment in the agreement's fixed form (day first, as Telegram), never a locale's",
+   /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(at17), at17);
 ck("  ...and its delete button says snapshot, and which", new RegExp(`aria-label="Delete saved snapshot for ${at17}"`).test(list("readiness"))
    && /<Tip text=\{`Delete this saved \$\{noun\}`\}>/.test(readFileSync(new URL("../../src/components/fm/SavedDocumentsList.tsx", import.meta.url), "utf8")),
    (list("readiness").match(/aria-label="[^"]*"/g) ?? []));

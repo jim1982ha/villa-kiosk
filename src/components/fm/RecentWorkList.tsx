@@ -13,9 +13,10 @@
 // resolved a ticket is told on its own card in Tickets → Closed (who, the note, its photos and cost) and in Spend.
 // ⚠️ THE SAME CARD AS EVERY FACILITY RECORD (RecordCard), folded and paged as Tickets' Closed (FoldedList).
 
+import { momentText } from "@/utils/dateText";
 import { useMemo } from "react";
 import { useFmData } from "@/fm/FmDataContext";
-import { localStamp, completionSource, workedBy, recordsKeptNote } from "@/fm/fmEngine";
+import { completionSource, workedBy, recordsKeptNote } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
 import AgentMark from "./AgentMark";
 import RecordCard from "./RecordCard";
@@ -48,10 +49,10 @@ export default function RecentWorkList() {
       tip={kept ? `${kept} A task's latest completion is always kept.` : undefined}>
       {({ completion: c, title, cost }) => (
         <RecordCard key={c.id} title={title}
-          when={`${localStamp(c.at)}${workedBy(c) !== "—" ? ` · ${workedBy(c)}` : ""}`}
+          when={`${momentText(c.at)}${workedBy(c) !== "—" ? ` · ${workedBy(c)}` : ""}`}
           pills={<AgentMark record={c} />} notes={[c.note]} photoIds={c.photoIds}
           amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
-          erase={{ title: "Erase this completion", detail: `${title}, ${localStamp(c.at)}`,
+          erase={{ title: "Erase this completion", detail: `${title}, ${momentText(c.at)}`,
             run: (token) => removeCompletion(c.id, token) }} />
       )}
     </FoldedList>

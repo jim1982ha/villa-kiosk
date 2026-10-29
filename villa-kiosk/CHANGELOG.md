@@ -1,3 +1,501 @@
+## 2.496.608
+
+What you will see:
+- A question you speak to VESTA stays in its place in the conversation, even when you type another one before VESTA
+  has written out the first. Before, the spoken one could drop below it, and the dots kept running under an answered
+  question.
+- A button you pressed on VESTA's card (Approve) stays "Sent" when VESTA redraws the card without a new step (a
+  translation, a title retouched); before, it could be pressed a second time.
+- A page VESTA attaches to an answer in your conversation is only ever shown to your own profile.
+- Right after a reload, the Inbox opens on Notifications when VESTA's notifications are unread, as it does for the
+  villa's own.
+- On a guest's tablet, a ring's photo stays for as long as the ring holds the screen ("Ring shown for"), not 60s.
+
+## 2.496.607
+
+What you will see:
+- Nothing changes on screen. A picture in your conversation with VESTA is now only ever shown to your own profile
+  (another profile allowed to see cameras could fetch it by its address). A spoken question is deleted once VESTA has
+  heard it, or after the 10min a question is kept, even when nobody asks anything after it.
+- Tapping Listen on an answer whose sound can no longer be played says "This answer's sound could not be played."
+  instead of nothing. A typed question cannot be sent while a spoken one is still being sent.
+
+## 2.496.606
+
+What you will see:
+- Cockpit › Inbox has no "All" filter any more: Issues · Notifications · Reports. It opens on Issues, or on
+  Notifications (Reports) when something there is unread.
+- An issue whose device came back after being unavailable says "Back to normal · closes at about 00:58 if it stays
+  so", instead of the state it had been in all along ("Unlocked since before 19 Oct").
+
+## 2.496.605
+
+What you will see:
+- Every open issue in Cockpit › Inbox shows a time: the last step told of it, else when it was opened. A brand new
+  alert, and a problem the night check found, showed none until something was told of them.
+
+## 2.496.604
+
+What you will see:
+- On a phone, hold "Ask VESTA" in the menu: the orb fills the screen and VESTA listens, as from the top bar on a
+  tablet. Let go to send. A tap still opens the conversation.
+- An answer's speaker icon is a plain icon on its date line, with no frame around it.
+
+## 2.496.603
+
+What you will see:
+- A notification's photo (a visitor at the doorbell) is centred: in its card in the Cockpit, and in the notice that
+  pops up over the villa.
+
+## 2.496.602
+
+What you will see:
+- An answer said aloud has a small speaker icon at the right of its date line, instead of a Listen button the width
+  of the answer. Tap it to hear the answer again.
+- "New conversation" empties VESTA's window: only "New conversation." and what follows are shown.
+- A spoken question that recorded only silence (a microphone muted or turned off) is no longer sent. The window says
+  "Nothing was heard: check that the microphone is on and not muted, then hold to talk again."
+
+## 2.496.601
+
+What you will see:
+- Nothing changes on screen. Each question spoken to VESTA now writes one line in this app's log, saying what the page
+  recorded: how long you held the button, how long the sound is, the microphone's rate and the page's, any piece of
+  sound lost, and how loud it was. It is there to find why the tablet's spoken questions are badly understood while
+  the same words through Telegram are not.
+
+## 2.496.600
+
+What you will see (with VESTA Agent 0.12.396):
+- Ask VESTA by holding the microphone: its answer is written in the conversation as before, then VESTA says it aloud
+  in the villa's own voice (the text-to-speech chosen in the villa's voice assistant settings), the same voice on
+  every tablet. Only the tablet you spoke to says it.
+- An answer said aloud has a Listen button under it, to hear it again. If the tablet stopped its sound meanwhile (the
+  screen locked), the conversation says "Tap Listen to hear VESTA's answer."
+- Holding the microphone while VESTA speaks stops it, so it never talks over you.
+- If the villa's voice is not set up, the answer stays in words and says "Spoken answers need the villa's voice to be
+  installed."
+
+## 2.496.599
+
+What you will see:
+- While a spoken question is still being sent, both microphone buttons say so ("Sending your question to VESTA").
+  Holding the conversation's microphone at that moment no longer answers "Hold the microphone while you speak".
+- A day alone keeps its words ("24 Jul 2026"); a moment with its time reads "24/10/2026 19:05" (your choice,
+  29/10). Nothing else changes on screen.
+
+## 2.496.598
+
+What you will see (with VESTA Agent 0.12.394):
+- Hold the microphone left of the robot: a large orb fills the screen, "VESTA is listening", and swells with your
+  voice. Let go: the orb goes and VESTA's conversation opens with your question.
+- The microphone now starts the moment your finger touches the button (once you have allowed it), so your first words
+  are kept. Before, it started half a second later and Whisper heard the end of the sentence only. A quick tap may
+  make the browser's recording dot blink for a moment.
+- In the open conversation, the box has its own microphone button: hold it to ask the next question aloud. The
+  button lights with a small orb while VESTA listens (no full screen orb there). A tap on it says how to use it.
+- If the tablet interrupts a hold (a banner, a call), the conversation says your question was not sent, instead of
+  losing it without a word.
+- Every date on the tablet is written as Telegram writes it, day first: "24/10/2026 19:05" (issues, tickets, recaps,
+  statements, snapshots, the conversation).
+- Typing "/help", "/whoami" or "/ask" alone to VESTA gets an answer instead of the dots for 10min (VESTA Agent).
+- An alert's card on the tablet lists every step, whoever it was sent to, even after VESTA chased the owner (VESTA
+  Agent).
+
+## 2.496.597
+
+(2.496.596 was never published: its build machine failed to start. This is the same change.)
+
+What you will see (VESTA hears it from VESTA Agent 0.12.393):
+- The VESTA button left of the robot is a microphone now. Tap it: VESTA's conversation opens, as before. Hold it and
+  speak, then let go: your question is sent, the conversation opens, and your line reads "Spoken question" until
+  VESTA has written out your words, which then show as your question; VESTA answers below it.
+- The first time you hold it, the tablet asks to use the microphone: allow it. If it is refused, a line under the
+  conversation's box says how to allow it.
+- Your voice goes to the villa's own Whisper, never to Apple's or Google's dictation, and is deleted once written out.
+  A question is at most 30s long.
+- Where the page cannot record (an address that is not https, a device with no microphone), the button stays the
+  speech bubble: tap to open the conversation.
+
+## 2.496.595
+
+What you will see (VESTA follows it from VESTA Agent 0.12.392):
+- Advanced Settings › System has a "Maintenance mode" switch (owner only): "Only urgent (P1) alerts are sent while
+  it's on." Its (i) says exactly what it does: urgent alerts are still chased; any other new alert gets no number, no
+  reminder and no ticket (the villa's own message still shows); alerts already open carry on; nothing held back is
+  sent afterwards.
+- While it is on, the top bar shows a "Maintenance" mark with a wrench on every tablet and phone (the wrench alone on
+  a phone), for the owner and the facility manager. Its (i) opens the same explanation.
+- It replaces the hidden setting in the villa's system that VESTA used to read: one switch, on the tablet.
+
+## 2.496.594
+
+What you will see:
+- Nothing new on the tablet. The shared rules now say that every villa message reporting a problem is handed to VESTA
+  (numbered, chased, closed by itself), while a doorbell ring or a camera picture stays a plain notice.
+
+## 2.496.593
+
+What you will see:
+- The Cockpit's Notifications hold only what still waits for someone. Anything finished goes to Issues › Closed: a
+  request approved, refused or no longer valid, a doorbell ring opened or missed, an alert that ended. One rule for
+  every message that offers buttons, today's and later ones.
+- Closed counts "closed items" and its (i) says what it holds.
+- Messages that arrived before this update stay where they are; every one from now on is placed this way.
+
+## 2.496.592
+
+What you will see:
+- An alert's card in the Inbox says each thing once: its line is named by VESTA's title ("#92-P2 (cleared)"), the
+  problem and what to do are in VESTA's message only, and once it went back to normal (under Watch) "Cleared on …" is
+  said by VESTA's status only. An open alert still says when it closes if it stays right.
+
+## 2.496.591
+
+What you will see:
+- An alert with an open ticket (such as "#92-P2") is ONE card in the Cockpit's Inbox, under Issues: its device, room
+  and next check at the top, VESTA's message inside it ("To:", what happened, what to do, its status), and VESTA's
+  Done · Need help under it. Before, VESTA's card stood above the issue's own card, each with its own buttons.
+- Done · Need help are the same on the alert's notice, its card and its issue. Its ticket is opened, edited and closed
+  in the Tickets tab.
+
+## 2.496.590
+
+What you will see (with VESTA Agent 0.12.387):
+- VESTA's conversation shows three moving dots in VESTA's bubble while it works, as every chat app does: from the
+  moment you send a question until the answer comes, and while it prepares something longer (a report). If VESTA
+  stopped meanwhile, the dots go within 3min.
+- Every notice at the top of the screen has the doorbell's squared corners (an alert with Done / Need help, a
+  sensor, an approval, the connection notices): one shape for all.
+- Every notice stays the same 10s, buttons or not, then goes: its card, with the same buttons, is in the Cockpit's
+  Inbox. A notice arriving no longer pushes another off: they show together (the newest 3), each for its own 10s.
+- A ring the owner picked for the whole screen goes after "Ring shown for", with no notice after it.
+
+## 2.496.589
+
+What you will see:
+- A notice that changes says what changed: after you refuse (or approve) a request, its notice reads "Approval request ·
+  Refused on 29/10/2026 13:50 (JM). Nothing was done." instead of repeating "Turn on Indoor Top?". The same for a
+  reminder or a ring answered.
+- A notice with buttons (an approval, the doorbell's Unlock) stays at the top until it is answered or closed, whatever
+  other notice comes meanwhile (a sensor's passes beside it, and goes after 10s).
+
+## 2.496.588
+
+What you will see (with VESTA Agent 0.12.386):
+- Cockpit › Inbox, an open issue from an alert: VESTA's card above it shows only Need help; the issue's own Close
+  (below) does what Done does. Done stays where there is no Close: the alert's notice and its card under
+  Notifications.
+
+## 2.496.587
+
+What you will see (needs VESTA Agent 0.12.385):
+- VESTA's buttons on the tablet, the same everywhere a message shows (its notice at the top, its full screen, its card
+  in the Inbox, VESTA's conversation): Approve / Refuse on an approval request, Done / Need help on an alert, VESTA's
+  offers (record a fault, investigate) and Continue. Pressing one does what the same button does on Telegram, and
+  every copy (Telegram's too) then says who decided.
+- Approve and Refuse ask first, in the same confirmation box as running a scene: "Approve or refuse this request? It
+  cannot be taken back."
+- VESTA's short answer to a press shows under the button (as Telegram's pop-up does).
+- A guest is offered only buttons that do not act (Continue); the doorbell's Unlock stays for every profile, as before.
+
+## 2.496.586
+
+What you will see:
+- Nothing changes on screen. The working rules every contributor follows now say it: a reply names VESTA's own setting
+  as its page names it ("VESTA's Allowed actions"), never "your Rules", which reads as the villa's automations.
+
+## 2.496.585
+
+What you will see (architecture review of 29 October 2026):
+- The robot on the Cockpit button and VESTA's chat button now appear and disappear together when VESTA stops or
+  starts, for every profile (they could disagree for up to a minute).
+- The Weather window's charts (temperature, humidity, wind, pressure, sun) have the same "enlarge" icon as a device's
+  chart: each opens large with its title, its legend and the period toggle. The rain chart stays as it is.
+- A notification's buttons (the doorbell's Unlock) work wherever the notification shows, the same way.
+- "Open the page" is the same link in VESTA's conversation and under a report.
+
+## 2.496.584
+
+What you will see:
+- A device's trend chart has a small "enlarge" icon at the right of its unit line ("W"). It opens the chart large, in
+  a window the Cockpit's size (full screen on a phone), with the same "Last 24 hours" line, the 1h · 24h · 1w · 1m ·
+  1y toggle and the range slider beside its axis: a choice made there is the small chart's too.
+
+## 2.496.583
+
+What you will see:
+- VESTA has its own button in the top bar, a speech bubble next to the robot (every profile, only while VESTA runs). It
+  opens VESTA's conversation in a window of its own, framed like every other window: "New conversation" at the top,
+  your questions and VESTA's answers, the box to ask at the bottom, Close. On a phone, the menu's "Ask VESTA" opens
+  the same window. VESTA is no longer a line at the top of the Cockpit.
+- The Cockpit's first tab is now called Inbox (beside Tickets, Schedule, Recap and Spend).
+- The gear at the top right of the Cockpit is gone: its settings are under the profile button › Settings › Messages.
+- Every Cockpit card shows its text across the whole card, with its buttons in a row under it, on the right (open
+  issues, tickets, schedule, spend, work done).
+- An open notification or report is now the same card as an issue: the same frame, title, text sizes and colours, and
+  its buttons (the doorbell's Unlock) under it on the right.
+
+## 2.496.582
+
+What you will see (talking to VESTA on the tablet, needs VESTA 0.12.380):
+- Cockpit › Messages: VESTA is pinned at the top of the list, on every filter. Tap it to open your conversation: type a
+  question and press Ask (or Enter); VESTA's answer appears under it, with the camera pictures it looked at and, for
+  the owner and the facility manager, an "Open the page" link when it made one (an investigation). /investigate and
+  /proposal work as on Telegram; "New conversation" starts again, as /new does.
+- Each profile has its own conversation, apart from every Telegram chat: a guest never sees what the owner asked. A
+  guest gets answers only: VESTA takes no action and asks for no approval for a guest.
+- "I cannot answer right now…" in the conversation when VESTA cannot reach its AI, as on Telegram.
+- A question VESTA never picked up (it stopped just then) says "No answer came. Ask again." after 10min.
+- On a phone, the menu has an "Ask VESTA" row that opens the conversation.
+- While VESTA is stopped, the robot on the Cockpit button becomes the warning triangle again, and VESTA's line in
+  Messages and "Ask VESTA" are hidden: nothing on screen that cannot answer.
+
+## 2.496.581
+
+What you will see:
+- Cockpit › Messages: press and hold a notification or a report, then enter the superadmin code, to delete it for good
+  (as a Facility record is deleted). It goes from every tablet. Nothing is deleted without the code.
+- An open issue that only the villa's system reports (a device "Unavailable", no record yet) has an Open Ticket
+  button: it opens the ticket form already pointed at that device. There is nothing to close on it: it goes when the
+  device is back.
+
+## 2.496.580
+
+What you will see (three rounds of architecture review, 29 October 2026):
+- The unread dot on the robot, the phone's gear and the menu's Cockpit row lights only for what Messages › Notifications
+  and Reports list and you have not seen. It no longer stays lit for an alert already shown on its Open issues line.
+- An alert that cleared with no ticket moves to the folded Watch section, no longer among the notifications.
+- The Watch section counts "watched items" and its (i) says it holds cleared alerts too.
+- A villa announcement and a VESTA message that happen to share a number are no longer mixed up (read marks, a
+  pressed button).
+- A report that VESTA corrects keeps its "Open the page" link.
+
+## 2.496.579
+
+What you will see:
+- Messages has a fourth filter, Reports (All · Issues · Notifications · Reports, still on one line). It lists VESTA's
+  reports, newest first: the morning digest, the weekly report and the owner's weekly lines, the monthly report, the
+  night check's message. Tap one to read it; a report with a page has an "Open the page" button (owner and facility
+  manager), which opens the same page Telegram attaches, without the internet.
+- A report is no longer also a line in Notifications.
+- A report shows in English when VESTA wrote an English version, otherwise in the language it was written in.
+- A report and its page stay for the "records kept" days (Advanced Settings), whatever happens to any ticket.
+- Messages opens on Reports when the only unread lines are reports.
+- Needs the VESTA Agent 0.12.377 or later; with an older one the Reports filter stays empty.
+
+## 2.496.578
+
+What you will see:
+- An open alert with a ticket is listed once, as its line in Open issues (VESTA's card opens on the right when you tap
+  it), no longer also as a card in Notifications: as on Telegram, one alert, one place. Notifications keeps what has
+  no ticket (the doorbell, the villa's other announcements, VESTA's notes).
+- Opening such an alert's line marks its card read.
+
+## 2.496.577
+
+What you will see:
+- A VESTA card you have seen no longer counts as unread again when VESTA only touches it up (its last line the
+  same); a new step (a reminder, an escalation, cleared) still does.
+- Nothing else changes on screen: from the review of tickets 26-27, the list of priorities is now in the agreement
+  shared with VESTA, and an alert's number, the list's order and an alert's stage are each read in one place.
+
+## 2.496.576
+
+What you will see:
+- Nothing changes on screen. The working rules every contributor follows now say it once: Telegram and the tablet
+  show the same thing, and every report, notice and alert names an alert the same way ("#91-P2").
+
+## 2.496.575
+
+What you will see:
+- In Messages, the filter "Open issues" is now "Issues": it lists a problem's whole life, Open issues, then Watch,
+  then Closed. Its number still counts the open issues only.
+- Notifications lists only the notifications: Closed moved from there to the issues.
+- Watch and Closed are always shown, saying "Nothing is being watched." or "Nothing closed yet." when empty.
+- All still shows the four sections: Open issues, Notifications, Watch, Closed.
+
+## 2.496.574
+
+What you will see:
+- An alert's open issue, its ticket and its Watch line are named as on Telegram: "#91-P2 · Test lock…" instead of
+  "#91 · Test lock…", once the VESTA Agent is updated too (0.12.374 or later; until then they keep "#91").
+
+## 2.496.573
+
+What you will see:
+- Every closed alert goes to Closed, the villa's own closed messages too (a doorbell "✅ Opened at … at the gate", a
+  cleared alarm VESTA did not take over): before, only VESTA's closed cards did.
+- A card's "To:" reads exactly as on Telegram.
+- Nothing else changes on screen: the tablet now reads an alert's stage, what replaces what, and VESTA's card names
+  through one shared piece each, used by the list, the notice and the add-on alike.
+
+## 2.496.572
+
+What you will see:
+- A doorbell notice with Unlock Gate always goes once the ring has ended (opened at the gate, from Telegram, from a
+  tablet, or nobody answered within 2min), also on a tablet that was asleep or offline at that moment: it goes at the
+  tablet's next read. Before, such a notice could stay until its ✕.
+- VESTA's card replaces the villa's own alarm notice on screen by the same rule that keeps Messages to one line per
+  alert.
+
+## 2.496.571
+
+What you will see:
+- Messages has four sections at one level, each folded or opened by its arrow: Open issues, Notifications, Watch
+  (was "Watched", now below Notifications) and Closed. Watch and Closed start folded.
+- An alert being watched is listed in Watch only: its card no longer also sits in Notifications.
+- An alert that is over ("#90-P2 (closed)") moves to Closed, and no longer keeps the unread mark lit.
+
+## 2.496.570
+
+What you will see:
+- Messages reads at the same text size as the other menus (Settings, Logout): a line's title, and the message open on
+  the right, were much larger. A message taking the whole screen keeps its large text.
+
+## 2.496.569
+
+What you will see:
+- Messages › Notifications shows VESTA's alerts as Telegram does: one card per alert, headed with its number and
+  priority ("#91-P2 (new)"), "To:", the alert and "What to do", then "Status:" with its whole story (alert sent,
+  reminder, escalation, cleared). When VESTA updates the alert, the same card changes and moves to the top; it is no
+  longer a new line each time the villa repeats it.
+- The villa's own message of an alert VESTA took over is not listed beside it any more: the card stands for it. While
+  VESTA is stopped, the villa's own messages show as before.
+- An open issue raised by an alert shows VESTA's card of it above its Open Ticket and Close.
+- A new step of an alert (a reminder, cleared) appears as a notice and counts as unread; a quiet change to the card
+  does not.
+- VESTA's Done and Need help are not shown on the tablet yet: they are still pressed on Telegram.
+- Needs the VESTA Agent 0.12.372 or later.
+
+## 2.496.568
+
+What you will see:
+- Nothing yet on screen. The add-on now keeps every message VESTA writes on Telegram (an alert it took over, its
+  reminders and escalations, a camera snapshot, an approval request, the night check, the morning digest, its notes to
+  you) as it stands now: when VESTA rewrites a message, the kept copy is replaced, not added. They are kept for the
+  same number of days as tickets and messages, and a guest sees a camera snapshot only while it is the newest message
+  on the tablet, the same rule as the visitor's photo when the doorbell is pressed. The Messages list shows them in the next release, once the VESTA Agent is updated too.
+
+## 2.496.567
+
+What you will see:
+- A ring waiting for an answer keeps its notice and its Unlock when something else is announced: the other
+  announcement shows beside it for 10s, then goes. Before, the newer one pushed the ring off the screen.
+- Two announcements arriving together each show; before, only the newer did.
+- A ring holding the whole screen keeps it for "Ring shown for" when something else arrives.
+- A tablet left on for days lists exactly what the add-on keeps: notifications past the records-kept days leave its
+  Messages too, as on a tablet just opened.
+- A photo a guest may no longer see (a past ring's) is no longer an empty frame: it is not shown.
+
+## 2.496.566
+
+What you will see:
+- A ring you picked for the whole screen no longer takes it again once it is answered or times out, even when the
+  tablet had just reloaded or woken up between the ring and its answer: the answer is a short notice.
+- Unlock pressed on a ring's notice now shows "Sent" in Messages too, on the same ring, and cannot be pressed a second
+  time there.
+- A notification that says only its last line (for example "✅ Done at 10:00") shows that line on its notice too, as
+  Messages does.
+- Nothing else changes on screen: the tablet now reads an alarm's stage from the same list VESTA writes it from, and
+  keeps rings through one shared mechanism that the reports and VESTA's conversation will use next.
+
+## 2.496.565
+
+What you will see:
+- In Messages, an open issue with a ticket shows its whole short story under its line, as Telegram's "Status:" tells
+  it: the alert sent and to whom, each reminder, an escalation, a button pressed on Telegram, each with its time, in
+  order. It showed only the last of these. The whole story shows once the VESTA Agent is updated too.
+
+## 2.496.564
+
+What you will see:
+- When the villa has announced something this tablet has not shown yet, a small dot sits on the robot's upper left. The amber count of open issues on its upper right is unchanged.
+- Tapping the robot then opens the Cockpit on Messages › Notifications, the newest one open. Once a notification has
+  been shown under Notifications, or opened, on this tablet, the dot goes; each tablet keeps its own.
+- On a phone, the same dot sits on the gear, and on the menu's Cockpit row.
+
+## 2.496.563
+
+What you will see:
+- The Cockpit's first tab is now Messages, in place of Overview: Messages · Tickets · Schedule · Recap · Spend.
+- Messages has three filters on one line: All, Open issues and Notifications. The list is on the left, and what you
+  tap in it opens on the right.
+- Open issues is the old Overview list: one line per device, in the same order. Tap a line and its card opens on the
+  right with the same buttons (Open Ticket, Close, Edit ticket). "Open a ticket" and the (i) are above the list, and
+  Watched is folded at the end. A device window's warning opens Messages on that device's issue.
+- Notifications lists everything the villa has announced and kept, newest first, 10 a page: tap one to read it whole,
+  with its photo and its buttons (the gate's Unlock while the ring can still be answered). A notice that has gone
+  from the screen can be read here.
+- The Cockpit is wider on the tablet (1080px), on every tab. On a phone, the list and the item take the screen in
+  turn, with a Back to the list.
+- A guest still sees the Cockpit with no tab strip: Messages alone.
+
+## 2.496.562
+
+What you will see:
+- Every announcement's notice under the category bar goes by itself after 10s, problems ("New alert") included:
+  nothing to close by hand, and no ✕ on it. Only a ring offering the gate's Unlock stays while the button can still be
+  pressed.
+- A notice with a photo (a camera's person alert) has square corners instead of the rounded ends of the bar; the
+  photo keeps its size, above the words.
+- The server room and storage room camera alerts, and the night presence guard's photo, now show their photo on the
+  tablet as on Telegram (a change to those automations on the villa, already saved).
+
+## 2.496.561
+
+What you will see:
+- Advanced Settings has a new Messages tab, between Devices and System, for the owner only. "Full screen for" lists
+  what the villa has announced; pick one, such as the doorbell's ring, and it takes the whole screen of every tablet
+  for "Ring shown for" (60s until you change it). Nothing is picked at first, so nothing changes until you pick.
+- Settings now has two tabs, General (everything it held before) and Messages. Messages has "Rings full screen on
+  this tablet": switch it off on a tablet that must never be taken over, such as the bedroom's. The Cockpit has a new
+  gear at the top right that opens Settings straight on Messages.
+- A full-screen announcement shows its photo, its words and its buttons (the gate's Unlock). Close, at the bottom,
+  ends it early; once the ring is answered or nobody answered in time, it leaves the screen and what happened shows
+  as a notice.
+- A problem the villa announces ("New alert", "Still open") now stays under the category bar until you close it with
+  its ✕. Everything else (an all-clear, the weekly test) still goes after 10s.
+
+## 2.496.560
+
+What you will see:
+- A doorbell ring's notice on the tablet now carries the same button as the Telegram message (the gate's Unlock).
+  Anyone at the tablet can press it, whatever profile is signed in, with no PIN. The villa's doorbell automation then
+  opens the gate, and its message, on Telegram and on the tablet, says the gate was opened "from the tablet".
+- The button works only while the doorbell automation is still waiting for an answer. Once the ring is
+  answered on Telegram, opened at the gate, or nobody answered in time, the notice changes to what happened and the
+  button is gone. A press that comes too late says "No longer offered" and opens nothing.
+- A ring's notice with its button stays on screen until then, or until you close it with its ✕; other announcements
+  still go after 10s.
+- The Unlock button on Telegram works exactly as before.
+
+## 2.496.559
+
+What you will see:
+- A guest's tablet now shows a ring's photo too, but only while that ring is the notification on screen (up to 60s
+  after it rang, and only until the next announcement). A guest never sees a past ring's photo.
+
+## 2.496.558
+
+What you will see:
+- A doorbell ring and what became of it ("Opened at 14:02") are one line on the tablet, not two: the second replaces
+  the first.
+- A ring's notice shows the photo taken for that ring, above its words. It stays that ring's photo even after the next
+  ring. Only profiles that may see cameras get the photo; a guest sees the words without it.
+- A ring's photo is deleted with it, after the number of days set in "How many days tickets, attachments and messages
+  are kept" (Settings › Advanced › System).
+
+## 2.496.557
+
+What you will see:
+- When the villa announces something on Telegram (the doorbell, an alarm, the weekly test), every tablet and phone
+  showing VESTA now shows it too, for 10s, under the top bar: its title and the first line of what it says. It works
+  whatever profile is signed in, and with VESTA's assistant stopped. A page you reload does not show the last one
+  again.
+- Settings › Advanced › System › Maintenance records: the field is now "How many days tickets, attachments and messages
+  are kept". What the villa announces is kept that long too.
+
 ## 2.496.556
 
 What you will see:

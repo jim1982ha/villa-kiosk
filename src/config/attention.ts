@@ -15,8 +15,8 @@ import { alarmText, rowText } from "@/config/reading";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
-import { DUE_WORDS, faultTitle, fmAttention, stageOf, type FmStage } from "@/fm/fmEngine";
-import { lastNoted } from "@/fm/faultNotes";
+import { alertNumberOf, DUE_WORDS, faultTitle, fmAttention, stageOf, type FmStage } from "@/fm/fmEngine";
+import { notedStory } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
@@ -67,8 +67,13 @@ export interface AttentionItem {
    *  reads now and since when — "Locked since 14:38 · closes at about 14:49 if it stays locked" (cockpitCard). `since`:
    *  read from its history (useStateSince), never its last_changed. */
   closing?: { at: string; word?: string; since?: Since };
-  /** Set on a fault: what last happened about it on Telegram (faultNotes.lastNoted — "Escalation sent to Owner"). */
-  latest?: { note: string; at: string };
+  /** Set on a fault: when it was opened (FmTicket.openedAt): its row's time until something is told of it. */
+  openedAt?: string;
+  /** Set on a fault: its short story on Telegram, in time order (faultNotes.notedStory — "Escalation sent to Owner"). */
+  story?: { note: string; at: string }[];
+  /** Set on a fault an alert raised: the number its Telegram messages carry ("#91"), which names VESTA's card of it
+   *  (messagesModel.cardsOfIssue). */
+  alertNumber?: number;
   /** Set on a fault: the other open records that say exactly the same thing on the same card (foldTwins) — one line,
    *  "(N times)", and the card's buttons act on every one of them. */
   twins?: string[];
@@ -80,10 +85,16 @@ export interface AttentionItem {
  *  ⚠️ A RESTART IS NOT WHEN IT WAS LOCKED (villa, 2026-10-26): "since" was the entity's last_changed, which every restart
  *  of the villa's system rewrites — `sinceOf` reads it from the history, as the presence tile does. */
 function closingOf(closesAt: string | undefined, entity: HassEntity | undefined, entityId: string | undefined,
-  sinceOf: (id: string) => Since): AttentionItem["closing"] {
+  sinceOf: (id: string) => Since, openedAt?: string): AttentionItem["closing"] {
   if (!closesAt || Number.isNaN(Date.parse(closesAt))) return undefined;
   if (!entity || !entityId || isOffline(entity)) return { at: closesAt };
-  return { at: closesAt, word: rowText(entityId, entity), since: sinceOf(entityId) };
+  const since = sinceOf(entityId);
+  // ⚠️ A STATE OLDER THAN THE PROBLEM IS NOT WHAT CHANGED (owner's end-to-end test, 2026-10-30: a lock that had been
+  // UNAVAILABLE read "Unlocked since before 19 Oct · closes … if it stays unlocked"): the device has been in it since
+  // before the problem was opened, so the problem was about something else (its availability) — "Back to normal"
+  const opened = openedAt ? Date.parse(openedAt) : NaN;
+  if (since && since !== "loading" && (since.before || (!Number.isNaN(opened) && since.at < opened))) return { at: closesAt };
+  return { at: closesAt, word: rowText(entityId, entity), since };
 }
 
 /** The entities whose state a fault waiting to close says "since" of (closingOf): the ones useStateSince reads. */
@@ -383,10 +394,12 @@ export function buildAttentionItems(opts: {
       entityId,
       ticketId: t.id,
       stage: stageOf(t),
-      latest: lastNoted(t),
+      story: notedStory(t),
+      openedAt: t.openedAt,
+      ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t) } : {}),
       source: faultSource(t),
       check: t.check,
-      closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf),
+      closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf, t.openedAt),
       // lost contact — isOffline, or an entity the villa's system no longer has (Missing), as devices.unavailable
       // reads it: the device's offline line takes it. ⚠️ A MISSING ENTITY TOO (architecture review, 2026-10-21): only
       // one the villa's system still had counted, so a ticket on a sibling deleted with its device stood as a second

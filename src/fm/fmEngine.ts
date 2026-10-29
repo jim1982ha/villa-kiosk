@@ -18,6 +18,7 @@ import { villaTime, wallClock } from "@/utils/villaClock";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import type { Tone } from "./tone";
 import { countOf } from "@/utils/countOf";
+import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 export type DueState = "never" | "overdue" | "due-soon" | "ok";
 /** Where the month's minor spending stands against its cap. */
@@ -306,15 +307,30 @@ export const STAGE_WORDS: Record<FmStage, { word: string; tone: Tone }> = {
   closed: { word: "Resolved", tone: "ok" },
 };
 
-/** A fault's title as every list shows it: "#5 · House Pump Power …" when it came from a VESTA Agent alert — the
- *  number its Telegram messages carry (FmTicket.alertNumber) — else its title alone. A duration in it is worded now,
+/** A fault's alert number when it carries a real one (a positive integer), else undefined — the one reading of
+ *  FmTicket.alertNumber (faultTitle, the open issue's and the Watch line's link to VESTA's card). */
+export const alertNumberOf = (t: Pick<FmTicket, "alertNumber">): number | undefined =>
+  typeof t.alertNumber === "number" && Number.isInteger(t.alertNumber) && t.alertNumber > 0 ? t.alertNumber : undefined;
+
+/** An alert's name as Telegram writes it — "#5-P2", or "#5" without a priority — in the agreement's one form
+ *  (agent-contract.json ticket.alertLabel, the form the VESTA Agent titles its messages with). Pure. */
+export function alertLabel(number: number, priority?: string): string {
+  const known = priority !== undefined && (AGENT_CONTRACT.ticket.priorities as readonly string[]).includes(priority);
+  const form = known ? AGENT_CONTRACT.ticket.alertLabel : AGENT_CONTRACT.ticket.alertLabelNoPriority;
+  return form.replace("{number}", String(number)).replace("{priority}", priority ?? "");
+}
+
+/** A fault's title as every list shows it: "#5-P2 · House Pump Power …" when it came from a VESTA Agent alert — its name
+ *  as its Telegram messages carry it (alertLabel) — else its title alone. A duration in it is worded now,
  *  from its `since` ("offline for 6 d 2 h"), in the Kiosk's duration words (chartUtils.fmtDuration): the title the
  *  Agent wrote at 02:00 said "129 h" all day (architecture review, 2026-10-15). */
-export function faultTitle(t: Pick<FmTicket, "title" | "alertNumber" | "titlePattern" | "since">, now: number = Date.now()): string {
+export function faultTitle(t: Pick<FmTicket, "title" | "alertNumber" | "alertPriority" | "titlePattern" | "since">,
+  now: number = Date.now()): string {
   const from = t.since ? Date.parse(t.since) : NaN;
   const title = t.titlePattern?.includes("{since}") && Number.isFinite(from)
     ? t.titlePattern.replace("{since}", fmtDuration(now - from)) : t.title;
-  return typeof t.alertNumber === "number" && t.alertNumber > 0 ? `#${t.alertNumber} · ${title}` : title;
+  const n = alertNumberOf(t);
+  return n !== undefined ? `${alertLabel(n, t.alertPriority)} · ${title}` : title;
 }
 
 /** Who did a piece of work: the person, when someone else recorded it (a VESTA Agent completion for a Done on
@@ -484,18 +500,8 @@ export function completionsInMonth(
     }));
 }
 
-/** Local-time ISO-ish stamp for a filename or a report heading. Avoids
- *  toISOString(), which silently shifts a Bali evening into the previous UTC
- *  day and would put a completion in the wrong month at the boundary. */
-export function localStamp(at: string | number | Date = Date.now()): string {
-  const w = wallClock(new Date(at));   // the villa's clock (utils/villaClock), wherever the report is made
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${w.year}-${p(w.month)}-${p(w.day)} ${p(w.hour)}:${p(w.minute)}`;
-}
-
-
 /** Short human date, local time (e.g. "24 Jul 2026") — for a target/due date
- *  or a report table row, where the full time-of-day in localStamp() is more
+ *  or a report table row, where the full time-of-day in dateText.momentText() is more
  *  precision than the reader needs. Was previously private to fmDocuments.ts;
  *  moved here (and imported back from there) so TodayTab and ScheduleEditor
  *  can show the exact same date format the report annex uses, rather than

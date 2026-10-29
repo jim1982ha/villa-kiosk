@@ -7,7 +7,9 @@
 //     (owner, 2026-10-20: "all the modal to keep the same height whatever the content is");
 //   * "device": a window about ONE device (its own window, "Open a ticket") — as tall as what it shows (owner, same
 //     day: "keep an adjusted height");
-//   * "question": a question box or the colour picker — its own size.
+//   * "question": a question box or the colour picker — its own size;
+//   * "screen": the whole screen, over every other window (an announcement the owner picked for full screen, ticket 16
+//     of "One inbox").
 //
 // ⚠️ EACH WINDOW BUILT ITS FRAME BY HAND (to 2.496.548): the same five lines in eleven files, and a height chosen by a
 // list of exceptions each new window had to remember to join — "every window drawn over the whole screen" was the same
@@ -17,7 +19,7 @@ import type { CSSProperties, ReactNode } from "react";
 import DialogLayer from "./DialogLayer";
 import { useModalA11y } from "@/hooks/useModalA11y";
 
-export type WindowKind = "content" | "device" | "question";
+export type WindowKind = "content" | "device" | "question" | "screen";
 
 export default function Window({ kind, label, onClose, onEscape, className, layer, zIndex, style, frameKey, outside, children }: {
   kind: WindowKind;
@@ -42,7 +44,7 @@ export default function Window({ kind, label, onClose, onEscape, className, laye
 }) {
   const ref = useModalA11y(onEscape ?? onClose);
   return (
-    <DialogLayer className={`modal-backdrop${layer ? ` ${layer}` : ""}`} onClick={onClose}
+    <DialogLayer className={`modal-backdrop${kind === "screen" ? " backdrop-screen" : ""}${layer ? ` ${layer}` : ""}`} onClick={onClose}
       style={zIndex !== undefined ? { zIndex } : undefined}>
       <div key={frameKey} ref={ref} className={`modal window-${kind}${className ? ` ${className}` : ""}`} style={style}
         onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={label}>

@@ -43,6 +43,7 @@ export function useConfirmedClose(): ConfirmedClose {
 /** The Overview's buttons carry an icon (the Tickets tab's wrench for Open Ticket, owner 2026-10-14). */
 const ICON: Partial<Record<WorkActionKind, ReactNode>> = {
   openTicket: <Wrench size={14} aria-hidden />,
+  raiseTicket: <Wrench size={14} aria-hidden />,
   editTicket: <Pencil size={14} aria-hidden />,
   closeDevice: <X size={14} />,
   closeAll: <X size={14} />,

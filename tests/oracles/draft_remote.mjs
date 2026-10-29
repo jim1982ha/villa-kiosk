@@ -18,7 +18,7 @@ const { DEFAULT_CONFIG, normaliseConfig } = await import("@/config/AppConfig");
 const D = await import("@/config/deviceConfig");
 const { pushWithRebase } = await import("@/utils/keyedSync");
 const E = await import("@/config/mappingEdits");
-const { withDevice } = await import("@/components/settings/UnavailableByDesign");
+const { withItem: withDevice } = await import("@/utils/listToggle");
 
 // Settings' one draft: a few of its own keys plus Advanced Settings' (components/settings/SettingsModal SETTINGS_KEYS)
 const KEYS = ["walkSpeed", "theme", ...ADV];

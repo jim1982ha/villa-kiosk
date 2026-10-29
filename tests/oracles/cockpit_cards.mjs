@@ -6,7 +6,7 @@ import { React, h, draw, inside, btn } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
 const { default: RecordCard } = await import("@/components/fm/RecordCard");
-const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { groupAttention } = await import("@/config/attention");
 const { STAGE_WORDS } = await import("@/fm/fmEngine");
@@ -133,6 +133,16 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
      && line(undefined) === null, [line(waiting)]);
   const drawn = draw(h(AttentionCard, { card: cockpitCard(fault(waiting), CADENCE, t1445), onOpenEntity: () => {} }));
   ck("  ...drawn under its problem's line", drawn.includes(`if it stays locked</span>`), drawn.slice(0, 500));
+  // ticket 19 of "One inbox" (owner, 2026-10-28): the short story Telegram's Status tells, every line, under its problem
+  const story = [{ note: "Alert sent (to: Facility Manager)", at: "2026-10-21T06:40:00Z" },
+    { note: "🆘 Need help on Telegram (Wayan)", at: "2026-10-21T06:52:00Z" }];
+  const told = draw(h(AttentionCard, { card: cockpitCard({ ...fault(waiting), items: [{ ...fault(waiting).items[0], story }] },
+    CADENCE, t1445), onOpenEntity: () => {} }));
+  const list = inside(told, "cockpit-attention-story");
+  ck("  ...and its short story, every line in order with its time, under its problem's line",
+     list.indexOf(`Alert sent (to: Facility Manager) · ${momentText(story[0].at)}`) >= 0
+     && list.indexOf(`🆘 Need help on Telegram (Wayan) · ${momentText(story[1].at)}`) > list.indexOf("Alert sent"), list || told.slice(0, 800));
+  ck("  ...none told, no story drawn", !drawn.includes("cockpit-attention-story"));
   const { buildAttentionItems } = await import("@/config/attention");
   const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
   const { devicesOf } = await import("../consistency/devices.mjs");
@@ -153,6 +163,20 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const unread = buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
     fmData }).find((i) => i.ticketId === "c1")?.closing;
   ck("  ...no history to ask: no time said, never last_changed", unread?.since === null, unread);
+  // owner's end-to-end test, 2026-10-30: a lock that was UNAVAILABLE read "Unlocked since before 19 Oct"
+  const olderState = (since) => buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {},
+    resolvedRooms: {}, fmData, sinceOf: () => since }).find((i) => i.ticketId === "c1")?.closing;
+  const before = olderState({ at: Date.parse("2026-10-20T00:00:00Z"), before: false });
+  const outOfReach = olderState({ at: Date.parse("2026-10-19T00:00:00Z"), before: true });
+  ck("  ...a state older than the problem is not what changed: \"Back to normal\", never its state since then",
+     before?.at === closes.toISOString() && before?.word === undefined && outOfReach?.word === undefined, [before, outOfReach]);
+  // owner, 2026-10-29: a new alert's row in Messages had no time (nothing told of it yet)
+  const { rowTime } = await import("@/config/cockpitCard");
+  const opened = items.find((i) => i.ticketId === "c1");
+  const fresh = cockpitCard({ ...fault(waiting), items: [opened] }, CADENCE, t1445);
+  const toldCard = cockpitCard({ ...fault(waiting), items: [{ ...opened, story }] }, CADENCE, t1445);
+  ck("  ...its row says when: the last step told of it, else when it was opened, never nothing",
+     rowTime(fresh) === "2026-10-21T06:00:00Z" && rowTime(toldCard) === story[1].at, [rowTime(fresh), rowTime(toldCard)]);
 }
 ck("  ...said whole, with its moment, by the pill's tooltip (the Kiosk's own: common/Tip)",
    /aria-label="Next check: within 5min \(\d\d\/\d\d\/\d{4} \d\d:\d\d\)"/.test(issue)
@@ -234,7 +258,7 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   const card = draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {}, lineActions: () => btn("Close") }));
   ck("  ...a problem's words sit in one cut line, whole on hover; its own Close in its own slot beside them",
      card.includes(`<span class="cockpit-attention-sub-title">${words}</span>`)
-     && /<Tip text=\{line\.text\}><span className="cockpit-attention-sub-title">/.test(readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8"))
+     && /<Tip text=\{line\.text\}><span className="cockpit-attention-sub-title">/.test(readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8"))
      && (card.match(/<span class="cockpit-line-act">/g) ?? []).length === 2, card.slice(0, 600));
   const shared = css("08-shared.css"), fac = css("07-facility.css"), base = css("01-base.css");
   ck("  ...cut with \"…\", and the cut words never push a line's Close off its line",

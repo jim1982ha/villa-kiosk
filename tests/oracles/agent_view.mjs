@@ -57,12 +57,15 @@ ck("  ...and no window of its own any more (2.496.443)", !/AgentModal|shown\("ag
   // Cockpit's footer, behind the same door (doors.agent; HUD hands both on).
   const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
   const hud = strip(src("components/hud/HUD.tsx"));
-  const cockpit = strip((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/CockpitOverview.tsx")));
+  const cockpit = strip((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/IssueCard.tsx")));
   ck("the agent's presence is the Cockpit button's robot and dot only (no robot button of its own)",
      !/onOpenAgent/.test(hud));
-  ck("  ...the Cockpit button shows the robot and the presence dot only with the agent's door, the ⚠ without",
-     /\{doors\.agent \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
-     && /\{doors\.agent && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{agentOnline/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
+  // ⚠️ ONLY WHILE IT RUNS (ticket 21 of "One inbox", owner 2026-10-28: nothing dead on screen): the robot is the agent's
+  // door AND its heartbeat; stopped, the ⚠
+  ck("  ...the Cockpit button shows the robot and the presence dot only with the agent's door while it runs, the ⚠ without",
+     /const robot = doors\.agent && thread\.shown;/.test(hud)
+     && /\{robot \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
+     && /\{robot && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{robot/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
   ck("  ...and the Cockpit's footer has no 'VESTA Agent' (one footer: Close)",
      /<ModalFooter onClose=\{onClose\} \/>/.test(cockpit) && !/VESTA Agent/.test(cockpit));
 }
@@ -162,8 +165,8 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
 }
 const faults = src("components/fm/TicketsTab.tsx");
 ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",
-   !/fm-timeline-head|fm-timeline-dot/.test(faults) && /notes=\{faultNoteLines\(t, localStamp\)\}/.test(faults)
-   && /when=\{faultWhen\(t, localStamp\)\}/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
+   !/fm-timeline-head|fm-timeline-dot/.test(faults) && /notes=\{faultNoteLines\(t, momentText\)\}/.test(faults)
+   && /when=\{faultWhen\(t, momentText\)\}/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
 {
   // what the button is: fm/deviceWork's, by value; that the Closed list draws it: the one wiring line
   const { closedActions, workRecord } = await import("@/fm/deviceWork");

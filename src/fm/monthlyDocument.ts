@@ -11,7 +11,8 @@
 // "Saved" went back to "Save snapshot" after 2.5 s where the other two stayed
 // (architecture review, round two, 2026-10-17).
 
-import { localStamp, monthKey, monthLabel } from "./fmEngine";
+import { momentText } from "@/utils/dateText";
+import { monthKey, monthLabel } from "./fmEngine";
 import { localMonthStart } from "@/utils/localDay";
 import type { FmData, FmSavedDocument, FmTerms } from "./fmTypes";
 import type { ReadinessResult } from "./readiness";
@@ -50,7 +51,7 @@ export interface DocumentKindInfo {
   /** What it is ABOUT: a month (the recap, the statement), or the moment it was taken (the snapshot). */
   about: "month" | "moment";
   /** Its title in the saved list: its month — or, for a moment, the moment it was saved, in the documents' fixed form
-   *  (fmEngine.localStamp, the "Generated:" stamp). ⚠️ THREE SNAPSHOTS THIS MONTH WERE ALL "October 2026" (architecture
+   *  (dateText.momentText, the "Generated:" stamp). ⚠️ THREE SNAPSHOTS THIS MONTH WERE ALL "October 2026" (architecture
    *  review, 2026-10-19): every kind was titled by its month. */
   title: (doc: Pick<FmSavedDocument, "month" | "generatedAt">) => string;
   /** The document, from the inputs, for `month`. */
@@ -70,7 +71,7 @@ export const DOCUMENT_KINDS: Record<DocumentKind, DocumentKindInfo> = {
   },
   readiness: {
     noun: "snapshot", plural: "snapshots", fileWord: "readiness", about: "moment",
-    title: (doc) => localStamp(doc.generatedAt),
+    title: (doc) => momentText(doc.generatedAt),
     build: (i, month) => buildReadinessSnapshot(i.readiness, i.villaName, month),
   },
 };

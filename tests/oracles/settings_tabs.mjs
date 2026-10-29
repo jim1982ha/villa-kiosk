@@ -87,7 +87,8 @@ console.log("\n  assertions:");
 ck("the scan reached the source tree", FILES.length > 100);
 ck("exactly one hand-written tab strip, and it is ModalTabs",
    strips.length === 1 && strips[0] === "components/common/ModalTabs.tsx");
-ck("Advanced Settings renders three tabs", Object.keys(chunks).sort().join(",") === "devices,system,villa");
+// four since 2.496.561: Messages, between Devices and System (ticket 16 of "One inbox", owner 2026-10-28)
+ck("Advanced Settings renders four tabs", Object.keys(chunks).sort().join(",") === "devices,messages,system,villa");
 ck("all five sections survive, each in exactly one tab", misplaced.length === 0);
 // owner, 2026-10-24: at the header's right, Back taking its footer place (where Settings' "Advanced Settings" is)
 ck("Log Out All is the header's own control, on every tab, never inside one",

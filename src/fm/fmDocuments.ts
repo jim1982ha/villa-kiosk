@@ -14,20 +14,17 @@
 // document unchanged, needs no viewer, and stays readable if it is ever
 // archived as plain text years later for a dispute.
 
-import {
-  budgetStatus, capNotes, completionsInMonth, dueLine, DUE_WORDS, fmAttention, localStamp, monthBounds, monthKey,
-  monthLabel, resolvedInMonth, scheduleBoard, STAGE_WORDS, stageOf, ticketAt, ticketStats, workedBy,
-} from "./fmEngine";
+import { budgetStatus, capNotes, completionsInMonth, dueLine, DUE_WORDS, fmAttention, monthBounds, monthKey, monthLabel, resolvedInMonth, scheduleBoard, STAGE_WORDS, stageOf, ticketAt, ticketStats, workedBy } from "./fmEngine";
 import { COST_CATEGORY_NAMES, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
 import { AVAILABILITY_CHECK_LABEL, CHECK_WORDS, VERDICT_WORDS, type ReadinessResult } from "./readiness";
 import { openCounts } from "./deviceWork";
-import { docDate } from "@/utils/dateText";
+import { docDate, momentText } from "@/utils/dateText";
 import { formatMoney } from "@/utils/money";
 import { fmtDuration } from "@/components/panels/chartUtils";
 
-// ⚠️ EVERY DATE IN A DOCUMENT IS dateText.docDate ("2026-09-05"), THE FORM "Generated:" ALREADY USED (owner's decision,
-// 2026-10-19): a saved recap or statement is read years later, on any device; its rows were written in the generating
+// ⚠️ EVERY DATE IN A DOCUMENT IS dateText.docDate ("05/09/2026", day first as Telegram: owner, 2026-10-29), the form of
+// "Generated:" (owner's decision, 2026-10-19): a saved recap or statement is read years later, on any device; its rows were written in the generating
 // phone's locale ("05 Sept 2026" / "Sep 5, 2026") beside a fixed stamp. Screens keep the reader's locale (shortDate).
 
 export interface RecapInput {
@@ -133,9 +130,9 @@ export function documentHeader(titleSuffix: string, villaName: string, month: st
   return [
     `# ${villaName}: ${titleSuffix}`,
     `**Period:** ${monthLabel(month)}  `,
-    // localStamp: a fixed, unambiguous YYYY-MM-DD HH:MM in the reader's own
-    // time — an archived document should not change shape with a browser.
-    `**Generated:** ${localStamp()}  `,
+    // momentText: the agreement's fixed form on the villa's clock: an
+    // archived document should not change shape with a browser.
+    `**Generated:** ${momentText()}  `,
     `**Scope:** ${scopeDescription} `
       + `Financial reporting (revenue, commissions and payout) is out of scope and provided separately.`,
     "",
@@ -262,8 +259,8 @@ export function buildMonthlyRecap(input: RecapInput): string {
     L.push(`- **${avail.total - off} of ${avail.total}** devices reporting `
       + `(${pct.toFixed(1)}%)`);
     // ⚠️ "SEE THE FAULTS SECTION ABOVE" POINTED AT NOTHING (architecture review, 2026-10-19): a device not answering is
-    // not a fault record; it is a row of the Overview's Open issues, and the readiness check names it below.
-    if (off > 0) L.push(`- ${off} device(s) currently offline, listed under "Open issues" on the Overview, `
+    // not a fault record; it is a row of Messages' Open issues, and the readiness check names it below.
+    if (off > 0) L.push(`- ${off} device(s) currently offline, listed under "Open issues" in the Cockpit's Messages, `
       + `and under "${AVAILABILITY_CHECK_LABEL}" below.`);
     L.push("");
   }

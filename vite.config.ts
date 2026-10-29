@@ -176,7 +176,7 @@ export default defineConfig(({ command }) => {
               // this list and the proxy's routes disagree.
               ["/core", "/auth", "/addon-config", "/model", "/model-upload",
                "/device-config", "/fm-data", "/fm-evidence", "/fm-document", "/telemetry",
-               "/agent-status", "/kiosk-rooms", "/critical-devices", "/agent"].map((p) => [
+               "/agent-status", "/announcements", "/announcement-photo", "/announcement-press", "/message-erase", "/vesta-messages", "/vesta-ask", "/vesta-conversation", "/vesta-speech", "/vesta-press", "/kiosk-rooms", "/critical-devices", "/agent"].map((p) => [
                 p,
                 {
                   target: process.env.VITE_DEV_PROXY,

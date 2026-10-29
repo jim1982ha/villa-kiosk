@@ -85,7 +85,10 @@
 /* ⚠️ THE CARD'S WIDTH, NEVER ITS LONGEST LINE (owner, 2026-10-14: a "VESTA reads: …" note ran past a Closed card's
    right edge): a line of its own that may shrink wraps every note inside the card. */
 .fm-record-body > .fm-row-main { flex: 1 1 260px; min-width: 0; }
-.fm-record-actions { flex: 0 0 auto; margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* ⚠️ THE BUTTONS UNDER THE TEXT, ON THE RIGHT (owner, 2026-10-29: "the description take all the width of the cards and
+   the buttons to appear below it, aligned on the right", every card alike): beside it, they squeezed an alert's story
+   into a narrow column, a date cut over two lines. A row of their own; a cost stays beside the text. */
+.fm-record-actions { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .fm-record-actions .modal-actions { justify-content: flex-end; flex-wrap: wrap; }
 /* ⚠️ A CARD'S "Close this? No action needed." ON A PHONE (owner, 2026-10-21: "very buggy" on iPhone): the row of
    buttons is sized to its content (flex: 0 0 auto), and the question with Cancel and Close is wider than a phone's

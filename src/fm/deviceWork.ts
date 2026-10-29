@@ -64,14 +64,15 @@ export function ticketCards(records: readonly FmTicket[], deviceOfRecord: (field
 /** Every button a card of open work can carry. Two Closes, because they close different things:
  *  `closeDevice` — an Overview card's: every fault and ticket of the device; `closeTicket` — a Tickets card's: that
  *  ticket's records. Both close with nothing done and no cost (fmCommands' closeTickets). */
-export type WorkActionKind = "openTicket" | "editTicket" | "markResolved" | "closeDevice" | "closeAll" | "closeOne"
-  | "closeTicket" | "reopen";
+export type WorkActionKind = "openTicket" | "raiseTicket" | "editTicket" | "markResolved" | "closeDevice" | "closeAll"
+  | "closeOne" | "closeTicket" | "reopen";
 
-/** What a button does once pressed: record a stage change (FaultStageModal, to `to`), open the record's form, or —
- *  after its question — close the records with no action. */
+/** What a button does once pressed: record a stage change (FaultStageModal, to `to`), open the record's form, open
+ *  the ticket form pointed at a device, or — after its question — close the records with no action. */
 export type WorkStep =
   | { kind: "stage"; to: FmTicketStatus }
   | { kind: "edit" }
+  | { kind: "raise" }
   | { kind: "close"; question: string; confirmLabel: string };
 
 export interface WorkActionSpec { label: string; step: WorkStep }
@@ -79,6 +80,8 @@ export interface WorkActionSpec { label: string; step: WorkStep }
 /** ONE wording per action. */
 export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   openTicket: { label: "Open Ticket", step: { kind: "stage", to: "in_progress" } },
+  // a card with no record yet (only what the villa's system reports): the same words, the ticket form for its device
+  raiseTicket: { label: "Open Ticket", step: { kind: "raise" } },
   editTicket: { label: "Edit Ticket", step: { kind: "edit" } },
   markResolved: { label: "Mark resolved", step: { kind: "stage", to: "resolved" } },
   closeDevice: { label: "Close", step: { kind: "close", question: "Close this? No action needed.", confirmLabel: "Close" } },
@@ -90,7 +93,7 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
 };
 
-/** A button on a card: what it is, and the records it acts on (never empty). */
+/** A button on a card: what it is, and the records it acts on (never empty) — raiseTicket's: the device. */
 export interface WorkAction extends WorkActionSpec { kind: WorkActionKind; ids: string[] }
 
 const action = (kind: WorkActionKind, ids: string[]): WorkAction => ({ kind, ids, ...WORK_ACTIONS[kind] });
@@ -100,13 +103,14 @@ export interface WorkRecord { id: string; stage: FmStage }
 
 /**
  * The buttons of an Overview card, from the device's open records (its own fault lines and those folded onto a live
- * state's line). None when it holds no record — a card that is only what Home Assistant reports has no button.
- * "Open Ticket" takes on its faults (one ticket for the device); once every one is a ticket, "Edit Ticket" opens the
+ * state's line). A card holding no record — only what the villa's system reports — has one: "Open Ticket" opens the
+ * ticket form for its `device` (owner, 2026-10-29: it had none, so nothing could be done from it); with no device,
+ * none. "Open Ticket" takes on its faults (one ticket for the device); once every one is a ticket, "Edit Ticket" opens the
  * first. "Close" closes them ALL, faults and tickets.
  */
-export function overviewActions(records: readonly WorkRecord[], problems = 1): WorkAction[] {
+export function overviewActions(records: readonly WorkRecord[], problems = 1, device?: string): WorkAction[] {
   const open = records.filter((r) => r.stage !== "closed");
-  if (open.length === 0) return [];
+  if (open.length === 0) return device ? [action("raiseTicket", [device])] : [];
   const faults = open.filter((r) => r.stage === "fault").map((r) => r.id);
   const tickets = open.filter((r) => r.stage === "ticket").map((r) => r.id);
   return [

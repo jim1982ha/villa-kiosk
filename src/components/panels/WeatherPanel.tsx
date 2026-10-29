@@ -28,6 +28,7 @@ import LineChart, { ChartEmpty } from "./LineChart";
 import { useHA } from "@/ha/HAStateStore";
 import { useHistorySource } from "@/hooks/useHistorySource";
 import { ChartStep, useHistoryRange, type HistoryRange } from "./historyRange";
+import { ExpandableChart } from "./ChartWindow";
 import { PERIOD_MS, peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
 import { isUnavailable } from "@/utils/stateColors";
 import type { HassEntity, HistorySeries } from "@/types/ha.types";
@@ -74,7 +75,7 @@ export default function WeatherPanel({ station, onClose }: { station: WeatherSta
     <DataWindow title="Weather" icon={<CloudSun size={22} />} onClose={onClose}
       live={r.updated && <LiveNote>live · {ago(r.updated, now)}</LiveNote>} picker={picker}
       now={() => <NowView station={station} r={r} />}
-      history={() => <HistoryView station={station} range={range} />} />
+      history={() => <HistoryView station={station} range={range} picker={picker} />} />
   );
 }
 
@@ -355,7 +356,7 @@ function useTodayPeak(entityId: string | undefined): { v: number; t: number } | 
 const MEASURED: WeatherRole[] = ["temperature", "indoorTemperature", "humidity", "indoorHumidity", "windSpeed", "windGust", "pressure", "solar", "uv"];
 type MeasuredField = "mean" | "min" | "max";
 
-function HistoryView({ station, range }: { station: WeatherStation; range: HistoryRange }) {
+function HistoryView({ station, range, picker }: { station: WeatherStation; range: HistoryRange; picker: ReactNode }) {
   const { entities } = useHA();
   const ids = MEASURED.map((r) => station.roles[r]).filter((x): x is string => !!x);
   const rainId = station.roles.rainToday;
@@ -396,16 +397,16 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
         }).map((f) => <Figure key={f.label} label={f.label} value={f.value} />)}
       </div>
       <div className="weather-charts">
-        <ChartTile stepMs={PERIOD_MS[range.period]} title="Temperature" legend={[["Outside", "out"], ["Inside", "in"]]} win={win} status={status}
+        <ChartTile picker={picker} stepMs={PERIOD_MS[range.period]} title="Temperature" legend={[["Outside", "out"], ["Inside", "in"]]} win={win} status={status}
           lines={[line("temperature", { cls: "out", label: "Outside", unit: "°" }), line("indoorTemperature", { cls: "in dashed", label: "Inside", unit: "°" })]} />
-        <ChartTile stepMs={PERIOD_MS[range.period]} title="Humidity" legend={[["Outside", "water"], ["Inside", "in"]]} win={win} status={status}
+        <ChartTile picker={picker} stepMs={PERIOD_MS[range.period]} title="Humidity" legend={[["Outside", "water"], ["Inside", "in"]]} win={win} status={status}
           lines={[line("humidity", { cls: "water", label: "Outside", unit: "%" }), line("indoorHumidity", { cls: "in dashed", label: "Inside", unit: "%" })]} />
-        <ChartTile stepMs={PERIOD_MS[range.period]} title="Wind" legend={[["Speed", "out area"], ["Gust", "ink"]]} win={win} status={status}
+        <ChartTile picker={picker} stepMs={PERIOD_MS[range.period]} title="Wind" legend={[["Speed", "out area"], ["Gust", "ink"]]} win={win} status={status}
           lines={[line("windSpeed", { cls: "out", area: true, label: "Speed", unit: ` ${unitOf("windSpeed")}` }), line("windGust", { cls: "ink thin", label: "Gust", unit: ` ${unitOf("windGust")}` }, "max")]} />
         {rainId && <RainTile s={rain} win={win} status={status} stepMs={PERIOD_MS[range.totalPeriod]} unit={unitOf("rainToday") || "mm"} />}
-        <ChartTile stepMs={PERIOD_MS[range.period]} title="Pressure" note={p && P ? `${Math.round(p.min)} – ${Math.round(P.max)} ${unitOf("pressure")}` : undefined}
+        <ChartTile picker={picker} stepMs={PERIOD_MS[range.period]} title="Pressure" note={p && P ? `${Math.round(p.min)} – ${Math.round(P.max)} ${unitOf("pressure")}` : undefined}
           win={win} status={status} lines={[line("pressure", { cls: "out", label: "Pressure", unit: ` ${unitOf("pressure")}` })]} />
-        <ChartTile stepMs={PERIOD_MS[range.period]} title="Sun & UV" legend={[["Sunlight", "warm area"], ["UV", "uv"]]} win={win} status={status}
+        <ChartTile picker={picker} stepMs={PERIOD_MS[range.period]} title="Sun & UV" legend={[["Sunlight", "warm area"], ["UV", "uv"]]} win={win} status={status}
           lines={[line("solar", { cls: "warm", area: true, ownScale: true, label: "Sunlight", unit: " W/m²" }), line("uv", { cls: "uv", ownScale: true, label: "UV", unit: "" }, "max")]} />
       </div>
     </div>
@@ -417,26 +418,35 @@ interface Line { s: HistorySeries | undefined; cls: string; label: string; unit:
 const CHART_PX = 150;
 
 /** A Weather chart: its head, then the app's one line chart (LineChart). */
-function ChartTile({ title, legend, note, lines, win, status, stepMs }: {
+function ChartTile({ title, legend, note, lines, win, status, stepMs, picker }: {
   title: string; legend?: [string, string][]; note?: string; lines: Line[]; win: { from: number; to: number }; status: HistoryStatus;
   /** The step of its figures (the recorder's statistics period): beside its title and in its tooltip. */
   stepMs: number;
+  /** The window's period toggle: the larger chart carries it too (ExpandableChart). */
+  picker: ReactNode;
 }) {
   // Every line the station has a sensor for — one with no readings still has
   // its outage, and its band says so.
   const present = lines.filter((l): l is Line & { s: HistorySeries } => !!l.s);
+  const head = (
+    <div className="weather-chart-head">
+      <div className="weather-eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} /></div>
+      {legend && <div className="weather-legend">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
+      {note && <div className="weather-legend">{note}</div>}
+    </div>
+  );
   return (
     <div className="weather-tile chart">
-      <div className="weather-chart-head">
-        <div className="weather-eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} /></div>
-        {legend && <div className="weather-legend">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
-        {note && <div className="weather-legend">{note}</div>}
-      </div>
-      <LineChart stepMs={stepMs} label={`${title} history`} height={CHART_PX} status={status} window={win.to > win.from ? win : undefined}
-        lines={present.map((l) => ({
-          pts: l.s.points, gaps: l.s.gaps, label: l.label, unit: l.unit, cls: l.cls, area: l.area,
-          scale: l.ownScale ? "fromZero" as const : "shared" as const,
-        }))} />
+      {head}
+      {/* larger, as every trend chart opens (ExpandableChart), its toggle with it */}
+      <ExpandableChart title={title} head={<>{head}<div className="weather-ranges-row">{picker}</div></>} chart={(height, onExpand) => (
+        <LineChart stepMs={stepMs} label={`${title} history`} height={height ?? CHART_PX} status={status}
+          window={win.to > win.from ? win : undefined} onExpand={onExpand}
+          lines={present.map((l) => ({
+            pts: l.s.points, gaps: l.s.gaps, label: l.label, unit: l.unit, cls: l.cls, area: l.area,
+            scale: l.ownScale ? "fromZero" as const : "shared" as const,
+          }))} />
+      )} />
     </div>
   );
 }

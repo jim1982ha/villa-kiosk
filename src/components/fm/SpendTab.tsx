@@ -6,13 +6,14 @@
 // for. The warning therefore has to arrive BEFORE the money is committed,
 // which is why the entry form projects the new total as you type.
 
+import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import { DocumentButtons } from "@/components/common/SaveButton";
 import { Plus, Sparkles } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, capNotes, localStamp, parseAmount, recordsKeptNote } from "@/fm/fmEngine";
+import { budgetStatus, capNotes, parseAmount, recordsKeptNote } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { useProfile } from "@/auth/ProfileContext";
@@ -206,7 +207,7 @@ export default function SpendTab(
         {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => (
           // THE Cockpit card (RecordCard, architecture review 2026-10-15): the amount on the right, its receipt —
           // the whole point of attaching one is that somebody can later check it
-          <RecordCard key={c.id} title={c.label} when={localStamp(c.at)} notes={[c.note]} photoIds={c.photoIds}
+          <RecordCard key={c.id} title={c.label} when={momentText(c.at)} notes={[c.note]} photoIds={c.photoIds}
             amount={money(c.amountIdr)} onOpen={() => openEditor(c)}
             erase={{ title: "Erase this spend entry", detail: `${c.label}, ${money(c.amountIdr)}`,
               run: (token) => removeCost(c.id, token) }}

@@ -992,3 +992,23 @@
   top: 50%; left: 50%; transform: translate(-50%, -50%);
   box-shadow: 0 2px 12px var(--shadow);
 }
+
+/* Something in Messages this tablet has not shown yet (ticket 18 of "One inbox"): a light mark in the text's own ink,
+   never a status colour (amber and red are the open issues' count, green the agent's presence dot), on the button's
+   upper left, clear of the count (upper right) and the presence (lower right). In a phone-menu row it ends the row. */
+.unread-mark {
+  position: absolute; top: 4px; left: 4px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: 0 0 0 1.5px var(--bg-overlay);
+}
+.hud-menu-item > .unread-mark { position: static; margin-left: auto; flex: 0 0 auto; }
+
+/* The villa's maintenance mode, while it is on (owner, 2026-10-29: "so nobody forgets it"): a warning-coloured pill
+   beside the robot; on a phone the word goes, the wrench stays (05-layout). */
+.maintenance-mark {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  border: 1.5px solid var(--status-warning); color: var(--status-warning);
+  background: var(--bg-overlay); font-size: 13px; font-weight: 600; white-space: nowrap;
+}

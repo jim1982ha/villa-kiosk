@@ -11,7 +11,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Nothing villa-specific ships](owner-rules.md#nothing-villa-specific-ships) — no entity id, room, count, dimension, tuning or contract value in shipped code; empty defaults
 - [No internet dependency](owner-rules.md#no-internet-dependency) — works with no WAN; no CDN, webfont, remote asset; check Babylon features for lazy fetches
 - [Never name the platform](owner-rules.md#never-name-the-platform) — "the villa's system", never Home Assistant / HA in text a person reads
-- [Automation, never rule](owner-rules.md#automation-never-rule) — the villa's automations are "automations"; "Rules" is only the Agent's policy
+- [Automation, never rule](owner-rules.md#automation-never-rule) — the villa's automations are "automations"; name the Agent's setting itself ("VESTA's Allowed actions"), never "your Rules"
 - [Every number is a setting](owner-rules.md#every-number-is-a-setting) — a role, duration, window, priority or threshold in text comes from its setting
 - [Durations are joined](owner-rules.md#durations-are-joined) — "30s", "10min", "1h 30min"; use the shared duration words
 - [No long dash in UI text](owner-rules.md#no-long-dash-in-ui-text) — no " — " in text a person reads
@@ -22,6 +22,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Time matters](owner-rules.md#time-matters) — bundle a release; measure only what a decision needs; say what was skipped
 - [One mechanism per job](owner-rules.md#one-mechanism-per-job) — one store, channel or input per job; widen the existing one before adding; merging designs never keeps both
 - [Defined once](owner-rules.md#defined-once) — every list, value or text in one place; YAML anchors, shared modules
+- [Telegram and the tablet alike](owner-rules.md#telegram-and-the-tablet-alike) — one card per alert, one name ("#91-P2") on Telegram, the tablet and every report; formats in the agreement
 - [Fix the shared piece](owner-rules.md#fix-the-shared-piece) — fix the shared component, never the misbehaving caller (DRY)
 - [No per-caller switch](owner-rules.md#no-per-caller-switch) — a shared window behaves the same from every entry point
 - [The owner verifies by screenshots](owner-rules.md#the-owner-verifies-by-screenshots) — no browser testing; say what to check on which device
@@ -120,6 +121,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Fetch what you know](villa-system.md#fetch-what-you-know) — fetch the one thing by path or id; small history windows
 - [Read the logbook in day windows](villa-system.md#read-the-logbook-in-day-windows) — 24-hour windows; one long read truncates silently
 - [The suffix is not the duplicate](villa-system.md#the-suffix-is-not-the-duplicate) — the `_2` registration may be the live one
+- [An alert is VESTA's](villa-system.md#an-alert-is-vestas) — a villa message reporting a problem hands it to VESTA in the same run, with a claim; notices never use an alert stage
 - [Use the platform's own features](villa-system.md#use-the-platforms-own-features) — consume the villa system's API before building your own
 - [App packaging facts](villa-system.md#app-packaging-facts) — watchdog, HEALTHCHECK, linter defaults, ports on update
 

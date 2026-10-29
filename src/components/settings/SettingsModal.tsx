@@ -15,7 +15,10 @@ import { useAppNotice } from "@/components/hud/AppNotice";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import {
   Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Radar,
+  Settings2, MessageSquare, Maximize,
 } from "lucide-react";
+import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
+import { TipTitle } from "@/components/common/InfoTip";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan, type Capability } from "@/auth/permissions";
@@ -26,15 +29,28 @@ import { DEFAULT_SITE_TITLE, type RenderConfig } from "@/config/AppConfig";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import type { SceneManager } from "@/babylon/SceneManager";
 import InfoTip from "@/components/common/InfoTip";
+import { fmtDuration } from "@/components/panels/chartUtils";
+
+/** Settings' tabs (ticket 16 of "One inbox", owner 2026-10-28): General, all it held before; Messages, how this
+ *  tablet shows the villa's announcements. */
+export type SettingsTab = "general" | "messages";
 
 interface Props {
   manager: SceneManager | null;
   onClose: () => void;
   /** Open the full Config Editor (a modal over the live villa). */
   onOpenConfigEditor: () => void;
+  /** The open tab, held by the caller (pages/screen): the Cockpit's gear opens Messages. */
+  tab: SettingsTab;
+  onTab: (tab: SettingsTab) => void;
 }
 
-export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: Props) {
+const TABS: ModalTab<SettingsTab>[] = [
+  { id: "general", label: "General", icon: Settings2 },
+  { id: "messages", label: "Messages", icon: MessageSquare },
+];
+
+export default function SettingsModal({ manager, onClose, onOpenConfigEditor, tab, onTab }: Props) {
   const { config } = useConfig();
   const { role } = useProfile();
   const { haConfig } = useHA();
@@ -59,7 +75,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   const SETTINGS_KEYS = [
     "badgeStyle", "eyeHeight", "highlightInteractive", "naturalScrolling",
     "render", "showSummaryBar", "siteTitle", "theme",
-    "walkSpeed",
+    "walkSpeed", "ringsFullScreen",
     // ⚠️ THE VILLA'S, NOT THIS DEVICE'S (owner, 2026-10-22: moved here from Advanced Settings): a shared key
     // (deviceConfig), so writing it reaches every tablet — through the same draft as every other option here, Save
     // keeping it and Cancel putting it back.
@@ -146,8 +162,28 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           </div>
         )}
       </div>
+      {/* every profile that opens Settings: the Cockpit's gear opens it on Messages for the same profiles (doors.settings) */}
+      <ModalTabs tabs={TABS} active={tab} onSelect={onTab} label="Settings sections" />
+
       <div className="modal-body">
 
+      {tab === "messages" && (
+        <>
+          <TipTitle title="Messages" tip={<>
+            When this tablet is allowed, an announcement the owner picked in Advanced Settings › Messages takes the whole
+            screen for {fmtDuration(config.ringShownForS * 1000)}. Off, it shows under the category bar like every other
+            announcement: useful for a bedroom tablet at night.
+          </>} />
+          <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <SegmentedGroup ariaLabel="Rings full screen on this tablet"
+              active={v.ringsFullScreen ? "on" : null} onChange={() => slice.set({ ringsFullScreen: !v.ringsFullScreen }, { now: true })}
+              options={[{ key: "on", title: "Let a ring take the whole screen on this tablet", label: <><Maximize size={16} /> Rings full screen on this tablet</> }]} />
+          </div>
+        </>
+      )}
+
+      {tab === "general" && (
+      <>
       {/* RBAC: shared branding — administration, not personal taste. */}
       {can("editConfig") && (
         <>
@@ -337,6 +373,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         </div>
       </div>
 
+      </>
+      )}
       </>
       )}
 

@@ -39,8 +39,11 @@ const capClass = (c: UnitCap, side: string) => `chart-unit ${side}${c.cls ? ` ti
 /** The line above every line chart (owner, 2026-10-26), one height filtered or not, in the chart's own columns: the
  *  left unit over the axis numbers (past the slider's column when there is one), a range's chip (`children`) at the
  *  right, under the period buttons, and a right axis' unit over it. The axes draw no unit then. */
-export function ChartUnitLine({ left, right, slider, children }: {
-  left: UnitCap; right?: UnitCap | null; slider?: boolean; children?: ReactNode;
+export function ChartUnitLine({ left, right, slider, action, children }: {
+  left: UnitCap; right?: UnitCap | null; slider?: boolean;
+  /** At the far right of the line (a chart's "enlarge", owner 2026-10-29). */
+  action?: ReactNode;
+  children?: ReactNode;
 }) {
   const style = (c: UnitCap) => (c.color ? { color: c.color } : undefined);
   return (
@@ -50,6 +53,7 @@ export function ChartUnitLine({ left, right, slider, children }: {
       <span className="chart-unit-grow" />
       {children}
       {right && <span className={capClass(right, "right")} style={style(right)}>{right.unit}</span>}
+      {action}
     </div>
   );
 }

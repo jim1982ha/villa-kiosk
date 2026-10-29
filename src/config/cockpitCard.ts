@@ -1,7 +1,7 @@
 // src/config/cockpitCard.ts
 // ONE COCKPIT CARD, AS IT IS DRAWN (architecture review scan 1, 2026-10-19): its title and room, the icons before its
 // name, its "Next check" and the date and time behind it, its buttons, and each problem's line — words, icons, what
-// last happened on Telegram, its own Close. Pure; CockpitOverview draws exactly this, a check reads it by value.
+// last happened on Telegram, its own Close. Pure; IssueCard draws exactly this, a check reads it by value.
 //
 // ⚠️ FIVE CALLS, ONE CARD: the page asked attention for a line's words (twice: once for its hover text), its icons,
 // its buttons and the card's, and faultTiming for its next check, and worked out a line's latest Telegram note itself
@@ -21,7 +21,7 @@ import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, dayMonth, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
 import { confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
-import { faultTitle } from "@/fm/fmEngine";
+import { alertNumberOf, faultTitle } from "@/fm/fmEngine";
 import type { HassEntity } from "@/types/ha.types";
 import { labelOf } from "./EntityMap";
 import { recordEntity, type VillaDevices } from "./deviceGroups";
@@ -31,7 +31,7 @@ import { attentionSeverity, cardDevice, cardHead, type AttentionGroup, type Atte
  *  live state's line by mergeFaults): fm/deviceWork.overviewActions' answer, in the order drawn. Empty when it holds
  *  none, so a card that is only what Home Assistant reports has no button. */
 function cardActions(group: AttentionGroup): WorkAction[] {
-  return overviewActions(cardRecords(group), problemLines(group));
+  return overviewActions(cardRecords(group), problemLines(group), group.entityId);
 }
 
 /** One line's own Close (deviceWork.lineActions): on a card holding several problems, each closes alone. */
@@ -75,7 +75,7 @@ function faultStatus(item: AttentionItem): string | undefined {
 }
 
 /** The icons a problem's line shows inside its row: its own sources only where the row's icons do not say them already
- *  — the row's are its first line's (CockpitOverview draws them beside the device's name).
+ *  — the row's are its first line's (IssueCard draws them beside the device's name).
  *  ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon — a red "!"
  *  beside "House & Pool Relay" and again before "Open fault: …". A row mixing kinds (a lock "Unlocked" with a fault on
  *  its battery) still marks the line whose kind is not the row's. */
@@ -147,14 +147,22 @@ export interface CardLine {
   text: string;
   /** Its source icons, only where the card's own do not say them already; null: none. */
   icons: LineSources | null;
-  /** What last happened about it on Telegram — a reminder, an escalation, a button pressed. */
-  latest: { note: string; at: string } | null;
+  /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
+   *  (ticket 19 of "One inbox"); [] when nothing was told. */
+  story: { note: string; at: string }[];
+  /** When its fault was opened (ISO); null for a live state with no fault. */
+  openedAt: string | null;
+  /** The alert number of its fault ("#91"), whose VESTA card the open issue shows; absent without one. */
+  alertNumber?: number;
   /** When the VESTA Agent closes it if it stays as it is now — "Locked since 14:38 · closes at about 14:49 if it stays
    *  locked" (closingText); null when it is not waiting to close. */
   closing: string | null;
   /** Its own Close, on a card holding several problems; [] otherwise. */
   actions: WorkAction[];
 }
+
+/** `{ alertNumber }` when there is one, else nothing (an optional field stays absent). */
+const alertNumberIn = (n: number | undefined) => (n !== undefined ? { alertNumber: n } : {});
 
 export interface CardView {
   key: string;
@@ -184,6 +192,15 @@ function nextCheckView(group: AttentionGroup, cadence: AgentCadence | null, now:
   return { text, at: moment, when: nextCheckWhen(group.items, cadence, now), tip: moment ? `${text} (${moment})` : text };
 }
 
+/** ⚠️ EVERY ROW SAYS WHEN (owner, 2026-10-29: "why I don't see the time in the VESTA card, as any other notification?"):
+ *  an issue's row in Messages shows when its first problem was last told of (its story's last step), else when it was
+ *  opened: a new alert has no step yet, and its row showed no time at all. Null for a live state with neither. Pure. */
+export function rowTime(card: Pick<CardView, "lines">): string | null {
+  const first = card.lines[0];
+  if (!first) return null;
+  return first.story.length ? first.story[first.story.length - 1].at : first.openedAt;
+}
+
 /** The card of `group`, as drawn. `cadence`: the VESTA Agent's own timing (null: it did not say). */
 export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null, now: Date = new Date()): CardView {
   const at = nextCheckAt(group.items, cadence, now);
@@ -191,7 +208,9 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     key: item.id,
     text: attentionLineIn(group, item),
     icons: lineIcon(group, item),
-    latest: item.latest ?? item.fault?.latest ?? null,
+    story: item.story ?? item.fault?.story ?? [],
+    openedAt: item.openedAt ?? item.fault?.openedAt ?? null,
+    ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
     closing: closingText(item.closing ?? item.fault?.closing, now),
     actions: itemActions(group, item),
   });
@@ -234,7 +253,9 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
       // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
       // issues' next-check pill (its time, then "within 5 min"), who closed it the line under its fault
       lead: null, nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
-      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, latest: null, closing: said.did, actions: [] }],
+      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, story: [], openedAt: t.openedAt ?? null,
+        closing: said.did, actions: [],
+        ...alertNumberIn(alertNumberOf(t)) }],
     }];
   });
 }

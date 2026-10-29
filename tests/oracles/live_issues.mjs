@@ -46,7 +46,17 @@ const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { 
 ck("  ...once every fault is a ticket, the button is Edit Ticket, on its first record",
    said(cardActions(taken)).join(" | ") === `Edit Ticket → b | Close all → b,c ${OV_ALL}`, said(cardActions(taken)));
 const [lock] = groupAttention([item("alarm:lock.door", "alarm", "lock.door")]);
-ck("a card that is only what Home Assistant reports has nothing to act on — no button", cardActions(lock).length === 0);
+// a card with no record: its one button opens a ticket for its device, the form already pointed at it (owner,
+// 2026-10-29: the Overview's Open Ticket was missing on a line only the villa's system reports)
+ck("a card that is only what Home Assistant reports: Open Ticket, for its device, opening the ticket form",
+   said(cardActions(lock)).join(" | ") === "Open Ticket → lock.door" && cardActions(lock)[0]?.step.kind === "raise", said(cardActions(lock)));
+const [lone] = groupAttention([{ id: "alarm:x", kind: "alarm", title: "Water leak", detail: "" }]);
+ck("  ...a problem on no device has nothing to open a ticket for: no button", cardActions(lone).length === 0, said(cardActions(lone)));
+const srcAt = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
+const IC = srcAt("components/cockpit/IssueCard.tsx"), MT = srcAt("components/cockpit/MessagesTab.tsx");
+ck("  ...pressed, it opens Messages' ticket form pointed at the device (the one \"Open a ticket\" form)",
+   /a\.step\.kind === "raise" \? onRaiseTicket\(a\.ids\[0\]\)/.test(IC)
+   && /onRaiseTicket=\{\(entity\) => setRaising\(\{ entity \}\)\}/.test(MT));
 ck("a ticket in progress (Tickets): Mark resolved and Close, both on every record of it — its own Close question",
    said(W.ticketActions([{ id: "a", stage: "ticket" }, { id: "b", stage: "ticket" }])).join(" | ")
    === `Mark resolved → a,b (resolved) | Close → a,b ${TK_CLOSE}`);
@@ -145,9 +155,9 @@ console.log("\n  where things land:");
 const OWNER = { facility: true }, GUEST = { facility: false };
 const open = { ...START, nav: { ...START.nav, panel: { entityId: "light.a" } } };
 const raised = screenReducer(open, { type: "reportFault" }, OWNER);
-ck("a device's wrench (owner/facility): the Overview, Raise a fault pointed at it", raised.cockpitTab === "overview" && raised.faultFor === "light.a");
+ck("a device's wrench (owner/facility): Messages, Open a ticket pointed at it", raised.cockpitTab === "messages" && raised.faultFor === "light.a");
 const edit = screenReducer(START, { type: "editTicket", id: "b" }, OWNER);
-ck("an Overview card's Edit ticket: the Tickets tab, that record's form", edit.cockpitTab === "tickets" && edit.ticketFor === "b");
+ck("an open issue's Edit ticket: the Tickets tab, that record's form", edit.cockpitTab === "tickets" && edit.ticketFor === "b");
 ck("  ...dropped once the form has it, and when the Cockpit closes",
    screenReducer(edit, { type: "ticketEditOpened" }, OWNER).ticketFor === null
    && screenReducer(edit, { type: "closeWindow", window: "cockpit" }, OWNER).ticketFor === null);
@@ -160,9 +170,14 @@ ck("a fault from a VESTA Agent alert reads \"#5 · …\" on its card; one withou
    numbered.find((i) => i.ticketId === "n")?.title === "#5 · House Pump Power has not run" && numbered.find((i) => i.ticketId === "p")?.title === "fault p",
    numbered.map((i) => i.title));
 ck("  ...and the same in the Tickets tab", /<RecordCard key=\{t\.id\} framed=\{framed\} title=\{faultTitle\(t\)\}/.test(readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8")));
+ck("  ...with its priority, named as Telegram names it (agent-contract.json ticket.alertLabel): \"#5-P2 · …\" (owner, 2026-10-28)",
+   E.faultTitle({ title: "x", alertNumber: 5, alertPriority: "P2" }) === "#5-P2 · x"
+   && E.faultTitle({ title: "x", alertNumber: 5, alertPriority: "high" }) === "#5 · x"
+   && E.faultTitle({ title: "x", alertNumber: 5, alertPriority: "P9" }) === "#5 · x");   // only the agreement's priorities
 ck("  ...a number that is not one (0, text) is not shown", E.faultTitle({ title: "x", alertNumber: 0 }) === "x" && E.faultTitle({ title: "x", alertNumber: "5" }) === "x");
 
-const ov = readFileSync(new URL("../../src/components/cockpit/CockpitOverview.tsx", import.meta.url), "utf8");
+const ov = readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8");
+const msg = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
 console.log("\n  an offline device is ONE line (owner, 2026-10-14: the same Timmerflotte said \"Unavailable\" and \"offline for 9 h\"):");
 const ent = (id, state) => ({ entity_id: id, state, attributes: {}, last_changed: "", last_updated: "" });
 const offlineDevice = (batteryState) => groupAttention(buildAttentionItems({ devices: devicesOf({ unavailable: ["sensor.example_temperature"], folding: new Map([["sensor.example_battery", "sensor.example_temperature"]]) }), entities: { "sensor.example_temperature": ent("sensor.example_temperature", "unavailable"),
@@ -239,7 +254,7 @@ const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night", entityId: "x.
   { ...rec("t", "x.t"), status: "in_progress" }, { ...rec("r", "x.r"), status: "resolved", resolvedAt: "2026-10-14T09:00:00Z" }]);
 ck("4 faults and 1 ticket: \"4 detected faults (1 open ticket)\", where to deal with each, and the faults' source icons",
    mixedOpen.label === "4 detected faults (1 open ticket)"
-   && mixedOpen.detail === 'Check the faults in "Overview", or the open tickets in "Tickets".'
+   && mixedOpen.detail === 'Check the faults in "Messages", or the open tickets in "Tickets".'
    && mixedOpen.sources.join() === "guest,alert,night", mixedOpen);   // the legend's order: the Kiosk's, then the Agent's
 // ⚠️ COUNTED AS DRAWN, PER DEVICE (architecture review, 2026-10-15): the pump's two faults taken on together are ONE
 // ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
@@ -256,8 +271,8 @@ const byRecord = ready([rec("m1", "sensor.gone,sensor.pump_power"), rec("m2", "s
   { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) });
 ck("  ...a fault naming several sensors counts on its device's card", byRecord.label === "1 detected fault (0 open tickets)", byRecord);
 const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
-ck("  ...one fault, no ticket: singular, and only Overview", onlyFaults.label === "1 detected fault (0 open tickets)"
-   && onlyFaults.detail === 'Check the faults in "Overview".', onlyFaults);
+ck("  ...one fault, no ticket: singular, and only Messages", onlyFaults.label === "1 detected fault (0 open tickets)"
+   && onlyFaults.detail === 'Check the faults in "Messages".', onlyFaults);
 const onlyTickets = readyWith([{ ...rec("t", "x.y"), status: "in_progress" }]);
 ck("  ...tickets only: no icon, only Tickets", onlyTickets.detail === 'Check the open tickets in "Tickets".' && onlyTickets.sources.length === 0, onlyTickets);
 const allClear = readyWith([]);
@@ -268,7 +283,7 @@ ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass
   const result = { checks: [mixedOpen], passed: 0, total: 1, overall: "warn" };
   const checks = (startOpen) => draw(h(ReadinessChecks, { readiness: result, label: (id) => id, onOpenEntity: () => {}, onOpenCheck: () => {}, ...(startOpen ? { startOpen } : {}) }));
   ck("  ...the Recap draws those icons in the line, after \"Check the\"",
-     text(checks(true)).includes('|Check the |G|[icon][icon]| faults in "Overview", or the open tickets in "Tickets".|'), text(checks(true)));
+     text(checks(true)).includes('|Check the |G|[icon][icon]| faults in "Messages", or the open tickets in "Tickets".|'), text(checks(true)));
   const folded = checks();   // as the tab draws it: no startOpen
   ck("  ...the checks fold under their verdict, closed at first; a tap on the verdict opens them (owner, 2026-10-14)",
      /class="fm-headline-toggle" aria-expanded="false"/.test(folded) && text(folded).includes("|Ready, with things worth fixing|0 of 1 checks passing|")
@@ -366,8 +381,16 @@ const told = { ...rec("s", "switch.pump"), status: "open", updates: [
 const reopenedThenTold = { ...told, updates: [{ at: "2026-10-13T08:00:00.000Z", status: "resolved", photoIds: [] },
   { at: "2026-10-14T07:00:00.000Z", status: "open", photoIds: [], kind: "reopened", by: "Owner" }, ...told.updates.slice(1)] };
 const withLatest = buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([told]) });
-ck("the card's line under the fault: the LAST thing Telegram said, with its time",
-   withLatest[0].latest?.note === "🆘 Need help pressed by Fabien" && withLatest[0].latest.at === "2026-10-14T09:10:00.000Z", withLatest[0].latest);
+ck("under the fault, its short story as Telegram tells it, each line with its time, in time order (ticket 19 of \"One inbox\")",
+   JSON.stringify(withLatest[0].story) === JSON.stringify([{ note: "Escalation sent to Owner", at: "2026-10-14T08:49:00.000Z" },
+     { note: "🆘 Need help pressed by Fabien", at: "2026-10-14T09:10:00.000Z" }]), withLatest[0].story);
+const lateWritten = { ...told, updates: [told.updates[0], told.updates[2], told.updates[1]] };
+ck("  ...a line the Agent wrote late (the repair, minutes after its moment) still in its moment's place",
+   buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([lateWritten]) })[0]
+     .story.map((x) => x.note).join("|") === "Escalation sent to Owner|🆘 Need help pressed by Fabien");
+ck("  ...a fault the Agent told nothing about has none (no line drawn)",
+   buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([{ ...told, updates: [told.updates[0]] }]) })[0]
+     .story.length === 0);
 ck("  ...a noted line is never a status change: \"reopened by Owner\" still read under it",
    N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /reopened .* by Owner/.test(N.faultWhen(reopenedThenTold, (a) => a.slice(11, 16))),
    N.faultWhen(reopenedThenTold, (a) => a.slice(11, 16)));
@@ -375,7 +398,7 @@ ck("  ...and each one is a note in the Tickets tab, with its time",
    N.faultNoteLines(told, (a) => a.slice(11, 16)).join("|") === "Escalation sent to Owner (08:49)|🆘 Need help pressed by Fabien (09:10)",
    N.faultNoteLines(told, (a) => a.slice(11, 16)));
 {
-  const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+  const { AttentionCard } = await import("@/components/cockpit/IssueCard");
   const card = draw(h(AttentionCard, { card: cockpitCard(groupAttention(withLatest)[0], { checkMinutes: 5, nightlyAt: "02:00" }), onOpenEntity: () => {} }));
   ck("  ...shown on the Overview card, under the fault's line", /fault s[\s\S]*class="cockpit-attention-latest">🆘 Need help pressed by Fabien · /.test(card), text(card));
 }
@@ -387,14 +410,15 @@ const tt = src("components/fm/TicketsTab.tsx");
 // here, that the tab draws it — and counts it (openCounts: the same cards)
 ck("the Tickets tab draws ticketCards — the tickets in progress, by device — and Closed; never a raise form",
    /ticketCards\(data\.tickets, deviceOfRecord\)/.test(tt) && /openCounts\(data\.tickets, deviceOfRecord\)\.tickets/.test(tt) && !/Raise a fault/.test(tt));
-ck("the Overview's title line: the (i) then Open a ticket, for the profiles that manage tickets; a guest reports a problem",
-   /<FaultTiming \/>\s*<button className="btn ghost" onClick=\{\(\) => setRaising\(\{\}\)\}><Plus size=\{16\} \/> Open a ticket<\/button>/.test(ov) && /Report a problem<\/button>/.test(ov) && /<FaultForm /.test(ov));
+ck("the Open issues title line (Messages): the (i) then Open a ticket, for the profiles that manage tickets; a guest reports a problem",
+   /<FaultTiming \/>\s*<button className="btn ghost" onClick=\{raise\}><Plus size=\{16\} \/> Open a ticket<\/button>/.test(msg)
+   && /const raise = \(\) => setRaising\(\{\}\);/.test(msg) && /Report a problem<\/button>/.test(msg) && /<FaultForm /.test(msg));
 // WHAT the buttons are, on which records, with which question: by value at the top and in "the buttons, drawn".
 // Here only the wiring a drawing cannot reach — the Overview hands cardActions to the shared buttons, and acts on
 // what each button names (its stage, its records), with no status or rule of its own
 ck("a card draws what cardActions says (no rule of its own)",
    /const acts = card\.actions;/.test(ov) && /<WorkButtons actions=\{acts\} cardKey=\{card\.key\} closer=\{closer\}/.test(ov)
-   && /a\.step\.kind === "stage" \? setStaging\(\{ tickets: records\(a\.ids\), to: a\.step\.to \}\) : onEditTicket\(a\.ids\[0\]\)/.test(ov)
+   && /a\.step\.kind === "stage" \? setStaging\(\{ tickets: records\(a\.ids\), to: a\.step\.to \}\)\s+: a\.step\.kind === "raise" \? onRaiseTicket\(a\.ids\[0\]\) : onEditTicket\(a\.ids\[0\]\)/.test(ov)
    && !/closeTickets|InlineConfirm|in_progress"|"resolved"/.test(ov + tt));
 
 console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
@@ -422,7 +446,7 @@ ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-1
    && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));
 console.log("\n  one line per problem (owner, 2026-10-17: \"#49 · One mains phase lost\" six times):");
 {
-  const { AttentionCard } = await import("@/components/cockpit/CockpitOverview");
+  const { AttentionCard } = await import("@/components/cockpit/IssueCard");
   const lost = (id) => ({ ...rec(id, "sensor.phase_a_voltage,sensor.phase_b_voltage"), title: "One mains phase lost", alertNumber: 49 });
   const six = ["a", "b", "c", "d", "e", "f"].map(lost);
   const ents = { "sensor.phase_b_voltage": { entity_id: "sensor.phase_b_voltage", state: "230", attributes: { friendly_name: "Phase B Voltage" } } };

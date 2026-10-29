@@ -18,18 +18,18 @@ import type { DeviceLook } from "@/utils/deviceActivity";
 
 /** A window over the map. Several may be open at once: Advanced Settings
  *  opens over Settings. */
-export type Surface = "rooms" | "cockpit" | "settings" | "configEditor" | "presence";
+export type Surface = "rooms" | "cockpit" | "settings" | "configEditor" | "presence" | "vesta";
 
 export type Surfaces = Readonly<Record<Surface, boolean>>;
 
 /** What a window is called on a "Back to …" button. */
 export const SURFACE_LABEL: Readonly<Record<Surface, string>> = {
   rooms: "Rooms", cockpit: "Cockpit", settings: "Settings",
-  configEditor: "Advanced Settings", presence: "Villa presence",
+  configEditor: "Advanced Settings", presence: "Villa presence", vesta: "VESTA",
 };
 
 export const NO_SURFACES: Surfaces = {
-  rooms: false, cockpit: false, settings: false, configEditor: false, presence: false,
+  rooms: false, cockpit: false, settings: false, configEditor: false, presence: false, vesta: false,
 };
 
 /** May this profile open `s`? The doors (auth/doors) say, once — every

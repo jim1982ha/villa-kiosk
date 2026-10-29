@@ -198,6 +198,9 @@ export interface FmTicket extends FmProvenance {
    *  Agent (0.12.195+), shown before the title (fmEngine.faultTitle) so the message and the card read as one problem
    *  (owner, 2026-10-14). Absent on a person's fault and on a night check's (no message numbers those). */
   alertNumber?: number;
+  /** Its alert's priority ("P2"), kept current by the VESTA Agent: the label reads "#5-P2" as on Telegram (owner,
+   *  2026-10-28). Absent where the Agent did not write it (older Agent, a night check's fault, a person's). */
+  alertPriority?: string;
   /** Where the VESTA Agent made it from (0.12.198+): an alert, its nightly check, or a chat ("Create this fault") — the
    *  card's source icon (issueSource.faultSource). Absent on a person's fault and on the Agent's older ones. */
   origin?: FmTicketOrigin;
