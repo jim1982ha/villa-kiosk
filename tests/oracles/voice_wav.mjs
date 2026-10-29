@@ -4,7 +4,7 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { encodeWav, VOICE, canRecord } = await import("@/messages/voice");
+const { encodeWav, VOICE, canRecord, playSpeech, startRecording } = await import("@/messages/voice");
 const { elements, guardsOf, parseTsx } = await import("../consistency/jsx.mjs");
 
 /** The WAV read back: its header fields and its samples. */
@@ -75,5 +75,40 @@ ck("the button is the microphone only then (the page's talk session exists), els
 const context = (await import("node:fs")).readFileSync(new URL("../../src/messages/ConversationContext.tsx", import.meta.url), "utf8");
 ck("  ...and the session exists only where canRecord says the page can record",
    /useState\(\(\) => canRecord\(\) \? new TalkSession\(/.test(context));
+
+
+// VESTA's answer said aloud (ticket 24): the REAL player, over a stand-in for the page's Web Audio that records what it
+// is asked (a context per `new`, its sounds started and stopped)
+console.log("\n  VESTA's answer said aloud:");
+const made = [];
+class StandInAudio {
+  constructor() { this.state = "suspended"; this.sampleRate = 48000; this.destination = {}; this.sounds = []; made.push(this); }
+  resume() { this.state = "running"; return Promise.resolve(); }
+  decodeAudioData(data, ok) { ok({ bytes: data.byteLength }); }
+  createBufferSource() {
+    const s = { started: false, stopped: false, connect() {}, start() { s.started = true; }, stop() { s.stopped = true; } };
+    this.sounds.push(s);
+    return s;
+  }
+}
+const sound = async () => new ArrayBuffer(8);
+const audio = (cls) => Object.defineProperty(globalThis, "AudioContext", { value: cls, configurable: true });
+audio(undefined);
+ck("with no press yet on this page, an answer that arrives does not play (no sound the tablet would refuse)",
+   (await playSpeech(sound, false)) === false && made.length === 0);
+audio(StandInAudio);
+ck("Listen plays the answer, its context started at the press", (await playSpeech(sound, true)) === true
+   && made.length === 1 && made[0].sounds[0].started);
+ck("  ...an answer that arrives after a press plays through that same context (an iPad's rule)",
+   (await playSpeech(sound, false)) === true && made.length === 1 && made[0].sounds[1].started);
+ck("  ...and a second answer stops the first: one voice at a time", made[0].sounds[0].stopped);
+startRecording();
+ck("holding the microphone stops VESTA speaking", made[0].sounds[1].stopped);
+made[0].state = "suspended";
+made[0].resume = () => Promise.resolve();          // the tablet keeps the page's sound stopped (screen locked)
+ck("  ...an answer the tablet will not let start says so (the page then shows Listen's line)",
+   (await playSpeech(sound, false)) === false);
+ck("  ...and one whose sound cannot be had plays nothing", (await playSpeech(async () => null, true)) === false);
+audio(undefined);
 
 done("✅ the tablet's recording is the agreement's WAV");

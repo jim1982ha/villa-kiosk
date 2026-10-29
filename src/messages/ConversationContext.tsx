@@ -6,15 +6,15 @@
 // one spoken question (messages/talk: both talk buttons and the orb read it). Mounted beside the announcements' watch
 // (pages/Dashboard).
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { HOLD_MS_HUD } from "@/utils/tapThresholds";
 import { backendFetch } from "@/auth/sessionLost";
 import { useProfile } from "@/auth/ProfileContext";
-import { ASK_SAID, askVesta, fetchConversation, vestaRuns, type AskOutcome, type Turn } from "./conversation";
-import { answersOf, mergeTurns, threadView, type ThreadView } from "./conversationModel";
+import { ASK_SAID, LISTEN_SAID, askVesta, fetchConversation, fetchSpeech, vestaRuns, type AskOutcome, type Turn } from "./conversation";
+import { answersOf, arrivedSpeech, mergeTurns, playsAloud, threadView, type ThreadView } from "./conversationModel";
 import { pauseFor, watchFeed } from "./feed";
 import { TALK_IDLE, TalkSession, type TalkView } from "./talk";
-import { VOICE, canRecord, microphoneAllowed, startRecording, watchMicrophone } from "./voice";
+import { VOICE, canRecord, microphoneAllowed, playSpeech, startRecording, stopSpeech, watchMicrophone } from "./voice";
 
 interface Conversation {
   thread: ThreadView;
@@ -49,12 +49,26 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
     return () => stop.abort();
   }, [role]);
   const [said, tell] = useState<string | null>(null);
+  // when this page sent its spoken question: its answer is said aloud here only (conversationModel.playsAloud)
+  const spokenAt = useRef<number | null>(null);
   const ask = useCallback(async (question: string | Blob) => {
     tell(null);
     const out = await askVesta(question, backendFetch);
     tell(out === "sent" ? null : ASK_SAID[out]);
+    if (out === "sent" && typeof question !== "string") spokenAt.current = Date.now();
     return out;
   }, []);
+  const heldTurns = useRef<Turn[]>([]);
+  useEffect(() => {
+    const name = arrivedSpeech(heldTurns.current, state.turns);
+    heldTurns.current = state.turns;
+    if (name && playsAloud(spokenAt.current, Date.now())) {
+      spokenAt.current = null;
+      void playSpeech(() => fetchSpeech(name), false).then((played) => { if (!played) tell(LISTEN_SAID); });
+    }
+  }, [state.turns]);
+  // the owner's answer never goes on speaking for the guest who signs in after them
+  useEffect(() => () => { spokenAt.current = null; stopSpeech(); }, [role]);
   // one session for the page, made once; null where the page cannot record (http, no microphone): no button records
   const [talker] = useState(() => canRecord() ? new TalkSession({
     record: startRecording, allowed: microphoneAllowed, send: ask, tell,

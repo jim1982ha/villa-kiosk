@@ -6,6 +6,7 @@
 // apart from every Telegram chat.
 
 import { ingressPath } from "@/ha/ingress";
+import { backendFetch } from "@/auth/sessionLost";
 import { fetchFeed, type FeedRead } from "./feed";
 import { vestaButtons, type AnnouncementButton, type Pressable } from "./announcements";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
@@ -34,6 +35,8 @@ export interface Turn {
   typing: boolean;
   /** The person's question was spoken (hold to talk): its words are the ones VESTA heard, empty until it heard them. */
   voice: boolean;
+  /** VESTA's answer said aloud by the villa's voice (ticket 24): the add-on's name for its sound, read at /vesta-speech. */
+  speech: string | null;
 }
 
 /** The longest question the add-on keeps (agent-contract.json conversation.limits.question). */
@@ -53,7 +56,18 @@ export function parseTurn(raw: unknown): Turn | null {
     answers: typeof r.answers === "number" ? r.answers : null,
     typing: r.typing === true,
     voice: r.voice === true,
+    speech: typeof r.speech === "string" && r.speech ? r.speech : null,
   };
+}
+
+/** An answer's sound (the add-on serves it to the profile it answered only), or null when it cannot be had. */
+export async function fetchSpeech(name: string): Promise<ArrayBuffer | null> {
+  try {
+    const r = await backendFetch(ingressPath(`vesta-speech/${encodeURIComponent(name)}`), { credentials: "same-origin" });
+    return r.ok ? await r.arrayBuffer() : null;
+  } catch {
+    return null;
+  }
 }
 
 /** This profile's conversation, a read of the add-on's feed (messages/feed); the read also says whether VESTA runs. */
@@ -82,6 +96,10 @@ export const TALK_SAID: Record<"refused" | "none" | "silent" | "cut" | "hold", s
   cut: "Your question was not sent: the touch was interrupted. Hold to talk again.",
   hold: "Hold the microphone while you speak, then let go to send.",
 };
+
+/** The line under the box when VESTA's answer could not start aloud by itself (the tablet stopped the page's sound since
+ *  the question: the screen locked, a call): Listen plays it. */
+export const LISTEN_SAID = "Tap Listen to hear VESTA's answer.";
 
 /** What a spoken question's line says until VESTA has heard its words. */
 export const SPOKEN_WAITING = "Spoken question";

@@ -820,6 +820,59 @@ async def main() -> None:
     ck("  ...once, and never over a typed question: the person's words are the person's (400, 400)",
        r.status == 400 and r2.status == 400, (r.status, r2.status))
 
+    # ── An answer said aloud (ticket 24 of "One inbox") ─────────────────────────────────────────────────────────────
+    print("\n  an answer said aloud:")
+    reset_lockout()
+    mp3 = b"ID3\x04\x00" + b"\x00" * 400
+    r = await post("/agent/v1/speech", headers={**bearer(), "Content-Type": "audio/mpeg"}, data=mp3)
+    sound = (await r.json()).get("name") if r.status == 200 else None
+    ck("the Agent's sound of an answer is kept, under a name of the add-on's", isinstance(sound, str)
+       and proxy.SPEECH_RE.match(sound) is not None and (TMP / "data" / proxy.SPEECH_DIR / sound).read_bytes() == mp3,
+       (r.status, sound))
+    for name, kind, bad in (("of a type the agreement does not name", "audio/ogg", b"OggS" + b"\x00" * 40),
+                            ("that is not the type it says", "audio/mpeg", b"RIFF" + b"\x00" * 40),
+                            ("empty", "audio/wav", b"")):
+        r = await post("/agent/v1/speech", headers={**bearer(), "Content-Type": kind}, data=bad)
+        ck(f"  ...a sound {name} is refused (400)", r.status == 400, r.status)
+    r = await post("/agent/v1/speech", headers={**bearer(), "Content-Type": "audio/mpeg"},
+                   data=mp3 + b"\x00" * voice["answerBytes"])
+    ck("  ...one past the agreement's answerBytes is refused (413)", r.status == 413, r.status)
+    reset_lockout()
+    r = await post("/agent/v1/speech", headers={**cookie("owner"), "Content-Type": "audio/mpeg"}, data=mp3)
+    ck("  ...the door is the Agent's only: a signed-in owner's cookie is 401", r.status == 401, r.status)
+    reset_lockout()
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:aloud", "profile": "owner", "text": "The pool pump is on.", "speech": sound})
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    answer = next((t for t in body["turns"] if t["key"] == "turn:aloud"), {})
+    ck("the answer's turn names its sound", r.status == 200 and answer.get("speech") == sound, (r.status, answer))
+    r = await get(f"/vesta-speech/{sound}", headers=cookie("owner"))
+    ck("  ...which the profile it answered hears, as it was made", r.status == 200 and await r.read() == mp3
+       and r.content_type == "audio/mpeg", r.status)
+    r = await get(f"/vesta-speech/{sound}", headers=cookie("guest"))
+    r2 = await get(f"/vesta-speech/{'0' * 32}.mp3", headers=cookie("owner"))
+    ck("  ...never another profile (a guest never hears the owner's answers), nor a sound no turn names (404, 404)",
+       r.status == 404 and r2.status == 404, (r.status, r2.status))
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:aloud-only", "profile": "owner", "speech": sound})
+    r2 = await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:aloud-bad", "profile": "owner", "text": "x", "speech": "../vesta-asks.json"})
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    bad = next((t for t in body["turns"] if t["key"] == "turn:aloud-bad"), {})
+    ck("  ...a sound is never a turn on its own (400), and a name not the add-on's is not kept",
+       r.status == 400 and r2.status == 200 and "speech" not in bad, (r.status, bad))
+    grace, proxy.ANNOUNCEMENT_PHOTO_GRACE_S = proxy.ANNOUNCEMENT_PHOTO_GRACE_S, 120   # set to none above, for the photos
+    orphan = TMP / "data" / proxy.SPEECH_DIR / ("1" * 32 + ".mp3")
+    orphan.write_bytes(mp3)
+    os.utime(orphan, (time.time() - proxy.ANNOUNCEMENT_PHOTO_GRACE_S - 5,) * 2)
+    young = TMP / "data" / proxy.SPEECH_DIR / ("2" * 32 + ".mp3")
+    young.write_bytes(mp3)
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "turn:sweep", "profile": "owner", "text": "x"})
+    ck("a sound no turn names is swept at the next write; one just uploaded (its turn on the way) and a named one stay",
+       not orphan.exists() and young.exists() and (TMP / "data" / proxy.SPEECH_DIR / sound).exists(),
+       sorted(p.name for p in (TMP / "data" / proxy.SPEECH_DIR).iterdir()))
+    proxy.ANNOUNCEMENT_PHOTO_GRACE_S = grace
+
     # ── VESTA's buttons pressed on a tablet (ticket 22 of "One inbox") ───────────────────────────────────────────────
     print("\n  VESTA's buttons pressed on a tablet:")
     reset_lockout()

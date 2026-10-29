@@ -99,6 +99,47 @@ function audioAtTheTouch(): AudioContext {
   return pageAudio;
 }
 
+// ⚠️ VESTA'S ANSWER SAID ALOUD (ticket 24 of "One inbox", owner 2026-10-28: "use piper path only first"): the villa's own
+// voice, the sound the add-on keeps with the answer, played through the SAME audio context — resumed at the touch that
+// asked (an iPad plays a page's sound only from a context started inside the person's gesture, and the answer comes
+// seconds after the finger lifted). Never the device's own voices (speechSynthesis): they differ per tablet.
+let speaking: AudioBufferSourceNode | null = null;
+
+/** VESTA stops speaking (a new question is held to talk, a profile signs out). */
+export function stopSpeech(): void {
+  try { speaking?.stop(); } catch { /* already ended */ }
+  speaking = null;
+}
+
+/** Play an answer's sound. `atTheTouch`: called from the person's press (its own context resumed there, before the sound
+ *  is fetched); otherwise only the context a press already started, and nothing when there is none (the page then
+ *  offers Listen). Whether it plays. */
+export async function playSpeech(sound: () => Promise<ArrayBuffer | null>, atTheTouch: boolean): Promise<boolean> {
+  let ctx: AudioContext | null;
+  try {
+    ctx = atTheTouch ? audioAtTheTouch() : pageAudio;
+  } catch {
+    return false;
+  }
+  if (!ctx || ctx.state === "closed") return false;
+  const data = await sound();
+  if (!data) return false;
+  try {
+    // the callback form: an older iPad's context has no promise one
+    const buffer = await new Promise<AudioBuffer>((ok, no) => { void ctx.decodeAudioData(data, ok, no); });
+    stopSpeech();
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.onended = () => { if (speaking === source) speaking = null; };
+    source.start(0);
+    speaking = source;
+    return ctx.state === "running";
+  } catch {
+    return false;
+  }
+}
+
 /** What became of asking for the microphone: recording; the person or the browser refused it; there is none. */
 export type Listening = "listening" | "refused" | "none";
 
@@ -118,6 +159,7 @@ export interface Recording {
  *  nothing, and every Safari and Chrome a wall tablet runs has it. */
 export function startRecording(onLevel?: (level: number) => void): Recording {
   const ctx = audioAtTheTouch();
+  stopSpeech();                          // VESTA stops speaking as the person speaks
   const chunks: Float32Array[] = [];
   let stream: MediaStream | null = null;
   let node: ScriptProcessorNode | null = null;

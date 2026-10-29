@@ -199,7 +199,9 @@ const NEVER_CACHE = [
 ];
 // "/fm-document/": a fault's report — deleted with its fault (2.496.326), so never kept on a device after it
 // "/announcement-photo/": a visitor's picture at the gate, deleted with its announcement: never kept on a device
-const NEVER_CACHE_FRAGMENTS = ["/api/", "/auth/", "/agent/v1/", "camera_proxy", "/fm-document/", "/announcement-photo/"];
+// "/vesta-speech/": VESTA's answer said aloud, the profile's own: never kept on a device either
+const NEVER_CACHE_FRAGMENTS = ["/api/", "/auth/", "/agent/v1/", "camera_proxy", "/fm-document/", "/announcement-photo/",
+  "/vesta-speech/"];
 
 function swRoute(url, mode, destination, origin) {
   if (url.searchParams.has(SW_BYPASS_PARAM)) return "bypass";

@@ -7,11 +7,12 @@
 
 import { momentText } from "@/utils/dateText";
 import { useEffect, useRef, useState } from "react";
-import { Mic, RotateCcw, Send } from "lucide-react";
+import { Mic, RotateCcw, Send, Volume2 } from "lucide-react";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 
-import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, TALK_SAID, pressableOf, type Turn } from "@/messages/conversation";
+import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, TALK_SAID, fetchSpeech, pressableOf, type Turn } from "@/messages/conversation";
+import { playSpeech } from "@/messages/voice";
 import { useConversation } from "@/messages/ConversationContext";
 import { unanswered, vestaWorking } from "@/messages/conversationModel";
 import { AnnouncementPhoto, PageLink, RecordButtons } from "./AnnouncementContent";
@@ -19,7 +20,8 @@ import TalkButton from "./TalkButton";
 
 /** One line of the thread: who said it, when, its words, the camera pictures VESTA looked at and the page it attached
  *  ("Open the page" only for a profile the add-on serves pages to). A spoken question (hold to talk) carries the
- *  microphone, and says it was spoken until VESTA heard its words. Pure: a check draws it. */
+ *  microphone, and says it was spoken until VESTA heard its words; an answer said aloud offers Listen. Pure: a check
+ *  draws it. */
 export function TurnLine({ turn, canOpenPage }: { turn: Turn; canOpenPage: boolean }) {
   return (
     <div className={`vesta-turn ${turn.from === "person" ? "asked" : "answered"}${turn.voice ? " vesta-turn-spoken" : ""}`}>
@@ -32,6 +34,13 @@ export function TurnLine({ turn, canOpenPage }: { turn: Turn; canOpenPage: boole
       {turn.text && <p className="vesta-turn-text">{turn.text}</p>}
       {turn.voice && !turn.text && <p className="vesta-turn-text muted">{SPOKEN_WAITING}</p>}
       {turn.page && canOpenPage && <PageLink page={turn.page} />}
+      {turn.speech && (
+        // the answer said aloud (ticket 24): played as it came on the tablet that asked; heard again from here
+        <button type="button" className="btn ghost vesta-turn-listen"
+          onClick={() => { const name = turn.speech; if (name) void playSpeech(() => fetchSpeech(name), true); }}>
+          <Volume2 size={16} aria-hidden /> Listen
+        </button>
+      )}
       {turn.buttons.length > 0 && <RecordButtons record={pressableOf(turn)} />}
     </div>
   );

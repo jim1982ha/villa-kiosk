@@ -10,12 +10,13 @@ import { elements, guardsOf, parseTsx, propText } from "../consistency/jsx.mjs";
 import ts from "typescript";
 import { readFileSync } from "node:fs";
 const { parseTurn, askVesta, vestaRuns, NEW_CONVERSATION, SPOKEN_WAITING } = await import("@/messages/conversation");
-const { mergeTurns, threadView, unanswered } = await import("@/messages/conversationModel");
+const { mergeTurns, threadView, unanswered, arrivedSpeech, playsAloud } = await import("@/messages/conversationModel");
 const { START, screenReducer } = await import("@/pages/screen");
 const { TurnLine } = await import("@/components/messages/VestaThread");
+const AGENT_CONTRACT = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
 
 const turn = (seq, extra = {}) => ({ seq, key: `k${seq}`, from: "vesta", at: `2026-10-29T10:0${seq % 10}:00Z`, text: `T${seq}`,
-  photos: [], page: null, gone: false, buttons: [], answers: null, typing: false, voice: false, ...extra });
+  photos: [], page: null, gone: false, buttons: [], answers: null, typing: false, voice: false, speech: null, ...extra });
 const J = JSON.stringify;
 
 console.log("  a turn as the add-on sends it:");
@@ -24,7 +25,10 @@ ck("read whole: who said it, when, its words, its pictures and page",
                  page: "p1", buttons: [{ label: "Continue", kind: "c", id: "k1" }, { label: "x" }], answers: 7 }))
    === J({ seq: 3, key: "turn:9", from: "vesta", at: "2026-10-29T10:00:00Z", text: "On.", photos: ["a.jpg"], page: "p1",
            gone: false, buttons: [{ label: "Continue", command: "c:k1", acts: false }], answers: 7, typing: false,
-           voice: false }));
+           voice: false, speech: null }));
+ck("  ...an answer said aloud names its sound (ticket 24); anything else is none",
+   parseTurn({ seq: 5, key: "turn:5", from: "vesta", text: "On.", speech: "ab.mp3" })?.speech === "ab.mp3"
+   && [3, "", null].every((v) => parseTurn({ seq: 5, key: "turn:5", from: "vesta", speech: v })?.speech === null));
 ck("  ...a spoken question says so (hold to talk), with no words until VESTA heard them",
    parseTurn({ seq: 4, key: "ask:4", from: "person", voice: true })?.voice === true
    && parseTurn({ seq: 4, key: "ask:4", from: "person", voice: true })?.text === "");
@@ -163,6 +167,28 @@ ck("an answer: VESTA's words, its picture and its page for a profile served page
 ck("  ...no page offered to a profile the add-on serves none (a guest)", !guest.includes("Open the page"));
 ck("  ...the person's own question reads as theirs",
    draw(h(TurnLine, { turn: turn(1, { from: "person" }), canOpenPage: false })).includes("You"));
+ck("an answer said aloud offers Listen; one in words only does not",
+   draw(h(TurnLine, { turn: turn(4, { speech: "ab.mp3" }), canOpenPage: false })).includes("Listen")
+   && !draw(h(TurnLine, { turn: turn(4), canOpenPage: false })).includes("Listen"));
+const listen = elements(parseTsx("components/messages/VestaThread.tsx"), "button")
+  .find((b) => (propText(b, "className") || "").includes("vesta-turn-listen"));
+ck("  ...Listen plays the turn's own sound from the press itself (an iPad starts a page's sound only there)",
+   /playSpeech\(\(\) => fetchSpeech\(name\), true\)/.test(propText(listen, "onClick") || ""), propText(listen, "onClick"));
+const provider = readFileSync(new URL("../../src/messages/ConversationContext.tsx", import.meta.url), "utf8");
+ck("  ...an answer that arrives plays only by playsAloud, and one that cannot start says to tap Listen",
+   /if \(name && playsAloud\(spokenAt\.current, Date\.now\(\)\)\)/.test(provider)
+   && /playSpeech\(\(\) => fetchSpeech\(name\), false\)\.then\(\(played\) => \{ if \(!played\) tell\(LISTEN_SAID\); \}\)/.test(provider)
+   && /if \(out === "sent" && typeof question !== "string"\) spokenAt\.current = Date\.now\(\);/.test(provider));
+const words = turn(5, { key: "turn:5" }), aloud = turn(6, { key: "turn:5", speech: "s1.mp3" });
+ck("the sound that just arrived: the answer rewritten with its sound, once (ticket 24)",
+   arrivedSpeech([words], [aloud]) === "s1.mp3" && arrivedSpeech([aloud], [aloud]) === null
+   && arrivedSpeech([], [words]) === null);
+ck("  ...played as it comes only on the tablet that asked, while the add-on would keep its question",
+   playsAloud(1000, 2000) && !playsAloud(null, 2000)
+   && !playsAloud(0, AGENT_CONTRACT.conversation.askKeptSeconds * 1000 + 1));
+ck("  ...never the person's line, nor an answer withdrawn",
+   arrivedSpeech([], [turn(7, { from: "person", speech: "s2.mp3" })]) === null
+   && arrivedSpeech([], [turn(8, { gone: true, speech: "s3.mp3" })]) === null);
 const waiting = draw(h(TurnLine, { turn: turn(2, { from: "person", voice: true, text: "" }), canOpenPage: false }));
 const heard = draw(h(TurnLine, { turn: turn(2, { from: "person", voice: true, text: "Is the pump on?" }), canOpenPage: false }));
 ck("a spoken question waiting for its words says it was spoken, as a line of its own",

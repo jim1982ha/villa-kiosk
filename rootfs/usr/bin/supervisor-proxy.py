@@ -4352,6 +4352,62 @@ def _take_voice(name: str) -> bytes | None:
     return data
 
 
+# ⚠️ AN ANSWER SPOKEN ALOUD (ticket 24 of "One inbox", owner 2026-10-28: "use piper path only first"): VESTA's answer to a
+# spoken question in the villa's own voice, made by the Agent (the text-to-speech the villa's voice settings name) and
+# uploaded before the turn that names it (`speech`). Kept apart, as a turn's pictures are, while a turn names it; served
+# only to the profile whose turn names it. Only the agreement's voice.answerTypes, each told by its first bytes.
+SPEECH_DIR = "vesta-speech"
+SPEECH_ENDINGS = {"audio/mpeg": ".mp3", "audio/wav": ".wav"}
+SPEECH_RE = re.compile(r"^[0-9a-f]{32}\.(?:mp3|wav)$")
+
+
+def _speech_refused(data: bytes, kind: str) -> str | None:
+    """Why `data` is not an answer's sound the add-on keeps, or None: one of the agreement's voice.answerTypes, its first
+    bytes that type's (an MP3's tag or frame, a WAV's RIFF/WAVE), at most voice.answerBytes. Pure —
+    tests/agent-interface.py."""
+    if kind not in (VOICE.get("answerTypes") or ()) or kind not in SPEECH_ENDINGS:
+        return "An answer's sound is " + " or ".join(VOICE.get("answerTypes") or ["none"]) + "."
+    if not data:
+        return "This sound is empty."
+    if len(data) > int(VOICE.get("answerBytes") or 0):
+        return "This sound is too long."
+    mp3 = data[:3] == b"ID3" or (len(data) > 1 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0)
+    if not (mp3 if kind == "audio/mpeg" else data[:4] == b"RIFF" and data[8:12] == b"WAVE"):
+        return f"This sound is not {kind}."
+    return None
+
+
+def _keep_speech(data: bytes, kind: str) -> str:
+    """Keep an answer's sound for the turn that will name it: its name. Blocking: called on a worker thread."""
+    os.makedirs(_data(SPEECH_DIR), exist_ok=True)
+    name = secrets.token_hex(16) + SPEECH_ENDINGS[kind]
+    atomic_write(_data(SPEECH_DIR, name), lambda out: out.write(data))
+    return name
+
+
+def _sweep_speech(kept) -> None:
+    """Delete every answer's sound no kept turn names (its turn expired, or a rewrite left it), unless younger than
+    ANNOUNCEMENT_PHOTO_GRACE_S: it is uploaded BEFORE the turn that names it. Blocking."""
+    named = {t.get("speech") for t in kept if isinstance(t, dict)} if isinstance(kept, list) else set()
+    try:
+        names = os.listdir(_data(SPEECH_DIR))
+    except OSError:
+        return
+    young = time.time() - ANNOUNCEMENT_PHOTO_GRACE_S
+    for name in names:
+        try:
+            if name not in named and SPEECH_RE.match(name) and os.path.getmtime(_data(SPEECH_DIR, name)) <= young:
+                os.remove(_data(SPEECH_DIR, name))
+        except OSError:
+            pass
+
+
+def _after_conversation(stored, kept) -> None:
+    """What a conversation write leaves behind, swept: the pictures and the sounds no kept turn names."""
+    _sweep_announcement_photos(stored, kept)
+    _sweep_speech(kept)
+
+
 def _heard_line(turns: list, body: dict) -> dict | None:
     """The person's spoken line with the words the Agent heard (`{"key": "ask:<seq>", "profile", "heard"}`), or None
     when that is not one: ⚠️ THE ONLY WRITE THE AGENT MAKES TO A PERSON'S LINE — a spoken one of that profile, with no
@@ -4406,6 +4462,9 @@ def _turn_record(body, seq: int, now_iso: str) -> dict | None:
     # VESTA is answering (Telegram's "typing…"): the tablet's dots in its bubble
     if body.get("typing") is True:
         rec["typing"] = True
+    # the answer said aloud (ticket 24): a sound uploaded first (/agent/v1/speech); never a turn on its own
+    if isinstance(body.get("speech"), str) and SPEECH_RE.match(body["speech"]):
+        rec["speech"] = body["speech"]
     photos = body.get("photos")
     has_photo = isinstance(photos, list) and any(isinstance(p, str) and p for p in photos)
     return rec if ("text" in rec or "page" in rec or "typing" in rec or has_photo) else None
@@ -4428,7 +4487,7 @@ ASKED = Feed(ASKS, lambda items: _asks_kept(items, time.time()))
 #: records-kept days, a picture swept with the turn that named it.
 CONVERSED = Feed(TURNS, lambda items: _announcements_kept(items if isinstance(items, list) else [], time.time(),
                                                           _evidence_retention_days(), CONVERSATION_MAX_BYTES),
-                 after=_sweep_announcement_photos)
+                 after=_after_conversation)
 
 
 def _vesta_online() -> bool:
@@ -4555,6 +4614,39 @@ async def agent_voice_handler(request: web.Request) -> web.Response:
     if data is None:
         return web.json_response({"error": "not found"}, status=404)
     return web.Response(body=data, content_type="audio/wav", headers={"Cache-Control": "no-store"})
+
+
+async def agent_speech_handler(request: web.Request) -> web.Response:
+    """An answer's sound (ticket 24 of "One inbox", VESTA answers aloud), from the Agent (token-gated, `agentWrite`):
+    kept for the turn that names it, `{"name"}`. 404 when the agreement names no answer's sound, 413 past its
+    answerBytes, 400 for anything that is not one of its answerTypes."""
+    if (refused := _agent_refuse(request, "agentWrite")) is not None:
+        return refused
+    if not CONVERSATION_LIMITS or not VOICE.get("answerTypes"):
+        return web.json_response({"error": "not found"}, status=404)
+    data = bytearray()
+    async for chunk in request.content.iter_chunked(64 * 1024):
+        data.extend(chunk)
+        if len(data) > int(VOICE.get("answerBytes") or 0):
+            return web.json_response({"error": "This sound is too long."}, status=413)
+    if why := _speech_refused(bytes(data), request.content_type):
+        return web.json_response({"error": why}, status=400)
+    return web.json_response({"ok": True, "name": await asyncio.to_thread(_keep_speech, bytes(data), request.content_type)})
+
+
+async def vesta_speech_handler(request: web.Request) -> web.StreamResponse:
+    """One answer's sound, to the profile whose turn names it (every other is told there is none: a guest never hears
+    the owner's answers)."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    name, profile = request.match_info.get("name", ""), _role_for(request)
+    path = _data(SPEECH_DIR, name)
+    mine = SPEECH_RE.match(name) and any(isinstance(t, dict) and t.get("speech") == name and t.get("profile") == profile
+                                         for t in await asyncio.to_thread(CONVERSED.items))
+    if not mine or not os.path.isfile(path):
+        return web.json_response({"error": "no such sound"}, status=404)
+    kind = next(k for k, e in SPEECH_ENDINGS.items() if name.endswith(e))
+    return web.FileResponse(path, headers={"Content-Type": kind, "Cache-Control": "no-store"})
 
 
 async def agent_conversation_turn_handler(request: web.Request) -> web.Response:
@@ -4983,6 +5075,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     # Talking to VESTA (every profile, each its own conversation).
     app.router.add_post("/vesta-ask", vesta_ask_handler)
     app.router.add_get("/vesta-conversation", vesta_conversation_handler)
+    app.router.add_get("/vesta-speech/{name}", vesta_speech_handler)
     app.router.add_post("/vesta-press", vesta_press_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
@@ -4996,6 +5089,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_get("/agent/v1/inbox", agent_inbox_handler)
     app.router.add_get("/agent/v1/voice/{name}", agent_voice_handler)
     app.router.add_post("/agent/v1/conversation-turn", agent_conversation_turn_handler)
+    app.router.add_post("/agent/v1/speech", agent_speech_handler)
     app.router.add_post("/agent/v1/heartbeat", agent_heartbeat_handler)
     return app
 

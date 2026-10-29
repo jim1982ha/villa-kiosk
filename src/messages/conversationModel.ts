@@ -41,6 +41,21 @@ export function threadView(turns: readonly Turn[], online: boolean): ThreadView 
     typingAt: typing?.at ?? null };
 }
 
+/** The sound of VESTA's answer that has just arrived (ticket 24, VESTA answers aloud): the newest of VESTA's turns naming
+ *  a sound the page did not hold before (a turn comes first in words, then rewritten with its sound), or null. Pure. */
+export function arrivedSpeech(before: readonly Turn[], after: readonly Turn[]): string | null {
+  const had = new Set(before.map((t) => t.speech));
+  const t = [...after].reverse().find((x) => x.from === "vesta" && !x.gone && x.speech !== null && !had.has(x.speech));
+  return t?.speech ?? null;
+}
+
+/** ⚠️ ONLY THE TABLET THAT ASKED SPEAKS (ticket 24): every tablet signed in as the profile reads the answer, but its sound
+ *  plays as it comes only where the person held the button (`spokenAt`, when that page sent its spoken question; null
+ *  on every other) and while the add-on would still keep that question. Pure. */
+export function playsAloud(spokenAt: number | null, now: number): boolean {
+  return spokenAt !== null && 0 <= now - spokenAt && now - spokenAt <= ASK_KEPT_MS;
+}
+
 /** VESTA's short answers to this profile's presses, by the press's number (shown under the button pressed). Pure. */
 export function answersOf(turns: readonly Turn[]): ReadonlyMap<number, string> {
   return new Map(turns.flatMap((t) => (t.answers !== null && t.text ? [[t.answers, t.text] as const] : [])));
