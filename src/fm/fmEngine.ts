@@ -501,7 +501,7 @@ export function completionsInMonth(
 }
 
 /** Short human date, local time (e.g. "24 Jul 2026") — for a target/due date
- *  or a report table row, where the full time-of-day in momentText() is more
+ *  or a report table row, where the full time-of-day in dateText.momentText() is more
  *  precision than the reader needs. Was previously private to fmDocuments.ts;
  *  moved here (and imported back from there) so TodayTab and ScheduleEditor
  *  can show the exact same date format the report annex uses, rather than

@@ -8,7 +8,7 @@
 // ONLY WHERE THE PAGE CAN RECORD (spec story 49): an http page, or a browser with no microphone, keeps the speech
 // bubble on the top bar (tap only) and no button in the conversation, so nothing on screen is dead.
 
-import { useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { MessageCircle, Mic } from "lucide-react";
 import { useConversation } from "@/messages/ConversationContext";
@@ -34,9 +34,8 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
   children?: ReactNode;
 }) {
   const { talker, talk } = useConversation();
-  // a hold's click that follows is no tap; a hold whose click never came (the finger slid off) never swallows the next
-  const heldClick = useRef(false);
-  const phase = talk.place === place ? talk.phase : "idle";
+  // a question sending is the page's (both buttons say so: neither takes a press then); listening, the held button's
+  const phase = talk.phase === "sending" || talk.place === place ? talk.phase : "idle";
   const label = phase === "idle" ? idle : SAYS[phase];
   return (
     <>
@@ -45,17 +44,14 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
         className={`${className} talk-btn${phase !== "idle" ? ` talk-${phase}` : ""}`}
         title={label} aria-label={label}
         onPointerDown={(e) => {
-          heldClick.current = false;
           // a finger that slides off while talking still sends on release
           if (talker && e.button === 0 && talker.down(place, onOpen)) e.currentTarget.setPointerCapture?.(e.pointerId);
         }}
-        onPointerUp={() => { if (talker?.up() === "held") heldClick.current = true; }}
+        onPointerUp={() => talker?.up()}
         onPointerCancel={() => talker?.interrupted()}
         onContextMenu={(e) => { if (talker) e.preventDefault(); }}
-        onClick={() => {
-          if (heldClick.current) { heldClick.current = false; return; }
-          if (phase === "idle") onTap();
-        }}
+        // the session says whether this click is a tap (never after a hold, nor a press refused while sending)
+        onClick={() => { if (!talker || talker.clicked()) onTap(); }}
       >
         {place === "thread" && phase === "listening" && <VoiceOrb size="small" />}
         {talker && <Mic size={place === "bar" ? 24 : 16} aria-hidden />}

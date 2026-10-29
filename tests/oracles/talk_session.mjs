@@ -139,6 +139,39 @@ console.log("\n  limits:");
   ck("one press at a time", b.s.down("thread", b.open("thread")) === false);
 }
 
+console.log("\n  the click that follows a press:");
+{
+  const b = bench();
+  b.s.down("bar", b.open("bar"));
+  b.s.up();
+  ck("a tap's click acts (the top bar opens the conversation)", b.s.clicked() === true);
+  ck("  ...a key press, with no finger at all, acts too", b.s.clicked() === true);
+}
+{
+  const b = bench();
+  b.s.down("bar", b.open("bar"));
+  await b.fire(480);
+  b.s.up();
+  ck("a hold's click does not (no second opening, no advice)", b.s.clicked() === false);
+  await settle();
+}
+{
+  const b = bench({ wav: "WAV" });
+  b.s.down("bar", b.open("bar"));
+  await b.fire(480);
+  let release;
+  b.s.deps.send = () => new Promise((r) => { release = r; });
+  b.s.up();
+  await settle();
+  ck("a press refused while a question sends: its click is no tap (never \"Hold the microphone…\")",
+     b.s.now.phase === "sending" && b.s.down("thread", b.open("thread")) === false && b.s.up() === null
+     && b.s.clicked() === false, b.s.now);
+  release();
+}
+const btnSrc = (await import("node:fs")).readFileSync(new URL("../../src/components/messages/TalkButton.tsx", import.meta.url), "utf8");
+ck("the button asks the session whether a click is a tap, and keeps no rule of its own",
+   /talker\.clicked\(\)/.test(btnSrc) && !/heldClick/.test(btnSrc));
+
 console.log("\n  drawn where it is held:");
 const btn = parseTsx("components/messages/TalkButton.tsx");
 const orbs = elements(btn, "VoiceOrb");

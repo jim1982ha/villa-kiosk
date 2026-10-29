@@ -51,7 +51,7 @@ export interface DocumentKindInfo {
   /** What it is ABOUT: a month (the recap, the statement), or the moment it was taken (the snapshot). */
   about: "month" | "moment";
   /** Its title in the saved list: its month — or, for a moment, the moment it was saved, in the documents' fixed form
-   *  (fmEngine.momentText, the "Generated:" stamp). ⚠️ THREE SNAPSHOTS THIS MONTH WERE ALL "October 2026" (architecture
+   *  (dateText.momentText, the "Generated:" stamp). ⚠️ THREE SNAPSHOTS THIS MONTH WERE ALL "October 2026" (architecture
    *  review, 2026-10-19): every kind was titled by its month. */
   title: (doc: Pick<FmSavedDocument, "month" | "generatedAt">) => string;
   /** The document, from the inputs, for `month`. */

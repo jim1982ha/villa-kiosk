@@ -1,7 +1,9 @@
 // src/utils/dateText.ts
 // How a moment is written on screen — the app's date/time display formats,
-// defined once (2.496.263). Each fixes its FIELDS (so a shape is stable) and
-// leaves the ordering and spelling to the reader's own locale (`[]`), the rule
+// defined once (2.496.263). Two families: the agreement's fixed forms
+// (momentText, docDate: a moment, a document's day, as Telegram writes them),
+// and the rest, which fix their FIELDS (so a shape is stable) and leave the
+// ordering and spelling to the reader's own locale (`[]`), the rule
 // fmEngine.shortDate set for the report.
 //
 // ⚠️ "3 Oct, 14:05" WAS WRITTEN OUT THREE TIMES (the Agent's activity, the

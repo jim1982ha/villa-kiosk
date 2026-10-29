@@ -38,6 +38,8 @@ export class TalkSession {
   private view: TalkView = TALK_IDLE;
   private views = new Set<(v: TalkView) => void>();
   private levels = new Set<(level: number) => void>();
+  // the click that follows a press is no tap when the press was a hold, or was refused (a question still sending)
+  private swallow = false;
   private deps: TalkDeps;
   constructor(deps: TalkDeps) { this.deps = deps; }
 
@@ -59,7 +61,8 @@ export class TalkSession {
   /** A finger down on a talk button: the recording begins (the microphone too once allowed: nothing said is lost);
    *  `open` shows the conversation. False when this press is not taken (one already runs, or a question is sending). */
   down(place: TalkPlace, open: () => void): boolean {
-    if (this.press || this.view.phase === "sending") return false;
+    this.swallow = false;
+    if (this.press || this.view.phase === "sending") { this.swallow = true; return false; }
     let rec: Recording;
     try {
       rec = this.deps.record((level) => this.levels.forEach((fn) => fn(level)));
@@ -93,8 +96,18 @@ export class TalkSession {
     const p = this.press;
     if (!p) return null;
     if (!p.held) { this.end(p); p.rec.cancel(); return "tap"; }
+    this.swallow = true;
     void this.finish(p);
     return "held";
+  }
+
+  /** The button's click: true when it is a tap to act on (a tap, or a key press with no finger at all); false after a
+   *  hold, or after a press refused while a question was sending (architecture review R, round 2: the conversation's
+   *  button said "Hold the microphone while you speak" to a person who had just held it). */
+  clicked(): boolean {
+    const tap = !this.swallow;
+    this.swallow = false;
+    return tap;
   }
 
   /** The touch taken away (a banner, a call): a hold says its question was not sent, never vanishes in silence. */
