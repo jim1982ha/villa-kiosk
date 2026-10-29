@@ -34,6 +34,9 @@
 //     roomGlowAndCones whether the map lights a room red and draws a camera's
 //                    cone on a detection: one switch for every tablet (owner,
 //                    2026-10-22)
+//     maintenanceMode the villa's maintenance mode: only urgent (P1) alerts
+//                    while it is on; the VESTA Agent reads it from the stored
+//                    document (the heartbeat's answer, owner 2026-10-29)
 //     fullScreenFor, ringShownForS  which announcements take the whole screen
 //                    and for how long: the owner's choice for every tablet
 //                    (ticket 16 of "One inbox"); each tablet may still refuse
@@ -91,6 +94,7 @@ interface SharedItems {
   presenceSensor: string;
   recordsKeptDays: number;
   roomGlowAndCones: boolean;
+  maintenanceMode: boolean;
   fullScreenFor: true;
   ringShownForS: number;
 }
@@ -168,6 +172,14 @@ const idList: SharedKeyRow<string[], true> = {
   empty: [],
 };
 
+/** One on/off of the villa's, off by default (one value, a single item): a stored config without the key reads OFF. */
+const villaSwitchOff: SharedKeyRow<boolean, boolean> = {
+  index: (v) => ({ value: v }),
+  fromIndex: (items) => items.value ?? false,
+  parse: (raw) => (typeof raw === "boolean" ? raw : undefined),
+  empty: false,
+};
+
 /** One on/off of the villa's, on by default: one value, indexed as a single item; its empty is ON — what the villa
  *  had before the switch existed — so a device on the default proposes nothing, and a stored config without the key
  *  reads ON. */
@@ -205,6 +217,7 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
   presenceSensor: villaText,
   recordsKeptDays: recordsKept,
   roomGlowAndCones: villaSwitchOn,
+  maintenanceMode: villaSwitchOff,
   fullScreenFor: idList,
   ringShownForS: ringShownFor,
 };

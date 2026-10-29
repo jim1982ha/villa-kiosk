@@ -28,6 +28,7 @@ import UnavailableByDesign from "./UnavailableByDesign";
 import { FullScreenFor, RingShownFor } from "./MessagesSettings";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
+import MaintenanceMode, { MaintenanceModeExplained } from "./MaintenanceMode";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
 import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
@@ -433,6 +434,9 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             other roles rather than rendered-and-403 — see the TABS filter. */}
         {tab === "system" && roleCan(role, "editConfig") && (
           <>
+            {/* the villa's maintenance mode (owner, 2026-10-29): VESTA reads it from here, and the top bar shows it */}
+            <TipTitle title="Maintenance mode" tip={<MaintenanceModeExplained />} />
+            <MaintenanceMode />
             <TipTitle title="Maintenance records" tip={<>
               Photos, repaired faults, work done, money spent and messages older than this are deleted.
               0 keeps them for ever. A task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.

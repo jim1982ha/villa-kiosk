@@ -171,6 +171,13 @@ export interface AppConfig {
    */
   roomGlowAndCones: boolean;
   /**
+   * The villa's maintenance mode (owner, 2026-10-29: a switch in Advanced Settings › System, owner only, and a mark in
+   * the top bar while it is on): the VESTA Agent sends only urgent (P1) alerts while it is on. ⚠️ THE KIOSK OWNS IT, as
+   * it owns the devices asleep by design: the Agent reads it in its heartbeat's answer (agent-contract.json
+   * `heartbeat.answer.maintenance`). Off by default.
+   */
+  maintenanceMode: boolean;
+  /**
    * The announcements that take the whole screen when they arrive, by their title (messages/announcements noticeFor):
    * picked by the owner in Advanced Settings › Messages from what the villa has announced, never named in code. The
    * villa's (owner, 2026-10-28, ticket 16 of "One inbox"). Empty by default: nothing takes the screen until picked.
@@ -377,6 +384,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   presenceSensor: "",
   recordsKeptDays: RECORDS_KEPT_DAYS_DEFAULT,
   roomGlowAndCones: true,
+  maintenanceMode: false,
   fullScreenFor: [],
   ringShownForS: RING_SHOWN_FOR_S_DEFAULT,
   ringsFullScreen: true,

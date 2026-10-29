@@ -3566,7 +3566,7 @@ async def agent_heartbeat_handler(request: web.Request) -> web.Response:
     await AGENT_PRESENCE.replace({"last_seen": time.time(), "status": status,
                                   "cadence": _agent_cadence(cadence)})
     answer = {"ok": True, "offline_after_minutes": _agent_offline_minutes(),
-              "unavailableByDesign": _unavailable_by_design()}
+              "unavailableByDesign": _unavailable_by_design(), "maintenance": _maintenance_mode()}
     global _CADENCE_REFUSAL_LOGGED
     if why is not None:
         answer["cadence"] = f"refused: {why}"
@@ -3587,6 +3587,15 @@ def _unavailable_by_design() -> list[str]:
     cfg = DEVICE_CONFIG.read()
     raw = cfg.get("unavailableByDesign") if isinstance(cfg, dict) else None
     return sorted({e for e in raw if isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e)}) if isinstance(raw, list) else []
+
+
+def _maintenance_mode() -> bool:
+    """The villa's maintenance mode (device-config.json `maintenanceMode`, Advanced Settings › System, owner 2026-10-29):
+    while it is on the VESTA Agent sends only urgent (P1) alerts (agent-contract.json `heartbeat.answer`). ⚠️ THE KIOSK
+    OWNS IT, as it owns the devices asleep by design; only a stored `true` is on — absent, unreadable or anything else is
+    off, never a refused beat."""
+    cfg = DEVICE_CONFIG.read()
+    return isinstance(cfg, dict) and cfg.get("maintenanceMode") is True
 
 
 #: The last malformed-cadence reason logged — one line per new reason, not one per beat (every few minutes).

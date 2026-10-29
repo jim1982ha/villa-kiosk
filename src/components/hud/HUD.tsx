@@ -30,10 +30,12 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot, MessageCircle,
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, MessageCircle, Wrench,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
+import InfoTip from "@/components/common/InfoTip";
+import { MaintenanceModeExplained } from "@/components/settings/MaintenanceMode";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { ROLE_LABELS, ROLE_INITIALS } from "@/auth/roles";
@@ -584,6 +586,16 @@ export default function HUD({
             plus a genuinely-applied has-alert border once it left the old
             category row) can't read as bigger/higher than its neighbours. */}
         <div className="hud-right">
+          {/* ⚠️ THE VILLA'S MAINTENANCE MODE, SEEN WHILE IT IS ON (owner, 2026-10-29: "so nobody forgets it"): only
+              urgent alerts are sent meanwhile. Beside the robot, and on a phone too (outside the inline group a
+              phone hides), for the profiles shown VESTA. */}
+          {doors.agent && config.maintenanceMode && (
+            <span className="maintenance-mark" role="status">
+              <Wrench size={16} aria-hidden="true" /><span className="maintenance-mark-word">Maintenance</span>
+              {/* its (i): a tap opens it on every phone and tablet, the switch's own words */}
+              <InfoTip label="Maintenance mode is on: what it does"><MaintenanceModeExplained /></InfoTip>
+            </span>
+          )}
           <div className="hud-right-inline hud-group">
             {/* ONE button for the Cockpit and the agent (2.496.242): with an
                 agent configured the Cockpit's icon IS the robot — its count

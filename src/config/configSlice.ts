@@ -127,7 +127,7 @@ export function revertLedger(ledger: DraftLedger, config: AppConfig): Partial<Ap
 export const ADVANCED_SETTINGS_KEYS = [
   "latitude", "longitude", "northOffsetDeg", "presenceSensor",
   "entityMap", "meshBindings", "deviceGroups", "dismissedEntityIds", "unavailableByDesign",
-  "recordsKeptDays", "fullScreenFor", "ringShownForS",
+  "recordsKeptDays", "fullScreenFor", "ringShownForS", "maintenanceMode",
 ] as const satisfies readonly (keyof AppConfig)[];
 
 /** Whose change another tablet replaced: a device (by entity id) or one of the villa's settings. */
@@ -137,7 +137,7 @@ export type ReplacedSubject = { device: string } | { setting: string };
 const SETTING_NAMES: Partial<Record<SharedConfigKey, string>> = {
   latitude: "The villa's location", longitude: "The villa's location", northOffsetDeg: "Model north offset",
   presenceSensor: "Villa presence", recordsKeptDays: "Days records are kept", roomGlowAndCones: "Room glow",
-  fullScreenFor: "Full screen for", ringShownForS: "Ring shown for",
+  fullScreenFor: "Full screen for", ringShownForS: "Ring shown for", maintenanceMode: "Maintenance mode",
 };
 
 /** The device an item of a shared key is about (its id, or the entity a mesh or group stands for). */

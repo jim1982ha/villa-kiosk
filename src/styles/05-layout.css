@@ -222,6 +222,9 @@
      so it cannot drift from the category section beside it. */
   .hud-right-inline { display: none; }
   .hud-overflow { display: flex; }
+  /* the maintenance mark keeps its wrench only: the phone's bar has no room for the word (its title still says it) */
+  .maintenance-mark { padding: 4px 6px; }
+  .maintenance-mark-word { display: none; }
   /* The view switch under 1F/2F goes with the inline controls: a phone has
      it in the overflow menu. Scoped through .hud-left-col to outrank
      `.icon-btn { display: flex }`. */

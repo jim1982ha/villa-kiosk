@@ -1,3 +1,14 @@
+## 2.496.595
+
+What you will see (VESTA follows it from VESTA Agent 0.12.392):
+- Advanced Settings › System has a "Maintenance mode" switch (owner only): "Only urgent (P1) alerts are sent while
+  it's on." Its (i) says exactly what it does: urgent alerts are still chased; any other new alert gets no number, no
+  reminder and no ticket (the villa's own message still shows); alerts already open carry on; nothing held back is
+  sent afterwards.
+- While it is on, the top bar shows a "Maintenance" mark with a wrench on every tablet and phone (the wrench alone on
+  a phone), for the owner and the facility manager. Its (i) opens the same explanation.
+- It replaces the hidden setting in the villa's system that VESTA used to read: one switch, on the tablet.
+
 ## 2.496.594
 
 What you will see:

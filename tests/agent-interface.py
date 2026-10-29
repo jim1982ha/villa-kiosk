@@ -414,6 +414,18 @@ async def main() -> None:
     ck("  ...and a setting of another shape is an empty list, never a refused beat",
        r.status == 200 and (await r.json()).get("unavailableByDesign") == [])
     cfg_file.unlink(missing_ok=True)
+    # ⚠️ THE KIOSK OWNS THE VILLA'S MAINTENANCE MODE (owner, 2026-10-29): the Agent reads it in every beat's answer
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    unset = (await r.json()).get("maintenance")
+    cfg_file.write_text(json.dumps({"maintenanceMode": True}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    on = (await r.json()).get("maintenance")
+    cfg_file.write_text(json.dumps({"maintenanceMode": "yes"}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    odd = (await r.json()).get("maintenance")
+    ck("the beat's answer carries the villa's maintenance mode, as the agreement declares it: on only when stored true",
+       "maintenance" in contract_answer and on is True and unset is False and odd is False, (unset, on, odd))
+    cfg_file.unlink(missing_ok=True)
     presence = TMP / "data" / "agent-presence.json"
     presence.write_text(json.dumps({"last_seen": time.time() - 6 * 60, "status": None, "cadence": beat["cadence"]}))
     status, body = await jget("/agent-status", cookie("ops"))
