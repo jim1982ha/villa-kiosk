@@ -16,3 +16,6 @@ on_event:
   # words: Whisper asked directly (language "auto"), then the villa's speech-to-text in "auto", then in
   # {language} (which Whisper, which speech-to-text, a fixed language: villa.voice.yaml).
   voice_message: "voice.py prepare --audio {audio} --language {language}"
+  # An answer to a question spoken on the tablet, said aloud: which language its words are in, and the voice that says
+  # it (the voice settings' own for their language; villa.voice.yaml `voices:` for another). No voice: why, in words.
+  answer_aloud: "voice.py speak --text {text} --language {language} --voice {voice}"

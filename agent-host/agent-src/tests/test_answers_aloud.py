@@ -41,9 +41,10 @@ def _answered(v, kiosk, monkeypatch, answer="The pool pump is on.", spoken=True,
     return villa
 
 
-def _agent(tmp_path, pipeline):
+def _agent(tmp_path, pipeline, voice_yaml=None):
     kiosk = FakeKiosk()
-    return voice_agent(tmp_path, kiosk=kiosk, converse=True, reader=FakeHA(pipeline=pipeline)), kiosk
+    return voice_agent(tmp_path, kiosk=kiosk, converse=True, reader=FakeHA(pipeline=pipeline),
+                       voice_yaml=voice_yaml), kiosk
 
 
 def test_the_answer_to_a_spoken_question_carries_the_villas_voice(tmp_path, monkeypatch):
@@ -99,3 +100,31 @@ def test_the_next_question_never_waits_on_the_voice(tmp_path, monkeypatch):
     second = next(i for i, t in enumerate(answers) if t["key"] != first)
     sound = next(i for i, t in enumerate(answers) if "speech" in t)
     assert second < sound, [(t["key"], "speech" in t) for t in answers]
+
+
+# ── In the answer's own language (owner, 2026-10-29: a French answer read by the English voice) ─────────────────────
+FRENCH = "J'ai compris votre question, mais je ne trouve pas cet appareil dans la maison."
+
+
+def test_an_answer_in_another_language_is_said_by_the_voice_named_for_it(tmp_path, monkeypatch):
+    # the villa-concierge skill tells the language from the words and names the voice villa.voice.yaml gives it
+    v, kiosk = _agent(tmp_path, {**VOICE_SET, "tts_language": "en_US", "tts_voice": "en_US-test-medium"},
+                      voice_yaml={"voices": {"fr": "fr_FR-test-medium"}})
+    villa = _answered(v, kiosk, monkeypatch, answer=FRENCH)
+    assert [(b["language"], b["options"].get("voice")) for b in villa.spoken] == [("fr_FR", "fr_FR-test-medium")]
+    assert "speech" in kiosk.conversation("owner")[-1]
+
+
+def test_an_answer_in_a_language_with_no_voice_is_never_read_by_another_one(tmp_path, monkeypatch):
+    v, kiosk = _agent(tmp_path, {**VOICE_SET, "tts_language": "en_US"})
+    villa = _answered(v, kiosk, monkeypatch, answer=FRENCH)
+    turn = kiosk.conversation("owner")[-1]
+    assert villa.spoken == [] and "speech" not in turn
+    assert turn["text"].startswith(FRENCH) and "could not be spoken in French" in turn["text"]
+
+
+def test_an_answer_in_the_voice_settings_own_language_keeps_their_voice(tmp_path, monkeypatch):
+    v, kiosk = _agent(tmp_path, {**VOICE_SET, "tts_language": "en_US", "tts_voice": "en_US-test-medium"},
+                      voice_yaml={"voices": {"fr": "fr_FR-test-medium"}})
+    villa = _answered(v, kiosk, monkeypatch, answer="The pool pump is on and the lights are off.")
+    assert [(b["language"], b["options"].get("voice")) for b in villa.spoken] == [("en_US", "en_US-test-medium")]

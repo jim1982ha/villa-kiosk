@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import NamedTuple
+from typing import Awaitable, Callable, NamedTuple
 
 import aiohttp
 
@@ -53,19 +53,29 @@ class Said(NamedTuple):
 
 
 class Silent(NamedTuple):
-    """No sound: its kind (above) and why, for the log (never an address or the words)."""
+    """No sound: its kind (above) and why, for the log (never an address or the words); `say`: what the answer says
+    instead, when the skill that chose the voice wrote it (no voice for the answer's language)."""
     kind: str
     why: str
+    say: str | None = None
+
+
+#: The skill's choice of voice for an answer (on_event.answer_aloud): (the words, the voice settings) ->
+#: {"language", "voice"} | {"say"} | None (no skill: the settings' own voice).
+Choose = Callable[[str, dict], Awaitable[dict | None]]
 
 
 class Speech:
-    def __init__(self, settings, reader, headers: dict | None = None):
+    def __init__(self, settings, reader, headers: dict | None = None, choose: Choose | None = None):
         self.s = settings
         self.reader = reader            # the villa's system through ha-mcp (its voice settings)
         self.headers = headers or {}    # Cloudflare Access, when the villa's system is reached through it
+        self.choose = choose            # the skill's choice of language and voice (app._choose_voice)
 
     async def say(self, text: str) -> Said | Silent:
-        """`text` in the villa's voice, within speak_s() in all."""
+        """`text` in the villa's voice, within speak_s() in all. ⚠️ IN THE ANSWER'S OWN LANGUAGE (owner, 2026-10-29: a
+        French answer read by the English voice): the skill tells the language and names its voice, or says why
+        there is none; never another language's voice."""
         deadline = time.monotonic() + speak_s()
         try:
             pipeline = await asyncio.wait_for(asyncio.to_thread(self.reader.voice_pipeline), speak_s())
@@ -76,9 +86,16 @@ class Speech:
             return Silent(NONE, "no text-to-speech in the villa's voice settings")
         if not (self.s.ha_url and self.s.ha_token):
             return Silent(FAILED, "no address or token for the villa's system")
-        options = {"voice": pipeline["tts_voice"]} if pipeline.get("tts_voice") else {}
+        language, voice = pipeline.get("tts_language"), pipeline.get("tts_voice")
+        if self.choose is not None:
+            chosen = await self.choose(text, pipeline)
+            if chosen and chosen.get("say"):
+                return Silent(FAILED, "no voice for the answer's language", str(chosen["say"]))
+            if chosen and chosen.get("language"):
+                language, voice = chosen["language"], chosen.get("voice") or None
+        options = {"voice": voice} if voice else {}
         body = {"engine_id": engine, "message": text, "options": {**options, "preferred_format": FORMAT},
-                **({"language": pipeline["tts_language"]} if pipeline.get("tts_language") else {})}
+                **({"language": language} if language else {})}
         base, h = self.s.ha_url.rstrip("/"), {**self.headers, "Authorization": f"Bearer {self.s.ha_token}"}
         cap = int(agreement.section("conversation")["voice"]["answerBytes"])
         try:

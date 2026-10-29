@@ -32,6 +32,7 @@ and skill.yaml (what the engine needs):
     on_event:
       critical_event: "desk.py intake --event {event}"
       voice_message: "voice.py prepare --audio {audio} --language {language}"   # prints {"stt": {...}}
+      answer_aloud: "voice.py speak --text {text} --language {language} --voice {voice}"  # {"language", "voice"}
     on_reply: "desk.py reply --incident {incident} --option {option} --from {role} --name {name}"
     buttons:                         the buttons under every message about an open alert, answered by on_reply
       - {option: done, label: Done}              option: what on_reply is given; label: the words on the button
@@ -156,7 +157,8 @@ VILLA_PREFIX = "villa."
 #: the files a skill is made of: never deleted from the page (the page hid the button, the server allowed it, review 9)
 REQUIRED_FILES = ("SKILL.md", "skill.yaml")
 #: The events a skill's on_event answers, and how the page names each (when_it_runs).
-HOOK_EVENTS = {"critical_event": "a VESTA automation's critical alert", "voice_message": "a voice message"}
+HOOK_EVENTS = {"critical_event": "a VESTA automation's critical alert", "voice_message": "a voice message",
+               "answer_aloud": "a spoken answer's voice"}
 JOB_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 JOB_TARGETS = ROLES
 

@@ -181,7 +181,7 @@ class Vesta:
         self.voice = Voice(self.s, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers,
                            entity_ids=lambda: villa_entity_ids(self.reader))
         # the villa's own voice, for the answer to a question spoken on the tablet (speech.py, ticket 24 of "One inbox")
-        self.speech = speech.Speech(self.s, self.reader, self.cf_headers)
+        self.speech = speech.Speech(self.s, self.reader, self.cf_headers, choose=self._choose_voice)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
         self.notices = Notices(self.state, self.policy, settings.timezone, name=incidents.name,
@@ -832,6 +832,28 @@ class Vesta:
                 # after the answer, outside this conversation's lock: the next question never waits on the voice
                 self.tablet.later(self._aloud(cid, mid, reply.text))
 
+    async def _choose_voice(self, text: str, pipeline: dict) -> dict | None:
+        """The skill's choice of language and voice for an answer (on_event.answer_aloud: skills before code), or None
+        when no skill makes one (the voice settings' own voice). The words go to it in a file, removed after."""
+        hook = next(((sk, sk.on_event["answer_aloud"]) for sk in self.skills.all().values()
+                     if "answer_aloud" in sk.on_event), None)
+        if not hook:
+            return None
+        folder = os.path.join(self.s.out_dir, "voice")
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, f"answer-{time.time_ns()}.txt")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+            return await asyncio.to_thread(self.code_command, hook[0], hook[1],
+                                           {"text": path, "language": str(pipeline.get("tts_language") or ""),
+                                            "voice": str(pipeline.get("tts_voice") or "")}, speech.speak_s())
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
     async def _aloud(self, cid: int, mid: int | None, text: str) -> None:
         """The answer `mid` (its words already on the tablet: nobody waits on the voice to read them) said by the villa's
         voice (speech.Speech), its sound named on the turn; else the turn says why it was not spoken."""
@@ -846,7 +868,7 @@ class Vesta:
                 return
             said = speech.Silent(speech.FAILED, "the sound not named on the answer (tablet.Tablet.speak logs why)")
         log.info("Answer not spoken in the tablet's conversation (%s): %s", tablet.profile_of(cid), said.why)
-        await self.tablet.note(cid, mid, speech.NO_VOICE if said.kind == speech.NONE else speech.NOT_SPOKEN)
+        await self.tablet.note(cid, mid, said.say or (speech.NO_VOICE if said.kind == speech.NONE else speech.NOT_SPOKEN))
 
     async def _delivered(self, request: Request, cid: int, person, res, asked: str):
         """⚠️ WHAT A COMMAND SKILL'S ANSWER CARRIES, CHECKED — NEVER LEFT TO THE AI (owner, 2026-10-11: "make sure this

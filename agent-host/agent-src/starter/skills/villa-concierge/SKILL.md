@@ -75,6 +75,12 @@ has several) in `auto`, skipped once the villa's system has refused it; then
 in the person's saved language. `language:` a code always uses that language,
 through the villa's system only. All in `villa.voice.yaml`, optional.
 
+`on_event.answer_aloud` runs `voice.py speak`: an answer to a question spoken on
+the tablet is said in the language it is written in, by the voice the villa's
+voice settings name for their language, or by `voices:` in `villa.voice.yaml`
+for another (`fr: fr_FR-siwis-medium`); with none for it, the answer stays in
+words and says so.
+
 ## Reading (no confirmation)
 
 - "Is everything OK" / "status" / "how is the villa": the villa's status,

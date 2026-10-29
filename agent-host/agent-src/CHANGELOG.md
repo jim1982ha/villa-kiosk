@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.383 (29 October 2026)
+
+- An answer said in its own language (owner, 2026-10-29: a French answer read by the English voice): a new hook,
+  on_event.answer_aloud (skills.HOOK_EVENTS), and villa-concierge's `voice.py speak`: the answer's language told from
+  its common short words (WORDS, villa.voice.yaml `words:`), its voice the voice settings' own for their language or
+  villa.voice.yaml `voices:` for another, else the words the answer says instead (`say`). speech.Speech takes the
+  skill's choice (app._choose_voice); Silent carries its `say`.
+
 ## 0.6.382 (29 October 2026)
 
 - VESTA answers aloud (ticket 24 of "One inbox"): speech.Speech asks the text-to-speech the villa's preferred voice
