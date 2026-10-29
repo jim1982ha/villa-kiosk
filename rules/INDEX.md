@@ -11,7 +11,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Nothing villa-specific ships](owner-rules.md#nothing-villa-specific-ships) — no entity id, room, count, dimension, tuning or contract value in shipped code; empty defaults
 - [No internet dependency](owner-rules.md#no-internet-dependency) — works with no WAN; no CDN, webfont, remote asset; check Babylon features for lazy fetches
 - [Never name the platform](owner-rules.md#never-name-the-platform) — "the villa's system", never Home Assistant / HA in text a person reads
-- [Automation, never rule](owner-rules.md#automation-never-rule) — the villa's automations are "automations"; "Rules" is only the Agent's policy
+- [Automation, never rule](owner-rules.md#automation-never-rule) — the villa's automations are "automations"; name the Agent's setting itself ("VESTA's Allowed actions"), never "your Rules"
 - [Every number is a setting](owner-rules.md#every-number-is-a-setting) — a role, duration, window, priority or threshold in text comes from its setting
 - [Durations are joined](owner-rules.md#durations-are-joined) — "30s", "10min", "1h 30min"; use the shared duration words
 - [No long dash in UI text](owner-rules.md#no-long-dash-in-ui-text) — no " — " in text a person reads
