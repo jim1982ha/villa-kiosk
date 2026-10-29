@@ -128,3 +128,29 @@ def test_an_answer_in_the_voice_settings_own_language_keeps_their_voice(tmp_path
                       voice_yaml={"voices": {"fr": "fr_FR-test-medium"}})
     villa = _answered(v, kiosk, monkeypatch, answer="The pool pump is on and the lights are off.")
     assert [(b["language"], b["options"].get("voice")) for b in villa.spoken] == [("en_US", "en_US-test-medium")]
+
+
+def test_every_language_of_the_page_is_told_from_its_words_or_its_letters():
+    # owner, 2026-10-29: every language a person may be given on the VESTA Agent page prepared
+    import importlib.util
+    from pathlib import Path
+    from vesta_agent.policy import LANGUAGES
+    spec = importlib.util.spec_from_file_location(
+        "concierge_voice", Path(__file__).parents[1] / "starter/skills/villa-concierge/scripts/voice.py")
+    voice = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(voice)
+    said = {"en": "The pool pump is on and the lights are off.",
+            "fr": FRENCH,
+            "id": "Pompa kolam sudah menyala dan lampu di ruang tamu tidak menyala.",
+            "de": "Die Poolpumpe ist an und das Licht ist nicht an.",
+            "es": "La bomba de la piscina está encendida y la luz no está encendida.",
+            "it": "La pompa della piscina è accesa e la luce non è accesa.",
+            "nl": "De zwembadpomp is aan en het licht in de woonkamer is niet aan.",
+            "zh": "泳池水泵已开启，客厅的灯已关闭。",
+            "ja": "プールのポンプはオンで、リビングの照明はオフです。",
+            "ko": "수영장 펌프가 켜져 있고 거실 조명은 꺼져 있습니다."}
+    assert set(said) == set(LANGUAGES)
+    assert {lang: voice.language_of(text, voice.WORDS) for lang, text in said.items()} == {k: k for k in said}
+    assert set(LANGUAGES) <= set(voice.NAMES)
+    # a device's Latin name quoted in a Korean answer still reads as Korean
+    assert voice.language_of("Pool Pump 펌프가 켜져 있습니다.", voice.WORDS) == "ko"

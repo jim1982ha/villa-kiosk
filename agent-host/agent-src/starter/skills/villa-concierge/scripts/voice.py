@@ -52,7 +52,7 @@ Every choice is the villa's, in ../villa.voice.yaml (optional, kept by updates):
   language: auto               the default: the language spoken, else the person's saved one
   voices:                      a voice for each language an answer may be in, beside the voice settings' own
     fr: fr_FR-siwis-medium     (the text-to-speech's own voice name; its language is the name's start)
-  words:                       more common words telling a language (WORDS has seven)
+  words:                       more common words telling a language (beside WORDS)
     id: [yang, dan, di, ini]
 """
 
@@ -230,16 +230,29 @@ WORDS = {
     "es": "el la los las y es son usted su de del un una en para con no que esta este".split(),
     "it": "il lo la gli le e è sono lei suo di del un una in per con non che questo questa".split(),
     "nl": "de het een en is zijn u uw ik niet van in op voor met dat deze die".split(),
-    "pt": "o a os as e é são você seu de do da um uma em para com não que este esta".split(),
+    "id": "yang dan di ini itu dengan untuk tidak dari ke ada adalah saya anda akan sudah bisa".split(),
 }
-#: What the person reads of a language (its English name), when no voice says it.
-NAMES = {"en": "English", "fr": "French", "de": "German", "es": "Spanish", "it": "Italian", "nl": "Dutch",
-         "pt": "Portuguese"}
+#: What the person reads of a language (its English name), when no voice says it: the languages a person may be given
+#: on the VESTA Agent page, and those an answer is told in.
+NAMES = {"en": "English", "fr": "French", "id": "Indonesian", "de": "German", "es": "Spanish", "it": "Italian",
+         "nl": "Dutch", "zh": "Chinese", "ja": "Japanese", "ko": "Korean", "pt": "Portuguese"}
+#: ⚠️ THE LANGUAGES WRITTEN WITHOUT SPACES ARE TOLD BY THEIR LETTERS (owner, 2026-10-29: every language of the page
+#: prepared): Korean by its Hangul, Japanese by its kana (its text holds Chinese characters too), Chinese by its
+#: characters alone. A share of the letters is enough (an answer quotes a device's Latin name now and then): a third, a
+#: tenth for the kana (a Japanese sentence holds more Chinese characters than kana).
+SCRIPTS = (("ko", ((0xAC00, 0xD7A3), (0x1100, 0x11FF), (0x3130, 0x318F)), 3),
+           ("ja", ((0x3040, 0x30FF),), 10),
+           ("zh", ((0x4E00, 0x9FFF), (0x3400, 0x4DBF)), 3))
 
 
 def language_of(text: str, words: dict) -> str | None:
-    """The language whose common words `text` holds most (a tie, or none at all: None)."""
+    """The language whose common words `text` holds most (a tie, or none at all: None); one written without spaces by
+    its letters (SCRIPTS) first."""
     import re
+    letters = [ord(c) for c in text if c.isalpha()]
+    for lang, ranges, share in SCRIPTS:
+        if letters and sum(any(a <= c <= b for a, b in ranges) for c in letters) * share >= len(letters):
+            return lang
     seen = [w for w in re.split(r"[^\w]+", text.lower()) if w]
     score = {lang: sum(w in set(ws) for w in seen) for lang, ws in words.items()}
     best = sorted(score.items(), key=lambda kv: -kv[1])

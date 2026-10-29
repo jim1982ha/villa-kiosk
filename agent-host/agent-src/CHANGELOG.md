@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.384 (30 October 2026)
+
+- villa-concierge `voice.py speak`: Chinese, Japanese and Korean told by their letters (SCRIPTS: a share of Hangul,
+  kana or Chinese characters), Indonesian by its common words; NAMES covers every language of policy.LANGUAGES, held
+  by a test that tells each one.
+
 ## 0.6.383 (29 October 2026)
 
 - An answer said in its own language (owner, 2026-10-29: a French answer read by the English voice): a new hook,
