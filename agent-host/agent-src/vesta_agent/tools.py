@@ -327,7 +327,7 @@ class Toolbox:
         # them (app.converse): (base64, mime), in the order looked at, each picture once.
         self.photos: list[tuple[str, str]] = []
         self.sent = 0                  # messages send_message delivered in this run (an answer may be one: a page)
-        self.attached: list[str] = []  # the files those messages carried (a command skill's page: app._delivered)
+        self.attached: list[str] = []  # the files those messages carried (a command skill's page: command_request.Request.carried)
         self.pages: dict[str, int] = {}  # each of those files → the message it went with, in the asker's chat
         self.offered: list[str] = []   # the faults offered in this run (tools._ticket in a chat)
         self.read: list[str] = []      # the villa's reading tools this run used, each once (command_offers: after_reading)

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.388 (30 October 2026)
+
+- Architecture review round 2 (2026-10-30): alert_buttons keeps one press per incident at a time (`_pressing`) and
+  settles everywhere only when every copy shown is settled; state.alert_seen is kept as long as the catch-up reads
+  back (missed_alerts.catch_up_hours); layout.step_said / note_said build a step's and a note's record once (posting,
+  outcome, incident_thread), the step naming its incident. IncidentThread takes every collaborator at construction
+  (`words`: notice.Notices or PlainWords, `name`, `translations`, `mirror`), and owns an alert card's translation
+  (`own_words`; asked for once the copy is recorded): Poster.translations and Outcome's reach into the poster gone.
+  answering.Ask is one conversation turn (app.Vesta.converse's twelve arguments); command_request.Request.carried
+  checks what a command skill's answer carries (was app._delivered); intake.gate writes the words of /whoami, /new, an
+  unregistered sender and a switched-off command; a ticket button goes straight to fault_offers.press.
+
 ## 0.6.387 (30 October 2026)
 
 - Architecture review (2026-10-30): speech.Aloud owns a spoken answer whole (the skill's choice, ONE clock shared by the

@@ -4,6 +4,7 @@ answer creates it, once; a scheduled job, with nobody to press, still creates it
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import os
 
 from helpers import make_agent
@@ -264,6 +265,22 @@ def test_an_investigation_that_forgot_its_page_is_sent_back_to_it_once(tmp_path,
     assert len(kb["inline_keyboard"]) == 1                                  # the AI's own offer: no second one
     assert v.state.claim_ticket_offer(kb["inline_keyboard"][0][0]["callback_data"].split(":")[1], JM)["title"] == \
         "Check the float switch"
+
+
+def test_the_turn_sent_back_for_its_page_is_the_conversation_kept(tmp_path, monkeypatch):
+    # the follow-up goes on with the first turn's conversation, and the chat goes on from the follow-up's (Request.carried)
+    from ai_fake import FakeAI
+    sessions, resumed = iter(("first-turn", "page-turn")), []
+    real = FakeAI.run
+
+    async def numbered(self, *a, **k):
+        got = await real(self, *a, **k)
+        resumed.append(self.runs[-1]["resume"])
+        return dataclasses.replace(got, session_id=next(sessions))
+    monkeypatch.setattr(FakeAI, "run", numbered)
+    v, runs = _investigating(tmp_path, monkeypatch, page_on_run=(2,))
+    assert len(runs) == 2 and resumed[1] == "first-turn"
+    assert v.state.session(JM)[0] == "page-turn"
 
 
 def test_an_investigation_that_never_makes_its_page_says_so(tmp_path, monkeypatch):

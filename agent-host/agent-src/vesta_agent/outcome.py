@@ -394,8 +394,7 @@ class Outcome:
                 # ⚠️ IN THE CHAT'S LANGUAGE (owner, 2026-10-23): the villa's own message is English (its template); taken
                 # over, its Status reads as the chat's other copies do, and the step is kept for the next redraw
                 lang = self.notices.lang(chat)
-                said = {"stage": h.get("stage"), "roles": sorted(roles), "at": now.isoformat(), "status": status,
-                        "incident": int(iid), **({"status_in": status_in} if status_in else {})}
+                said = layout.step_said(h.get("stage"), roles, now, status, status_in, int(iid))
                 status = self.notices.bottom(h.get("stage"), roles, pick(status, status_in, lang), now,
                                              incident=int(iid), lang=lang)
             p = layout.parts(body=text, status=status,
@@ -404,13 +403,9 @@ class Outcome:
                 p["said"] = said
             # its own words in the chat's language, as any card of the incident (translation.py): known, it is taken over
             # translated; not yet, as written, and translated once recorded — never waited for
-            tr = getattr(self.poster, "translations", None)
-            want = None
-            if tr is not None and said:
-                p, want = tr.apply(int(iid), chat, p)
+            if said:
+                p = self.thread.own_words(int(iid), chat, p)
             await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb)
-            if want:
-                tr.later(int(iid), chat, want)
             # ⚠️ TAKEN OVER, IT IS THE AGENT'S (2026-10-17): a press is handled only on the agent's own messages, and this
             # one carries its Done / Need help — never remembered, a press on the rule's first copy was left unanswered
             self.state.remember_message(chat, mid)

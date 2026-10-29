@@ -632,7 +632,7 @@ def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_se
         def roles_for(self, chat, to=None):
             return set()
 
-        def bottom(self, stage, roles, status, at=None):
+        def bottom(self, stage, roles, status, at=None, incident=None):
             return status
     run(Poster(send=send, notices=Notices()).post(JM, "Camera snapshot", incident=9, photo=("SlBFRw==", "image/jpeg")))
     (text, photo), = sent

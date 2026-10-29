@@ -116,6 +116,24 @@ def test_a_double_tap_on_done_answers_once(tmp_path):
     assert len(ran) == 1 and "Already answered." in toasts
     asyncio.run(b.press(GROUP, ["5", "need_help"], person, toast))              # later, on a settled incident
     assert len(ran) == 1
+    # architecture review, 2026-10-30: pressed again on the TABLET's copy (its chat has no copy of its own): answered once,
+    # never a second escalation; and a Telegram press and a tablet press at the same moment are one
+    tablet_chat = 4503601096569778
+    toasts.clear()
+    asyncio.run(b.press(tablet_chat, ["5", "need_help"], person, toast, anywhere=True))
+    assert len(ran) == 1 and toasts == ["Already answered."]
+    asyncio.run(thread.post(6, GROUP, 71, layout.parts(body="Incident #6 · leak"), buttons=True))
+    d.state.set_alert_skill(6, GROUP, "desk")
+
+    async def slow_toast(text):                         # a real toast goes to Telegram: the press waits there
+        toasts.append(text)
+        await asyncio.sleep(0.02)
+
+    async def both():
+        await asyncio.gather(b.press(GROUP, ["6", "need_help"], person, slow_toast),
+                             b.press(tablet_chat, ["6", "need_help"], person, slow_toast, anywhere=True))
+    asyncio.run(both())
+    assert len(ran) == 2                                  # #6 answered once, though pressed in two places at once
 
 
 def test_a_style_that_fails_never_keeps_a_message_from_its_chat(monkeypatch):

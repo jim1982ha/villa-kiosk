@@ -1,5 +1,5 @@
-"""A conversation's turn, around the AI's run: the question as the AI reads it (`question_words`), and what follows the
-answer, in its order (`Answering.deliver`).
+"""A conversation's turn, around the AI's run: the turn asked for (`Ask`), the question as the AI reads it
+(`question_words`), and what follows the answer, in its order (`Answering.deliver`).
 
 ⚠️ OUT OF app.Vesta (architecture review, 2026-10-30): the agent's main module built the prompt's framing itself and
 ran the five steps after every answer inline, their order written nowhere else — the end of every Telegram and tablet
@@ -8,9 +8,37 @@ with its own tests (tests/test_answering.py).
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable
 
 from .policy import Language
+
+
+@dataclass(frozen=True)
+class Ask:
+    """One turn of a conversation, as app.Vesta.converse is asked for it. ⚠️ ONE VALUE, NOT TWELVE ARGUMENTS
+    (architecture review 2026-10-30, round 2): they were passed by position from converse to _converse, twice listed,
+    where a swapped pair was no error.
+
+    `resume`: the AI conversation to go on with ("auto": by the reset rule; None: a fresh one). `is_continue`: a
+    Continue pressed. `voice`: the words are a voice message's, as transcribed; `spoken`: the language Whisper said it
+    heard it in (transcriber.Heard), None when it did not say (instructions.md rule 6 then reads the words). `image`: a
+    photo the person sent (base64, mime), `text` its caption: the AI looks at it. `invoked`: the command skill the
+    person's "/command" called (a new request); `request`: the one a Continue continues (command_request.Request).
+    `about`: what the answer whose button started this request had read (command_offers.subject), told to the AI with
+    the question. `aloud`: the answer is spoken too (a question spoken on the tablet: speech.Aloud)."""
+    chat: int
+    person: object
+    text: str
+    resume: str | None = "auto"
+    is_continue: bool = False
+    voice: bool = False
+    image: tuple[str, str] | None = None
+    invoked: str | None = None
+    request: object = None
+    spoken: str | None = None
+    about: str | None = None
+    aloud: bool = False
 
 
 def question_words(text: str, *, image: bool, voice: bool, spoken: str | None, who: str | None, role: str | None,

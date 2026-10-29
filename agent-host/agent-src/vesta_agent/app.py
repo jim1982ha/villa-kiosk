@@ -64,7 +64,7 @@ from .voice import TelegramAudio, Voice
 from .transcriber import villa_entity_ids
 from . import answering, missed_alerts, speech
 from .tickets import Tickets
-from .places import tab, where
+from .places import where
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
 from .routing import Origin, Routing
 from .scheduler import Scheduler, every as scheduler_every
@@ -72,7 +72,6 @@ from .command_offers import CommandOffers
 from .command_request import Request, Requests
 from vesta_shared.limits import limit
 from vesta_shared.messaging import SIREN_TITLE
-from vesta_shared.message_format import ROLE_WORDS
 from .fault_offers import FaultOffers
 from .skills import SEEDED, Skills, script_env
 from .state import State
@@ -163,9 +162,21 @@ class Vesta:
                                executed=lambda *a: self.siren.executed(*a), tablet_keeps=lambda: self.kiosk.enabled)
         self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_siren)
         # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
-        # what each chat shows of an incident (incident_thread.py), and an alert's buttons and their press
+        # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
+        incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
+        self.notices = Notices(self.state, self.policy, settings.timezone, name=incidents.name,
+                               closed=incidents.closed, runs=incidents.runs, reaches=incidents.reaches,
+                               watching=incidents.watching)
+        # every message written on Telegram is also kept for the tablet, in the background (kiosk_messages.py): the thread
+        # keeps an alert's, an approval's and a snapshot's, the poster a note sent on its own
+        self.messages = KioskMessages(self.kiosk, message_timeout_s)
+        # what each chat shows of an incident (incident_thread.py), and an alert's buttons and their press: its words (each
+        # chat's heading, Status and language) are the notices'; an alert card's own words are drawn by the translations,
+        # which are built on the thread (hence the late lookup)
         self.thread = IncidentThread(self.state, settings.timezone, edit=(self.delivery.edit if self.tg else None),
-                                     delete=(self.delivery.delete if self.tg else None))
+                                     delete=(self.delivery.delete if self.tg else None), words=self.notices,
+                                     name=incidents.name, mirror=self.messages.keep,
+                                     translations=lambda: self.translations)
         self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
                                     thread=self.thread, run_job=self.run_code_job, facts=self.chat_facts)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
@@ -183,33 +194,17 @@ class Vesta:
         # the villa's own voice, for the answer to a question spoken on the tablet (speech.py, ticket 24 of "One inbox")
         self.aloud = speech.Aloud(self.s, self.reader, self.tablet, self.state, self.skills, self.code_command,
                                   self.cf_headers)
-        # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
-        incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
-        self.notices = Notices(self.state, self.policy, settings.timezone, name=incidents.name,
-                               closed=incidents.closed, runs=incidents.runs, reaches=incidents.reaches,
-                               watching=incidents.watching)
-        self.thread.name = incidents.name                    # "#9-P2" in a pointer, as the title names it
-        self.thread.retitle = self.notices.retitle           # a settled copy of a closed incident is headed "Closed"
-        self.thread.reheading = self.notices.heading         # a replaced status: every earlier step listed again
-        self.thread.story_of = self.notices.story_of         # an older copy's Status told for everyone (tell_open)
-        self.thread.language = self.notices.lang             # each chat's Status in its own language (owner, 2026-10-23)
-        self.thread.restatus = self.notices.restatus
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
         # an alert card's own words in each chat's language, learnt once per sentence pattern (translation.py)
         self.translations = Translations(self.state, skills=self.skills, settings=settings,
                                          names=lambda iid: incident_names(
                                              self.pack(), ents := incidents.entities(iid), self.state.entity_names(ents)),
                                          thread=self.thread)
-        self.thread.translate = self.translations.draw
         self._villa_tasks: set[asyncio.Task] = set()
         self.villa_messages = VillaMessages(self.state, self.translations, lambda chat: self.notices.lang(chat),
                                             self.delivery.edit, names=lambda: villa_names(self.pack(), self.state.all_entity_names()))
-        # every message written on Telegram is also kept for the tablet, in the background (kiosk_messages.py): the thread
-        # keeps an alert's, an approval's and a snapshot's, the poster a note sent on its own
-        self.messages = KioskMessages(self.kiosk, message_timeout_s)
-        self.thread.mirror = self.messages.keep
         self.poster = Poster(send=self.delivery.send, thread=self.thread, notices=self.notices,
-                             timezone_name=settings.timezone, edit=self.delivery.edit, translations=self.translations,
+                             timezone_name=settings.timezone, edit=self.delivery.edit,
                              mirror=self.messages.keep)
         # a job asked for in a chat, start to end (chat_jobs.py); what it tells a chat goes titled, through the poster
         self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work, facts=self.chat_facts, poster=self.poster)
@@ -654,32 +649,17 @@ class Vesta:
             if got.why:
                 self.state.log("ignored", {"reason": got.why, "chat": got.chat})
             return
-        if got.action == "told":
-            await self.delivery.send(got.chat, got.text)
-            return
-        if got.action == "whoami":
-            if got.person is not None:
-                # a tablet: who is signed in there is the answer (no Telegram id to tell)
-                await self.delivery.send(got.chat, f"You are {got.person.name}; VESTA answers you as "
-                                                   f"{ROLE_WORDS.get(got.person.role, got.person.role)}.")
-                return
-            await self.delivery.send(got.chat, f"Your Telegram id: {from_id}. This chat id: {got.chat}.")
-            log.info("whoami: person %s (%s) in chat %s", from_id, q.first_name, got.chat)
-            return
-        if got.action == "unregistered":
-            log.info("Unregistered sender: id %s (%s) in chat %s", from_id, q.first_name, got.chat)
-            self.state.log("unknown_sender", {"telegram_id": from_id, "chat": got.chat})
-            if not got.group:
-                await self.delivery.send(got.chat, f"{NOT_REGISTERED} Your Telegram id is {from_id}.")
-            return
-        if got.action == "command_off":
-            cmd = (self.skills.all(include_off=True).get(got.invoked).command if got.invoked else "") or ""
-            await self.delivery.send(got.chat, f"The {got.invoked} skill is switched off on this villa ({tab('skills')}). "
-                                               f"Write your question without /{cmd}.")
-            return
-        if got.action == "new":
-            self.state.set_session(got.chat, None)
-            await self.delivery.send(got.chat, "New conversation.")
+        if got.action != "converse":
+            # told, whoami, unregistered, new, command_off: the gate wrote what the person is told (intake.Intake.text)
+            if got.action == "whoami":
+                log.info("whoami: person %s (%s) in chat %s", from_id, q.first_name, got.chat)
+            elif got.action == "unregistered":
+                log.info("Unregistered sender: id %s (%s) in chat %s", from_id, q.first_name, got.chat)
+                self.state.log("unknown_sender", {"telegram_id": from_id, "chat": got.chat})
+            elif got.action == "new":
+                self.state.set_session(got.chat, None)
+            if got.text:
+                await self.delivery.send(got.chat, got.text)
             return
         # the person waits from now: "typing…" while the message is read (a photo fetched, a voice transcribed) and
         # answered, until the answer goes (delivery.Delivery.hold — the one "typing…" of every wait)
@@ -756,29 +736,22 @@ class Vesta:
                 # tenth of the price). The date and time ride on each message instead (runner.run).
                 f"Villa time zone: {self.s.timezone}. The current villa date and time head each message.")
 
-    async def converse(self, cid: int, person: Person | None, text: str,
-                       resume: str | None = "auto", is_continue: bool = False, voice: bool = False,
-                       image: tuple[str, str] | None = None, held=None, invoked: str | None = None,
-                       request: Request | None = None, spoken: str | None = None, about: str | None = None,
-                       aloud: bool = False):
-        """`about`: what the answer whose button started this request had read (command_offers.subject), told to the AI
-        with the question: a command starts a fresh conversation. `image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
-        "typing…" taken when the message arrived (handle_message), carried on until the answer goes. `invoked`: the
-        command skill the person's "/command" called (a new request); `request`: the one a Continue continues.
-        `spoken`: the language Whisper said it heard a voice message in (transcriber.Heard), said beside it; None
-        when it did not say (the villa's Whisper never does: instructions.md rule 6 then reads the words). `aloud`: the
-        answer is spoken too (a question spoken on the tablet: speech.Aloud)."""
-        if request is None and not is_continue:
-            request = self.requests.begin(invoked)
+    async def converse(self, cid: int, person: Person | None, text: str, held=None, **how):
+        """A turn of chat `cid`'s conversation: `how` are answering.Ask's fields (resume, is_continue, voice, image,
+        invoked, request, spoken, about, aloud). `held`: the chat's "typing…" taken when the message arrived
+        (handle_question), carried on until the answer goes."""
+        ask = answering.Ask(cid, person, text, **how)
+        if ask.request is None and not ask.is_continue:
+            ask = dataclasses.replace(ask, request=self.requests.begin(ask.invoked))
         # what they asked, kept until it is answered: a restart in between is said at the next start (chat_jobs)
-        asked = ("Continue" if is_continue else text or ("a photo" if image else "a voice message" if voice else "…"))
+        asked = ("Continue" if ask.is_continue else
+                 text or ("a photo" if ask.image else "a voice message" if ask.voice else "…"))
         async with self.delivery.typing(cid, held=held) as answered, self.chat_jobs.answering(cid, asked):
-            await self._converse(cid, person, text, resume, is_continue, voice, answered, image, request, spoken,
-                                 about, aloud)
+            await self._converse(ask, answered)
 
-    async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None,
-                        request: Request | None = None, spoken: str | None = None, about: str | None = None,
-                        aloud: bool = False):
+    async def _converse(self, ask: "answering.Ask", answered):
+        cid, person, text, request, resume = ask.chat, ask.person, ask.text, ask.request, ask.resume
+        is_continue, voice, image = ask.is_continue, ask.voice, ask.image
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
@@ -797,9 +770,9 @@ class Vesta:
                 # no Telegram chat (ticket 21 of "One inbox"); the words of the question: answering.question_words
                 where = tablet.WHERE if tablet.profile_of(cid) else self.policy().chat_label(cid)
                 prompt = answering.question_words(
-                    text, image=bool(image), voice=bool(voice), spoken=spoken, who=person.name if person else None,
+                    text, image=bool(image), voice=bool(voice), spoken=ask.spoken, who=person.name if person else None,
                     role=person.role if person else None, language=lang, where=where, skill=sk,
-                    command_by=person.name if person else None, about=about)
+                    command_by=person.name if person else None, about=ask.about)
             told_at = None
             if not is_continue:
                 checked = await asyncio.to_thread(self.before_answer)
@@ -824,7 +797,13 @@ class Vesta:
                      f"{res.cost_usd:.3f} USD" if isinstance(res.cost_usd, (int, float)) else "cost unknown",
                      time.monotonic() - began, f", error {res.error}" if res.error else "")
             if sk is not None and sk.deliver and not (res.problem or res.error or res.stopped_at_limit):
-                res = await self._delivered(request, cid, person, res, asked or "")
+                async def again(words: str, sid=res.session_id):
+                    follow = await self.turns.chat(person, cid, words, resume=sid, request=request)
+                    if follow.session_id:
+                        self.state.set_session(cid, follow.session_id)
+                    return follow
+                res = await request.carried(res, again, lambda inv, account: self.fault_offers.ensure(
+                    cid, inv, account, asked or "", float(inv)))
             # what the person receives — text, buttons, offers carried: turn_reply.py decides, in its order
             reply = await self.turn_reply.compose(
                 cid, res, asked=text or "", page=sk.deliver.get("page") if sk is not None else None,
@@ -833,34 +812,7 @@ class Vesta:
             answered()                                       # "typing…" ends: the answer is going out
             # what follows the answer, in its order (answering.Answering): sent with the camera pictures the AI looked
             # at, its offers, its approvals, its jobs, its voice
-            await self.answering.deliver(cid, reply, res.photos, res.approvals, aloud=aloud)
-
-    async def _delivered(self, request: Request, cid: int, person, res, asked: str):
-        """⚠️ WHAT A COMMAND SKILL'S ANSWER CARRIES, CHECKED — NEVER LEFT TO THE AI (owner, 2026-10-11: "make sure this
-        always trigger the full use of the skill — HTML report in the response and buttons to create and cancel a
-        ticket creation"). skill.yaml `deliver`: the page the answer must have sent (missing: the AI is sent back to it
-        once, then the person is told), and a fault always offered — one per investigation `inv` (fault_offers)."""
-        sk, inv = request.skill, request.inv
-        page, account = sk.deliver.get("page"), sk.deliver.get("fault_offer")
-        if page and page not in res.attached:
-            log.info("Chat %s: /%s answered without %s: the AI is sent back to make it", cid, sk.command, page)
-            again = await self.turns.chat(
-                person, cid, f"Your answer has not sent {page}: every /{sk.command} answer carries it. Make it now and send "
-                             f"it with send_message (attachment {page}), as the {sk.name} skill says. Write nothing else.",
-                resume=res.session_id, request=request)
-            # ⚠️ THE FOLLOW-UP'S OWN OUTCOME GOES ON (review 32): its stop at the limit (Continue) and its problem (no
-            # credit is not "the page could not be made") — every field by its rule (TurnResult.then)
-            res = res.then(again)
-            if again.session_id:
-                self.state.set_session(cid, again.session_id)
-            if page not in res.attached and not (res.problem or res.error or res.stopped_at_limit):
-                log.warning("Chat %s: /%s still without %s", cid, sk.command, page)
-                res = dataclasses.replace(res, text=((res.text or res.earlier or "").strip() + "\n\n" +
-                                                     "The report page could not be made this time.").strip())
-        if account and inv:
-            self.fault_offers.ensure(cid, inv, account, asked, float(inv))
-            res = dataclasses.replace(res, offered=max(res.offered, 1))
-        return res
+            await self.answering.deliver(cid, reply, res.photos, res.approvals, aloud=ask.aloud)
 
     def before_answer(self) -> str:
         """What each skill's `before_answer` check says now (skills.Skill.before_answer: its script's "text"), for the
@@ -912,7 +864,7 @@ class Vesta:
         kind, parts = button_data.read(data)
         handle = {button_data.APPROVAL: self.approvals.press, button_data.CONTINUE: self._press_continue,
                   button_data.ALERT: self._press_alert, button_data.REPORT: self._press_report,
-                  button_data.TICKET: self._press_ticket, button_data.COMMAND: self.command_offers.press,
+                  button_data.TICKET: self.fault_offers.press, button_data.COMMAND: self.command_offers.press,
                   button_data.DECLINE: self.command_offers.decline}.get(kind)
         if handle is None:
             return await toast("Unknown button.")
@@ -930,9 +882,6 @@ class Vesta:
         await p.toast("Continuing.")
         await self.converse(p.chat, p.person, "", resume=cont["session_id"], is_continue=True,
                             request=self.requests.resume(cont.get("invoked"), cont.get("inv")))
-
-    async def _press_ticket(self, p: "Press") -> None:
-        await self.fault_offers.press(p)
 
     async def _press_alert(self, p: "Press") -> None:
         # the presser as this chat knows them (Policy.member: one person may be both owner and fm, each with its name)

@@ -38,7 +38,7 @@ class AlertButtons:
         self.store_path = store_path
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident
         self.run_job = run_job          # (skill, command, timeout, values, origin) -> result: the on_reply hook
-        self._pressing: set[tuple[str, int]] = set()   # (incident, chat) whose press is being handled now
+        self._pressing: set[str] = set()   # the incidents whose press is being handled now (one at a time, anywhere)
 
     def open(self, iid: int | str) -> bool:
         """Is incident `iid` still waiting for an answer (incidents.Incidents)? Its messages then carry the buttons."""
@@ -79,8 +79,14 @@ class AlertButtons:
         # buttons were not — a quick double tap on Done ran the skill's answer twice, and the second ("Already closed")
         # replaced the first in the chat; a double Need help told the owner twice. A press while one is handled, or on
         # an incident this chat already shows as settled, changes nothing.
-        key = (iid, int(chat))
-        if key in self._pressing or (self.thread.shown(int(iid)).get(int(chat)) or {}).get("settled"):
+        # ⚠️ ONE ANSWER WHEREVER IT IS PRESSED (architecture review, 2026-10-30): the tablet's chat has no copy of its own,
+        # so "settled here" never held there — Need help on Telegram, then on the tablet, chased the owner twice; and
+        # two presses in two places at once were each taken. Keyed by the incident; a press on the tablet's copy is
+        # answered already once every copy of it is settled.
+        key = str(iid)
+        shown = self.thread.shown(int(iid))
+        settled_everywhere = anywhere and bool(shown) and all((c or {}).get("settled") for c in shown.values())
+        if key in self._pressing or (shown.get(int(chat)) or {}).get("settled") or settled_everywhere:
             self.state.log("press_refused", {"incident": iid, "by": person.telegram_id, "reason": "already answered"})
             return await toast("Already answered.")
         self._pressing.add(key)

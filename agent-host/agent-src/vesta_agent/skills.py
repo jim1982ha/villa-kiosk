@@ -269,7 +269,7 @@ class Skill:
     # and a message carrying "/<command>" tells the AI to use it (intake.gate, Toolbox.gated). Without the "/".
     command: str | None = None
     also: list[str] = field(default_factory=list)   # other spellings that start it too: command's first
-    # what every answer of a command skill carries, checked after the AI's turn (app._delivered): {"page": file sent with
+    # what every answer of a command skill carries, checked after the AI's turn (command_request.Request.carried): {"page": file sent with
     # send_message, "fault_offer": the saved account a fault is offered from when the AI offered none}
     deliver: dict[str, str] = field(default_factory=dict)
     # how to write it, the skill's own example ("/investigate why did …?"): said to a person who sent the command alone

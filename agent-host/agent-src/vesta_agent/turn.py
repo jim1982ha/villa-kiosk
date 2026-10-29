@@ -72,7 +72,7 @@ class TurnResult:
         return bool(self.problem or (self.error and not self.text))
 
     def then(self, again: "TurnResult") -> "TurnResult":
-        """This turn followed by `again`, a follow-up on the same request (app._delivered): one result, each field by
+        """This turn followed by `again`, a follow-up on the same request (command_request.Request.carried): one result, each field by
         its rule in THEN.
 
         ⚠️ EVERY FIELD HAS A RULE (architecture review, 2026-10-13): the follow-up was merged by hand, field by field —

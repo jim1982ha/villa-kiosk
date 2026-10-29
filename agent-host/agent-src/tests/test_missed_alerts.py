@@ -90,3 +90,16 @@ def test_a_rules_repeat_of_an_open_alert_is_its_own_handover(tmp_path):
     asyncio.run(v.on_critical(handover("i-1")))
     asyncio.run(v.on_critical({**handover("i-1"), "timestamp": "2026-10-30T01:00:00+08:00"}))
     assert len(taken_in(v)) == 2
+
+
+def test_a_handover_is_remembered_as_long_as_the_catch_up_looks_back(tmp_path, monkeypatch):
+    # the villa messages kept 1 hour, the catch-up 6: one taken in 3 hours before a stop is still known as taken in
+    from vesta_agent import missed_alerts
+    from vesta_agent.state import State
+    monkeypatch.setattr(State, "ha_sent_keep_h", staticmethod(lambda: 1))
+    monkeypatch.setattr(missed_alerts, "catch_up_hours", lambda: 6)
+    v = agent(tmp_path, [])
+    early = NOW - timedelta(hours=3)
+    assert v.state.alert_seen("i-1:opened:t", at=early) is False
+    assert v.state.alert_seen("i-2:opened:t", at=NOW) is False      # a later write prunes what is past the window
+    assert v.state.alert_seen("i-1:opened:t", at=NOW) is True

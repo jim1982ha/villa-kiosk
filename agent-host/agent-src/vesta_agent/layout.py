@@ -176,6 +176,24 @@ def render(p: dict, limit: int | None = None) -> str:
     return framed(fit(middle, room) if middle else "")
 
 
+def step_said(stage: str | None, roles, at: datetime, status: str, status_in: dict | None = None,
+              incident: int | None = None) -> dict:
+    """What a copy's bottom line was drawn from, kept as its `said` so the copy another chat gets of it is drawn again
+    in that chat's language (notice.Notices.restatus): the step, to whom, when, the skill's words (and their other
+    languages), and whose incident (a step to no role says what its priority does: "(to: digest)"). ⚠️ ONE SHAPE
+    (architecture review, 2026-10-30): five writers spelled it, and Poster's had no incident — a step to no role, redrawn
+    in another chat, read "(to: nobody)" where the villa's own message taken over read "(to: digest)"."""
+    return {"stage": stage, "roles": sorted(roles), "at": at.isoformat(), "status": status,
+            **({"status_in": status_in} if status_in else {}), **({"incident": int(incident)} if incident is not None else {})}
+
+
+def note_said(note: str, note_in: dict, now: datetime, zone: str) -> dict:
+    """What a note (a close, a restatement) was drawn from: the note and its other languages, its time filled in — no
+    step, so no time of its own on a redraw (notice.Notices.restatus)."""
+    return {"stage": None, "status": fill_time(note, now, zone),
+            "status_in": {k: fill_time(v, now, zone) for k, v in note_in.items()}}
+
+
 def changed(p: dict, *, status: str | None = None, body: str | None = None, mark: str | None = None) -> dict:
     """The same message with a new status and/or body; its head and lead kept. A new status brings its own `mark`
     (none: the stage's icon) — a "Need help" status replaced by "Done pressed …" is no longer 🆘."""

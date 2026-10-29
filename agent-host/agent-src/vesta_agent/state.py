@@ -555,7 +555,10 @@ class State:
         if self.get(f"alertseen:{key}") is not None:
             return True
         self.put(f"alertseen:{key}", now.isoformat())
-        cutoff = (now - timedelta(hours=self.ha_sent_keep_h())).isoformat()
+        # ⚠️ AT LEAST AS LONG AS THE CATCH-UP LOOKS BACK (architecture review, 2026-10-30): kept the villa messages' hours
+        # only, a handover taken in live and forgotten before a long stop was taken in again by the catch-up at start
+        from .missed_alerts import catch_up_hours
+        cutoff = (now - timedelta(hours=max(self.ha_sent_keep_h(), catch_up_hours()))).isoformat()
         with self._lock:
             self.db.execute("delete from kv where k like 'alertseen:%' and v < ?", (cutoff,))
             self.db.commit()

@@ -11,7 +11,7 @@ import pytest
 
 from helpers import ROOT
 from vesta_agent import button_data, intake
-from vesta_agent.policy import Policy
+from vesta_agent.policy import NOT_REGISTERED, Person, Policy
 
 OWNER, FM, STRANGER, GROUP, OTHER_GROUP = 11, 22, 99, -100, -200
 BOT = "Villa_Test_bot"
@@ -34,12 +34,14 @@ def ev(chat, user, text="hi", **k):
     ("telegram_text", ev(GROUP, OWNER, f"@{BOT} lights?"), "converse", "lights?"),
     ("telegram_text", ev(GROUP, OWNER, "yes", reply_to_message_id=5), "converse", "yes"),     # a reply to it
     ("telegram_text", ev(OTHER_GROUP, OWNER, f"@{BOT} hi"), "drop", ""),                      # an unlisted group
-    ("telegram_text", ev(STRANGER, STRANGER), "unregistered", ""),
-    ("telegram_command", {"chat_id": OWNER, "user_id": OWNER, "command": "/new"}, "new", ""),
+    ("telegram_text", ev(STRANGER, STRANGER), "unregistered", f"{NOT_REGISTERED} Your Telegram id is {STRANGER}."),
+    ("telegram_command", {"chat_id": OWNER, "user_id": OWNER, "command": "/new"}, "new", "New conversation."),
     ("telegram_command", {"chat_id": OTHER_GROUP, "user_id": STRANGER, "command": "/whoami"}, "drop", ""),
-    ("telegram_command", {"chat_id": GROUP, "user_id": STRANGER, "command": "/whoami"}, "whoami", ""),
+    ("telegram_command", {"chat_id": GROUP, "user_id": STRANGER, "command": "/whoami"}, "whoami",
+     f"Your Telegram id: {STRANGER}. This chat id: {GROUP}."),
     # a listed person reads a new group's id there, to add it to People (0.12.128)
-    ("telegram_command", {"chat_id": OTHER_GROUP, "user_id": OWNER, "command": "/whoami"}, "whoami", ""),
+    ("telegram_command", {"chat_id": OTHER_GROUP, "user_id": OWNER, "command": "/whoami"}, "whoami",
+     f"Your Telegram id: {OWNER}. This chat id: {OTHER_GROUP}."),
     ("telegram_command", {"chat_id": OWNER, "user_id": OWNER, "command": "/gate"}, "drop", ""),   # HA's own
     ("telegram_command", {"chat_id": OWNER, "user_id": OWNER, "command": "/ask@OtherBot", "args": ["x"]}, "drop", ""),
     ("telegram_command", {"chat_id": OWNER, "user_id": OWNER, "command": f"/ask@{BOT}", "args": ["pool", "ok?"]},
@@ -52,6 +54,13 @@ def ev(chat, user, text="hi", **k):
 def test_what_the_agent_does_with_each_message(etype, m, action, text):
     got = intake.gate(intake.from_telegram(etype, m), Pol(), BOT, lambda cid, mid: mid == 5)
     assert (got.action, got.text) == (action, text)
+
+
+def test_a_tablets_whoami_says_who_is_signed_in_there_in_the_roles_words():
+    from vesta_shared.message_format import ROLE_WORDS
+    q = intake.Question(chat=OWNER, command="/whoami", person=Person(OWNER, "Ana", "fm"))
+    got = intake.gate(q, Pol(), BOT, lambda *a: False)
+    assert (got.action, got.text) == ("whoami", f"You are Ana; VESTA answers you as {ROLE_WORDS['fm']}.")
 
 
 def test_a_voice_message_is_handed_on_to_be_transcribed():
@@ -136,5 +145,6 @@ def test_a_switched_off_skills_command_is_answered_never_dropped():
     got = intake.gate(intake.from_telegram("telegram_command", ev(OWNER, OWNER, "", command="/investigate", args=["the", "pump"])), Pol(), BOT,
                       lambda c, mid: False, {}, {"/investigate": "investigate"})
     assert (got.action, got.invoked) == ("command_off", "investigate")
+    assert got.text.startswith("The investigate skill is switched off") and got.text.endswith("without /investigate.")
     assert intake.gate(intake.from_telegram("telegram_command", ev(OWNER, OWNER, "", command="/lights", args=[])), Pol(), BOT,
                        lambda c, mid: False, {}, {"/investigate": "investigate"}).action == "drop"   # still HA's

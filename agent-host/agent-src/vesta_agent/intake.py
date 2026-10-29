@@ -23,7 +23,10 @@ from datetime import datetime, time, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-from .policy import reset_at, silence_reset_hours, tablet_profile
+from vesta_shared.message_format import ROLE_WORDS
+
+from .places import tab
+from .policy import NOT_REGISTERED, reset_at, silence_reset_hours, tablet_profile
 
 OWN_COMMANDS = {"/ask", "/new", "/whoami"}
 
@@ -78,7 +81,10 @@ class Intake:
     action: str                          # drop · told · whoami · unregistered · new · command_off · converse
     chat: int = 0
     person: object = None
-    text: str = ""                       # converse: the words; told: what the person is told
+    # converse: the words; told, whoami, unregistered, new, command_off: what the person is told (empty: nothing, an
+    # unregistered sender in a group). ⚠️ WRITTEN HERE, ONCE (architecture review 2026-10-30, round 2): app.py wrote them
+    # beside its sends, out of reach of a test of the gate
+    text: str = ""
     voice_file: str | None = None        # a Telegram voice note to transcribe first
     audio: object = None                 # a voice message from elsewhere to transcribe first (Question.audio)
     photo_file: str | None = None        # a photo the AI looks at, its caption the text
@@ -162,7 +168,10 @@ def gate(q: Question, policy, bot_username: str | None, is_own_message: Callable
     # that knows who asks (a tablet) says who that is: there is no Telegram id to tell.
     if cmd == "/whoami" and (q.person is not None or not group or not policy.destinations or policy.roles_in(cid)
                              or policy.person(q.user_id) is not None):
-        return Intake("whoami", cid, q.person, group=group)
+        # a tablet: who is signed in there is the answer (no Telegram id to tell)
+        said = (f"You are {q.person.name}; VESTA answers you as {ROLE_WORDS.get(q.person.role, q.person.role)}."
+                if q.person is not None else f"Your Telegram id: {q.user_id}. This chat id: {cid}.")
+        return Intake("whoami", cid, q.person, said, group=group)
     if group and not policy.roles_in(cid):
         # never leaveChat: the bot is Home Assistant's too
         return Intake("drop", cid, group=True, why="group not listed in People" if policy.destinations else None)
@@ -173,11 +182,13 @@ def gate(q: Question, policy, bot_username: str | None, is_own_message: Callable
         if not (cmd or mention or invoked or is_own_message(cid, q.reply_to)):
             return Intake("drop", cid, group=True)            # people talking to each other
     if person is None:
-        return Intake("unregistered", cid, group=group)
+        return Intake("unregistered", cid, text="" if group else f"{NOT_REGISTERED} Your Telegram id is {q.user_id}.",
+                      group=group)
     if cmd == "/new":
-        return Intake("new", cid, person, group=group)
+        return Intake("new", cid, person, "New conversation.", group=group)
     if cmd in commands_off:
-        return Intake("command_off", cid, person, group=group, invoked=commands_off[cmd])
+        return Intake("command_off", cid, person, f"The {commands_off[cmd]} skill is switched off on this villa "
+                      f"({tab('skills')}). Write your question without {cmd}.", group=group, invoked=commands_off[cmd])
     if q.voice_file is not None or q.audio is not None:
         # in a group, only a voice message that replies to the agent reaches here (no mention possible)
         return Intake("converse", cid, person, voice_file=q.voice_file, audio=q.audio, group=group)

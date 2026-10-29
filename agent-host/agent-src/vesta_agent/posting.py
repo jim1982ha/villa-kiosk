@@ -35,14 +35,12 @@ def laid_out(make: Callable[[], object], plain):
 
 class Poster:
     def __init__(self, *, send: Callable[..., Awaitable], thread=None, notices=None, timezone_name: str = "UTC",
-                 edit: Callable[..., Awaitable] | None = None, translations=None, mirror: Callable | None = None):
+                 edit: Callable[..., Awaitable] | None = None, mirror: Callable | None = None):
         self.send = send                # delivery.Delivery.send — the message id, or None when nothing arrived
         self.edit = edit                # delivery.Delivery.edit — a message already sent, rewritten (rewrite)
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident or request
         self.notices = notices          # notice.Notices: the heading
         self.tz = timezone_name         # "{time}" in a message: the villa's time when it is sent
-        # translation.Translations: an alert card's own words in the chat's language (owner, 2026-10-23); None: as written
-        self.translations = translations
         # kiosk_messages.KioskMessages.keep (a record): a message sent on its own, kept for the tablet too (ticket 25 of
         # "One inbox"); None: not kept
         self.mirror = mirror
@@ -96,20 +94,18 @@ class Poster:
             # ⚠️ IN THE CHAT'S LANGUAGE, KEPT AS THE STEP (owner, 2026-10-23): the step and the skill's words are kept
             # (`said`), so the copy another chat gets of it (IncidentThread.sync) is drawn in that chat's language
             stepped = sorted(told or self.notices.roles_for(chat, roles))
-            said = {"stage": stage, "roles": stepped, "at": now.isoformat(), "status": status,
-                    **({"status_in": status_in} if status_in else {})}
+            said = layout.step_said(stage, stepped, now, status, status_in, incident)
             lang = self.notices.lang(chat) if hasattr(self.notices, "lang") else "en"
-            status = self.notices.bottom(stage, stepped, pick(status, status_in, lang), now,
+            status = self.notices.bottom(stage, stepped, pick(status, status_in, lang), now, incident=incident,
                                          **({"lang": lang} if lang != "en" else {}))
         p = layout.parts(body=text, status=status, head=head, lead=lead, mark=mark)
         if said:
             p["said"] = said
         # the alert's own words in the chat's language: known, the card goes translated; not yet, it goes as written and
-        # is translated afterwards (`later`, once recorded) — never waited for (translation.py). The incident's own
+        # is translated once recorded — never waited for (IncidentThread.own_words). The incident's own
         # card only: a snapshot's caption is the agent's
-        want = None
-        if self.translations is not None and said and str(thread) == str(incident):
-            p, want = self.translations.apply(int(incident), chat, p)
+        if self.thread is not None and said and str(thread) == str(incident):
+            p = self.thread.own_words(incident, chat, p)
         # ⚠️ A CAPTION IS 1,024 CHARACTERS (architecture review 20): laid out for 4,096, a long incident's snapshot went as a
         # photo and a separate text — only the text was recorded, so the next snapshot left the old photo behind
         limit = telegram_caption_chars() if (photo or document) else telegram_message_chars()
@@ -119,8 +115,6 @@ class Poster:
         if mid and thread is not None and self.thread is not None:
             await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard,
                                    photo=photo)
-            if want:
-                self.translations.later(int(incident), chat, want)
         elif thread is not None and self.thread is not None:
             # ⚠️ THE TABLET TOO WHEN TELEGRAM DID NOT TAKE IT (off, or refused): the thread records only what arrived, and
             # the tablet is the second place precisely for when Telegram is not there (spec, "Without the internet").

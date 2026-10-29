@@ -540,3 +540,13 @@ def test_an_open_alert_with_no_step_since_the_tablet_kept_cards_gets_its_card_at
     assert any("Alert sent" in line for line in rec["status"]) and any("Reminder sent" in line for line in rec["status"])
     assert sum("Escalation sent" in line for line in rec["status"]) == 1, rec["status"]
     assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Need help"], rec
+
+
+def test_a_step_posted_on_an_alert_keeps_whose_it_is_for_its_redraw(agent, kiosk):
+    # architecture review, 2026-10-30: Poster's kept step had no incident — a step to no role, drawn again in another
+    # chat (notice.restatus), read "(to: nobody)" where the villa's own message taken over read "(to: digest)"
+    from vesta_agent import layout
+
+    scenario(agent, alert)
+    said = [layout.of(rec).get("said") for _c, rec in agent.state.incident_chats(1)]
+    assert said and all(isinstance(x, dict) and x.get("incident") == 1 for x in said), said

@@ -50,34 +50,55 @@ def owed_for() -> timedelta:
                                  reached="It is given up: that copy keeps its old text and buttons.", told=""))
 
 
+class PlainWords:
+    """A thread's words as given: its copies' headings, Status and language with no notices to draw them (a test, or a
+    thread built before them). notice.Notices is the one the engine uses: the same five methods."""
+
+    def retitle(self, iid, head: str, chat: int = 0) -> str:
+        return head
+
+    def heading(self, chat: int, incident: int | None = None) -> str | None:
+        return None
+
+    def story_of(self, incident: int, chat: int, shown) -> None:
+        return None
+
+    def lang(self, chat: int) -> str:
+        return "en"
+
+    def restatus(self, chat: int, p: dict) -> dict:
+        return p
+
+
 class IncidentThread:
-    def __init__(self, state, timezone: str, edit: Edit | None = None, delete: Delete | None = None):
+    def __init__(self, state, timezone: str, edit: Edit | None = None, delete: Delete | None = None, *,
+                 words=None, name: Callable[[int | str], str] = incident_tag, translations: Callable[[], object] | None = None,
+                 mirror=None):
+        """⚠️ EVERY COLLABORATOR AT CONSTRUCTION (architecture review 2026-10-30, round 2): eight of them were set on the
+        thread after it was built, each a None the code had to test for, and one forgotten was a feature silently off.
+
+        `words`: notice.Notices (or PlainWords): `retitle` (a copy's heading as its incident stands now); `heading` (chat,
+        incident): the whole heading again, title, "To:" and EVERY earlier step, used when a copy's status is REPLACED
+        (owner, 2026-10-15: "Escalation sent … to Owner" vanished when "Ticket opened…" replaced it); `lang` (chat) and
+        `restatus` (chat, parts): each chat's Status in its own language (owner, 2026-10-23); `story_of` (incident,
+        chat, its lines): a copy drawn before its heading held every step, told for everyone (tell_open).
+        `name`: incidents.Incidents.name, how the incident is named ("#9-P2") in a pointer to its newer message.
+        `translations` () → translation.Translations (or None): the alert's own words in each chat's language, when known,
+        else asked for in the background (owner, 2026-10-23); a lookup, since they are built on this thread. None: as
+        written.
+        `mirror` (a record): kiosk_messages.KioskMessages.keep, the copy as it stands kept for the tablet too (ticket 25
+        of "One inbox"); None: not kept. Called at every change that is the incident's own step, never at a retry or a
+        redraw in another language (`tell` of _show): the tablet's record is the latest step, not whichever chat was
+        drawn last."""
         self.state = state
         self.tz = timezone
         self.edit = edit                # Telegram's edit (its buttons go); None while Telegram is off
         self.delete = delete            # Telegram's deleteMessage: True when the message is gone
-        self.retitle = None             # notice.Notices.retitle: a copy's heading as its incident stands now
-        # notice.Notices.heading (chat, incident): the whole heading again — title, "To:" and EVERY earlier step. Used
-        # when a copy's status is REPLACED (taken on in the Kiosk, closed): the status it showed becomes a line of its
-        # history (owner, 2026-10-15: "Escalation sent … to Owner" vanished when "Ticket opened…" replaced it)
-        self.reheading = None
-        # notice.Notices.lang (chat): the language a chat reads its cards' Status in; notice.Notices.restatus (chat,
-        # parts): a step's bottom line drawn again in that chat's language (owner, 2026-10-23). None: as given
-        self.language = None
-        self.restatus = None
-        # translation.Translations.draw (incident, chat, parts): the alert's own words in the chat's language when they
-        # are known, else asked for in the background (owner, 2026-10-23). None: as written
-        self.translate = None
-        # kiosk_messages.KioskMessages.keep (a record): the copy as it stands, kept for the tablet too (ticket 25 of "One
-        # inbox"). None: not kept. Called at every change that is the incident's own step, never at a retry or a redraw
-        # in another language (`tell` of _show): the tablet's record is the latest step, not whichever chat was drawn last.
-        self.mirror = None
-        # notice.Notices.story_of (incident, chat, its lines): a copy drawn before its heading held every step, told for
-        # everyone (tell_open). None: its own steps
-        self.story_of = None
-        # incidents.Incidents.name: how the incident is named ("#9-P2") in a pointer to its newer message; its number
-        # alone until set
-        self.name = incident_tag
+        self.words = words or PlainWords()
+        self.name = name
+        self._translations = translations or (lambda: None)
+        self._wanted: dict[tuple[str, int], tuple] = {}  # (incident, chat) → its words still to translate, once recorded
+        self.mirror = mirror
         self._told: dict[str, tuple] = {}       # incident → the last copy told (parts, keyboard, photo): `taken` tells it again
         self._locks: dict[str, asyncio.Lock] = {}
 
@@ -134,7 +155,7 @@ class IncidentThread:
                 if "story" in h:
                     told_steps, parts = h["story"], rec["parts"]
                 else:
-                    story = self.story_of(int(iid), chat, h["history"]) if self.story_of else None
+                    story = self.words.story_of(int(iid), chat, h["history"])
                     # ⚠️ ONE WHOSE LINES NO COUNT DRAWS AGAIN COMES LAST (round 2): it tells its own chat's steps only
                     told_steps, parts = (story[1], {**rec["parts"], "head": {**h, "story": story[1]}}) if story \
                         else (None, rec["parts"])
@@ -163,6 +184,31 @@ class IncidentThread:
                                                     "buttons": buttons, "settled": False,
                                                     **({"kb": keyboard} if buttons and keyboard else {})})
         self.tell(iid, parts, keyboard if buttons else None, photo)
+        want, tr = self._wanted.pop((str(iid), int(chat)), None), self._translations()
+        if want and tr is not None:
+            tr.later(int(iid), chat, want)      # recorded now: its translation redraws this very copy
+
+    def own_words(self, iid: int | str, chat: int, p: dict) -> dict:
+        """A card of incident `iid` about to go to `chat` (Poster.post, Outcome's take-over), its alert words in the chat's
+        language: known, translated; not yet, as written, and asked for once the copy is recorded (`_post`), never
+        waited for (translation.py).
+
+        ⚠️ THE THREAD'S JOB, ONCE (architecture review 2026-10-30, round 2): the poster and the take-over each applied
+        the translation and asked for the rest after posting, the take-over by reaching into the poster for it."""
+        tr = self._translations()
+        if tr is None:
+            return p
+        p, want = tr.apply(int(iid), chat, p)
+        if want:
+            self._wanted[(str(iid), int(chat))] = want
+        else:
+            self._wanted.pop((str(iid), int(chat)), None)
+        return p
+
+    def _translate(self, iid: int | str, chat: int, p: dict) -> dict:
+        """A redrawn copy's alert words (translation.Translations.draw): kept, drawn; not yet, as written and asked for."""
+        tr = self._translations()
+        return tr.draw(iid, chat, p) if tr is not None else p
 
     async def adopt(self, iid: int, chat: int, mid: int, parts: dict, keyboard: dict | None = None) -> None:
         """One of Home Assistant's own messages (a VESTA rule's alert, its all-clear) belongs to incident `iid`: it is
@@ -210,11 +256,11 @@ class IncidentThread:
             for chat, rec in self.state.incident_chats(iid):
                 said = pick(note, note_in, self._lang(chat))
                 said = layout.fill_time(said, now, self.tz) if said else said           # 10/10/2026 17:13, as every notice
-                if rec.get("settled") and self.retitle:
+                if rec.get("settled"):
                     # ⚠️ SETTLED BEFORE ITS INCIDENT CLOSED (owner, 2026-10-11): a press settles every copy at once, the desk
                     # closes the incident just after — the group's copy kept "New" above "Done pressed by Fabien"
                     p = layout.of(rec)
-                    head = self.retitle(iid, p.get("head") or "", chat)
+                    head = self.words.retitle(iid, p.get("head") or "", chat)
                     if head != (p.get("head") or ""):
                         n += await self._show(iid, chat, rec, {**p, "head": head})
                     continue
@@ -228,8 +274,7 @@ class IncidentThread:
                 p = layout.changed(layout.of(rec), status=said, body=body, mark=mark)
                 if note_in:
                     # its other languages kept with it: a copy another chat later gets of this one says its own (sync)
-                    p["said"] = {"stage": None, "status": layout.fill_time(note, now, self.tz),
-                                 "status_in": {k: layout.fill_time(v, now, self.tz) for k, v in note_in.items()}}
+                    p["said"] = layout.note_said(note, note_in, now, self.tz)
                 p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
                 p = self._own_words(iid, chat, p)
                 n += await self._show(iid, chat, {**rec, "settled": True}, p)
@@ -264,8 +309,7 @@ class IncidentThread:
                 words = layout.fill_time(pick(note, note_in, self._lang(chat)), now, self.tz)
                 p = layout.changed(layout.of(rec), status=words)
                 if note_in:
-                    p["said"] = {"stage": None, "status": layout.fill_time(note, now, self.tz),
-                                 "status_in": {k: layout.fill_time(v, now, self.tz) for k, v in note_in.items()}}
+                    p["said"] = layout.note_said(note, note_in, now, self.tz)
                 p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "(closed)", its story listed
                 p = self._own_words(iid, chat, p)
                 n += await self._show(iid, chat, {**rec, "settled": True, "finished": True}, p)
@@ -285,8 +329,7 @@ class IncidentThread:
                     continue
                 p = layout.changed(layout.of(rec), status=layout.fill_time(pick(note, note_in, self._lang(chat)), now, self.tz))
                 if note_in:
-                    p["said"] = {"stage": None, "status": layout.fill_time(note, now, self.tz),
-                                 "status_in": {k: layout.fill_time(v, now, self.tz) for k, v in note_in.items()}}
+                    p["said"] = layout.note_said(note, note_in, now, self.tz)
                 p = self._own_words(iid, chat, {**p, "head": self._head_now(iid, chat, p.get("head") or "")})
                 n += await self._show(iid, chat, {**rec, "buttons": False}, p)
             return n
@@ -299,18 +342,17 @@ class IncidentThread:
         its Status in Chinese over the alert's words in English). The heading and Status were redrawn in the chat's
         language now, the words kept the copy's old drawing — another language's, so shown in English — and nothing
         asked for the new one. Only sync drew them."""
-        return self.translate(iid, chat, p) if self.translate else p
+        return self._translate(iid, chat, p)
 
     def _lang(self, chat: int) -> str:
         """The language chat `chat` reads (`language`); English without it."""
-        return self.language(chat) if self.language else "en"
+        return self.words.lang(chat)
 
     def _head_now(self, iid: int | str, chat: int, head: str) -> str:
         """A copy's heading when its status is replaced: every earlier step listed again (reheading), else its title
         brought up to date (retitle) — a message about no incident keeps its own."""
-        if self.reheading and str(iid).isdigit() and head:
-            return self.reheading(chat, int(iid))
-        return self.retitle(iid, head, chat) if self.retitle else head
+        whole = self.words.heading(chat, int(iid)) if str(iid).isdigit() and head else None
+        return whole or self.words.retitle(iid, head, chat)
 
     async def sync(self, iid: int | str, parts: dict, skip=(), keyboard=None, head_for=None, quiet=()) -> int:
         """Every copy of incident `iid` outside `skip` (the chats just sent it) shows `parts` too — the same title,
@@ -330,20 +372,18 @@ class IncidentThread:
                 own = layout.of(rec)
                 if chat in quiet:
                     # its own words, its own steps; the title word and "To:" as the incident stands now (retitle)
-                    p = {**own, "head": self.retitle(iid, own.get("head") or "", chat) if self.retitle else own.get("head")}
+                    p = {**own, "head": self.words.retitle(iid, own.get("head") or "", chat)}
                     tell = False                                # its own words are not the incident's latest step
                 else:
                     p = {**parts, "limit": own.get("limit")}
                     if head_for:
                         p["head"] = head_for(chat)              # this chat's own heading (each chat its own steps)
-                    elif self.retitle:
-                        p["head"] = self.retitle(iid, p.get("head") or "", chat)
-                    if self.restatus:
-                        p = self.restatus(chat, p)              # this step's bottom line in the chat's own language
-                    if self.translate:
-                        # ⚠️ ITS OWN WORDS, NEVER THE ENGLISH BACK (owner, 2026-10-23): `parts` are another chat's copy —
-                        # its translation, if any, is that chat's; this one draws its own
-                        p = self.translate(iid, chat, p)
+                    else:
+                        p["head"] = self.words.retitle(iid, p.get("head") or "", chat)
+                    p = self.words.restatus(chat, p)            # this step's bottom line in the chat's own language
+                    # ⚠️ ITS OWN WORDS, NEVER THE ENGLISH BACK (owner, 2026-10-23): `parts` are another chat's copy — its
+                    # translation, if any, is that chat's; this one draws its own
+                    p = self._translate(iid, chat, p)
                 if layout.render(p) == rec.get("text"):
                     continue
                 live = rec.get("buttons") and not rec.get("settled")
