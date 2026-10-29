@@ -163,6 +163,13 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const unread = buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
     fmData }).find((i) => i.ticketId === "c1")?.closing;
   ck("  ...no history to ask: no time said, never last_changed", unread?.since === null, unread);
+  // owner's end-to-end test, 2026-10-30: a lock that was UNAVAILABLE read "Unlocked since before 19 Oct"
+  const olderState = (since) => buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {},
+    resolvedRooms: {}, fmData, sinceOf: () => since }).find((i) => i.ticketId === "c1")?.closing;
+  const before = olderState({ at: Date.parse("2026-10-20T00:00:00Z"), before: false });
+  const outOfReach = olderState({ at: Date.parse("2026-10-19T00:00:00Z"), before: true });
+  ck("  ...a state older than the problem is not what changed: \"Back to normal\", never its state since then",
+     before?.at === closes.toISOString() && before?.word === undefined && outOfReach?.word === undefined, [before, outOfReach]);
   // owner, 2026-10-29: a new alert's row in Messages had no time (nothing told of it yet)
   const { rowTime } = await import("@/config/cockpitCard");
   const opened = items.find((i) => i.ticketId === "c1");

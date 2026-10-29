@@ -3,6 +3,7 @@
 // window shows. Pure: tests/oracles/conversation_model.mjs.
 
 import { NEW_CONVERSATION, type Turn } from "./conversation";
+import { stillKept } from "./feed";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 /** How long the add-on keeps a question for VESTA to collect (agent-contract.json conversation.askKeptSeconds). */
@@ -15,9 +16,9 @@ const TYPING_MS = AGENT_CONTRACT.conversation.typingSeconds * 1000;
  *  add-on keeps, so nothing held before stays. */
 export function mergeTurns(held: readonly Turn[], incoming: readonly Turn[], full: boolean, first = 0,
   kept: readonly number[] | null = null): Turn[] {
-  const still = (t: Turn) => t.seq >= first && (kept === null || kept.includes(t.seq));
+
   const byKey = new Map<string, Turn>();
-  for (const t of [...(full ? [] : held.filter(still)), ...incoming]) {
+  for (const t of [...(full ? [] : stillKept(held, first, kept)), ...incoming]) {
     const was = byKey.get(t.key);
     if (!was || was.seq < t.seq) byKey.set(t.key, t);
   }

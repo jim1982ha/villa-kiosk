@@ -306,10 +306,16 @@ export interface PressResult { outcome: PressOutcome; press?: number }
 /** ⚠️ ONE DOOR PER KIND OF RECORD, CHOSEN HERE (ticket 22 of "One inbox"): the villa's own buttons go to its press event
  *  (/announcement-press), VESTA's — a message's or a conversation turn's — to VESTA (/vesta-press, kept for it as a
  *  question is). Every screen presses through this. `send` is backendFetch (a check passes its own). */
+/** Where each kind of record's presses go: one row per kind, so a kind added to Pressable without its door fails the
+ *  type check, never goes to VESTA by default (architecture review, 2026-10-30). */
+export const PRESS_DOORS: Record<NonNullable<Pressable["feed"]> | "villa", string> = {
+  villa: "announcement-press", vesta: "vesta-press", turn: "vesta-press",
+};
+
 export function pressOf(
   a: Pressable, command: string, send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status"> & { json?: () => Promise<unknown> }>,
 ): Promise<PressResult> {
-  return a.key ? pressAt(a.feed ? "vesta-press" : "announcement-press", a.key, command, send)
+  return a.key ? pressAt(PRESS_DOORS[a.feed ?? "villa"], a.key, command, send)
     : Promise.resolve({ outcome: "failed" });
 }
 

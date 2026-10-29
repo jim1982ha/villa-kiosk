@@ -13,6 +13,13 @@ import { backendFetch } from "@/auth/sessionLost";
  *  `said`: what else the add-on answered beside them (the conversation's: whether VESTA runs). */
 export interface FeedRead<T> { items: T[]; last: number; first: number; kept: number[] | null; said: Record<string, unknown> }
 
+/** What a page holds that the add-on still keeps, after a read said `first` (the first number it keeps) and `kept`
+ *  (every number it keeps; null from an older add-on: nothing more dropped). ⚠️ ONE RULE FOR EVERY FEED (architecture
+ *  review, 2026-10-30): the announcements' and the conversation's readers each wrote it. Pure. */
+export function stillKept<T extends { seq: number }>(held: readonly T[], first: number, kept: readonly number[] | null): T[] {
+  return held.filter((h) => h.seq >= first && (kept === null || kept.includes(h.seq)));
+}
+
 /** Pause before asking again when the add-on could not be reached. */
 const RETRY_MS = 5_000;
 /** A read the add-on holds open waits at most 25s (ANNOUNCEMENT_WAIT_S); one still open well after that is a

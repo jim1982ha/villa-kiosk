@@ -85,10 +85,16 @@ export interface AttentionItem {
  *  ⚠️ A RESTART IS NOT WHEN IT WAS LOCKED (villa, 2026-10-26): "since" was the entity's last_changed, which every restart
  *  of the villa's system rewrites — `sinceOf` reads it from the history, as the presence tile does. */
 function closingOf(closesAt: string | undefined, entity: HassEntity | undefined, entityId: string | undefined,
-  sinceOf: (id: string) => Since): AttentionItem["closing"] {
+  sinceOf: (id: string) => Since, openedAt?: string): AttentionItem["closing"] {
   if (!closesAt || Number.isNaN(Date.parse(closesAt))) return undefined;
   if (!entity || !entityId || isOffline(entity)) return { at: closesAt };
-  return { at: closesAt, word: rowText(entityId, entity), since: sinceOf(entityId) };
+  const since = sinceOf(entityId);
+  // ⚠️ A STATE OLDER THAN THE PROBLEM IS NOT WHAT CHANGED (owner's end-to-end test, 2026-10-30: a lock that had been
+  // UNAVAILABLE read "Unlocked since before 19 Oct · closes … if it stays unlocked"): the device has been in it since
+  // before the problem was opened, so the problem was about something else (its availability) — "Back to normal"
+  const opened = openedAt ? Date.parse(openedAt) : NaN;
+  if (since && since !== "loading" && (since.before || (!Number.isNaN(opened) && since.at < opened))) return { at: closesAt };
+  return { at: closesAt, word: rowText(entityId, entity), since };
 }
 
 /** The entities whose state a fault waiting to close says "since" of (closingOf): the ones useStateSince reads. */
@@ -393,7 +399,7 @@ export function buildAttentionItems(opts: {
       ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t) } : {}),
       source: faultSource(t),
       check: t.check,
-      closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf),
+      closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf, t.openedAt),
       // lost contact — isOffline, or an entity the villa's system no longer has (Missing), as devices.unavailable
       // reads it: the device's offline line takes it. ⚠️ A MISSING ENTITY TOO (architecture review, 2026-10-21): only
       // one the villa's system still had counted, so a ticket on a sibling deleted with its device stood as a second

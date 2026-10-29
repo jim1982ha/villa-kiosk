@@ -17,47 +17,43 @@ const ann = (seq, extra = {}) => ({ seq, at: `2026-10-28T1${seq % 10}:00:00+08:0
 const J = JSON.stringify;
 
 console.log("  the filters, on one line:");
-ck("All · Issues · Notifications · Reports, in that order (owner, 2026-10-28: \"Issues\" holds open, watched and closed; ticket 20: Reports)",
-   J(FILTERS.map((f) => f.label)) === J(["All", "Issues", "Notifications", "Reports"]));
+ck("Issues · Notifications · Reports, in that order, no All (owner, 2026-10-30; 2026-10-28: \"Issues\" holds open, watched and closed; ticket 20: Reports)",
+   J(FILTERS.map((f) => f.label)) === J(["Issues", "Notifications", "Reports"]));
 const base = { open: [card("a"), card("b")], watched: [card("w", { look: "watched" })], announcements: [ann(1), ann(2), ann(3)] };
-const all = messagesView({ ...base, filter: "all", selected: null });
+const issues = messagesView({ ...base, filter: "issues", selected: null });
 ck("  ...Issues counts the open issues only (the watched never counted); the others no count",
-   J(all.filters.map((f) => [f.id, f.count])) === J([["all", null], ["issues", 2], ["notifications", null], ["reports", null]]), all.filters);
+   J(issues.filters.map((f) => [f.id, f.count])) === J([["issues", 2], ["notifications", null], ["reports", null]]), issues.filters);
 
 console.log("\n  what each filter lists:");
-ck("All: the open issues first, in their order, then the notifications newest first; the watched folded after the issues",
-   J(all.issues.map((i) => i.key)) === J(["a", "b"]) && J(all.watched.map((i) => i.key)) === J(["w"])
-   && J(all.notifications.map((i) => i.key)) === J(["n3", "n2", "n1"]), all);
-const issues = messagesView({ ...base, filter: "issues", selected: null });
-ck("  ...Open issues: the issues and the watched, no notification",
-   issues.issues.length === 2 && issues.watched.length === 1 && issues.notifications.length === 0, issues);
+ck("Issues: the open issues in their order, the watched folded after them, no notification",
+   J(issues.issues.map((i) => i.key)) === J(["a", "b"]) && J(issues.watched.map((i) => i.key)) === J(["w"])
+   && issues.notifications.length === 0, issues);
 const notes = messagesView({ ...base, filter: "notifications", selected: null });
-ck("  ...Notifications: the notifications alone", notes.issues.length === 0 && notes.watched.length === 0
-   && notes.notifications.length === 3, notes);
+ck("  ...Notifications: the notifications alone, newest first", notes.issues.length === 0 && notes.watched.length === 0
+   && J(notes.notifications.map((i) => i.key)) === J(["n3", "n2", "n1"]), notes);
 
 console.log("\n  the item open on the right:");
 ck("the one asked for, wherever it is listed (an issue, a watched fault, a notification)",
-   messagesView({ ...base, filter: "all", selected: "b" }).selected?.key === "b"
-   && messagesView({ ...base, filter: "all", selected: "w" }).selected?.key === "w"
-   && messagesView({ ...base, filter: "all", selected: "n2" }).selected?.key === "n2");
-ck("  ...none asked: the first listed (an issue before a notification); nothing listed, none",
-   all.selected?.key === "a" && notes.selected?.key === "n3"
-   && messagesView({ open: [], watched: [], announcements: [], filter: "all", selected: null }).selected === null);
+   messagesView({ ...base, filter: "issues", selected: "b" }).selected?.key === "b"
+   && messagesView({ ...base, filter: "issues", selected: "w" }).selected?.key === "w"
+   && messagesView({ ...base, filter: "notifications", selected: "n2" }).selected?.key === "n2");
+ck("  ...none asked: the first listed; nothing listed, none",
+   issues.selected?.key === "a" && notes.selected?.key === "n3"
+   && messagesView({ open: [], watched: [], announcements: [], filter: "issues", selected: null }).selected === null);
 ck("  ...one the filter does not list is not kept: the first listed instead",
    messagesView({ ...base, filter: "notifications", selected: "a" }).selected?.key === "n3");
 ck("  ...one gone (an issue that cleared) gives way to the first listed",
-   messagesView({ ...base, filter: "all", selected: "gone" }).selected?.key === "a");
+   messagesView({ ...base, filter: "issues", selected: "gone" }).selected?.key === "a");
 ck("a device window's warning: its issue open, when nothing else was asked",
-   messagesView({ ...base, filter: "all", selected: null, focus: (c) => c.key === "b" }).selected?.key === "b");
+   messagesView({ ...base, filter: "issues", selected: null, focus: (c) => c.key === "b" }).selected?.key === "b");
 ck("why it is open: asked for, a warning's, or only the first listed (a phone then shows the list, not an item no one chose)",
-   messagesView({ ...base, filter: "all", selected: "b" }).openedBy === "asked"
-   && messagesView({ ...base, filter: "all", selected: null, focus: (c) => c.key === "b" }).openedBy === "focus"
-   && all.openedBy === "first" && messagesView({ ...base, filter: "all", selected: "gone" }).openedBy === "first"
-   && messagesView({ ...base, filter: "all", selected: null, focus: () => false }).openedBy === "first"
-   && messagesView({ open: [], watched: [], announcements: [], filter: "all", selected: null }).openedBy === null);
+   messagesView({ ...base, filter: "issues", selected: "b" }).openedBy === "asked"
+   && messagesView({ ...base, filter: "issues", selected: null, focus: (c) => c.key === "b" }).openedBy === "focus"
+   && issues.openedBy === "first" && messagesView({ ...base, filter: "issues", selected: "gone" }).openedBy === "first"
+   && messagesView({ ...base, filter: "issues", selected: null, focus: () => false }).openedBy === "first"
+   && messagesView({ open: [], watched: [], announcements: [], filter: "issues", selected: null }).openedBy === null);
 ck("which parts each filter shows (the tab draws those, never its own rule)",
-   J(all.shows) === J({ issues: true, notifications: true, reports: true })
-   && J(issues.shows) === J({ issues: true, notifications: false, reports: false })
+   J(issues.shows) === J({ issues: true, notifications: false, reports: false })
    && J(notes.shows) === J({ issues: false, notifications: true, reports: false }));
 
 console.log("\n  the facility manager's reports (ticket 20 of \"One inbox\"):");
@@ -86,13 +82,13 @@ ck("Reports lists the reports alone, newest first; the first open on the right",
 const onNotes = messagesView({ ...withReports, filter: "notifications", selected: null });
 ck("  ...a report is never also a notification (one place per thing)",
    J(onNotes.notifications.map((i) => i.announcement.seq)) === J([33, 1]) && onNotes.reports.length === 0, onNotes.notifications);
-const onAll = messagesView({ ...withReports, filter: "all", selected: "v:note:d1" });
-ck("  ...All lists them too, and one asked for opens there",
-   onAll.reports.length === 3 && onAll.selected?.key === "v:note:d1", onAll.reports);
-ck("  ...a report open, or the Reports page shown, is read; on All below the fold it is not",
+const asked = messagesView({ ...withReports, filter: "reports", selected: "v:note:d1" });
+ck("  ...one asked for opens on Reports",
+   asked.reports.length === 3 && asked.selected?.key === "v:note:d1", asked.reports);
+ck("  ...a report open, or the Reports page shown, is read; on another filter a report is not",
    J(readOnScreen("reports", { reports: onReports.reports.slice(0, 2) }, null).map((a) => a.seq)) === J([32, 31])
-   && readOnScreen("all", { reports: onAll.reports }, null).length === 0
-   && J(readOnScreen("all", {}, onAll.selected).map((a) => a.seq)) === J([30]));
+   && readOnScreen("issues", { reports: asked.reports }, null).length === 0
+   && J(readOnScreen("issues", {}, asked.selected).map((a) => a.seq)) === J([30]));
 ck("  ...Messages opens on Reports when only reports are unread, on Notifications when anything else is",
    openingFilter(2, {}, 2) === "reports" && openingFilter(3, {}, 2) === "notifications" && openingFilter(2, { warning: true }, 2) === "issues");
 
@@ -126,11 +122,11 @@ ck("  ...the add-on's store started again: its first new one, with an old number
 const pruned = markShown(seen, [ann(4)], [ann(3), ann(4)]);
 ck("  ...the list keeps only what the add-on still keeps (it never grows past it)", pruned.length === 2, pruned);
 
-ck("something unread: Messages opens on Notifications, its newest open on the right; nothing unread, on All",
-   openingFilter(1) === "notifications" && openingFilter(0) === "all"
+ck("something unread: Messages opens on Notifications, its newest open on the right; nothing unread, on Issues (the default)",
+   openingFilter(1) === "notifications" && openingFilter(0) === "issues"
    && messagesView({ ...base, filter: openingFilter(1), selected: null }).selected?.key === "n3");
-ck("  ...opened for something else, never on Notifications, so nothing is read unseen: a warning on its issues, the wrench's form on All",
-   openingFilter(1, { warning: true }) === "issues" && openingFilter(1, { form: true }) === "all"
+ck("  ...opened for something else, never on Notifications, so nothing is read unseen: a warning or the wrench's form on Issues",
+   openingFilter(1, { warning: true }) === "issues" && openingFilter(1, { form: true }) === "issues"
    && openingFilter(0, { warning: true }) === "issues");
 
 console.log("\n  one line per item, drawn:");
@@ -243,14 +239,14 @@ ck("the tab draws a Reports section, its lines from the model's reports",
    sections.includes('"Reports"') && /reportsPaged = usePaged\(view\.reports\)/.test(tab), sections);
 // what counts as read, driven by value (review Q 5: it was decided in the tab, pinned by its source text)
 {
-  const page = notes.notifications.slice(0, 2), opened = notes.notifications[2], issue = all.issues[0];
+  const page = notes.notifications.slice(0, 2), opened = notes.notifications[2], issue = issues.issues[0];
   const seqs = (xs) => xs.map((x) => x.seq).join();
-  ck("  ...read: the Notifications page shown and the one open; on All, only the one open; an open issue is no announcement",
+  ck("  ...read: the Notifications page shown and the one open; on another filter, only the one open; an open issue is no announcement",
      seqs(readOnScreen("notifications", { notifications: page }, opened)) === "3,2,1"
-     && seqs(readOnScreen("all", { notifications: page }, opened)) === "1"
-     && seqs(readOnScreen("all", { notifications: page }, issue)) === "" && seqs(readOnScreen("issues", {}, null)) === ""
+     && seqs(readOnScreen("issues", { notifications: page }, opened)) === "1"
+     && seqs(readOnScreen("issues", { notifications: page }, issue)) === "" && seqs(readOnScreen("issues", {}, null)) === ""
      && seqs(readOnScreen("reports", { notifications: page }, null)) === "",
-     [readOnScreen("notifications", { notifications: page }, opened), readOnScreen("all", { notifications: page }, opened)]);
+     [readOnScreen("notifications", { notifications: page }, opened), readOnScreen("issues", { notifications: page }, opened)]);
 }
 
 
@@ -320,12 +316,15 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
      /To: Owner &amp; FM.*🔓 Door unlocked.*Status:.*- Alert sent 19:42.*- Reminder sent 20:02.*✅ Cleared/s.test(drawn), drawn);
   const watchedCard = card("w90", { look: "watched", lines: [{ key: "fault:t9", text: "", icons: null, story: [], closing: null,
     actions: [], alertNumber: 90 }] });
-  const withWatch = messagesView({ open: [], watched: [watchedCard], announcements: shown, filter: "all", selected: null });
+  const withWatch = messagesView({ open: [], watched: [watchedCard], announcements: shown, filter: "notifications", selected: null });
+  const watchList = messagesView({ open: [], watched: [watchedCard], announcements: shown, filter: "issues", selected: null });
   ck("an alert in Watch is listed there only: its card leaves Notifications (owner, 2026-10-28)",
-     J(withWatch.notifications.map((i) => i.key)) === J(["n3"]) && withWatch.watched.length === 1, withWatch.notifications);
+     J(withWatch.notifications.map((i) => i.key)) === J(["n3"]) && watchList.watched.length === 1, withWatch.notifications);
   const closed90 = parseVestaMessage(record(5, { key: "incident:89", title: "#89-P2 (closed)", stage: "closed",
     status: ["✅ Closed on 28/10/2026 21:58."] }));
-  const withClosed = messagesView({ open: [], watched: [], announcements: [...shown, closed90], filter: "all", selected: null });
+  const withClosed = messagesView({ open: [], watched: [], announcements: [...shown, closed90], filter: "issues", selected: null });
+  const closedNotes = messagesView({ open: [], watched: [], announcements: [...shown, closed90], filter: "notifications",
+    selected: null });
   const onlyNotes = messagesView({ open: [], watched: [watchedCard], announcements: [...shown, closed90], filter: "notifications",
     selected: null });
   const onlyIssues = messagesView({ open: [], watched: [watchedCard], announcements: [...shown, closed90], filter: "issues",
@@ -336,12 +335,14 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
      { notes: onlyNotes, issues: onlyIssues });
   ck("an alert that is over goes to Closed, after Watch, never among the notifications (owner, 2026-10-28)",
      J(withClosed.closed.map((i) => i.key)) === J(["v:incident:89"])
-     && !withClosed.notifications.some((i) => i.key === "v:incident:89"), withClosed);
+     && !closedNotes.notifications.some((i) => i.key === "v:incident:89"), withClosed);
   const villaClosed = ann(8, { at: "2026-10-28T21:00:00+08:00", title: "Doorbell", status: "✅ Opened at 21:00 at the gate" });
-  const both = messagesView({ open: [], watched: [], announcements: [villaClosed, closed90], filter: "all", selected: null });
+  const both = messagesView({ open: [], watched: [], announcements: [villaClosed, closed90], filter: "issues", selected: null });
+  const bothNotes = messagesView({ open: [], watched: [], announcements: [villaClosed, closed90], filter: "notifications",
+    selected: null });
   ck("  ...by ONE reader of the stage (alertStage): the villa's own closed message goes to Closed too, an alert not over stays",
-     J(both.closed.map((i) => i.announcement.title)) === J(["Doorbell", "#89-P2 (closed)"]) && both.notifications.length === 0
-     && messagesView({ open: [], watched: [], announcements: [ann(9, { status: "⚠️ New alert" })], filter: "all", selected: null })
+     J(both.closed.map((i) => i.announcement.title)) === J(["Doorbell", "#89-P2 (closed)"]) && bothNotes.notifications.length === 0
+     && messagesView({ open: [], watched: [], announcements: [ann(9, { status: "⚠️ New alert" })], filter: "notifications", selected: null })
        .notifications.length === 1, both);
   ck("  ...and is no unread: the mark never stays lit for a folded card", unreadOf([closed90], []) === 0
      && unreadOf([later], []) === 1);
@@ -351,11 +352,12 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
      unreadOf([quietAgain], seenStep) === 0 && unreadOf([{ ...quietAgain, status: "⚠️ ⚙️ Reminder sent" }], seenStep) === 1);
   const openIssue = card("o90", { lines: [{ key: "fault:t1", text: "#90-P2 · Door", icons: null, story: [], closing: null,
     actions: [], alertNumber: 90 }] });
-  const withOpen = messagesView({ open: [openIssue], watched: [], announcements: shown, filter: "all", selected: null });
+  const withOpen = messagesView({ open: [openIssue], watched: [], announcements: shown, filter: "issues", selected: null });
+  const openNotes = messagesView({ open: [openIssue], watched: [], announcements: shown, filter: "notifications", selected: null });
   ck("an OPEN alert with a ticket is listed once, as its open issue: its card leaves Notifications (owner, 2026-10-29)",
-     J(withOpen.notifications.map((i) => i.key)) === J(["n3"]) && withOpen.issues.length === 1, withOpen.notifications);
+     J(openNotes.notifications.map((i) => i.key)) === J(["n3"]) && withOpen.issues.length === 1, openNotes.notifications);
   ck("  ...and its card, shown on the right when its line is open, is read there",
-     J(readOnScreen("all", {}, withOpen.issues[0], shown).map((a) => a.key)) === J(["incident:90"]));
+     J(readOnScreen("issues", {}, withOpen.issues[0], shown).map((a) => a.key)) === J(["incident:90"]));
   ck("what this tablet read of one feed is not read of the other (two feeds number apart)",
      unreadOf([ann(1), { ...card90, seq: 1, at: ann(1).at }], markShown([], [ann(1)], [ann(1)])) === 1);
 }
@@ -371,7 +373,7 @@ const withIssue = card("d", { lines: [{ key: "l", text: "Open", icons: null, sto
 ck("a card listed under its open issue lights no unread mark (the issue has its own count); without the issue it does",
    unreadOf([newCard], [], [withIssue]) === 0 && unreadOf([newCard], []) === 1);
 ck("  ...so Messages opens on Issues' own place, never on an empty Notifications",
-   openingFilter(unreadOf([newCard], [], [withIssue])) === "all");
+   openingFilter(unreadOf([newCard], [], [withIssue])) === "issues");
 const ctxNow = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");
 ck("  ...and the page's unread count is given the open and watched issues",
    /unreadOf\(kept, read, issueCards\)/.test(ctxNow) && /const \{ open, watched \} = useCockpitIssues\(\);/.test(ctxNow));
@@ -388,15 +390,18 @@ for (const stage of ["new", "existing", "watch", "closed"]) {
   for (const held of [false, true]) {
     const a = stageCard(40, stage, 77);
     const iss = held ? [card("h", { lines: [{ key: "l", text: "", icons: null, story: [], closing: null, actions: [], alertNumber: 77 }] })] : [];
-    const v = messagesView({ open: iss, watched: [], announcements: [a], filter: "all", selected: null });
-    const listedNew = [...v.notifications, ...v.reports].length;
+    const listedNew = ["notifications", "reports"].map((filter) =>
+      messagesView({ open: iss, watched: [], announcements: [a], filter, selected: null }))
+      .reduce((n, v) => n + v.notifications.length + v.reports.length, 0);
     if (unreadOf([a], [], iss) !== listedNew) mixes.push(`${stage}${held ? "+issue" : ""}: unread ${unreadOf([a], [], iss)}, listed ${listedNew}`);
   }
 }
 ck("every stage, with or without its issue: the mark counts exactly what Notifications and Reports list", mixes.length === 0, mixes);
-const cleared = messagesView({ open: [], watched: [], announcements: [stageCard(41, "watch", 78)], filter: "all", selected: null });
+const cleared = messagesView({ open: [], watched: [], announcements: [stageCard(41, "watch", 78)], filter: "issues", selected: null });
+const clearedNotes = messagesView({ open: [], watched: [], announcements: [stageCard(41, "watch", 78)], filter: "notifications",
+  selected: null });
 ck("  ...an alert that cleared, with no ticket, is parked in Watch (owner, 2026-10-28), never a notification",
-   placeOf(stageCard(41, "watch", 78)) === "watch" && cleared.watched.length === 1 && cleared.notifications.length === 0, cleared);
+   placeOf(stageCard(41, "watch", 78)) === "watch" && cleared.watched.length === 1 && clearedNotes.notifications.length === 0, cleared);
 ck("  ...a report under Reports, an open alert a notification, a closed one in Closed",
    placeOf(digest) === "report" && placeOf(stageCard(42, "new", 79)) === "notification" && placeOf(stageCard(43, "closed", 80)) === "closed");
 

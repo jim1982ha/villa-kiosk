@@ -1,3 +1,11 @@
+## 2.496.606
+
+What you will see:
+- Cockpit › Inbox has no "All" filter any more: Issues · Notifications · Reports. It opens on Issues, or on
+  Notifications (Reports) when something there is unread.
+- An issue whose device came back after being unavailable says "Back to normal · closes at about 00:58 if it stays
+  so", instead of the state it had been in all along ("Unlocked since before 19 Oct").
+
 ## 2.496.605
 
 What you will see:

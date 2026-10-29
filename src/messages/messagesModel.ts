@@ -7,12 +7,13 @@
 
 import type { CardView } from "@/config/cockpitCard";
 import { alertStage, incidentKey, type Announcement } from "./announcements";
+import { stillKept } from "./feed";
 
-export type MessagesFilter = "all" | "issues" | "notifications" | "reports";
+export type MessagesFilter = "issues" | "notifications" | "reports";
 
-/** The filters, in their order on their one line. */
+/** The filters, in their order on their one line. ⚠️ NO "ALL" (owner, 2026-10-30: "remove the All tab, and make Issues
+ *  the default"): each filter lists one kind. */
 export const FILTERS: readonly { id: MessagesFilter; label: string }[] = [
-  { id: "all", label: "All" },
   // ⚠️ "ISSUES", NOT "OPEN ISSUES" (owner, 2026-10-28): it lists a problem's whole life — open, watched, closed —
   // its count the open ones only
   { id: "issues", label: "Issues" },
@@ -142,11 +143,11 @@ export function afterRead(held: readonly Announcement[], items: readonly Announc
   // ⚠️ WHAT THE ADD-ON NO LONGER KEEPS GOES (review Q round 2): a tablet left on kept every announcement it ever read —
   // past the records-kept days, their photos refused — while one opened later listed what the add-on keeps
   // ...and one erased (held, then the superadmin code: owner, 2026-10-29), named no longer in what it keeps
-  const still = (h: Announcement) => h.seq >= first && (kept === null || kept.includes(h.seq));
-  const merged = mergeAnnouncements(full ? [] : held.filter(still), items);
+  const merged = mergeAnnouncements(full ? [] : stillKept(held, first, kept), items);
   if (full) return { kept: merged, arrived: [] };
   const arrived = [...items].sort((x, y) => x.seq - y.seq)
-    .map((a) => ({ announcement: a, was: a.key !== null ? held.find((h) => h.key === a.key && h.seq < a.seq) : undefined }))
+    .map((a) => ({ announcement: a,
+      was: a.key !== null ? held.find((h) => h.key === a.key && h.feed === a.feed && h.seq < a.seq) : undefined }))
     // ⚠️ A QUIET REWRITE IS NO NEWS (ticket 27): VESTA redraws a card whose bottom line stays (a title retouched, its
     // words translated) — on Telegram a quiet edit, never a ping; a new step (reminder, escalation, cleared) changes it
     .filter(({ announcement: a, was }) => !(a.feed === "vesta" && was && was.status === a.status))
@@ -166,7 +167,7 @@ export function announcementWords(a: Announcement, { step = false }: { step?: bo
 
 /** The announcements the Messages tab shows as read on this tablet (ticket 18; review Q 5: decided here, not in the
  *  tab): the page shown of the Notifications or the Reports filter (`pages`: each section's page on screen), and the
- *  one open on the right. On All they sit under the open issues, maybe below the fold: drawn there is not seen. */
+ *  one open on the right. */
 export function readOnScreen(filter: MessagesFilter,
   pages: { notifications?: readonly MessageItem[]; reports?: readonly MessageItem[] }, open: MessageItem | null,
   kept: readonly Announcement[] = []): Announcement[] {
@@ -204,14 +205,14 @@ export function markShown(read: readonly string[], shown: readonly Announcement[
   return [...new Set([...read, ...shown.map(readId)])].filter((id) => still.has(id));
 }
 
-/** The filter Messages opens on: a device window's warning on Open issues, its issue open; the wrench's "Open a ticket"
- *  on All; else Notifications while something is unread (the robot opens on what was not seen) — Reports when the
- *  unread are reports only (`unreadReports` of `unread`) —, else All. Decided before the first draw: a first draw on
+/** The filter Messages opens on: a device window's warning on Issues, its issue open; the wrench's "Open a ticket" on
+ *  Issues; else Notifications while something is unread (the robot opens on what was not seen) — Reports when the
+ *  unread are reports only (`unreadReports` of `unread`) —, else Issues (owner, 2026-10-30: the default). Decided before the first draw: a first draw on
  *  Notifications would mark its page read before anyone saw it. */
 export function openingFilter(unread: number, opening: { warning?: boolean; form?: boolean } = {}, unreadReports = 0):
   MessagesFilter {
   if (opening.warning) return "issues";
-  if (opening.form || unread <= 0) return "all";
+  if (opening.form || unread <= 0) return "issues";
   return unread > unreadReports ? "notifications" : "reports";
 }
 
@@ -226,9 +227,9 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   focus?: (card: CardView) => boolean;
 }): MessagesView {
   const issueItem = (card: CardView): MessageItem => ({ kind: "issue", key: card.key, card });
-  const showIssues = filter === "all" || filter === "issues";
-  const showNotes = filter === "all" || filter === "notifications";
-  const showReports = filter === "all" || filter === "reports";
+  const showIssues = filter === "issues";
+  const showNotes = filter === "notifications";
+  const showReports = filter === "reports";
   const issues = showIssues ? open.map(issueItem) : [];
   const watchedItems = showIssues ? watched.map(issueItem) : [];
   // ⚠️ A WATCHED ALERT IS LISTED ONCE, IN WATCH (owner, 2026-10-28): its card is open on its Watch line, never also a
