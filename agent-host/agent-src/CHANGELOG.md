@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.368 (29 October 2026)
+
+- Tickets.repair: an open task whose fault id the Kiosk does not hold (open or closed) gets its fault again; the old
+  id is kept until the new one is written, so a Kiosk that cannot read its store loses nothing and doubles nothing.
+
 ## 0.6.367 (29 October 2026)
 
 - Architecture review, three rounds: Poster.post's "Telegram did not take it" branch tells the incident through

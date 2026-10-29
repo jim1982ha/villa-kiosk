@@ -1,3 +1,10 @@
+## 0.12.379
+
+What you will see:
+- A problem VESTA still has open gets its record on the tablet again when the tablet app does not hold it (VESTA was
+  moved to another tablet app, or its records were reset): Timmerflotte_2623, LED Strip, #83 and #88 come back under
+  Messages › Issues with their Open Ticket and Close buttons, shortly after VESTA starts.
+
 ## 0.12.378
 
 What you will see (architecture review, 29 October 2026):

@@ -126,6 +126,58 @@ def test_the_repair_gives_an_open_problem_with_no_fault_its_fault(tmp_path, capl
     assert "have no Kiosk fault" not in caplog.text
 
 
+def test_an_open_problem_whose_fault_the_kiosk_no_longer_holds_gets_it_again(tmp_path):
+    # villa, 2026-10-29: the agent was moved to another VESTA Kiosk; its open problems kept the first Kiosk's fault ids,
+    # the new one held none of them, and the Cockpit showed "Unavailable" with nothing to act on while the digest said
+    # "still open" — the repair skipped every task that had an id, held or not
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    st = Store(v.s.store_path)
+    st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39h", {})
+    run(v.tickets.repair())
+    [(tid, first)] = [(t["id"], t["todo_uid"]) for t in st.tasks("open")]
+    k.doc["data"]["tickets"] = []                                  # another Kiosk, or its store started afresh
+    run(v.tickets.repair())
+    assert k.tickets == [("Example offline for 39h", "sensor.example_room")]   # what this Kiosk holds: the fault again
+    again = st.task(tid)["todo_uid"]
+    assert again and again != first and again in {t["id"] for t in k.doc["data"]["tickets"]}
+    run(v.tickets.repair())                                        # held now: never a second
+    assert len(k.doc["data"]["tickets"]) == 1 and st.task(tid)["todo_uid"] == again
+
+
+def test_a_kiosk_that_cannot_read_its_store_costs_the_problem_no_fault(tmp_path):
+    # the Kiosk's read answers an empty record when its file cannot be read, and refuses every write: the task keeps
+    # the id it had, so the fault it still holds on disk is found again — never doubled — once the file is back
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    st = Store(v.s.store_path)
+    st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39h", {})
+    run(v.tickets.repair())
+    [(tid, first)] = [(t["id"], t["todo_uid"]) for t in st.tasks("open")]
+    on_disk = k.doc["data"]["tickets"]
+    k.doc["data"]["tickets"] = []
+    k.refuses("t2", 409, "the stored data document could not be read")
+    run(v.tickets.repair())
+    assert st.task(tid)["todo_uid"] == first
+    k.doc["data"]["tickets"] = on_disk                             # the file back
+    run(v.tickets.repair())
+    assert st.task(tid)["todo_uid"] == first and len(k.doc["data"]["tickets"]) == 1
+
+
+def test_a_closed_fault_of_an_open_problem_is_held_not_missing(tmp_path):
+    # the other side: a fault the Kiosk holds CLOSED is not missing — its problem still there, the repair opens THAT
+    # fault again (its close did not reach the task: the agent's own clearing as its problem came back), never a second
+    k = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    st = Store(v.s.store_path)
+    st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39h", {})
+    run(v.tickets.repair())
+    [(tid, uid)] = [(t["id"], t["todo_uid"]) for t in st.tasks("open")]
+    assert run(k.resolve_ticket(uid, note="Cleared: the problem is over."))
+    run(v.tickets.repair())
+    assert len(k.doc["data"]["tickets"]) == 1 and st.task(tid)["todo_uid"] == uid and k.ticket(uid)["status"] == "open"
+
+
 # ---------------------------------------------------------------------- 4, 6 · a reopening is read, and someone is told
 PM = os.path.join(STARTER_SKILLS, "preventive-maintenance")
 sys.path.insert(0, os.path.join(PM, "scripts"))

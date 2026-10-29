@@ -167,7 +167,12 @@ class Tickets:
         moved_cards = await self._converge(problems, held)
         made = 0
         for t in problems.open_tasks():
-            if t.get("todo_uid"):
+            # ⚠️ AN ID IS NOT A FAULT (villa, 2026-10-29): the agent was moved to another VESTA Kiosk, whose store held
+            # none of its faults; the open tasks kept the first Kiosk's ids, were skipped here as "has a fault", and the
+            # Cockpit showed "Unavailable" with no button while the digest said "still open". A fault this Kiosk does not
+            # hold (a closed one it does) is made again; the old id is kept until the new one is written (create), so a
+            # store the Kiosk could not read — its read answers empty on purpose, its writes are refused — loses nothing.
+            if t.get("todo_uid") and t["todo_uid"] in held:
                 continue
             try:
                 check = problems.check_of(t)

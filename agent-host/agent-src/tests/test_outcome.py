@@ -86,6 +86,7 @@ def test_an_open_task_without_its_ticket_gets_one_once(agent):
     lost = st.add_task("PM-Y", "sensor.example_battery", "Battery low")
     has = st.add_task("PM-Z", "sensor.example_other", "Already filed")
     st.set_task_uid(has, "t-old")
+    kiosk.held("t-old")              # filed: the Kiosk holds it (an id it does not hold is made again, test_fault_steps)
     assert run(v.tickets.repair())["created"] == 1
     assert kiosk.tickets == [("Battery low", "sensor.example_battery")]
     assert st.task(lost)["todo_uid"] == "t1"
