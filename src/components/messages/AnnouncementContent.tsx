@@ -5,6 +5,8 @@
 // buttons (components/hud/AnnouncementNotice).
 
 import { useState } from "react";
+import { FileText } from "lucide-react";
+import { documentUrl } from "@/fm/fmApi";
 import { announcementPhotoUrl, PRESS_SAID, type Announcement, type PressOutcome } from "@/messages/announcements";
 import type { PressState } from "@/messages/presses";
 
@@ -15,6 +17,19 @@ export function AnnouncementPhoto({ id, className }: { id: string; className: st
   const [refused, setRefused] = useState<string | null>(null);
   if (refused === id) return null;
   return <img className={className} src={announcementPhotoUrl(id)} alt="" onError={() => setRefused(id)} />;
+}
+
+/** A page VESTA attached (a report's, an investigation's), opened in the document viewer — ONE link for every place a
+ *  VESTA message shows (the Inbox's report, the conversation's answer: architecture review 2026-10-29 #4). The caller
+ *  offers it only to a profile the add-on serves pages to. */
+export function PageLink({ page }: { page: string }) {
+  return (
+    <div className="fm-documents">
+      <a className="fm-document-link" href={documentUrl(page)} target="_blank" rel="noopener noreferrer">
+        <FileText size={15} aria-hidden="true" /> Open the page
+      </a>
+    </div>
+  );
 }
 
 /** The buttons an announcement offers, and what became of the last press. */

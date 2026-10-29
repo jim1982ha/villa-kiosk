@@ -11,7 +11,7 @@ import { h, draw, inside } from "../consistency/screen.mjs";
 import { elements, guardsOf, parseTsx, propText } from "../consistency/jsx.mjs";
 const LineChart = (await import("@/components/panels/LineChart")).default;
 const ChartWindow = (await import("@/components/panels/ChartWindow")).default;
-const { chartWindowHeight } = await import("@/components/panels/ChartWindow");
+const { chartWindowHeight, ExpandableChart } = await import("@/components/panels/ChartWindow");
 
 const pts = [{ t: 0, v: 40 }, { t: 1000, v: 90 }, { t: 2000, v: 60 }];
 const chart = (extra = {}) => ({ lines: [{ pts, label: "x", unit: " W" }], window: { from: 0, to: 3000 }, status: "ready",
@@ -35,19 +35,23 @@ ck("the windows' own frame at the Cockpit's width: its title, the chart, Close",
 ck("  ...the plot as tall as the screen allows, within bounds",
    chartWindowHeight(1000) === 560 && chartWindowHeight(700) === 340 && chartWindowHeight(400) === 220);
 
-console.log("\n  the same chart, larger:");
-const hist = parseTsx("components/panels/NumericHistory.tsx");
-const windows = elements(hist, "ChartWindow");
-ck("every layout opens one (one series, two on one chart, a chart per series), only when asked",
-   windows.length === 3 && windows.every((w) => guardsOf(w).some((g) => g === "big" || g === "opened")),
-   windows.map((w) => guardsOf(w)));
-ck("  ...each with the header (`Last …`, its step and the period toggle) and the chart, at the window's height",
-   windows.every((w) => /header\(/.test(w.getText()) && /\(tall\)|, tall\)/.test(w.getText())));
-const charts = elements(hist, "LineChart");
-ck("  ...the same chart: one LineChart per layout, drawn twice (small with its button, large without)",
-   charts.length === 3 && charts.every((c) => propText(c, "onExpand") === "onExpand"));
-const filtered = charts.filter((c) => propText(c, "filter"));
-ck("  ...with its range slider where the small one has it (its filter, the same state)",
-   filtered.length === 2 && filtered.every((c) => propText(c, "filter") === "f.filter"));
-
+console.log("\n  the same chart, larger, wherever a trend chart is (architecture review 2026-10-29 #6):");
+const sections = (rel) => elements(parseTsx(rel), "ExpandableChart");
+const hist = sections("components/panels/NumericHistory.tsx"), weather = sections("components/panels/WeatherPanel.tsx");
+ck("one shared section opens it: every device layout (one series, two on one chart, a chart per series) and the "
+   + "Weather window's line charts", hist.length === 3 && weather.length === 1, [hist.length, weather.length]);
+ck("  ...its window shows the chart's head: the `Last …` line with its period toggle (the device's header; the "
+   + "Weather chart's title with the window's toggle)",
+   hist.every((e) => /header\(/.test(propText(e, "head"))) && /picker/.test(propText(weather[0], "head")));
+// a one-line chart is drawn by NumericHistory's oneLine (one series, and each of several): read its body once
+const oneLine = elements(parseTsx("components/panels/NumericHistory.tsx"), "LineChart")
+  .map((c) => c.getText()).find((t) => /filter=\{f\.filter\}/.test(t)) ?? "";
+const drawn = (e) => (/^oneLine\(/.test(propText(e, "chart")) ? oneLine : propText(e, "chart"));
+ck("  ...the same chart in both: small with its button, larger at the window's height, its range slider kept",
+   [...hist, ...weather].every((e) => /onExpand=\{onExpand\}/.test(drawn(e)) && /height \?\? /.test(drawn(e)))
+   && hist.filter((e) => /^oneLine\(/.test(propText(e, "chart"))).length === 2 && /filter=\{f\.filter\}/.test(oneLine));
+const opened = draw(h(ExpandableChart, { title: "T", head: h("p", null, "HEAD"),
+  chart: (height, onExpand) => h("i", { "data-h": String(height), "data-x": onExpand ? "yes" : "no" }) }));
+ck("  ...drawn closed: the small chart (its own height) with its button, no window",
+   /data-h="undefined" data-x="yes"/.test(opened) && !opened.includes("HEAD"), opened);
 done("✅ a device's chart opens larger, the same chart with its header, toggle and slider");

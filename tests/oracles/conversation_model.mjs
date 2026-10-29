@@ -76,6 +76,13 @@ ck("  ...no page offered to a profile the add-on serves none (a guest)", !guest.
 ck("  ...the person's own question reads as theirs",
    draw(h(TurnLine, { turn: turn(1, { from: "person" }), canOpenPage: false })).includes("You"));
 
+// architecture review 2026-10-29 #4: ONE drawing of a VESTA message's page, wherever it shows
+const { execSync } = await import("node:child_process");
+const pageLinks = execSync("grep -rl '/> Open the page' src --include=*.tsx", { cwd: new URL("../..", import.meta.url).pathname })
+  .toString().trim().split("\n");
+ck("\"Open the page\" is drawn in ONE place (PageLink), the conversation's answers and the Inbox's reports alike",
+   pageLinks.length === 1 && pageLinks[0].endsWith("AnnouncementContent.tsx"), pageLinks);
+
 console.log("\n  hidden without VESTA, wherever it shows:");
 const hud = parseTsx("components/hud/HUD.tsx");
 const dash = parseTsx("pages/Dashboard.tsx");
@@ -103,8 +110,9 @@ const declared = (tree, name) => {
   return found;
 };
 const robotIcons = elements(hud, "Bot").map((b) => b.parent?.parent?.getText?.() ?? "");
-ck("the robot only while VESTA runs (robot = doors.agent && agentOnline, its heartbeat, and every robot drawn by it)",
-   declared(hud, "robot") === "doors.agent && agentOnline" && robotIcons.length >= 2
+// one reading of "VESTA runs" for the robot and the VESTA button (architecture review 2026-10-29 #5)
+ck("the robot only while VESTA runs, by the VESTA button's own reading (robot = doors.agent && thread.shown)",
+   declared(hud, "robot") === "doors.agent && thread.shown" && robotIcons.length >= 2
    && robotIcons.every((t) => t.startsWith("{robot ?")), [declared(hud, "robot"), robotIcons]);
 
 console.log("\n  \"Ask VESTA\" on screen:");

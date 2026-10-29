@@ -106,6 +106,8 @@ const NOTHING_PRESSED: PressState = Object.freeze({}) as PressState;
 /** Pressing `a`'s buttons, from any screen: what became of each press (the page's one record), and a press. */
 export function useAnnouncementPress(a: Announcement | null): { presses: PressState; press: (command: string) => void } {
   const { presses } = useAnnouncements();
-  const state = useSyncExternalStore(presses.subscribe, () => (a ? presses.get(a) : NOTHING_PRESSED));
+  const snapshot = () => (a ? presses.get(a) : NOTHING_PRESSED);
+  // the same snapshot drawn on a server (a check draws a card that owns its press)
+  const state = useSyncExternalStore(presses.subscribe, snapshot, snapshot);
   return { presses: state, press: (command) => { if (a) presses.press(a, command); } };
 }

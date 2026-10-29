@@ -63,9 +63,9 @@ ck("  ...and no window of its own any more (2.496.443)", !/AgentModal|shown\("ag
   // ⚠️ ONLY WHILE IT RUNS (ticket 21 of "One inbox", owner 2026-10-28: nothing dead on screen): the robot is the agent's
   // door AND its heartbeat; stopped, the ⚠
   ck("  ...the Cockpit button shows the robot and the presence dot only with the agent's door while it runs, the ⚠ without",
-     /const robot = doors\.agent && agentOnline;/.test(hud)
+     /const robot = doors\.agent && thread\.shown;/.test(hud)
      && /\{robot \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
-     && /\{robot && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{agentOnline/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
+     && /\{robot && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{robot/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
   ck("  ...and the Cockpit's footer has no 'VESTA Agent' (one footer: Close)",
      /<ModalFooter onClose=\{onClose\} \/>/.test(cockpit) && !/VESTA Agent/.test(cockpit));
 }

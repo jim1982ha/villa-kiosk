@@ -5,7 +5,7 @@
 // Cockpit's width (full screen on a phone, as every window of content), over the device window. What it draws is the
 // caller's: the same header, toggle and slider, bound to the same choices, so the two views never disagree.
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 
@@ -22,5 +22,27 @@ export default function ChartWindow({ title, onClose, children }: { title: strin
       <div className="modal-body">{children}</div>
       <ModalFooter onClose={onClose} />
     </Window>
+  );
+}
+
+/** ⚠️ THE LARGER CHART BELONGS TO THE CHART (architecture review 2026-10-29, #6): every trend chart opens larger the same
+ *  way — its button on its unit line, its window with `head` above it (the `Last …` line or the chart's title, and the
+ *  period toggle) — instead of each screen building the window per layout. `chart` draws it: small (`height`
+ *  undefined: the caller's own) with `onExpand`, or at the window's height without. */
+export function ExpandableChart({ title, head, chart }: {
+  title: string;
+  head: ReactNode;
+  chart: (height: number | undefined, onExpand?: () => void) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      {chart(undefined, () => setOpen(true))}
+      {open && (
+        <ChartWindow title={title} onClose={() => setOpen(false)}>
+          {head}{chart(chartWindowHeight(globalThis.innerHeight ?? 800))}
+        </ChartWindow>
+      )}
+    </>
   );
 }

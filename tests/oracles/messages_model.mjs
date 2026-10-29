@@ -185,11 +185,15 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
 {
   const ring = ann(9, { title: "🔔 Visitor", text: "Someone is at the door.", key: "R1",
     buttons: [{ label: "Unlock", command: "/unlock" }] });
-  const card = draw(h(NoteDetail, { announcement: ring, onPress() {}, presses: {} }));
+  const card = draw(h(NoteDetail, { announcement: ring }));
   ck("an open notification is the shared card (RecordCard): its title in the card's head, its words in its body, its "
      + "buttons in the card's own row", /class="fm-record-card"/.test(card) && /fm-record-head[\s\S]*🔔 Visitor/.test(card)
      && /fm-record-body[\s\S]*Someone is at the door\.[\s\S]*fm-record-actions[\s\S]*Unlock/.test(card), card);
   ck("  ...a report too", /class="fm-record-card"/.test(opened));
+  // it owns its press (architecture review 2026-10-29 #4): no screen passes one, so a card wherever it shows (an issue's
+  // VESTA card, a report) draws the buttons it carries
+  ck("  ...its buttons drawn with no press handed in: the card presses them itself",
+     /fm-record-actions[\s\S]*Unlock/.test(draw(h(NoteDetail, { announcement: ring }))));
 }
 ck("its words, then its page opened in the document viewer (the add-on's sandboxed page)",
    opened.includes("Two things") && opened.includes('href="/fm-document/page-en-0001"') && opened.includes("Open the page"), opened);

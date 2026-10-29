@@ -6,15 +6,14 @@
 // (messages/conversationModel); this draws it.
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, RotateCcw, Send } from "lucide-react";
+import { RotateCcw, Send } from "lucide-react";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 import { localStamp } from "@/fm/fmEngine";
-import { documentUrl } from "@/fm/fmApi";
 import { ASK_SAID, NEW_CONVERSATION, QUESTION_MAX, type Turn } from "@/messages/conversation";
 import { useConversation } from "@/messages/ConversationContext";
 import { unanswered } from "@/messages/conversationModel";
-import { AnnouncementPhoto } from "./AnnouncementContent";
+import { AnnouncementPhoto, PageLink } from "./AnnouncementContent";
 
 /** One line of the thread: who said it, when, its words, the camera pictures VESTA looked at and the page it attached
  *  ("Open the page" only for a profile the add-on serves pages to). Pure: a check draws it. */
@@ -27,11 +26,7 @@ export function TurnLine({ turn, canOpenPage }: { turn: Turn; canOpenPage: boole
       </div>
       {turn.photos.map((id) => <AnnouncementPhoto key={id} id={id} className="announcement-full-photo" />)}
       {turn.text && <p className="vesta-turn-text">{turn.text}</p>}
-      {turn.page && canOpenPage && (
-        <a className="fm-document-link" href={documentUrl(turn.page)} target="_blank" rel="noopener noreferrer">
-          <FileText size={15} aria-hidden="true" /> Open the page
-        </a>
-      )}
+      {turn.page && canOpenPage && <PageLink page={turn.page} />}
     </div>
   );
 }

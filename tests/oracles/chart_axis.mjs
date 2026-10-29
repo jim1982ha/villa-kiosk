@@ -64,7 +64,7 @@ const barComp = read("../../src/components/panels/BarChart.tsx");
 ck("  ...and BarChart draws the YAxis from its layout's ticks", /<YAxis unit=\{unit\} height=\{height\} frame=\{1\} ticks=\{L\.ticks\} \/>/.test(barComp));
 const weather = read("../../src/components/panels/WeatherPanel.tsx");
 ck("each Weather line chart is the app's LineChart, at the rain chart's CHART_PX (a right axis for a line on its own scale is LineChart's)",
-   /<LineChart stepMs=\{stepMs\} label=\{`\$\{title\} history`\} height=\{CHART_PX\}/.test(weather) && /scale: l\.ownScale \? "fromZero" as const : "shared" as const/.test(weather)
+   /<LineChart stepMs=\{stepMs\} label=\{`\$\{title\} history`\} height=\{height \?\? CHART_PX\}/.test(weather) && /scale: l\.ownScale \? "fromZero" as const : "shared" as const/.test(weather)
      && !/<YAxis|<svg className="weather-chart"/.test(weather));
 ck("  ...and LineChart sets its SVG to the same height as its axis", /style=\{\{ height: H, touchAction: "none" \}\}/.test(lc));
 ck("the rain chart is a BarChart with its unit (so it has the axis)", /<BarChart label="Rain history" buckets=\{buckets\} height=\{CHART_PX\} unit=\{unit\}/.test(weather));

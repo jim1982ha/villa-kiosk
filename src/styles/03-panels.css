@@ -1016,3 +1016,4 @@ button.energy-rank-row.energy-rank-group:focus-visible { outline: 2px solid var(
 .chart-expand:focus-visible { background: var(--bg-input); color: var(--text-primary); }
 @media (hover: hover) { .chart-expand:hover { background: var(--bg-input); color: var(--text-primary); } }
 .chart-modal .modal-body { display: flex; flex-direction: column; }
+.weather-ranges-row { display: flex; justify-content: flex-end; margin: 6px 0 10px; }

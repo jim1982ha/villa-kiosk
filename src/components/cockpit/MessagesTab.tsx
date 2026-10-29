@@ -18,7 +18,6 @@ import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
 import type { CardView } from "@/config/cockpitCard";
 import { localStamp } from "@/fm/fmEngine";
-import { documentUrl } from "@/fm/fmApi";
 import { useAnnouncementPress, useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { useSuperadminDelete } from "@/hooks/useSuperadminDelete";
@@ -31,10 +30,9 @@ import FaultTiming from "@/components/fm/FaultTiming";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import InfoTip from "@/components/common/InfoTip";
 import { Pager, usePaged } from "@/components/common/Paged";
-import { AnnouncementActions, AnnouncementContent } from "@/components/messages/AnnouncementContent";
+import { AnnouncementActions, AnnouncementContent, PageLink } from "@/components/messages/AnnouncementContent";
 import RecordCard from "@/components/fm/RecordCard";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
-import type { PressState } from "@/messages/presses";
 import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 
@@ -292,7 +290,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           : <CockpitAttentionRow key={item.key} card={item.card} onOpenEntity={onOpenEntity} canManage={canManage}
               onEditTicket={onEditTicket} onRaiseTicket={(entity) => setRaising({ entity })}
               focused={!!isFocus?.(item.card)} />)}
-        {item?.kind === "notification" && <NotificationDetail item={item} />}
+        {item?.kind === "notification" && <NoteDetail announcement={item.announcement} />}
         {item?.kind === "report" && <ReportDetail announcement={item.announcement} canOpenPage={canManage} />}
         {!raising && !item && <p className="muted body-text messages-empty">Nothing to show.</p>}
       </div>
@@ -300,40 +298,29 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   );
 }
 
-/** A notification, open on the right: its title and when it came, then all it says, its photo and its buttons. */
-function NotificationDetail({ item }: { item: Extract<MessageItem, { kind: "notification" }> }) {
-  const { presses, press } = useAnnouncementPress(item.announcement);
-  return <NoteDetail announcement={item.announcement} onPress={press} presses={presses} />;
-}
-
 /** A report, open on the right: what VESTA wrote, then its page in the document viewer — for the profiles the add-on
  *  serves pages to (the owner and the facility manager: fm-document), so no one is offered a page they cannot open. */
 export function ReportDetail({ announcement: a, canOpenPage }: { announcement: Announcement; canOpenPage: boolean }) {
   return (
     <NoteDetail announcement={a}>
-      {a.page && canOpenPage && (
-        <div className="fm-documents">
-          <a className="fm-document-link" href={documentUrl(a.page)} target="_blank" rel="noopener noreferrer">
-            <FileText size={15} aria-hidden="true" /> Open the page
-          </a>
-        </div>
-      )}
+      {a.page && canOpenPage && <PageLink page={a.page} />}
     </NoteDetail>
   );
 }
 
-/** A notification's title, when it came and all it says: on its own, or VESTA's card of an open issue's alert above the
- *  issue's own card (no buttons of its own: announcements.parseVestaMessage). ⚠️ THE COCKPIT'S ONE CARD (owner,
- *  2026-10-29: "the notification cards styled the same way as the Issue cards, text colour, font, size"): its frame,
- *  title and text sizes are an issue's (RecordCard), its buttons under it on the right. */
-export function NoteDetail({ announcement: a, onPress, presses = {}, children }: {
-  announcement: Announcement; onPress?: (command: string) => void; presses?: PressState; children?: ReactNode;
-}) {
+/** A notification's title, when it came and all it says: on its own, VESTA's card of an open issue's alert above the
+ *  issue's own card, or a report. ⚠️ THE COCKPIT'S ONE CARD (owner, 2026-10-29: "the notification cards styled the same
+ *  way as the Issue cards, text colour, font, size"): its frame, title and text sizes are an issue's (RecordCard), its
+ *  buttons under it on the right. ⚠️ IT OWNS ITS PRESS (architecture review 2026-10-29 #4): the screens each decided
+ *  whether to pass one — an issue's card and a report passed none — so whatever buttons a message carries are pressed
+ *  here, the same wherever it shows (useAnnouncementPress, the page's one record of presses). */
+export function NoteDetail({ announcement: a, children }: { announcement: Announcement; children?: ReactNode }) {
+  const { presses, press } = useAnnouncementPress(a);
   return (
     <RecordCard title={a.title}
       titlePills={a.at ? <span className="fm-entity-chip fm-chip-static">{localStamp(a.at)}</span> : undefined}
       body={<div className="messages-card-body"><AnnouncementContent announcement={a} />{children}</div>}
-      actions={onPress && a.buttons.length > 0
-        ? <AnnouncementActions announcement={a} onPress={onPress} presses={presses} /> : undefined} />
+      actions={a.buttons.length > 0
+        ? <AnnouncementActions announcement={a} onPress={press} presses={presses} /> : undefined} />
   );
 }

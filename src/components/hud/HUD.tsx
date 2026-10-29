@@ -55,7 +55,6 @@ import type { Doors } from "@/auth/doors";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import type { VillaHealthLevel } from "@/config/attention";
 import { formatCountBadge } from "@/utils/countBadge";
-import { useAgent } from "@/agent/AgentContext";
 import { useConversation } from "@/messages/ConversationContext";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { countOf } from "@/utils/countOf";
@@ -152,19 +151,18 @@ export default function HUD({
 
   // (Facility's own button and count are gone, 2.496.273: its tabs live in the
   // Cockpit, and the Cockpit's count already includes faults and overdue work.)
-  // The VESTA Agent: its presence dot.
-  const { status: agentStatus } = useAgent();
-  const agentOnline = agentStatus?.state === "online";
-  const agentTitle = `VESTA Agent, ${agentOnline ? "online" : "offline"}`;
   // ⚠️ THE ROBOT ONLY WHILE VESTA RUNS (ticket 21 of "One inbox", owner 2026-10-28: "the robot, microphone and VESTA's
   // thread hidden while VESTA is not running, so that nothing on screen is dead"): without its heartbeat the Cockpit's
-  // button is the ⚠ again. Its presence is the agent's own (/agent-status, the profiles that see it); "Ask VESTA" reads
-  // the conversation's, which the add-on tells every profile, a guest too.
-  const robot = doors.agent && agentOnline;
+  // button is the ⚠ again. ⚠️ ONE READING OF "VESTA RUNS" (architecture review 2026-10-29 #5): the robot read the
+  // agent's status (every minute, owner and facility manager) and the VESTA button the conversation's (every read, every
+  // profile), so for up to a minute one showed VESTA and the other did not. Both read the conversation's now: the one
+  // every profile makes. `doors.agent` still says whether this profile is shown the Agent at all.
   const { thread } = useConversation();
+  const robot = doors.agent && thread.shown;
+  const agentTitle = "VESTA Agent, online";
   // The agent's presence as the dot on its robot — the top bar's and the
-  // phone menu's are this one element (.status-dot, 2.496.247).
-  const agentDot = <span className={`status-dot ${agentOnline ? "on" : "warn"}`} aria-hidden="true" />;
+  // phone menu's are this one element (.status-dot, 2.496.247): shown only while it runs.
+  const agentDot = <span className={`status-dot ${robot ? "on" : "warn"}`} aria-hidden="true" />;
   // What this tablet has not seen in Messages (ticket 18 of "One inbox"): a light mark on the robot, the phone's gear
   // and the menu's Cockpit row, apart from the amber count of open issues; the robot then opens on it (MessagesTab).
   const { unread } = useAnnouncements();

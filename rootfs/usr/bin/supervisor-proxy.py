@@ -4049,26 +4049,37 @@ async def _current_photos() -> set:
     return {photo} if photo else set()
 
 
-def _feed_handler(feed: "Feed", field: str):
+def _after_of(request: web.Request) -> int | None | web.Response:
+    """A long read's `?after=<seq>` (None without one), or the 400 to answer when it is not a number."""
+    try:
+        return int(request.query["after"]) if "after" in request.query else None
+    except ValueError:
+        return web.json_response({"error": "after must be a number"}, status=400)
+
+
+def _feed_handler(feed: "Feed", field: str, own=None, said=None):
     """A page's read of one feed — `{field: [...], "last": seq, "first": seq}`, every profile. With `?after=<seq>`, only
     the newer ones, the answer waiting up to ANNOUNCEMENT_WAIT_S for one to arrive. ⚠️ ONE READ FOR EVERY FEED (owner,
     2026-10-28: "the same code … consistently used"): the villa's announcements and VESTA's messages are answered by
     this one, the guest's photo rule included — a profile that may not view cameras is told only the current
-    notification's photo (_current_photos; announcement_photo_handler refuses it the others too)."""
+    notification's photo (_current_photos; announcement_photo_handler refuses it the others too), and never a
+    conversation's pictures. `own(record, profile)`: the records this session's profile reads, when a feed holds several
+    profiles' (VESTA's conversation: each its own, never another's); `said()`: what else the read answers."""
     async def handler(request: web.Request) -> web.Response:
         if (refused := _refuse(request)) is not None:
             return refused
-        try:
-            after = int(request.query["after"]) if "after" in request.query else None
-        except ValueError:
-            return web.json_response({"error": "after must be a number"}, status=400)
+        if isinstance(after := _after_of(request), web.Response):
+            return after
+        profile = _role_for(request)
+        mine = (lambda a: own(a, profile)) if own else (lambda a: True)
         items, last, first = await feed.read(after, ANNOUNCEMENT_WAIT_S)
+        items = [a for a in items if mine(a)]
         # every number still kept: a page drops what it holds that is not (one erased: message_erase_handler)
-        kept = [a["seq"] for a in await asyncio.to_thread(feed.items)]
-        if not _may(_role_for(request), "viewCameras"):
+        kept = [a["seq"] for a in await asyncio.to_thread(feed.items) if mine(a)]
+        if not _may(profile, "viewCameras"):
             current = await _current_photos()
-            items = [a if a.get("photo") in current else {k: v for k, v in a.items() if k != "photo"} for a in items]
-        return web.json_response({field: items, "last": last, "first": first, "kept": kept},
+            items = [{k: v for k, v in a.items() if k != "photos" and (k != "photo" or v in current)} for a in items]
+        return web.json_response({field: items, "last": last, "first": first, "kept": kept, **(said() if said else {})},
                                  headers={"Cache-Control": "no-store"})
     return handler
 
@@ -4306,14 +4317,6 @@ def _vesta_online() -> bool:
     return _agent_presence().get("state") == "online"
 
 
-def _after_of(request: web.Request) -> int | None | web.Response:
-    """A long read's `?after=<seq>` (None without one), or the 400 to answer when it is not a number."""
-    try:
-        return int(request.query["after"]) if "after" in request.query else None
-    except ValueError:
-        return web.json_response({"error": "after must be a number"}, status=400)
-
-
 def _asked_lately(items: list, profile: str, now: float) -> int:
     """How many questions this profile asked in the last minute. Pure."""
     return sum(1 for a in items if isinstance(a, dict) and a.get("profile") == profile
@@ -4348,23 +4351,12 @@ async def vesta_ask_handler(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
-async def vesta_conversation_handler(request: web.Request) -> web.Response:
-    """This session's profile's conversation — `{"turns": [...], "last", "first", "kept", "vesta": "online"|"offline"}`,
-    every profile; with `?after=<seq>` the newer turns, the answer waiting up to ANNOUNCEMENT_WAIT_S for one (Feed). ⚠️
-    ONLY ITS OWN: a guest never reads what the owner asked. A profile that may not view cameras gets no picture."""
-    if (refused := _refuse(request)) is not None:
-        return refused
-    if isinstance(after := _after_of(request), web.Response):
-        return after
-    profile = _role_for(request)
-    items, last, first = await CONVERSED.read(after, ANNOUNCEMENT_WAIT_S)
-    own = [t for t in items if t.get("profile") == profile]
-    kept = [t["seq"] for t in await asyncio.to_thread(CONVERSED.items) if t.get("profile") == profile]
-    if not _may(profile, "viewCameras"):
-        own = [{k: v for k, v in t.items() if k != "photos"} for t in own]
-    return web.json_response({"turns": own, "last": last, "first": first, "kept": kept,
-                              "vesta": "online" if _vesta_online() else "offline"},
-                             headers={"Cache-Control": "no-store"})
+#: This session's profile's conversation, read as every feed is (_feed_handler): `{"turns", "last", "first", "kept",
+#: "vesta": "online"|"offline"}`, every profile, ⚠️ ONLY ITS OWN (a guest never reads what the owner asked), no picture for
+#: a profile that may not view cameras — and whether VESTA runs, which every profile is told (the top bar's VESTA button).
+vesta_conversation_handler = _feed_handler(
+    CONVERSED, "turns", own=lambda t, profile: t.get("profile") == profile,
+    said=lambda: {"vesta": "online" if _vesta_online() else "offline"})
 
 
 async def agent_inbox_handler(request: web.Request) -> web.Response:
