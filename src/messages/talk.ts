@@ -27,6 +27,8 @@ export interface TalkDeps {
   after: (ms: number, fn: () => void) => unknown;
   cancel: (timer: unknown) => void;
   holdMs: number;
+  /** A recording whose loudest moment is under this (dB) is silence: never sent (voice.SILENT_PEAK_DB). */
+  silentDb: number;
   /** The longest question, in ms (the agreement's conversation.voice.seconds). */
   capMs: number;
 }
@@ -128,8 +130,10 @@ export class TalkSession {
     this.show({ phase: "sending", place: p.place });
     p.open();
     const wav = await p.rec.stop();
-    if (wav) await this.deps.send(wav, p.rec.measure());
-    else this.deps.tell(TALK_SAID.silent);
+    const measure = p.rec.measure();
+    if (!wav) this.deps.tell(TALK_SAID.silent);
+    else if (measure.peakDb < this.deps.silentDb) this.deps.tell(TALK_SAID.quiet);
+    else await this.deps.send(wav, measure);
     this.show(TALK_IDLE);
   }
 

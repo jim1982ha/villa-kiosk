@@ -154,6 +154,11 @@ export type Listening = "listening" | "refused" | "none";
 export interface RecordingMeasure { heldMs: number; openMs: number; rate: number; micRate: number; blocks: number;
   missing: number; peakDb: number }
 
+/** ⚠️ A RECORDING THIS QUIET IS SILENCE (owner's MacBook, 2026-10-29: a question held 4.5s peaked at -45 dB, against -1
+ *  and -2 dB for the ones Whisper heard; its "could not make out" answer arrived after the person had started a new
+ *  conversation): never sent, the person told to check the microphone. Any voice near a microphone peaks far above. */
+export const SILENT_PEAK_DB = -40;
+
 /** Blocks missing between those that came: each block says when it plays (`times`, seconds), `step` apart when none is
  *  lost. Pure: tests/oracles/voice_wav.mjs. */
 export function missingBlocks(times: readonly number[], step: number): number {

@@ -29,18 +29,19 @@ export function TurnLine({ turn, canOpenPage }: { turn: Turn; canOpenPage: boole
         <b>{turn.from === "person" ? "You" : "VESTA"}</b>
         {turn.voice && <Mic size={14} aria-label="spoken" />}
         {turn.at && <span className="muted">{momentText(turn.at)}</span>}
+        {turn.speech && (
+          // the answer said aloud (ticket 24): played as it came on the tablet that asked; heard again from here, an
+          // icon at the end of the line (owner, 2026-10-29: not a button the width of the answer)
+          <button type="button" className="btn ghost vesta-turn-listen" aria-label="Listen" title="Listen"
+            onClick={() => { const name = turn.speech; if (name) void playSpeech(() => fetchSpeech(name), true); }}>
+            <Volume2 size={18} aria-hidden />
+          </button>
+        )}
       </div>
       {turn.photos.map((id) => <AnnouncementPhoto key={id} id={id} className="announcement-full-photo" />)}
       {turn.text && <p className="vesta-turn-text">{turn.text}</p>}
       {turn.voice && !turn.text && <p className="vesta-turn-text muted">{SPOKEN_WAITING}</p>}
       {turn.page && canOpenPage && <PageLink page={turn.page} />}
-      {turn.speech && (
-        // the answer said aloud (ticket 24): played as it came on the tablet that asked; heard again from here
-        <button type="button" className="btn ghost vesta-turn-listen"
-          onClick={() => { const name = turn.speech; if (name) void playSpeech(() => fetchSpeech(name), true); }}>
-          <Volume2 size={16} aria-hidden /> Listen
-        </button>
-      )}
       {turn.buttons.length > 0 && <RecordButtons record={pressableOf(turn)} />}
     </div>
   );

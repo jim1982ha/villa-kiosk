@@ -186,6 +186,10 @@ ck("  ...an answer that arrives plays only by playsAloud, and one that cannot st
    /if \(name && playsAloud\(spokenAt\.current, Date\.now\(\)\)\)/.test(provider)
    && /playSpeech\(\(\) => fetchSpeech\(name\), false\)\.then\(\(played\) => \{ if \(!played\) tell\(LISTEN_SAID\); \}\)/.test(provider)
    && /if \(out === "sent" && typeof question !== "string"\) spokenAt\.current = Date\.now\(\);/.test(provider));
+const fresh = threadView([turn(1, { from: "person", text: "Is the pump on?" }), turn(2), turn(3, { from: "person", text: "/new" }),
+  turn(4, { text: "New conversation." }), turn(5, { from: "person", text: "And the lights?" })], true);
+ck("\"New conversation\" empties the thread: only what came after the last /new shows (owner, 2026-10-29)",
+   J(fresh.lines.map((t) => t.text)) === J(["New conversation.", "And the lights?"]), fresh.lines);
 const words = turn(5, { key: "turn:5" }), aloud = turn(6, { key: "turn:5", speech: "s1.mp3" });
 ck("the sound that just arrived: the answer rewritten with its sound, once (ticket 24)",
    arrivedSpeech([words], [aloud]) === "s1.mp3" && arrivedSpeech([aloud], [aloud]) === null

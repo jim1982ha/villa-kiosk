@@ -2,7 +2,7 @@
 // VESTA's conversation (ticket 21 of "One inbox", owner 2026-10-28): what a read of it changes on the page, and what its
 // window shows. Pure: tests/oracles/conversation_model.mjs.
 
-import type { Turn } from "./conversation";
+import { NEW_CONVERSATION, type Turn } from "./conversation";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 /** How long the add-on keeps a question for VESTA to collect (agent-contract.json conversation.askKeptSeconds). */
@@ -34,10 +34,13 @@ export interface ThreadView {
   typingAt: string | null;
 }
 
-/** What the conversation shows, from this profile's turns and whether VESTA runs. */
+/** What the conversation shows, from this profile's turns and whether VESTA runs. ⚠️ "NEW CONVERSATION" EMPTIES IT
+ *  (owner, 2026-10-29: "the expectation is to see the modal to clear"): only what came after the person's last "/new"
+ *  shows, as on Telegram's own fresh chat, VESTA's "New conversation." first. Pure. */
 export function threadView(turns: readonly Turn[], online: boolean): ThreadView {
   const typing = turns.find((t) => t.typing && !t.gone);
-  return { shown: online, lines: turns.filter((t) => !t.gone && t.answers === null && !t.typing),
+  const fresh = turns.reduce((at, t) => (t.from === "person" && t.text === NEW_CONVERSATION ? t.seq : at), -1);
+  return { shown: online, lines: turns.filter((t) => !t.gone && t.answers === null && !t.typing && t.seq > fresh),
     typingAt: typing?.at ?? null };
 }
 

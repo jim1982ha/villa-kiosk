@@ -10,7 +10,7 @@ const { TALK_SAID } = await import("@/messages/conversation");
 const { elements, guardsOf, parseTsx, propText } = await import("../consistency/jsx.mjs");
 
 /** A session with a fake microphone and a hand-turned clock; what it did, in order. */
-function bench({ allowed = true, listening = "listening", wav = "WAV" } = {}) {
+function bench({ allowed = true, listening = "listening", wav = "WAV", peak = -3 } = {}) {
   const log = [];
   const timers = new Map();
   let next = 0;
@@ -19,7 +19,7 @@ function bench({ allowed = true, listening = "listening", wav = "WAV" } = {}) {
     listen: async () => { log.push("listen"); return listening; },
     stop: async () => { log.push("stop"); return wav; },
     cancel: () => log.push("cancel"),
-    measure: () => "MEASURE",
+    measure: () => ({ peakDb: peak, toString: () => "MEASURE" }),
   });
   const s = new TalkSession({
     record: (onLevel) => { level = onLevel; log.push("record"); return rec(); },
@@ -28,7 +28,7 @@ function bench({ allowed = true, listening = "listening", wav = "WAV" } = {}) {
     tell: (line) => log.push(`tell ${line}`),
     after: (ms, fn) => { const id = ++next; timers.set(id, { ms, fn }); return id; },
     cancel: (id) => timers.delete(id),
-    holdMs: 480, capMs: 30000,
+    holdMs: 480, silentDb: -40, capMs: 30000,
   });
   const views = [];
   s.watch((v) => views.push(`${v.phase}${v.place ? `@${v.place}` : ""}`));
@@ -50,6 +50,16 @@ console.log("  a tap:");
   ck("  ...a tap gives it back and records nothing; the click opens the conversation, not the session",
      b.s.up() === "tap" && b.log.join() === "record,listen,cancel" && b.opened.length === 0, b.log);
   ck("  ...no orb", b.views.join() === "idle", b.views);
+}
+{
+  // a hold whose microphone gave silence (the owner's MacBook, 2026-10-29: -45 dB): never sent, the person told
+  const b = bench({ peak: -45 });
+  b.s.down("bar", b.open("bar"));
+  await b.fire(480);
+  b.s.up();
+  await settle();
+  ck("a recording that is silence is never sent: the person is told to check the microphone",
+     !b.log.some((l) => l.startsWith("send")) && b.log.includes(`tell ${TALK_SAID.quiet}`) && b.s.now === TALK_IDLE, b.log);
 }
 {
   const b = bench({ allowed: false });

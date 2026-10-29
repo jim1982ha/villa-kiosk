@@ -14,7 +14,7 @@ import { ASK_SAID, LISTEN_SAID, askVesta, fetchConversation, fetchSpeech, vestaR
 import { answersOf, arrivedSpeech, mergeTurns, playsAloud, threadView, type ThreadView } from "./conversationModel";
 import { pauseFor, watchFeed } from "./feed";
 import { TALK_IDLE, TalkSession, type TalkView } from "./talk";
-import { VOICE, canRecord, microphoneAllowed, playSpeech, startRecording, stopSpeech, watchMicrophone,
+import { SILENT_PEAK_DB, VOICE, canRecord, microphoneAllowed, playSpeech, startRecording, stopSpeech, watchMicrophone,
   type RecordingMeasure } from "./voice";
 
 interface Conversation {
@@ -74,7 +74,7 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
   const [talker] = useState(() => canRecord() ? new TalkSession({
     record: startRecording, allowed: microphoneAllowed, send: ask, tell,
     after: (ms, fn) => setTimeout(fn, ms), cancel: (t) => clearTimeout(t as ReturnType<typeof setTimeout>),
-    holdMs: HOLD_MS_HUD, capMs: VOICE.seconds * 1000,
+    holdMs: HOLD_MS_HUD, silentDb: SILENT_PEAK_DB, capMs: VOICE.seconds * 1000,
   }) : null);
   const [talk, setTalk] = useState<TalkView>(TALK_IDLE);
   useEffect(() => {

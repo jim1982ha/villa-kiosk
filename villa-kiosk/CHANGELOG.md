@@ -1,3 +1,12 @@
+## 2.496.602
+
+What you will see:
+- An answer said aloud has a small speaker icon at the right of its date line, instead of a Listen button the width
+  of the answer. Tap it to hear the answer again.
+- "New conversation" empties VESTA's window: only "New conversation." and what follows are shown.
+- A spoken question that recorded only silence (a microphone muted or turned off) is no longer sent. The window says
+  "Nothing was heard: check that the microphone is on and not muted, then hold to talk again."
+
 ## 2.496.601
 
 What you will see:
