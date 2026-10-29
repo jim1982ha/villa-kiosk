@@ -80,6 +80,24 @@ await pressOf({ seq: 2, key: "turn:9", buttons: [], feed: "turn" }, "c:k1", knoc
 ck("one door per kind of record: VESTA's messages and turns to VESTA, the villa's own to its press event",
    J(doors.map(([u, b]) => [u.split("/").pop(), b.key])) === J([["vesta-press", "thread:ap1"], ["announcement-press", "run-1"],
      ["vesta-press", "turn:9"]]) && vestaPress.outcome === "sent" && vestaPress.press === 12, doors);
+// owner, 2026-10-29: the approval's notice "replaced by the other notifications about a sensor being triggered"; after
+// Refuse, its notice still read "Approval request · Turn on Indoor Top?"
+const { noticeStep, NO_NOTICE } = await import("@/messages/noticeModel");
+const { announcementWords } = await import("@/messages/messagesModel");
+const { AnnouncementNoticeView } = await import("@/components/hud/AnnouncementNotice");
+const SHOW = { fullScreenFor: [], ringsFullScreen: false, ringShownForS: 60 };
+const motion = { seq: 50, at: "2026-10-29T10:00:00Z", title: "Motion detected", to: "", text: "Outdoor 2F", status: "",
+  photo: null, key: null, buttons: [] };
+const refused = { ...approval, seq: 5, buttons: [], status: "Refused on 29/10/2026 13:50 (JM). Nothing was done." };
+let shown = [{ type: "arrived", announcement: approval, rewrite: false, settings: SHOW },
+  { type: "arrived", announcement: motion, rewrite: false, settings: SHOW }].reduce(noticeStep, NO_NOTICE);
+ck("an approval's notice (it offers buttons) STAYS when a sensor's notice comes after it: the sensor's passes beside it",
+   shown.staying.length === 1 && shown.staying[0] === approval && shown.passing?.announcement === motion);
+shown = noticeStep(shown, { type: "arrived", announcement: refused, rewrite: true, settings: SHOW });
+ck("  ...decided, its rewrite takes its place (no buttons: it passes) and says the decision, not the request again",
+   shown.staying.length === 0 && shown.passing?.announcement === refused && shown.steps.length === 1
+   && draw(h(AnnouncementNoticeView, { announcement: refused, step: true })).includes("Approval request · Refused on 29/10/2026 13:50 (JM)")
+   && announcementWords(refused).line === "Turn on the pool light?");
 const { pressOrAsk } = await import("@/components/messages/AnnouncementContent");
 const asked = [], sentNow = [];
 pressOrAsk(approval.buttons[0], (q) => asked.push(q), (c) => sentNow.push(c));

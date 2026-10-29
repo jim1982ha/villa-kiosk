@@ -143,8 +143,11 @@ export function afterRead(held: readonly Announcement[], items: readonly Announc
 /** An announcement in words, the same on every screen (review Q 5): its title, the line under it — the first of
  *  what it says, else its bottom line ("✅ Done at 10:00") — and when it came. The notice draws "title · line", the
  *  Messages list the two lines. */
-export function announcementWords(a: Announcement): { title: string; line: string; at: string } {
-  return { title: a.title, line: a.text.split("\n")[0] || a.status, at: a.at };
+export function announcementWords(a: Announcement, { step = false }: { step?: boolean } = {}):
+  { title: string; line: string; at: string } {
+  // ⚠️ A REWRITE SAYS WHAT CHANGED (owner, 2026-10-29: refused, its notice still read "Approval request · Turn on Indoor
+  // Top?" as if it waited): the notice of a rewrite (`step`: a reminder, a decision, a ring answered) says its bottom line
+  return { title: a.title, line: (step && a.status) || a.text.split("\n")[0] || a.status, at: a.at };
 }
 
 /** The announcements the Messages tab shows as read on this tablet (ticket 18; review Q 5: decided here, not in the

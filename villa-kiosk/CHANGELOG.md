@@ -1,3 +1,12 @@
+## 2.496.589
+
+What you will see:
+- A notice that changes says what changed: after you refuse (or approve) a request, its notice reads "Approval request ·
+  Refused on 29/10/2026 13:50 (JM). Nothing was done." instead of repeating "Turn on Indoor Top?". The same for a
+  reminder or a ring answered.
+- A notice with buttons (an approval, the doorbell's Unlock) stays at the top until it is answered or closed, whatever
+  other notice comes meanwhile (a sensor's passes beside it, and goes after 10s).
+
 ## 2.496.588
 
 What you will see (with VESTA Agent 0.12.386):

@@ -16,9 +16,11 @@ export interface NoticeState {
   staying: Announcement[];
   /** The one passing, for `ms` (every other announcement: 10s). */
   passing: { announcement: Announcement; ms: number } | null;
+  /** The ones on screen that arrived as a rewrite (messagesModel.idOf): their notice says what changed (its step). */
+  steps: readonly string[];
 }
 
-export const NO_NOTICE: NoticeState = { full: null, staying: [], passing: null };
+export const NO_NOTICE: NoticeState = { full: null, staying: [], passing: null, steps: [] };
 
 export type NoticeEvent =
   /** One announcement arrived (each of a read, oldest first); `rewrite`: it rewrites one the page held. */
@@ -42,13 +44,15 @@ export function noticeStep(s: NoticeState, e: NoticeEvent): NoticeState {
       const passing = s.passing && supersedes(a, s.passing.announcement) ? null : s.passing;
       const full = s.full && supersedes(a, s.full.announcement) ? null : s.full;
       const how = noticeFor(a, e.settings, { rewrite: e.rewrite });
+      const steps = e.rewrite ? [...s.steps, idOf(a)] : s.steps;
       if (how.fullScreenMs !== null) {
         // the screen goes to the newest picked one; one it took it from keeps its notice when that one stays
         const left = full?.stays ? [full.announcement] : [];
-        return { full: { announcement: a, ms: how.fullScreenMs, stays: how.noticeMs === null }, staying: [...staying, ...left], passing };
+        return { full: { announcement: a, ms: how.fullScreenMs, stays: how.noticeMs === null }, staying: [...staying, ...left],
+          passing, steps };
       }
-      if (how.noticeMs === null) return { full, staying: [...staying, a], passing };
-      return { full, staying, passing: { announcement: a, ms: how.noticeMs } };
+      if (how.noticeMs === null) return { full, staying: [...staying, a], passing, steps };
+      return { full, staying, passing: { announcement: a, ms: how.noticeMs }, steps };
     }
     case "fullEnded":
       if (!s.full) return s;
@@ -65,7 +69,10 @@ export function noticeStep(s: NoticeState, e: NoticeEvent): NoticeState {
       const still = (a: Announcement) => ids.has(idOf(a)) && !e.kept.some((k) => supersedes(k, a));
       const staying = s.staying.filter(still);
       const full = s.full && !still(s.full.announcement) ? null : s.full;
-      return staying.length === s.staying.length && full === s.full ? s : { ...s, staying, full };
+      // a step remembered only while its notice may still be on screen
+      const steps = s.steps.filter((id) => ids.has(id));
+      return staying.length === s.staying.length && full === s.full && steps.length === s.steps.length ? s
+        : { ...s, staying, full, steps };
     }
     case "dismissed":
       return { ...s, staying: s.staying.filter((x) => idOf(x) !== e.id),

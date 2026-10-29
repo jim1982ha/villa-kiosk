@@ -25,13 +25,15 @@ import { AnnouncementContent, AnnouncementPhoto, RecordButtons } from "@/compone
  *  RecordButtons: the doorbell's Unlock, an approval's Approve / Refuse). A rewrite of the same record replaces it in
  *  place (the add-on's key). Only a notice offering a button stays (noticeFor), so only it carries a ✕; every other goes
  *  by itself. */
-export function AnnouncementNoticeView({ announcement, onDismiss, buttons }: {
+export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step = false }: {
   announcement: Announcement;
   onDismiss?: () => void;
   buttons?: ReactNode;
+  /** It arrived as a rewrite (noticeModel `steps`): it says what changed, its bottom line. */
+  step?: boolean;
 }) {
   // its words as every screen says them (messagesModel.announcementWords): the title, then its first line or bottom line
-  const { title, line } = announcementWords(announcement);
+  const { title, line } = announcementWords(announcement, { step });
   const words = line ? `${title} · ${line}` : title;
   return (
     <NoticeView tone="info" icon={<Bell size={16} />} onDismiss={announcement.buttons.length ? onDismiss : undefined}>
@@ -62,8 +64,8 @@ export function AnnouncementFullScreenView({ announcement, onDismiss, buttons }:
 }
 
 /** One notice with its record's buttons (RecordButtons: the one row, wherever a record shows). */
-function OneNotice({ announcement, onDismiss }: { announcement: Announcement; onDismiss: () => void }) {
-  return <AnnouncementNoticeView announcement={announcement} onDismiss={onDismiss}
+function OneNotice({ announcement, onDismiss, step }: { announcement: Announcement; onDismiss: () => void; step: boolean }) {
+  return <AnnouncementNoticeView announcement={announcement} onDismiss={onDismiss} step={step}
     buttons={<RecordButtons record={announcement} />} />;
 }
 
@@ -118,8 +120,10 @@ export default function AnnouncementNotice() {
   return (
     <>
       {state.full && <OneFullScreen announcement={state.full.announcement} onDismiss={() => send({ type: "fullEnded" })} />}
-      {state.staying.map((a) => <OneNotice key={idOf(a)} announcement={a} onDismiss={() => send({ type: "dismissed", id: idOf(a) })} />)}
-      {passing && <OneNotice key={idOf(passing)} announcement={passing} onDismiss={() => send({ type: "dismissed", id: idOf(passing) })} />}
+      {state.staying.map((a) => <OneNotice key={idOf(a)} announcement={a} step={state.steps.includes(idOf(a))}
+        onDismiss={() => send({ type: "dismissed", id: idOf(a) })} />)}
+      {passing && <OneNotice key={idOf(passing)} announcement={passing} step={state.steps.includes(idOf(passing))}
+        onDismiss={() => send({ type: "dismissed", id: idOf(passing) })} />}
     </>
   );
 }
