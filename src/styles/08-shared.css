@@ -91,7 +91,8 @@
 .vesta-notice-text { min-width: 0; overflow-wrap: anywhere; }
 /* an announcement's photo (a ring's snapshot), above its words (owner, 2026-10-28: the pill's round ends around a photo
    read "pretty much wrong"; the photo keeps its size) */
-.vesta-notice-photo { display: block; max-width: min(240px, 100%); max-height: 160px; margin-bottom: 6px; border-radius: 8px; object-fit: cover; }
+/* the photo centred over the words (owner, 2026-10-29), in the pop-up as in the card */
+.vesta-notice-photo { display: block; max-width: min(240px, 100%); max-height: 160px; margin: 0 auto 6px; border-radius: 8px; object-fit: cover; }
 /* the buttons a ring offers (the doorbell's Unlock), under its words; they wrap on a narrow phone */
 .vesta-notice-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
 .vesta-notice-action { pointer-events: auto; min-height: var(--touch-min); padding: 0 16px; }
@@ -168,7 +169,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-card-body .announcement-full-text { font-size: var(--text-xs); color: var(--text-secondary); }
 .messages-card-body .announcement-full-to, .messages-card-body .announcement-full-status {
   font-size: var(--text-2xs); color: var(--text-dim); }
-.messages-card-body .announcement-full-photo { max-height: 320px; align-self: flex-start; }
+.messages-card-body .announcement-full-photo { max-height: 320px; align-self: center; }
 .messages-detail > .fm-record-card + .fm-record-card { margin-top: 10px; }
 @media (max-width: 860px) {
   .messages-list { flex: 1 1 auto; border-right: 0; }
