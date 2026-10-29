@@ -13,6 +13,7 @@
 // quietly stopped looking at three of six charts — the symptom.
 
 import { useId, type ReactNode } from "react";
+import { Maximize2 } from "lucide-react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
 import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
@@ -97,7 +98,7 @@ const keyOf = (l: LineSpec): ReactNode => (l.cls
   ? <i className={`key ${l.cls.split(" ")[0]}`} />
   : <span style={{ color: l.color }}>{l.dashed ? "┄" : "●"}</span>);
 
-export default function LineChart({ lines, window, height = 150, status, label, stepMs, filter }: {
+export default function LineChart({ lines, window, height = 150, status, label, stepMs, filter, onExpand }: {
   lines: readonly LineSpec[];
   /** The span that was asked for — the x-axis. Omitted: the readings' own span. */
   window?: TimeWindow;
@@ -114,6 +115,9 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   /** A range filter on its one line (NumericHistory's charts; never a chart on two scales: one slider stands on one
    *  axis). */
   filter?: ChartFilter;
+  /** The chart, larger, in a window of its own (owner, 2026-10-29: "a graceful icon at the top right of the mini-chart …
+   *  on the same line as the Y-axis unit"): its button at the right of the unit line; none in the larger one. */
+  onExpand?: () => void;
 }) {
   const H = height, BOT = height - 12;
   const plot = { left: 0, right: W, top: TOP, bottom: BOT };
@@ -148,7 +152,13 @@ export default function LineChart({ lines, window, height = 150, status, label, 
   return (
     <>
       <ChartUnitLine slider={!!slid} left={{ unit: unit.trim(), cls: lines[0].cls?.split(" ")[0], color: lines[0].color }}
-        right={right ? { unit: right.unit?.trim() || right.label, cls: right.cls?.split(" ")[0], color: right.color } : null}>
+        right={right ? { unit: right.unit?.trim() || right.label, cls: right.cls?.split(" ")[0], color: right.color } : null}
+        action={onExpand && (
+          <button type="button" className="chart-expand" onClick={onExpand} title="Enlarge the chart"
+            aria-label={`Enlarge: ${label}`}>
+            <Maximize2 size={14} aria-hidden="true" />
+          </button>
+        )}>
         {on && slid && <RangeChip range={on} step={ax.step} unit={unit} state={slid.state}
           kept={kept ? keptWords(kept.count, kept.of, stepMs) : undefined} onClear={() => slid.onChange(null)} />}
       </ChartUnitLine>

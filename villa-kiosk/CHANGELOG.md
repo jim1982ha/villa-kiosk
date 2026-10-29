@@ -1,3 +1,10 @@
+## 2.496.584
+
+What you will see:
+- A device's trend chart has a small "enlarge" icon at the right of its unit line ("W"). It opens the chart large, in
+  a window the Cockpit's size (full screen on a phone), with the same "Last 24 hours" line, the 1h · 24h · 1w · 1m ·
+  1y toggle and the range slider beside its axis: a choice made there is the small chart's too.
+
 ## 2.496.583
 
 What you will see:

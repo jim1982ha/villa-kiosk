@@ -34,7 +34,8 @@ const weather = src("WeatherPanel.tsx"), energy = src("EnergyPanel.tsx"), head =
 ck("the line chart's tooltip says the moment at its step (a closed-up chart: its kept step's real time, worded for the period)", /stamp=\{fmtStepStamp\(realAt\(hover\.t\), stepMs, dated\.spanHours\)\}/.test(line) && !/fmtChartStamp\(hover/.test(line));
 ck("every device line chart gives the range's step, its header 'avg'",
    (num.match(/<LineChart stepMs=\{range\.grainMs\}/g) || []).length === 3 && /aggregationWords\(range\.grainMs, "avg"\)/.test(num)
-   && (num.match(/step=\{step\}/g) || []).length === 3);
+   // one header for every layout, the larger chart's too (owner, 2026-10-29: its window has the same `Last …` line)
+   && /const header = \(title: string\) => <HistoryHeader title=\{title\} picker=\{picker\} step=\{step\} \/>/.test(num));
 ck("the on/off band's header: its step alone", /step=\{aggregationWords\(range\.grainMs, null\)\}/.test(band));
 ck("a history header shows the step beside its title", /\{title\}<ChartStep words=\{step\} \/>/.test(head));
 ck("the Weather charts: their period's step, 'avg', the rain 'sum' at its own bucket",

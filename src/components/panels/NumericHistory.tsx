@@ -21,6 +21,7 @@
 import { useState } from "react";
 import LineChart, { type ChartFilter } from "./LineChart";
 import { useHistoryRange, HistoryHeader, ChartStep } from "./historyRange";
+import ChartWindow, { chartWindowHeight } from "./ChartWindow";
 import { aggregationWords } from "./chartUtils";
 import { useHistorySource } from "@/hooks/useHistorySource";
 import type { TimeWindow } from "@/utils/lineChart";
@@ -36,10 +37,12 @@ export interface NumericSeries {
   color: string;
 }
 
-export default function NumericHistory({ series, named = false }: {
+export default function NumericHistory({ series, named = false, name }: {
   series: readonly NumericSeries[];
   /** Title each chart with its series' label, even when there is one. */
   named?: boolean;
+  /** The device's name: the larger chart's window is titled with it (one series, or two on one chart). */
+  name?: string;
 }) {
   const { range, picker } = useHistoryRange();
   // a device's measured value: the mean over the range's step (historySource "trend")
@@ -77,46 +80,69 @@ export default function NumericHistory({ series, named = false }: {
     };
   };
 
+  // ⚠️ THE CHART, LARGER (owner, 2026-10-29): the same chart — its header, period toggle and range slider, bound to the
+  // same choices — redrawn in a window of its own (ChartWindow), opened from its unit line; one at a time
+  const [big, setBig] = useState<string | null>(null);
+  const tall = big ? chartWindowHeight(globalThis.innerHeight ?? 800) : 0;
+  const expand = (key: string) => () => setBig(key);
+  const header = (title: string) => <HistoryHeader title={title} picker={picker} step={step} />;
+
   if (series.length === 0) return null;
   if (series.length === 1 && !named) {
     const f = filtered(series[0]);
+    const chart = (height: number, onExpand?: () => void) => (
+      <LineChart stepMs={range.grainMs} label="History" height={height} status={status} window={f.window} lines={f.lines}
+        filter={f.filter} onExpand={onExpand} />
+    );
     return (
       <div className="field">
-        <HistoryHeader title={range.title} picker={picker} step={step} />
-        <LineChart stepMs={range.grainMs} label="History" height={110} status={status} window={f.window} lines={f.lines}
-          filter={f.filter} />
+        {header(range.title)}
+        {chart(110, expand(series[0].id))}
+        {big && <ChartWindow title={name ?? series[0].label} onClose={() => setBig(null)}>{header(range.title)}{chart(tall)}</ChartWindow>}
       </div>
     );
   }
   if (dual) {
     const [a, b] = series;
-    return (
-      <div className="field">
-        <HistoryHeader title={range.title} picker={picker} step={step} />
-        <LineChart stepMs={range.grainMs} label={`${a.label} and ${b.label} history`} height={120}
+    const chart = (height: number, onExpand?: () => void) => (
+      <>
+        <LineChart stepMs={range.grainMs} label={`${a.label} and ${b.label} history`} height={height}
           window={history[a.id]?.window} status={status}
-          lines={[line(a, { scale: "own" }), line(b, { dashed: true, scale: "own" })]} />
+          lines={[line(a, { scale: "own" }), line(b, { dashed: true, scale: "own" })]} onExpand={onExpand} />
         <div className="row" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)" }}>
           <span className="muted"><span style={{ color: a.color }}>●</span> {a.label}</span>
           <span className="muted"><span style={{ color: b.color }}>┄</span> {b.label}</span>
         </div>
+      </>
+    );
+    return (
+      <div className="field">
+        {header(range.title)}
+        {chart(120, expand("dual"))}
+        {big && <ChartWindow title={name ?? `${a.label} and ${b.label}`} onClose={() => setBig(null)}>
+          {header(range.title)}{chart(tall)}</ChartWindow>}
       </div>
     );
   }
+  const opened = series.find((s) => s.id === big);
+  const chartOf = (s: NumericSeries, height: number, onExpand?: () => void) => {
+    const f = filtered(s);
+    return <LineChart stepMs={range.grainMs} label={`${s.label} history`} height={height} status={status} window={f.window}
+      lines={f.lines} filter={f.filter} onExpand={onExpand} />;
+  };
   return (
     <>
-      {series.map((s, i) => {
-        const f = filtered(s);
-        return (
+      {series.map((s, i) => (
         <div className="field" key={s.id}>
           {i === 0
-            ? <HistoryHeader title={`${s.label}, ${range.title.toLowerCase()}`} picker={picker} step={step} />
+            ? header(`${s.label}, ${range.title.toLowerCase()}`)
             : <label className="entity-label">{s.label}, {range.title.toLowerCase()}<ChartStep words={step} /></label>}
-          <LineChart stepMs={range.grainMs} label={`${s.label} history`} height={110} status={status} window={f.window}
-            lines={f.lines} filter={f.filter} />
+          {chartOf(s, 110, expand(s.id))}
         </div>
-        );
-      })}
+      ))}
+      {/* the larger one carries the toggle whichever chart it is: it changes them all, as the first one's does */}
+      {opened && <ChartWindow title={opened.label} onClose={() => setBig(null)}>
+        {header(`${opened.label}, ${range.title.toLowerCase()}`)}{chartOf(opened, tall)}</ChartWindow>}
     </>
   );
 }
