@@ -1,3 +1,11 @@
+## 0.12.393
+
+What you will see (with VESTA (dev2) 2.496.597):
+- A question spoken on the tablet (hold the VESTA button left of the robot) is written out by the villa's own Whisper,
+  as a Telegram voice note is, and answered in the tablet's conversation. The words heard replace "Spoken question" on
+  your line. This works with Telegram switched off too.
+- When the words cannot be made out, VESTA says so in the conversation, as on Telegram.
+
 ## 0.12.392
 
 What you will see (with VESTA (dev2) 2.496.595):
