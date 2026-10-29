@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.370 (29 October 2026)
+
+- The log says "Message received in the tablet's conversation (owner)" for a tablet's question, no longer
+  "(telegram_text)": the gate reads it in a Telegram message's shape, but it is not one.
+
 ## 0.6.369 (29 October 2026)
 
 - Ticket 21 of "One inbox" (talking to VESTA on the tablet): tablet.py collects the tablets' questions from the Kiosk's

@@ -604,7 +604,11 @@ class Vesta:
         if got.action != "drop":
             # ⚠️ THE START OF THE TIMELINE (owner, 2026-10-09: the log must cover "the moment the message to request a
             # report is sent / read by the agent" until the report is shown): when the message reached the agent
-            log.info("Message received in chat %s (%s)", got.chat, event_type)
+            if tablet.profile_of(got.chat):
+                # a tablet's question is no Telegram event, whatever shape the gate reads it in
+                log.info("Message received in the tablet's conversation (%s)", tablet.profile_of(got.chat))
+            else:
+                log.info("Message received in chat %s (%s)", got.chat, event_type)
         if got.action == "drop":
             if got.why:
                 self.state.log("ignored", {"reason": got.why, "chat": got.chat})
