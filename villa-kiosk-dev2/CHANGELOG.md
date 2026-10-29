@@ -1,3 +1,15 @@
+## 2.496.600
+
+What you will see (with VESTA Agent 0.12.396):
+- Ask VESTA by holding the microphone: its answer is written in the conversation as before, then VESTA says it aloud
+  in the villa's own voice (the text-to-speech chosen in the villa's voice assistant settings), the same voice on
+  every tablet. Only the tablet you spoke to says it.
+- An answer said aloud has a Listen button under it, to hear it again. If the tablet stopped its sound meanwhile (the
+  screen locked), the conversation says "Tap Listen to hear VESTA's answer."
+- Holding the microphone while VESTA speaks stops it, so it never talks over you.
+- If the villa's voice is not set up, the answer stays in words and says "Spoken answers need the villa's voice to be
+  installed."
+
 ## 2.496.599
 
 What you will see:
