@@ -8,6 +8,7 @@
 // folded at the end, a device window's warning opening on its issue. On a phone the list and the item take the
 // screen in turn.
 
+import { momentText } from "@/utils/dateText";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Bell, CheckCircle2, ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
 import type { ReactNode } from "react";
@@ -17,7 +18,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
 import type { CardView } from "@/config/cockpitCard";
-import { localStamp } from "@/fm/fmEngine";
+
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { useSuperadminDelete } from "@/hooks/useSuperadminDelete";
@@ -126,7 +127,7 @@ function rowOf(item: MessageItem) {
         : card.lead ? <SourceIcons {...card.lead} /> : null,
       title: card.title,
       sub: [card.room, first?.text].filter(Boolean).join(" · "),
-      time: first?.story.length ? localStamp(first.story[first.story.length - 1].at) : "",
+      time: first?.story.length ? momentText(first.story[first.story.length - 1].at) : "",
     };
   }
   // its words as every screen says them (messagesModel.announcementWords)
@@ -135,7 +136,7 @@ function rowOf(item: MessageItem) {
     icon: item.kind === "report" ? <FileText size={18} aria-hidden="true" /> : <Bell size={18} aria-hidden="true" />,
     title: w.title,
     sub: w.line,
-    time: w.at ? localStamp(w.at) : "",
+    time: w.at ? momentText(w.at) : "",
   };
 }
 
@@ -322,7 +323,7 @@ export function ReportDetail({ announcement: a, canOpenPage }: { announcement: A
 export function NoteDetail({ announcement: a, children }: { announcement: Announcement; children?: ReactNode }) {
   return (
     <RecordCard title={a.title}
-      titlePills={a.at ? <span className="fm-entity-chip fm-chip-static">{localStamp(a.at)}</span> : undefined}
+      titlePills={a.at ? <span className="fm-entity-chip fm-chip-static">{momentText(a.at)}</span> : undefined}
       body={<div className="messages-card-body"><AnnouncementContent announcement={a} />{children}</div>}
       actions={a.buttons.length > 0 ? <RecordButtons record={a} /> : undefined} />
   );

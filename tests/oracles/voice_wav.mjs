@@ -67,10 +67,13 @@ ck("an https page with a microphone and Web Audio records", page(true, true, tru
 ck("  ...an http page never does (a browser gives it no microphone)", page(false, true, true) === false);
 ck("  ...nor one with no microphone, nor one with no Web Audio", page(true, false, true) === false
    && page(true, true, false) === false);
-const talk = parseTsx("components/hud/TalkButton.tsx");
-ck("the button is the microphone only then, else the speech bubble (tap only)",
-   elements(talk, "Mic").every((e) => guardsOf(e).includes("talks"))
-   && elements(talk, "MessageCircle").every((e) => guardsOf(e).includes("!talks")) && elements(talk, "Mic").length === 1,
+const talk = parseTsx("components/messages/TalkButton.tsx");
+ck("the button is the microphone only then (the page's talk session exists), else the speech bubble (tap only)",
+   elements(talk, "Mic").every((e) => guardsOf(e).includes("talker"))
+   && elements(talk, "MessageCircle").every((e) => guardsOf(e).includes("!talker")) && elements(talk, "Mic").length === 1,
    elements(talk, "Mic").map(guardsOf));
+const context = (await import("node:fs")).readFileSync(new URL("../../src/messages/ConversationContext.tsx", import.meta.url), "utf8");
+ck("  ...and the session exists only where canRecord says the page can record",
+   /useState\(\(\) => canRecord\(\) \? new TalkSession\(/.test(context));
 
 done("✅ the tablet's recording is the agreement's WAV");

@@ -5,15 +5,17 @@
 // asks, and VESTA's answer arrives in the thread (messages/ConversationContext). What it shows is the model's
 // (messages/conversationModel); this draws it.
 
+import { momentText } from "@/utils/dateText";
 import { useEffect, useRef, useState } from "react";
 import { Mic, RotateCcw, Send } from "lucide-react";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
-import { localStamp } from "@/fm/fmEngine";
-import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, pressableOf, type Turn } from "@/messages/conversation";
+
+import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, TALK_SAID, pressableOf, type Turn } from "@/messages/conversation";
 import { useConversation } from "@/messages/ConversationContext";
 import { unanswered, vestaWorking } from "@/messages/conversationModel";
 import { AnnouncementPhoto, PageLink, RecordButtons } from "./AnnouncementContent";
+import TalkButton from "./TalkButton";
 
 /** One line of the thread: who said it, when, its words, the camera pictures VESTA looked at and the page it attached
  *  ("Open the page" only for a profile the add-on serves pages to). A spoken question (hold to talk) carries the
@@ -24,7 +26,7 @@ export function TurnLine({ turn, canOpenPage }: { turn: Turn; canOpenPage: boole
       <div className="vesta-turn-head">
         <b>{turn.from === "person" ? "You" : "VESTA"}</b>
         {turn.voice && <Mic size={14} aria-label="spoken" />}
-        {turn.at && <span className="muted">{localStamp(turn.at)}</span>}
+        {turn.at && <span className="muted">{momentText(turn.at)}</span>}
       </div>
       {turn.photos.map((id) => <AnnouncementPhoto key={id} id={id} className="announcement-full-photo" />)}
       {turn.text && <p className="vesta-turn-text">{turn.text}</p>}
@@ -45,7 +47,7 @@ export function WorkingBubble() {
 }
 
 export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => void; canOpenPage: boolean }) {
-  const { thread, ask, said } = useConversation();
+  const { thread, ask, said, tell, talker } = useConversation();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const end = useRef<HTMLDivElement>(null);
@@ -88,6 +90,11 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
           onChange={(e) => setText(e.target.value)}
           // Enter sends, Shift+Enter starts a new line, as in a chat
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }} />
+        {/* a spoken question from the open conversation: this button's own orb, never the big one again */}
+        {talker && (
+          <TalkButton place="thread" onOpen={() => undefined} onTap={() => tell(TALK_SAID.hold)} className="btn"
+            idle="Hold to talk to VESTA" />
+        )}
         <button type="submit" className="btn primary" disabled={sending || !text.trim()}>
           <Send size={16} aria-hidden /> Ask
         </button>

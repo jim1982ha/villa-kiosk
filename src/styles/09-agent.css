@@ -14,16 +14,38 @@
    (.icon-btn-count). */
 .agent-btn { position: relative; }
 
-/* Hold to talk (ticket 23 of "One inbox"): the top bar's VESTA button. A hold must stay a hold on an iPad: no text
-   selection, no callout, no scroll taking the finger. While it records, a ring pulses in the accent (not a status
-   colour: nothing needs attention); while it sends, it rests dimmed. */
-.talk-btn { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/* Hold to talk (ticket 23 of "One inbox"): the top bar's VESTA button and the conversation's own. A hold must stay a
+   hold on an iPad: no text selection, no callout, no scroll taking the finger. While it records, a ring pulses in the
+   accent (not a status colour: nothing needs attention); while it sends, it rests dimmed. */
+.talk-btn { position: relative; isolation: isolate; touch-action: none; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none; }
 /* the still ring first: a Safari without color-mix() drops the pulse and keeps it */
 .talk-btn.talk-listening { color: var(--accent-strong); box-shadow: 0 0 0 3px var(--accent);
   animation: talk-listening 1.2s ease-out infinite; }
 .talk-btn.talk-sending { opacity: 0.6; }
 @keyframes talk-listening { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
   to { box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent); } }
+
+/* The orb VESTA listens with (owner, 2026-10-29, after Cornelius): ONE drawing, two sizes. It breathes while it waits
+   and swells with the voice (--voice, 0…1, set by VoiceOrb many times a second, never through React). Over the screen
+   for a hold from the top bar, the finger's place left free (pointer-events: none: the hold stays the button's);
+   behind the conversation's talk button for a hold there. */
+.voice-orb { --voice: 0; display: block; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle at 35% 30%, #ffffff 0%, var(--accent) 45%, var(--accent-strong) 100%);
+  box-shadow: 0 0 calc(24px + 70px * var(--voice)) var(--accent);
+  transform: scale(calc(1 + 0.45 * var(--voice)));
+  transition: transform 90ms linear, box-shadow 90ms linear;
+  animation: voice-orb-breathe 2.4s ease-in-out infinite; }
+.voice-orb-full { width: min(42vmin, 260px); aspect-ratio: 1; }
+.voice-orb-small { position: absolute; inset: -4px; z-index: -1; opacity: 0.85; }
+@keyframes voice-orb-breathe { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.18); } }
+.talk-orb-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 18px; padding: 16px; pointer-events: none;
+  background: var(--scrim-strong); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: modal-backdrop-in 0.16s ease-out; }
+.talk-orb-says { margin: 24px 0 0; font-size: var(--text-xl); font-weight: 600; color: #fff; }
+.talk-orb-hint { margin: 0; color: rgba(255, 255, 255, 0.75); }
 @media (prefers-reduced-motion: reduce) {
   .talk-btn.talk-listening { animation: none; box-shadow: 0 0 0 3px var(--accent); }
+  .voice-orb { animation: none; }
 }

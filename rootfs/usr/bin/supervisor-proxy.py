@@ -4273,8 +4273,9 @@ CONVERSATION_LIMITS: dict = dict(CONVERSATION.get("limits") or {})
 CONVERSATION_PROFILES: dict = dict(CONVERSATION.get("profiles") or {})
 #: A question the Agent has not collected by then is dropped: an answer an hour late is no answer.
 ASK_KEPT_S = int(CONVERSATION.get("askKeptSeconds") or 0)
-#: The person's own lines are the add-on's: their key starts so, and the Agent may not write one.
-ASK_KEY = "ask:"
+#: The person's own lines are the add-on's: their key starts so (the agreement's conversation.keys), and the Agent may
+#: not write one. Without an agreement, every key starts so: nothing is written.
+ASK_KEY = str((CONVERSATION.get("keys") or {}).get("ask") or "")
 #: At most this many questions per profile in a minute: each one costs an AI answer, and a guest's tablet is anyone's.
 ASKS_PER_MINUTE = int(CONVERSATION.get("asksPerMinute") or 0)
 ASKS_MAX_BYTES = 200_000

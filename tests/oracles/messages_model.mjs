@@ -143,7 +143,7 @@ const noteLine = draw(h(MessageRow, { item: { kind: "notification", key: "n1", a
   text: "Someone is at the door.\nGate A", at: "2026-10-28T10:00:00+08:00" }) }, selected: false, onSelect() {} }));
 ck("  ...a notification: its title, its first words, when it came; not chosen, not marked",
    /class="messages-row"/.test(noteLine) && noteLine.includes("<b>🔔 Visitor</b>") && noteLine.includes("<span>Someone is at the door.</span>")
-   && !noteLine.includes("Gate A") && /messages-row-time">2026-10-28 \d\d:00</.test(noteLine), noteLine);
+   && !noteLine.includes("Gate A") && /messages-row-time">28\/10\/2026 \d\d:00</.test(noteLine), noteLine);
 
 console.log("\n  the window and the tab read the model:");
 const { parseTsx, elements, guardsOf, propText } = await import("../consistency/jsx.mjs");

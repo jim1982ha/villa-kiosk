@@ -46,11 +46,11 @@ ck("its first line counts the late tasks, as the Schedule tab and the HUD do (fm
    && E.fmAttention(fm, now).lateTasks.length === 2, standing.split("\n").slice(0, 3));
 ck("its rows are the board's order — overdue, never, due soon, on schedule — never the stored order; no paused task",
    rows.map((r) => r.split("|")[1].trim()).join() === "AC service,Pest control,Garden,Pool filter", rows);
-ck("  ...each row's Status is its state's ONE word (the late ones bold), its Due the sentence with the date as 2026-09-24",
-   rows[0].includes(`| **${E.DUE_WORDS.overdue.word}** | 3 days overdue (by 2026-09-24) |`)
-   && rows[1].includes(`| **${E.DUE_WORDS.never.word}** | No completion recorded yet (by 2026-10-01) |`)
-   && rows[2].includes(`| ${E.DUE_WORDS["due-soon"].word} | Due in 4 days (by 2026-10-01) |`)
-   && rows[3].includes(`| ${E.DUE_WORDS.ok.word} | Due in 28 days (by 2026-10-25) |`), rows);
+ck("  ...each row's Status is its state's ONE word (the late ones bold), its Due the sentence with the date as 24/09/2026",
+   rows[0].includes(`| **${E.DUE_WORDS.overdue.word}** | 3 days overdue (by 24/09/2026) |`)
+   && rows[1].includes(`| **${E.DUE_WORDS.never.word}** | No completion recorded yet (by 01/10/2026) |`)
+   && rows[2].includes(`| ${E.DUE_WORDS["due-soon"].word} | Due in 4 days (by 01/10/2026) |`)
+   && rows[3].includes(`| ${E.DUE_WORDS.ok.word} | Due in 28 days (by 25/10/2026) |`), rows);
 ck("  ...and no word of its own", !/Overdue by|\bLate\b/.test(standing));
 
 console.log("\n  the Overview's late-task line says the same word:");

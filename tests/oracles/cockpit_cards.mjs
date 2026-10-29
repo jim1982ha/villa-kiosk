@@ -136,13 +136,12 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   // ticket 19 of "One inbox" (owner, 2026-10-28): the short story Telegram's Status tells, every line, under its problem
   const story = [{ note: "Alert sent (to: Facility Manager)", at: "2026-10-21T06:40:00Z" },
     { note: "🆘 Need help on Telegram (Wayan)", at: "2026-10-21T06:52:00Z" }];
-  const { localStamp } = await import("@/fm/fmEngine");
   const told = draw(h(AttentionCard, { card: cockpitCard({ ...fault(waiting), items: [{ ...fault(waiting).items[0], story }] },
     CADENCE, t1445), onOpenEntity: () => {} }));
   const list = inside(told, "cockpit-attention-story");
   ck("  ...and its short story, every line in order with its time, under its problem's line",
-     list.indexOf(`Alert sent (to: Facility Manager) · ${localStamp(story[0].at)}`) >= 0
-     && list.indexOf(`🆘 Need help on Telegram (Wayan) · ${localStamp(story[1].at)}`) > list.indexOf("Alert sent"), list || told.slice(0, 800));
+     list.indexOf(`Alert sent (to: Facility Manager) · ${momentText(story[0].at)}`) >= 0
+     && list.indexOf(`🆘 Need help on Telegram (Wayan) · ${momentText(story[1].at)}`) > list.indexOf("Alert sent"), list || told.slice(0, 800));
   ck("  ...none told, no story drawn", !drawn.includes("cockpit-attention-story"));
   const { buildAttentionItems } = await import("@/config/attention");
   const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");

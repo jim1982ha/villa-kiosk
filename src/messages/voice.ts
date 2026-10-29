@@ -71,12 +71,40 @@ export const canRecord = (): boolean =>
   typeof window !== "undefined" && window.isSecureContext === true
   && typeof navigator.mediaDevices?.getUserMedia === "function" && audioContextClass() !== undefined;
 
+// ⚠️ THE MICROPHONE STARTS AT THE TOUCH ONCE IT IS ALLOWED (owner, 2026-10-29, after two spoken questions came out
+// as "Ténez le like et le ménagez" and Whisper's filler: it opened only once the hold was a hold, half a second, and
+// then took its time to start, so the first words were never recorded; Telegram records from the touch). Until the
+// person has allowed it, a tap must never ask: then it is asked for at the hold, as before.
+let allowed = false;
+/** Whether the microphone may be opened at the touch: the person allowed it (this page, or the browser remembers). */
+export const microphoneAllowed = (): boolean => allowed;
+/** Read what the browser remembers of the microphone, and follow it (where the browser says: not every one does). */
+export function watchMicrophone(): void {
+  try {
+    void navigator.permissions?.query({ name: "microphone" as PermissionName }).then((p) => {
+      allowed = p.state === "granted";
+      p.onchange = () => { allowed = p.state === "granted"; };
+    }).catch(() => undefined);
+  } catch { /* no Permissions API: allowed once the person allows it here */ }
+}
+
+/** ONE audio context for the page, resumed inside each press: an iPad lets a page's sound start only inside the
+ *  person's gesture, and a page that makes a context per question soon meets the browser's limit on them. */
+let pageAudio: AudioContext | null = null;
+function audioAtTheTouch(): AudioContext {
+  const Ctx = audioContextClass();
+  if (!Ctx) throw new Error("no Web Audio");
+  if (!pageAudio || pageAudio.state === "closed") pageAudio = new Ctx();
+  void pageAudio.resume().catch(() => undefined);
+  return pageAudio;
+}
+
 /** What became of asking for the microphone: recording; the person or the browser refused it; there is none. */
 export type Listening = "listening" | "refused" | "none";
 
 /** One spoken question being recorded. */
 export interface Recording {
-  /** Ask for the microphone and record from it. */
+  /** Ask for the microphone and record from it (once: a second call answers the first's outcome). */
   listen(): Promise<Listening>;
   /** Stop: the WAV to send, or null when nothing was recorded. */
   stop(): Promise<Blob | null>;
@@ -84,44 +112,55 @@ export interface Recording {
   cancel(): void;
 }
 
-/** A recording, begun AT THE PRESS: ⚠️ an iPad starts a page's sound only inside the person's gesture, so the audio
- *  context is made here, synchronously; the microphone is asked for only by `listen()` (a tap never asks for it).
+/** A recording, begun AT THE PRESS (the page's audio resumed inside the gesture); the microphone opens at `listen()`.
+ *  `onLevel`: how loud the voice is now (0…1), for the orb that shows VESTA hears it.
  *  ⚠️ A ScriptProcessorNode, not an AudioWorklet: the worklet needs a module of its own loaded by URL, this needs
  *  nothing, and every Safari and Chrome a wall tablet runs has it. */
-export function startRecording(): Recording {
-  const Ctx = audioContextClass();
-  if (!Ctx) throw new Error("no Web Audio");
-  const ctx = new Ctx();
-  void ctx.resume().catch(() => undefined);
+export function startRecording(onLevel?: (level: number) => void): Recording {
+  const ctx = audioAtTheTouch();
   const chunks: Float32Array[] = [];
   let stream: MediaStream | null = null;
   let node: ScriptProcessorNode | null = null;
+  let source: MediaStreamAudioSourceNode | null = null;
   let ended = false;
+  let asked: Promise<Listening> | null = null;
   const release = () => {
     ended = true;
+    source?.disconnect();
     node?.disconnect();
+    if (node) node.onaudioprocess = null;
     stream?.getTracks().forEach((t) => t.stop());
-    void ctx.close().catch(() => undefined);
+  };
+  const open = async (): Promise<Listening> => {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(
+        { audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    } catch (e) {
+      release();
+      return e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError") ? "refused" : "none";
+    }
+    allowed = true;
+    // let go while the browser was still asking: the microphone goes back at once
+    if (ended) { release(); return "none"; }
+    source = ctx.createMediaStreamSource(stream);
+    // one input channel: a stereo microphone is mixed down to it by the node itself; 2048 samples (about 40ms) a
+    // block, so the orb follows the voice and little is left unread when the finger lifts
+    node = ctx.createScriptProcessor(2048, 1, 1);
+    node.onaudioprocess = (e) => {
+      const block = new Float32Array(e.inputBuffer.getChannelData(0));
+      chunks.push(block);
+      if (onLevel) {
+        let sum = 0;
+        for (let i = 0; i < block.length; i++) sum += block[i] * block[i];
+        onLevel(Math.min(1, Math.sqrt(sum / block.length) * 4));
+      }
+    };
+    source.connect(node);
+    node.connect(ctx.destination);       // a processor not connected onward is never run (Chrome); it outputs silence
+    return "listening";
   };
   return {
-    async listen() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(
-          { audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      } catch (e) {
-        release();
-        return e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError") ? "refused" : "none";
-      }
-      // let go while the browser was still asking: the microphone goes back at once
-      if (ended) { release(); return "none"; }
-      const source = ctx.createMediaStreamSource(stream);
-      // one input channel: a stereo microphone is mixed down to it by the node itself
-      node = ctx.createScriptProcessor(4096, 1, 1);
-      node.onaudioprocess = (e) => { chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
-      source.connect(node);
-      node.connect(ctx.destination);       // a processor not connected onward is never run (Chrome); it outputs silence
-      return "listening";
-    },
+    listen() { return (asked ??= open()); },
     async stop() {
       const rate = ctx.sampleRate;
       release();

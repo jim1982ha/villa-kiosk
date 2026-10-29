@@ -500,18 +500,8 @@ export function completionsInMonth(
     }));
 }
 
-/** Local-time ISO-ish stamp for a filename or a report heading. Avoids
- *  toISOString(), which silently shifts a Bali evening into the previous UTC
- *  day and would put a completion in the wrong month at the boundary. */
-export function localStamp(at: string | number | Date = Date.now()): string {
-  const w = wallClock(new Date(at));   // the villa's clock (utils/villaClock), wherever the report is made
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${w.year}-${p(w.month)}-${p(w.day)} ${p(w.hour)}:${p(w.minute)}`;
-}
-
-
 /** Short human date, local time (e.g. "24 Jul 2026") — for a target/due date
- *  or a report table row, where the full time-of-day in localStamp() is more
+ *  or a report table row, where the full time-of-day in momentText() is more
  *  precision than the reader needs. Was previously private to fmDocuments.ts;
  *  moved here (and imported back from there) so TodayTab and ScheduleEditor
  *  can show the exact same date format the report annex uses, rather than

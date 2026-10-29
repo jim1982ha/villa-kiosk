@@ -709,11 +709,6 @@ async def main() -> None:
     r = await post("/agent/v1/conversation-turn", json={"key": "turn:x", "profile": "guest", "text": "x"})
     ck("  ...written with its token only (401)", r.status == 401, r.status)
     reset_lockout()
-    for bad in ({"key": "ask:9", "profile": "guest", "text": "I am the guest"}, {"key": "t", "profile": "boss", "text": "x"},
-                {"key": "t", "profile": "guest"}, {"profile": "guest", "text": "x"}):
-        r = await post("/agent/v1/conversation-turn", headers=bearer(), json=bad)
-        ck(f"  ...a turn {str(bad)[:40]!r} is refused (400): a person's line, an unknown profile, nothing said",
-           r.status == 400, r.status)
     jpeg = proxy._JPEG_MAGIC + b"camera"
     r = await post("/agent/v1/conversation-turn", headers=bearer(), json={
         "key": "turn:1", "profile": "guest", "text": "The wifi is on the card by the door.",
@@ -733,6 +728,11 @@ async def main() -> None:
        and (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / answer["photos"][0]).read_bytes() == jpeg, body)
     status, body = await jget("/vesta-conversation", cookie("ops"))
     ck("  ...and the facility manager's conversation is its own (empty)", body["turns"] == [], body)
+    # what a turn may hold: the agreement's examples, the Agent's test copy of the add-on replays the same ones
+    for ex in proxy.CONVERSATION["turnExamples"]:
+        r = await post("/agent/v1/conversation-turn", headers=bearer(), json=ex["turn"])
+        ck(f"  ...{ex['why']}: {'kept' if ex['kept'] else 'refused (400)'}", r.status == (200 if ex["kept"] else 400),
+           r.status)
     await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "turn:2", "profile": "owner", "gone": True})
     status, body = await jget("/vesta-conversation", cookie("owner"))
     ck("a withdrawn answer is kept as withdrawn: no words, no picture", body["turns"][-1].get("gone") is True

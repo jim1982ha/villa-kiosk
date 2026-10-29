@@ -7,13 +7,14 @@
 //
 // Time-to-resolution is what evidences supervision, so the app stamps the resolution time itself.
 
+import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
-import { faultTitle, keptDays, localStamp, STAGE_WORDS, stageOf, ticketStats, type FmRetention } from "@/fm/fmEngine";
+import { faultTitle, keptDays, STAGE_WORDS, stageOf, ticketStats, type FmRetention } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
 import { closedActions, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork, type WorkAction } from "@/fm/deviceWork";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
@@ -79,7 +80,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
     return (
       <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={status} actions={actions}
-        when={faultWhen(t, localStamp)} notes={faultNoteLines(t, localStamp)} photoIds={t.photoIds}
+        when={faultWhen(t, momentText)} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
         documentIds={t.documentIds} amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
         erase={{ title: "Erase this record", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => setEditingId(t.id)}

@@ -6,6 +6,7 @@
 // 3D map. Overdue work is exactly the kind of gap a management contract's
 // maintenance-standard clause exists to prevent, whatever that clause is.
 
+import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
@@ -13,7 +14,7 @@ import { useFmData } from "@/fm/FmDataContext";
 import { useDeviceIdentity } from "@/config/VillaModel";
 import { openCounts } from "@/fm/deviceWork";
 import { pillClass, toneClass } from "@/fm/tone";
-import { budgetStatus, dueLine, DUE_WORDS, localStamp, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
+import { budgetStatus, dueLine, DUE_WORDS, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
@@ -120,7 +121,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           <RecordCard key={s.schedule.id} tone={toneClass(DUE_WORDS[s.state].tone)} title={s.schedule.title}
             status={{ text: DUE_WORDS[s.state].word, tone: pillClass(DUE_WORDS[s.state].tone) }}
             when={`${dueText(s)} · every ${s.schedule.everyDays} days`
-              + (s.last ? ` · last ${localStamp(s.last.at)} by ${workedBy(s.last)}` : "")}
+              + (s.last ? ` · last ${momentText(s.last.at)} by ${workedBy(s.last)}` : "")}
             pills={<>
               {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
               {s.schedule.room && <span className="fm-clause">{s.schedule.room}</span>}

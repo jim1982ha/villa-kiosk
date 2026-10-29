@@ -180,7 +180,7 @@ console.log("\n  one word per check state and one verdict, on the tab, in the re
   }
   const snap = R.buildReadinessSnapshot(one("warn"), "V", "2026-09");
   ck("the snapshot opens with the documents' shared header (its Generated stamp is the moment taken), no \"Taken\" line, nothing shouted",
-     snap.startsWith("# V: readiness snapshot\n**Period:** ") && /^\*\*Generated:\*\* \d{4}-\d{2}-\d{2} \d{2}:\d{2}  $/m.test(snap) && /^\*\*Scope:\*\* /m.test(snap)
+     snap.startsWith("# V: readiness snapshot\n**Period:** ") && /^\*\*Generated:\*\* \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}  $/m.test(snap) && /^\*\*Scope:\*\* /m.test(snap)
      && !/Taken |READY|Attention/.test(snap), snap.split("\n").slice(0, 5));
   const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
   ck("  ...and neither the tab nor the documents spell a verdict or a check word themselves",

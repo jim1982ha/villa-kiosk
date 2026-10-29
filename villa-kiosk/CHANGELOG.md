@@ -1,3 +1,21 @@
+## 2.496.598
+
+What you will see (with VESTA Agent 0.12.394):
+- Hold the microphone left of the robot: a large orb fills the screen, "VESTA is listening", and swells with your
+  voice. Let go: the orb goes and VESTA's conversation opens with your question.
+- The microphone now starts the moment your finger touches the button (once you have allowed it), so your first words
+  are kept. Before, it started half a second later and Whisper heard the end of the sentence only. A quick tap may
+  make the browser's recording dot blink for a moment.
+- In the open conversation, the box has its own microphone button: hold it to ask the next question aloud. The
+  button lights with a small orb while VESTA listens (no full screen orb there). A tap on it says how to use it.
+- If the tablet interrupts a hold (a banner, a call), the conversation says your question was not sent, instead of
+  losing it without a word.
+- Every date on the tablet is written as Telegram writes it, day first: "24/10/2026 19:05" (issues, tickets, recaps,
+  statements, snapshots, the conversation).
+- Typing "/help", "/whoami" or "/ask" alone to VESTA gets an answer instead of the dots for 10min (VESTA Agent).
+- An alert's card on the tablet lists every step, whoever it was sent to, even after VESTA chased the owner (VESTA
+  Agent).
+
 ## 2.496.597
 
 (2.496.596 was never published: its build machine failed to start. This is the same change.)

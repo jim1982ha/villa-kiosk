@@ -5,9 +5,10 @@
 // by its own name (monthlyDocument.DOCUMENT_KINDS: snapshots were listed as
 // "statements" until 2.496.403).
 
+import { momentText } from "@/utils/dateText";
 import { Eye, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { localStamp } from "@/fm/fmEngine";
+
 import { DOCUMENT_KINDS } from "@/fm/monthlyDocument";
 import type { FmSavedDocument } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
@@ -50,7 +51,7 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
       <div className="fm-list">
         {docs.map((doc) => (
           // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22)
-          <RecordCard key={doc.id} title={title(doc)} when={`Saved ${localStamp(doc.generatedAt)}`}
+          <RecordCard key={doc.id} title={title(doc)} when={`Saved ${momentText(doc.generatedAt)}`}
             pills={<AgentMark record={doc} />}
             actions={<>
               <button className="btn ghost" onClick={() => onOpen(doc)}>

@@ -165,8 +165,8 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
 }
 const faults = src("components/fm/TicketsTab.tsx");
 ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",
-   !/fm-timeline-head|fm-timeline-dot/.test(faults) && /notes=\{faultNoteLines\(t, localStamp\)\}/.test(faults)
-   && /when=\{faultWhen\(t, localStamp\)\}/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
+   !/fm-timeline-head|fm-timeline-dot/.test(faults) && /notes=\{faultNoteLines\(t, momentText\)\}/.test(faults)
+   && /when=\{faultWhen\(t, momentText\)\}/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
 {
   // what the button is: fm/deviceWork's, by value; that the Closed list draws it: the one wiring line
   const { closedActions, workRecord } = await import("@/fm/deviceWork");

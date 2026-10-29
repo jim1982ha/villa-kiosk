@@ -4,6 +4,7 @@
 // (ticket 17 of "One inbox", owner 2026-10-28): the list is one line per device there, the card unchanged here. The
 // villa by room / floor / category and Recent activity were removed before (owner, 2026-10-20).
 
+import { momentText } from "@/utils/dateText";
 import { useState, type ReactNode } from "react";
 import { CheckCircle2 } from "lucide-react";
 import Tip from "@/components/common/Tip";
@@ -13,7 +14,7 @@ import type { CardLine, CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
 import FaultStageModal from "@/components/fm/FaultStageModal";
-import { localStamp } from "@/fm/fmEngine";
+
 import type { Announcement } from "@/messages/announcements";
 import { AnnouncementContent, RecordButtons } from "@/components/messages/AnnouncementContent";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
@@ -113,7 +114,7 @@ function CockpitAttentionSub({ line, actions, message }: { line: CardLine; actio
           {/* VESTA's message of its alert says it all (its "To:", "What to do", its Status: the same story) */}
           {message ?? (line.story.length > 0 && (
             <ul className="cockpit-attention-story">
-              {line.story.map((s) => <li key={`${s.at} ${s.note}`} className="cockpit-attention-latest">{s.note} · {localStamp(s.at)}</li>)}
+              {line.story.map((s) => <li key={`${s.at} ${s.note}`} className="cockpit-attention-latest">{s.note} · {momentText(s.at)}</li>)}
             </ul>
           ))}
           {/* when the VESTA Agent closes it if it stays right (owner, 2026-10-21) */}

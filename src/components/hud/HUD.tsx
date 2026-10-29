@@ -21,7 +21,7 @@
 // Bottom bar: bottom-right shows the first-person movement joystick only.
 
 import PresenceTile from "./PresenceTile";
-import TalkButton from "./TalkButton";
+import TalkButton from "@/components/messages/TalkButton";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { useNow } from "@/hooks/useInterval";
@@ -160,7 +160,7 @@ export default function HUD({
   // agent's status (every minute, owner and facility manager) and the VESTA button the conversation's (every read, every
   // profile), so for up to a minute one showed VESTA and the other did not. Both read the conversation's now: the one
   // every profile makes. `doors.agent` still says whether this profile is shown the Agent at all.
-  const { thread } = useConversation();
+  const { thread, talker } = useConversation();
   const robot = doors.agent && thread.shown;
   const agentTitle = "VESTA Agent, online";
   // The agent's presence as the dot on its robot — the top bar's and the
@@ -604,7 +604,10 @@ export default function HUD({
                 bottom right. Without one, the ⚠ as before. */}
             {/* VESTA's conversation, its own button beside the robot (owner, 2026-10-29), every profile, while VESTA runs:
                 tap to open it, hold to talk where the page can record (ticket 23 of "One inbox") */}
-            {thread.shown && <TalkButton onOpen={onAskVesta} />}
+            {thread.shown && (
+              <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta} className="icon-btn"
+                idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} />
+            )}
             <button
               className={`icon-btn${robot ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
               onClick={onOpenCockpit}

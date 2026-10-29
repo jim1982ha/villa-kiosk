@@ -75,10 +75,12 @@ export const ASK_SAID: Record<Exclude<AskOutcome, "sent">, string> = {
 
 /** The line under the box when a spoken question was not recorded (hold to talk): the microphone refused, none, or
  *  nothing heard while the button was held. */
-export const TALK_SAID: Record<"refused" | "none" | "silent", string> = {
+export const TALK_SAID: Record<"refused" | "none" | "silent" | "cut" | "hold", string> = {
   refused: "The microphone is not allowed: allow it for this page in the browser's settings, then hold to talk again.",
   none: "No microphone could be used on this device.",
   silent: "Nothing was recorded: keep holding the button while you speak.",
+  cut: "Your question was not sent: the touch was interrupted. Hold to talk again.",
+  hold: "Hold the microphone while you speak, then let go to send.",
 };
 
 /** What a spoken question's line says until VESTA has heard its words. */
