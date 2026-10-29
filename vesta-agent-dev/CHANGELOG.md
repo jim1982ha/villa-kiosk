@@ -1,3 +1,8 @@
+## 0.12.386
+
+What you will see (with VESTA (dev2) 2.496.588):
+- On the tablet, an open issue's VESTA card shows Need help only: the issue's own Close does what Done does.
+
 ## 0.12.385
 
 What you will see (needs VESTA (dev2) 2.496.587):
