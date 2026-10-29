@@ -1,3 +1,11 @@
+## 2.496.599
+
+What you will see:
+- While a spoken question is still being sent, both microphone buttons say so ("Sending your question to VESTA").
+  Holding the conversation's microphone at that moment no longer answers "Hold the microphone while you speak".
+- A day alone keeps its words ("24 Jul 2026"); a moment with its time reads "24/10/2026 19:05" (your choice,
+  29/10). Nothing else changes on screen.
+
 ## 2.496.598
 
 What you will see (with VESTA Agent 0.12.394):
