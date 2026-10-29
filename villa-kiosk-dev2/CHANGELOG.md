@@ -1,3 +1,16 @@
+## 2.496.608
+
+What you will see:
+- A question you speak to VESTA stays in its place in the conversation, even when you type another one before VESTA
+  has written out the first. Before, the spoken one could drop below it, and the dots kept running under an answered
+  question.
+- A button you pressed on VESTA's card (Approve) stays "Sent" when VESTA redraws the card without a new step (a
+  translation, a title retouched); before, it could be pressed a second time.
+- A page VESTA attaches to an answer in your conversation is only ever shown to your own profile.
+- Right after a reload, the Inbox opens on Notifications when VESTA's notifications are unread, as it does for the
+  villa's own.
+- On a guest's tablet, a ring's photo stays for as long as the ring holds the screen ("Ring shown for"), not 60s.
+
 ## 2.496.607
 
 What you will see:
