@@ -154,10 +154,10 @@ ck("a guest (one tab, Messages) gets no tab strip: the strip is drawn only with 
 const tab = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
 ck("  ...the tab lists, counts and opens what messagesView says, from the open issues and the page's announcements",
    /const \{ kept, unread, unreadReports, shown \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, announcements: kept, filter, selected,/.test(tab)
-   && /view\.filters\.map\(/.test(tab) && /const item = raising \|\| threadOpen \? null : view\.selected;/.test(tab)
+   && /view\.filters\.map\(/.test(tab) && /const item = raising \? null : view\.selected;/.test(tab)
    && /const \{ issues: showsIssues, notifications: showsNotes, reports: showsReports \} = view\.shows;/.test(tab));
-ck("  ...a phone shows the item someone chose (a line, a warning, the ticket form, VESTA's thread), else the list",
-   /const reading = !!raising \|\| threadOpen \|\| view\.openedBy === "asked" \|\| view\.openedBy === "focus";/.test(tab)
+ck("  ...a phone shows the item someone chose (a line, a warning, the ticket form), else the list",
+   /const reading = !!raising \|\| view\.openedBy === "asked" \|\| view\.openedBy === "focus";/.test(tab)
    && /className=\{`messages\$\{reading \? " reading" : ""\}`\}/.test(tab));
 
 console.log("\n  the unread mark, drawn where the model says (ticket 18):");
@@ -177,9 +177,20 @@ ck("Messages opens where the model says, and marks read what it shows",
    && /const onScreen = readOnScreen\(filter, \{ notifications: paged\.page, reports: reportsPaged\.page \}, item, kept\);/.test(tab));
 
 console.log("\n  a report, drawn (ticket 20):");
-const { ReportDetail } = await import("@/components/cockpit/MessagesTab");
+const { NoteDetail, ReportDetail } = await import("@/components/cockpit/MessagesTab");
 globalThis.window = globalThis.window ?? { location: { pathname: "/" } };   // the add-on's own address (no Ingress prefix)
 const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true }));
+// ⚠️ THE COCKPIT'S ONE CARD (owner, 2026-10-29: "notification cards shall use the same shared card component used across
+// all Cockpit lists"): its frame, title and when as an issue's, its buttons under its words
+{
+  const ring = ann(9, { title: "🔔 Visitor", text: "Someone is at the door.", key: "R1",
+    buttons: [{ label: "Unlock", command: "/unlock" }] });
+  const card = draw(h(NoteDetail, { announcement: ring, onPress() {}, presses: {} }));
+  ck("an open notification is the shared card (RecordCard): its title in the card's head, its words in its body, its "
+     + "buttons in the card's own row", /class="fm-record-card"/.test(card) && /fm-record-head[\s\S]*🔔 Visitor/.test(card)
+     && /fm-record-body[\s\S]*Someone is at the door\.[\s\S]*fm-record-actions[\s\S]*Unlock/.test(card), card);
+  ck("  ...a report too", /class="fm-record-card"/.test(opened));
+}
 ck("its words, then its page opened in the document viewer (the add-on's sandboxed page)",
    opened.includes("Two things") && opened.includes('href="/fm-document/page-en-0001"') && opened.includes("Open the page"), opened);
 ck("  ...no page link for a profile the add-on serves no page to, nor for a report without a page",

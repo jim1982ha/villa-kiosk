@@ -159,14 +159,14 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-detail { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 0 0 12px 16px; }
 .messages-back { display: none; }
 .messages-empty { padding: 8px 0; }
-.messages-note { display: flex; flex-direction: column; gap: 10px; }
-.messages-note-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.messages-note-head strong { font-size: var(--text-md); }
-.messages-note-head .muted { font-size: var(--text-xs); }
-/* the open message reads at the menus' size; the full-screen ring keeps its large text (.announcement-full-text) */
-.messages-note .announcement-full-text, .messages-note .announcement-full-status, .messages-note .announcement-full-to {
-  font-size: var(--text-base); }
-.messages-note .announcement-full-photo { max-height: 320px; align-self: flex-start; }
+/* an open notification or report is the Cockpit's one card (RecordCard, owner 2026-10-29): its words as an issue's
+   lines, its "To:" and Status as an issue's story; the full-screen ring keeps its large text (.announcement-full-text) */
+.messages-card-body { display: flex; flex-direction: column; gap: 6px; }
+.messages-card-body .announcement-full-text { font-size: var(--text-xs); color: var(--text-secondary); }
+.messages-card-body .announcement-full-to, .messages-card-body .announcement-full-status {
+  font-size: var(--text-2xs); color: var(--text-dim); }
+.messages-card-body .announcement-full-photo { max-height: 320px; align-self: flex-start; }
+.messages-detail > .fm-record-card + .fm-record-card { margin-top: 10px; }
 @media (max-width: 860px) {
   .messages-list { flex: 1 1 auto; border-right: 0; }
   .messages-scroll { padding-right: 0; }
@@ -488,10 +488,9 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   font-family: inherit; cursor: pointer; min-height: var(--touch-min); }
 .messages-section .cockpit-issues-head { margin-top: 12px; }
 .messages-section .cockpit-issues-head .settings-section-title { margin: 0; }
-/* VESTA's thread (ticket 21 of "One inbox"): pinned above the list; open, its lines in the detail pane with the box to
-   ask under them — the person's own lines set apart, as in any chat */
-.messages-thread { border-bottom: 1px solid var(--hairline); }
-.vesta-thread { display: flex; flex-direction: column; gap: 10px; min-height: 100%; }
+/* VESTA's conversation, its own window (ticket 21 of "One inbox"; owner, 2026-10-29: beside the robot, the windows' own
+   frame): its lines scroll above the box to ask, the person's own lines set apart, as in any chat */
+.vesta-modal .modal-body.vesta-thread { display: flex; flex-direction: column; gap: 10px; }
 .vesta-thread-lines { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; }
 .vesta-turn { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px;
   background: var(--bg-input); max-width: 92%; align-self: flex-start; }

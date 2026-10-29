@@ -106,10 +106,10 @@ console.log("\n  the doors");
   ck("the top bar opens the Cockpit on Messages", run(OWNER, { type: "cockpitTab", tab: "faults" }, { type: "openWindow", window: "cockpit", tab: "messages" }).cockpitTab === "messages");
 }
 
-console.log("\n  Settings' tabs (ticket 16 of \"One inbox\"): the profile button opens General, the Cockpit's gear Messages");
+console.log("\n  Settings' tabs (ticket 16 of \"One inbox\"): the profile button opens General; a tab asked for opens that one");
 {
   const gear = run(OWNER, { type: "openWindow", window: "cockpit", tab: "messages" }, { type: "openWindow", window: "settings", settingsTab: "messages" });
-  ck("the Cockpit's gear opens Settings on Messages, over the Cockpit", gear.windows.settings && gear.windows.cockpit && gear.settingsTab === "messages", gear);
+  ck("Settings asked for on Messages opens there, over the Cockpit", gear.windows.settings && gear.windows.cockpit && gear.settingsTab === "messages", gear);
   const again = run(OWNER, { type: "openWindow", window: "settings", settingsTab: "messages" }, { type: "closeWindow", window: "settings" },
     { type: "openWindow", window: "settings" });
   ck("  ...the profile button opens it on General, wherever it was left", again.settingsTab === "general", again.settingsTab);

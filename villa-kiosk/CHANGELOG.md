@@ -1,3 +1,17 @@
+## 2.496.583
+
+What you will see:
+- VESTA has its own button in the top bar, a speech bubble next to the robot (every profile, only while VESTA runs). It
+  opens VESTA's conversation in a window of its own, framed like every other window: "New conversation" at the top,
+  your questions and VESTA's answers, the box to ask at the bottom, Close. On a phone, the menu's "Ask VESTA" opens
+  the same window. VESTA is no longer a line at the top of the Cockpit.
+- The Cockpit's first tab is now called Inbox (beside Tickets, Schedule, Recap and Spend).
+- The gear at the top right of the Cockpit is gone: its settings are under the profile button › Settings › Messages.
+- Every Cockpit card shows its text across the whole card, with its buttons in a row under it, on the right (open
+  issues, tickets, schedule, spend, work done).
+- An open notification or report is now the same card as an issue: the same frame, title, text sizes and colours, and
+  its buttons (the doorbell's Unlock) under it on the right.
+
 ## 2.496.582
 
 What you will see (talking to VESTA on the tablet, needs VESTA 0.12.380):

@@ -11,7 +11,7 @@
 
 import Window from "@/components/common/Window";
 import { useMemo } from "react";
-import { MessageSquare, RefreshCw, Settings } from "lucide-react";
+import { Inbox, RefreshCw } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import type { Doors } from "@/auth/doors";
@@ -48,22 +48,19 @@ export interface CockpitModalProps {
   onReportProblem: () => void;
   /** The devices whose open issue Messages opens (a device window's warning). */
   focusFaults?: readonly string[];
-  /** Messages opens on VESTA's thread ("Ask VESTA"). */
-  openThread?: boolean;
-  /** The header's gear: Settings, open on its Messages tab (ticket 16 of "One inbox"); absent for a profile that may
-   *  not open Settings. */
-  onOpenSettings?: () => void;
 }
 
 /** Messages, then the Facility tabs (2.496.273: the Facility window merged in — one top-bar button, one window, the
  *  same workflows). Messages replaced the Overview (ticket 17 of "One inbox", owner 2026-10-28): its open issues are
  *  Messages › Open issues. */
 export type CockpitTab = "messages" | FacilityTab;
-const MESSAGES_TAB: ModalTab<CockpitTab> = { id: "messages", label: "Messages", icon: MessageSquare };
+// ⚠️ "INBOX" (owner, 2026-10-29: "rename the Messages tab to something more consistent"): one word beside Tickets,
+// Schedule, Recap, Spend — its issues, notifications and reports, VESTA's conversation having its own window
+const MESSAGES_TAB: ModalTab<CockpitTab> = { id: "messages", label: "Inbox", icon: Inbox };
 
 export default function CockpitModal({
   onClose, onOpenEntity, doors, tab, onTab, reportFaultFor, onFaultFormOpened,
-  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults, openThread, onOpenSettings,
+  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults,
 }: CockpitModalProps) {
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
   const tabs: ModalTab<CockpitTab>[] = doors.facility ? [MESSAGES_TAB, ...FACILITY_TABS] : [MESSAGES_TAB];
@@ -94,7 +91,8 @@ export default function CockpitModal({
         {/* Updates Home Assistant has waiting (firmware, add-ons — this one included): in the header, drawn like
             Advanced Settings' header buttons, for the profiles holding `doors.updates` (owner, 2026-10-14). It only
             SAYS so — nothing to press; it used to be a line at the bottom of the Overview. */}
-        {/* the updates waiting and the gear, grouped at the right as Advanced Settings' header buttons are */}
+        {/* the updates waiting, at the right as Advanced Settings' header buttons are (the gear to Settings › Messages
+            was removed: owner, 2026-10-29) */}
         <div className="modal-header-actions">
         {updatesAvailable > 0 && (
           <Tip text={updatesTip(updates)}>
@@ -103,13 +101,6 @@ export default function CockpitModal({
               <RefreshCw size={18} />
               <span className="icon-btn-count" aria-hidden="true">{formatCountBadge(updatesAvailable)}</span>
             </span>
-          </Tip>
-        )}
-        {onOpenSettings && (
-          <Tip text="Messages settings">
-            <button type="button" className="icon-btn header-icon-btn" aria-label="Messages settings" onClick={onOpenSettings}>
-              <Settings size={18} aria-hidden />
-            </button>
           </Tip>
         )}
         </div>
@@ -126,7 +117,7 @@ export default function CockpitModal({
         ) : (
           <MessagesTab onOpenEntity={onOpenEntity} doors={doors} reportFaultFor={reportFaultFor}
             onFaultFormOpened={onFaultFormOpened} onEditTicket={onEditTicket} onReportProblem={onReportProblem}
-            focusFaults={focusFaults} openThread={openThread} />
+            focusFaults={focusFaults} />
         )}
       </div>
 

@@ -16,6 +16,7 @@ import UpdateBanner from "@/components/hud/UpdateBanner";
 import AnnouncementNotice from "@/components/hud/AnnouncementNotice";
 import { AnnouncementsProvider } from "@/messages/AnnouncementsContext";
 import { ConversationProvider } from "@/messages/ConversationContext";
+import VestaWindow from "@/components/messages/VestaThread";
 import AppNotice, { AppNoticeContext, type AppNoticeMessage } from "@/components/hud/AppNotice";
 import { NoticeStack } from "@/components/hud/Notice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
@@ -757,7 +758,7 @@ export default function Dashboard() {
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
         onOpenCockpit={() => go({ type: "openWindow", window: "cockpit", tab: "messages" })}
-        onAskVesta={() => go({ type: "askVesta" })}
+        onAskVesta={() => openSurface("vesta")}
         onOpenCategory={(category) => go({ type: "openList", list: { kind: "category", category } })}
         onOpenPresence={() => openSurface("presence")}
       />
@@ -770,6 +771,8 @@ export default function Dashboard() {
         scenes={haScenes}
       />
 
+      {/* VESTA's conversation, its own window (owner, 2026-10-29: "a dedicated icon in the top bar, next to the robot") */}
+      {shown("vesta") && <VestaWindow onClose={() => closeSurface("vesta")} canOpenPage={doors.facility} />}
       {shown("presence") && (
         <PresenceWindow onClose={() => closeSurface("presence")} onOpenEntity={(id) => handOver("presence", id)}
           canOpen={(id) => devicePanel(id) !== null} />
@@ -877,8 +880,6 @@ export default function Dashboard() {
           onTicketEditOpened={() => go({ type: "ticketEditOpened" })}
           onReportProblem={() => go({ type: "reportProblem" })}
           focusFaults={screen.faultsFocus ?? undefined}
-          openThread={screen.threadFocus}
-          onOpenSettings={doors.settings ? () => go({ type: "openWindow", window: "settings", settingsTab: "messages" }) : undefined}
         />
       )}
 

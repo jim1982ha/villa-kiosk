@@ -1,7 +1,7 @@
 // The Messages settings (ticket 16 of "One inbox", owner 2026-10-28): "Full screen for" and "Ring shown for" are the
 // villa's (every tablet, empty / 60s by default), "Rings full screen on this tablet" each tablet's; Advanced Settings
-// gains a Messages tab between Devices and System, owner only; Settings a strip General · Messages, opened on Messages
-// by the Cockpit's gear.
+// gains a Messages tab between Devices and System, owner only; Settings a strip General · Messages, reached
+// from the profile button's Settings (the Cockpit's gear that opened it there was removed, owner 2026-10-29).
 import { readFileSync } from "node:fs";
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
@@ -39,9 +39,11 @@ ck("Settings: a strip General · Messages; Messages holds this tablet's switch, 
    /\{ id: "general", label: "General"[^}]*\},\s*\{ id: "messages", label: "Messages"/.test(set)
    && /tab === "messages"[\s\S]*?ariaLabel="Rings full screen on this tablet"/.test(set) && /"walkSpeed", "ringsFullScreen",/.test(set));
 const dash = src("pages/Dashboard.tsx");
-ck("the Cockpit's gear opens Settings on Messages, for a profile that may open Settings",
-   /onOpenSettings=\{doors\.settings \? \(\) => go\(\{ type: "openWindow", window: "settings", settingsTab: "messages" \}\) : undefined\}/.test(dash)
-   && /\{onOpenSettings && \(/.test(src("components/cockpit/CockpitModal.tsx")));
+// ⚠️ NO GEAR IN THE COCKPIT (owner, 2026-10-29: "it doesn't make sense to see it here"): Settings › Messages is reached
+// from the profile button's Settings, its strip
+ck("the Cockpit's header has no Settings gear any more (the top bar's own Settings stays)",
+   !/onOpenSettings|Messages settings/.test(src("components/cockpit/CockpitModal.tsx"))
+   && !/<CockpitModal[^>]*onOpenSettings/.test(dash));
 ck("  ...and Settings opens on the tab the screen holds", /tab=\{screen\.settingsTab\}/.test(dash));
 
 done("✅ the Messages settings: the villa's in Advanced Settings, each tablet's in Settings");

@@ -11,8 +11,9 @@ const dash = rd("pages/Dashboard.tsx"), hud = rd("components/hud/HUD.tsx");
 const ids = [...fm.matchAll(/\{ id: "(\w+)", label: "([^"]+)"/g)].map((m) => m[2]);
 // owner, 2026-10-14: Tickets right after the Overview; Today + Schedule one tab, Readiness + Recap one tab; the
 // Overview became Messages (ticket 17 of "One inbox", owner 2026-10-28)
-ck("5 tabs: Messages, then Tickets, Schedule (today's board + the schedule), Recap (readiness + the recap), Spend",
-   /const MESSAGES_TAB: ModalTab<CockpitTab> = \{ id: "messages", label: "Messages"/.test(cockpit) && !/"overview"/.test(cockpit)
+// ...named Inbox (owner, 2026-10-29: one word beside the others)
+ck("5 tabs: Inbox, then Tickets, Schedule (today's board + the schedule), Recap (readiness + the recap), Spend",
+   /const MESSAGES_TAB: ModalTab<CockpitTab> = \{ id: "messages", label: "Inbox"/.test(cockpit) && !/"overview"/.test(cockpit)
    && ids.join() === "Tickets,Schedule,Recap,Spend", ids);
 ck("  ...the merged tabs show both their parts",
    /tab === "schedule" && \([\s\S]{0,40}<TodayTab[\s\S]{0,160}<ScheduleEditor \/>/.test(fm)

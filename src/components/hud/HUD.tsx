@@ -100,7 +100,7 @@ interface Props {
   /** Open the Cockpit — mounted by the Dashboard beside the other windows
    *  (pages/surfaces); with `doors.agent` its button is the robot. */
   onOpenCockpit: () => void;
-  /** "Ask VESTA" (the phone's menu, while VESTA runs): the Cockpit's Messages with VESTA's thread open. */
+  /** "Ask VESTA" (its top-bar button and the phone's menu row, while VESTA runs): VESTA's conversation window. */
   onAskVesta: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
@@ -591,6 +591,12 @@ export default function HUD({
                 agent configured the Cockpit's icon IS the robot — its count
                 (top right) stays the Cockpit's, the agent's presence dot sits
                 bottom right. Without one, the ⚠ as before. */}
+            {/* VESTA's conversation, its own button beside the robot (owner, 2026-10-29), every profile, while VESTA runs */}
+            {thread.shown && (
+              <button className="icon-btn" onClick={onAskVesta} title="Ask VESTA" aria-label="Ask VESTA">
+                <MessageCircle size={24} />
+              </button>
+            )}
             <button
               className={`icon-btn${robot ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
               onClick={onOpenCockpit}

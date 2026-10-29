@@ -1,11 +1,14 @@
 // src/components/messages/VestaThread.tsx
-// VESTA's thread, open on the right of Messages (ticket 21 of "One inbox", owner 2026-10-28): this profile's conversation
-// with VESTA, a box to ask, and "New conversation" (Telegram's /new). The question is sent as typed; the add-on stamps who
+// VESTA's conversation, a window of its own (ticket 21 of "One inbox"; owner, 2026-10-29: "a dedicated icon in the top
+// bar, next to the robot … re-using the same graphical components as any other modal"): this profile's conversation with
+// VESTA, a box to ask, and "New conversation" (Telegram's /new). The question is sent as typed; the add-on stamps who
 // asks, and VESTA's answer arrives in the thread (messages/ConversationContext). What it shows is the model's
 // (messages/conversationModel); this draws it.
 
 import { useEffect, useRef, useState } from "react";
 import { FileText, RotateCcw, Send } from "lucide-react";
+import Window from "@/components/common/Window";
+import ModalFooter from "@/components/common/ModalFooter";
 import { localStamp } from "@/fm/fmEngine";
 import { documentUrl } from "@/fm/fmApi";
 import { ASK_SAID, NEW_CONVERSATION, QUESTION_MAX, type Turn } from "@/messages/conversation";
@@ -33,7 +36,7 @@ export function TurnLine({ turn, canOpenPage }: { turn: Turn; canOpenPage: boole
   );
 }
 
-export default function VestaThread({ canOpenPage }: { canOpenPage: boolean }) {
+export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => void; canOpenPage: boolean }) {
   const { thread, ask } = useConversation();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -54,13 +57,16 @@ export default function VestaThread({ canOpenPage }: { canOpenPage: boolean }) {
   const submit = () => { if (text.trim() && !sending) void send(text.trim()); };
 
   return (
-    <div className="vesta-thread">
-      <div className="messages-note-head">
-        <strong>VESTA</strong>
-        <button type="button" className="btn ghost" disabled={sending} onClick={() => void send(NEW_CONVERSATION)}>
-          <RotateCcw size={16} aria-hidden /> New conversation
-        </button>
+    <Window kind="content" label="VESTA" onClose={onClose} className="settings-modal vesta-modal">
+      <div className="modal-header">
+        <h2>VESTA</h2>
+        <div className="modal-header-actions">
+          <button type="button" className="btn ghost" disabled={sending} onClick={() => void send(NEW_CONVERSATION)}>
+            <RotateCcw size={16} aria-hidden /> New conversation
+          </button>
+        </div>
       </div>
+      <div className="modal-body vesta-thread">
       <div className="vesta-thread-lines" role="log" aria-live="polite">
         {thread.lines.length === 0 && (
           <p className="muted body-text messages-empty">Ask VESTA about the villa: what is on, what happened, what to check.</p>
@@ -79,6 +85,8 @@ export default function VestaThread({ canOpenPage }: { canOpenPage: boolean }) {
         </button>
       </form>
       {said && <p className="muted body-text">{said}</p>}
-    </div>
+      </div>
+      <ModalFooter onClose={onClose} />
+    </Window>
   );
 }

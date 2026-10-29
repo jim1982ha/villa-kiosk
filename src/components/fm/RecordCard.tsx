@@ -2,8 +2,8 @@
 // THE card of every Cockpit list — an open issue in Messages, a ticket, a closed ticket, a scheduled task, a spend
 // line, a piece of work done (owner, 2026-10-14/15: "the same style as any other card, fully re-using the same code").
 // Its title with a status pill (and a line under it: the room), the line of pills and when, its notes, photos and
-// reports — or its own lines (`body`: an open issue's problems) — a cost on the right, and its buttons on the right of
-// its text, inside the card. Tapping it opens it (`onOpen`); holding it erases it when it can be erased (`erase`:
+// reports — or its own lines (`body`: an open issue's problems) — a cost on the right, and its buttons in a row under
+// its text, on the right, inside the card (owner, 2026-10-29). Tapping it opens it (`onOpen`); holding it erases it when it can be erased (`erase`:
 // ErasableRow, superadmin) — a scheduled task is removed with its own bin instead.
 //
 // ⚠️ ONE CARD, NOT FOUR (architecture review, 2026-10-15): the Overview, Schedule and Spend each drew their own, so a
@@ -79,7 +79,7 @@ export default function RecordCard({ title, status, lead, titlePills, check, pil
         {status && <span className={`fm-badge ${status.tone}`}>{status.text}</span>}
         {check && <CheckPill when={check.when} tip={check.tip} />}
       </div>
-      {/* its text on the left, its cost and buttons on the right of it, inside the card (owner, 2026-10-14) */}
+      {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}
       <div className="fm-record-body">
         <div className="fm-row-main">
           {body ?? (
