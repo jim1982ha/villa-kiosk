@@ -1,3 +1,9 @@
+## 0.12.401
+
+What you will see:
+- Nothing changes on screen. A spoken answer now keeps to its time limit as a whole (it could take about twice the
+  setting), and each one leaves a record of whether it was spoken and why not.
+
 ## 0.12.400
 
 What you will see:
