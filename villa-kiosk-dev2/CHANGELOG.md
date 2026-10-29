@@ -1,3 +1,12 @@
+## 2.496.607
+
+What you will see:
+- Nothing changes on screen. A picture in your conversation with VESTA is now only ever shown to your own profile
+  (another profile allowed to see cameras could fetch it by its address). A spoken question is deleted once VESTA has
+  heard it, or after the 10min a question is kept, even when nobody asks anything after it.
+- Tapping Listen on an answer whose sound can no longer be played says "This answer's sound could not be played."
+  instead of nothing. A typed question cannot be sent while a spoken one is still being sent.
+
 ## 2.496.606
 
 What you will see:
