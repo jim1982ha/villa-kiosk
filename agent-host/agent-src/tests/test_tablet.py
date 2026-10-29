@@ -176,3 +176,60 @@ def test_the_owner_at_the_tablet_is_the_owner_for_an_action_that_runs_at_once(tm
     assert pol.person(owner).role == "owner" and pol.person(guest) is None
     # ...and a tablet is never sent a role's messages: it is in no role's chats, and no listed chat
     assert owner not in pol.chats_for("owner") and not pol.knows_chat(owner)
+
+
+def test_the_tablet_answer_says_what_became_of_a_request_approved_on_telegram(tmp_path, monkeypatch):
+    # owner, 2026-10-29: approved on Telegram, the light on, and the tablet still said "It will switch on once you press
+    # Approve" — "a single message to merge both status is enough"
+    from telegram_fake import BOT
+    kiosk = FakeKiosk()
+    v = make_agent(tmp_path, {**policy(), "act_enabled": True, "allowed_services": {"light.turn_on": "owner"},
+                              "chats": {"owner": OWNER}}, kiosk=kiosk)
+
+    class Writer:
+        def call_service(self, *a):
+            pass
+
+        def states(self, ids):
+            return {i: {"state": "on"} for i in ids}
+    v.actions.writer_factory = Writer
+
+    async def act(run):
+        await run["call"]("ha_call_service", {"domain": "light", "service": "turn_on", "entity_id": "light.example_gym"})
+    FakeAI("I've asked to turn on the gym light. It will switch on once you press Approve.", act=act).install(monkeypatch)
+    kiosk.person_asks("owner", "turn on the gym light")
+    collect(v)
+    (answer,) = kiosk.conversation("owner")
+    assert "once you press Approve" in answer["text"] and "Approved" not in answer["text"]
+    # the request went to the owner's Telegram chat (the tablet shows no buttons yet): pressed there
+    mid, (chat, _text, keyboard) = next((n, s) for n, s in enumerate(v.tg.sent, start=1001) if s[2])
+    data = keyboard["inline_keyboard"][0][0]["callback_data"]
+
+    async def press():
+        await v.on_ha_event("telegram_callback", {"id": "cb", "data": data, "chat_id": chat, "user_id": OWNER,
+                                                  "from_first": "JM", "message": {"message_id": mid, "chat": {"id": chat}},
+                                                  "bot": BOT})
+        await v.approvals.idle()
+    asyncio.run(press())
+    (told,) = kiosk.conversation("owner")                                  # ONE message, rewritten in place
+    assert told["key"] == answer["key"] and "once you press Approve" in told["text"]
+    import re
+    assert re.fullmatch(r"I've asked to turn on the gym light\. It will switch on once you press Approve\.\nStatus:\n"
+                        r"Approved on \d\d/\d\d/\d{4} \d\d:\d\d \(Owner\)\. Turned on Example gym\.", told["text"]), told["text"]
+    assert v.state.approval_answer(next(iter(v.state.approvals_decided_since("2000")))["id"]) is None   # settled: forgotten
+
+
+def test_the_tablet_answer_says_when_nobody_answered_the_request(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    kiosk = FakeKiosk()
+    v = make_agent(tmp_path, {**policy(), "act_enabled": True, "allowed_services": {"light.turn_on": "owner"},
+                              "chats": {"owner": OWNER}}, kiosk=kiosk)
+
+    async def act(run):
+        await run["call"]("ha_call_service", {"domain": "light", "service": "turn_on", "entity_id": "light.example_gym"})
+    FakeAI("I've asked for approval.", act=act).install(monkeypatch)
+    kiosk.person_asks("ops", "turn on the gym light")                     # the facility manager, at the tablet
+    collect(v)
+    assert asyncio.run(v.approvals.expire(datetime.now(timezone.utc) + timedelta(days=1))) == 1
+    (told,) = kiosk.conversation("ops")
+    assert told["text"].startswith("I've asked for approval.\nStatus:\nExpired on ") and "nothing was done" in told["text"]

@@ -209,7 +209,8 @@ class Vesta:
         self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work, facts=self.chat_facts, poster=self.poster)
         # an approval request from start to end (approvals.py); the siren's gate asks through it too
         self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
-                                   post=self.poster.post, timezone_name=settings.timezone, safe=self._safe)
+                                   post=self.poster.post, timezone_name=settings.timezone, safe=self._safe,
+                                   edit=self.delivery.edit)
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
                                notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone,
@@ -778,6 +779,8 @@ class Vesta:
             # the camera pictures the AI looked at go with it (Toolbox.photos)
             mid = await self.delivery.reply(cid, reply.text, keyboard=reply.keyboard, photos=res.photos)
             self.fault_offers.delivered(reply.offered, mid)
+            # a request this answer told of, shown in another chat: each of its steps rewrites this answer (approvals.py)
+            self.approvals.answered(res.approvals, cid, mid, reply.text)
             await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
 
     async def _delivered(self, request: Request, cid: int, person, res, asked: str):

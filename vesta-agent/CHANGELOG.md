@@ -1,3 +1,12 @@
+## 0.12.383
+
+What you will see:
+- When you ask VESTA for an action on the tablet and the Approve / Refuse request goes to Telegram, VESTA's answer on the
+  tablet now changes in place once it is decided: under "I've asked…", a Status line says "Approved on 29/10/2026 13:17
+  (JM). Turned on Indoor Top." (or refused, expired, not done). One message, no second one.
+- The same on Telegram when a facility manager asks for an action only the owner may approve: their chat's answer says
+  what became of it.
+
 ## 0.12.382
 
 What you will see:

@@ -760,6 +760,18 @@ class State:
                             (status, json.dumps(result, default=str), aid))
             self.db.commit()
 
+    # The answer that told the person who asked of a request shown elsewhere (approvals.Approvals.answered): rewritten
+    # with each step of the request, then forgotten once it is settled.
+    def keep_approval_answer(self, aid: str, chat: int, mid: int, text: str) -> None:
+        self.put(f"approval_answer:{aid}", json.dumps({"chat": int(chat), "mid": int(mid), "text": text}))
+
+    def approval_answer(self, aid: str) -> dict | None:
+        got = self.get(f"approval_answer:{aid}")
+        return json.loads(got) if got else None
+
+    def drop_approval_answer(self, aid: str) -> None:
+        self.drop(f"approval_answer:{aid}")
+
     def expire_approval(self, aid: str) -> bool:
         """A pending request past its time is expired — once: False when a press claimed it first (architecture review
         20: the expiry wrote "nothing was done" on a request a press had just carried out)."""

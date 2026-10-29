@@ -19,6 +19,7 @@ from typing import Awaitable, Callable
 from vesta_shared.message_format import acted
 from vesta_shared.limits import limit
 
+from . import layout
 from .notice import when
 from .policy import Decision
 
@@ -91,9 +92,10 @@ def approval_thread(approval_id: str) -> str:
 
 class Approvals:
     def __init__(self, *, state, policy: Callable, actions, thread, post: Callable[..., Awaitable], timezone_name: str,
-                 safe: Callable[[Awaitable], Awaitable]):
+                 safe: Callable[[Awaitable], Awaitable], edit: Callable[..., Awaitable] | None = None):
         self.state, self.policy, self.actions, self.thread = state, policy, actions, thread
         self.post = post                # posting.Poster.post: the one way a message is put in a chat
+        self.edit = edit                # delivery.Delivery.edit: the asker's answer, told each step (answered)
         self.tz, self._safe = timezone_name, safe
         # a request "approved" before this moment, still without its outcome, was cut by a stop (resume)
         self.started = datetime.now(timezone.utc)
@@ -121,6 +123,30 @@ class Approvals:
             log.warning("approval %s: no chat received it", msg.approval_id)
         return n
 
+    # ⚠️ THE ASKER HEARS WHAT BECAME OF IT (owner, 2026-10-29: approved on Telegram, the light on, and the tablet's
+    # conversation still said "It will switch on once you press Approve" — "a single message to merge both status is
+    # enough"): a request shown in another chat than the one it was asked in (the tablet's conversation; a facility
+    # manager's chat for an owner-only action) has its asker's answer rewritten in place at each step — approved,
+    # done or not, refused, expired — as every copy of the request is.
+    def answered(self, approval_ids, chat: int, mid: int | None, text: str) -> None:
+        """The answer `mid` (its words `text`) told the asker in `chat` of these requests: kept for the ones not shown
+        there, so each step rewrites it (_tell_asker)."""
+        for aid in approval_ids:
+            if mid and text and int(chat) not in self.thread.shown(approval_thread(aid)):
+                self.state.keep_approval_answer(aid, chat, mid, text)
+
+    async def _tell_asker(self, aid: str, body: str = "") -> None:
+        """The asker's answer (answered) says where the request stands now, under its own words: one message. Forgotten
+        once the request is settled."""
+        told, ap = self.state.approval_answer(aid), self.state.approval(aid)
+        if not told or not ap or self.edit is None or ap["status"] == "pending":
+            return
+        line = note(ap["status"], ap.get("decided_name") or "", time=self._at(ap["decided_at"])) if ap.get("decided_at") else ""
+        said = " ".join(x for x in (line, (body or "").strip()) if x)
+        await self.edit(told["chat"], told["mid"], layout.render(layout.parts(body=told["text"], status=said)))
+        if ap["status"] not in ("approved", "moving"):
+            self.state.drop_approval_answer(aid)
+
     def shown_in(self, approval_ids, chat: int) -> bool:
         """Is one of these requests shown in `chat`? Then it is the answer there (app._converse sends no other)."""
         return any(int(chat) in self.thread.shown(approval_thread(a)) for a in approval_ids)
@@ -145,6 +171,7 @@ class Approvals:
             from .layout import legacy
             await self.thread.post(key, p.chat, int(p.mid), legacy(p.words), buttons=True)
         await self.thread.close(key, note(out["state"], out.get("by", ""), out.get("why", "")), out.get("body"))
+        await self._tell_asker(aid, out.get("body") or "")
         if out.get("follow"):
             self._watch(aid, out["follow"])
 
@@ -176,6 +203,7 @@ class Approvals:
         # rewritten later, said "Opened" — and the AI, reading the record, told the owner it had failed
         self.state.finish_approval(aid, status, {"ok": status == "done", "text": body})
         await self.thread.rewrite(approval_thread(aid), body)
+        await self._tell_asker(aid, body)
 
     async def resume(self) -> None:
         """At start: a request still "moving" (its device was being followed when the agent stopped) is followed again —
@@ -198,6 +226,7 @@ class Approvals:
                 self.state.finish_approval(ap["id"], status, {"ok": bool(body), "text": said})
                 await self.thread.close(approval_thread(ap["id"]),
                                         note(status, ap.get("decided_name"), time=self._at(ap["decided_at"])), said)
+                await self._tell_asker(ap["id"], said)
         # decided, but stopped before its copies said so (the press's own task cut by the stop): they say it now, their
         # buttons gone — a copy already settled is left as it is (IncidentThread.close)
         for ap in self.state.approvals_decided_since((self.started - timedelta(days=1)).isoformat()):
@@ -223,6 +252,7 @@ class Approvals:
         for ap in self.state.approvals_in("pending"):
             if datetime.fromisoformat(ap["expires_at"]) <= now and self.state.expire_approval(ap["id"]):
                 await self.thread.close(approval_thread(ap["id"]), note("expired"))
+                await self._tell_asker(ap["id"])
                 n += 1
         return n
 

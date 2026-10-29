@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.372 (29 October 2026)
+
+- A request shown in another chat than the one it was asked in (the tablet's conversation; a facility manager's chat
+  for an owner-only action): its asker's answer is rewritten in place at each step (approved, done or not, refused,
+  expired, no longer allowed), under its own words, "Status:" and the step (approvals.answered / _tell_asker; the answer
+  kept in State until the request is settled). Owner, 2026-10-29: "a single message to merge both status is enough".
+
 ## 0.6.371 (29 October 2026)
 
 - Architecture review (the tablet): #1 the People module answers for a tablet's conversations (policy.tablet_*:
