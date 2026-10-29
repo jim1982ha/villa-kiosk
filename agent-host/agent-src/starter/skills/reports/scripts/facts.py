@@ -473,7 +473,7 @@ def s_equipment(c: Ctx) -> dict:
     cards = []
     for slug, a in sorted(c.pack.assets.items()):
         pw = (a.get("entities") or {}).get("power")
-        if a.get("kind") != "motor" or not pw:
+        if not daily.measured_motor(a) or not pw:
             continue
         run = c.running_days(pw, a, days)
         series = [(d.isoformat(), round(w)) for d, w, _ in run if w is not None]
@@ -637,7 +637,7 @@ def s_trends(c: Ctx) -> dict:
                        "bars": bars, "figures": {"weeks": [b["value"] for b in bars]}})
     for slug, a in sorted(c.pack.assets.items()):
         en = (a.get("entities") or {}).get("energy")
-        if a.get("kind") != "motor" or not en:
+        if not daily.measured_motor(a) or not en:
             continue
         series = [(d.isoformat(), v) for d, v in sorted(c.daily_kwh(en, c.start, c.end).items())]
         if series and max(v for _, v in series) > 0:

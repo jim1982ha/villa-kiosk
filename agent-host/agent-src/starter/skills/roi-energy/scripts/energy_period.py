@@ -29,6 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
 from vesta_shared import occupancy  # noqa: E402  (like with like: a usual level of days in the same state)
+from vesta_shared import daily  # noqa: E402  (a motor whose power is its own: measured_motor)
 from vesta_shared.params import MissingParameter  # noqa: E402
 from vesta_shared.stats import med, pct_change  # noqa: E402
 from vesta_shared.messaging import fmt_money  # noqa: E402
@@ -146,11 +147,12 @@ def run(args) -> dict:
 
     # pumps: run hours from hourly power stats
     pumps = []
-    p_ids = [r["entity_id"] for r in pack.entities("power") if pack.assets.get(r["asset"], {}).get("kind", "appliance") == "motor"]
+    # a motor whose power is its own (vesta_shared.daily.measured_motor): a wall switch's fan and light are not "pumps"
+    p_ids = [r["entity_id"] for r in pack.entities("power") if daily.measured_motor(pack.assets.get(r["asset"]))]
     hstats = cli.statistics(p_ids, datetime.combine(a, time(0, 0), tzinfo=Z), win_end, "hour", ("mean", "min", "max")) if p_ids else {}
     for r in pack.entities("power"):
         rows = hstats.get(r["entity_id"], [])
-        if not rows or pack.assets.get(r["asset"], {}).get("kind", "appliance") != "motor":
+        if not rows or not daily.measured_motor(pack.assets.get(r["asset"])):
             continue
         _, feats = F.power_days(pack.assets.get(r["asset"]), rows, pack.time_zone, params)   # the one "running"
         hrs = [feats[d]["run_hours"] for d in feats if a <= d <= b]

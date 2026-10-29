@@ -7,7 +7,7 @@ broken its energy reports. Pure functions: statistics rows in, numbers per local
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 from .params import MissingParameter
 from .stats import med
@@ -96,6 +96,127 @@ def running_threshold(asset: dict | None, hour_rows: list[dict], params) -> floa
             helper_thr = None
     cands = [t for t in (data_thr, helper_thr) if t]
     return min(cands) if cands else params.behaviour("on_threshold_floor_w")
+
+
+# ⚠️ ONE METER, TWO PARTS (owner, 2026-10-29: "a wall switch that has a few gangs: one gang controls the light, the
+# other one controls the fan"): one power reading measures a fan and a light together (knowledge_pack.parts_of). Judged
+# by its power alone, a light left on read as the fan running, and the fan's running power held the light's. For such a
+# motor, its OWN on/off decides when it runs, and its power is read only in the hours no other part was on.
+#: The states of a part that is not on (a climate unit's "off" too): anything else is on.
+NOT_ON = ("off", "unavailable", "unknown", "")
+
+
+def shared_meter(asset: dict | None) -> tuple[list[str], list[str]] | None:
+    """(its motor parts, the other parts its meter also measures) for a motor whose power reading measures something
+    else too (a light on the same wall switch); None for any other device."""
+    parts = (asset or {}).get("parts") or {}
+    if (asset or {}).get("kind") == "motor" and parts.get("motor") and parts.get("light"):
+        return list(parts["motor"]), list(parts["light"])
+    return None
+
+
+def measured_motor(asset: dict | None) -> bool:
+    """A motor whose power reading is its own: its running power and run hours are read from that power (the reports'
+    equipment cards and trends, the energy figures' pumps). A shared meter's (shared_meter) are not: the light is in it."""
+    return (asset or {}).get("kind") == "motor" and shared_meter(asset) is None
+
+
+def on_spans(changes: list[tuple[datetime, str]], end: datetime) -> list[tuple[datetime, datetime]]:
+    """When a part was on: each (from, to) of its state changes (History.changes: the state carried in from before the
+    window first), the last one open until `end`."""
+    spans, since = [], None
+    for t, state in sorted(changes):
+        on = str(state).strip().lower() not in NOT_ON
+        if on and since is None:
+            since = t
+        elif not on and since is not None:
+            spans.append((since, t))
+            since = None
+    if since is not None and since < end:
+        spans.append((since, end))
+    return spans
+
+
+def joined(*span_lists) -> list[tuple[datetime, datetime]]:
+    """Several parts' spans as one: when ANY of them was on."""
+    out: list[list[datetime]] = []
+    for a, b in sorted(x for spans in span_lists for x in spans):
+        if out and a <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return [(a, b) for a, b in out]
+
+
+def seconds_on(spans, a: datetime, b: datetime) -> float:
+    """How long within [a, b) the spans cover."""
+    return sum(max(0.0, (min(b, y) - max(a, x)).total_seconds()) for x, y in spans)
+
+
+def shared_day_features(hour_rows: list[dict], zone: str, motor_on, others_on) -> dict[date, dict]:
+    """power_daily_features for a motor on a shared meter (shared_meter): `run_hours` and `full_hours` from its own on/off
+    (`motor_on`), `running_power` the mean of the hours it ran whole while no other part was on (`others_on`), `peak_w`
+    the highest maximum of the hours no other part was on. An hour another part was on still counts as data (never a
+    gap: the meter was there)."""
+    by_day: dict[date, list[dict]] = defaultdict(list)
+    for r in hour_rows:
+        by_day[local_day(r["start"], zone)].append(r)
+    out = {}
+    for day, rows in by_day.items():
+        run_s, full, clean_full, clean_max = 0.0, 0, [], []
+        for r in rows:
+            h0 = datetime.fromtimestamp(r["start"] / 1000, tz=timezone.utc)
+            h1 = h0 + timedelta(hours=1)
+            on = seconds_on(motor_on, h0, h1)
+            alone = seconds_on(others_on, h0, h1) == 0
+            run_s += on
+            whole = on >= 3600 - 60
+            full += whole
+            if alone and r.get("max") is not None:
+                clean_max.append(r["max"])
+            if alone and whole and r.get("mean") is not None:
+                clean_full.append(r["mean"])
+        out[day] = {
+            "run_hours": round(run_s / 3600, 2),
+            "full_hours": full,
+            "running_power": round(sum(clean_full) / len(clean_full), 1) if clean_full else None,
+            "peak_w": round(max(clean_max), 0) if clean_max else 0,
+            "gap_hours": 24 - len(rows),
+            "hours_with_data": len(rows),
+        }
+    return out
+
+
+def alone_rows(hour_rows: list[dict], others_on) -> list[dict]:
+    """The hours no other part on the meter was on (a shared meter's typical peak and threshold are the motor's own)."""
+    out = []
+    for r in hour_rows:
+        h0 = datetime.fromtimestamp(r["start"] / 1000, tz=timezone.utc)
+        if seconds_on(others_on, h0, h0 + timedelta(hours=1)) == 0:
+            out.append(r)
+    return out
+
+
+def motor_alone(raw: list[dict], motor_on, others_on) -> list[dict]:
+    """A shared meter's raw power readings as the motor's own: a reading while the motor is off or another part is on
+    reads 0, and a 0 is added where either begins, so a run ends there (features.runs_from_history splits on it)."""
+    def at(r):
+        try:
+            return datetime.fromisoformat(r["last_changed"])
+        except (KeyError, TypeError, ValueError):
+            return None
+    out = []
+    for r in raw:
+        t = at(r)
+        if t is None:
+            continue
+        mine = seconds_on(motor_on, t, t + timedelta(seconds=1)) > 0 and seconds_on(others_on, t, t + timedelta(seconds=1)) == 0
+        out.append(r if mine else {**r, "state": "0"})
+    for x, y in others_on:
+        out.append({"state": "0", "last_changed": x.isoformat()})
+    for x, y in motor_on:
+        out.append({"state": "0", "last_changed": y.isoformat()})
+    return sorted(out, key=lambda r: at(r) or datetime.min.replace(tzinfo=timezone.utc))
 
 
 def hour_rows_of(readings: list[tuple[datetime, float | None]]) -> list[dict]:

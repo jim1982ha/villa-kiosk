@@ -8,7 +8,7 @@ a thermometer) is not listed — unless a kind was chosen for it, which stays sh
 from __future__ import annotations
 
 from vesta_shared import asset_kinds
-from vesta_shared.knowledge_pack import KnowledgePack, guessed_kind
+from vesta_shared.knowledge_pack import KnowledgePack, guessed_kind, kind_from_parts
 
 from .changes import PageFiles, Refused, _read
 
@@ -20,9 +20,21 @@ def _measured(a: dict) -> bool:
     return any(str(role).startswith(("power", "energy")) for role in (a.get("entities") or {}))
 
 
+#: A part as the page names it (its entity's domain)
+PART_WORDS = {"light": "light", "fan": "fan", "climate": "climate unit"}
+
+
+def parts_words(a: dict) -> str:
+    """What the villa's system says the device is made of, as the page says it: "light + fan" (knowledge_pack.parts_of)."""
+    ids = [e for kind in ("light", "motor") for e in ((a.get("parts") or {}).get(kind) or [])]
+    words = list(dict.fromkeys(PART_WORDS.get(e.split(".", 1)[0], e.split(".", 1)[0]) for e in ids))
+    return " + ".join(words)
+
+
 def rows(settings) -> dict:
     """The card's answer: {rows, kinds, built}. A row: slug, name, area, guess, kind, chosen (set by the owner), gone (a
-    choice for a device the villa no longer has)."""
+    choice for a device the villa no longer has), parts (what the villa's system says it is made of: "light + fan"),
+    source ("system": the guess read from those parts; "name": from its name)."""
     pack = KnowledgePack.read(settings.pack_path, settings.asset_kinds_path)
     chosen = asset_kinds.chosen(settings.asset_kinds_path)
     out = []
@@ -31,7 +43,8 @@ def rows(settings) -> dict:
             continue
         guess = guessed_kind(a)
         out.append({"slug": slug, "name": a.get("name") or slug, "area": a.get("area") or "", "guess": guess,
-                    "kind": chosen.get(slug, guess), "chosen": slug in chosen, "gone": False})
+                    "kind": chosen.get(slug, guess), "chosen": slug in chosen, "gone": False, "parts": parts_words(a),
+                    "source": "system" if kind_from_parts(a) else "name"})
     known = {r["slug"] for r in out}
     for slug, kind in chosen.items():
         if slug not in known and not (pack and slug in pack.assets):

@@ -312,7 +312,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
 let KIND_SEARCH = "";
 export function kindsCard(data, probs) {
   const names = Object.fromEntries(data.kinds.map(([k, name]) => [k, name]));
-  const info = `What each device is decides what the agent does with its power and energy. ${data.kinds.map(([, name, words]) => `${name}: ${words}`).join(" ")} The agent guesses it from the device's name; a kind chosen here replaces the guess, from the next night check or report.`;
+  const info = `What each device is decides what the agent does with its power and energy. ${data.kinds.map(([, name, words]) => `${name}: ${words}`).join(" ")} The agent reads it from what the villa's system says the device is made of (a light, a fan, a climate unit), else guesses it from the device's name; a kind chosen here replaces it, from the next night check or report. A light and a fan on one switch, measured together: the fan is checked by its own on and off, its power read only while the light is off; the light counts in the energy figures only.`;
   const list = h("div");
   const save = async (r, kind) => {
     try {
@@ -326,11 +326,13 @@ export function kindsCard(data, probs) {
     draw();
   };
   const row = (r) => [
-    [h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null],
-    dropdown(data.kinds.map(([k, name]) => [k, k === r.guess ? `${name} (guess)` : name]), r.kind, (v) => save(r, v), `${r.name}, kind`),
+    [h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null,
+      r.parts ? h("span", { class: "muted" }, ` · ${r.parts}`) : null],
+    dropdown(data.kinds.map(([k, name]) => [k, k === r.guess ? `${name} (${r.source === "system" ? "the villa's system" : "guess"})` : name]), r.kind, (v) => save(r, v), `${r.name}, kind`),
     h("span", { class: "chips" },
       r.gone ? h("span", { class: "chip warn" }, "No longer found")
-        : h("span", { class: r.chosen ? "chip" : "chip gray" }, r.chosen ? "Chosen here" : "Guessed"),
+        : h("span", { class: r.chosen ? "chip" : "chip gray" },
+          r.chosen ? "Chosen here" : r.source === "system" ? "From the villa's system" : "Guessed"),
       r.chosen ? h("button", { type: "button", class: "btn ghost", onclick: () => save(r, null) }, r.gone ? "Remove" : "Back to the guess") : null),
   ];
   const draw = () => {

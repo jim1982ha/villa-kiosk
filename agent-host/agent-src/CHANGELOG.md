@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.385 (30 October 2026)
+
+- What a device is, from the villa's system (owner, 2026-10-29: a two-gang wall switch, a light and a fan on one power
+  reading): knowledge_pack.parts_of reads the fan, climate and light entities of the one registry device an asset's
+  readings belong to (never with two power readings on it), Asset.parts; guessed_kind reads them after the helpers,
+  before the name; "vmc" moved to MOTOR_WORDS. daily.shared_meter / shared_day_features / alone_rows / motor_alone:
+  a motor sharing its meter runs by its own on/off, its power read in the hours no other part was on; nightly.
+  shared_spans reads the parts' history (not whole: the asset waits a night). daily.measured_motor for the reports and
+  the energy figures. Rules › Device kinds shows the parts and the source.
+
 ## 0.6.384 (30 October 2026)
 
 - villa-concierge `voice.py speak`: Chinese, Japanese and Korean told by their letters (SCRIPTS: a share of Hangul,

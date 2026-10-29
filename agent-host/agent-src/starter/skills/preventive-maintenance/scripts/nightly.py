@@ -196,14 +196,28 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
     if asset.get("kind", "appliance") in ("lighting", "meter"):
         return findings, 0
     p_series, e_series = {}, {}
+    # a motor whose meter measures another part too (a wall switch's fan and light: vesta_shared.daily.shared_meter):
+    # its own on/off decides when it runs, its power is read only while the other part is off
+    spans = None
+    if p_eid and (shared := daily.shared_meter(asset)):
+        spans = shared_spans(cli, shared, hour_stats.get(p_eid, []), day_end, now_ref)
+        if spans is None:
+            notes.append(f"{asset['name']}: the on/off of its parts could not be read, its checks wait for the next night.")
+            return findings, 0
     if p_eid:
         rows = hour_stats.get(p_eid, [])
-        thr = daily.running_threshold(asset, rows, params)       # the one "running" (vesta_shared.daily)
-        p_series = F.power_daily_features(rows, zone, thr)
+        if spans:
+            thr = daily.running_threshold(asset, daily.alone_rows(rows, spans[1]), params)
+            p_series = daily.shared_day_features(rows, zone, *spans)
+        else:
+            thr = daily.running_threshold(asset, rows, params)       # the one "running" (vesta_shared.daily)
+            p_series = F.power_daily_features(rows, zone, thr)
         # raw runs for the closing day
         if not skip_raw:
             got = cli.history_read([p_eid], day_end - timedelta(days=RAW_POWER_DAYS), day_end, now=now_ref)
             raw = got.rows.get(p_eid, [])
+            if raw and spans:
+                raw = daily.motor_alone(raw, *spans)
             if raw:
                 runs = F.runs_from_history(raw, thr, zone, MIN_RUN_MINUTES)
                 if not got.whole(p_eid):
@@ -253,10 +267,30 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
             if o:
                 prior[rid] = json.loads(o["detail"] or "{}")
     if p_eid:
-        findings += R.power_rules(asset, p_eid, p_series, today, params, expected, e_series or None, prior, occupied)
+        # a shared meter's energy is the other part's too: counted in the energy figures, never judged as the motor's
+        findings += R.power_rules(asset, p_eid, p_series, today, params, expected, None if spans else (e_series or None),
+                                  prior, occupied)
     elif e_eid and expected:
         findings += R.power_rules(asset, e_eid, {}, today, params, expected, e_series, prior, occupied)
     return findings, features_written
+
+
+def shared_spans(cli, shared: tuple[list[str], list[str]], rows: list[dict], day_end: datetime, now_ref: datetime):
+    """(when the motor was on, when another part on its meter was on) over the hours `rows` cover, from the parts'
+    own state history; None when it could not be read whole (judged on half a history, a light on would read as the
+    fan's power again)."""
+    if not rows:
+        return [], []
+    start = datetime.fromtimestamp(min(r["start"] for r in rows) / 1000, tz=timezone.utc)
+    motors, others = shared
+    try:
+        got = cli.history_read(motors + others, start, day_end, now=now_ref)
+    except Exception:  # noqa: BLE001 — the reason is the reader's; the night says the checks wait
+        return None
+    if not all(got.whole(e) for e in motors + others):
+        return None
+    return (daily.joined(*(daily.on_spans(got.changes(e), got.end) for e in motors)),
+            daily.joined(*(daily.on_spans(got.changes(e), got.end) for e in others)))
 
 
 def level_findings(pack, params, rows: list[dict], lvl_stats: dict, today: date, zone: str) -> list:

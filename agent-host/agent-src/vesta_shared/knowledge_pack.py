@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
@@ -63,8 +64,14 @@ def asset_slug(entity_id: str) -> str:
     return obj
 
 
-MOTOR_WORDS = ("pump", "compressor", "fan", "hvac", "aircon", "air_con", "_ac_", "ac_", "motor", "jet", "blower", "chiller")
-LIGHT_WORDS = ("light", "led", "lamp", "vmc", "lighting", "spot")
+# ⚠️ "vmc" IS A FAN (owner, 2026-10-29): a ventilation unit (VMC, its French name) was on the lighting words, so a wall
+# switch for a light and a VMC was never checked as the fan it drives. A device's own parts now speak first (parts_of).
+MOTOR_WORDS = ("pump", "compressor", "fan", "hvac", "aircon", "air_con", "_ac_", "ac_", "motor", "jet", "blower", "chiller",
+               "vmc")
+LIGHT_WORDS = ("light", "led", "lamp", "lighting", "spot")
+#: What a device's own parts are in the villa's system (its entities' domains, a switch "shown as" a light or a fan
+#: included: the villa's system makes it that entity): a fan or a climate unit is a motor, a light is lighting.
+PART_DOMAINS = {"fan": "motor", "climate": "motor", "light": "light"}
 METER_WORDS = ("main_power", "phase_", "_mean", "total", "grid", "meter", "consumption")
 
 
@@ -74,19 +81,51 @@ def _field(a, name: str):
 
 
 def guessed_kind(a) -> str:
-    """What the asset is, guessed from its helpers first (a schedule, a runtime counter or a power baseline mark a
-    motor), then its name. motor: pumps, fans, compressors (physics rules apply). lighting: light circuits (ROI only).
-    meter: the main meter, its phases, template aggregates (ROI only). appliance: anything else."""
+    """What the asset is: from its helpers first (a schedule, a runtime counter or a power baseline mark a motor), then
+    what the villa's system says its parts are (parts_of: a fan part a motor, light parts only lighting), then its name.
+    motor: pumps, fans, compressors (physics rules apply). lighting: light circuits (ROI only). meter: the main meter,
+    its phases, template aggregates (ROI only). appliance: anything else."""
     text = f"{_field(a, 'slug')} {_field(a, 'name')}".lower()
     if any(w in text for w in METER_WORDS):
         return "meter"
     if _field(a, "schedule") or _field(a, "counter") or _field(a, "baseline_helper"):
         return "motor"
+    parts = _field(a, "parts") or {}
+    if parts.get("motor"):
+        return "motor"
+    if parts.get("light"):
+        return "lighting"
     if any(w in text for w in MOTOR_WORDS):
         return "motor"
     if any(w in text for w in LIGHT_WORDS):
         return "lighting"
     return "appliance"
+
+
+def kind_from_parts(a) -> bool:
+    """Whether the guess came from what the villa's system says the device's parts are (not from its name)."""
+    text = f"{_field(a, 'slug')} {_field(a, 'name')}".lower()
+    helpers = _field(a, "schedule") or _field(a, "counter") or _field(a, "baseline_helper")
+    return bool(_field(a, "parts")) and not helpers and not any(w in text for w in METER_WORDS)
+
+
+def parts_of(entity_ids, devices: dict[str, str], visible: list[dict], power_on_device: dict[str, int]) -> dict:
+    """{"motor": [...], "light": [...]}: the parts the villa's system has on the ONE device the asset's readings belong
+    to. ⚠️ A WALL SWITCH WITH TWO GANGS (owner, 2026-10-29: "one gang controls the light, the other one the fan"): one
+    power reading, a light and a fan on the same device. ⚠️ ONLY WITH ONE POWER READING ON IT: a two-channel module
+    measures each channel apart, and which part each reading measures is not known — its parts are not read then."""
+    devs = {devices[e] for e in entity_ids if e in devices}
+    if len(devs) != 1:
+        return {}
+    dev = next(iter(devs))
+    if power_on_device.get(dev, 0) > 1:
+        return {}
+    out: dict[str, list[str]] = {}
+    for e in visible:
+        part = PART_DOMAINS.get(e["entity_id"].split(".", 1)[0])
+        if part and e.get("device_id") == dev:
+            out.setdefault(part, []).append(e["entity_id"])
+    return {k: sorted(v) for k, v in out.items()}
 
 
 def asset_kind(a, chosen: dict[str, str] | None = None) -> str:
@@ -158,6 +197,7 @@ class Asset:
     bom: dict | None = None
     critical: bool = False
     kind: str = "appliance"   # motor | lighting | meter | appliance: decides which maintenance rules apply
+    parts: dict = field(default_factory=dict)  # {"motor": [fan.…], "light": [light.…]}: its device's parts (parts_of)
 
 
 #: ⚠️ A NEW RULE IN build_pack IS A FORMAT CHANGE (2026-10-15): the pack is rebuilt at 01:30, so an update that leaves out
@@ -558,8 +598,15 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
                     if r["asset"] == long_slug:
                         r["asset"] = target
 
+    # what the villa's system says each asset's device is made of (parts_of): its fan, climate and light parts
+    devices_of = {e["entity_id"]: e["device_id"] for e in live if e.get("device_id")}
+    power_on_device: dict[str, int] = defaultdict(int)
+    for r in families.get("power", []):
+        if r.get("device_id"):
+            power_on_device[r["device_id"]] += 1
     # attach helpers, schedules, counters and parameters to assets
     for slug, a in assets.items():
+        a.parts = parts_of(a.entities.values(), devices_of, ents, power_on_device)
         sch = f"schedule.{slug}_expected_runtime"
         if sch in schedules:
             a.schedule = sch

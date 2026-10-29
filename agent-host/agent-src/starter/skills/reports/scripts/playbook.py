@@ -11,6 +11,7 @@ from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 
 from vesta_shared import battery  # a battery's charge: the night check's own reading
+from vesta_shared import daily  # a motor whose power is its own (measured_motor)
 from vesta_shared.stats import step_index  # the night check's step detector
 from vesta_shared.timeutil import day_time_label, said  # the one day format; a stored time in words
 from vesta_shared.past import unread  # the one "could not be read whole: nothing is known after"
@@ -75,7 +76,7 @@ def clue_run_change(c, when):
     out = []
     for slug, a in sorted(c.pack.assets.items()):
         pw = (a.get("entities") or {}).get("power")
-        if a.get("kind") != "motor" or not pw:
+        if not daily.measured_motor(a) or not pw:
             continue
         rows = _days_power(c, pw, a, int(when.get("days", 30)))
         best = _best_split([float(r[2]) for r in rows], int(when.get("min_days", 3)))
