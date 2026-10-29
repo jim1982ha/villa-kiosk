@@ -4138,7 +4138,7 @@ def _vm_buttons(value) -> list:
     for b in value if isinstance(value, list) else []:
         made = {f: _vm_text(b.get(f), f) for f in ("label", "kind", "id")} if isinstance(b, dict) else {}
         if all(made.values()) and len(out) < int(VESTA_MESSAGE_LIMITS.get("buttons") or 0):
-            out.append({**made, **({"closes": True} if b.get("closes") is True else {})})
+            out.append(made)
     return out
 
 

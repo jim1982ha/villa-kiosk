@@ -67,10 +67,9 @@ ck("  ...one that acts is never offered to a guest; one that does not (Continue)
    offeredButtons(approval.buttons, false).length === 0 && offeredButtons(approval.buttons, true).length === 2
    && offeredButtons(vestaButtons([{ label: "Continue", kind: "c", id: "k" }]), false).length === 1
    && offeredButtons([{ label: "Unlock", command: "/unlock" }], false).length === 1);
-const alertCard = vestaButtons([{ label: "Done", kind: "i", id: "9:done", closes: true }, { label: "Need help", kind: "i", id: "9:need_help" }]);
-ck("  ...above an issue's own Close only Need help (owner, 2026-10-29): the button VESTA flags as closing is that Close",
-   J(offeredButtons(alertCard, true, true).map((b) => b.label)) === J(["Need help"])
-   && J(offeredButtons(alertCard, true).map((b) => b.label)) === J(["Done", "Need help"]));
+const alertCard = vestaButtons([{ label: "Done", kind: "i", id: "9:done" }, { label: "Need help", kind: "i", id: "9:need_help" }]);
+ck("  ...an alert's Done · Need help, both offered to who may act (owner, 2026-10-29: the same wherever it shows)",
+   J(offeredButtons(alertCard, true).map((b) => b.label)) === J(["Done", "Need help"]));
 ck("  ...a kind the agreement does not know acts (never offered to a guest)", vestaButtons([{ label: "X", kind: "z", id: "1" }])[0].acts === true);
 const doors = [];
 const knock = async (url, init) => { doors.push([url, JSON.parse(init.body)]); return { ok: true, status: 200, json: async () => ({ press: 12 }) }; };
@@ -158,8 +157,6 @@ const pageLinks = execSync("grep -rl '/> Open the page' src --include=*.tsx", { 
 ck("\"Open the page\" is drawn in ONE place (PageLink), the conversation's answers and the Inbox's reports alike",
    pageLinks.length === 1 && pageLinks[0].endsWith("AnnouncementContent.tsx"), pageLinks);
 
-ck("the Inbox's issue card draws its alert's VESTA card beside its own Close (besideClose), and only there",
-   elements(parseTsx("components/cockpit/MessagesTab.tsx"), "NoteDetail").filter((e) => propText(e, "besideClose") === true).length === 1);
 
 console.log("\n  hidden without VESTA, wherever it shows:");
 const hud = parseTsx("components/hud/HUD.tsx");

@@ -22,7 +22,7 @@ import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { useSuperadminDelete } from "@/hooks/useSuperadminDelete";
 import type { LongPressHandlers } from "@/hooks/useLongPress";
-import { announcementWords, cardsOfIssue, idOf, messagesView, openingFilter, readOnScreen, type MessageItem,
+import { announcementWords, cardsOfIssue, idOf, messageOfLine, messagesView, openingFilter, readOnScreen, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -33,7 +33,7 @@ import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent, PageLink, RecordButtons } from "@/components/messages/AnnouncementContent";
 import RecordCard from "@/components/fm/RecordCard";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
-import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
+import { AlertIssueCard, AttentionCard, CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 
 /** One line of the list — pure (a check draws it): its icon, its title, the line under it, its time. */
@@ -284,10 +284,12 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
             onDone={() => setRaising(null)} />
         )}
         {/* an alert's open issue: VESTA's card of it first, as Telegram shows it, then the tablet's own buttons */}
-        {item?.kind === "issue" && cardsOfIssue(item.card, kept).map((a) => (
-          <NoteDetail key={a.key} announcement={a} besideClose />
-        ))}
-        {item?.kind === "issue" && (item.card.look === "watched"
+        {/* an alert's issue: ONE card, VESTA's message inside it and its buttons (owner, 2026-10-29) */}
+        {item?.kind === "issue" && cardsOfIssue(item.card, kept).length > 0 && (
+          <AlertIssueCard card={item.card} messages={(line) => messageOfLine(line, kept)} onOpenEntity={onOpenEntity}
+            focused={!!isFocus?.(item.card)} />
+        )}
+        {item?.kind === "issue" && cardsOfIssue(item.card, kept).length === 0 && (item.card.look === "watched"
           ? <AttentionCard card={item.card} onOpenEntity={onOpenEntity} />
           : <CockpitAttentionRow key={item.key} card={item.card} onOpenEntity={onOpenEntity} canManage={canManage}
               onEditTicket={onEditTicket} onRaiseTicket={(entity) => setRaising({ entity })}
@@ -316,16 +318,11 @@ export function ReportDetail({ announcement: a, canOpenPage }: { announcement: A
  *  buttons under it on the right. ⚠️ IT OWNS ITS PRESS (architecture review 2026-10-29 #4): the screens each decided
  *  whether to pass one — an issue's card and a report passed none — so whatever buttons a message carries are pressed
  *  here, the same wherever it shows (RecordButtons, the one button row). */
-export function NoteDetail({ announcement: a, besideClose = false, children }: {
-  announcement: Announcement;
-  /** Shown above its issue's own card (with its Close): the alert's closing button is left out (RecordButtons). */
-  besideClose?: boolean;
-  children?: ReactNode;
-}) {
+export function NoteDetail({ announcement: a, children }: { announcement: Announcement; children?: ReactNode }) {
   return (
     <RecordCard title={a.title}
       titlePills={a.at ? <span className="fm-entity-chip fm-chip-static">{localStamp(a.at)}</span> : undefined}
       body={<div className="messages-card-body"><AnnouncementContent announcement={a} />{children}</div>}
-      actions={a.buttons.length > 0 ? <RecordButtons record={a} besideClose={besideClose} /> : undefined} />
+      actions={a.buttons.length > 0 ? <RecordButtons record={a} /> : undefined} />
   );
 }

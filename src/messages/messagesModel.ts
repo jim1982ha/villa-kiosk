@@ -78,8 +78,14 @@ export const idOf = (a: Announcement): string => `${a.feed === "vesta" ? "v" : "
 /** VESTA's card of each alert an open issue carries, in the order of its lines (its thread `incident:<n>`, the Agent's
  *  kiosk_messages.thread_key): what the issue shows above its own buttons, as Telegram shows it. Pure. */
 export function cardsOfIssue(card: CardView, kept: readonly Announcement[]): Announcement[] {
-  return card.lines.flatMap((l) => kept.filter((a) => a.feed === "vesta" && l.alertNumber !== undefined
-    && a.key === incidentKey(l.alertNumber)));
+  return card.lines.flatMap((l) => { const a = messageOfLine(l, kept); return a ? [a] : []; });
+}
+
+/** VESTA's card of one line's alert (its thread `incident:<n>`), or null: the line's message inside the issue's one card
+ *  (cockpit/IssueCard AlertIssueCard). Pure. */
+export function messageOfLine(line: CardView["lines"][number], kept: readonly Announcement[]): Announcement | null {
+  return line.alertNumber === undefined ? null
+    : kept.find((a) => a.feed === "vesta" && a.key === incidentKey(line.alertNumber!)) ?? null;
 }
 
 /** When a record came, for the order of the list (two feeds: their numbers do not compare). */

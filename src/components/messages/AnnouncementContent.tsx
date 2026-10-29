@@ -67,16 +67,12 @@ export function ButtonRow({ buttons, onPress, presses, answer }: {
  *  announcements.offeredButtons; a button that asks first asks in the tablet's one confirmation box (useConfirmDialog:
  *  an approval, owner 2026-10-28); a press goes through the page's one record (useAnnouncementPress) to its record's door
  *  (announcements.pressOf); VESTA's short answer comes back in this profile's conversation (ConversationContext). */
-export function RecordButtons({ record, besideClose = false }: {
-  record: Pressable;
-  /** Drawn above an issue's own Close (the Inbox's issue card): the button that closes its alert is that Close. */
-  besideClose?: boolean;
-}) {
+export function RecordButtons({ record }: { record: Pressable }) {
   const profile = useProfileOrNull();
   const { presses, press, numberOf } = useAnnouncementPress(record);
   const { answers } = useConversation();
   const { ask, dialog } = useConfirmDialog();
-  const offered = offeredButtons(record.buttons, roleCan(profile?.role ?? null, "viewAgent"), besideClose);
+  const offered = offeredButtons(record.buttons, roleCan(profile?.role ?? null, "viewAgent"));
   // VESTA's answer to the last of this record's presses that has one
   const answer = offered.map((b) => numberOf(b.command)).reverse()
     .map((n) => (n !== undefined ? answers.get(n) : undefined)).find(Boolean);

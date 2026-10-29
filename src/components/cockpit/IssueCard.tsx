@@ -14,6 +14,8 @@ import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
 import FaultStageModal from "@/components/fm/FaultStageModal";
 import { localStamp } from "@/fm/fmEngine";
+import type { Announcement } from "@/messages/announcements";
+import { AnnouncementContent, RecordButtons } from "@/components/messages/AnnouncementContent";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
@@ -59,7 +61,7 @@ function LineClose({ card, line, closer }: { card: CardView; line: CardLine; clo
  *  source icons before the device's name, the room under it, its problems' lines, its buttons on the right of them.
  *  Tapping it opens the device; its buttons take their own presses. Draws `card` (config/cockpitCard) and nothing
  *  else: what it says is decided there, by value. Pure: a check draws it. */
-export function AttentionCard({ card, onOpenEntity, actions, lineActions, focused }: {
+export function AttentionCard({ card, onOpenEntity, actions, lineActions, lineMessage, focused }: {
   card: CardView;
   onOpenEntity: (id: string) => void;
   actions?: ReactNode;
@@ -67,6 +69,8 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions, focuse
   focused?: boolean;
   /** A line's own buttons (its Close, on a card holding several problems). */
   lineActions?: (line: CardLine) => ReactNode;
+  /** VESTA's message of a line's alert, drawn in the line in place of its short story (AlertIssueCard). */
+  lineMessage?: (line: CardLine) => ReactNode;
 }) {
   const open = card.entityId;
   return (
@@ -85,7 +89,8 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions, focuse
       onOpen={open ? () => onOpenEntity(open) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
-          {card.lines.map((line) => <CockpitAttentionSub key={line.key} line={line} actions={lineActions?.(line)} />)}
+          {card.lines.map((line) => <CockpitAttentionSub key={line.key} line={line} actions={lineActions?.(line)}
+            message={lineMessage?.(line)} />)}
         </ul>
       )}
       actions={actions ?? undefined}
@@ -95,7 +100,7 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions, focuse
   );
 }
 
-function CockpitAttentionSub({ line, actions }: { line: CardLine; actions?: ReactNode }) {
+function CockpitAttentionSub({ line, actions, message }: { line: CardLine; actions?: ReactNode; message?: ReactNode }) {
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line fm-record-gutter">
@@ -105,11 +110,12 @@ function CockpitAttentionSub({ line, actions }: { line: CardLine; actions?: Reac
           <Tip text={line.text}><span className="cockpit-attention-sub-title">{line.text}</span></Tip>
           {/* what happened about it on Telegram — the short story its Status tells: the alert sent, a reminder, an
               escalation, a button pressed (owner, 2026-10-14; every line since ticket 19 of "One inbox") */}
-          {line.story.length > 0 && (
+          {/* VESTA's message of its alert says it all (its "To:", "What to do", its Status: the same story) */}
+          {message ?? (line.story.length > 0 && (
             <ul className="cockpit-attention-story">
               {line.story.map((s) => <li key={`${s.at} ${s.note}`} className="cockpit-attention-latest">{s.note} · {localStamp(s.at)}</li>)}
             </ul>
-          )}
+          ))}
           {/* when the VESTA Agent closes it if it stays right (owner, 2026-10-21) */}
           {/* ...or, on a fault being confirmed, who closed it and when the Agent confirms it (owner, 2026-10-23) */}
           {line.closing && <span className="cockpit-attention-latest">{line.closing}</span>}
@@ -139,5 +145,29 @@ function useCardActions(card: CardView, canManage: boolean, onEditTicket: (ticke
       {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
       {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={() => setStaging(null)} />}
     </>
+  );
+}
+
+/** ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components, since the
+ *  same button shall consistently appear for any type"): the issue's own card — its device, room and next check — with
+ *  VESTA's message of the alert inside its line (as Telegram shows it: "To:", what happened, "What to do", its Status),
+ *  and VESTA's buttons (Done · Need help: RecordButtons, the same row as its notice and its Notifications card). Its
+ *  ticket is opened and closed in the Tickets tab. Before, VESTA's card stood above the issue's, each with its buttons.
+ *  `messages`: VESTA's card of each line's alert (messagesModel.messageOfLine). */
+export function AlertIssueCard({ card, messages, onOpenEntity, focused }: {
+  card: CardView;
+  messages: (line: CardLine) => Announcement | null;
+  onOpenEntity: (id: string) => void;
+  focused?: boolean;
+}) {
+  const shown = card.lines.map(messages).filter((a): a is Announcement => a !== null);
+  return (
+    <AttentionCard card={card} onOpenEntity={onOpenEntity} focused={focused}
+      lineMessage={(line) => {
+        const a = messages(line);
+        return a ? <div className="messages-card-body"><AnnouncementContent announcement={a} /></div> : undefined;
+      }}
+      actions={shown.some((a) => a.buttons.length > 0)
+        ? <>{shown.map((a) => <RecordButtons key={a.key} record={a} />)}</> : undefined} />
   );
 }

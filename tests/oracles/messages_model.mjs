@@ -195,6 +195,34 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   ck("  ...its buttons drawn with no press handed in: the card presses them itself",
      /fm-record-actions[\s\S]*Unlock/.test(draw(h(NoteDetail, { announcement: ring }))));
 }
+// ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components, since the
+// same button shall consistently appear for any type"): the issue's head, VESTA's message in its line, VESTA's buttons
+{
+  const { AlertIssueCard } = await import("@/components/cockpit/IssueCard");
+  const { messageOfLine } = await import("@/messages/messagesModel");
+  const { elements, guardsOf, parseTsx, propText } = await import("../consistency/jsx.mjs");
+  const alert = parseVestaMessage({ seq: 30, key: "incident:92", title: "#92-P2 (new)", to: "To: Facility manager",
+    body: "The pool pump stopped.", status: ["⚠️ New alert"],
+    buttons: [{ label: "Done", kind: "i", id: "92:done" }, { label: "Need help", kind: "i", id: "92:need_help" }] });
+  const issue = card("p", { lines: [{ key: "l1", text: "Pump stopped", story: [{ at: "2026-10-29T10:00:00+08:00",
+    note: "SHORT STORY" }], alertNumber: 92 }] });
+  const drawn = draw(h(AlertIssueCard, { card: issue, messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} }));
+  ck("an alert's issue is ONE card: the issue's head, VESTA's message inside its line, in place of its short story",
+     (drawn.match(/class="fm-record-card/g) ?? []).length === 1 && /fm-record-head[\s\S]*Device p/.test(drawn)
+     && drawn.includes("The pool pump stopped.") && !drawn.includes("SHORT STORY"), drawn);
+  ck("  ...a line whose alert VESTA holds no card for keeps its story", messageOfLine(issue.lines[0], []) === null
+     && draw(h(AlertIssueCard, { card: issue, messages: () => null, onOpenEntity() {} })).includes("SHORT STORY"));
+  const one = elements(parseTsx("components/cockpit/IssueCard.tsx"), "RecordButtons");
+  ck("  ...its buttons VESTA's own row (RecordButtons), the same as its notice and its Notifications card: no other",
+     one.length === 1 && propText(one[0], "record") === "a" && !/WorkButtons|onRaiseTicket/.test(
+       readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8")
+         .split("export function AlertIssueCard")[1]));
+  const tab = parseTsx("components/cockpit/MessagesTab.tsx");
+  ck("  ...the Inbox draws it in place of the two stacked cards (no VESTA card above an issue's own)",
+     elements(tab, "AlertIssueCard").length === 1 && elements(tab, "NoteDetail").every((e) => !/cardsOfIssue/.test(e.getText()))
+     && guardsOf(elements(tab, "AlertIssueCard")[0]).includes("cardsOfIssue(item.card, kept).length > 0")
+     && guardsOf(elements(tab, "CockpitAttentionRow")[0]).includes("cardsOfIssue(item.card, kept).length === 0"));
+}
 ck("its words, then its page opened in the document viewer (the add-on's sandboxed page)",
    opened.includes("Two things") && opened.includes('href="/fm-document/page-en-0001"') && opened.includes("Open the page"), opened);
 ck("  ...no page link for a profile the add-on serves no page to, nor for a report without a page",
