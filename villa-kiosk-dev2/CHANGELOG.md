@@ -1,3 +1,13 @@
+## 2.496.585
+
+What you will see (architecture review of 29 October 2026):
+- The robot on the Cockpit button and VESTA's chat button now appear and disappear together when VESTA stops or
+  starts, for every profile (they could disagree for up to a minute).
+- The Weather window's charts (temperature, humidity, wind, pressure, sun) have the same "enlarge" icon as a device's
+  chart: each opens large with its title, its legend and the period toggle. The rain chart stays as it is.
+- A notification's buttons (the doorbell's Unlock) work wherever the notification shows, the same way.
+- "Open the page" is the same link in VESTA's conversation and under a report.
+
 ## 2.496.584
 
 What you will see:
