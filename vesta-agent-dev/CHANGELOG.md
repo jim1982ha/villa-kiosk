@@ -1,3 +1,13 @@
+## 0.12.397
+
+What you will see:
+- VESTA says each spoken answer in its own language: an answer in French is said by a French voice, never read by
+  the English one. Name the voice for each extra language on this page: Skills › villa-concierge › villa.voice.yaml,
+  for example `voices:` then `  fr: fr_FR-siwis-medium`. The voice assistant settings' own voice keeps saying their
+  language.
+- An answer in a language with no voice named stays in words and says "This answer could not be spoken in French:
+  the villa has no French voice".
+
 ## 0.12.396
 
 What you will see (with VESTA (dev2) 2.496.600):
