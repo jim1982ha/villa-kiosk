@@ -66,10 +66,12 @@ def skill_called(text: str, skill_commands: dict[str, str]) -> tuple[str | None,
 
 
 def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_message: Callable[[int, object], bool],
-         skill_commands: dict[str, str] | None = None, commands_off: dict[str, str] | None = None) -> Intake:
+         skill_commands: dict[str, str] | None = None, commands_off: dict[str, str] | None = None,
+         person=None) -> Intake:
     """`skill_commands`: "/command" → the skill only it starts (skills.Skills.commands); `commands_off`: those of the
     skills the villa switched off — ⚠️ ANSWERED, NEVER DROPPED (review 32: "/investigate" with the skill off was silence,
-    while the concierge still told people to write it)."""
+    while the concierge still told people to write it). `person`: who writes, when the caller knows it — a tablet's
+    profile, stamped by the Kiosk (tablet.py): never looked up in People, and no Telegram id to tell (/whoami)."""
     skill_commands, commands_off = skill_commands or {}, commands_off or {}
     try:
         cid = int(m.get("chat_id"))
@@ -103,13 +105,14 @@ def gate(event_type: str, m: dict, policy, bot_username: str | None, is_own_mess
         invoked, text = skill_called(text, skill_commands)
     # ⚠️ /whoami IS HOW A GROUP GETS INTO PEOPLE (0.12.128): its id is read there before it is listed — by anyone while
     # People is empty, by a listed person once it is not (a stranger in an unlisted group still gets nothing)
-    if cmd == "/whoami" and (not group or not policy.destinations or policy.roles_in(cid)
-                             or policy.person(m.get("user_id")) is not None):
+    if cmd == "/whoami" and person is None and (not group or not policy.destinations or policy.roles_in(cid)
+                                                or policy.person(m.get("user_id")) is not None):
         return Intake("whoami", cid, group=group)
     if group and not policy.roles_in(cid):
         # never leaveChat: the bot is Home Assistant's too
         return Intake("drop", cid, group=True, why="group not listed in People" if policy.destinations else None)
-    person = policy.member(m.get("user_id"), cid, m.get("from_first"))     # a listed group's member has its role
+    # a listed group's member has its role; a tablet's profile is the caller's (the Kiosk stamped it)
+    person = person if person is not None else policy.member(m.get("user_id"), cid, m.get("from_first"))
     if group:
         mention = bool(bot_username) and f"@{bot_username}".lower() in text.lower()
         if not (cmd or mention or invoked or is_own_message(cid, m.get("reply_to_message_id"))):

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.369 (29 October 2026)
+
+- Ticket 21 of "One inbox" (talking to VESTA on the tablet): tablet.py collects the tablets' questions from the Kiosk's
+  inbox (GET /agent/v1/inbox, long read, the last collected kept in State.tablet_after) and hands each to
+  app.on_tablet, which enters handle_message with the profile's Person (intake.gate takes `person`: never looked up in
+  People, no /whoami) in the profile's own conversation (a chat id above every Telegram id). Delivery gains a second
+  sink chosen by conversation (Tablet: a send is a turn, an edit replaces it, a delete withdraws it, a reply is one
+  turn with its camera pictures, an .html attachment is uploaded as a page); chat_jobs asks Delivery.reaches instead of
+  "is Telegram on". The message says where it was written (tablet.WHERE); the system prompt names the tablet beside
+  Telegram. tool_access.GUEST: answers only (no ha_call_service, create_ticket, start_job, no cameras). Agreement copied
+  from Kiosk 2.496.582 (conversation).
+
 ## 0.6.368 (29 October 2026)
 
 - Tickets.repair: an open task whose fault id the Kiosk does not hold (open or closed) gets its fault again; the old

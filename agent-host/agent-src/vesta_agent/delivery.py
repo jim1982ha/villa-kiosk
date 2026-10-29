@@ -14,6 +14,11 @@ job's result whatever it says — its report, its daily text, or why it could no
 
 Also here, because they are what a chat SEES of the agent: the conversation's reply (the camera pictures the AI
 looked at, its answer as the last one's caption) and "typing…" while the AI works.
+
+⚠️ A SECOND SINK, CHOSEN BY CONVERSATION (ticket 21 of "One inbox", 2026-10-29): a tablet's conversation (tablet.py) is
+not a Telegram chat. What is sent, edited or deleted there goes to the Kiosk as its turns, through this same module —
+so every caller (a reply, a job's waiting message and its result, "New conversation.") reaches the tablet as it reaches
+Telegram, and "did it arrive" stays one answer.
 """
 from __future__ import annotations
 
@@ -27,7 +32,7 @@ from typing import AsyncIterator, Awaitable, Callable
 from vesta_shared.limits import limit
 from vesta_shared.messaging import split_message, telegram_caption_chars, telegram_message_chars, tg_len
 
-from . import layout
+from . import layout, tablet
 from .in_progress import InProgress
 from .routing import JOB, Origin, Routing
 from .telegram import TelegramError
@@ -98,8 +103,9 @@ def typing_timeline(times: list[tuple[float, float, bool]]) -> str:
 
 
 class Delivery:
-    def __init__(self, tg, state, policy: Callable, work: InProgress | None = None):
+    def __init__(self, tg, state, policy: Callable, work: InProgress | None = None, tablet=None):
         self.tg = tg                  # telegram.Telegram, or None when the takeover is off: nothing is sent
+        self.tablet = tablet          # tablet.Tablet: a tablet's conversation, the second sink (None: no Kiosk)
         self.state = state
         self.policy = policy
         # what runs and whether its result arrived (in_progress.py): every message that arrives is told there, once
@@ -110,11 +116,28 @@ class Delivery:
         self.on_unreachable: Callable[[int, str], Awaitable[None]] | None = None
         self._waiting: dict[int, dict] = {}   # chat → its one "typing…" loop and what holds it (hold)
 
+    def _on_tablet(self, chat_id) -> bool:
+        return self.tablet is not None and self.tablet.owns(chat_id)
+
+    def reaches(self, chat_id) -> bool:
+        """Whether anything sent to `chat_id` can arrive: a tablet's conversation, or a chat while Telegram is on."""
+        return self._on_tablet(chat_id) or self.tg is not None
+
+    async def _arrived(self, chat_id, mid: int, origin: Origin | None) -> int:
+        """What every message that arrived tells, wherever it went: a run's result owes nothing at the next start, and a
+        job's result takes its "being prepared" message away."""
+        self.work.arrived(origin)
+        if origin is not None and origin.kind == JOB and self.on_job_result:
+            await self.on_job_result(origin)
+        return mid
+
     # ------------------------------------------------------------------ one message
     async def send(self, chat_id: int, text: str, *, keyboard: dict | None = None, document: str | None = None, photo: Photo | None = None, origin: Origin | None = None, reply_to: int | None = None) -> int | None:
         """The message's id, or None: nothing arrived. `origin`: on whose behalf — a job asked for in a chat
         (kind JOB) makes this its result, which replaces the chat's "being prepared" message. `reply_to`: one of the
         agent's messages this one answers (a rewrite's backup, Outcome.rewrite)."""
+        if self._on_tablet(chat_id):
+            return await self._to_tablet(chat_id, text, origin, document=document, photos=[photo] if photo else [])
         if self.tg is None:
             self.state.log("send_skipped", {"chat": chat_id, "reason": "Telegram is off (\"Agent replies on Telegram\" is off)"})
             log.info("Telegram off: a message for chat %s was not sent", chat_id)
@@ -146,12 +169,10 @@ class Delivery:
         if not mid:
             return None
         self.state.set_unreachable(chat_id, None)
-        self.work.arrived(origin)                               # a run's message arrived: nothing owed at the next start
         log.info("Sent to chat %s (%s)%s%s%s", chat_id, Routing(self.policy()).label(chat_id),
                  " with buttons" if keyboard else "", " and a file" if document else "", " and a photo" if photo else "")
-        if origin is not None and origin.kind == JOB and self.on_job_result:
-            await self.on_job_result(origin)                    # its waiting message goes, its "typing…" stops
-        return mid
+        # a run's message arrived: nothing owed at the next start; a job's result: its waiting message goes
+        return await self._arrived(chat_id, mid, origin)
 
     # ------------------------------------------------------------------ a message already there
     # ⚠️ ONE WAY TO TELEGRAM FOR A MESSAGE'S WHOLE LIFE (architecture review 15, 2026-10-10): sending came here, but the
@@ -160,7 +181,9 @@ class Delivery:
     async def edit(self, chat_id: int, message_id: int, text: str, keyboard: dict | None = None) -> bool:
         """Rewrite one of the agent's messages (its buttons go, or become `keyboard`), as a send would show it: plain
         text, and — one message cannot be split — at most Telegram's limit, cut between lines. False: Telegram is off,
-        or refused."""
+        or refused. On a tablet: its turn says it now (the Kiosk replaces it by its key; its buttons are ticket 22's)."""
+        if self._on_tablet(chat_id):
+            return await self.tablet.edit(int(chat_id), int(message_id), plain_text(text))
         if self.tg is None:
             return False
         text = fit(plain_text(text))
@@ -183,13 +206,17 @@ class Delivery:
                                keyboard)
 
     async def buttons(self, chat_id: int, message_id: int, keyboard: dict | None) -> bool:
-        """Put buttons under one of the agent's messages already sent, its text untouched. False: off, or refused."""
-        if self.tg is None:
+        """Put buttons under one of the agent's messages already sent, its text untouched. False: off, or refused (a
+        tablet's buttons: ticket 22)."""
+        if self.tg is None or self._on_tablet(chat_id):
             return False
         return bool(await self.tg.buttons(int(chat_id), int(message_id), keyboard))
 
     async def delete(self, chat_id: int, message_id: int) -> bool:
-        """Delete one of the agent's messages. False: Telegram is off, or refused (past its 48 hours)."""
+        """Delete one of the agent's messages. False: Telegram is off, or refused (past its 48 hours). On a tablet: its turn
+        is withdrawn (never removed: the agent removes nothing at the Kiosk)."""
+        if self._on_tablet(chat_id):
+            return await self.tablet.delete(int(chat_id), int(message_id))
         if self.tg is None:
             return False
         return bool(await self.tg.delete(int(chat_id), int(message_id)))
@@ -204,8 +231,10 @@ class Delivery:
                     photos: list[Photo] | tuple = ()) -> int | None:
         """The answer to a person, with the camera pictures the AI looked at (the last PHOTOS_PER_REPLY): the
         answer is the last one's caption, or follows them when it carries the Continue button. A picture
-        Telegram refuses does not take the answer with it."""
+        Telegram refuses does not take the answer with it. On a tablet: ONE turn, the words with the pictures."""
         photos = list(photos)[-photos_per_reply():]
+        if self._on_tablet(chat_id):
+            return await self._to_tablet(chat_id, text, None, photos=photos) if (text or photos) else None
         if not (text or keyboard):
             # ⚠️ NO WORDS, STILL THE PICTURES (architecture review 19): a reply whose sentence was dropped (an approval
             # request shown in the chat says it all) lost the camera picture asked for with it
@@ -225,6 +254,18 @@ class Delivery:
             mid = await self.send(chat_id, text or "…", keyboard=keyboard)
         return mid
 
+    async def _to_tablet(self, chat_id: int, text: str, origin: Origin | None, *, document: str | None = None,
+                         photos: list[Photo] | tuple = ()) -> int | None:
+        """ONE turn of a tablet's conversation: the words, the pictures and a page together (a send, or a reply with
+        its camera pictures). Its id, or None when the Kiosk did not keep it."""
+        mid = await self.tablet.send(int(chat_id), plain_text(text or ""), document=document, photos=[p[0] for p in photos])
+        if not mid:
+            return None
+        self.state.remember_message(chat_id, mid)
+        log.info("Sent to the tablet's conversation (%s)%s%s", tablet.profile_of(chat_id), " and a file" if document else "",
+                 " and a picture" if photos else "")
+        return await self._arrived(chat_id, mid, origin)
+
     # ⚠️ ONE "TYPING…" FOR EVERY WAIT (owner, 2026-10-10: "make sure each message sent to the agent triggers this Typing
     # notification in a consistent way, for all the time the user is waiting for any reply ... coded one time"). A chat
     # is WAITING while anything holds it — a message being read (a photo fetched, a voice message transcribed), the AI
@@ -233,8 +274,9 @@ class Delivery:
     # (here and chat_jobs.py); a photo's download ran before either, 2.6 s with nothing shown (villa, 12:32).
     def hold(self, chat_id: int, label: str | None = None) -> Callable[[], None]:
         """The chat waits for the agent from now: "typing…" shows until every hold of it is released. Returns the
-        release (safe to call twice). `label`: a job's name, for the loop's account in the log at its end."""
-        if self.tg is None:
+        release (safe to call twice). `label`: a job's name, for the loop's account in the log at its end. A tablet's
+        conversation shows no "typing…" yet (ticket 22)."""
+        if self.tg is None or self._on_tablet(chat_id):
             return lambda: None
         chat = int(chat_id)
         w = self._waiting.get(chat)

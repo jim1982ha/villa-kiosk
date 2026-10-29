@@ -19,6 +19,9 @@ class _Delivery:
     over a quick typing loop."""
     from vesta_agent.delivery import Delivery as _Real
     hold = _Real.hold
+    reaches = _Real.reaches          # ...and where a message can arrive (a tablet's conversation: none here)
+    _on_tablet = _Real._on_tablet
+    tablet = None
 
     def __init__(self):
         from telegram_fake import FakeTelegram

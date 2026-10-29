@@ -347,6 +347,19 @@ class State:
         elif self.get(f"unreachable:{int(chat)}") is not None:
             self.drop(f"unreachable:{int(chat)}")
 
+    # The last question collected from the tablets (tablet.py): kept here so that a restart answers each once.
+    def tablet_after(self) -> int | None:
+        """The last of the tablets' questions collected from the Kiosk (tablet.Tablet.collect): a restart never answers
+        one twice. None: none collected yet (or the Kiosk's store started again)."""
+        got = self.get("tablet.inbox_after")
+        return int(got) if got and str(got).lstrip("-").isdigit() else None
+
+    def set_tablet_after(self, seq: int | None) -> None:
+        if seq is None:
+            self.drop("tablet.inbox_after")
+        else:
+            self.put("tablet.inbox_after", str(int(seq)))
+
     # When the siren must stop (siren.py): kept here so that a restart still stops it.
     def siren_stop(self) -> str | None:
         return self.get("siren:stop_at")

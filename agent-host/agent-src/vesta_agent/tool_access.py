@@ -169,6 +169,12 @@ def _without_groups(tools: set[str], denied: set[str]) -> set[str]:
 
 #: The asker of a scheduled job or an alert hook: nobody asked, everything switched on.
 SYSTEM = "system"
+#: A guest at the tablet (agent-contract.json conversation.profiles, ticket 21 of "One inbox"): ANSWERS ONLY (owner,
+#: 2026-10-28: "VESTA must take no action for a guest") — never a tool that acts or asks for an approval (ACTS), never
+#: the cameras (a guest's tablet hides them: roles.json deniedTypes), and the facility manager's refusals besides.
+GUEST = "guest"
+#: The tools that act: an action on the villa (and its approval), a fault recorded, a report started.
+ACTS = frozenset({"ha_call_service", "create_ticket", "start_job"})
 
 
 def allowed_for(policy: Policy, server_tools: list[dict], role: str | None, chat_id: int | None = None) -> set[str]:
@@ -183,6 +189,8 @@ def allowed_for(policy: Policy, server_tools: list[dict], role: str | None, chat
     fm_group = chat_id is not None and policy.group_role(chat_id) == "fm"     # the group's role: Policy.group_role
     if role != "owner" or fm_group:
         tools = _without_groups(tools, fm_denied(policy))
+    if role == GUEST:
+        tools = _without_groups(tools - ACTS, {"cameras"})
     return tools
 
 

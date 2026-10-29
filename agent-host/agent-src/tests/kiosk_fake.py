@@ -46,9 +46,30 @@ class FakeKiosk(Kiosk):
         self.messages: dict[str, dict] = {}    # …and what the tablet holds: the last of each key (the add-on replaces by key)
         self.keeps_messages = True             # False plays an older Kiosk (404): it keeps none
         self.message_refusals = 0              # how many pushes it answers 500 first (a Kiosk restarting)
+        self.asks: list[dict] = []             # the tablets' questions it keeps (person_asks), numbered as the add-on does
+        self.turns: dict[str, dict] = {}       # each conversation turn the agent wrote, by key (a rewrite replaces it)
+        self.turns_pushed: list[dict] = []     # ...and every write, in order
+        self.keeps_turns = True                # False plays an older Kiosk (404): no inbox, no conversation
 
     # ------------------------------------------------------------------ the one thing replaced: the transport
-    async def _req(self, method, path, body=None):
+    async def _req(self, method, path, body=None, **_):
+        if path.startswith("/agent/v1/inbox"):
+            if not self.keeps_turns:
+                return 404, {"error": "not found"}
+            after = int(path.split("after=")[1]) if "after=" in path else None
+            items = [a for a in self.asks if after is None or a["seq"] > after]
+            return 200, {"asks": copy.deepcopy(items), "last": self.asks[-1]["seq"] if self.asks else 0,
+                         "first": self.asks[0]["seq"] if self.asks else 1}
+        if path == "/agent/v1/conversation-turn":
+            if not self.keeps_turns:
+                return 404, {"error": "not found"}
+            # the add-on's rule (_turn_record): never a person's line, a profile it names, something said or withdrawn
+            if (str(body.get("key", "")).startswith("ask:") or body.get("profile") not in _AGREEMENT["conversation"]["profiles"]
+                    or not (body.get("text") or body.get("photos") or body.get("page") or body.get("gone"))):
+                return 400, {"error": "not a turn"}
+            self.turns_pushed.append(copy.deepcopy(body))
+            self.turns[body["key"]] = copy.deepcopy(body)
+            return 200, {"ok": True, "seq": len(self.turns_pushed)}
         if path == "/agent/v1/fm-data":
             if method == "GET":
                 return 200, copy.deepcopy(self.doc)
@@ -94,6 +115,16 @@ class FakeKiosk(Kiosk):
         """The Kiosk's proxy refuses every write that changes fault `tid` (a new one included: its id is the next the
         agent makes, t1, t2 …), answering `status` and its own `sentence` — as it refuses a removal or an unknown field."""
         self._refused[tid] = (status, sentence)
+
+    def person_asks(self, profile: str, text: str) -> dict:
+        """A question typed on a tablet signed in as `profile`, kept in the inbox as the add-on keeps it (stamped)."""
+        ask = {"seq": (self.asks[-1]["seq"] if self.asks else 0) + 1, "at": PERSON_AT, "profile": profile, "text": text}
+        self.asks.append(ask)
+        return ask
+
+    def conversation(self, profile: str) -> list[dict]:
+        """What the tablet of `profile` shows of VESTA's answers, in order: each turn as it stands, none withdrawn."""
+        return [t for t in self.turns.values() if t.get("profile") == profile and not t.get("gone")]
 
     # ------------------------------------------------------------------ what a person does in the Cockpit
     def _all(self) -> list[dict]:

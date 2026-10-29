@@ -89,6 +89,16 @@ def kiosk_timeout_s() -> float:
                  reached="That exchange fails: a fault not recorded is said so; the next try comes later.",
                  told="person")
 
+def inbox_timeout_s() -> float:
+    """How long the agent waits for the Kiosk's answer to its long read of the tablets' questions (tablet.py): the
+    Kiosk's own hold (the agreement's conversation.waitSeconds), and a margin."""
+    return float(agreement.section("conversation").get("waitSeconds") or 0) + limit(
+        "kiosk.inbox_margin_s", 15, unit="seconds", group="run", lo=5, hi=120,
+        says="How much longer than the Kiosk's own hold the agent waits for its answer when collecting the tablet's "
+             "questions.",
+        reached="The read is tried again; a question is never lost (the Kiosk keeps it).", told="")
+
+
 def message_timeout_s() -> float:
     return limit("kiosk.message_timeout_s", 10, unit="seconds", group="run", lo=2, hi=120,
                  says="How long the agent waits for the VESTA Kiosk to keep a message for the tablet.",
@@ -368,8 +378,9 @@ class Kiosk:
         self._cadence_refused: str | None = None        # the Kiosk's last "refused: …" of our cadence, said once
         self._lock = asyncio.Lock()
 
-    async def _req(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
-        timeout = aiohttp.ClientTimeout(total=kiosk_timeout_s())
+    async def _req(self, method: str, path: str, body: dict | None = None,
+                   timeout_s: float | None = None) -> tuple[int, dict]:
+        timeout = aiohttp.ClientTimeout(total=timeout_s or kiosk_timeout_s())
         try:
             async with aiohttp.ClientSession(timeout=timeout, headers=self.headers) as http:
                 async with http.request(method, f"{self.url}{path}", json=body) as r:
@@ -489,6 +500,30 @@ class Kiosk:
             return True
         log.warning("The Kiosk did not keep a message for the tablet: it answered %s%s", status,
                     " (a Kiosk older than 2.496.568 keeps none)" if status == 404 else "")
+        return False
+
+    async def inbox(self, after: int | None) -> dict | None:
+        """The tablets' questions after `after` (all kept with None), the Kiosk holding the read open until one comes:
+        {asks: [{seq, at, profile, text}], last, first} (GET /agent/v1/inbox, the Kiosk since 2.496.582: tablet.py).
+        None from a Kiosk with no inbox (an older one answers 404). KioskError when it could not be reached."""
+        status, data = await self._req("GET", "/agent/v1/inbox" + ("" if after is None else f"?after={int(after)}"),
+                                       timeout_s=inbox_timeout_s())
+        if status == 404:
+            return None
+        if status != 200:
+            raise KioskError(f"/agent/v1/inbox answered {status}", status=status)
+        return data
+
+    async def add_turn(self, record: dict) -> bool:
+        """One turn of a tablet's conversation, added or replacing the turn of its key (POST
+        /agent/v1/conversation-turn, the Kiosk since 2.496.582: tablet.py). True when kept; False when refused or this
+        Kiosk keeps none (404). KioskError when it could not be reached. ⚠️ NEVER A REMOVAL: a withdrawn turn is kept
+        withdrawn (`gone`)."""
+        status, data = await self._req("POST", "/agent/v1/conversation-turn", record)
+        if status == 200:
+            return True
+        log.warning("The Kiosk did not keep a turn of the tablet's conversation: it answered %s%s", status,
+                    f" ({str(data.get('error', ''))[:error_short_chars()]})" if data.get("error") else "")
         return False
 
     def _ticket_id(self) -> str:

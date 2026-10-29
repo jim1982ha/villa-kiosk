@@ -1,3 +1,13 @@
+## 0.12.380
+
+What you will see (needs VESTA (dev2) 2.496.582 or later):
+- Questions typed in Cockpit › Messages › VESTA on the tablet are answered there, by the profile signed in: the owner
+  and the facility manager with their usual rights, a guest with answers only (VESTA takes no action and asks for no
+  approval for a guest). Each profile is its own conversation, apart from every Telegram chat.
+- /investigate, /proposal and /new work there as on Telegram; an answer carries the camera pictures VESTA looked at and
+  the page it made; a report's "being prepared" line is replaced by the report.
+- An action asked for on the tablet is sent for approval to the owner's Telegram chats, as today.
+
 ## 0.12.379
 
 What you will see:

@@ -168,7 +168,7 @@ class ChatJobs:
             log.info("Job %s in chat %s was cut by the last stop: said so", cut.name, cut.chat)
             if cut.kind == CHAT_JOB and self.facts is not None:
                 self.facts.job_ended(cut, chat_facts.CUT)
-            if self.delivery.tg is None:
+            if not self.delivery.reaches(cut.chat):
                 continue
             # a report cut by a restart is told to the tablet too (ticket 25 of "One inbox", inventory 25); a question's
             # "send it again" is the conversation's (ticket 21)
@@ -209,7 +209,7 @@ class ChatJobs:
     # ------------------------------------------------------------------ the waiting message, "typing…"
     async def _carry(self, chat: int, step) -> None:
         """Carry out what job_notices.py decided about a waiting message."""
-        if step is None or self.delivery.tg is None:
+        if step is None or not self.delivery.reaches(chat):
             return
         what, mid, job = step
         log.info("Waiting message %s in chat %s: %s", mid, chat, "deleted (its result came)" if what == "delete"
@@ -236,7 +236,7 @@ class ChatJobs:
     def _typing_on(self, chat: int, name: str) -> None:
         """⚠️ "typing…" UNTIL THE RESULT IS THERE (owner, 2026-10-07): the job holds the chat's one "typing…"
         (delivery.Delivery.hold) — never a loop of its own: a second one hides the first (measured 2026-10-09)."""
-        if self.delivery.tg is None or not self.work.running(chat, name) or (chat, name) in self._typing:
+        if not self.delivery.reaches(chat) or not self.work.running(chat, name) or (chat, name) in self._typing:
             return
         self._typing[(chat, name)] = self.delivery.hold(chat, name)
 

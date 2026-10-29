@@ -37,7 +37,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-from . import button_data, intake, requests_box, script_run, tool_access
+from . import button_data, intake, requests_box, script_run, tablet, tool_access
 from .ai_jobs import AiJobs
 from .chat_facts import ChatFacts
 from .chat_jobs import ChatJobs
@@ -163,7 +163,9 @@ class Vesta:
         # everything that reaches a chat, and whether it did (delivery.py)
         # what runs, for whom, what it promised, whether its result arrived — and what a stop cut (in_progress.py)
         self.work = InProgress(self.state, settings.timezone)
-        self.delivery = Delivery(self.tg, self.state, self.policy, self.work)
+        # a tablet's conversation (tablet.py, ticket 21 of "One inbox"): Delivery's second sink, and the inbox it is asked in
+        self.tablet = tablet.Tablet(self.kiosk, self.state)
+        self.delivery = Delivery(self.tg, self.state, self.policy, self.work, tablet=self.tablet)
         self.delivery.on_unreachable = self._tell_unreachable
         # what is happening for a chat beyond its conversation, told to the AI with each message there (chat_facts.py)
         named = Incidents(settings.store_path)
@@ -574,18 +576,30 @@ class Vesta:
         Store(self.s.store_path).beat("ha_events", datetime.now(timezone.utc).isoformat())
 
     # ------------------------------------------------------------------ messages
-    def gate(self, event_type: str, m: dict) -> intake.Intake:
+    def gate(self, event_type: str, m: dict, person: Person | None = None) -> intake.Intake:
         """What the agent does with this message, by the villa's rules now (intake.gate): a message that arrived, and
-        the one a command offer's button stands for (command_offers.py) — judged by the same rule."""
+        the one a command offer's button stands for (command_offers.py) — judged by the same rule. `person`: a tablet's
+        profile, as the Kiosk stamped it (tablet.py)."""
         on = self.skills.commands()
         return intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message, on,
-                           {c: s for c, s in self.skills.commands(include_off=True).items() if c not in on})
+                           {c: s for c, s in self.skills.commands(include_off=True).items() if c not in on}, person=person)
 
-    async def handle_message(self, event_type: str, m: dict, about: str | None = None):
+    async def on_tablet(self, ask: dict) -> None:
+        """A question typed on a tablet (tablet.Tablet.listen): it enters where a Telegram message does — the gate, so
+        /investigate, /proposal and /new work as there — in its profile's own conversation, as that profile's role."""
+        profile = ask.get("profile")
+        person, chat = tablet.person_of(profile), tablet.chat_of(profile)
+        if person is None or chat is None:
+            log.warning("A question from the tablet names no profile this agent answers (%s): not answered", profile)
+            return
+        event_type, m = tablet.as_message(chat, person, str(ask.get("text") or ""))
+        await self._safe(self.handle_message(event_type, m, person=person))
+
+    async def handle_message(self, event_type: str, m: dict, about: str | None = None, person: Person | None = None):
         """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30): intake.py decides.
         `about`: what the answer a command offer was under had read (command_offers.subject) — given by the press only,
-        never read from an event."""
-        got = self.gate(event_type, m)
+        never read from an event. `person`: a tablet's profile (on_tablet), never read from an event."""
+        got = self.gate(event_type, m, person)
         from_id = m.get("user_id")
         if got.action != "drop":
             # ⚠️ THE START OF THE TIMELINE (owner, 2026-10-09: the log must cover "the moment the message to request a
@@ -668,7 +682,9 @@ class Vesta:
         # ⚠️ NOT CHOSEN BY THE AI (owner, 2026-10-11): a skill with a command is used only when the person writes it
         by_command = ", ".join(f"{n} (/{sk.command})" for n, sk in everyone.items() if sk.command)
         return (self.s.instructions() + "\n\n" +
-                "Telegram shows your text exactly as written: plain text only, no Markdown (no ** or #, no tables); "
+                # ⚠️ BOTH PLACES (ticket 21 of "One inbox"): a tablet's conversation shows text as Telegram does
+                "Telegram and the villa's wall tablet show your text exactly as written: plain text only, no Markdown "
+                "(no ** or #, no tables); "
                 "a list is lines starting with '- '.\n"
                 "Only the text you write after your LAST tool call reaches the person: write your whole answer there, "
                 "once. Text written before a tool call is never sent, and never send your answer with send_message too.\n" +
@@ -721,8 +737,11 @@ class Vesta:
                         "a photo (attached: look at it), with no message" if image else
                         (f"a voice message, as transcribed (spoken in {Language.name_of(spoken)})" if spoken else
                          "a voice message, as transcribed") if voice else "a message")
+                # ⚠️ WHERE IT WAS WRITTEN, AND HOW THAT PLACE SHOWS THE ANSWER: a tablet's conversation (tablet.WHERE) is
+                # no Telegram chat (ticket 21 of "One inbox")
+                where = tablet.WHERE if tablet.profile_of(cid) else self.policy().chat_label(cid)
                 prompt = (f"{said[0].upper() + said[1:]} from {person.name if person else 'someone'} (role "
-                          f"{person.role if person else '?'}; language saved for them: {lang}) in the {self.policy().chat_label(cid)}:\n"
+                          f"{person.role if person else '?'}; language saved for them: {lang}) in the {where}:\n"
                           f"\"\"\"{text}\"\"\"")
             # a skill only its command starts (skills.Skill.command): this turn's request, or — for a Continue — the one
             # its button carries (state.new_continuation): its id, its offers, its web searches (command_request.py)
@@ -1022,6 +1041,8 @@ class Vesta:
         if self.kiosk.enabled:
             tasks.append(asyncio.create_task(self.kiosk.heartbeats(stop, cadence=self.kiosk_cadence,
                                                                    answered=self.kiosk_answered)))
+            # the tablets' questions (tablet.py): collected from the Kiosk, which never calls the agent
+            tasks.append(asyncio.create_task(self.tablet.listen(stop, self.on_tablet)))
         tasks.append(asyncio.create_task(requests_box.serve(self.s.data_dir, self.on_request, stop)))
         tasks.append(asyncio.create_task(self.siren.watch(stop)))     # stops the siren on time, after a restart too
         await stop.wait()
