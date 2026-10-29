@@ -6,8 +6,8 @@
 // tests/oracles/messages_model.mjs.
 
 import type { CardView } from "@/config/cockpitCard";
-import { alertStage, incidentKey, type Announcement } from "./announcements";
-import { stillKept } from "./feed";
+import { alertStage, incidentKey, versionOf, type Announcement } from "./announcements";
+import { byTime, stillKept } from "./feed";
 
 export type MessagesFilter = "issues" | "notifications" | "reports";
 
@@ -97,10 +97,7 @@ export function messageOfLine(line: CardView["lines"][number], kept: readonly An
     : kept.find((a) => a.feed === "vesta" && a.key === incidentKey(line.alertNumber!)) ?? null;
 }
 
-/** When a record came, for the order of the list (two feeds: their numbers do not compare). */
-const timeOf = (a: Announcement) => Date.parse(a.at) || 0;
-/** The list's one order: by time, oldest first, then by number. */
-const byTime = (x: Announcement, y: Announcement) => timeOf(x) - timeOf(y) || x.seq - y.seq;
+// the list's one order (feed.byTime): two feeds' numbers do not compare
 
 /**
  * What the tablet lists as notifications (tickets 26-27 of "One inbox", owner 2026-10-28: "update the existing card,
@@ -181,7 +178,8 @@ export function readOnScreen(filter: MessagesFilter,
  *  rewrite (a new number) is news again; so is the first of a store that started again (an old number, a new time). */
 // ⚠️ VESTA'S CARD BY ITS STEP, NOT ITS NUMBER (spec review, 2026-10-29): a quiet rewrite (its bottom line unchanged)
 // comes under a new number and lit the unread mark again; a new step (reminder, escalation) changes the bottom line
-const readId = (a: Announcement) => (a.feed === "vesta" ? `v:${a.key}@${a.status}` : `${idOf(a)}@${a.at}`);
+// (VESTA's card: its version, announcements.versionOf — the identity its presses are kept by too)
+const readId = (a: Announcement) => (a.feed === "vesta" ? versionOf(a) : `${idOf(a)}@${a.at}`);
 
 /** How many of the kept announcements this tablet has not shown in Messages yet: the light mark on the robot, the
  *  phone's gear and the menu's Cockpit row. The open issues are not in it: they have their own count — nor VESTA's card

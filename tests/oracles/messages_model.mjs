@@ -169,7 +169,10 @@ ck("  ...on a phone, on the gear and on the menu's Cockpit row",
    holds((b) => /Menu/.test(propText(b, "aria-label") ?? "")) && holds((b) => propText(b, "role") === '"menuitem"'
      && /onOpenCockpit\(\)/.test(propText(b, "onClick") ?? "")));
 ck("Messages opens where the model says, and marks read what it shows",
-   /useState<MessagesFilter>\(\s*\(\) => openingFilter\(unread, \{ warning: !!focusFaults\?\.length, form: !!reportFaultFor && canManage \}, unreadReports\)\)/.test(tab) && /if \(onScreen\.length\) shown\(onScreen\);/.test(tab)
+   /useState<MessagesFilter>\(\(\) => openingFilter\(unread, opening, unreadReports\)\)/.test(tab) && /if \(onScreen\.length\) shown\(onScreen\);/.test(tab)
+   // ...and until a filter is chosen it follows what is unread (VESTA's feed read after the Cockpit opened)
+   && /if \(!chosen\) setFilter\(openingFilter\(unread, opening, unreadReports\)\);/.test(tab)
+   && /onClick=\{\(\) => pickFilter\(f\.id\)\}/.test(tab)
    && /const onScreen = readOnScreen\(filter, \{ notifications: paged\.page, reports: reportsPaged\.page \}, item, kept\);/.test(tab));
 
 console.log("\n  a report, drawn (ticket 20):");

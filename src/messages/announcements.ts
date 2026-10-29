@@ -64,7 +64,17 @@ export interface AnnouncementButton {
 }
 
 /** What may be pressed: a villa announcement, one of VESTA's messages, a turn of VESTA's conversation. */
-export interface Pressable { seq: number; key: string | null; buttons: AnnouncementButton[]; feed?: "vesta" | "turn" }
+export interface Pressable { seq: number; key: string | null; buttons: AnnouncementButton[]; feed?: "vesta" | "turn";
+  /** VESTA's card's bottom line: its step (versionOf). */
+  status?: string }
+
+/** One version of a record, the ONE identity a press and a read are kept by (architecture review, 2026-10-30): VESTA's
+ *  card by its key and its step (its bottom line) — a quiet rewrite (a title retouched, its words translated) is the
+ *  same card, a new step (a reminder, a decision) a new one; any other record by its key and number. A press kept by
+ *  number was forgotten at a quiet rewrite, and Approve could be pressed again. Pure. */
+export const versionOf = (a: Pressable): string =>
+  // VESTA's card spelled as the tablets already keep what they read (`v:` + key @ step): no card turns unread again
+  a.feed === "vesta" ? `v:${a.key}@${a.status ?? ""}` : `${a.feed ?? "villa"}:${a.key}@${a.seq}`;
 
 /** Each of VESTA's button kinds' rules for the tablet, read from the agreement both sides read. */
 const BUTTON_KINDS = AGENT_CONTRACT.vestaMessage.buttonKinds as Record<string, { acts?: boolean; confirm?: string }>;

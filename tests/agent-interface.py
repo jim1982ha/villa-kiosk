@@ -548,6 +548,17 @@ async def main() -> None:
     r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
     ck("  ...a guest sees that photo while it is the current notification, as a ring's (owner, 2026-10-28)",
        gbody["messages"][0].get("photo") == one[0]["photo"] and r.status == 200, (r.status, gbody))
+    # architecture review, 2026-10-30: current as long as the ring holds the screen (the villa's "Ring shown for")
+    held, read = proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read
+    proxy.ANNOUNCEMENT_CURRENT_S = 0
+    proxy.DEVICE_CONFIG.read = lambda: {}
+    await asyncio.sleep(1.1)
+    r_gone = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    proxy.DEVICE_CONFIG.read = lambda: {"ringShownForS": 120}
+    r_held = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read = held, read
+    ck("  ...current for as long as the villa's \"Ring shown for\" holds it on screen (403 past it, 200 within it)",
+       r_gone.status == 403 and r_held.status == 200, (r_gone.status, r_held.status))
     proxy.ANNOUNCEMENT_PHOTO_GRACE_S = 0       # the sweep's grace for a copy not yet recorded: none here
     soon = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() + 5))
     await proxy._record_announcement(None, {"event_type": proxy.ANNOUNCEMENT_EVENT, "time_fired": soon,
@@ -733,6 +744,15 @@ async def main() -> None:
     r2 = await get(f"/announcement-photo/{answer['photos'][0]}", headers=cookie("ops"))
     ck("  ...the picture of an answer goes to the profile it answered only (404 for another, cameras or not)",
        r.status == 200 and r2.status == 404, (r.status, r2.status))
+    # ...and its page (architecture review, 2026-10-30: served to any facility profile by its id)
+    await post("/agent/v1/fm-document?id=conv-page-0001", headers={**bearer(), "Content-Type": "text/html; charset=utf-8"},
+               data=b"<!doctype html><p>The owner's answer</p>")
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "turn:pg", "profile": "owner",
+                                                                      "text": "Here is the page.", "page": "conv-page-0001"})
+    r = await get("/fm-document/conv-page-0001", headers=cookie("owner"))
+    r2 = await get("/fm-document/conv-page-0001", headers=cookie("ops"))
+    ck("  ...the page of an answer too: to the profile it answered only (404 for the facility manager)",
+       r.status == 200 and r2.status == 404, (r.status, r2.status))
     # what a turn may hold: the agreement's examples, the Agent's test copy of the add-on replays the same ones
     for ex in proxy.CONVERSATION["turnExamples"]:
         r = await post("/agent/v1/conversation-turn", headers=bearer(), json=ex["turn"])
@@ -824,6 +844,10 @@ async def main() -> None:
     ck("the words the Agent heard become the person's question in the thread, still a spoken one",
        r.status == 200 and line.get("text") == "Is the pool pump on?" and line.get("voice") is True
        and line.get("from") == "person", (r.status, line))
+    ck("  ...the question's own time kept: the page orders the thread by it (feed.byTime), never by the new number",
+       line.get("at") == spoken.get("at"), (line, spoken))
+    ck("  ...written once even when two writes come together: the second, merged under the store's lock, changes nothing",
+       proxy._with_heard([{**line}], {**line, "text": "Something else", "seq": 99}) == [line])
     r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": key, "profile": "owner",
                                                                           "heard": "Something else"})
     typed = next(t for t in body["turns"] if t["from"] == "person" and not t.get("voice"))

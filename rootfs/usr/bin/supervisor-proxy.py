@@ -3290,6 +3290,9 @@ async def fm_document_get_handler(request: web.Request) -> web.StreamResponse:
     path = os.path.join(_data(FM_EVIDENCE_NAME), f"{doc_id}.html")
     if os.path.realpath(os.path.dirname(path)) != os.path.realpath(_data(FM_EVIDENCE_NAME)) or not os.path.isfile(path):
         return web.json_response({"error": "not found"}, status=404)
+    # an answer's page in another profile's conversation: theirs (as its picture is: _turn_only)
+    if await _turn_only(doc_id, "page", _role_for(request)):
+        return web.json_response({"error": "not found"}, status=404)
     return web.FileResponse(path, headers={
         "Cache-Control": "private, max-age=31536000, immutable",      # a random id, never reused: never changes
         "Content-Type": "text/html; charset=utf-8",
@@ -3957,13 +3960,24 @@ def _keep_pushed_photo(raw, cap: int | None = None) -> str | None:
 ANNOUNCEMENT_CURRENT_S = 60
 
 
-def _current_photo(items: list, now: float) -> str | None:
-    """The photo of the current notification, or None: the newest announcement's, while it is new. Pure —
-    tests/store-doors.py drives it."""
+def _ring_current_s() -> int:
+    """How long a ring is the current notification: ANNOUNCEMENT_CURRENT_S, or the villa's "Ring shown for"
+    (device-config.json `ringShownForS`) when longer. ⚠️ AS LONG AS IT HOLDS THE SCREEN (architecture review,
+    2026-10-30): with "Ring shown for" at 120s, a guest's photo was refused after 60s, the ring still on screen."""
+    cfg = DEVICE_CONFIG.read()
+    shown = cfg.get("ringShownForS") if isinstance(cfg, dict) else None
+    # its range is the page's to keep (AppConfig.ringShownForOk, on save): here a whole number of seconds, nothing else
+    ok = isinstance(shown, int) and not isinstance(shown, bool) and shown > 0
+    return max(ANNOUNCEMENT_CURRENT_S, shown if ok else 0)
+
+
+def _current_photo(items: list, now: float, current_s: int = ANNOUNCEMENT_CURRENT_S) -> str | None:
+    """The photo of the current notification, or None: the newest announcement's, while it is new (`current_s`:
+    _ring_current_s). Pure — tests/store-doors.py drives it."""
     newest = max((a for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)),
                  key=lambda a: a["seq"], default=None)
     at = _iso_epoch(newest.get("at")) if newest else None
-    if newest is None or at is None or not 0 <= now - at <= ANNOUNCEMENT_CURRENT_S:
+    if newest is None or at is None or not 0 <= now - at <= current_s:
         return None
     return newest.get("photo") or None
 
@@ -3973,13 +3987,39 @@ def _current_photo(items: list, now: float) -> str | None:
 ANNOUNCEMENT_PHOTO_GRACE_S = 120
 
 
-def _photos_named(records) -> set:
-    """Every kept photo `records` name: an announcement's or a message's `photo`, a conversation turn's `photos`. Pure."""
+def _names_in(records, kind: str) -> set:
+    """Every kept file of `kind` `records` name — "photo": an announcement's or a message's `photo`, a turn's `photos`;
+    "page": a message's or a turn's `page`, in each of its languages; "speech": a turn's sound. ⚠️ ONE READER OF WHAT A
+    RECORD NAMES (architecture review, 2026-10-30): each sweep and each door spelled the fields itself, and a
+    conversation's page, missed by the per-profile rule its photo got, was served to any facility profile. Pure."""
     named = set()
     for a in records if isinstance(records, list) else ():
-        if isinstance(a, dict):
+        if not isinstance(a, dict):
+            continue
+        if kind == "photo":
             named |= {a.get("photo")} | set(a.get("photos") if isinstance(a.get("photos"), list) else ())
-    return named
+        elif kind == "page":
+            named |= {a.get("page")} | {w.get("page") for w in (a.get("languages") or {}).values() if isinstance(w, dict)}
+        elif kind == "speech":
+            named.add(a.get("speech"))
+    return {n for n in named if isinstance(n, str) and n}
+
+
+def _photos_named(records) -> set:
+    """Every kept photo `records` name (_names_in)."""
+    return _names_in(records, "photo")
+
+
+async def _turn_only(name: str, kind: str, profile: str) -> bool:
+    """Whether `name` is named by conversation turns only (no announcement nor VESTA message names it) and none of them
+    is `profile`'s: then it is another profile's private answer, never served. ⚠️ A CONVERSATION'S FILES ARE ITS
+    PROFILE'S (architecture review, 2026-10-30): its picture and its page alike."""
+    turns = [t for t in await asyncio.to_thread(CONVERSED.items) if isinstance(t, dict) and name in _names_in([t], kind)]
+    if not turns:
+        return False
+    shared = name in _names_in(await asyncio.to_thread(ANNOUNCED.items), kind) \
+        or name in _names_in(await asyncio.to_thread(MESSAGED.items), kind)
+    return not shared and not any(t.get("profile") == profile for t in turns)
 
 
 def _sweep_announcement_photos(_stored, kept) -> None:
@@ -4102,7 +4142,7 @@ async def _current_photos() -> set:
         items = [a for a in await asyncio.to_thread(feed.items) if isinstance(a, dict)]
         newest += [max(items, key=lambda a: a["seq"])] if items else []
     newest.sort(key=lambda a: _iso_epoch(a.get("at")) or 0)
-    photo = _current_photo(newest[-1:], time.time())
+    photo = _current_photo(newest[-1:], time.time(), await asyncio.to_thread(_ring_current_s))
     return {photo} if photo else set()
 
 
@@ -4159,10 +4199,7 @@ async def announcement_photo_handler(request: web.Request) -> web.StreamResponse
     profile = _role_for(request)
     if not _may(profile, "viewCameras") and name not in await _current_photos():
         return _forbidden("This profile sees a ring's photo only while it is the current notification.")
-    turns = [t for t in await asyncio.to_thread(CONVERSED.items) if isinstance(t, dict) and name in (t.get("photos") or [])]
-    shared = name in _photos_named(await asyncio.to_thread(ANNOUNCED.items)) \
-        or name in _photos_named(await asyncio.to_thread(MESSAGED.items))
-    if turns and not shared and not any(t.get("profile") == profile for t in turns):
+    if await _turn_only(name, "photo", profile):
         return web.json_response({"error": "no such photo"}, status=404)
     _, ctype, _ = ANNOUNCEMENT_PHOTO_TYPES[os.path.splitext(name)[1]]
     return web.FileResponse(path, headers={"Content-Type": ctype, "Cache-Control": "no-store"})
@@ -4226,12 +4263,8 @@ def _vm_language(code) -> bool:
 def _report_pages() -> set:
     """Every page a kept VESTA message names (a report's, in each of its languages): a fault's write never sweeps them as
     unattached — a report's page lives with its message, the records-kept days, never with a ticket (ticket 20)."""
-    named = set()
     # ...and an answer's page in the tablet's conversation (ticket 21), the records-kept days too
-    for m in [*MESSAGED.items(), *CONVERSED.items()]:
-        if isinstance(m, dict):
-            named |= {m.get("page")} | {w.get("page") for w in (m.get("languages") or {}).values() if isinstance(w, dict)}
-    return {p for p in named if isinstance(p, str) and p}
+    return _names_in([*MESSAGED.items(), *CONVERSED.items()], "page")
 
 
 def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
@@ -4435,7 +4468,7 @@ def _keep_speech(data: bytes, kind: str) -> str:
 def _sweep_speech(kept) -> None:
     """Delete every answer's sound no kept turn names (its turn expired, or a rewrite left it), unless younger than
     SPEECH_GRACE_S: it is uploaded BEFORE the turn that names it. Blocking."""
-    SPEECHES.sweep({t.get("speech") for t in kept if isinstance(t, dict)} if isinstance(kept, list) else set())
+    SPEECHES.sweep(_names_in(kept, "speech"))
 
 
 def _after_conversation(stored, kept) -> None:
@@ -4464,6 +4497,13 @@ def _asks_kept(items, now: float) -> list:
     kept = [a for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)] if isinstance(items, list) else []
     kept = [a for a in kept if 0 <= now - (_iso_epoch(a.get("at")) or 0) <= ASK_KEPT_S]
     return _telemetry_ring_after(kept, len(kept), ASKS_MAX_BYTES)
+
+
+def _with_heard(stored: list, rec: dict) -> list:
+    """The conversation with the words heard on the person's spoken line — unless the line, as stored now, has words
+    already (the person's words are written once). Its `at` stays the question's (the thread's order: feed.byTime). Pure."""
+    now = next((t for t in stored if isinstance(t, dict) and t.get("key") == rec["key"]), None)
+    return stored if now is not None and "text" in now else _turns_with(stored, rec)
 
 
 def _turns_with(stored: list, rec: dict) -> list:
@@ -4707,7 +4747,9 @@ async def agent_conversation_turn_handler(request: web.Request) -> web.Response:
         if line is None:
             return web.json_response({"error": "words heard go onto a spoken question of that profile, once"},
                                      status=400)
-        rec = await CONVERSED.add(lambda seq: {**line, "seq": seq}, _turns_with)
+        # ⚠️ ONCE, UNDER THE STORE'S LOCK (architecture review, 2026-10-30): the check above read the store outside it, so
+        # two writes of the words at once both passed; the merge checks the line as it is when it is written
+        rec = await CONVERSED.add(lambda seq: {**line, "seq": seq}, _with_heard)
         return web.json_response({"ok": True, "seq": rec["seq"]})
     said = _turn_record(body, 0, _now_iso())
     photos = [] if said is None or said.get("gone") else await asyncio.to_thread(_keep_turn_photos, body.get("photos"))

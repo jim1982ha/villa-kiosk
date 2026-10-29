@@ -20,6 +20,13 @@ export function stillKept<T extends { seq: number }>(held: readonly T[], first: 
   return held.filter((h) => h.seq >= first && (kept === null || kept.includes(h.seq)));
 }
 
+/** A list's one order: by when each record came, oldest first, then by number. ⚠️ NEVER BY NUMBER ALONE (architecture
+ *  review, 2026-10-30): a rewrite takes a new number, and a spoken question whose words VESTA wrote after a typed one
+ *  dropped below it — the conversation's last line was the question, the dots ran on. Pure. */
+export function byTime<T extends { at: string; seq: number }>(x: T, y: T): number {
+  return (Date.parse(x.at) || 0) - (Date.parse(y.at) || 0) || x.seq - y.seq;
+}
+
 /** Pause before asking again when the add-on could not be reached. */
 const RETRY_MS = 5_000;
 /** A read the add-on holds open waits at most 25s (ANNOUNCEMENT_WAIT_S); one still open well after that is a

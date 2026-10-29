@@ -6,14 +6,14 @@
 // button, so a press already sent (or being sent) is refused here. Pure of React: tests/oracles/announcements.mjs
 // drives it; messages/AnnouncementsContext holds the page's one.
 
-import type { PressOutcome, PressResult, Pressable } from "./announcements";
+import { versionOf, type PressOutcome, type PressResult, type Pressable } from "./announcements";
 
 /** What became of each button pressed, by command ("sending" until the add-on answers). */
 export type PressState = Record<string, PressOutcome | "sending">;
 
 const NONE: PressState = Object.freeze({}) as PressState;
-// one stored version of one record (three feeds number apart: the villa's, VESTA's messages, its conversation)
-const idOf = (a: Pressable) => `${a.feed ?? "villa"}:${a.key}@${a.seq}`;
+// one version of one record (announcements.versionOf: VESTA's card by its step, the others by their number)
+const idOf = versionOf;
 
 export interface Presses {
   /** The presses of `a` (the same object until one changes: a screen re-draws only then). */

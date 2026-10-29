@@ -182,6 +182,14 @@ console.log("\n  one record of presses for the page (review Q 2):");
   await new Promise((r) => setTimeout(r, 0));
   ck("  ...one that failed may be pressed again; a rewrite (a new number) starts afresh",
      failing.get(other)["/unlock"] === "failed" && Object.keys(presses.get({ ...ring, seq: 22 })).length === 0);
+  // architecture review, 2026-10-30: VESTA's card, pressed, then redrawn under a new number with the same step
+  const card = { seq: 5, key: "thread:ap1", feed: "vesta", status: "Waiting for approval", buttons: [] };
+  const sentCard = pressesOf(async () => "sent");
+  sentCard.press(card, "a:ap1:y");
+  await new Promise((r) => setTimeout(r, 0));
+  ck("  ...VESTA's card keeps its press through a quiet rewrite (same step, new number); a new step starts afresh",
+     sentCard.get({ ...card, seq: 6 })["a:ap1:y"] === "sent"
+     && Object.keys(sentCard.get({ ...card, seq: 7, status: "Approved" })).length === 0);
   const content = src("components/messages/AnnouncementContent.tsx");
   // ⚠️ ONE BUTTON ROW (owner, 2026-10-29: "DRY, centralising all the configuration and layout"): RecordButtons presses
   // through the page's one record, and every screen that shows a record's buttons draws it
@@ -327,3 +335,4 @@ ck("each title the store holds, once, in order, without the ones already picked"
    announcedTitles(kept, ["🔥 Overload"]));
 
 done("✅ the villa's announcements: read into words, shown once, each in the one notice");
+

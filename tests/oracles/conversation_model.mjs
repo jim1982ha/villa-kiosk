@@ -186,6 +186,13 @@ ck("  ...the provider tells the one speaker what happened: a spoken question sen
    /new Speaker\(\{ play: playSpeech, stop: stopSpeech, sound: fetchSpeech/.test(provider)
    && /if \(out === "sent" && typeof question !== "string"\) speaker\.asked\(\);/.test(provider)
    && /speaker\.read\(state\.turns\)/.test(provider) && /\(\) => speaker\.close\(\), \[role, speaker\]/.test(provider));
+// architecture review, 2026-10-30: a spoken question's words come as a rewrite (a new number) after a typed question
+const spokenQ = turn(10, { key: "ask:10", from: "person", voice: true, text: "", at: "2026-10-29T10:00:00Z" });
+const typedQ = turn(11, { key: "ask:11", from: "person", text: "And the lights?", at: "2026-10-29T10:00:05Z" });
+const heardQ = { ...spokenQ, seq: 12, text: "Is the pump on?" };
+const ordered = mergeTurns(mergeTurns([spokenQ, typedQ], [heardQ], false), [], false);
+ck("a spoken question's words keep its place: the thread is ordered by when each line came, then its number",
+   J(ordered.map((t) => [t.key, t.text])) === J([["ask:10", "Is the pump on?"], ["ask:11", "And the lights?"]]), ordered);
 const fresh = threadView([turn(1, { from: "person", text: "Is the pump on?" }), turn(2), turn(3, { from: "person", text: "/new" }),
   turn(4, { text: "New conversation." }), turn(5, { from: "person", text: "And the lights?" })], true);
 ck("\"New conversation\" empties the thread: only what came after the last /new shows (owner, 2026-10-29)",

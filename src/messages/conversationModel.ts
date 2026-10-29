@@ -3,7 +3,7 @@
 // window shows. Pure: tests/oracles/conversation_model.mjs.
 
 import { NEW_CONVERSATION, type Turn } from "./conversation";
-import { stillKept } from "./feed";
+import { byTime, stillKept } from "./feed";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 /** How long the add-on keeps a question for VESTA to collect (agent-contract.json conversation.askKeptSeconds). */
@@ -22,7 +22,7 @@ export function mergeTurns(held: readonly Turn[], incoming: readonly Turn[], ful
     const was = byKey.get(t.key);
     if (!was || was.seq < t.seq) byKey.set(t.key, t);
   }
-  return [...byKey.values()].sort((x, y) => x.seq - y.seq);
+  return [...byKey.values()].sort(byTime);
 }
 
 export interface ThreadView {

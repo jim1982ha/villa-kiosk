@@ -169,8 +169,15 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   const { open, watched } = useCockpitIssues();
   const { kept, unread, unreadReports, shown } = useAnnouncements();
   // something unread: opened on Notifications, the newest open (ticket 18 of "One inbox"); a warning or the wrench first
-  const [filter, setFilter] = useState<MessagesFilter>(
-    () => openingFilter(unread, { warning: !!focusFaults?.length, form: !!reportFaultFor && canManage }, unreadReports));
+  const opening = { warning: !!focusFaults?.length, form: !!reportFaultFor && canManage };
+  const [filter, setFilter] = useState<MessagesFilter>(() => openingFilter(unread, opening, unreadReports));
+  // ⚠️ UNTIL ONE IS CHOSEN, IT FOLLOWS WHAT IS UNREAD (architecture review, 2026-10-30): VESTA's feed may be read a moment
+  // after the Cockpit opened (a reload), and the Inbox stayed on Issues over unread notifications
+  const [chosen, setChosen] = useState(false);
+  const pickFilter = (f: MessagesFilter) => { setChosen(true); setFilter(f); };
+  useEffect(() => {
+    if (!chosen) setFilter(openingFilter(unread, opening, unreadReports));
+  }, [chosen, unread, unreadReports]);     // `opening`: the Cockpit's, fixed while the tab is open
   const [selected, setSelected] = useState<string | null>(null);
   // a device window's warning opens its issue until Back (or another line) is chosen
   const [focusDone, setFocusDone] = useState(false);
@@ -187,7 +194,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   useEffect(() => {
     if (!focusKey) return;
     setSelected(null);
-    setFilter("issues");
+    pickFilter("issues");
     setFocusDone(false);
   }, [focusKey]);
   const isFocus = focusKey && !focusDone
@@ -224,7 +231,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
         <div className="messages-filters" role="group" aria-label="Show">
           {view.filters.map((f) => (
             <button key={f.id} type="button" className={`messages-filter${filter === f.id ? " on" : ""}`}
-              aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
+              aria-pressed={filter === f.id} onClick={() => pickFilter(f.id)}>
               {f.label}{f.count ? <span className="messages-filter-count">{f.count}</span> : null}
             </button>
           ))}

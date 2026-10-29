@@ -303,6 +303,15 @@ async def main() -> None:
     ck("  ...nor once it is older than the current notification's time, even as the newest",
        proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + proxy.ANNOUNCEMENT_CURRENT_S + 1) is None
        and proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 1) == ring.get("photo"))
+    ck("  ...as long as the ring holds the screen: a longer \"Ring shown for\" keeps it current (architecture review 2026-10-30)",
+       proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 90, 120) == ring.get("photo")
+       and proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 121, 120) is None)
+    was = proxy.DEVICE_CONFIG.read
+    for stored, want in (({"ringShownForS": 120}, 120), ({"ringShownForS": 30}, 60), ({"ringShownForS": "x"}, 60), ({}, 60)):
+        proxy.DEVICE_CONFIG.read = lambda stored=stored: stored
+        ck(f"  ...the villa's \"Ring shown for\" read from its settings ({stored}): current for {want}s",
+           proxy._ring_current_s() == want, proxy._ring_current_s())
+    proxy.DEVICE_CONFIG.read = was
     await proxy._record_announcement(app, kev("<b>Opened at 09:03</b>", key="run-1"))
     status, body = await call("GET", "/announcements", owner)
     same = [a for a in body["announcements"] if a.get("key") == "run-1"]
