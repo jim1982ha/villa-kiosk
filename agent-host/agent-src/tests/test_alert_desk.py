@@ -1040,3 +1040,23 @@ def test_a_lock_asleep_before_the_minutes_read_closes_from_its_report_never_from
     assert not _tick(store, asleep, 90 + clear / 2).get("cleared")
     assert _closes(store, iid) == (T0 + timedelta(minutes=90 + clear)).isoformat()
     assert _tick(store, asleep, 90 + clear)["cleared"] == [iid]
+
+
+def test_maintenance_mode_is_the_kiosks_switch_and_lets_only_p1_through(store, tmp_path, monkeypatch):
+    """The villa's maintenance mode (owner, 2026-10-29): the Kiosk's switch, told in its heartbeat's answer and kept
+    beside the pack (vesta_shared.maintenance). While on, a P2 is not taken up (no number, no send, no fault), a P1 is;
+    an answer without the switch (an older Kiosk) keeps what was told; never told, off."""
+    from vesta_shared import maintenance
+    pack = str(tmp_path / "pack.json")
+    monkeypatch.setenv("VESTA_PACK", pack)
+    assert maintenance.on() is False and maintenance.told({"ok": True}) is None             # never told: off
+    assert maintenance.save(pack, maintenance.told({"maintenance": True})) is True and maintenance.on() is True
+    assert maintenance.save(pack, True) is False                                            # unchanged: not written again
+    p2 = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")
+    assert p2["decision"] == "maintenance_mode" and not p2["send"] and p2["incident_id"] is None
+    p1 = desk.intake(store, event(rule="automation.critical_condition_phase_a", priority="P1", entities=("sensor.p",),
+                                  label="Phase lost"), T0, occupancy_reader=lambda: "occupied")
+    assert p1["decision"] == "new" and p1["send"]
+    maintenance.save(pack, False)
+    assert desk.intake(store, event(rule="automation.critical_condition_back_door", entities=("lock.back",)), T0,
+                       occupancy_reader=lambda: "occupied")["decision"] == "new"

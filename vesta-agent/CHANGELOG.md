@@ -1,3 +1,9 @@
+## 0.12.392
+
+What you will see (with VESTA (dev2) 2.496.595):
+- VESTA follows the tablet's new "Maintenance mode" switch (Advanced Settings › System): while it is on, only urgent
+  (P1) alerts are taken up. The hidden setting in the villa's system is no longer read.
+
 ## 0.12.391
 
 What you will see (with VESTA (dev2) 2.496.594):

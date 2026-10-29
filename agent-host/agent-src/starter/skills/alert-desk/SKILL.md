@@ -51,7 +51,7 @@ decides alone to act on the villa.
 ## Procedure per alert (`desk.py intake`)
 
 The decision is one of:
-- `maintenance_mode`: `input_boolean.maintenance_mode` is on, nothing sent unless P1.
+- `maintenance_mode`: the villa's maintenance mode is on (the VESTA Kiosk's switch, Advanced Settings › System), nothing sent unless P1.
 - `counted`: the same automation on the same entity is already open and inside its cooldown. Nothing sent.
 - `repeat`: open and past the cooldown: one "still there, N times since" message to the roles its
   priority reaches (as the first alert), with the villa system's latest words and claim.

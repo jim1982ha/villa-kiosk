@@ -38,6 +38,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 from vesta_shared.store import Incident, Notes, Store, alerted_states, notes_of  # noqa: E402  (PYTHONPATH is set by the engine)
 from vesta_shared import alert_watch as W  # noqa: E402  (a closed alert's watch: one owner)
 from vesta_shared.params import VillaParams  # noqa: E402
+from vesta_shared.maintenance import on as maintenance_on  # noqa: E402  (the villa's maintenance mode: the Kiosk's)
 from vesta_shared.timeutil import day_time_label, moment_label, villa_time  # noqa: E402
 from vesta_shared.problems import AGAIN_DAYS, Problems, incident_runs, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
@@ -466,7 +467,8 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     sev = priority(ev, route)
     key = alert_keys(ev)[0]
     out = {"send": [], "actions": [], "incident_id": None, "decision": None}
-    if params and params.boolean("maintenance_mode", default=False) and sev != "P1":
+    # ⚠️ THE KIOSK'S SWITCH (owner, 2026-10-29; vesta_shared.maintenance): no longer a villa helper no screen showed
+    if maintenance_on() and sev != "P1":
         out["decision"] = "maintenance_mode"; store.audit("alert-desk", "suppressed_maintenance", ev); return out
     if route.get("intrusion") and not ev.get("occupancy"):
         ev["occupancy"] = occupancy_reader()

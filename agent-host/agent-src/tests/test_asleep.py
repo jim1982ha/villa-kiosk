@@ -44,6 +44,15 @@ def test_the_kiosk_hands_the_list_over_and_the_agent_keeps_it_beside_its_pack(tm
     assert asleep.listed(pack) == frozenset()
     # the agent's own list of 0.12.308 is gone: the Rules page no longer edits one
     assert "asleep_entities" not in FIELDS
+    # the villa's maintenance mode travels in the same answer (owner, 2026-10-29: the Kiosk's switch)
+    from vesta_shared import maintenance
+    assert maintenance.on(pack) is False
+    _App().kiosk_answered({"unavailableByDesign": [], "maintenance": True})
+    assert maintenance.on(pack) is True
+    _App().kiosk_answered({"unavailableByDesign": []})                               # an older Kiosk: kept
+    assert maintenance.on(pack) is True
+    _App().kiosk_answered({"maintenance": False})
+    assert maintenance.on(pack) is False
 
 
 def test_the_rules_page_drops_the_retired_own_list_on_its_next_save():

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.378 (29 October 2026)
+
+- The villa's maintenance mode is the VESTA Kiosk's switch (Advanced Settings › System, owner 2026-10-29), told in its
+  heartbeat's answer (`maintenance`) and kept beside the knowledge pack (vesta_shared/maintenance.py), as the devices
+  asleep by design are. The alert desk reads it there instead of the villa helper `maintenance_mode` no screen showed:
+  while on, only P1 is taken up. Never told (no Kiosk, an older one): off. The agreement copied from the Kiosk
+  (2.496.595).
+
 ## 0.6.377 (29 October 2026)
 
 - An alert's buttons on the tablet are no longer flagged `closes` (AlertButtons.closes, IncidentThread.closes and

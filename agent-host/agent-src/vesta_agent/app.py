@@ -467,12 +467,17 @@ class Vesta:
 
     # ------------------------------------------------------------------ Home Assistant's events
     def kiosk_answered(self, answer: dict) -> None:
-        """The Kiosk's answer to a heartbeat: its list of devices unavailable by design (vesta_shared.asleep), kept
-        beside the knowledge pack for every check — a Kiosk that does not say it leaves the kept one as it is."""
-        from vesta_shared import asleep
+        """The Kiosk's answer to a heartbeat: its list of devices unavailable by design (vesta_shared.asleep) and the
+        villa's maintenance mode (vesta_shared.maintenance), kept beside the knowledge pack for every check — a Kiosk
+        that does not say one leaves the kept one as it is."""
+        from vesta_shared import asleep, maintenance
         ids = asleep.told(answer)
         if ids is not None and asleep.save(self.s.pack_path, ids):
             log.info("The VESTA Kiosk's devices unavailable by design: %s", ", ".join(ids) or "none")
+        # the villa's maintenance mode, the Kiosk's switch (vesta_shared.maintenance): the alert desk reads it
+        mm = maintenance.told(answer)
+        if mm is not None and maintenance.save(self.s.pack_path, mm):
+            log.info("The VESTA Kiosk's maintenance mode: %s", "on, only P1 alerts are taken up" if mm else "off")
 
     def devices_changed(self, settle: float | None = None) -> None:
         """The villa's devices changed (ha_events.REGISTRY_EVENTS): read them again once they have been still for
