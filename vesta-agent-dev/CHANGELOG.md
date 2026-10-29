@@ -1,3 +1,12 @@
+## 0.12.382
+
+What you will see:
+- On the tablet, the owner and the facility manager are recognised as themselves when VESTA acts: an action your Rules
+  let VESTA do at once when you ask is done at once from the tablet too, as from your Telegram chat, instead of
+  becoming an Approve / Refuse request on Telegram. A guest still gets answers only.
+- Nothing else changes on Telegram: VESTA's buttons and messages work as before (the way they are handled inside VESTA
+  was reorganised, ready for the tablet's buttons).
+
 ## 0.12.381
 
 What you will see:
