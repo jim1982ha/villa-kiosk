@@ -1,3 +1,9 @@
+## 2.496.605
+
+What you will see:
+- Every open issue in Cockpit › Inbox shows a time: the last step told of it, else when it was opened. A brand new
+  alert, and a problem the night check found, showed none until something was told of them.
+
 ## 2.496.604
 
 What you will see:
