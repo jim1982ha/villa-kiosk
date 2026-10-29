@@ -1,3 +1,8 @@
+## 0.12.381
+
+What you will see:
+- VESTA's log names a question asked on the tablet as the tablet's, no longer as a Telegram message.
+
 ## 0.12.380
 
 What you will see (needs VESTA (dev2) 2.496.582 or later):
