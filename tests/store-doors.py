@@ -207,7 +207,7 @@ async def main() -> None:
     status, _ = await call("GET", "/announcements", {})
     ck("no session: refused", status == 401, status)
     status, body = await call("GET", "/announcements", guest)
-    ck("never written: a guest reads none, last 0", status == 200 and body == {"announcements": [], "last": 0, "first": 1},
+    ck("never written: a guest reads none, last 0", status == 200 and body == {"announcements": [], "last": 0, "first": 1, "kept": []},
        (status, body))
     ck("the event it keeps is named in the one table", proxy.ANNOUNCEMENT_EVENT == proxy.HA_COMMANDS.get("announcement")
        and bool(proxy.ANNOUNCEMENT_EVENT) and proxy.ANNOUNCEMENT_EVENT not in proxy.ALLOWED_EVENT_TYPES)
@@ -229,7 +229,7 @@ async def main() -> None:
        and waited < 5, (status, body, round(waited, 2)))
     proxy.ANNOUNCEMENT_WAIT_S = 0.2
     status, body = await call("GET", "/announcements?after=2", guest)
-    ck("  ...and answers none when nothing came", status == 200 and body == {"announcements": [], "last": 2, "first": 1}, body)
+    ck("  ...and answers none when nothing came", status == 200 and body == {"announcements": [], "last": 2, "first": 1, "kept": [1, 2]}, body)
     proxy.ANNOUNCEMENT_WAIT_S = 5
     t0 = asyncio.get_running_loop().time()
     status, body = await call("GET", "/announcements?after=9", guest)
@@ -375,6 +375,45 @@ async def main() -> None:
     proxy._fire_press = unreachable
     status, _ = await call("POST", "/announcement-press", guest, {"key": "run-3", "command": "/unlock_gate"})
     ck("the villa's system not reached: 502, so the tablet says it was not sent", status == 502, status)
+
+    # ── a message erased: held, then the superadmin code (owner, 2026-10-29: a stale card is removed as a Facility
+    # record is, never by a button) ─────────────────────────────────────────────────────────────────────────────────
+    print("  /message-erase, a kept message removed with the superadmin code:")
+    _, body = await call("GET", "/announcements", owner)
+    gone = body["announcements"][0]["seq"]
+    erase = {"feed": "villa", "seq": gone}
+    proxy._configured_superadmin_pin = lambda: ""
+    status, _ = await call("POST", "/message-erase", owner, {**erase, "elevation": proxy._mint_elevation()})
+    ck("no superadmin code configured: 403 even with a token, nothing removed", status == 403, status)
+    proxy._configured_superadmin_pin = lambda: "123456"
+    status, _ = await call("POST", "/message-erase", {}, {**erase, "elevation": proxy._mint_elevation()})
+    ck("no session: 401", status == 401, status)
+    status, _ = await call("POST", "/message-erase", owner, erase)
+    ck("no fresh authorisation: 403", status == 403, status)
+    status, _ = await call("POST", "/message-erase", owner, {**erase, "elevation": "not-a-token"})
+    ck("  ...nor a made-up one", status == 403, status)
+    _, still = await call("GET", "/announcements", owner)
+    ck("  ...the message is still kept", any(a["seq"] == gone for a in still["announcements"]), still)
+    token = proxy._mint_elevation()
+    status, body = await call("POST", "/message-erase", guest, {**erase, "elevation": token})
+    _, after = await call("GET", "/announcements", owner)
+    ck("with a fresh authorisation (any profile: the code is the gate): 200, and it is no longer kept",
+       status == 200 and all(a["seq"] != gone for a in after["announcements"]), (status, body, after))
+    ck("  ...every read names what is kept, so a page left open drops it too",
+       sorted(after.get("kept") or []) == sorted(a["seq"] for a in after["announcements"]), after)
+    status, _ = await call("POST", "/message-erase", owner, {**erase, "elevation": token})
+    ck("  ...the authorisation is spent: the same token again is 403", status == 403, status)
+    status, _ = await call("POST", "/message-erase", owner, {**erase, "elevation": proxy._mint_elevation()})
+    ck("a message no longer kept: 404", status == 404, status)
+    status, _ = await call("POST", "/message-erase", owner, {"feed": "elsewhere", "seq": 1, "elevation": proxy._mint_elevation()})
+    ck("a feed that is not one of the two: 400", status == 400, status)
+    await proxy.MESSAGED.add(lambda seq: {"seq": seq, "key": "note:1", "at": proxy._now_iso(), "title": "Old report",
+                                          "body": "Still open"}, proxy._announcements_with)
+    _, vm = await call("GET", "/vesta-messages", owner)
+    seq = vm["messages"][-1]["seq"]
+    status, _ = await call("POST", "/message-erase", owner, {"feed": "vesta", "seq": seq, "elevation": proxy._mint_elevation()})
+    _, vm = await call("GET", "/vesta-messages", owner)
+    ck("VESTA's messages are erased the same way", status == 200 and all(m["seq"] != seq for m in vm["messages"]), (status, vm))
 
     await client.close()
 

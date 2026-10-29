@@ -46,7 +46,17 @@ const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { 
 ck("  ...once every fault is a ticket, the button is Edit Ticket, on its first record",
    said(cardActions(taken)).join(" | ") === `Edit Ticket → b | Close all → b,c ${OV_ALL}`, said(cardActions(taken)));
 const [lock] = groupAttention([item("alarm:lock.door", "alarm", "lock.door")]);
-ck("a card that is only what Home Assistant reports has nothing to act on — no button", cardActions(lock).length === 0);
+// a card with no record: its one button opens a ticket for its device, the form already pointed at it (owner,
+// 2026-10-29: the Overview's Open Ticket was missing on a line only the villa's system reports)
+ck("a card that is only what Home Assistant reports: Open Ticket, for its device, opening the ticket form",
+   said(cardActions(lock)).join(" | ") === "Open Ticket → lock.door" && cardActions(lock)[0]?.step.kind === "raise", said(cardActions(lock)));
+const [lone] = groupAttention([{ id: "alarm:x", kind: "alarm", title: "Water leak", detail: "" }]);
+ck("  ...a problem on no device has nothing to open a ticket for: no button", cardActions(lone).length === 0, said(cardActions(lone)));
+const srcAt = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
+const IC = srcAt("components/cockpit/IssueCard.tsx"), MT = srcAt("components/cockpit/MessagesTab.tsx");
+ck("  ...pressed, it opens Messages' ticket form pointed at the device (the one \"Open a ticket\" form)",
+   /a\.step\.kind === "raise" \? onRaiseTicket\(a\.ids\[0\]\)/.test(IC)
+   && /onRaiseTicket=\{\(entity\) => setRaising\(\{ entity \}\)\}/.test(MT));
 ck("a ticket in progress (Tickets): Mark resolved and Close, both on every record of it — its own Close question",
    said(W.ticketActions([{ id: "a", stage: "ticket" }, { id: "b", stage: "ticket" }])).join(" | ")
    === `Mark resolved → a,b (resolved) | Close → a,b ${TK_CLOSE}`);
@@ -408,7 +418,7 @@ ck("the Open issues title line (Messages): the (i) then Open a ticket, for the p
 // what each button names (its stage, its records), with no status or rule of its own
 ck("a card draws what cardActions says (no rule of its own)",
    /const acts = card\.actions;/.test(ov) && /<WorkButtons actions=\{acts\} cardKey=\{card\.key\} closer=\{closer\}/.test(ov)
-   && /a\.step\.kind === "stage" \? setStaging\(\{ tickets: records\(a\.ids\), to: a\.step\.to \}\) : onEditTicket\(a\.ids\[0\]\)/.test(ov)
+   && /a\.step\.kind === "stage" \? setStaging\(\{ tickets: records\(a\.ids\), to: a\.step\.to \}\)\s+: a\.step\.kind === "raise" \? onRaiseTicket\(a\.ids\[0\]\) : onEditTicket\(a\.ids\[0\]\)/.test(ov)
    && !/closeTickets|InlineConfirm|in_progress"|"resolved"/.test(ov + tt));
 
 console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");

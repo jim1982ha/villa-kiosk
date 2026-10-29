@@ -20,20 +20,23 @@ import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
  *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
  *  room, every problem a line INSIDE the card. A card holding a fault carries its actions (owner, 2026-10-14):
  *  "Open Ticket" (was "Mark in progress"; the Tickets tab's wrench and Title Case, owner 2026-10-14) makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear
- *  one alone), then "Edit ticket" opens it in the Tickets tab; "Close" closes them all ("no action needed"). A line
- *  that is only what Home Assistant reports has no button: it goes when the device is back. */
-export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicket, focused }: {
+ *  one alone), then "Edit ticket" opens it in the Tickets tab; "Close" closes them all ("no action needed"). A card
+ *  that is only what Home Assistant reports has Open Ticket alone, opening the ticket form for its device (owner,
+ *  2026-10-29); nothing to close: it goes when the device is back. */
+export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicket, onRaiseTicket, focused }: {
   card: CardView;
   onOpenEntity: (id: string) => void;
   canManage: boolean;
   onEditTicket: (ticketId: string) => void;
+  /** Open the ticket form pointed at this device: a card with no record's Open Ticket. */
+  onRaiseTicket: (entityId: string) => void;
   /** The device a window's warning opened the Cockpit for: its card marked. */
   focused?: boolean;
 }) {
   // ONE close-question per card, its own Close and each line's: asking on one puts the others' buttons back
   const closer = useConfirmedClose();
   return <AttentionCard card={card} onOpenEntity={onOpenEntity} focused={focused}
-    actions={useCardActions(card, canManage, onEditTicket, closer)}
+    actions={useCardActions(card, canManage, onEditTicket, onRaiseTicket, closer)}
     lineActions={canManage ? (line) => <LineClose card={card} line={line} closer={closer} /> : undefined} />;
 }
 
@@ -121,7 +124,7 @@ function CockpitAttentionSub({ line, actions }: { line: CardLine; actions?: Reac
 /** A card's buttons, for the profiles that manage Facility work — WHICH buttons, on which records and with which
  *  question is the card's (cockpitCard `actions`: fm/deviceWork, tested by value); WorkButtons draws them. */
 function useCardActions(card: CardView, canManage: boolean, onEditTicket: (ticketId: string) => void,
-  closer: ConfirmedClose) {
+  onRaiseTicket: (entityId: string) => void, closer: ConfirmedClose) {
   const { data } = useFmData();
   const [staging, setStaging] = useState<{ tickets: FmTicket[]; to: FmTicketStatus } | null>(null);
   const acts = card.actions;
@@ -131,7 +134,8 @@ function useCardActions(card: CardView, canManage: boolean, onEditTicket: (ticke
   return (
     <>
       <WorkButtons actions={acts} cardKey={card.key} closer={closer} name={card.title} className="fm-fault-actions"
-        onAction={(a) => (a.step.kind === "stage" ? setStaging({ tickets: records(a.ids), to: a.step.to }) : onEditTicket(a.ids[0]))} />
+        onAction={(a) => (a.step.kind === "stage" ? setStaging({ tickets: records(a.ids), to: a.step.to })
+          : a.step.kind === "raise" ? onRaiseTicket(a.ids[0]) : onEditTicket(a.ids[0]))} />
       {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
       {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={() => setStaging(null)} />}
     </>

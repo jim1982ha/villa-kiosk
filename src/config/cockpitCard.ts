@@ -31,7 +31,7 @@ import { attentionSeverity, cardDevice, cardHead, type AttentionGroup, type Atte
  *  live state's line by mergeFaults): fm/deviceWork.overviewActions' answer, in the order drawn. Empty when it holds
  *  none, so a card that is only what Home Assistant reports has no button. */
 function cardActions(group: AttentionGroup): WorkAction[] {
-  return overviewActions(cardRecords(group), problemLines(group));
+  return overviewActions(cardRecords(group), problemLines(group), group.entityId);
 }
 
 /** One line's own Close (deviceWork.lineActions): on a card holding several problems, each closes alone. */

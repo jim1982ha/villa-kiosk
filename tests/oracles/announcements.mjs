@@ -35,23 +35,26 @@ ck("a stored record becomes an announcement; one this build cannot read is left 
 
 console.log("\n  each one kept after the page opened is shown once:");
 const a = (seq) => ({ seq, at: "", title: `T${seq}`, to: "", text: "", status: "", photo: null, key: null, buttons: [] });
-const answers = [{ items: [a(1), a(2)], last: 2 }, null, { items: [a(3)], last: 3 }, { items: [], last: 3 },
+const answers = [{ items: [a(1), a(2)], last: 2, kept: [1, 2] }, null, { items: [a(3)], last: 3 }, { items: [], last: 3 },
   { items: [a(4), a(5)], last: 5 }, { items: [], last: 1 }, { items: [a(2)], last: 2 }];
 const asked = [];
 const shown = [];
 const stop = new AbortController();
 const pauses = [];
 const reads = [];
+const keptSaid = [];
 // the add-on's feed, watched as every feed is (messages/feed, review Q 4): what is NEW is a read that is not a baseline
 await watchFeed(async (after) => {
   asked.push(after);
   if (!answers.length) { stop.abort(); return null; }
   return answers.shift();
-}, (items, full) => {
+}, (items, full, _first, kept) => {
   reads.push([full, items.map((x) => x.seq)]);
+  keptSaid.push(kept ?? null);
   const { arrived } = afterRead([], items, full);
   if (arrived.length) shown.push(arrived.map((x) => x.announcement.seq));
 }, stop.signal, async (ms) => { pauses.push(ms); });
+ck("each read hands on what the add-on says it keeps", JSON.stringify(keptSaid[0]) === "[1,2]" && keptSaid[1] === null, keptSaid);
 ck("the first read is the baseline (nothing shown); then each read asks for what came after the last",
    JSON.stringify(asked) === JSON.stringify([null, 2, null, 3, 3, 5, null, 2]), asked);
 ck("  ...what arrived is shown, together when it came together; nothing when nothing came",
@@ -78,6 +81,9 @@ ck("  ...a baseline is what the add-on keeps now: what the page held before is r
 ck("  ...what the add-on no longer keeps (below the first number it still keeps) goes from the page (review Q round 2)",
    afterRead([a(1), a(2), a(3)], [a(4)], false, 3).kept.map((x) => x.seq).join() === "3,4"
    && afterRead([a(1), a(2)], [], false, 0).kept.length === 2);
+ck("  ...one erased (held, then the superadmin code; owner 2026-10-29) goes too: the page keeps only what the add-on names",
+   afterRead([a(1), a(2), a(3)], [a(4)], false, 0, [1, 3, 4]).kept.map((x) => x.seq).join() === "1,3,4"
+   && afterRead([a(1), a(2)], [], false, 0, null).kept.length === 2);
 ck("  ...a new ring (no key held) is not; every one of a read arrives, oldest first (one in a read with another is shown)",
    afterRead(baseline.kept, [{ ...a(9), key: "run-2" }], false).arrived[0]?.rewrite === false
    && afterRead([], [a(10), a(12), a(11)], false).arrived.map((x) => x.announcement.seq).join() === "10,11,12");
@@ -90,11 +96,31 @@ ck("  ...the notice sends each to the notice model and keeps no memory of its ow
   const { fetchFeed } = await import("@/messages/feed");
   const saved = globalThis.fetch;
   globalThis.window = globalThis.window ?? { location: { pathname: "/" } };
-  globalThis.fetch = async () => new Response(JSON.stringify({ announcements: [{ seq: 4, message: "<b>R</b>" }, { seq: "x" }], last: 4, first: 3 }));
+  globalThis.fetch = async () => new Response(JSON.stringify({ announcements: [{ seq: 4, message: "<b>R</b>" }, { seq: "x" }], last: 4, first: 3, kept: [3, 4] }));
   const got = await fetchFeed("announcements", "announcements", parseAnnouncement, null, new AbortController().signal);
+  globalThis.fetch = async () => new Response(JSON.stringify({ announcements: [], last: 4, first: 3 }));
+  const older = await fetchFeed("announcements", "announcements", parseAnnouncement, null, new AbortController().signal);
   globalThis.fetch = saved;
-  ck("a read carries the first number still kept, and leaves out a record it cannot read",
-     got?.first === 3 && got.last === 4 && got.items.map((x) => x.seq).join() === "4", got);
+  ck("a read carries the first number still kept and every one kept, and leaves out a record it cannot read",
+     got?.first === 3 && got.last === 4 && got.items.map((x) => x.seq).join() === "4" && got.kept?.join() === "3,4", got);
+  ck("  ...an add-on that does not name what it keeps: nothing dropped for it", older?.kept === null, older);
+  const { eraseMessage } = await import("@/messages/announcements");
+  const sent = [];
+  const send = async (url, init) => { sent.push([url, init.method, init.body]); return { ok: true, status: 200 }; };
+  const ok = await eraseMessage({ ...a(7), feed: "vesta" }, "tok", send);
+  await eraseMessage(a(5), "tok2", send);
+  ck("an erase names the message's feed and number with its one-shot authorisation",
+     ok === true && JSON.stringify(sent) === JSON.stringify([
+       ["/message-erase", "POST", JSON.stringify({ feed: "vesta", seq: 7, elevation: "tok" })],
+       ["/message-erase", "POST", JSON.stringify({ feed: "villa", seq: 5, elevation: "tok2" })]]), sent);
+  const tab = src("components/cockpit/MessagesTab.tsx");
+  ck("  ...a notification's and a report's line are held to erase them, the code asked first (never a button)",
+     /paged\.page\.map\(\(n\) => <ErasableMessageRow /.test(tab) && /reportsPaged\.page\.map\(\(r\) => <ErasableMessageRow /.test(tab)
+     && /useSuperadminDelete\(\{ title: "Delete message"/.test(tab) && /eraseMessage\(a, token, backendFetch\)/.test(tab)
+     && /if \(!consumeClick\(\)\) onSelect\(item\.key\)/.test(tab));
+  const ctx = src("messages/AnnouncementsContext.tsx");
+  ck("  ...and the page's watch hands what is kept to the merge", /\(items, full, first, kept\) =>/.test(ctx)
+     && /afterRead\(s\.kept, items, full, first, kept\)/.test(ctx));
 }
 const settingsSrc = src("components/settings/MessagesSettings.tsx");
 ck("\"Full screen for\" offers the titles of the villa's own announcements the page holds (never VESTA's cards), never a read of its own",

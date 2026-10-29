@@ -20,6 +20,9 @@ import type { CardView } from "@/config/cockpitCard";
 import { localStamp } from "@/fm/fmEngine";
 import { documentUrl } from "@/fm/fmApi";
 import { useAnnouncementPress, useAnnouncements } from "@/messages/AnnouncementsContext";
+import { backendFetch } from "@/auth/sessionLost";
+import { useSuperadminDelete } from "@/hooks/useSuperadminDelete";
+import type { LongPressHandlers } from "@/hooks/useLongPress";
 import { announcementWords, cardsOfIssue, idOf, messagesView, openingFilter, readOnScreen, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
@@ -29,29 +32,48 @@ import { SourceIcons } from "@/components/fm/sourceIcons";
 import InfoTip from "@/components/common/InfoTip";
 import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
-import type { Announcement } from "@/messages/announcements";
+import { eraseMessage, type Announcement } from "@/messages/announcements";
 import type { PressState } from "@/messages/presses";
 import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 
 /** One line of the list — pure (a check draws it): its icon, its title, the line under it, its time. */
-export function MessageRow({ item, selected, onSelect }: {
+export function MessageRow({ item, selected, onSelect, hold }: {
   item: MessageItem;
   selected: boolean;
   onSelect: (key: string) => void;
+  /** Held, then the superadmin code: the message is erased (ErasableMessageRow). */
+  hold?: LongPressHandlers;
 }) {
   const row = rowOf(item);
+  const { consumeClick, ...holding } = hold ?? { consumeClick: () => false };
   return (
-    <button type="button" className={`messages-row${selected ? " on" : ""}`} aria-current={selected || undefined}
-      onClick={() => onSelect(item.key)}>
+    <button type="button" className={`messages-row${selected ? " on" : ""}${hold ? " fm-erasable" : ""}`}
+      aria-current={selected || undefined}
+      // a completed hold is followed by a click: opening the message under the code's prompt would be wrong
+      onClick={() => { if (!consumeClick()) onSelect(item.key); }} {...holding}>
       <span className="messages-row-icon">{row.icon}</span>
       <span className="messages-row-text">
         <b>{row.title}</b>
         {row.sub && <span>{row.sub}</span>}
       </span>
       {row.time && <span className="messages-row-time">{row.time}</span>}
+      {hold && <span className="fm-erasable-dot" aria-hidden="true" />}
     </button>
   );
+}
+
+/** A notification's or a report's line, erased as a Facility record is (owner, 2026-10-29: a card left from an
+ *  older format): held, then the superadmin code (hooks/useSuperadminDelete, the add-on's /message-erase). */
+function ErasableMessageRow({ item, selected, onSelect }: {
+  item: MessageItem;
+  selected: boolean;
+  onSelect: (key: string) => void;
+}) {
+  const a = item.kind === "issue" ? null : item.announcement;
+  const hold = useSuperadminDelete({ title: "Delete message", detail: a ? announcementWords(a).title : "" },
+    async (token) => (a ? eraseMessage(a, token, backendFetch) : false), { nativeButton: true });
+  return <MessageRow item={item} selected={selected} onSelect={onSelect} hold={a ? hold : undefined} />;
 }
 
 /** One section of the list — Open issues, Notifications, Watch — its name, count and (i) on one line with its actions,
@@ -223,7 +245,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           )}
           {showsNotes && (
             <MessagesSection title="Notifications" open={folds.notes} onToggle={() => fold("notes")}>
-              {paged.page.map((n) => <MessageRow key={n.key} item={n} selected={item?.key === n.key} onSelect={choose} />)}
+              {paged.page.map((n) => <ErasableMessageRow key={n.key} item={n} selected={item?.key === n.key} onSelect={choose} />)}
               {view.notifications.length === 0
                 ? <p className="muted body-text messages-empty">Nothing announced yet.</p>
                 : <Pager paged={paged} unit="notification" />}
@@ -232,7 +254,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           {/* VESTA's reports (ticket 20 of "One inbox"): the daily digest, the weekly and monthly reports, the night check */}
           {showsReports && (
             <MessagesSection title="Reports" open={folds.reports} onToggle={() => fold("reports")}>
-              {reportsPaged.page.map((r) => <MessageRow key={r.key} item={r} selected={item?.key === r.key} onSelect={choose} />)}
+              {reportsPaged.page.map((r) => <ErasableMessageRow key={r.key} item={r} selected={item?.key === r.key} onSelect={choose} />)}
               {view.reports.length === 0
                 ? <p className="muted body-text messages-empty">No report yet.</p>
                 : <Pager paged={reportsPaged} unit="report" />}
@@ -267,7 +289,8 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
         {item?.kind === "issue" && (item.card.look === "watched"
           ? <AttentionCard card={item.card} onOpenEntity={onOpenEntity} />
           : <CockpitAttentionRow key={item.key} card={item.card} onOpenEntity={onOpenEntity} canManage={canManage}
-              onEditTicket={onEditTicket} focused={!!isFocus?.(item.card)} />)}
+              onEditTicket={onEditTicket} onRaiseTicket={(entity) => setRaising({ entity })}
+              focused={!!isFocus?.(item.card)} />)}
         {item?.kind === "notification" && <NotificationDetail item={item} />}
         {item?.kind === "report" && <ReportDetail announcement={item.announcement} canOpenPage={canManage} />}
         {!raising && !item && <p className="muted body-text messages-empty">Nothing to show.</p>}

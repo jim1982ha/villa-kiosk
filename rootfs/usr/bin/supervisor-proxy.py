@@ -3714,6 +3714,23 @@ class Feed:
         woken.set()
         return made["rec"]
 
+    async def remove(self, seq: int) -> bool:
+        """Remove the record numbered `seq` (a superadmin's erase, message_erase_handler); whether one was kept. Every
+        page waiting is woken: its next read names what is still kept, so it drops the record too."""
+        hit: dict = {}
+
+        def change(stored):
+            stored = stored if isinstance(stored, list) else []
+            left = [a for a in stored if not (isinstance(a, dict) and a.get("seq") == seq)]
+            hit["was"] = len(left) < len(stored)
+            return self.tidy(left)
+
+        await self.store.update(change, after=self.after)
+        if hit.get("was"):
+            woken, self._kept = self._kept, asyncio.Event()
+            woken.set()
+        return bool(hit.get("was"))
+
     async def read(self, after: int | None, wait_s: float) -> tuple[list, int, int]:
         """(the records after `after` — all with None —, the last number given, and the FIRST still kept: a page drops
         what it holds below it, so a tablet left on lists exactly what the add-on keeps, never a record tidied away
@@ -4036,10 +4053,13 @@ def _feed_handler(feed: "Feed", field: str):
         except ValueError:
             return web.json_response({"error": "after must be a number"}, status=400)
         items, last, first = await feed.read(after, ANNOUNCEMENT_WAIT_S)
+        # every number still kept: a page drops what it holds that is not (one erased: message_erase_handler)
+        kept = [a["seq"] for a in await asyncio.to_thread(feed.items)]
         if not _may(_role_for(request), "viewCameras"):
             current = await _current_photos()
             items = [a if a.get("photo") in current else {k: v for k, v in a.items() if k != "photo"} for a in items]
-        return web.json_response({field: items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
+        return web.json_response({field: items, "last": last, "first": first, "kept": kept},
+                                 headers={"Cache-Control": "no-store"})
     return handler
 
 
@@ -4192,6 +4212,35 @@ async def agent_vesta_message_handler(request: web.Request) -> web.Response:
 
 
 vesta_messages_handler = _feed_handler(MESSAGED, "messages")
+
+
+# ── A message erased (owner, 2026-10-29) ─────────────────────────────────────────────────────────────────────────────
+# A card left from an older format — the villa's message a VESTA card already stands for, a report kept as a
+# notification — is removed as a Facility record is: held on the tablet, then the superadmin code (ErasableRow). The
+# code is the gate, not the profile: one fresh elevation removes one record. Nothing else removes a message; the
+# records-kept days still expire them all.
+#: The two feeds a page lists, by the name the page gives them (announcements.ts `feed`).
+ERASABLE_FEEDS = {"villa": ANNOUNCED, "vesta": MESSAGED}
+
+
+async def message_erase_handler(request: web.Request) -> web.Response:
+    """`{"feed": "villa"|"vesta", "seq", "elevation"}` — 200 once removed, 403 without a fresh superadmin authorisation
+    (or none configured), 404 when no such record is kept, 400 for anything else."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    feed, seq = ERASABLE_FEEDS.get(body.get("feed")), body.get("seq")
+    if feed is None or not isinstance(seq, int) or isinstance(seq, bool) or not set(body) <= {"feed", "seq", "elevation"}:
+        return web.json_response({"error": "an erase names a feed, a number and its authorisation"}, status=400)
+    if not _configured_superadmin_pin():
+        return _forbidden("Deleting records requires the superadmin code, which is not configured on this installation.")
+    if not _consume_elevation(body.get("elevation")):
+        return _forbidden("Deleting a record requires a fresh superadmin authorisation for that specific action.")
+    if not await feed.remove(seq):
+        return web.json_response({"error": "This message is no longer kept."}, status=404)
+    return web.json_response({"ok": True})
 
 
 # ── A button an announcement offers, pressed on a tablet (ha-commands.json `press`) ─────────────────────────────────
@@ -4555,6 +4604,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_get("/announcement-photo/{id}", announcement_photo_handler)
     app.router.add_get("/vesta-messages", vesta_messages_handler)
     app.router.add_post("/announcement-press", announcement_press_handler)
+    app.router.add_post("/message-erase", message_erase_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
     app.router.add_get("/agent/v1/info", agent_info_handler)

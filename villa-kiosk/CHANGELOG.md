@@ -1,3 +1,12 @@
+## 2.496.581
+
+What you will see:
+- Cockpit › Messages: press and hold a notification or a report, then enter the superadmin code, to delete it for good
+  (as a Facility record is deleted). It goes from every tablet. Nothing is deleted without the code.
+- An open issue that only the villa's system reports (a device "Unavailable", no record yet) has an Open Ticket
+  button: it opens the ticket form already pointed at that device. There is nothing to close on it: it goes when the
+  device is back.
+
 ## 2.496.580
 
 What you will see (three rounds of architecture review, 29 October 2026):

@@ -195,7 +195,7 @@ self.addEventListener("activate", (event) => {
 const NEVER_CACHE = [
   "/device-config", "/fm-data", "/telemetry", "/addon-config", "/model-upload",
   "/agent-status", "/kiosk-rooms", "/critical-devices", "/healthz", "/announcements", "/announcement-press",
-  "/vesta-messages",
+  "/vesta-messages", "/message-erase",
 ];
 // "/fm-document/": a fault's report — deleted with its fault (2.496.326), so never kept on a device after it
 // "/announcement-photo/": a visitor's picture at the gate, deleted with its announcement: never kept on a device

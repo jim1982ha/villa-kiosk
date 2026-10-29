@@ -271,6 +271,23 @@ export async function pressButton(
   }
 }
 
+/** Erase kept message `a` with a one-shot superadmin authorisation (held on its row, then the code: owner,
+ *  2026-10-29): whether the add-on removed it. Every page then drops it at its next read (feed `kept`). `send` is
+ *  backendFetch (a check passes its own). */
+export async function eraseMessage(
+  a: Announcement, elevation: string, send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status">>,
+): Promise<boolean> {
+  try {
+    const r = await send(ingressPath("message-erase"), {
+      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feed: a.feed === "vesta" ? "vesta" : "villa", seq: a.seq, elevation }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** The kept announcements, a read of the add-on's feed (messages/feed); with `after`, only newer ones, the add-on
  *  waiting for one to come. null = not reached. */
 export const fetchAnnouncements = (after: number | null, stop: AbortSignal): Promise<FeedRead<Announcement> | null> =>

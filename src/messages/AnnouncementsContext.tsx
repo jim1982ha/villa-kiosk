@@ -55,9 +55,9 @@ function useFeed(read: (after: number | null, stop: AbortSignal) => Promise<Feed
   const [state, setState] = useState<FeedState>(NO_FEED);
   useEffect(() => {
     const stop = new AbortController();
-    void watchFeed(read, (items, full, first) => setState((s) => {
-      const { kept, arrived } = afterRead(s.kept, items, full, first);
-      return { kept, loaded: true, fresh: arrived.length ? { arrived, n: (s.fresh?.n ?? 0) + 1 } : s.fresh };
+    void watchFeed(read, (items, full, first, kept) => setState((s) => {
+      const { kept: held, arrived } = afterRead(s.kept, items, full, first, kept);
+      return { kept: held, loaded: true, fresh: arrived.length ? { arrived, n: (s.fresh?.n ?? 0) + 1 } : s.fresh };
     }), stop.signal, pauseFor);
     return () => stop.abort();
   }, [read]);

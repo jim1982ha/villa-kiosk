@@ -8,8 +8,9 @@
 import { ingressPath } from "@/ha/ingress";
 import { backendFetch } from "@/auth/sessionLost";
 
-/** One read: the records, the last number given, and the first still kept (a page drops what it holds below it). */
-export interface FeedRead<T> { items: T[]; last: number; first: number }
+/** One read: the records, the last number given, the first still kept (a page drops what it holds below it), and
+ *  every number still kept (a page drops what it holds that is not: one erased); null from an add-on before 2.496.581. */
+export interface FeedRead<T> { items: T[]; last: number; first: number; kept: number[] | null }
 
 /** Pause before asking again when the add-on could not be reached. */
 const RETRY_MS = 5_000;
@@ -34,7 +35,8 @@ export async function fetchFeed<T>(path: string, field: string, parse: (raw: unk
     const items = Array.isArray(raw) ? raw.map(parse) : [];
     const last = typeof b.last === "number" ? b.last : 0;
     // an add-on before review Q round 2 does not say it: nothing is dropped
-    return { items: items.filter((x): x is T => x !== null), last, first: typeof b.first === "number" ? b.first : 0 };
+    const kept = Array.isArray(b.kept) && b.kept.every((n) => typeof n === "number") ? (b.kept as number[]) : null;
+    return { items: items.filter((x): x is T => x !== null), last, first: typeof b.first === "number" ? b.first : 0, kept };
   } catch {
     return null;
   } finally {
@@ -47,10 +49,10 @@ export async function fetchFeed<T>(path: string, field: string, parse: (raw: unk
  *  first read, after a pause, after the store started again), else what came after the last — what is NEW: what was
  *  kept before a full read never is (a page reloaded does not announce the last ring again, nor a tablet waking up what
  *  came while it slept). `first`: the first number the add-on still keeps — what the page holds below it was tidied
- *  away. `read` is a fetchFeed (a check passes its own). */
+ *  away; `kept`: every number it keeps (null: not said). `read` is a fetchFeed (a check passes its own). */
 export async function watchFeed<T>(
   read: (after: number | null, stop: AbortSignal) => Promise<FeedRead<T> | null>,
-  onRead: (items: T[], full: boolean, first: number) => void,
+  onRead: (items: T[], full: boolean, first: number, kept: number[] | null) => void,
   stop: AbortSignal,
   pause: (ms: number, stop: AbortSignal) => Promise<void>,
 ): Promise<void> {
@@ -71,7 +73,7 @@ export async function watchFeed<T>(
       last = null;
       continue;
     }
-    onRead(got.items, last === null, got.first);
+    onRead(got.items, last === null, got.first, got.kept);
     last = got.last;
   }
 }

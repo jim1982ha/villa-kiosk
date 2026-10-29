@@ -122,19 +122,22 @@ export function mergeAnnouncements(held: readonly Announcement[], incoming: read
  *  PAGE HELD (review Q 1, 2026-10-28): the notice kept its own memory of the rings it had shown, empty after a reload or
  *  a wake-up, so the rewrite of a ring the page had read in its baseline took the whole screen for "Ring shown for".
  *  ⚠️ EVERY ONE, not the newest alone (review Q round 2): a ring arriving with another in one read was never shown. */
-export function afterRead(held: readonly Announcement[], items: readonly Announcement[], full: boolean, first = 0):
+export function afterRead(held: readonly Announcement[], items: readonly Announcement[], full: boolean, first = 0,
+  kept: readonly number[] | null = null):
   { kept: Announcement[]; arrived: { announcement: Announcement; rewrite: boolean }[] } {
   // ⚠️ WHAT THE ADD-ON NO LONGER KEEPS GOES (review Q round 2): a tablet left on kept every announcement it ever read —
   // past the records-kept days, their photos refused — while one opened later listed what the add-on keeps
-  const kept = mergeAnnouncements(full ? [] : held.filter((h) => h.seq >= first), items);
-  if (full) return { kept, arrived: [] };
+  // ...and one erased (held, then the superadmin code: owner, 2026-10-29), named no longer in what it keeps
+  const still = (h: Announcement) => h.seq >= first && (kept === null || kept.includes(h.seq));
+  const merged = mergeAnnouncements(full ? [] : held.filter(still), items);
+  if (full) return { kept: merged, arrived: [] };
   const arrived = [...items].sort((x, y) => x.seq - y.seq)
     .map((a) => ({ announcement: a, was: a.key !== null ? held.find((h) => h.key === a.key && h.seq < a.seq) : undefined }))
     // ⚠️ A QUIET REWRITE IS NO NEWS (ticket 27): VESTA redraws a card whose bottom line stays (a title retouched, its
     // words translated) — on Telegram a quiet edit, never a ping; a new step (reminder, escalation, cleared) changes it
     .filter(({ announcement: a, was }) => !(a.feed === "vesta" && was && was.status === a.status))
     .map(({ announcement, was }) => ({ announcement, rewrite: was !== undefined }));
-  return { kept, arrived };
+  return { kept: merged, arrived };
 }
 
 /** An announcement in words, the same on every screen (review Q 5): its title, the line under it — the first of

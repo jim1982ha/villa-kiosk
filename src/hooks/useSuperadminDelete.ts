@@ -8,17 +8,19 @@
 // from inventing a fifth interaction.
 
 import { useCallback } from "react";
-import { useLongPress, type LongPressHandlers } from "./useLongPress";
+import { useLongPress, type LongPressHandlers, type LongPressOptions } from "./useLongPress";
 import { useSuperadmin, type ElevationIntent } from "@/auth/SuperadminGate";
 
 /**
  * @param intent  What the prompt says is about to be destroyed.
  * @param erase   Performs the deletion with the token it is handed. Runs ONLY
  *                after a correct code; the token authorises one write.
+ * @param opts    The hold's own options (`nativeButton` on a row that is a <button>).
  */
 export function useSuperadminDelete(
   intent: ElevationIntent,
   erase: (elevation: string) => Promise<unknown>,
+  opts?: LongPressOptions,
 ): LongPressHandlers {
   const { authorize } = useSuperadmin();
   return useLongPress(useCallback(() => {
@@ -28,5 +30,5 @@ export function useSuperadminDelete(
     })();
     // The intent is spread so a changed label doesn't rebuild the handler on
     // every keystroke elsewhere in the screen.
-  }, [authorize, erase, intent.title, intent.detail])); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authorize, erase, intent.title, intent.detail]), opts); // eslint-disable-line react-hooks/exhaustive-deps
 }
