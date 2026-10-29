@@ -150,6 +150,8 @@ export interface CardLine {
   /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
    *  (ticket 19 of "One inbox"); [] when nothing was told. */
   story: { note: string; at: string }[];
+  /** When its fault was opened (ISO); null for a live state with no fault. */
+  openedAt: string | null;
   /** The alert number of its fault ("#91"), whose VESTA card the open issue shows; absent without one. */
   alertNumber?: number;
   /** When the VESTA Agent closes it if it stays as it is now — "Locked since 14:38 · closes at about 14:49 if it stays
@@ -190,6 +192,15 @@ function nextCheckView(group: AttentionGroup, cadence: AgentCadence | null, now:
   return { text, at: moment, when: nextCheckWhen(group.items, cadence, now), tip: moment ? `${text} (${moment})` : text };
 }
 
+/** ⚠️ EVERY ROW SAYS WHEN (owner, 2026-10-29: "why I don't see the time in the VESTA card, as any other notification?"):
+ *  an issue's row in Messages shows when its first problem was last told of (its story's last step), else when it was
+ *  opened: a new alert has no step yet, and its row showed no time at all. Null for a live state with neither. Pure. */
+export function rowTime(card: Pick<CardView, "lines">): string | null {
+  const first = card.lines[0];
+  if (!first) return null;
+  return first.story.length ? first.story[first.story.length - 1].at : first.openedAt;
+}
+
 /** The card of `group`, as drawn. `cadence`: the VESTA Agent's own timing (null: it did not say). */
 export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null, now: Date = new Date()): CardView {
   const at = nextCheckAt(group.items, cadence, now);
@@ -198,6 +209,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     text: attentionLineIn(group, item),
     icons: lineIcon(group, item),
     story: item.story ?? item.fault?.story ?? [],
+    openedAt: item.openedAt ?? item.fault?.openedAt ?? null,
     ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
     closing: closingText(item.closing ?? item.fault?.closing, now),
     actions: itemActions(group, item),
@@ -241,7 +253,8 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
       // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
       // issues' next-check pill (its time, then "within 5 min"), who closed it the line under its fault
       lead: null, nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
-      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, story: [], closing: said.did, actions: [],
+      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, story: [], openedAt: t.openedAt ?? null,
+        closing: said.did, actions: [],
         ...alertNumberIn(alertNumberOf(t)) }],
     }];
   });

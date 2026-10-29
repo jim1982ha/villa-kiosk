@@ -163,6 +163,13 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const unread = buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
     fmData }).find((i) => i.ticketId === "c1")?.closing;
   ck("  ...no history to ask: no time said, never last_changed", unread?.since === null, unread);
+  // owner, 2026-10-29: a new alert's row in Messages had no time (nothing told of it yet)
+  const { rowTime } = await import("@/config/cockpitCard");
+  const opened = items.find((i) => i.ticketId === "c1");
+  const fresh = cockpitCard({ ...fault(waiting), items: [opened] }, CADENCE, t1445);
+  const toldCard = cockpitCard({ ...fault(waiting), items: [{ ...opened, story }] }, CADENCE, t1445);
+  ck("  ...its row says when: the last step told of it, else when it was opened, never nothing",
+     rowTime(fresh) === "2026-10-21T06:00:00Z" && rowTime(toldCard) === story[1].at, [rowTime(fresh), rowTime(toldCard)]);
 }
 ck("  ...said whole, with its moment, by the pill's tooltip (the Kiosk's own: common/Tip)",
    /aria-label="Next check: within 5min \(\d\d\/\d\d\/\d{4} \d\d:\d\d\)"/.test(issue)

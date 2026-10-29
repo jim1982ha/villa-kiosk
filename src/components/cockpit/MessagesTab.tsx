@@ -17,7 +17,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
-import type { CardView } from "@/config/cockpitCard";
+import { rowTime, type CardView } from "@/config/cockpitCard";
 
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
@@ -121,13 +121,14 @@ function rowOf(item: MessageItem) {
   if (item.kind === "issue") {
     const { card } = item;
     const first = card.lines[0];
+    const when = rowTime(card);
     return {
       icon: card.look === "watched"
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
         : card.lead ? <SourceIcons {...card.lead} /> : null,
       title: card.title,
       sub: [card.room, first?.text].filter(Boolean).join(" · "),
-      time: first?.story.length ? momentText(first.story[first.story.length - 1].at) : "",
+      time: when ? momentText(when) : "",
     };
   }
   // its words as every screen says them (messagesModel.announcementWords)
