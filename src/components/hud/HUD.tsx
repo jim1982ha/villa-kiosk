@@ -31,7 +31,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot, MessageCircle, Wrench,
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, Wrench,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -704,11 +704,13 @@ export default function HUD({
                   {unreadMark}
                 </button>
                 {/* VESTA's thread straight away (spec story 31; ticket 21 of "One inbox"), every profile, while VESTA runs */}
+                {/* ...and held, VESTA listens (ticket 23; owner 2026-10-29: the phone's one way to it): the top bar's own button */}
                 {thread.shown && (
-                  <button role="menuitem" className="hud-menu-item" onClick={() => { setMenuOpen(false); onAskVesta(); }}>
-                    <span className="hud-menu-glyph"><MessageCircle size={18} aria-hidden="true" /></span>
+                  <TalkButton place="menu" className="hud-menu-item"
+                    onOpen={() => { setMenuOpen(false); onAskVesta(); }} onTap={() => { setMenuOpen(false); onAskVesta(); }}
+                    idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"}>
                     <span>Ask VESTA</span>
-                  </button>
+                  </TalkButton>
                 )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus
                     — one row, not two menu items, since it's a single

@@ -33,6 +33,9 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
   /** Drawn beside the icon (the conversation's button names itself). */
   children?: ReactNode;
 }) {
+  // the phone's menu row (owner, 2026-10-29: "when i long press on the Ask VESTA line on my mobile phone, the orb is not
+  // displayed"): the same button, drawn as the menu's other rows (their glyph, their size)
+  const menu = place === "menu";
   const { talker, talk } = useConversation();
   // a question sending is the page's (both buttons say so: neither takes a press then); listening, the held button's
   const phase = talk.phase === "sending" || talk.place === place ? talk.phase : "idle";
@@ -40,7 +43,7 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
   return (
     <>
       <button
-        type="button"
+        type="button" role={menu ? "menuitem" : undefined}
         className={`${className} talk-btn${phase !== "idle" ? ` talk-${phase}` : ""}`}
         title={label} aria-label={label}
         onPointerDown={(e) => {
@@ -54,16 +57,18 @@ export default function TalkButton({ place, onOpen, onTap, className, idle, chil
         onClick={() => { if (!talker || talker.clicked()) onTap(); }}
       >
         {place === "thread" && phase === "listening" && <VoiceOrb size="small" />}
-        {talker && <Mic size={place === "bar" ? 24 : 16} aria-hidden />}
-        {!talker && <MessageCircle size={24} aria-hidden />}
+        <span className={menu ? "hud-menu-glyph" : "talk-btn-glyph"}>
+          {talker && <Mic size={menu ? 18 : place === "bar" ? 24 : 16} aria-hidden />}
+          {!talker && <MessageCircle size={menu ? 18 : 24} aria-hidden />}
+        </span>
         {children}
       </button>
-      {place === "bar" && phase === "listening" && <ListeningOverScreen />}
+      {place !== "thread" && phase === "listening" && <ListeningOverScreen />}
     </>
   );
 }
 
-/** The big orb over the whole screen, above every window, while a hold from the top bar listens. */
+/** The big orb over the whole screen, above every window, while a hold from the top bar or the phone's menu listens. */
 function ListeningOverScreen() {
   return createPortal(
     <div className="talk-orb-overlay" role="status" aria-live="assertive">

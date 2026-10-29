@@ -9,8 +9,9 @@
 import { TALK_SAID } from "./conversation";
 import type { Listening, Recording, RecordingMeasure } from "./voice";
 
-/** Where the hold began: the top bar (the conversation not open yet: the big orb) or the conversation itself. */
-export type TalkPlace = "bar" | "thread";
+/** Where the hold began: the top bar or the phone's menu row "Ask VESTA" (the conversation not open yet: the big orb),
+ *  or the conversation itself. */
+export type TalkPlace = "bar" | "menu" | "thread";
 /** What the page shows of the press now. */
 export interface TalkView { phase: "idle" | "listening" | "sending"; place: TalkPlace | null }
 export const TALK_IDLE: TalkView = { phase: "idle", place: null };

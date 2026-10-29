@@ -503,7 +503,9 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .vesta-turn-head b { font-size: var(--text-sm); }
 /* Listen, an icon at the end of an answer's own line (owner, 2026-10-29), its touch target kept */
 .vesta-turn-head .vesta-turn-listen { margin-left: auto; align-self: center; padding: 4px; min-width: var(--touch-min);
-  min-height: var(--touch-min); margin-block: calc((var(--touch-min) - 24px) / -2); }
+  min-height: var(--touch-min); margin-block: calc((var(--touch-min) - 24px) / -2);
+  /* a plain icon (owner's phone, 2026-10-29: a framed box that pushed the answer down) */
+  border: 0; background: none; box-shadow: none; color: var(--text-secondary); }
 .vesta-turn-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-base); }
 .vesta-turn .announcement-full-photo { max-height: 320px; align-self: flex-start; }
 .vesta-thread-ask { display: flex; gap: 8px; align-items: flex-end; position: sticky; bottom: 0; padding-top: 6px;

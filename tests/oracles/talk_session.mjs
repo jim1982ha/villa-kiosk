@@ -188,8 +188,8 @@ console.log("\n  drawn where it is held:");
 const btn = parseTsx("components/messages/TalkButton.tsx");
 const orbs = elements(btn, "VoiceOrb");
 const over = elements(btn, "ListeningOverScreen");
-ck("the big orb only for a hold from the top bar, while it listens",
-   over.length === 1 && guardsOf(over[0]).includes('place === "bar"') && guardsOf(over[0]).includes('phase === "listening"')
+ck("the big orb only for a hold from the top bar or the phone's menu (never the conversation's), while it listens",
+   over.length === 1 && guardsOf(over[0]).includes('place !== "thread"') && guardsOf(over[0]).includes('phase === "listening"')
    && orbs.filter((e) => propText(e, "size") === '"full"').length === 1, over.map(guardsOf));
 ck("  ...the small one only in the conversation, while it listens",
    orbs.filter((e) => propText(e, "size") === '"small"').every((e) => guardsOf(e).includes('place === "thread"')

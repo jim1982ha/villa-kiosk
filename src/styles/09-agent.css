@@ -23,6 +23,8 @@
 .talk-btn.talk-listening { color: var(--accent-strong); box-shadow: 0 0 0 3px var(--accent);
   animation: talk-listening 1.2s ease-out infinite; }
 .talk-btn.talk-sending { opacity: 0.6; }
+/* the icon's own box is the button's: drawn as before on the top bar and in the conversation */
+.talk-btn-glyph { display: contents; }
 @keyframes talk-listening { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
   to { box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent); } }
 

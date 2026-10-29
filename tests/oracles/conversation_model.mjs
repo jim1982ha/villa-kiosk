@@ -234,8 +234,10 @@ ck("  ...drawn in the windows' own frame: Window, its header and Close",
 ck("  ...and no longer pinned in the Cockpit's Messages",
    !/VestaThread|VestaWindow|useConversation/.test(
      readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8")));
-const askRow = elements(hud, "button").find((b) => (propText(b, "onClick") || "").includes("onAskVesta"));
-ck("the phone's \"Ask VESTA\" row only while VESTA runs", !!askRow && guardsOf(askRow).includes("thread.shown"));
+const askRow = elements(hud, "TalkButton").find((b) => propText(b, "place") === '"menu"');
+ck("the phone's \"Ask VESTA\" row only while VESTA runs, the top bar's talk button itself (held: VESTA listens)",
+   !!askRow && guardsOf(askRow).includes("thread.shown") && (propText(askRow, "onTap") || "").includes("onAskVesta")
+   && (propText(askRow, "onOpen") || "").includes("onAskVesta"));
 // the robot's one decision, read through the compiler's tree (whatever its layout), and every robot drawn by it
 const declared = (tree, name) => {
   let found = null;

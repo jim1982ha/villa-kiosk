@@ -1,3 +1,10 @@
+## 2.496.604
+
+What you will see:
+- On a phone, hold "Ask VESTA" in the menu: the orb fills the screen and VESTA listens, as from the top bar on a
+  tablet. Let go to send. A tap still opens the conversation.
+- An answer's speaker icon is a plain icon on its date line, with no frame around it.
+
 ## 2.496.603
 
 What you will see:
