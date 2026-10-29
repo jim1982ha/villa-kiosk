@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.373 (29 October 2026)
+
+- routing.approver_chats: a request asked at a tablet that "the owner or the facility manager" may approve goes to both
+  roles' chats (the owner's first); one only the owner may approve, to the owner's. Asked in a listed chat, unchanged.
+
 ## 0.6.372 (29 October 2026)
 
 - A request shown in another chat than the one it was asked in (the tablet's conversation; a facility manager's chat

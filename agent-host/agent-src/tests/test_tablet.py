@@ -233,3 +233,15 @@ def test_the_tablet_answer_says_when_nobody_answered_the_request(tmp_path, monke
     assert asyncio.run(v.approvals.expire(datetime.now(timezone.utc) + timedelta(days=1))) == 1
     (told,) = kiosk.conversation("ops")
     assert told["text"].startswith("I've asked for approval.\nStatus:\nExpired on ") and "nothing was done" in told["text"]
+
+
+def test_a_request_either_may_approve_asked_at_the_tablet_reaches_both_roles(tmp_path):
+    # owner, 2026-10-29: "approval required by either FM or Owner, I don't see any notification on the FM Telegram chat"
+    from vesta_agent.policy import Policy
+    from vesta_agent.routing import Routing
+    pol = Policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
+                             {"telegram_id": FM, "name": "Wayan", "role": "fm"}]})
+    r, tab = Routing(pol), tablet.chat_of("owner")
+    assert r.approver_chats("any", tab) == [OWNER, FM]                    # both roles' chats, the owner's first
+    assert r.approver_chats("owner", tab) == [OWNER]                      # only the owner may: the owner's alone
+    assert r.approver_chats("any", FM) == [FM]                            # asked in a chat: shown there, as before

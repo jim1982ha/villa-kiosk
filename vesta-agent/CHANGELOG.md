@@ -1,3 +1,11 @@
+## 0.12.384
+
+What you will see:
+- An action asked on the tablet that "the owner or the facility manager approves" (Allowed actions) now sends its
+  Approve / Refuse request to the facility manager's Telegram chat too, not only to yours. The first press decides; the
+  other copy then says who decided. One only the owner may approve still goes to you alone. A request asked in a
+  Telegram chat is unchanged: it is shown in that chat.
+
 ## 0.12.383
 
 What you will see:

@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 from vesta_shared.message_format import ROLE_WORDS, ROLES
 
-from .policy import Language, Policy
+from .policy import Language, Policy, tablet_profile
 
 TARGETS = ("here", *ROLES)
 
@@ -167,6 +167,13 @@ class Routing:
         owners = [c for c in self.policy.chats_for("owner") if self.policy.may_approve_in(c, "owner")]
         if required_role == "owner" or origin_chat is None:
             return owners
+        if tablet_profile(origin_chat) is not None:
+            # ⚠️ ASKED AT A TABLET, EVERY CHAT THAT MAY APPROVE IT (owner, 2026-10-29: "approval required by either FM or
+            # Owner, I don't see any notification on the FM Telegram chat"): the tablet's conversation is no chat the
+            # request can wait in yet (its buttons: ticket 22 of "One inbox"), so "the owner or the facility manager"
+            # means both roles' chats, the owner's first — not the owner's alone, as for a request with no asker
+            fms = [c for c in self.policy.chats_for("fm") if self.policy.may_approve_in(c, required_role)]
+            return list(dict.fromkeys([*owners, *fms]))
         return [int(origin_chat)] if self.policy.knows_chat(origin_chat) else owners
 
     def label(self, chat_id: int) -> str:
