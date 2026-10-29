@@ -1,3 +1,9 @@
+## 0.12.387
+
+What you will see (with VESTA (dev2) 2.496.590):
+- On the tablet, VESTA's bubble shows three moving dots while it answers or prepares something you asked for (a
+  report), as on Telegram's "typing…".
+
 ## 0.12.386
 
 What you will see (with VESTA (dev2) 2.496.588):

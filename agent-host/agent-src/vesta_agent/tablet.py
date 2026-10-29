@@ -32,6 +32,8 @@ log = logging.getLogger("vesta.tablet")
 REMEMBERED = 200
 #: Pause before reading the inbox again after the Kiosk could not be reached; after a Kiosk with no inbox (older).
 RETRY_S, NO_INBOX_S = 10.0, 600.0
+#: How often a conversation that waits for VESTA says so again (the tablet's dots go when it stops saying it).
+TYPING_EVERY_S = 60.0
 #: How the person's message reads to the AI: where it was written, and how that place shows the answer.
 WHERE = ("conversation on the villa's wall tablet (the VESTA Kiosk; apart from every Telegram chat): it shows your text "
          "as written, plain text, with the camera pictures you looked at and the pages you send")
@@ -76,6 +78,7 @@ class Tablet:
         self._last_mid = 0
         self._turns: dict[int, dict] = {}       # message id → the record last written for it (an edit keeps its pictures)
         self._tasks: set[asyncio.Task] = set()
+        self._working: dict[int, dict] = {}     # chat → its "VESTA is answering" loop and what holds it (hold)
         self._after: int | None = None          # the last question collected (kept in the state too: tablet_after)
         self._said: str | None = None           # the inbox's last trouble, said once: "unreached", "none"
 
@@ -145,8 +148,49 @@ class Tablet:
         return await self._write(int(mid), {**{k: v for k, v in was.items() if k != "buttons"},
                                             **({"buttons": b} if (b := buttons_of(keyboard)) else {})})
 
+    # ⚠️ "VESTA IS ANSWERING" ON THE TABLET (owner, 2026-10-29: "a running indicator in the chat response bubble while
+    # VESTA is thinking or waiting for an answer"): Telegram's "typing…" for the tablet — held as Delivery holds every
+    # wait (a message being read, the AI answering, a report being made), ONE per conversation whatever holds it, said
+    # again every TYPING_EVERY_S so a tablet can tell a VESTA that stopped (its dots go after the agreement's
+    # conversation.typingSeconds), and withdrawn when the last hold is released.
     def hold(self, chat: int, label: str | None = None) -> Callable[[], None]:
-        return lambda: None
+        """The conversation `chat` waits for VESTA from now; the release (safe to call twice)."""
+        w = self._working.get(chat)
+        if w is None:
+            w = {"stop": asyncio.Event(), "holds": set()}
+            try:
+                w["task"] = asyncio.get_running_loop().create_task(self._working_loop(chat, w["stop"]))
+            except RuntimeError:              # no loop (a script, a test outside one): nothing to show it on
+                return lambda: None
+            self._working[chat] = w
+        token = object()
+        w["holds"].add(token)
+
+        def release() -> None:
+            if token not in w["holds"]:
+                return
+            w["holds"].discard(token)
+            if not w["holds"]:
+                w["stop"].set()
+                if self._working.get(chat) is w:
+                    self._working.pop(chat, None)
+        return release
+
+    async def _working_loop(self, chat: int, stop: asyncio.Event) -> None:
+        key = {"key": f"typing:{profile_of(chat)}", "profile": profile_of(chat)}
+        while not stop.is_set():
+            await self._say_working(dict(key, typing=True))
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=TYPING_EVERY_S)
+            except asyncio.TimeoutError:
+                pass
+        await self._say_working(dict(key, gone=True))
+
+    async def _say_working(self, record: dict) -> None:
+        try:
+            await asyncio.wait_for(self.kiosk.add_turn(record), self._timeout_s())
+        except (KioskError, asyncio.TimeoutError):
+            pass                               # the tablet's dots are a courtesy: the answer itself never waits on them
 
     async def edit(self, chat: int, mid: int, text: str, keyboard: dict | None = None) -> bool:
         """`mid`'s turn says `text` now, its buttons gone or `keyboard`'s (its pictures and page kept): the Kiosk replaces it

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.376 (29 October 2026)
+
+- "VESTA is answering" on the tablet: Tablet.hold keeps one loop per conversation that writes a `typing:<profile>`
+  turn (typing: true) every TYPING_EVERY_S while anything holds the conversation (the answer, a job asked there), and
+  withdraws it (gone) when the last hold is released. Agreement copied from Kiosk 2.496.590 (conversation.typingSeconds).
+
 ## 0.6.375 (29 October 2026)
 
 - A tablet record's alert button whose press settles the alert as done (the skill's button with no mark: Done) is

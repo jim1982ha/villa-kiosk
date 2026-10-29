@@ -58,6 +58,9 @@ def test_a_tablet_question_reaches_the_conversation_and_its_answer_lands_as_a_tu
     assert run["folder"].endswith(f"chats/{tablet.chat_of('owner')}")       # its own conversation, its own folder
     assert [t["text"] for t in kiosk.conversation("owner")] == ["The pool pump is on."]
     assert agent.tg.sent == []                                             # nothing reached Telegram
+    # "VESTA is answering" while it worked, withdrawn once it was done (owner, 2026-10-29: a running indicator)
+    typing = [t for t in kiosk.turns_pushed if t["key"] == "typing:owner"]
+    assert typing[0].get("typing") is True and typing[-1].get("gone") is True, typing
     # collected once: the next read, and a restart (the last one collected is kept), never answer it again
     collect(agent)
     agent.tablet = tablet.Tablet(kiosk, agent.state)

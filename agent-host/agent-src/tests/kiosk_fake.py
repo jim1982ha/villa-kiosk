@@ -65,7 +65,8 @@ class FakeKiosk(Kiosk):
                 return 404, {"error": "not found"}
             # the add-on's rule (_turn_record): never a person's line, a profile it names, something said or withdrawn
             if (str(body.get("key", "")).startswith("ask:") or body.get("profile") not in _AGREEMENT["conversation"]["profiles"]
-                    or not (body.get("text") or body.get("photos") or body.get("page") or body.get("gone"))):
+                    or not (body.get("text") or body.get("photos") or body.get("page") or body.get("gone")
+                            or body.get("typing"))):
                 return 400, {"error": "not a turn"}
             self.turns_pushed.append(copy.deepcopy(body))
             self.turns[body["key"]] = copy.deepcopy(body)
@@ -131,7 +132,8 @@ class FakeKiosk(Kiosk):
 
     def conversation(self, profile: str) -> list[dict]:
         """What the tablet of `profile` shows of VESTA's answers, in order: each turn as it stands, none withdrawn."""
-        return [t for t in self.turns.values() if t.get("profile") == profile and not t.get("gone") and "answers" not in t]
+        return [t for t in self.turns.values() if t.get("profile") == profile and not t.get("gone") and "answers" not in t
+                and not t.get("typing")]
 
     def answer(self, profile: str, press: int) -> str | None:
         """What the tablet shows under the button of press `press`: VESTA's short answer."""
