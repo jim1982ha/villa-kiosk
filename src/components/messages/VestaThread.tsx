@@ -6,26 +6,29 @@
 // (messages/conversationModel); this draws it.
 
 import { useEffect, useRef, useState } from "react";
-import { RotateCcw, Send } from "lucide-react";
+import { Mic, RotateCcw, Send } from "lucide-react";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 import { localStamp } from "@/fm/fmEngine";
-import { ASK_SAID, NEW_CONVERSATION, QUESTION_MAX, pressableOf, type Turn } from "@/messages/conversation";
+import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, pressableOf, type Turn } from "@/messages/conversation";
 import { useConversation } from "@/messages/ConversationContext";
 import { unanswered, vestaWorking } from "@/messages/conversationModel";
 import { AnnouncementPhoto, PageLink, RecordButtons } from "./AnnouncementContent";
 
 /** One line of the thread: who said it, when, its words, the camera pictures VESTA looked at and the page it attached
- *  ("Open the page" only for a profile the add-on serves pages to). Pure: a check draws it. */
+ *  ("Open the page" only for a profile the add-on serves pages to). A spoken question (hold to talk) carries the
+ *  microphone, and says it was spoken until VESTA heard its words. Pure: a check draws it. */
 export function TurnLine({ turn, canOpenPage }: { turn: Turn; canOpenPage: boolean }) {
   return (
-    <div className={`vesta-turn ${turn.from === "person" ? "asked" : "answered"}`}>
+    <div className={`vesta-turn ${turn.from === "person" ? "asked" : "answered"}${turn.voice ? " vesta-turn-spoken" : ""}`}>
       <div className="vesta-turn-head">
         <b>{turn.from === "person" ? "You" : "VESTA"}</b>
+        {turn.voice && <Mic size={14} aria-label="spoken" />}
         {turn.at && <span className="muted">{localStamp(turn.at)}</span>}
       </div>
       {turn.photos.map((id) => <AnnouncementPhoto key={id} id={id} className="announcement-full-photo" />)}
       {turn.text && <p className="vesta-turn-text">{turn.text}</p>}
+      {turn.voice && !turn.text && <p className="vesta-turn-text muted">{SPOKEN_WAITING}</p>}
       {turn.page && canOpenPage && <PageLink page={turn.page} />}
       {turn.buttons.length > 0 && <RecordButtons record={pressableOf(turn)} />}
     </div>
@@ -42,10 +45,9 @@ export function WorkingBubble() {
 }
 
 export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => void; canOpenPage: boolean }) {
-  const { thread, ask } = useConversation();
+  const { thread, ask, said } = useConversation();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [said, setSaid] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const working = vestaWorking(thread, Date.now());
   // the dots come in view as a new line does
@@ -55,11 +57,9 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
 
   const send = async (words: string) => {
     setSending(true);
-    setSaid(null);
     const out = await ask(words);
     setSending(false);
-    if (out !== "sent") setSaid(ASK_SAID[out]);
-    else if (words !== NEW_CONVERSATION) setText("");
+    if (out === "sent" && words !== NEW_CONVERSATION) setText("");
   };
   const submit = () => { if (text.trim() && !sending) void send(text.trim()); };
 

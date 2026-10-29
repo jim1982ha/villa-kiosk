@@ -9,13 +9,13 @@ import { h, draw } from "../consistency/screen.mjs";
 import { elements, guardsOf, parseTsx, propText } from "../consistency/jsx.mjs";
 import ts from "typescript";
 import { readFileSync } from "node:fs";
-const { parseTurn, askVesta, vestaRuns, NEW_CONVERSATION } = await import("@/messages/conversation");
+const { parseTurn, askVesta, vestaRuns, NEW_CONVERSATION, SPOKEN_WAITING } = await import("@/messages/conversation");
 const { mergeTurns, threadView, unanswered } = await import("@/messages/conversationModel");
 const { START, screenReducer } = await import("@/pages/screen");
 const { TurnLine } = await import("@/components/messages/VestaThread");
 
 const turn = (seq, extra = {}) => ({ seq, key: `k${seq}`, from: "vesta", at: `2026-10-29T10:0${seq % 10}:00Z`, text: `T${seq}`,
-  photos: [], page: null, gone: false, buttons: [], answers: null, typing: false, ...extra });
+  photos: [], page: null, gone: false, buttons: [], answers: null, typing: false, voice: false, ...extra });
 const J = JSON.stringify;
 
 console.log("  a turn as the add-on sends it:");
@@ -23,7 +23,11 @@ ck("read whole: who said it, when, its words, its pictures and page",
    J(parseTurn({ seq: 3, key: "turn:9", from: "vesta", at: "2026-10-29T10:00:00Z", text: "On.", photos: ["a.jpg", 4],
                  page: "p1", buttons: [{ label: "Continue", kind: "c", id: "k1" }, { label: "x" }], answers: 7 }))
    === J({ seq: 3, key: "turn:9", from: "vesta", at: "2026-10-29T10:00:00Z", text: "On.", photos: ["a.jpg"], page: "p1",
-           gone: false, buttons: [{ label: "Continue", command: "c:k1", acts: false }], answers: 7, typing: false }));
+           gone: false, buttons: [{ label: "Continue", command: "c:k1", acts: false }], answers: 7, typing: false,
+           voice: false }));
+ck("  ...a spoken question says so (hold to talk), with no words until VESTA heard them",
+   parseTurn({ seq: 4, key: "ask:4", from: "person", voice: true })?.voice === true
+   && parseTurn({ seq: 4, key: "ask:4", from: "person", voice: true })?.text === "");
 ck("  ...a withdrawn one says so; one with no number, key or speaker is no turn",
    parseTurn({ seq: 1, key: "k", from: "vesta", gone: true })?.gone === true
    && [{ key: "k", from: "vesta" }, { seq: 1, from: "vesta" }, { seq: 1, key: "k", from: "admin" }, null, "x"]
@@ -130,7 +134,10 @@ ck("  ...drawn by the conversation exactly when the rule says", elements(parseTs
 
 console.log("\n  a question asked:");
 const sent = [];
-const answering = (status) => async (url, init) => { sent.push({ url, body: JSON.parse(init.body) }); return { ok: status === 200, status }; };
+const answering = (status) => async (url, init) => {
+  sent.push({ url, type: init.headers["Content-Type"], body: typeof init.body === "string" ? JSON.parse(init.body) : init.body });
+  return { ok: status === 200, status };
+};
 ck("sent as WORDS ONLY: no profile, no role (the add-on stamps who asks)",
    (await askVesta("Is the pump on?", answering(200))) === "sent" && J(sent[0].body) === J({ text: "Is the pump on?" })
    && sent[0].url.endsWith("vesta-ask"), sent);
@@ -138,6 +145,13 @@ ck("  ...VESTA not running, too many at once, anything else: each its own outcom
    (await askVesta("x", answering(503))) === "offline" && (await askVesta("x", answering(429))) === "busy"
    && (await askVesta("x", answering(500))) === "failed"
    && (await askVesta("x", async () => { throw new Error("offline"); })) === "failed");
+const wav = new Blob([new Uint8Array(44)], { type: "audio/wav" });
+sent.length = 0;
+ck("a spoken question goes to the same door as its recording, as audio/wav, nothing else with it",
+   (await askVesta(wav, answering(200))) === "sent" && sent[0].url.endsWith("vesta-ask") && sent[0].type === "audio/wav"
+   && sent[0].body === wav, sent);
+ck("  ...and its outcomes are a typed question's", (await askVesta(wav, answering(503))) === "offline"
+   && (await askVesta(wav, answering(429))) === "busy");
 ck("\"New conversation\" is Telegram's /new, read by the Agent's own gate", NEW_CONVERSATION === "/new");
 
 console.log("\n  drawn:");
@@ -149,6 +163,14 @@ ck("an answer: VESTA's words, its picture and its page for a profile served page
 ck("  ...no page offered to a profile the add-on serves none (a guest)", !guest.includes("Open the page"));
 ck("  ...the person's own question reads as theirs",
    draw(h(TurnLine, { turn: turn(1, { from: "person" }), canOpenPage: false })).includes("You"));
+const waiting = draw(h(TurnLine, { turn: turn(2, { from: "person", voice: true, text: "" }), canOpenPage: false }));
+const heard = draw(h(TurnLine, { turn: turn(2, { from: "person", voice: true, text: "Is the pump on?" }), canOpenPage: false }));
+ck("a spoken question waiting for its words says it was spoken, as a line of its own",
+   waiting.includes(SPOKEN_WAITING) && waiting.includes("vesta-turn-text") && waiting.includes("vesta-turn-spoken"), waiting);
+ck("  ...then the words VESTA heard, still marked as spoken",
+   heard.includes("Is the pump on?") && !heard.includes(SPOKEN_WAITING) && heard.includes("vesta-turn-spoken"), heard);
+ck("  ...a typed one carries no such mark",
+   !draw(h(TurnLine, { turn: turn(3, { from: "person", text: "typed" }), canOpenPage: false })).includes("vesta-turn-spoken"));
 
 // architecture review 2026-10-29 #4: ONE drawing of a VESTA message's page, wherever it shows
 const { execSync } = await import("node:child_process");
@@ -162,7 +184,7 @@ console.log("\n  hidden without VESTA, wherever it shows:");
 const hud = parseTsx("components/hud/HUD.tsx");
 const dash = parseTsx("pages/Dashboard.tsx");
 // owner, 2026-10-29: "a dedicated icon in the top bar, next to the robot … the same graphical components as any other modal"
-const askButton = elements(hud, "button").find((b) => propText(b, "onClick") === "onAskVesta");
+const askButton = elements(hud, "TalkButton").find((b) => propText(b, "onOpen") === "onAskVesta");
 ck("the top bar's VESTA button only while VESTA runs, every profile (no door asked)",
    !!askButton && guardsOf(askButton).includes("thread.shown") && !guardsOf(askButton).some((g) => g.includes("doors")),
    askButton && guardsOf(askButton));

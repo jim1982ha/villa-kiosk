@@ -21,6 +21,7 @@
 // Bottom bar: bottom-right shows the first-person movement joystick only.
 
 import PresenceTile from "./PresenceTile";
+import TalkButton from "./TalkButton";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { useNow } from "@/hooks/useInterval";
@@ -601,12 +602,9 @@ export default function HUD({
                 agent configured the Cockpit's icon IS the robot — its count
                 (top right) stays the Cockpit's, the agent's presence dot sits
                 bottom right. Without one, the ⚠ as before. */}
-            {/* VESTA's conversation, its own button beside the robot (owner, 2026-10-29), every profile, while VESTA runs */}
-            {thread.shown && (
-              <button className="icon-btn" onClick={onAskVesta} title="Ask VESTA" aria-label="Ask VESTA">
-                <MessageCircle size={24} />
-              </button>
-            )}
+            {/* VESTA's conversation, its own button beside the robot (owner, 2026-10-29), every profile, while VESTA runs:
+                tap to open it, hold to talk where the page can record (ticket 23 of "One inbox") */}
+            {thread.shown && <TalkButton onOpen={onAskVesta} />}
             <button
               className={`icon-btn${robot ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
               onClick={onOpenCockpit}

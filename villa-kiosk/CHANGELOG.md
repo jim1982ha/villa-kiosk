@@ -1,3 +1,16 @@
+## 2.496.596
+
+What you will see (VESTA hears it from VESTA Agent 0.12.393):
+- The VESTA button left of the robot is a microphone now. Tap it: VESTA's conversation opens, as before. Hold it and
+  speak, then let go: your question is sent, the conversation opens, and your line reads "Spoken question" until
+  VESTA has written out your words, which then show as your question; VESTA answers below it.
+- The first time you hold it, the tablet asks to use the microphone: allow it. If it is refused, a line under the
+  conversation's box says how to allow it.
+- Your voice goes to the villa's own Whisper, never to Apple's or Google's dictation, and is deleted once written out.
+  A question is at most 30s long.
+- Where the page cannot record (an address that is not https, a device with no microphone), the button stays the
+  speech bubble: tap to open the conversation.
+
 ## 2.496.595
 
 What you will see (VESTA follows it from VESTA Agent 0.12.392):

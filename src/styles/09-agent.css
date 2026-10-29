@@ -13,3 +13,17 @@
    glyph's lower right, clear of the count badge in the upper right
    (.icon-btn-count). */
 .agent-btn { position: relative; }
+
+/* Hold to talk (ticket 23 of "One inbox"): the top bar's VESTA button. A hold must stay a hold on an iPad: no text
+   selection, no callout, no scroll taking the finger. While it records, a ring pulses in the accent (not a status
+   colour: nothing needs attention); while it sends, it rests dimmed. */
+.talk-btn { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/* the still ring first: a Safari without color-mix() drops the pulse and keeps it */
+.talk-btn.talk-listening { color: var(--accent-strong); box-shadow: 0 0 0 3px var(--accent);
+  animation: talk-listening 1.2s ease-out infinite; }
+.talk-btn.talk-sending { opacity: 0.6; }
+@keyframes talk-listening { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+  to { box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent); } }
+@media (prefers-reduced-motion: reduce) {
+  .talk-btn.talk-listening { animation: none; box-shadow: 0 0 0 3px var(--accent); }
+}

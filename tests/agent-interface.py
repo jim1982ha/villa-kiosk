@@ -18,6 +18,7 @@ import importlib.util
 import json
 import os
 import shutil
+import struct
 import sys
 import tempfile
 import time
@@ -754,6 +755,70 @@ async def main() -> None:
     cfg_file.unlink(missing_ok=True)
     ck("a turn past the records-kept days goes", [t.get("text") for t in body["turns"]]
        == ["The wifi is on the card by the door."], body)
+
+    # ── A spoken question (ticket 23 of "One inbox", hold to talk) ─────────────────────────────────────────────────
+    print("\n  a question spoken on the tablet:")
+    reset_lockout()
+    await post("/agent/v1/heartbeat", headers=bearer())
+    voice = proxy.CONVERSATION["voice"]
+
+    def wav(seconds=1.0, rate=voice["rate"], channels=1, bits=16, head=b"RIFF"):
+        pcm = b"\x01\x00" * int(rate * seconds) * channels
+        return (head + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt " + struct.pack(
+            "<IHHIIHH", 16, 1, channels, rate, rate * channels * bits // 8, channels * bits // 8, bits)
+            + b"data" + struct.pack("<I", len(pcm)) + pcm)
+
+    said = wav()
+    asks.unlink(missing_ok=True)
+    r = await post("/vesta-ask", headers={**cookie("owner"), "Content-Type": "audio/wav"}, data=said)
+    status, body = await jget("/agent/v1/inbox", bearer())
+    spoken = body["asks"][-1] if body and body["asks"] else {}
+    ck("a spoken question is kept for the Agent, stamped with the profile, its sound named and no words yet",
+       r.status == 200 and spoken.get("profile") == "owner" and isinstance(spoken.get("voice"), str)
+       and "text" not in spoken, (r.status, body))
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    line = next((t for t in body["turns"] if t["key"] == f"ask:{spoken.get('seq')}"), {})
+    ck("  ...and shown at once in the profile's conversation as a spoken line waiting for its words",
+       line.get("from") == "person" and line.get("voice") is True and "text" not in line, body)
+    for name, bad in (("8 kHz", wav(rate=8000)), ("stereo", wav(channels=2)), ("8-bit", wav(bits=8)),
+                      ("not a WAV", wav(head=b"RIFX")), ("too long", wav(seconds=voice["seconds"] + 1)),
+                      ("empty", wav(seconds=0))):
+        r = await post("/vesta-ask", headers={**cookie("owner"), "Content-Type": "audio/wav"}, data=bad)
+        ck(f"  ...a recording {name} is refused (400)", r.status == 400, r.status)
+    r = await post("/vesta-ask", headers={"Content-Type": "audio/wav"}, data=said)
+    ck("  ...no session: refused", r.status == 401, r.status)
+    reset_lockout()
+    r = await get(f"/agent/v1/voice/{spoken.get('voice')}", headers=cookie("owner"))
+    ck("its sound is the Agent's only: a signed-in owner's cookie is 401", r.status == 401, r.status)
+    reset_lockout()
+    for bad in ("..%2Fvesta-asks.json", "0" * 31, "g" * 32):
+        r = await get(f"/agent/v1/voice/{bad}", headers=bearer())
+        ck(f"  ...a name that is not one of its own ({bad[:12]!r}) is 404", r.status == 404, r.status)
+    r = await get(f"/agent/v1/voice/{spoken.get('voice')}", headers=bearer())
+    got = await r.read()
+    ck("the Agent fetches the WAV as it was recorded", r.status == 200 and got == said
+       and r.content_type == "audio/wav", r.status)
+    r = await get(f"/agent/v1/voice/{spoken.get('voice')}", headers=bearer())
+    ck("  ...once: a voice is the person's, kept no longer than it takes to read it (404 after)", r.status == 404,
+       r.status)
+    key = f"ask:{spoken.get('seq')}"
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": key, "profile": "guest",
+                                                                          "heard": "Is the pool pump on?"})
+    ck("the words heard are refused for another profile's line (400)", r.status == 400, r.status)
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": key, "profile": "owner",
+                                                                          "heard": "  Is the pool pump on?  "})
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    line = next((t for t in body["turns"] if t["key"] == key), {})
+    ck("the words the Agent heard become the person's question in the thread, still a spoken one",
+       r.status == 200 and line.get("text") == "Is the pool pump on?" and line.get("voice") is True
+       and line.get("from") == "person", (r.status, line))
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": key, "profile": "owner",
+                                                                          "heard": "Something else"})
+    typed = next(t for t in body["turns"] if t["from"] == "person" and not t.get("voice"))
+    r2 = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": typed["key"], "profile": "owner",
+                                                                           "heard": "Something else"})
+    ck("  ...once, and never over a typed question: the person's words are the person's (400, 400)",
+       r.status == 400 and r2.status == 400, (r.status, r2.status))
 
     # ── VESTA's buttons pressed on a tablet (ticket 22 of "One inbox") ───────────────────────────────────────────────
     print("\n  VESTA's buttons pressed on a tablet:")

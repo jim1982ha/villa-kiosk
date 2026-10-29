@@ -32,6 +32,8 @@ export interface Turn {
   answers: number | null;
   /** VESTA says it is answering (Telegram's "typing…"), as of `at`: the dots in its bubble, never a line. */
   typing: boolean;
+  /** The person's question was spoken (hold to talk): its words are the ones VESTA heard, empty until it heard them. */
+  voice: boolean;
 }
 
 /** The longest question the add-on keeps (agent-contract.json conversation.limits.question). */
@@ -50,6 +52,7 @@ export function parseTurn(raw: unknown): Turn | null {
     buttons: vestaButtons(r.buttons),
     answers: typeof r.answers === "number" ? r.answers : null,
     typing: r.typing === true,
+    voice: r.voice === true,
   };
 }
 
@@ -70,17 +73,31 @@ export const ASK_SAID: Record<Exclude<AskOutcome, "sent">, string> = {
   failed: "Not sent, try again.",
 };
 
+/** The line under the box when a spoken question was not recorded (hold to talk): the microphone refused, none, or
+ *  nothing heard while the button was held. */
+export const TALK_SAID: Record<"refused" | "none" | "silent", string> = {
+  refused: "The microphone is not allowed: allow it for this page in the browser's settings, then hold to talk again.",
+  none: "No microphone could be used on this device.",
+  silent: "Nothing was recorded: keep holding the button while you speak.",
+};
+
+/** What a spoken question's line says until VESTA has heard its words. */
+export const SPOKEN_WAITING = "Spoken question";
+
 /** What "New conversation" sends: the command the Agent's gate reads, as on Telegram. */
 export const NEW_CONVERSATION = "/new";
 
-/** Ask VESTA `text` (the add-on stamps who asks). `send` is backendFetch (a check passes its own). */
+/** Ask VESTA: words typed, or a spoken question's WAV (messages/voice: hold to talk) — the add-on stamps who asks.
+ *  `send` is backendFetch (a check passes its own). */
 export async function askVesta(
-  text: string, send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status">>,
+  question: string | Blob, send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status">>,
 ): Promise<AskOutcome> {
+  const spoken = typeof question !== "string";
   try {
     const r = await send(ingressPath("vesta-ask"), {
-      method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": spoken ? "audio/wav" : "application/json" },
+      body: spoken ? question : JSON.stringify({ text: question }),
     });
     return r.ok ? "sent" : r.status === 503 ? "offline" : r.status === 429 ? "busy" : "failed";
   } catch {

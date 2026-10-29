@@ -4279,6 +4279,91 @@ ASK_KEY = "ask:"
 ASKS_PER_MINUTE = int(CONVERSATION.get("asksPerMinute") or 0)
 ASKS_MAX_BYTES = 200_000
 CONVERSATION_MAX_BYTES = 2_000_000
+# ⚠️ A SPOKEN QUESTION IS A WAV, AND ONLY ONE SHAPE OF IT (ticket 23 of "One inbox", hold to talk): the agreement's rate,
+# 16-bit, mono — what the villa's Whisper reads as it comes, so no page's recorder format (iPad and Android differ)
+# reaches the Agent. Kept as a file apart from the inbox (a 30s question is ~1 MB: the inbox stays small), named by a
+# random id the ask carries, read by the Agent ONCE and gone (a voice is the person's), never kept past askKeptSeconds.
+VOICE: dict = dict(CONVERSATION.get("voice") or {})
+VOICE_DIR = "vesta-voice"
+VOICE_NAME_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def _wav_refused(data: bytes) -> str | None:
+    """Why a recording is not a spoken question the add-on keeps, or None when it is one: a RIFF/WAVE of PCM at the
+    agreement's rate, one channel, 16-bit, with sound, at most voice.seconds long. Pure — tests/agent-interface.py."""
+    rate, longest = int(VOICE.get("rate") or 0), int(VOICE.get("seconds") or 0)
+    if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        return "A spoken question is a WAV recording."
+    fmt, sound, at = None, None, 12
+    while at + 8 <= len(data) and sound is None:
+        name, size = data[at:at + 4], int.from_bytes(data[at + 4:at + 8], "little")
+        if name == b"fmt " and size >= 16:
+            fmt = data[at + 8:at + 24]
+        elif name == b"data":
+            sound = data[at + 8:at + 8 + size]
+        at += 8 + size + (size & 1)
+    if fmt is None or int.from_bytes(fmt[0:2], "little") != 1 or int.from_bytes(fmt[2:4], "little") != 1 \
+            or int.from_bytes(fmt[4:8], "little") != rate or int.from_bytes(fmt[14:16], "little") != 16:
+        return f"A spoken question is {rate} Hz, 16-bit, mono."
+    if not sound:
+        return "This recording has no sound."
+    if len(sound) > rate * 2 * longest:
+        return f"A spoken question is at most {longest}s."
+    return None
+
+
+def _sweep_voices() -> None:
+    """Delete every kept sound older than askKeptSeconds: its question is no longer collected. Blocking."""
+    try:
+        names = os.listdir(_data(VOICE_DIR))
+    except OSError:
+        return
+    old = time.time() - ASK_KEPT_S
+    for name in names:
+        try:
+            if os.path.getmtime(_data(VOICE_DIR, name)) < old:
+                os.remove(_data(VOICE_DIR, name))
+        except OSError:
+            pass
+
+
+def _keep_voice(data: bytes) -> str:
+    """Keep a spoken question's WAV for the Agent: its name. Blocking: called on a worker thread."""
+    _sweep_voices()
+    os.makedirs(_data(VOICE_DIR), exist_ok=True)
+    name = secrets.token_hex(16)
+    with open(_data(VOICE_DIR, name), "wb") as f:
+        f.write(data)
+    return name
+
+
+def _take_voice(name: str) -> bytes | None:
+    """A kept WAV, read once and deleted; None when there is none by that name. Blocking."""
+    _sweep_voices()
+    if not VOICE_NAME_RE.match(name or ""):
+        return None
+    try:
+        with open(_data(VOICE_DIR, name), "rb") as f:
+            data = f.read()
+        os.remove(_data(VOICE_DIR, name))
+    except OSError:
+        return None
+    return data
+
+
+def _heard_line(turns: list, body: dict) -> dict | None:
+    """The person's spoken line with the words the Agent heard (`{"key": "ask:<seq>", "profile", "heard"}`), or None
+    when that is not one: ⚠️ THE ONLY WRITE THE AGENT MAKES TO A PERSON'S LINE — a spoken one of that profile, with no
+    words yet. Once: the person's words are never rewritten. Pure — tests/agent-interface.py."""
+    key, heard = body.get("key"), body.get("heard")
+    if set(body) != {"key", "profile", "heard"} or not isinstance(key, str) or not key.startswith(ASK_KEY) \
+            or not isinstance(heard, str) or not heard.strip():
+        return None
+    line = next((t for t in turns if isinstance(t, dict) and t.get("key") == key), None)
+    if line is None or line.get("from") != "person" or line.get("profile") != body.get("profile") \
+            or line.get("voice") is not True or "text" in line:
+        return None
+    return {**line, "text": heard.strip()[:int(CONVERSATION_LIMITS.get("question") or 0)]}
 
 
 def _asks_kept(items, now: float) -> list:
@@ -4358,18 +4443,28 @@ def _asked_lately(items: list, profile: str, now: float) -> int:
 
 async def vesta_ask_handler(request: web.Request) -> web.Response:
     """`{"text"}` — every profile: the question kept for the Agent, stamped with this session's profile, and shown in the
-    profile's conversation at once. 503 while VESTA is not running (nobody would answer), 429 past ASKS_PER_MINUTE, 400
-    for anything but words."""
+    profile's conversation at once. Or an `audio/wav` body — a spoken question (ticket 23, hold to talk): the sound kept
+    for the Agent, the line shown as spoken, its words written by the Agent once heard. 503 while VESTA is not running
+    (nobody would answer), 429 past ASKS_PER_MINUTE, 400 for anything but words or such a WAV."""
     if (refused := _refuse(request)) is not None:
         return refused
-    body = await _json_object(request)
-    if isinstance(body, web.Response):
-        return body
-    text = body.get("text")
-    longest = int(CONVERSATION_LIMITS.get("question") or 0)
-    if not CONVERSATION_PROFILES or set(body) != {"text"} or not isinstance(text, str) or not text.strip() \
-            or len(text) > longest:
-        return web.json_response({"error": f"A question is words, at most {longest} characters."}, status=400)
+    data = None
+    if request.content_type == "audio/wav":
+        data = await request.read()
+        if not CONVERSATION_PROFILES or not VOICE:
+            return web.json_response({"error": "not found"}, status=404)
+        if why := _wav_refused(data):
+            return web.json_response({"error": why}, status=400)
+        text = ""
+    else:
+        body = await _json_object(request)
+        if isinstance(body, web.Response):
+            return body
+        text = body.get("text")
+        longest = int(CONVERSATION_LIMITS.get("question") or 0)
+        if not CONVERSATION_PROFILES or set(body) != {"text"} or not isinstance(text, str) or not text.strip() \
+                or len(text) > longest:
+            return web.json_response({"error": f"A question is words, at most {longest} characters."}, status=400)
     profile = _role_for(request)
     if profile not in CONVERSATION_PROFILES:
         return _forbidden("This profile does not talk to VESTA.")
@@ -4377,10 +4472,13 @@ async def vesta_ask_handler(request: web.Request) -> web.Response:
         return web.json_response({"error": "VESTA is not running."}, status=503)
     if _asked_lately(await asyncio.to_thread(ASKED.items), profile, time.time()) >= ASKS_PER_MINUTE:
         return web.json_response({"error": "Too many questions at once: wait a minute."}, status=429)
-    at, words = _now_iso(), text.strip()
-    ask = await ASKED.add(lambda seq: {"seq": seq, "at": at, "profile": profile, "text": words})
+    at = _now_iso()
+    # a spoken one: the inbox names its sound, the thread shows it as spoken until the Agent writes the words heard
+    asked, shown = (({"voice": await asyncio.to_thread(_keep_voice, data)}, {"voice": True}) if data is not None
+                    else ({"text": text.strip()}, {"text": text.strip()}))
+    ask = await ASKED.add(lambda seq: {"seq": seq, "at": at, "profile": profile, **asked})
     await CONVERSED.add(lambda seq: {"seq": seq, "key": f"{ASK_KEY}{ask['seq']}", "profile": profile, "from": "person",
-                                     "at": at, "text": words}, _turns_with)
+                                     "at": at, **shown}, _turns_with)
     return web.json_response({"ok": True})
 
 
@@ -4447,6 +4545,17 @@ async def agent_inbox_handler(request: web.Request) -> web.Response:
     return web.json_response({"asks": items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
 
 
+async def agent_voice_handler(request: web.Request) -> web.Response:
+    """A spoken question's WAV, for the Agent (token-gated, `agentRead`), ONCE: deleted as it is read. 404 when there is
+    none by that name (read already, older than askKeptSeconds, or not one of the add-on's names)."""
+    if (refused := _agent_refuse(request, "agentRead")) is not None:
+        return refused
+    data = await asyncio.to_thread(_take_voice, request.match_info.get("name", "")) if VOICE else None
+    if data is None:
+        return web.json_response({"error": "not found"}, status=404)
+    return web.Response(body=data, content_type="audio/wav", headers={"Cache-Control": "no-store"})
+
+
 async def agent_conversation_turn_handler(request: web.Request) -> web.Response:
     """The Agent's answer as a turn (token-gated, `agentWrite`): added, or replacing the turn of its key. 404 when the
     agreement names no conversation; 400 for a body that is not a turn (a person's key, a profile it does not name, no
@@ -4458,6 +4567,14 @@ async def agent_conversation_turn_handler(request: web.Request) -> web.Response:
     body = await _json_object(request)
     if isinstance(body, web.Response):
         return body
+    if "heard" in body:
+        # the words of a spoken question (ticket 23): onto the person's own line, once (_heard_line)
+        line = _heard_line(await asyncio.to_thread(CONVERSED.items), body)
+        if line is None:
+            return web.json_response({"error": "words heard go onto a spoken question of that profile, once"},
+                                     status=400)
+        rec = await CONVERSED.add(lambda seq: {**line, "seq": seq}, _turns_with)
+        return web.json_response({"ok": True, "seq": rec["seq"]})
     said = _turn_record(body, 0, _now_iso())
     photos = [] if said is None or said.get("gone") else await asyncio.to_thread(_keep_turn_photos, body.get("photos"))
     if said is None or not (said.get("gone") or "text" in said or "page" in said or said.get("typing") or photos):
@@ -4876,6 +4993,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_post("/agent/v1/fm-document", agent_fm_document_handler)
     app.router.add_post("/agent/v1/vesta-message", agent_vesta_message_handler)
     app.router.add_get("/agent/v1/inbox", agent_inbox_handler)
+    app.router.add_get("/agent/v1/voice/{name}", agent_voice_handler)
     app.router.add_post("/agent/v1/conversation-turn", agent_conversation_turn_handler)
     app.router.add_post("/agent/v1/heartbeat", agent_heartbeat_handler)
     return app
