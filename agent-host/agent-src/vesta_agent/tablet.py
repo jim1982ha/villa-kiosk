@@ -23,6 +23,7 @@ from typing import Awaitable, Callable
 from vesta_shared import agreement
 
 from .kiosk import KioskError, kiosk_timeout_s
+from .kiosk_messages import buttons_of
 from .policy import Person, tablet_chat, tablet_person, tablet_profile, tablet_profiles
 
 log = logging.getLogger("vesta.tablet")
@@ -110,6 +111,8 @@ class Tablet:
         """One turn of VESTA's in `chat`'s conversation: its words, the camera pictures ((base64, mime)) and a page (an
         HTML file of the out folder, uploaded first). Its message id, or None when the Kiosk did not keep it."""
         rec = {"profile": profile_of(chat), "text": text or ""}
+        if buttons := buttons_of(keyboard):
+            rec["buttons"] = buttons                 # VESTA's own kind and id (kiosk_messages.buttons_of), never a command
         b64 = [p[0] for p in photos if p][-photos_per_turn():] if photos_per_turn() else []
         if b64:
             rec["photos"] = b64
@@ -122,20 +125,35 @@ class Tablet:
         mid = self._mid()
         return mid if await self._write(mid, {"key": turn_key(mid), **rec}) else None
 
+    async def answer(self, chat: int, press: int | None, text: str) -> bool:
+        """A press's short answer (Telegram's toast), back to the tablet that pressed: a turn naming the press, shown
+        under its button, never as a line of the conversation."""
+        if not isinstance(press, int) or not text:
+            return False
+        return await self._write(self._mid(), {"key": f"press:{press}", "profile": profile_of(chat), "text": text,
+                                               "answers": press})
+
     async def reply(self, chat: int, text: str, *, keyboard: dict | None = None, photos=()) -> int | None:
         """A reply to a person: ONE turn, its words with the camera pictures."""
         return await self.send(chat, text, keyboard=keyboard, photos=photos) if (text or photos) else None
 
     async def buttons(self, chat: int, mid: int, keyboard: dict | None) -> bool:
-        return False
+        """`mid`'s turn offers these buttons now (its words kept)."""
+        was = self._turns.get(int(mid))
+        if was is None:
+            return False
+        return await self._write(int(mid), {**{k: v for k, v in was.items() if k != "buttons"},
+                                            **({"buttons": b} if (b := buttons_of(keyboard)) else {})})
 
     def hold(self, chat: int, label: str | None = None) -> Callable[[], None]:
         return lambda: None
 
     async def edit(self, chat: int, mid: int, text: str, keyboard: dict | None = None) -> bool:
-        """`mid`'s turn says `text` now (its pictures and page kept): the Kiosk replaces it by its key."""
+        """`mid`'s turn says `text` now, its buttons gone or `keyboard`'s (its pictures and page kept): the Kiosk replaces it
+        by its key."""
         was = self._turns.get(int(mid)) or {"key": turn_key(mid), "profile": profile_of(chat)}
-        return await self._write(int(mid), {**was, "text": text})
+        rec = {k: v for k, v in was.items() if k != "buttons"}
+        return await self._write(int(mid), {**rec, "text": text, **({"buttons": b} if (b := buttons_of(keyboard)) else {})})
 
     async def delete(self, chat: int, mid: int) -> bool:
         """`mid`'s turn withdrawn (a "being prepared" answer once its result came, as on Telegram): the Kiosk keeps it

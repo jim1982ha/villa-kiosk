@@ -122,9 +122,21 @@ class FakeKiosk(Kiosk):
         self.asks.append(ask)
         return ask
 
+    def person_presses(self, profile: str, key: str, kind: str, bid: str) -> dict:
+        """One of VESTA's buttons pressed on a tablet signed in as `profile`, kept as the add-on keeps it (stamped)."""
+        ask = {"seq": (self.asks[-1]["seq"] if self.asks else 0) + 1, "at": PERSON_AT, "profile": profile,
+               "press": {"key": key, "kind": kind, "id": bid}}
+        self.asks.append(ask)
+        return ask
+
     def conversation(self, profile: str) -> list[dict]:
         """What the tablet of `profile` shows of VESTA's answers, in order: each turn as it stands, none withdrawn."""
-        return [t for t in self.turns.values() if t.get("profile") == profile and not t.get("gone")]
+        return [t for t in self.turns.values() if t.get("profile") == profile and not t.get("gone") and "answers" not in t]
+
+    def answer(self, profile: str, press: int) -> str | None:
+        """What the tablet shows under the button of press `press`: VESTA's short answer."""
+        return next((t["text"] for t in self.turns.values() if t.get("profile") == profile and t.get("answers") == press),
+                    None)
 
     # ------------------------------------------------------------------ what a person does in the Cockpit
     def _all(self) -> list[dict]:

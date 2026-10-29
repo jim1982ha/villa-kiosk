@@ -128,11 +128,11 @@ def _ids(entity_id: Any) -> str:
 
 
 def plain(decision: Decision, names: Callable[[str], str]) -> str:
-    """The action in plain words: every device (name and room), every parameter. Never an entity id."""
+    """The action in plain words: every device (name and room), every parameter. Never an entity id. ⚠️ NO "(final
+    state: on)" (owner, 2026-10-29: "improve the content … to something more user friendly"): every verb the rules accept
+    already says it (a toggle is refused: Policy.check_service)."""
     verb, target, extra = _words(decision, names)
-    state = EXPECT.get((decision.domain, decision.service))
-    tail = f" (final state: {state})" if state else ""
-    return f"{verb} {target}{extra}{tail}?"
+    return f"{verb} {target}{extra}?"
 
 
 def done_words(decision: Decision, names: Callable[[str], str], result: dict, settled: bool = True) -> str:
@@ -179,7 +179,8 @@ class Actions:
     def __init__(self, policy_loader: Callable[[], Policy], state: State,
                  writer_factory: Callable[[], Any], names: Callable[[str], str] | None = None,
                  related: Callable[[list[str]], set[str]] | None = None,
-                 executed: Callable[[str, str, list[str]], None] | None = None):
+                 executed: Callable[[str, str, list[str]], None] | None = None,
+                 tablet_keeps: Callable[[], bool] = lambda: False):
         self.policy_loader = policy_loader
         # executed(domain, service, entity_ids): told of every execution, whatever the path (siren.py)
         self.on_executed = executed or (lambda *a: None)
@@ -189,6 +190,9 @@ class Actions:
         # related(ids) -> every entity these ids stand for: group members, other entities of the same device.
         # An owner-only or excluded entity hidden behind a wrapper (a light group, a template cover) is caught here.
         self.related = related or (lambda ids: set())
+        # a request no Telegram chat may approve can still wait on the tablet, with its buttons (the Kiosk keeps VESTA's
+        # messages: ticket 22 of "One inbox", owner 2026-10-29: "if no Telegram is available but Kiosk is opened…")
+        self.tablet_keeps = tablet_keeps
 
     def _wrap_check(self, policy: Policy, d: Decision) -> Decision:
         if not d.allowed:
@@ -236,16 +240,19 @@ class Actions:
             said = done_words(d, self.names, result, settled=outcome(d, result) != "moving")
             return f"Executed without approval (the agent's rule for {d.domain}.{d.service} is direct). Result: {said}", None
         targets = Routing(policy).approver_chats(d.required_role, origin_chat)
-        if d.required_role == "owner" and not targets:
+        if not targets and self.tablet_keeps():
+            pass                                   # it waits on the tablet alone (approvals.ask keeps it there)
+        elif d.required_role == "owner" and not targets:
             self.state.log("refused", dict(base, reason="no chat where the owner can approve"))
             return ("Refused: no chat in People where the owner can approve it (an owner's private chat, or a group "
                     "listed for the owner only; a group listed for both roles acts as the facility manager)."), None
-        if not targets:
+        elif not targets:
             self.state.log("refused", dict(base, reason="no chat to ask in"))
             return "Refused: no chat to ask in.", None
         text = plain(d, self.names)
         action = {"domain": d.domain, "service": d.service, "entity_ids": d.entity_ids, "data": d.data, "plain": text}
-        aid = self.state.new_approval(action, d.action_hash(), d.required_role or "owner", int(targets[0]),
+        aid = self.state.new_approval(action, d.action_hash(), d.required_role or "owner",
+                                      int(targets[0]) if targets else int(origin_chat or 0),
                                       requester.telegram_id if requester else None, policy.approval_ttl_minutes)
         # the roles in their one set of words (message_format.ROLE_WORDS; owner, 2026-10-17)
         owner, fm = (f"the {ROLE_WORDS[r].lower()}" for r in ("owner", "fm"))
@@ -254,7 +261,8 @@ class Actions:
         msg = Outgoing([int(c) for c in targets],
                        # the action as its body, where it stands as its status — replaced by the decision when pressed
                        # (owner, 2026-10-10: every message of the agent's in the same layout, the asker's chat included)
-                       text,
+                       # who asked, under the action: a request may reach chats the asker is not in (owner, 2026-10-29)
+                       f"{text}\nAsked by {requester.name}." if requester else text,
                        {"inline_keyboard": [[{"text": "Approve", "callback_data": button_data.make(button_data.APPROVAL, aid, "y")},
                                              {"text": "Refuse", "callback_data": button_data.make(button_data.APPROVAL, aid, "n")}]]}, aid,
                        to="owner" if d.required_role == "owner" or origin_chat is None else None,

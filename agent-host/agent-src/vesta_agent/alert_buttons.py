@@ -56,13 +56,16 @@ class AlertButtons:
                                      for b in self.of(self.skills.get(skill_name))]]}
 
     async def press(self, chat: int, parts: list[str], person, toast: Callable[[str], Awaitable],
-                    name: str | None = None, pressed: int | None = None) -> None:
+                    name: str | None = None, pressed: int | None = None, anywhere: bool = False) -> None:
         """A button on an alert (button_data: its incident and option; the presser is a registered person): the
-        skill's on_reply decides, answering `here`. `pressed`: the message pressed (press.Press.mid)."""
+        skill's on_reply decides, answering `here`. `pressed`: the message pressed (press.Press.mid). `anywhere`: pressed
+        on the tablet's copy of the alert, which every chat's alert is (ticket 22 of "One inbox"): its skill is the one
+        any chat's copy was sent by."""
         iid, opt = parts
         if not iid.isdigit():
             return await toast("Unknown button.")
-        skill_name = self.state.alert_skill(iid, chat)
+        skill_name = self.state.alert_skill(iid, chat) or (next(
+            (k for c in self.thread.shown(int(iid)) if (k := self.state.alert_skill(iid, c))), None) if anywhere else None)
         skill = self.skills.get(skill_name) if skill_name else None
         buttons = {b["option"]: b for b in self.of(skill)}
         if opt not in buttons:

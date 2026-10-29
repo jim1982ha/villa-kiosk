@@ -199,7 +199,17 @@ class IncidentThread:
                 p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
                 p = self._own_words(iid, chat, p)
                 n += await self._show(iid, chat, {**rec, "settled": True}, p)
+            self._tell_alone(iid, status=layout.fill_time(note, now, self.tz) if note else None, body=body, mark=mark)
             return n
+
+    def _tell_alone(self, iid: int | str, **change) -> None:
+        """A thread no chat holds — a request only the tablet keeps (no Telegram chat may approve it: approvals.ask) —
+        changes on the tablet itself: its record is the only copy, settled there (its buttons gone)."""
+        told = self._told.get(str(iid))
+        if told is None or self.state.incident_chats(iid):
+            return
+        parts, _keyboard, photo = told
+        self.tell(iid, layout.changed(parts, **{k: v for k, v in change.items() if v is not None}), None, photo)
 
     async def _finish(self, iid: int | str, note: str, note_in: dict | None) -> int:
         """`close` with `final`: the incident's last word (see there). Returns how many chats show it now."""
@@ -327,6 +337,7 @@ class IncidentThread:
         async with self._lock(iid):
             for chat, rec in self.state.incident_chats(iid):
                 await self._show(iid, chat, rec, layout.changed(layout.of(rec), body=body))
+            self._tell_alone(iid, body=body)
 
     async def _show(self, iid: int | str, chat: int, rec: dict, p: dict, keyboard: dict | None = None,
                     tell: bool = True) -> bool:

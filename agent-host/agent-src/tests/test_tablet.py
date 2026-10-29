@@ -245,3 +245,87 @@ def test_a_request_either_may_approve_asked_at_the_tablet_reaches_both_roles(tmp
     assert r.approver_chats("any", tab) == [OWNER, FM]                    # both roles' chats, the owner's first
     assert r.approver_chats("owner", tab) == [OWNER]                      # only the owner may: the owner's alone
     assert r.approver_chats("any", FM) == [FM]                            # asked in a chat: shown there, as before
+
+
+def _approval_villa(tmp_path, monkeypatch, role="any"):
+    kiosk = FakeKiosk()
+    v = make_agent(tmp_path, {**policy(), "act_enabled": True, "allowed_services": {"light.turn_on": role},
+                              "chats": {"owner": OWNER, "fm": FM}}, kiosk=kiosk)
+    done = []
+
+    class Writer:
+        def call_service(self, *a):
+            done.append(a)
+
+        def states(self, ids):
+            return {i: {"state": "on"} for i in ids}
+    v.actions.writer_factory = Writer
+
+    async def act(run):
+        await run["call"]("ha_call_service", {"domain": "light", "service": "turn_on", "entity_id": "light.example_gym"})
+    FakeAI("I've asked for approval.", act=act).install(monkeypatch)
+    kiosk.person_asks("owner", "turn on the gym light")
+    collect(v)
+    asyncio.run(v.messages.settle())
+    (aid,) = [a["id"] for a in v.state.approvals_in("pending")]
+    record = next(m for m in kiosk.messages.values() if any(b["kind"] == "a" for b in m.get("buttons") or []))
+    return v, kiosk, aid, record, done
+
+
+def test_approve_pressed_on_the_tablet_runs_the_same_as_on_telegram(tmp_path, monkeypatch):
+    # ticket 22 of "One inbox": a tablet press enters the one table of button kinds, the same handler as Telegram's
+    v, kiosk, aid, record, done = _approval_villa(tmp_path, monkeypatch)
+    assert [b["label"] for b in record["buttons"]] == ["Approve", "Refuse"]          # the card on the tablet carries them
+    yes = next(b for b in record["buttons"] if b["label"] == "Approve")
+    press = kiosk.person_presses("owner", record["key"], yes["kind"], yes["id"])
+    collect(v)
+    asyncio.run(v.approvals.idle())
+    assert v.state.approval(aid)["status"] == "done" and len(done) == 1             # carried out
+    assert kiosk.answer("owner", press["seq"])                                       # its short answer, for the tablet
+    assert any("Approved on" in line for m in kiosk.messages.values() for line in m.get("status") or [])  # every copy says so
+    assert all(e[1] for e in v.tg.edits if e[0] in (OWNER, FM))                      # …Telegram's copies too
+
+
+def test_a_guests_press_acts_on_nothing(tmp_path, monkeypatch):
+    v, kiosk, aid, record, done = _approval_villa(tmp_path, monkeypatch)
+    yes = next(b for b in record["buttons"] if b["label"] == "Approve")
+    press = kiosk.person_presses("guest", record["key"], yes["kind"], yes["id"])     # (the add-on refuses it first)
+    collect(v)
+    assert v.state.approval(aid)["status"] == "pending" and done == []
+    assert kiosk.answer("guest", press["seq"])                                       # told why, under the button
+
+
+def test_with_no_telegram_chat_a_request_waits_on_the_tablet_and_is_approved_there(tmp_path, monkeypatch):
+    # owner, 2026-10-29: "if no Telegram is available but Kiosk is opened with a Owner (or FM) profile: shall the
+    # notification (approval) appear as notification in this UI?" — yes, with its buttons
+    kiosk = FakeKiosk()
+    v = make_agent(tmp_path, {"people": [], "act_enabled": True, "allowed_services": {"light.turn_on": "owner"}},
+                   kiosk=kiosk, telegram_on=False)
+    done = []
+
+    class Writer:
+        def call_service(self, *a):
+            done.append(a)
+
+        def states(self, ids):
+            return {i: {"state": "on"} for i in ids}
+    v.actions.writer_factory = Writer
+
+    async def act(run):
+        await run["call"]("ha_call_service", {"domain": "light", "service": "turn_on", "entity_id": "light.example_gym"})
+    FakeAI("I've asked for approval.", act=act).install(monkeypatch)
+    kiosk.person_asks("owner", "turn on the gym light")
+    collect(v)
+    asyncio.run(v.messages.settle())
+    (aid,) = [a["id"] for a in v.state.approvals_in("pending")]                 # waiting, never "undelivered"
+    card = next(m for m in kiosk.messages.values() if m.get("title") == "Approval request")
+    assert [b["label"] for b in card["buttons"]] == ["Approve", "Refuse"] and card["to"] == "Owner"
+    yes = card["buttons"][0]
+    kiosk.person_presses("owner", card["key"], yes["kind"], yes["id"])
+    collect(v)
+    asyncio.run(v.approvals.idle())
+    asyncio.run(v.messages.settle())
+    assert v.state.approval(aid)["status"] == "done" and len(done) == 1
+    settled = kiosk.messages[card["key"]]
+    assert "buttons" not in settled and any("Approved on" in line for line in settled["status"])   # settled on the tablet
+    assert "Approved on" in kiosk.conversation("owner")[-1]["text"]                                    # and the answer says so

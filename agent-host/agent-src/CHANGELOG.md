@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.374 (29 October 2026)
+
+- Ticket 22 of "One inbox" (VESTA's buttons on the tablet): the inbox brings presses ({key, kind, id}, stamped by the
+  Kiosk); app.on_tablet hands them to `_pressed`, the one table of button kinds Telegram's presses go through
+  (press.from_tablet; Press.place). Approvals accept a tablet press on any request it keeps; an alert's button pressed on
+  the tablet finds its skill from any chat's copy; a tablet's turns carry their buttons (Tablet.send/edit/buttons) and a
+  press's short answer (Tablet.answer: a turn naming the press). A request no Telegram chat may approve waits on the
+  tablet alone when a Kiosk is connected (Actions/Approvals `tablet_keeps`; IncidentThread._tell_alone settles its
+  record). Plainer request: no "(final state: …)", "Asked by <name>.", "Waiting for <who> to approve: the buttons work
+  for 15min from <time>." Agreement copied from Kiosk 2.496.587 (vestaMessage.buttonKinds, turn buttons/answers).
+
 ## 0.6.373 (29 October 2026)
 
 - routing.approver_chats: a request asked at a tablet that "the owner or the facility manager" may approve goes to both

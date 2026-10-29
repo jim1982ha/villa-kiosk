@@ -16,10 +16,11 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
-from vesta_shared.message_format import acted
+from vesta_shared.message_format import acted, audience
 from vesta_shared.limits import limit
 
 from . import layout
+from .press import TABLET
 from .notice import when
 from .policy import Decision
 
@@ -55,8 +56,10 @@ _APPROVED = acted("Approved", "{time}", "{by}") + "."
 #: and here, twice each. state → (what the AI is told, after "by <name> on <time>"; the press's toast when it comes after
 #: this state; the note every copy shows under its line — `note()`).
 STATES: dict[str, tuple[str, str, str]] = {
+    # ⚠️ IN THE PAGE'S OWN WORDS (owner, 2026-10-29: "more user friendly"): "the buttons work for", as Allowed actions
+    # names the setting ("Approve buttons work for")
     "pending": ("waiting for approval", "Still waiting.",
-                "Waiting for approval by {who} (asked on {time}, expires in {minutes}min)."),
+                "Waiting for {who} to approve: the buttons work for {minutes}min from {time}."),
     "approved": ("approved, its result not recorded yet", "Already approved.", _APPROVED),
     "moving": ("approved; the device was still on its way", "Already approved: on its way.", _APPROVED),
     "done": ("approved, and done", "Already approved and done.", _APPROVED),
@@ -92,10 +95,12 @@ def approval_thread(approval_id: str) -> str:
 
 class Approvals:
     def __init__(self, *, state, policy: Callable, actions, thread, post: Callable[..., Awaitable], timezone_name: str,
-                 safe: Callable[[Awaitable], Awaitable], edit: Callable[..., Awaitable] | None = None):
+                 safe: Callable[[Awaitable], Awaitable], edit: Callable[..., Awaitable] | None = None,
+                 tablet_keeps: Callable[[], bool] = lambda: False):
         self.state, self.policy, self.actions, self.thread = state, policy, actions, thread
         self.post = post                # posting.Poster.post: the one way a message is put in a chat
         self.edit = edit                # delivery.Delivery.edit: the asker's answer, told each step (answered)
+        self.tablet_keeps = tablet_keeps  # a Kiosk keeps VESTA's messages: a request may wait there (ask)
         self.tz, self._safe = timezone_name, safe
         # a request "approved" before this moment, still without its outcome, was cut by a stop (resume)
         self.started = datetime.now(timezone.utc)
@@ -118,6 +123,17 @@ class Approvals:
             if await self.post(chat, msg.text, status=msg.status, lead=head, roles={msg.to} if msg.to else (), title=TITLE,
                                keyboard=msg.keyboard, thread=approval_thread(msg.approval_id), origin=origin):
                 n += 1
+        if not msg.chats and self.tablet_keeps():
+            # ⚠️ NO TELEGRAM CHAT MAY APPROVE IT, THE TABLET DOES (owner, 2026-10-29): kept for the tablet alone, with its
+            # buttons, in the one layout (title, "To:", the action, where it stands) — pressed there, it is settled there
+            roles = {msg.to} if msg.to else {"owner", "fm"}
+            parts = layout.parts(body=msg.text, lead=head, head=layout.head(TITLE, audience(roles)),
+                                 status=layout.fill_time(msg.status, datetime.now(timezone.utc), self.tz))
+            self.thread.tell(approval_thread(msg.approval_id), parts, msg.keyboard)
+        if not n and self.tablet_keeps():
+            # the tablet keeps it with its buttons: none of its chats took it (Telegram off, or refusing — Poster.post told
+            # the tablet then), or it has none — it waits there, pressable, until it expires
+            n = 1
         if not n:
             self.state.undeliver_approval(msg.approval_id)
             log.warning("approval %s: no chat received it", msg.approval_id)
@@ -158,7 +174,8 @@ class Approvals:
         aid, yn = p.parts
         ap = self.state.approval(aid)
         key = approval_thread(aid)
-        if ap and ap["chat_id"] != p.chat and p.chat not in self.thread.shown(key):
+        # a tablet shows every request it keeps, whoever's chat it was sent to (ticket 22 of "One inbox")
+        if ap and ap["chat_id"] != p.chat and p.chat not in self.thread.shown(key) and p.place != TABLET:
             self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
             return await p.toast("This button belongs to another chat.")
         out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y", chat=p.chat,

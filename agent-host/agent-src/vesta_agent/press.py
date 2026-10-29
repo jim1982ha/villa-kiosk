@@ -5,7 +5,9 @@ raw Telegram callback themselves — the presser's first name (approvals, comman
 (approvals, a report button), its rows of buttons (command offers), its id inside the callback (alert buttons), whether
 its words were a file's caption (Delivery.settle) — so a press made anywhere else (the tablet, ticket 22 of "One inbox")
 would have had to be dressed up as a Telegram callback, field by field. Here a press is what the handlers need to know,
-read from Telegram in ONE place (`from_telegram`); the tablet's press is the second reading.
+read from Telegram in ONE place (`from_telegram`); the tablet's press (ticket 22 of "One inbox") is the second reading
+(`from_tablet`): a press on a VESTA message the tablet keeps, or on a turn of the presser's own conversation — no
+Telegram message, so no message id, words or rows to settle (each copy of the record is settled by its own thread).
 """
 from __future__ import annotations
 
@@ -28,6 +30,10 @@ class Press:
     words: str = ""                      # the pressed message's words, as it shows them now
     rows: list[list[dict]] = field(default_factory=list)   # its buttons, row by row ({"text", "callback_data"})
     caption: bool = False                # its words are a picture's or a file's caption (a shorter limit)
+    place: str = "telegram"              # where it was pressed: TELEGRAM, or TABLET (a record kept for every chat)
+
+
+TELEGRAM, TABLET = "telegram", "tablet"
 
 
 def from_telegram(q: dict, chat: int, person: Person | None, parts: list[str],
@@ -40,3 +46,10 @@ def from_telegram(q: dict, chat: int, person: Person | None, parts: list[str],
                  words=str(msg.get("text") or msg.get("caption") or ""),
                  rows=[list(r) for r in ((msg.get("reply_markup") or {}).get("inline_keyboard") or []) if isinstance(r, list)],
                  caption=msg.get("caption") is not None or bool(msg.get("document") or msg.get("photo")))
+
+
+def from_tablet(chat: int, person: Person | None, parts: list[str], toast: Callable[[str], Awaitable],
+                name: str | None = None) -> Press:
+    """A press on a tablet (tablet.Tablet.collect: the Kiosk stamped who pressed): its conversation is the chat, the
+    signed-in profile the presser (Policy.member knows the owner and the facility manager there)."""
+    return Press(chat=chat, mid=None, presser=chat, person=person, parts=parts, toast=toast, name=name, place=TABLET)

@@ -1,3 +1,13 @@
+## 0.12.385
+
+What you will see (needs VESTA (dev2) 2.496.587):
+- VESTA's buttons work on the tablet as on Telegram: Approve / Refuse, Done / Need help on an alert, VESTA's offers and
+  Continue. A press there does exactly what the same press does on Telegram, and every copy says who decided.
+- With no Telegram chat that may approve it, a request no longer fails: it waits on the tablet as a notification with
+  Approve / Refuse, for the owner or the facility manager signed in there, until it expires.
+- An approval request reads more plainly, on Telegram too: "Turn on Indoor Top?", then "Asked by JM.", and "Waiting for
+  the owner or the facility manager to approve: the buttons work for 15min from 29/10/2026 13:43."
+
 ## 0.12.384
 
 What you will see:

@@ -158,7 +158,7 @@ class Vesta:
         self.chat_facts = ChatFacts(self.state, self.work, settings.timezone, closed=named.closed, name=named.name)
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of,
                                related=lambda ids: related_entities(self.pack(), self.reader, ids),
-                               executed=lambda *a: self.siren.executed(*a))
+                               executed=lambda *a: self.siren.executed(*a), tablet_keeps=lambda: self.kiosk.enabled)
         self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_siren)
         # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
         # what each chat shows of an incident (incident_thread.py), and an alert's buttons and their press
@@ -210,7 +210,7 @@ class Vesta:
         # an approval request from start to end (approvals.py); the siren's gate asks through it too
         self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
                                    post=self.poster.post, timezone_name=settings.timezone, safe=self._safe,
-                                   edit=self.delivery.edit)
+                                   edit=self.delivery.edit, tablet_keeps=lambda: self.kiosk.enabled)
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
                                notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone,
@@ -579,6 +579,15 @@ class Vesta:
         if person is None or chat is None:
             log.warning("A question from the tablet names no profile this agent answers (%s): not answered", profile)
             return
+        if isinstance(ask.get("press"), dict):
+            # one of VESTA's buttons pressed there: its short answer goes back to that tablet, under the button
+            pressed = ask["press"]
+
+            async def toast(text: str):
+                await self.tablet.answer(chat, ask.get("seq"), text)
+            return await self._safe(self._pressed(
+                f"{pressed.get('kind')}:{pressed.get('id')}", chat, self.policy().member(chat, chat), toast,
+                lambda who, parts: press.from_tablet(chat, who, parts, toast, name=person.name)))
         event_type, m = tablet.as_message(chat, person, str(ask.get("text") or ""))
         await self._safe(self.handle_message(event_type, m, person=person))
 
@@ -850,7 +859,13 @@ class Vesta:
         async def toast(text: str):
             await self.delivery.toast(qid, text)
 
-        # ⚠️ ONE TABLE OF BUTTON KINDS (button_data.py): each kind's handler below; who must be registered, once
+        await self._pressed(data, cid, pol.member(presser, cid, q.get("from_first")), toast,
+                            lambda person, parts: press.from_telegram(q, cid, person, parts, toast))
+
+    async def _pressed(self, data: str, chat: int, person: Person | None, toast, make) -> None:
+        """A press, wherever it was made (`make(person, parts)`: press.from_telegram, press.from_tablet), handed to its
+        kind's handler. ⚠️ ONE TABLE OF BUTTON KINDS (button_data.py): each kind's handler below; who must be
+        registered, once — a tablet's press goes through exactly what a Telegram press does (ticket 22 of "One inbox")."""
         kind, parts = button_data.read(data)
         handle = {button_data.APPROVAL: self.approvals.press, button_data.CONTINUE: self._press_continue,
                   button_data.ALERT: self._press_alert, button_data.REPORT: self._press_report,
@@ -858,10 +873,10 @@ class Vesta:
                   button_data.DECLINE: self.command_offers.decline}.get(kind)
         if handle is None:
             return await toast("Unknown button.")
-        person = pol.member(presser, cid, q.get("from_first"))      # a listed group's member presses with its role
+        # a listed group's member presses with its role (Policy.member); a tablet's profile as the Kiosk stamped it
         if kind in button_data.FOR_PEOPLE_ONLY and person is None:
             return await toast(NOT_REGISTERED)
-        await handle(press.from_telegram(q, cid, person, parts, toast))
+        await handle(make(person, parts))
 
     async def _press_continue(self, p: "Press") -> None:
         cont = self.state.use_continuation(p.parts[0], p.chat, p.presser)
@@ -878,7 +893,8 @@ class Vesta:
 
     async def _press_alert(self, p: "Press") -> None:
         # the presser as this chat knows them (Policy.member: one person may be both owner and fm, each with its name)
-        await self.buttons.press(p.chat, p.parts, p.person, p.toast, name=p.person.name, pressed=p.mid)
+        await self.buttons.press(p.chat, p.parts, p.person, p.toast, name=p.person.name, pressed=p.mid,
+                                 anywhere=p.place == press.TABLET)
 
     async def _press_report(self, p: "Press") -> None:
         if not tool_access.may_start_job(self.policy(), self.server_tools, p.person, p.chat):

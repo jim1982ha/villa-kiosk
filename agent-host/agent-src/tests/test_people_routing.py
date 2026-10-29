@@ -227,8 +227,8 @@ def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(t
     (chat, text, _), = v.tg.sent
     # asked here, and still in the agent's layout (owner, 2026-10-10): heading, the action, then where it stands
     assert chat == JM and text.startswith("Approval request\nTo: ") and re.search(
-        r"\nStatus:\nWaiting for approval by the owner or the facility manager \(asked on \d\d/\d\d/\d{4} \d\d:\d\d, "
-        r"expires in 15min\)\.$", text)
+        r"\nAsked by .+\.\nStatus:\nWaiting for the owner or the facility manager to approve: the buttons work for 15min "
+        r"from \d\d/\d\d/\d{4} \d\d:\d\d\.$", text) and "final state" not in text
 
 
 def test_an_unreadable_rules_file_keeps_the_last_good_rules_and_the_siren_that_sounds_stops(tmp_path):
@@ -654,5 +654,5 @@ def test_the_villas_time_is_filled_into_a_message_in_one_place_and_a_pending_req
     assert layout.fill_time("Asked on {time}.", at, "Asia/Makassar") == "Asked on 10/10/2026 17:04."
     assert layout.fill_time(None, at, "UTC") == "" and layout.fill_time("no time", at, "UTC") == "no time"
     assert note("pending", who="the owner", minutes=15, time="10/10/2026 17:04") == \
-        "Waiting for approval by the owner (asked on 10/10/2026 17:04, expires in 15min)."
+        "Waiting for the owner to approve: the buttons work for 15min from 10/10/2026 17:04."
     assert "{who}" in STATES["pending"][2] and "{minutes}" in STATES["pending"][2]
