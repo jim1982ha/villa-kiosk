@@ -1,3 +1,12 @@
+## 2.496.591
+
+What you will see:
+- An alert with an open ticket (such as "#92-P2") is ONE card in the Cockpit's Inbox, under Issues: its device, room
+  and next check at the top, VESTA's message inside it ("To:", what happened, what to do, its status), and VESTA's
+  Done · Need help under it. Before, VESTA's card stood above the issue's own card, each with its own buttons.
+- Done · Need help are the same on the alert's notice, its card and its issue. Its ticket is opened, edited and closed
+  in the Tickets tab.
+
 ## 2.496.590
 
 What you will see (with VESTA Agent 0.12.387):
