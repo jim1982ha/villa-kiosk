@@ -73,9 +73,9 @@ def test_an_alert_it_took_over_is_kept_and_a_reminder_replaces_it(agent, kiosk):
     form = kiosk_messages.agreement.section("vestaMessage")["incidentKey"]
     assert rec["key"] == form.replace("{number}", "1"), "the key in the agreement's form, the one the tablet reads"
     assert {b["kind"] for b in rec["buttons"]} == {"i"} and all(b["label"] and b["id"].startswith("1:") for b in rec["buttons"])
-    # the one that settles the alert as done is flagged (owner, 2026-10-29: the tablet's issue card has its own Close, so
-    # only Need help shows beside it): by the skill's own button — no mark of its own — never by its label
-    assert {b["label"]: b.get("closes", False) for b in rec["buttons"]} == {"Done": True, "Need help": False}, rec["buttons"]
+    # its Done · Need help as Telegram shows them, none flagged (owner, 2026-10-29: the same wherever the alert shows)
+    assert [sorted(b) for b in rec["buttons"]] == [["id", "kind", "label"]] * 2 and \
+        [b["label"] for b in rec["buttons"]] == ["Done", "Need help"], rec["buttons"]
     assert "callback_data" not in str(rec) and "inline_keyboard" not in str(rec), "VESTA's button kind and id, nothing else"
     scenario(agent, tick_20 := (lambda v: tick(v, 20)))
     assert list(kiosk.messages) == ["incident:1"], "the reminder REPLACES the alert's record: one record per thread"

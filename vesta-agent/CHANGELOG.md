@@ -1,3 +1,9 @@
+## 0.12.388
+
+What you will see (with VESTA (dev2) 2.496.591):
+- Nothing new on screen: VESTA stops sending a detail the tablet no longer reads (which of an alert's buttons closes
+  it). The tablet shows an alert with an open ticket as one card with Done · Need help.
+
 ## 0.12.387
 
 What you will see (with VESTA (dev2) 2.496.590):

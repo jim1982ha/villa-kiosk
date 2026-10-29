@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.377 (29 October 2026)
+
+- An alert's buttons on the tablet are no longer flagged `closes` (AlertButtons.closes, IncidentThread.closes and
+  kiosk_messages' `closes` removed): the tablet now shows an alert as one card with Done · Need help wherever it shows
+  (owner, 2026-10-29), so nothing reads the flag. The agreement copied from the Kiosk (2.496.591).
+
 ## 0.6.376 (29 October 2026)
 
 - "VESTA is answering" on the tablet: Tablet.hold keeps one loop per conversation that writes a `typing:<profile>`

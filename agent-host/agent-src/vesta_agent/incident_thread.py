@@ -76,8 +76,6 @@ class IncidentThread:
         # alone until set
         self.name = incident_tag
         self._told: dict[str, tuple] = {}       # incident → the last copy told (parts, keyboard, photo): `taken` tells it again
-        # (kind, parts) → whether a button's press settles its alert as done (AlertButtons.closes); None: never said
-        self.closes = None
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock(self, iid: int | str) -> asyncio.Lock:
@@ -113,7 +111,7 @@ class IncidentThread:
         # tablet shows this one card in place of the villa's alert, its repeat and its all-clear
         self.mirror(kiosk_messages.of_parts(kiosk_messages.thread_key(iid), parts, keyboard=keyboard,
                                             photo=kiosk_messages.photo_b64(photo), to=AND.join(roles) if roles else None,
-                                            takes=self.state.incident_runs(iid), closes=self.closes))
+                                            takes=self.state.incident_runs(iid)))
 
     async def _post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
                     keyboard: dict | None = None, photo=None) -> None:
