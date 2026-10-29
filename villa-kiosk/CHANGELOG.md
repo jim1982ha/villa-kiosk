@@ -1,3 +1,9 @@
+## 2.496.586
+
+What you will see:
+- Nothing changes on screen. The working rules every contributor follows now say it: a reply names VESTA's own setting
+  as its page names it ("VESTA's Allowed actions"), never "your Rules", which reads as the villa's automations.
+
 ## 2.496.585
 
 What you will see (architecture review of 29 October 2026):
