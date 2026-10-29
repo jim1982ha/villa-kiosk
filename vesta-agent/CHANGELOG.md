@@ -1,3 +1,9 @@
+## 0.12.389
+
+What you will see (with VESTA (dev2) 2.496.593):
+- Nothing new on screen: VESTA reads the tablet's updated agreement (a request answered or expired is listed under
+  Closed on the tablet).
+
 ## 0.12.388
 
 What you will see (with VESTA (dev2) 2.496.591):
