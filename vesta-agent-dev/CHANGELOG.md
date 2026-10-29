@@ -1,3 +1,9 @@
+## 0.12.391
+
+What you will see (with VESTA (dev2) 2.496.594):
+- Nothing new on screen: the shared rules copied from the tablet (every villa message reporting a problem is handed
+  to VESTA).
+
 ## 0.12.390
 
 What you will see (with VESTA (dev2) 2.496.593):
