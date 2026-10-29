@@ -41,6 +41,9 @@ export interface Announcement {
   takes?: string[];
   /** The villa's own: the automation run that announced it (the add-on reads it from the event). */
   run?: string;
+  /** It offered buttons once and was rewritten since (agent-contract.json `_asked`: the add-on stamps it): with none
+   *  offered now, its question was answered or is over (messagesModel.placeOf). */
+  asked?: boolean;
   /** VESTA's card: its alert's stage as its title says it ("new", "existing", "watch", "closed"); none without one. */
   vestaStage?: string;
   /** VESTA's report (ticket 20 of "One inbox"): the scheduled job that sent it (the morning digest, the weekly and monthly
@@ -216,6 +219,7 @@ export function parseAnnouncement(raw: unknown): Announcement | null {
     seq: r.seq, at: atOf(r), ...parts, photo: photoOf(r), key,
     buttons: key ? buttonsOf(r.buttons) : [],
     ...(typeof r.run === "string" && r.run ? { run: r.run } : {}),
+    ...(r.asked === true ? { asked: true } : {}),
   };
 }
 
@@ -247,6 +251,7 @@ export function parseVestaMessage(raw: unknown): Announcement | null {
     seq: r.seq, at: atOf(r), title, to: typeof r.to === "string" ? r.to : "", text,
     status: lines[lines.length - 1] ?? "", story: lines.slice(0, -1), photo: photoOf(r),
     key: r.key, buttons: vestaButtons(r.buttons), feed: "vesta", takes: strings(r.takes),
+    ...(r.asked === true ? { asked: true } : {}),
     ...(typeof r.stage === "string" && r.stage ? { vestaStage: r.stage } : {}),
     ...(typeof r.report === "string" && r.report ? { report: r.report } : {}),
     ...(typeof shown.page === "string" && shown.page ? { page: shown.page } : {}),

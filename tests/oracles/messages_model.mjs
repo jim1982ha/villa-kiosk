@@ -400,4 +400,28 @@ ck("  ...an alert that cleared, with no ticket, is parked in Watch (owner, 2026-
 ck("  ...a report under Reports, an open alert a notification, a closed one in Closed",
    placeOf(digest) === "report" && placeOf(stageCard(42, "new", 79)) === "notification" && placeOf(stageCard(43, "closed", 80)) === "closed");
 
+// ⚠️ NOTIFICATIONS HOLD WHAT STILL WAITS FOR SOMEONE (owner, 2026-10-29: "anything finished goes to Closed … in a generic
+// and consistent way"): one rule for every record that asked — whoever asked it
+{
+  const { parseAnnouncement } = await import("@/messages/announcements");
+  const { isFinished } = await import("@/messages/messagesModel");
+  const ring = (extra) => parseAnnouncement({ seq: 60, at: "2026-10-29T14:17:00+08:00", key: "R9",
+    message: "🔔 Visitor\nSomeone is at the door.", ...extra });
+  const approval = (extra) => parseVestaMessage({ seq: 61, key: "thread:ap9", title: "Approval request",
+    body: "Turn on the light?", ...extra });
+  ck("a request answered or over is Closed, whoever asked: a ring opened or missed, an approval approved, refused or "
+     + "expired (the add-on's `asked`, no button left)", placeOf(ring({ asked: true })) === "closed"
+     && placeOf(approval({ asked: true })) === "closed" && isFinished(approval({ asked: true })));
+  ck("  ...still waiting (its buttons offered) is a notification, rewritten or not",
+     placeOf(ring({ buttons: [["Unlock", "/unlock"]] })) === "notification"
+     && placeOf(approval({ asked: true, buttons: [{ label: "Approve", kind: "a", id: "ap9:y" }] })) === "notification");
+  ck("  ...a note that never asked stays a notification; an alert goes by its stage (Done pressed, still open: a "
+     + "notification)", placeOf(ring({})) === "notification"
+     && placeOf(parseVestaMessage({ seq: 62, key: "incident:5", title: "#5-P2 (existing)", body: "Door",
+       stage: "existing", asked: true })) === "notification");
+  ck("  ...the Closed section counts items, not alerts, and says what it holds",
+     ((c) => !!c && propText(c, "unit") === '"closed item"' && /^"Finished:/.test(String(propText(c, "tip"))))(
+       elements(parseTsx("components/cockpit/MessagesTab.tsx"), "FoldedRows").find((e) => propText(e, "title") === '"Closed"')));
+}
+
 done("✅ the Messages model: what the tab lists, its counts and the item open on the right");

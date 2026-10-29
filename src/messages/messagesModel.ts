@@ -63,14 +63,22 @@ export type Place = "notification" | "report" | "watch" | "closed";
 
 /** ⚠️ THE ONE RULE OF WHERE A RECORD IS LISTED (architecture review 2026-10-29, round 2: the list and the unread mark
  *  each had their own, and they drifted three times — the mark lit for what the list put elsewhere, or not for what it
- *  showed): a report under Reports; an alert that is over in Watch (cleared, still watched) or Closed — "parked in Watch
- *  or Closed" (owner, 2026-10-28) —; anything else a notification. messagesView lists by it, unreadOf counts by it.
- *  VESTA's card of an alert with an issue is the issue's (cardsOfIssue), before this. */
+ *  showed): a report under Reports; an alert by its stage — over in Watch (cleared, still watched) or Closed, "parked in
+ *  Watch or Closed" (owner, 2026-10-28), else a notification —; any other record that asked and is answered or over
+ *  (isFinished) in Closed; anything else a notification. ⚠️ NOTIFICATIONS HOLD WHAT STILL WAITS FOR SOMEONE (owner,
+ *  2026-10-29: "anything finished goes to Closed … in a generic and consistent way"): answered approvals and every ring
+ *  sat there for ever. messagesView lists by it, unreadOf counts by it. VESTA's card of an alert with an issue is the
+ *  issue's (cardsOfIssue), before this. */
 export function placeOf(a: Announcement): Place {
   if (isReport(a)) return "report";
   const s = alertStage(a);
-  return s === "watch" || s === "closed" ? s : "notification";
+  if (s === "watch" || s === "closed") return s;
+  return s === null && isFinished(a) ? "closed" : "notification";
 }
+
+/** A record whose question is answered or over: it offered buttons (the add-on's `asked`, agent-contract.json `_asked`)
+ *  and offers none now — whoever asked (VESTA's approval, the villa's ring, any later one). Pure. */
+export const isFinished = (a: Announcement): boolean => a.asked === true && a.buttons.length === 0;
 
 /** One record's identity on the page: two feeds number apart, so VESTA's numbers are marked. */
 export const idOf = (a: Announcement): string => `${a.feed === "vesta" ? "v" : ""}${a.seq}`;

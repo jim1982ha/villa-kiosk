@@ -420,6 +420,19 @@ async def main() -> None:
 
 asyncio.run(main())
 
+# ── a record that asked, rewritten: the add-on remembers it asked (owner, 2026-10-29: finished goes to Closed) ───────
+print("\n  a record that asked, rewritten:")
+ring = {"seq": 1, "key": "R1", "message": "Visitor", "buttons": [["Unlock", "/unlock"]]}
+opened = proxy._announcements_with([ring], {"seq": 2, "key": "R1", "message": "Opened at 14:17"})
+ck("a rewrite of one that offered buttons is stamped `asked` (the ring opened or missed, the approval answered)",
+   opened == [{"seq": 2, "key": "R1", "message": "Opened at 14:17", "asked": True}], opened)
+again = proxy._announcements_with(opened, {"seq": 3, "key": "R1", "message": "Opened (edited)"})
+ck("  ...and keeps it on every later rewrite", again[-1].get("asked") is True, again)
+note = proxy._announcements_with([{"seq": 1, "key": "N1", "message": "Note"}], {"seq": 2, "key": "N1", "message": "Note 2"})
+fresh = proxy._announcements_with([], {"seq": 1, "key": "Q", "message": "Ask", "asked": True, "buttons": [["Ok", "/ok"]]})
+ck("  ...never on a record that never asked, and never taken from the writer",
+   "asked" not in note[-1] and "asked" not in fresh[-1], (note, fresh))
+
 # ── how a closed fault was closed: the agreement's histories (architecture review, 2026-10-15) ───────────────────
 # agent-contract.json `ticketUpdate.histories`: the cases tests/oracles/fault_close.mjs drives through the app's
 # fmEngine.lastResolution / isClearedStep — the same ones, through the proxy's reading, so neither side is tested on

@@ -3943,11 +3943,17 @@ def _sweep_announcement_photos(_stored, kept) -> None:
 def _announcements_with(stored: list, rec: dict) -> list:
     """The store with `rec` added. ⚠️ ONE LINE PER KEY: an announcement naming the key of a kept one REPLACES it (the
     ring becomes "Opened at …"); a rewrite with no photo keeps the first one's — and VESTA's report its job and page
-    (the night check's message rewritten by a later check stays a report). Pure — tests/store-doors.py drives it."""
+    (the night check's message rewritten by a later check stays a report). ⚠️ `asked` (agent-contract.json `asked`):
+    set on a rewrite of one that offered buttons, or had asked before — the one fact a rewrite loses and the tablet needs
+    to tell a request answered (approved, refused, expired, a ring opened or missed) from a note that never asked, so it
+    lists the first under Closed (owner, 2026-10-29). Never taken from the writer. Pure — tests/store-doors.py drives it."""
+    rec = {k: v for k, v in rec.items() if k != "asked"}
     if "key" in rec:
         old = next((a for a in stored if isinstance(a, dict) and a.get("key") == rec["key"]), None)
         if old is not None:
             rec = {**{f: old[f] for f in KEPT_ON_REWRITE if f not in rec and old.get(f)}, **rec}
+            if old.get("asked") is True or old.get("buttons"):
+                rec["asked"] = True
             stored = [a for a in stored if a is not old]
     return stored + [rec]
 

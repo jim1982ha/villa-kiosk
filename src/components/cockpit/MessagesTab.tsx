@@ -267,9 +267,10 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
               <FoldedRows title="Watch" rows={view.watched} unit="watched item" open={folds.watch}
                 onToggle={() => fold("watch")} selected={item?.key} onSelect={choose} empty="Nothing is being watched."
                 tip="Closed faults and cleared alerts VESTA still watches: a fault back before the time on its card reopens as the same problem; after it, VESTA lets it go." />
-              {/* alerts that are closed: folded, last */}
-              <FoldedRows title="Closed" rows={view.closed} unit="closed alert" open={folds.closed}
-                onToggle={() => fold("closed")} selected={item?.key} onSelect={choose} empty="Nothing closed yet." />
+              {/* what is finished (placeOf): alerts that ended, requests and rings answered or over; folded, last */}
+              <FoldedRows title="Closed" rows={view.closed} unit="closed item" open={folds.closed}
+                onToggle={() => fold("closed")} selected={item?.key} onSelect={choose} empty="Nothing closed yet."
+                tip="Finished: alerts that ended, and messages that asked something and were answered or are over (a request approved, refused or expired, a ring opened or missed)." />
             </>
           )}
         </div>
