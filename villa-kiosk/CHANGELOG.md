@@ -1,3 +1,9 @@
+## 2.496.594
+
+What you will see:
+- Nothing new on the tablet. The shared rules now say that every villa message reporting a problem is handed to VESTA
+  (numbered, chased, closed by itself), while a doorbell ring or a camera picture stays a plain notice.
+
 ## 2.496.593
 
 What you will see:

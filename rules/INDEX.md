@@ -121,6 +121,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Fetch what you know](villa-system.md#fetch-what-you-know) — fetch the one thing by path or id; small history windows
 - [Read the logbook in day windows](villa-system.md#read-the-logbook-in-day-windows) — 24-hour windows; one long read truncates silently
 - [The suffix is not the duplicate](villa-system.md#the-suffix-is-not-the-duplicate) — the `_2` registration may be the live one
+- [An alert is VESTA's](villa-system.md#an-alert-is-vestas) — a villa message reporting a problem hands it to VESTA in the same run, with a claim; notices never use an alert stage
 - [Use the platform's own features](villa-system.md#use-the-platforms-own-features) — consume the villa system's API before building your own
 - [App packaging facts](villa-system.md#app-packaging-facts) — watchdog, HEALTHCHECK, linter defaults, ports on update
 
