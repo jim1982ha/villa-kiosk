@@ -111,10 +111,10 @@ def test_a_double_tap_on_done_answers_once(tmp_path):
         toasts.append(text)
 
     async def twice():
-        await asyncio.gather(b.press({}, GROUP, ["5", "done"], person, toast), b.press({}, GROUP, ["5", "done"], person, toast))
+        await asyncio.gather(b.press(GROUP, ["5", "done"], person, toast), b.press(GROUP, ["5", "done"], person, toast))
     asyncio.run(twice())
     assert len(ran) == 1 and "Already answered." in toasts
-    asyncio.run(b.press({}, GROUP, ["5", "need_help"], person, toast))              # later, on a settled incident
+    asyncio.run(b.press(GROUP, ["5", "need_help"], person, toast))              # later, on a settled incident
     assert len(ran) == 1
 
 

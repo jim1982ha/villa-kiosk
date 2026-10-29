@@ -136,14 +136,14 @@ class Approvals:
             self.state.log("press_refused", {"approval": aid, "by": p.presser, "reason": "button pressed from another chat"})
             return await p.toast("This button belongs to another chat.")
         out = await asyncio.to_thread(self.actions.decide, aid, p.presser, yn == "y", chat=p.chat,
-                                      name=p.q.get("from_first"))
+                                      name=p.name)
         await p.toast(out["toast"])
         if not out.get("state"):
             return
         if p.mid and p.chat not in self.thread.shown(key):
             # a request sent before 0.12.128 has no thread: the pressed message is its one copy
             from .layout import legacy
-            await self.thread.post(key, p.chat, int(p.mid), legacy(str(p.msg.get("text") or "")), buttons=True)
+            await self.thread.post(key, p.chat, int(p.mid), legacy(p.words), buttons=True)
         await self.thread.close(key, note(out["state"], out.get("by", ""), out.get("why", "")), out.get("body"))
         if out.get("follow"):
             self._watch(aid, out["follow"])

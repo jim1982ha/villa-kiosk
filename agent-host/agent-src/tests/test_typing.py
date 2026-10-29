@@ -22,7 +22,7 @@ def test_a_chat_has_one_typing_loop_whatever_holds_it(tmp_path, monkeypatch):
     async def go():
         answer = d.hold(GROUP)
         report = d.hold(GROUP, "fm-weekly")
-        assert len(d._waiting) == 1 and len(d._waiting[GROUP]["holds"]) == 2       # one loop, held by both
+        assert len(d.telegram._waiting) == 1 and len(d.telegram._waiting[GROUP]["holds"]) == 2       # one loop, held by both
         await asyncio.sleep(0.05)
         answer()
         answer()                                                      # twice: harmless
@@ -34,7 +34,7 @@ def test_a_chat_has_one_typing_loop_whatever_holds_it(tmp_path, monkeypatch):
         await asyncio.sleep(0.05)
         after = len(d.tg.typing_in)
         await asyncio.sleep(0.05)
-        assert len(d.tg.typing_in) == after and d._waiting == {}      # nothing once nobody waits
+        assert len(d.tg.typing_in) == after and d.telegram._waiting == {}      # nothing once nobody waits
     asyncio.run(go())
 
 
@@ -56,4 +56,4 @@ def test_typing_starts_when_the_message_arrives_not_when_the_ai_starts(tmp_path,
          "message_id": 3, "bot": {"username": "Villa_Test_bot"}}
     asyncio.run(v.handle_message("telegram_attachment", e))
     assert seen["while_fetching"] == [GROUP]                         # already showing while the photo is fetched
-    assert v.delivery._waiting == {}                                  # and stops once the answer is out
+    assert v.delivery.telegram._waiting == {}                                  # and stops once the answer is out

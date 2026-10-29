@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.371 (29 October 2026)
+
+- Architecture review (the tablet): #1 the People module answers for a tablet's conversations (policy.tablet_*:
+  Policy.person knows the owner and the facility manager signed in there, never in destinations or chats_for; a guest
+  stays nobody registered), so an action allowed `direct` runs at once from the tablet as from Telegram. #2 press.py:
+  a press is who pressed, on which message, its words and buttons, read from Telegram's callback once
+  (press.from_telegram); no handler reads the raw callback. #3 Delivery chooses a chat's place once (`_place`):
+  TelegramChats (Telegram's own rules: refused chats, every part, fit, pictures, typing) and tablet.Tablet take the
+  same five steps; `fit` moved to layout (delivery and layout imported each other).
+
 ## 0.6.370 (29 October 2026)
 
 - The log says "Message received in the tablet's conversation (owner)" for a tablet's question, no longer

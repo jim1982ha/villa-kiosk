@@ -14,6 +14,7 @@ from helpers import make_agent
 from ha_fake import FakeHA, tool
 from kiosk_fake import FakeKiosk
 from vesta_agent import tablet, tool_access
+from vesta_agent.policy import TABLET_BASE
 
 OWNER, FM = 111, 222
 
@@ -70,7 +71,7 @@ def test_each_profile_is_its_own_conversation_apart_from_telegram(agent, kiosk, 
     kiosk.person_asks("guest", "second")
     collect(agent)
     owner, guest = tablet.chat_of("owner"), tablet.chat_of("guest")
-    assert owner != guest and min(owner, guest) >= tablet.TABLET_BASE      # no Telegram chat has such an id
+    assert owner != guest and min(owner, guest) >= TABLET_BASE      # no Telegram chat has such an id
     assert len(kiosk.conversation("owner")) == 1 and len(kiosk.conversation("guest")) == 1
     assert tablet.chat_of("boss") is None and tablet.profile_of(OWNER) is None
 
@@ -152,3 +153,26 @@ def test_an_older_kiosk_keeps_no_questions(agent, kiosk, monkeypatch):
     kiosk.keeps_turns = False
     kiosk.person_asks("owner", "hello")
     assert collect(agent) == tablet.NO_INBOX_S and ai.runs == []
+
+
+def test_the_owner_at_the_tablet_is_the_owner_for_an_action_that_runs_at_once(tmp_path, monkeypatch):
+    # architecture review 2026-10-29 #1: the People module answers for the tablet — an action the rules let run at once
+    # when a person asks ran from the owner's Telegram chat and became an approval request from the tablet
+    from test_call_service_shape import StrictSession, Writer
+    from vesta_agent.actions import Actions
+    from vesta_agent.policy import Policy
+    from vesta_agent.state import State
+    monkeypatch.delenv("VESTA_HA_READ_ONLY", raising=False)
+    session = StrictSession()
+    pol = Policy({"act_enabled": True, "people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}],
+                  "chats": {"owner": OWNER}, "allowed_services": {"light.turn_on": "direct"}})
+    actions = Actions(lambda: pol, State(str(tmp_path / "s.db")),
+                      lambda: Writer("http://unused", "UTC", write=True, session=session))
+    owner, guest = tablet.chat_of("owner"), tablet.chat_of("guest")
+    answer, msg = actions.request("light", "turn_on", "light.example_pool", {}, tablet.person_of("owner"), owner)
+    assert msg is None and "without approval" in answer and len(session.calls) == 1        # done at once, as on Telegram
+    _, msg = actions.request("light", "turn_on", "light.example_pool", {}, tablet.person_of("guest"), guest)
+    assert msg is not None and len(session.calls) == 1                                     # a guest is nobody registered
+    assert pol.person(owner).role == "owner" and pol.person(guest) is None
+    # ...and a tablet is never sent a role's messages: it is in no role's chats, and no listed chat
+    assert owner not in pol.chats_for("owner") and not pol.knows_chat(owner)

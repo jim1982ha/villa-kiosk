@@ -27,10 +27,19 @@ from vesta_shared.message_format import (CLOSED_STAGES, INCIDENT_TITLE, MARK_ICO
                                          parts as shape_parts, status_head, STATUS_BREAK)
 from vesta_shared import status_words
 from vesta_shared.limits import limit
-from vesta_shared.messaging import telegram_message_chars, tg_len
+from vesta_shared.messaging import split_message, telegram_message_chars, tg_len
 from vesta_shared.timeutil import moment_label
 
-from .delivery import fit
+
+def fit(text: str, limit: int | None = None) -> str:
+    """One message's text at most `limit` (Telegram's units; the villa's message limit by default), cut between lines
+    with "…" — for an edit, which cannot be split as a send is (Delivery), and every part of a layout."""
+    limit = limit or telegram_message_chars()
+    if tg_len(text) <= limit:
+        return text
+    head = split_message(text, limit - 2)[0]
+    return head.rstrip() + "\n…"
+
 
 #: The line a message recorded before 0.12.142 was cut at (its heading, its alert, its status): read by `legacy` only.
 OLD_RULE = "\n-------\n"

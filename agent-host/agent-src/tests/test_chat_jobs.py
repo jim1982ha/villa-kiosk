@@ -14,20 +14,40 @@ WEEKLY = {"name": "fm-weekly", "button": "Weekly report"}
 DAILY = {"name": "fm-daily", "button": "Daily digest"}
 
 
+class _QuickTelegram:
+    """The Telegram place's REAL hold (the one "typing…" of a chat: delivery.TelegramChats) over a quick typing loop."""
+    from vesta_agent.delivery import TelegramChats as _Real
+    hold = _Real.hold
+    reaches = _Real.reaches
+
+    def __init__(self, tg):
+        self.tg, self._waiting = tg, {}
+
+    async def typing_loop(self, chat, stop, job=None):
+        while not stop.is_set():
+            await self.tg.typing(chat)
+            try:
+                await asyncio.wait_for(stop.wait(), 0.005)
+            except asyncio.TimeoutError:
+                pass
+
+
 class _Delivery:
-    """What chat_jobs.py needs of delivery.Delivery: the Telegram stand-in, its REAL hold (the one "typing…" of a chat)
-    over a quick typing loop."""
+    """What chat_jobs.py needs of delivery.Delivery: the Telegram stand-in, the real choice of place (every chat a
+    Telegram one here) and its place's real hold."""
     from vesta_agent.delivery import Delivery as _Real
     hold = _Real.hold
-    reaches = _Real.reaches          # ...and where a message can arrive (a tablet's conversation: none here)
-    _on_tablet = _Real._on_tablet
+    reaches = _Real.reaches
     tablet = None
 
     def __init__(self):
         from telegram_fake import FakeTelegram
         self.tg = FakeTelegram()
+        self.telegram = _QuickTelegram(self.tg)
         self.on_job_result = None
-        self._waiting = {}
+
+    def _place(self, chat):
+        return self.telegram
 
     async def edit(self, chat, mid, text):                 # delivery.Delivery's own (architecture review 15)
         return await self.tg.edit(chat, mid, text)
@@ -37,14 +57,6 @@ class _Delivery:
 
     async def delete(self, chat, mid):
         return await self.tg.delete(chat, mid)
-
-    async def typing_loop(self, chat, stop, job=None):
-        while not stop.is_set():
-            await self.tg.typing(chat)
-            try:
-                await asyncio.wait_for(stop.wait(), 0.005)
-            except asyncio.TimeoutError:
-                pass
 
 
 async def _safe(coro):

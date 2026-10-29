@@ -126,4 +126,4 @@ class FaultOffers:
 
     async def _say(self, p, said: str) -> None:
         """The message stays whole, its buttons gone, the decision under it (Delivery.settle, within its own limit)."""
-        await self.delivery.settle(p.chat, p.mid, p.msg, said)
+        await self.delivery.settle(p, said)

@@ -187,7 +187,7 @@ def test_every_change_is_in_page_changes(ui):
 #: The cut-shaped numbers that are NOT limits on what the agent reads, says or keeps — each with why. A new one fails
 #: the release (test below) until it is declared with limit() or added here with its reason.
 NOT_LIMITS = {
-    ("vesta_agent/tablet.py", "hashlib.sha1(str(profile).encode()).digest()[:4]"): "4 bytes of a hash: a tablet "
+    ("vesta_agent/policy.py", "hashlib.sha1(str(profile).encode()).digest()[:4]"): "4 bytes of a hash: a tablet "
                                                                                    "conversation's id, never a text",
     # dates and times cut out of a timestamp, hashes shortened for a key, a word's prefix or suffix
     ("vesta_agent/status.py", "str(start)[:16]"): "the date and time part of a timestamp",

@@ -55,10 +55,10 @@ class AlertButtons:
         return {"inline_keyboard": [[{"text": b["label"], "callback_data": button_data.make(button_data.ALERT, iid, b["option"])}
                                      for b in self.of(self.skills.get(skill_name))]]}
 
-    async def press(self, q: dict, chat: int, parts: list[str], person, toast: Callable[[str], Awaitable],
-                    name: str | None = None) -> None:
+    async def press(self, chat: int, parts: list[str], person, toast: Callable[[str], Awaitable],
+                    name: str | None = None, pressed: int | None = None) -> None:
         """A button on an alert (button_data: its incident and option; the presser is a registered person): the
-        skill's on_reply decides, answering `here`."""
+        skill's on_reply decides, answering `here`. `pressed`: the message pressed (press.Press.mid)."""
         iid, opt = parts
         if not iid.isdigit():
             return await toast("Unknown button.")
@@ -88,8 +88,7 @@ class AlertButtons:
         # ⚠️ THE COPY PRESSED MAY NOT BE THE ONE ON RECORD (architecture review scan 1, 2026-10-19: #55 twice in the
         # owner's group): every copy on record was settled above; a copy no record points to would keep its buttons
         # beside the answer — it goes now
-        pressed = ((q or {}).get("message") or {}).get("message_id")
-        if str(pressed or "").isdigit():
+        if pressed is not None:
             await self.thread.stray(int(iid), int(chat), int(pressed))
 
     async def _answer(self, iid: str, button: dict, skill, chat: int, person, toast, name: str) -> None:

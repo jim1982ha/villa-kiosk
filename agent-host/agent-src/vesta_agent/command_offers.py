@@ -124,18 +124,17 @@ class CommandOffers:
         sk = self.skills.get(offer["skill"])
         if sk is None or not sk.command:
             return await p.toast(f"The {offer['skill']} skill is not available on this villa now.")
-        if not self._may(p.chat, p.presser, p.q.get("from_first"), sk, offer["question"]):
+        if not self._may(p.chat, p.presser, p.name, sk, offer["question"]):
             # judged again at the press, for the person pressing: one who may not write its command here starts nothing
             return await p.toast(f"You cannot start /{sk.command} here.")
         if not self.state.claim_command_offer(p.parts[0], p.chat):
             return await p.toast(_spent(self.state, p.parts[0], "Already started."))
         said = f"{(sk.offer or {}).get('pressed') or '/' + sk.command}: “{offer['question']}”"
         await p.toast(said[:toast_chars()])
-        kept = _without_offer(p.msg, p.parts[0])
-        await self.delivery.settle(p.chat, p.mid, p.msg, f"{said} ({p.person.name})",
-                                   {"inline_keyboard": kept} if kept else None)
+        kept = _without_offer(p.rows, p.parts[0])
+        await self.delivery.settle(p, f"{said} ({p.person.name})", {"inline_keyboard": kept} if kept else None)
         log.info("Chat %s: %s pressed /%s on the question asked", p.chat, p.person.name, sk.command)
-        await self.run(TYPED, typed(p.chat, p.presser, p.q.get("from_first"), sk.command, offer["question"]),
+        await self.run(TYPED, typed(p.chat, p.presser, p.name, sk.command, offer["question"]),
                        about=offer.get("about") or None)
 
     async def decline(self, p) -> None:
@@ -146,9 +145,8 @@ class CommandOffers:
         sk = self.skills.get(offer["skill"])
         said = ((sk.offer or {}).get("decline") if sk else None) or "Declined"
         await p.toast(said[:toast_chars()])
-        kept = _without_offer(p.msg, p.parts[0])
-        await self.delivery.settle(p.chat, p.mid, p.msg, f"{said} ({p.person.name})",
-                                   {"inline_keyboard": kept} if kept else None)
+        kept = _without_offer(p.rows, p.parts[0])
+        await self.delivery.settle(p, f"{said} ({p.person.name})", {"inline_keyboard": kept} if kept else None)
         log.info("Chat %s: %s declined /%s", p.chat, p.person.name, sk.command if sk else offer["skill"])
 
 
@@ -163,8 +161,8 @@ def _spent(state, oid: str, used: str) -> str:
     return used if state.command_offer_kept(oid) else TOO_OLD
 
 
-def _without_offer(msg: dict, oid: str) -> list[list[dict]]:
-    """The message's buttons without offer `oid`'s two (Investigate and its No): the others stay."""
+def _without_offer(rows: list[list[dict]], oid: str) -> list[list[dict]]:
+    """The pressed message's buttons (press.Press.rows) without offer `oid`'s two (Investigate and its No): the others
+    stay."""
     mine = {button_data.make(button_data.COMMAND, oid), button_data.make(button_data.DECLINE, oid)}
-    return [r for r in [[b for b in row if b.get("callback_data") not in mine]
-                        for row in ((msg.get("reply_markup") or {}).get("inline_keyboard") or [])] if r]
+    return [r for r in [[b for b in row if b.get("callback_data") not in mine] for row in rows] if r]

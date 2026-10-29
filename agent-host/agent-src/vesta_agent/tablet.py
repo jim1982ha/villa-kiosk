@@ -16,21 +16,17 @@ deletion withdraws it. Nobody is added to People.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import time
 from typing import Awaitable, Callable
 
 from vesta_shared import agreement
-from vesta_shared.message_format import ROLE_WORDS
 
 from .kiosk import KioskError, kiosk_timeout_s
-from .policy import Person
+from .policy import Person, tablet_chat, tablet_person, tablet_profile, tablet_profiles
 
 log = logging.getLogger("vesta.tablet")
 
-#: Above every Telegram chat id: Telegram's have at most 52 significant bits (its Bot API says so of every chat id).
-TABLET_BASE = 2 ** 52
 #: How many turns' last record are remembered, for an edit that changes only the words (its pictures kept).
 REMEMBERED = 200
 #: Pause before reading the inbox again after the Kiosk could not be reached; after a Kiosk with no inbox (older).
@@ -38,36 +34,14 @@ RETRY_S, NO_INBOX_S = 10.0, 600.0
 #: How the person's message reads to the AI: where it was written, and how that place shows the answer.
 WHERE = ("conversation on the villa's wall tablet (the VESTA Kiosk; apart from every Telegram chat): it shows your text "
          "as written, plain text, with the camera pictures you looked at and the pages you send")
-
-
-def profiles() -> dict[str, str]:
-    """The Kiosk's profiles the agent answers, each with its role (the agreement's one table)."""
-    return {str(k): str(v) for k, v in (agreement.section("conversation").get("profiles") or {}).items()}
-
-
-def chat_of(profile: str | None) -> int | None:
-    """The conversation of a profile, as a chat id no Telegram chat has (stable across versions: from its name)."""
-    if profile not in profiles():
-        return None
-    return TABLET_BASE + int.from_bytes(hashlib.sha1(str(profile).encode()).digest()[:4], "big")
-
-
-def profile_of(chat) -> str | None:
-    """The profile whose conversation `chat` is; None for any other chat (a Telegram one)."""
-    try:
-        chat = int(chat)
-    except (TypeError, ValueError):
-        return None
-    return next((p for p in profiles() if chat_of(p) == chat), None) if chat >= TABLET_BASE else None
+# who is at a tablet is the People module's answer (policy.tablet_*): one place for every step that asks
+profiles, chat_of, profile_of = tablet_profiles, tablet_chat, tablet_profile
 
 
 def person_of(profile: str | None) -> Person | None:
-    """Who asks, from the profile the Kiosk stamped: its role's rights; named for the AI by the role ("Owner at the
-    tablet"). English: the tablet's one language (ticket 28 parked)."""
-    chat, role = chat_of(profile), profiles().get(str(profile))
-    if chat is None or not role:
-        return None
-    return Person(chat, f"{ROLE_WORDS.get(role, role.capitalize())} at the tablet", role, "en")
+    """Who asks, from the profile the Kiosk stamped (policy.tablet_person): a guest too, answered with answers only."""
+    chat = tablet_chat(profile)
+    return tablet_person(chat) if chat is not None else None
 
 
 def as_message(chat: int, person: Person, text: str) -> tuple[str, dict]:
@@ -107,6 +81,10 @@ class Tablet:
     def owns(self, chat) -> bool:
         return self.kiosk.enabled and profile_of(chat) is not None
 
+    @property
+    def reaches(self) -> bool:
+        return self.kiosk.enabled
+
     # ------------------------------------------------------------------ out: turns
     def _mid(self) -> int:
         """A new message id for a turn: past every earlier one, across restarts (a turn's key is made of it)."""
@@ -125,11 +103,14 @@ class Tablet:
                 self._turns.pop(next(iter(self._turns)))
         return ok
 
-    async def send(self, chat: int, text: str, *, document: str | None = None, photos=()) -> int | None:
-        """One turn of VESTA's in `chat`'s conversation: its words, the camera pictures (base64) and a page (an HTML file
-        of the out folder, uploaded first). Its message id, or None when the Kiosk did not keep it."""
+    # ⚠️ DELIVERY'S SECOND PLACE (delivery.TelegramChats is the first): the same five steps, each as the tablet shows it.
+    # Buttons and "typing…" are ticket 22's (the keyboard is not drawn yet, a hold shows nothing).
+    async def send(self, chat: int, text: str, *, keyboard: dict | None = None, document: str | None = None, photos=(),
+                   reply_to: int | None = None) -> int | None:
+        """One turn of VESTA's in `chat`'s conversation: its words, the camera pictures ((base64, mime)) and a page (an
+        HTML file of the out folder, uploaded first). Its message id, or None when the Kiosk did not keep it."""
         rec = {"profile": profile_of(chat), "text": text or ""}
-        b64 = [p for p in photos if p][-photos_per_turn():] if photos_per_turn() else []
+        b64 = [p[0] for p in photos if p][-photos_per_turn():] if photos_per_turn() else []
         if b64:
             rec["photos"] = b64
         if document:
@@ -141,7 +122,17 @@ class Tablet:
         mid = self._mid()
         return mid if await self._write(mid, {"key": turn_key(mid), **rec}) else None
 
-    async def edit(self, chat: int, mid: int, text: str) -> bool:
+    async def reply(self, chat: int, text: str, *, keyboard: dict | None = None, photos=()) -> int | None:
+        """A reply to a person: ONE turn, its words with the camera pictures."""
+        return await self.send(chat, text, keyboard=keyboard, photos=photos) if (text or photos) else None
+
+    async def buttons(self, chat: int, mid: int, keyboard: dict | None) -> bool:
+        return False
+
+    def hold(self, chat: int, label: str | None = None) -> Callable[[], None]:
+        return lambda: None
+
+    async def edit(self, chat: int, mid: int, text: str, keyboard: dict | None = None) -> bool:
         """`mid`'s turn says `text` now (its pictures and page kept): the Kiosk replaces it by its key."""
         was = self._turns.get(int(mid)) or {"key": turn_key(mid), "profile": profile_of(chat)}
         return await self._write(int(mid), {**was, "text": text})

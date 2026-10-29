@@ -184,6 +184,50 @@ class Person:
     language: str = "en"
 
 
+# ── The tablet's people (ticket 21 of "One inbox") ─────────────────────────────────────────────────────────────────
+# ⚠️ ONE ANSWER TO "WHO IS THIS" (architecture review, 2026-10-29): who sits at a tablet was handed in by hand at two
+# steps (the gate, the conversation) and unknown at the others — an owner's action that runs at once from their Telegram
+# chat became an approval request from the tablet. The People module answers for the tablet's conversations too: the
+# owner and the facility manager there are themselves (never listed in People, never sent a role's messages: they are
+# not among `destinations`); a guest is nobody registered (answers only: tool_access.GUEST).
+
+#: Above every Telegram chat id: Telegram's have at most 52 significant bits (its Bot API says so of every chat id).
+TABLET_BASE = 2 ** 52
+
+
+def tablet_profiles() -> dict[str, str]:
+    """The Kiosk's profiles the agent answers, each with its role (the agreement's conversation.profiles)."""
+    from vesta_shared import agreement
+    return {str(k): str(v) for k, v in (agreement.section("conversation").get("profiles") or {}).items()}
+
+
+def tablet_chat(profile: str | None) -> int | None:
+    """The conversation of a profile, as a chat id no Telegram chat has (stable across versions: from its name)."""
+    if profile not in tablet_profiles():
+        return None
+    return TABLET_BASE + int.from_bytes(hashlib.sha1(str(profile).encode()).digest()[:4], "big")
+
+
+def tablet_profile(chat) -> str | None:
+    """The profile whose conversation `chat` is; None for any other chat (a Telegram one)."""
+    try:
+        chat = int(chat)
+    except (TypeError, ValueError):
+        return None
+    return next((p for p in tablet_profiles() if tablet_chat(p) == chat), None) if chat >= TABLET_BASE else None
+
+
+def tablet_person(chat) -> Person | None:
+    """Who writes in a tablet's conversation, from the profile the Kiosk stamped: its role's rights, named for the AI by
+    the role ("Owner at the tablet"). English: the tablet's one language (ticket 28 parked). None for any other chat."""
+    profile = tablet_profile(chat)
+    role = tablet_profiles().get(str(profile)) if profile else None
+    if not role:
+        return None
+    from vesta_shared.message_format import ROLE_WORDS
+    return Person(int(chat), f"{ROLE_WORDS.get(role, role.capitalize())} at the tablet", role, "en")
+
+
 @dataclass
 class Decision:
     allowed: bool
@@ -335,9 +379,15 @@ class Policy:
 
     # ------------------------------------------------------------------ people
     def person(self, telegram_id: int | None) -> Person | None:
+        """Their People entry — or, in a tablet's conversation, the owner or the facility manager signed in there (a
+        guest is nobody registered: tablet_person)."""
         if telegram_id is None or int(telegram_id) in ANONYMOUS_TELEGRAM_IDS:
             return None
-        return self.people.get(int(telegram_id))
+        listed = self.people.get(int(telegram_id))
+        if listed is not None:
+            return listed
+        tab = tablet_person(telegram_id)
+        return tab if tab is not None and tab.role in ROLES else None
 
     def member(self, telegram_id: int | None, chat_id: int | None, name: str | None = None) -> Person | None:
         """Who this is, writing or pressing in `chat_id`: their People entry; else, in a GROUP the People list names, a

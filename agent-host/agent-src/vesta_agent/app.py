@@ -32,12 +32,11 @@ import sys
 import threading
 import time
 import dataclasses
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-from . import button_data, intake, requests_box, script_run, tablet, tool_access
+from . import button_data, intake, press, requests_box, script_run, tablet, tool_access
+from .press import Press
 from .ai_jobs import AiJobs
 from .chat_facts import ChatFacts
 from .chat_jobs import ChatJobs
@@ -94,19 +93,6 @@ def _pretty(entity_id: str) -> str:
     return obj.replace("_", " ").strip().capitalize()
 
 
-
-
-@dataclass
-class Press:
-    """A press on one of the agent's buttons, as its handler gets it."""
-    q: dict
-    chat: int
-    mid: int | None
-    msg: dict
-    presser: int | None
-    person: Person | None
-    parts: list[str]
-    toast: Callable[[str], Awaitable]
 
 
 def pack_needs_build(path: str) -> bool:
@@ -872,7 +858,7 @@ class Vesta:
         person = pol.member(presser, cid, q.get("from_first"))      # a listed group's member presses with its role
         if kind in button_data.FOR_PEOPLE_ONLY and person is None:
             return await toast(NOT_REGISTERED)
-        await handle(Press(q, cid, mid, msg, presser, person, parts, toast))
+        await handle(press.from_telegram(q, cid, person, parts, toast))
 
     async def _press_continue(self, p: "Press") -> None:
         cont = self.state.use_continuation(p.parts[0], p.chat, p.presser)
@@ -889,7 +875,7 @@ class Vesta:
 
     async def _press_alert(self, p: "Press") -> None:
         # the presser as this chat knows them (Policy.member: one person may be both owner and fm, each with its name)
-        await self.buttons.press(p.q, p.chat, p.parts, p.person, p.toast, name=p.person.name)
+        await self.buttons.press(p.chat, p.parts, p.person, p.toast, name=p.person.name, pressed=p.mid)
 
     async def _press_report(self, p: "Press") -> None:
         if not tool_access.may_start_job(self.policy(), self.server_tools, p.person, p.chat):
@@ -903,8 +889,7 @@ class Vesta:
             # the message itself says so, its buttons gone: a toast alone is easily missed ("nothing happened")
             # where it stands, under the line at the bottom, as every update of a message (layout.py). The answer the
             # buttons came with is its body whole: an answer of the AI's, never cut apart at a line of its own (review 21)
-            await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(body=str(p.msg.get("text") or ""),
-                                                                               status=said)))
+            await self.delivery.edit(p.chat, p.mid, layout.render(layout.parts(body=p.words, status=said)))
 
     async def _server_tools(self) -> list[dict]:
         """HA MCP's tool list, read again when the agent has none yet."""
