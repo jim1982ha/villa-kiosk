@@ -6,6 +6,7 @@ answered aloud. Synthetic villa; ids invented."""
 from __future__ import annotations
 
 import asyncio
+import os
 
 from ai_fake import FakeAI
 from ha_fake import FakeHA
@@ -154,3 +155,28 @@ def test_every_language_of_the_page_is_told_from_its_words_or_its_letters():
     assert set(LANGUAGES) <= set(voice.NAMES)
     # a device's Latin name quoted in a Korean answer still reads as Korean
     assert voice.language_of("Pool Pump 펌프가 켜져 있습니다.", voice.WORDS) == "ko"
+
+
+def test_a_choice_of_voice_that_fails_is_never_the_english_voice(tmp_path, monkeypatch):
+    # the skill's script stopped (its answer {}): the answer stays in words, never said by the settings' own voice
+    v, kiosk = _agent(tmp_path, {**VOICE_SET, "tts_language": "en_US"})
+
+    async def broken(text, pipeline):
+        return {}
+    v.speech.choose = broken
+    villa = _answered(v, kiosk, monkeypatch, answer=FRENCH)
+    assert villa.spoken == [] and kiosk.conversation("owner")[-1]["text"].endswith(speech.NOT_SPOKEN)
+
+
+def test_one_skill_says_a_spoken_answers_voice_and_writes_out_a_voice_message(tmp_path, caplog):
+    # a second skill declaring the same hook: the first by name is used, the other said in the log, never in silence
+    import logging
+    import shutil
+    v, _ = _agent(tmp_path, VOICE_SET)
+    src = os.path.join(v.s.skills_dir, "villa-concierge")
+    shutil.copytree(src, os.path.join(v.s.skills_dir, "zz-other-voice"))
+    with caplog.at_level(logging.WARNING, logger="vesta.skills"):
+        used = [sk.name for sk, _ in v.skills.handlers("answer_aloud")]
+        again = [sk.name for sk, _ in v.skills.handlers("answer_aloud")]
+    assert used == again == ["villa-concierge"]
+    assert sum("only villa-concierge's is used" in r.message for r in caplog.records) == 1

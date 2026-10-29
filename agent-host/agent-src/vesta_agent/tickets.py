@@ -193,6 +193,15 @@ class Tickets:
                 break
         if made:
             log.info("Kiosk tickets created for %d open task(s) that had none", made)
+            # ⚠️ A NEW FAULT TELLS ITS STORY AT ONCE (owner's end-to-end test, 2026-10-30: alert #95's card on the tablet
+            # had no step, and its row no time, until the next repair 4 minutes later): step 3 ran before it existed,
+            # so it is brought up to date now, as every fault is (_converge: its number, its check, its short story)
+            try:
+                held = await self.kiosk.held_tickets()
+                for k, v in (await self._converge(problems, held)).items():
+                    moved_cards[k] = moved_cards.get(k, 0) + v
+            except Exception as e:  # noqa: BLE001 — the next repair (5 minutes) does it
+                log.warning("The new Kiosk tickets could not be brought up to date (%s)", type(e).__name__)
         moved_cards["resolved"] = moved_cards.get("resolved", 0) + await self._close_doubles(problems, held)
         # an open problem with no fault and no person's close is a fault the Cockpit never shows — said, not silent
         if unseen := problems.unseen():

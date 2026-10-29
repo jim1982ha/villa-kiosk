@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.386 (30 October 2026)
+
+- The owner's end-to-end test (2026-10-30): missed_alerts.py takes in at start every vesta_critical_event an automation
+  run fired since the last beat (its trace; limit alerts.catch_up_hours), once each (State.alert_seen by incident_id
+  and phase, in app.on_critical); tickets.repair brings a fault it made up to date in the same repair (its story).
+- Architecture review (2026-10-30): Skills.handlers(event), the one lookup of a hook (voice, alert, spoken answer; one
+  handler for SINGLE events, a second said in the log); Speech.say reads a failed choice of voice ({}) as a failure,
+  never the settings' own voice; daily.parts_spans, the one reading of a shared meter's parts (nightly and
+  /investigate: alone_points); the Device kinds page asks asset_kind.
+
 ## 0.6.385 (30 October 2026)
 
 - What a device is, from the villa's system (owner, 2026-10-29: a two-gang wall switch, a light and a fan on one power

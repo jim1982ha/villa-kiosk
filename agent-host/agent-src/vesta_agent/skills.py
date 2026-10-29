@@ -791,6 +791,25 @@ class Skills:
                 out.setdefault("/" + cmd, name)
         return out
 
+    #: The events ONE skill handles, the first by name (a voice message is written out once, an answer said once);
+    #: every skill declaring another event (an alert) is run.
+    SINGLE = ("voice_message", "answer_aloud")
+
+    def handlers(self, event: str) -> list[tuple[Skill, str]]:
+        """The skills whose `on_event` handles `event`, with its command, by name. ⚠️ ONE QUESTION FOR EVERY HOOK
+        (architecture review, 2026-10-30): voice.py, app's alert and its spoken answer each looked it up their own way,
+        and a second skill declaring a voice hook was skipped in silence. For a SINGLE event the first only; another
+        one declaring it is said in the log, once per run."""
+        found = [(sk, sk.on_event[event]) for sk in self.all().values() if event in sk.on_event]
+        if event in self.SINGLE and len(found) > 1:
+            told = self.__dict__.setdefault("_told_single", set())
+            if event not in told:
+                told.add(event)
+                log.warning("Skills %s all handle %s: only %s's is used", ", ".join(sk.name for sk, _ in found), event,
+                            found[0][0].name)
+            return found[:1]
+        return found
+
     def all(self, include_off: bool = False) -> dict[str, Skill]:
         """The skills the agent uses — without those the villa switched off, unless `include_off` (the page)."""
         switched_off = set(self._off() or ())

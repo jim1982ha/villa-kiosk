@@ -62,7 +62,7 @@ from .alert_buttons import AlertButtons
 from .outcome import Outcome
 from .voice import TelegramAudio, Voice
 from .transcriber import villa_entity_ids
-from . import speech
+from . import missed_alerts, speech
 from .tickets import Tickets
 from .places import tab, where
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
@@ -533,6 +533,12 @@ class Vesta:
         return await self.handle_message(event_type, data)
 
     async def on_critical(self, event: dict) -> None:
+        # once each, whichever way it came: the socket, or the catch-up at start (missed_alerts.py)
+        # ⚠️ BY ITS MOMENT TOO: a rule's repeat ("still there") is a new handover under the same incident id and phase
+        if event.get("incident_id") and event.get("timestamp") and self.state.alert_seen(
+                f"{event['incident_id']}:{event.get('phase') or ''}:{event['timestamp']}"):
+            log.info("Alert already taken in: %s (%s)", event.get("label") or event.get("rule_id"), event.get("phase"))
+            return
         os.makedirs(os.path.join(self.s.out_dir, "events"), exist_ok=True)
         path = os.path.join(self.s.out_dir, "events", f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}.json")
         with open(path, "w", encoding="utf-8") as f:
@@ -541,8 +547,7 @@ class Vesta:
                  event.get("blueprint") or "no blueprint")
         await self._alert_names(event)
         handled = False
-        for sk in self.skills.all().values():
-            cmd = sk.on_event.get("critical_event")
+        for sk, cmd in self.skills.handlers("critical_event"):
             if cmd:
                 handled = True
                 res = await self.run_code_job(sk, cmd, limit(
@@ -571,6 +576,19 @@ class Vesta:
         except Exception as e:  # noqa: BLE001 — a timeout too: the names already known are used
             log.info("The alert's device names could not be read from the villa's system (%s): the names already "
                      "known are used", type(e).__name__)
+
+    async def catch_up_alerts(self, connected: asyncio.Event, last_heard: str | None) -> int:
+        """Once the villa is heard again: every alert handed over while the agent was not listening, taken in in time
+        order (missed_alerts.py). How many."""
+        await connected.wait()
+        span = missed_alerts.window(last_heard, datetime.now(timezone.utc))
+        if span is None:
+            return 0
+        found = await asyncio.to_thread(missed_alerts.missed, self.reader, *span)
+        for event in found:
+            log.info("Alert handed over while the agent was not listening: %s", event.get("label") or event.get("rule_id"))
+            await self.on_critical(event)
+        return len(found)
 
     def beat(self) -> None:
         from vesta_shared.store import Store
@@ -835,8 +853,7 @@ class Vesta:
     async def _choose_voice(self, text: str, pipeline: dict) -> dict | None:
         """The skill's choice of language and voice for an answer (on_event.answer_aloud: skills before code), or None
         when no skill makes one (the voice settings' own voice). The words go to it in a file, removed after."""
-        hook = next(((sk, sk.on_event["answer_aloud"]) for sk in self.skills.all().values()
-                     if "answer_aloud" in sk.on_event), None)
+        hook = next(iter(self.skills.handlers("answer_aloud")), None)
         if not hook:
             return None
         folder = os.path.join(self.s.out_dir, "voice")
@@ -1122,8 +1139,12 @@ class Vesta:
                                    self.rebuild_pack, self.housekeeping, self.work)
         tasks = [asyncio.create_task(self.scheduler.run(stop))]
         if self.s.ha_url and self.s.ha_token:
+            # read BEFORE the socket beats again: when the agent last heard the villa, before it stopped
+            from vesta_shared.store import Store
+            last_heard = Store(self.s.store_path).last_beat("ha_events")
             events = HaEvents(self.s.ha_url, self.s.ha_token, self.on_ha_event, self.beat, headers=self.cf_headers)
             tasks.append(asyncio.create_task(events.run(stop)))
+            tasks.append(asyncio.create_task(self._safe(self.catch_up_alerts(events.connected, last_heard))))
         if self.kiosk.enabled:
             tasks.append(asyncio.create_task(self.kiosk.heartbeats(stop, cadence=self.kiosk_cadence,
                                                                    answered=self.kiosk_answered)))

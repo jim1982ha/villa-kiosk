@@ -547,6 +547,20 @@ class State:
                           "them.",
                      reached="An older one of the villa's alerts gets its story in a new message.", told="")
 
+    # The villa's handovers taken in (app.on_critical), by their own `incident_id` and phase: one taken in live is never
+    # taken in again by the catch-up at start (missed_alerts.py). Kept the villa messages' hours, as their messages are.
+    def alert_seen(self, key: str, at: datetime | None = None) -> bool:
+        """Whether this handover was taken in already; it counts as taken in from now."""
+        now = at or utcnow()
+        if self.get(f"alertseen:{key}") is not None:
+            return True
+        self.put(f"alertseen:{key}", now.isoformat())
+        cutoff = (now - timedelta(hours=self.ha_sent_keep_h())).isoformat()
+        with self._lock:
+            self.db.execute("delete from kv where k like 'alertseen:%' and v < ?", (cutoff,))
+            self.db.commit()
+        return False
+
     def note_ha_sent(self, context_id: str, chat: int | str, message_id: int | str, at: datetime | None = None) -> None:
         now = at or utcnow()
         self.put(f"hasent:{context_id}:{chat}:{message_id}", now.isoformat())

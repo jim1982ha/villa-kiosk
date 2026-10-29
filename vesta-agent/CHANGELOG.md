@@ -1,3 +1,17 @@
+## 0.12.400
+
+What you will see:
+- An alert the villa hands to VESTA while VESTA is restarting (an update) is no longer lost: when VESTA starts, it
+  takes in every alert handed over while it was not listening, and the villa's plain message gets VESTA's numbered
+  card and its buttons as any other.
+- A new alert's card on the tablet tells its first steps at once ("Alert sent …"), not at the next check minutes later.
+- A spoken answer whose language could not be told stays in words ("This answer could not be spoken."): never read by
+  another language's voice.
+- /investigate of a fan that shares its power reading with a light counts the fan's runs only while it ran alone, as
+  the night check does.
+- Rules › Device kinds: its (i) now says in full what the section is for: what VESTA does with each kind of device,
+  why it matters, where the kind comes from, and how to correct it.
+
 ## 0.12.399
 
 What you will see:

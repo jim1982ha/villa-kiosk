@@ -312,7 +312,16 @@ export function rulesForms(doc, jobs = [], tools = null) {
 let KIND_SEARCH = "";
 export function kindsCard(data, probs) {
   const names = Object.fromEntries(data.kinds.map(([k, name]) => [k, name]));
-  const info = `What each device is decides what the agent does with its power and energy. ${data.kinds.map(([, name, words]) => `${name}: ${words}`).join(" ")} The agent reads it from what the villa's system says the device is made of (a light, a fan, a climate unit), else guesses it from the device's name; a kind chosen here replaces it, from the next night check or report. A light and a fan on one switch, measured together: the fan is checked by its own on and off, its power read only while the light is off; the light counts in the energy figures only.`;
+  // ⚠️ WHAT THE SECTION IS FOR, IN FULL (owner, 2026-10-30: "I still don't understand what the Device kinds section is
+  // used for"): what VESTA does with a device's power, why the kind matters, where it comes from, how to correct it
+  const info = [
+    "VESTA watches every device that reports its power or its energy, and what it does with those readings depends on what the device is.",
+    `The kinds: ${data.kinds.map(([, name, words]) => `${name}: ${words}`).join(" ")}`,
+    "Why it matters: a pump that runs longer than usual, starts more often, or draws more or less power than before is often the first sign of wear, a leak or a blockage, so VESTA checks motors every night and charts them in the reports. A light left on or a meter's total is not a fault, so those are only counted in the energy figures.",
+    "Where the kind comes from: what the villa's system says the device is made of (a light, a fan, a climate unit), else its name. The last column says which: \"From the villa's system\", \"Guessed\" (from its name) or \"Chosen here\".",
+    "If a kind is wrong, choose the right one in its list: it applies from the next night check and report, and \"Back to the guess\" undoes it.",
+    "A wall switch with a light and a fan on one power reading shows \"light + fan\": VESTA checks the fan by its own on and off, reads its power only while the light is off, and counts the light in the energy figures only.",
+  ].join(" ");
   const list = h("div");
   const save = async (r, kind) => {
     try {

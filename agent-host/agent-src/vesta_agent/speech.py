@@ -89,10 +89,15 @@ class Speech:
         language, voice = pipeline.get("tts_language"), pipeline.get("tts_voice")
         if self.choose is not None:
             chosen = await self.choose(text, pipeline)
-            if chosen and chosen.get("say"):
-                return Silent(FAILED, "no voice for the answer's language", str(chosen["say"]))
-            if chosen and chosen.get("language"):
-                language, voice = chosen["language"], chosen.get("voice") or None
+            # None: no skill chooses (the settings' own voice). ⚠️ A CHOICE THAT FAILED IS NO CHOICE (architecture
+            # review, 2026-10-30): its script answered {} when it stopped or timed out, read as "no skill", and a French
+            # answer went to the English voice again — never read by another language's voice
+            if chosen is not None:
+                if chosen.get("say"):
+                    return Silent(FAILED, "no voice for the answer's language", str(chosen["say"]))
+                if "language" not in chosen:
+                    return Silent(FAILED, "the skill choosing the voice gave no answer")
+                language, voice = chosen["language"] or None, chosen.get("voice") or None
         options = {"voice": voice} if voice else {}
         body = {"engine_id": engine, "message": text, "options": {**options, "preferred_format": FORMAT},
                 **({"language": language} if language else {})}

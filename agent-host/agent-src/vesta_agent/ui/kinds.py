@@ -8,7 +8,7 @@ a thermometer) is not listed — unless a kind was chosen for it, which stays sh
 from __future__ import annotations
 
 from vesta_shared import asset_kinds
-from vesta_shared.knowledge_pack import KnowledgePack, guessed_kind, kind_from_parts
+from vesta_shared.knowledge_pack import KnowledgePack, asset_kind, guessed_kind, kind_from_parts
 
 from .changes import PageFiles, Refused, _read
 
@@ -43,7 +43,8 @@ def rows(settings) -> dict:
             continue
         guess = guessed_kind(a)
         out.append({"slug": slug, "name": a.get("name") or slug, "area": a.get("area") or "", "guess": guess,
-                    "kind": chosen.get(slug, guess), "chosen": slug in chosen, "gone": False, "parts": parts_words(a),
+                    # the engine's one answer (asset_kind: the owner's choice when it is a kind, else the guess), never a copy
+                    "kind": asset_kind(a, chosen), "chosen": slug in chosen, "gone": False, "parts": parts_words(a),
                     "source": "system" if kind_from_parts(a) else "name"})
     known = {r["slug"] for r in out}
     for slug, kind in chosen.items():

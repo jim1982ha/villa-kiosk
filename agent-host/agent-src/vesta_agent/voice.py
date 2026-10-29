@@ -78,8 +78,7 @@ class Voice:
         hook runs decodes the audio and answers the PLAN: which Whisper, which speech-to-text, which languages, in
         which order (transcriber.py). The engine fetches the audio and runs the plan, because it holds the tokens
         and a skill script never does."""
-        hook = next(((sk, sk.on_event["voice_message"]) for sk in self.skills.all().values()
-                     if "voice_message" in sk.on_event), None)
+        hook = next(iter(self.skills.handlers("voice_message")), None)
         audio = await source.fetch(cid)
         if not isinstance(audio, bytes):
             if audio:

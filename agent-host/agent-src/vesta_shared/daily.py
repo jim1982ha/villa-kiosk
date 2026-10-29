@@ -187,6 +187,22 @@ def shared_day_features(hour_rows: list[dict], zone: str, motor_on, others_on) -
     return out
 
 
+def parts_spans(cli, shared: tuple[list[str], list[str]], start: datetime, end: datetime, now: datetime):
+    """(when the motor was on, when another part on its meter was on) over [start, end), from the parts' own state
+    history; None when it could not be read whole (judged on half a history, a light on would read as the fan's power
+    again). ⚠️ ONE READING FOR EVERY JUDGE (architecture review, 2026-10-30): the night check had it alone, and
+    /investigate counted a light's hours as its fan's. Blocking."""
+    motors, others = shared
+    try:
+        got = cli.history_read(motors + others, start, end, now=now)
+    except Exception:  # noqa: BLE001 — the reason is the reader's; the caller says what waits
+        return None
+    if not all(got.whole(e) for e in motors + others):
+        return None
+    return (joined(*(on_spans(got.changes(e), got.end) for e in motors)),
+            joined(*(on_spans(got.changes(e), got.end) for e in others)))
+
+
 def alone_rows(hour_rows: list[dict], others_on) -> list[dict]:
     """The hours no other part on the meter was on (a shared meter's typical peak and threshold are the motor's own)."""
     out = []

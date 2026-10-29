@@ -162,3 +162,44 @@ def test_the_reports_and_the_energy_figures_read_a_motors_power_only_where_it_is
         src = (root / script).read_text()
         assert "daily.measured_motor(" in src, script
         assert not re.search(r"""kind["']?\)?(?:, *["']appliance["']\))? *[!=]= *["']motor["']""", src), script
+
+
+def test_investigate_reads_a_fan_measured_with_a_light_as_the_night_check_does(monkeypatch):
+    # architecture review, 2026-10-30: /investigate counted the light's hours as the fan's
+    from zoneinfo import ZoneInfo
+    from vesta_shared.ha_client import HABase
+    monkeypatch.syspath_prepend(os.path.join(STARTER_SKILLS, "investigate", "scripts"))
+    import investigate
+    p = f"sensor.{SWITCH}_power"
+    power = [(T0 + timedelta(hours=h, minutes=m), 46.0 if h == 4 else 6.0 if 2 <= h < 6 else 0.4)
+             for h in range(0, 8) for m in range(0, 60, 5)]
+    parts = {"fan.example_bath_switch_bottom": [(T0, "off"), (T0 + timedelta(hours=2), "on"), (T0 + timedelta(hours=6), "off")],
+             "light.example_bath_switch_top": [(T0, "off"), (T0 + timedelta(hours=4), "on"), (T0 + timedelta(hours=5), "off")]}
+
+    class Client(HABase):
+        def states(self, ids):
+            return {i: {"state": "6", "attributes": {"friendly_name": "Bath switch power", "unit_of_measurement": "W"}}
+                    for i in ids}
+
+        def history(self, ids, start, end):
+            out = {}
+            for i in ids:
+                rows = [(t, str(v)) for t, v in power] if i == p else parts.get(i, [])
+                kept = [r for r in rows if r[0] < start][-1:] + [r for r in rows if start <= r[0] < end]
+                out[i] = [{"state": s, "last_changed": max(t, start).isoformat()} for t, s in kept]
+            return out
+
+        def logbook(self, start, end):
+            return []
+
+        def tool(self, name, args):
+            return {}
+    pack = _pack()
+    got = investigate.timeline(Client(), [p], T0, T0 + timedelta(hours=8), 0, ZoneInfo("UTC"), now=T0 + timedelta(hours=9),
+                               pack=pack)
+    lines = str(got)
+    assert "counted only while it ran alone" in lines, lines
+    # its readings while the light was on read 0: the fan's own runs, never the light's 46 W
+    mine = investigate.alone_points([(t, str(v)) for t, v in power], [(T0 + timedelta(hours=2), T0 + timedelta(hours=6))],
+                                    [(T0 + timedelta(hours=4), T0 + timedelta(hours=5))])
+    assert max(float(s) for t, s in mine if T0 + timedelta(hours=4) <= t < T0 + timedelta(hours=5)) == 0

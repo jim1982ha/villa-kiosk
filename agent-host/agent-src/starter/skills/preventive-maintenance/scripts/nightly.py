@@ -282,15 +282,7 @@ def shared_spans(cli, shared: tuple[list[str], list[str]], rows: list[dict], day
     if not rows:
         return [], []
     start = datetime.fromtimestamp(min(r["start"] for r in rows) / 1000, tz=timezone.utc)
-    motors, others = shared
-    try:
-        got = cli.history_read(motors + others, start, day_end, now=now_ref)
-    except Exception:  # noqa: BLE001 — the reason is the reader's; the night says the checks wait
-        return None
-    if not all(got.whole(e) for e in motors + others):
-        return None
-    return (daily.joined(*(daily.on_spans(got.changes(e), got.end) for e in motors)),
-            daily.joined(*(daily.on_spans(got.changes(e), got.end) for e in others)))
+    return daily.parts_spans(cli, shared, start, day_end, now_ref)
 
 
 def level_findings(pack, params, rows: list[dict], lvl_stats: dict, today: date, zone: str) -> list:

@@ -173,3 +173,22 @@ def test_a_fault_made_in_a_later_run_starts_at_that_runs_return(tmp_path):
     run(t.repair())
     notes = [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
     assert notes == ["Back: alert sent (to: Facility Manager)"], notes
+
+
+def test_a_fault_the_repair_makes_tells_its_story_in_that_same_repair(tmp_path):
+    # owner's end-to-end test, 2026-10-30: alert #95's card had no step until the NEXT repair, 4 minutes later
+    s = settings(str(tmp_path))
+    state = State(s.state_path)
+    notices = Notices(state, lambda: Policy({"people": PEOPLE}), "UTC")
+    k = FakeKiosk()
+
+    async def settle(_iid, _note, **_kw):
+        return 0
+    t = Tickets(kiosk=k, state=state, store_path=s.store_path, settle_alert=settle, story=notices.story)
+    st = Store(s.store_path)
+    iid = st.new_incident("k", "watchdog", "lock.example", "P2", {"message": "Example lock unavailable"})
+    Problems(st).open_task("incident", iid, "watchdog", "lock.example", "Example lock unavailable")
+    notices.record(iid, "new", [(FM, "fm")], at=datetime.now(timezone.utc))
+    run(t.repair())                                      # ONE repair: it makes the fault
+    uid = k.doc["data"]["tickets"][0]["id"]
+    assert [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"] == ["Alert sent (to: Facility Manager)"]

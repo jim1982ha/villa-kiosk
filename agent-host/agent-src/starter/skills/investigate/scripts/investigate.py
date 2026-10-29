@@ -576,6 +576,17 @@ def threshold(rows: list[tuple[datetime, str]], params=None, pack=None, entity_i
                                          pack, entity_id)
 
 
+def alone_points(rows: list[tuple[datetime, str]], motor_on, others_on) -> list[tuple[datetime, str]]:
+    """A shared meter's readings as its motor's own (vesta_shared.daily.motor_alone): 0 while the motor is off or
+    another part is on, a 0 where either begins."""
+    if not rows:
+        return []
+    first, last = min(t for t, _ in rows), max(t for t, _ in rows)
+    mine = daily.motor_alone([{"state": s, "last_changed": t.isoformat()} for t, s in rows], motor_on, others_on)
+    # its markers inside its own readings' time: a period with none stays with none
+    return [(t, r["state"]) for r in mine if first <= (t := datetime.fromisoformat(r["last_changed"])) <= last]
+
+
 CHART_POINTS = 400                        # a chart's points: each the highest reading of its slice (a surge stays seen)
 
 
@@ -721,6 +732,18 @@ def timeline(client, ids: list[str], start: datetime, end: datetime, baseline_da
         if sleeps:
             before = before + ["  unavailable by design (it sleeps between its reports): its \"unavailable\" moments are "
                                "left out, each state holds until its next report"]
+        # a fan measured with a light (vesta_shared.daily.shared_meter): its readings only while it ran alone
+        if (shared := daily.shared_meter(daily.power_asset(pack, eid))) and (rows or base_rows):
+            spans = daily.parts_spans(client, shared, start - timedelta(days=baseline_days), end, now)
+            if spans is None:
+                lines_shared = ["  measured with another part of its switch, whose on and off could not be read: its "
+                                "runs cannot be told from the other part's — say so"]
+            else:
+                rows = alone_points(rows, *spans)
+                base_rows = alone_points(base_rows, *spans)
+                lines_shared = [f"  measured with {', '.join(spoken(e) for e in shared[1])} on one power reading: its "
+                                "readings are counted only while it ran alone"]
+            before = before + lines_shared
         on = threshold(base_rows + rows, params, pack, eid)
         zero_rest = rests_at_zero(base_rows or rows, on)
         ps = periods(rows, reach, on, zero_rest)
