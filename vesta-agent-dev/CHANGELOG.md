@@ -1,3 +1,10 @@
+## 0.12.398
+
+What you will see:
+- A spoken answer in Chinese, Japanese, Korean or Indonesian is now recognised too, so it is said by the voice named
+  for it in villa.voice.yaml (or stays in words and says why), never read by the English voice. Every language a
+  person may be given on this page is now recognised.
+
 ## 0.12.397
 
 What you will see:
