@@ -1,12 +1,12 @@
 // src/components/hud/AnnouncementNotice.tsx
 // What the villa just announced — "🔔 Visitor at the gate · Someone is at the door." — on every tablet and phone, as
-// messages/announcements noticeFor says (ticket 16 of "One inbox"): full screen for what the owner picked, a notice
-// for ANNOUNCEMENT_NOTICE_MS, a ring's button kept while it can be pressed; drawn as every notice is (Notice). Its own place in
-// the column, above AppNotice's: a motion notice (the visitor walking up) must not replace the ring.
+// messages/announcements noticeFor says (ticket 16 of "One inbox"): full screen for what the owner picked, else a notice
+// for ANNOUNCEMENT_NOTICE_MS, each its own time, none replacing another (noticeModel); drawn as every notice is (Notice).
+// Its own place in the column, above AppNotice's: a motion notice (the visitor walking up) must not replace the ring.
 //
-// A ring offers its buttons here too (ticket 15 of "One inbox", owner 2026-10-28: the doorbell's Unlock, for every
-// profile, no PIN): their labels and commands are the announcement's, never named in the Kiosk. Such a notice stays
-// until the villa's rewrite of the same ring replaces it (answered, opened at the gate, timed out) or its ✕.
+// A notice offers its record's buttons too (RecordButtons: the doorbell's Unlock, an approval's Approve / Refuse) for
+// its few seconds; its card in the Cockpit's Inbox keeps them after (owner, 2026-10-29). A rewrite of the same record
+// (answered, opened at the gate, decided) takes its place and says what changed.
 
 import { useEffect, useReducer, useRef, type ReactNode } from "react";
 import { Bell } from "lucide-react";
@@ -100,7 +100,7 @@ export default function AnnouncementNotice() {
   useEffect(() => {
     if (loaded) send({ type: "kept", kept: [...villa, ...kept] });
   }, [kept, villa, loaded]);
-  // the full screen ends with its time, Close, or this tablet's switch turned off; the passing one with its own time
+  // the full screen ends with its time, Close, or this tablet's switch turned off; each notice with its own time
   useEffect(() => {
     if (state.full && !config.ringsFullScreen) send({ type: "fullEnded" });
   }, [state.full, config.ringsFullScreen]);
@@ -109,21 +109,27 @@ export default function AnnouncementNotice() {
     const t = setTimeout(() => send({ type: "fullEnded" }), state.full.ms);
     return () => clearTimeout(t);
   }, [state.full]);
-  useEffect(() => {
-    const p = state.passing;
-    if (!p) return;
-    const t = setTimeout(() => send({ type: "passingEnded", id: idOf(p.announcement) }), p.ms);
-    return () => clearTimeout(t);
-  }, [state.passing]);
 
-  const passing = state.passing?.announcement;
   return (
     <>
       {state.full && <OneFullScreen announcement={state.full.announcement} onDismiss={() => send({ type: "fullEnded" })} />}
-      {state.staying.map((a) => <OneNotice key={idOf(a)} announcement={a} step={state.steps.includes(idOf(a))}
-        onDismiss={() => send({ type: "dismissed", id: idOf(a) })} />)}
-      {passing && <OneNotice key={idOf(passing)} announcement={passing} step={state.steps.includes(idOf(passing))}
-        onDismiss={() => send({ type: "dismissed", id: idOf(passing) })} />}
+      {state.shown.map(({ announcement: a, ms }) => (
+        <TimedNotice key={idOf(a)} announcement={a} ms={ms} step={state.steps.includes(idOf(a))}
+          onEnded={() => send({ type: "noticeEnded", id: idOf(a) })} onDismiss={() => send({ type: "dismissed", id: idOf(a) })} />
+      ))}
     </>
   );
+}
+
+/** One notice for its own time (noticeFor: one time for every notice), then gone; its card stays in the Inbox. */
+function TimedNotice({ announcement, ms, step, onEnded, onDismiss }: {
+  announcement: Announcement; ms: number; step: boolean; onEnded: () => void; onDismiss: () => void;
+}) {
+  const ended = useRef(onEnded);
+  ended.current = onEnded;
+  useEffect(() => {
+    const t = setTimeout(() => ended.current(), ms);
+    return () => clearTimeout(t);
+  }, [ms]);
+  return <OneNotice announcement={announcement} onDismiss={onDismiss} step={step} />;
 }

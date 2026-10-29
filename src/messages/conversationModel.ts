@@ -7,6 +7,8 @@ import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" wi
 
 /** How long the add-on keeps a question for VESTA to collect (agent-contract.json conversation.askKeptSeconds). */
 const ASK_KEPT_MS = AGENT_CONTRACT.conversation.askKeptSeconds * 1000;
+/** How long VESTA's "I am answering" is believed after it last said it (it says it again every minute while it works). */
+const TYPING_MS = AGENT_CONTRACT.conversation.typingSeconds * 1000;
 
 /** What the page holds after a read: each key once (a rewrite, a newer number, in place of what it rewrites), what the
  *  add-on no longer keeps dropped (below `first`, or not among `kept`), oldest first. `full`: the read is everything the
@@ -28,11 +30,15 @@ export interface ThreadView {
   shown: boolean;
   /** Its lines, oldest first: what VESTA withdrew is not among them. */
   lines: Turn[];
+  /** When VESTA last said it is answering (ISO), while it says so; null otherwise. */
+  typingAt: string | null;
 }
 
 /** What the conversation shows, from this profile's turns and whether VESTA runs. */
 export function threadView(turns: readonly Turn[], online: boolean): ThreadView {
-  return { shown: online, lines: turns.filter((t) => !t.gone && t.answers === null) };
+  const typing = turns.find((t) => t.typing && !t.gone);
+  return { shown: online, lines: turns.filter((t) => !t.gone && t.answers === null && !t.typing),
+    typingAt: typing?.at ?? null };
 }
 
 /** VESTA's short answers to this profile's presses, by the press's number (shown under the button pressed). Pure. */
@@ -46,4 +52,15 @@ export function answersOf(turns: readonly Turn[]): ReadonlyMap<number, string> {
 export function unanswered(lines: readonly Turn[], now: number): boolean {
   const last = lines[lines.length - 1];
   return !!last && last.from === "person" && now - (Date.parse(last.at) || now) > ASK_KEPT_MS;
+}
+
+/** ⚠️ "VESTA IS ANSWERING" (owner, 2026-10-29: "a running indicator in the chat response bubble while VESTA is thinking
+ *  or waiting for an answer … consistent with standard used in the market"): the dots in VESTA's bubble, as every chat
+ *  app shows them — while VESTA says it is working (Telegram's "typing…", said again every minute: believed TYPING_MS
+ *  after), and from the moment a question is sent until its answer comes (before VESTA has even read it), never past
+ *  the time the add-on keeps a question (unanswered says so then). Pure. */
+export function vestaWorking(view: ThreadView, now: number): boolean {
+  if (view.typingAt && now - (Date.parse(view.typingAt) || 0) < TYPING_MS) return true;
+  const last = view.lines[view.lines.length - 1];
+  return !!last && last.from === "person" && now - (Date.parse(last.at) || now) <= ASK_KEPT_MS;
 }

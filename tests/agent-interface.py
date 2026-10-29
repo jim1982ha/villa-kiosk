@@ -783,7 +783,11 @@ async def main() -> None:
        r.status == 200 and r2.status == 409, (r.status, r2.status))
     await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "press:1", "profile": "owner",
                                                                       "text": "Approved.", "answers": 1})
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "typing:owner", "profile": "owner",
+                                                                      "typing": True})
     status, body = await jget("/vesta-conversation", cookie("owner"))
+    ck("VESTA answering (its \"typing…\") is kept for the profile's tablet", any(
+        t["key"] == "typing:owner" and t.get("typing") is True for t in body["turns"]), body)
     told = next(t for t in body["turns"] if t["key"] == "press:1")
     ck("  ...a press's short answer comes back in the presser's conversation, naming the press", told.get("answers") == 1,
        told)

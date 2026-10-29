@@ -30,6 +30,8 @@ export interface Turn {
   buttons: AnnouncementButton[];
   /** A press's short answer: the number of the press it answers (shown under that button, never as a line). */
   answers: number | null;
+  /** VESTA says it is answering (Telegram's "typing…"), as of `at`: the dots in its bubble, never a line. */
+  typing: boolean;
 }
 
 /** The longest question the add-on keeps (agent-contract.json conversation.limits.question). */
@@ -47,6 +49,7 @@ export function parseTurn(raw: unknown): Turn | null {
     gone: r.gone === true,
     buttons: vestaButtons(r.buttons),
     answers: typeof r.answers === "number" ? r.answers : null,
+    typing: r.typing === true,
   };
 }
 

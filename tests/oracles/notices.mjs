@@ -23,6 +23,14 @@ ck("  ...each status tone IS the map legend's colour (STATUS_COLOR), the news to
 ck("  ...a notice that acts is the same pill as a button; one that stays has its Dismiss",
    /^<button type="button" class="vesta-notice tappable"/.test(draw(h(NoticeView, { tone: "info", icon, onTap: () => {} }, "x")))
    && /aria-label="Dismiss"/.test(draw(h(NoticeView, { tone: "alert", icon, onDismiss: () => {} }, "x"))));
+// ⚠️ ONE SHAPE (owner, 2026-10-29): the squared corners are the notice's own, never a case's (a photo's, a button's)
+{
+  const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  const own = css.match(/\n\.vesta-notice \{([^}]*)\}/)?.[1] ?? "";
+  ck("every notice has the doorbell's squared corners, set once on the shared notice, never per case",
+     /border-radius: 12px;/.test(own) && !/\.vesta-notice(?![-\w])[^{]*\{[^}]*border-radius/.test(css.replace(/\n\.vesta-notice \{[^}]*\}/, "")),
+     own);
+}
 ck("the column holds them, one place", /<div id="vesta-notices" class="notice-stack">/.test(draw(h(NoticeStack, null))));
 
 console.log("\n  every notice goes through it:");

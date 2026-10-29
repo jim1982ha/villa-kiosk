@@ -4302,9 +4302,12 @@ def _turn_record(body, seq: int, now_iso: str) -> dict | None:
     # a press's short answer (its toast): shown under the button pressed, never as a line of the conversation
     if isinstance(body.get("answers"), int) and not isinstance(body.get("answers"), bool):
         rec["answers"] = body["answers"]
+    # VESTA is answering (Telegram's "typing…"): the tablet's dots in its bubble
+    if body.get("typing") is True:
+        rec["typing"] = True
     photos = body.get("photos")
     has_photo = isinstance(photos, list) and any(isinstance(p, str) and p for p in photos)
-    return rec if ("text" in rec or "page" in rec or has_photo) else None
+    return rec if ("text" in rec or "page" in rec or "typing" in rec or has_photo) else None
 
 
 def _keep_turn_photos(raw) -> list:
@@ -4442,7 +4445,7 @@ async def agent_conversation_turn_handler(request: web.Request) -> web.Response:
         return body
     said = _turn_record(body, 0, _now_iso())
     photos = [] if said is None or said.get("gone") else await asyncio.to_thread(_keep_turn_photos, body.get("photos"))
-    if said is None or not (said.get("gone") or "text" in said or "page" in said or photos):
+    if said is None or not (said.get("gone") or "text" in said or "page" in said or said.get("typing") or photos):
         return web.json_response({"error": "a turn names its key and a profile, and says something"}, status=400)
 
     def record(seq: int) -> dict:

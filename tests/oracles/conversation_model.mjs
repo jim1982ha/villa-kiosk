@@ -15,7 +15,7 @@ const { START, screenReducer } = await import("@/pages/screen");
 const { TurnLine } = await import("@/components/messages/VestaThread");
 
 const turn = (seq, extra = {}) => ({ seq, key: `k${seq}`, from: "vesta", at: `2026-10-29T10:0${seq % 10}:00Z`, text: `T${seq}`,
-  photos: [], page: null, gone: false, buttons: [], answers: null, ...extra });
+  photos: [], page: null, gone: false, buttons: [], answers: null, typing: false, ...extra });
 const J = JSON.stringify;
 
 console.log("  a turn as the add-on sends it:");
@@ -23,7 +23,7 @@ ck("read whole: who said it, when, its words, its pictures and page",
    J(parseTurn({ seq: 3, key: "turn:9", from: "vesta", at: "2026-10-29T10:00:00Z", text: "On.", photos: ["a.jpg", 4],
                  page: "p1", buttons: [{ label: "Continue", kind: "c", id: "k1" }, { label: "x" }], answers: 7 }))
    === J({ seq: 3, key: "turn:9", from: "vesta", at: "2026-10-29T10:00:00Z", text: "On.", photos: ["a.jpg"], page: "p1",
-           gone: false, buttons: [{ label: "Continue", command: "c:k1", acts: false }], answers: 7 }));
+           gone: false, buttons: [{ label: "Continue", command: "c:k1", acts: false }], answers: 7, typing: false }));
 ck("  ...a withdrawn one says so; one with no number, key or speaker is no turn",
    parseTurn({ seq: 1, key: "k", from: "vesta", gone: true })?.gone === true
    && [{ key: "k", from: "vesta" }, { seq: 1, from: "vesta" }, { seq: 1, key: "k", from: "admin" }, null, "x"]
@@ -91,11 +91,11 @@ const motion = { seq: 50, at: "2026-10-29T10:00:00Z", title: "Motion detected", 
 const refused = { ...approval, seq: 5, buttons: [], status: "Refused on 29/10/2026 13:50 (JM). Nothing was done." };
 let shown = [{ type: "arrived", announcement: approval, rewrite: false, settings: SHOW },
   { type: "arrived", announcement: motion, rewrite: false, settings: SHOW }].reduce(noticeStep, NO_NOTICE);
-ck("an approval's notice (it offers buttons) STAYS when a sensor's notice comes after it: the sensor's passes beside it",
-   shown.staying.length === 1 && shown.staying[0] === approval && shown.passing?.announcement === motion);
+ck("an approval's notice is NOT replaced by a sensor's coming after it: both show, each its own time",
+   shown.shown.length === 2 && shown.shown[0].announcement === approval && shown.shown[1].announcement === motion);
 shown = noticeStep(shown, { type: "arrived", announcement: refused, rewrite: true, settings: SHOW });
-ck("  ...decided, its rewrite takes its place (no buttons: it passes) and says the decision, not the request again",
-   shown.staying.length === 0 && shown.passing?.announcement === refused && shown.steps.length === 1
+ck("  ...decided, its rewrite takes its place and says the decision, not the request again",
+   shown.shown.length === 2 && shown.shown[1].announcement === refused && shown.steps.length === 1
    && draw(h(AnnouncementNoticeView, { announcement: refused, step: true })).includes("Approval request · Refused on 29/10/2026 13:50 (JM)")
    && announcementWords(refused).line === "Turn on the pool light?");
 const { pressOrAsk } = await import("@/components/messages/AnnouncementContent");
@@ -108,6 +108,26 @@ ck("an approval asks first in the one confirmation box (owner, 2026-10-28), sent
 const answered = [turn(5, { key: "press:12", text: "Approved.", answers: 12 }), turn(6)];
 ck("VESTA's short answer to a press is shown under its button, never as a line of the conversation",
    answersOf(answered).get(12) === "Approved." && J(threadView(answered, true).lines.map((t) => t.seq)) === J([6]));
+
+console.log("\n  VESTA answering (owner, 2026-10-29: \"a running indicator in the chat response bubble\"):");
+const { vestaWorking } = await import("@/messages/conversationModel");
+const { WorkingBubble } = await import("@/components/messages/VestaThread");
+const T0 = Date.parse("2026-10-29T10:01:00Z");
+const asking = [turn(1, { from: "person" })];
+const saying = [...asking, turn(2, { key: "typing:owner", typing: true, at: "2026-10-29T10:01:00Z" })];
+const answeredNow = [...asking, turn(3, { text: "Done." }), turn(4, { key: "typing:owner", typing: true, gone: true })];
+ck("the dots show from the moment a question is sent (before VESTA read it), and while VESTA says it is answering",
+   vestaWorking(threadView(asking, true), T0 + 5_000) && vestaWorking(threadView(saying, true), T0 + 60_000)
+   && threadView(saying, true).lines.length === 1);
+ck("  ...and go once it answered and stopped, or when it stopped saying so for too long (a VESTA that stopped)",
+   !vestaWorking(threadView(answeredNow, true), T0 + 5_000)
+   && !vestaWorking(threadView([turn(3), turn(4, { key: "typing:owner", typing: true, at: "2026-10-29T10:01:00Z" })], true),
+     T0 + 10 * 60_000));
+const bubble = draw(h(WorkingBubble));
+ck("  ...three dots in VESTA's bubble, said to a screen reader", (bubble.match(/vesta-working-dot/g) || []).length === 3
+   && bubble.includes('aria-label="VESTA is answering"') && bubble.includes("vesta-turn answered"), bubble);
+ck("  ...drawn by the conversation exactly when the rule says", elements(parseTsx("components/messages/VestaThread.tsx"),
+   "WorkingBubble").some((e) => guardsOf(e).includes("vestaWorking(thread, Date.now())")));
 
 console.log("\n  a question asked:");
 const sent = [];

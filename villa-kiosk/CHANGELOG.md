@@ -1,3 +1,15 @@
+## 2.496.590
+
+What you will see (with VESTA Agent 0.12.387):
+- VESTA's conversation shows three moving dots in VESTA's bubble while it works, as every chat app does: from the
+  moment you send a question until the answer comes, and while it prepares something longer (a report). If VESTA
+  stopped meanwhile, the dots go within 3min.
+- Every notice at the top of the screen has the doorbell's squared corners (an alert with Done / Need help, a
+  sensor, an approval, the connection notices): one shape for all.
+- Every notice stays the same 10s, buttons or not, then goes: its card, with the same buttons, is in the Cockpit's
+  Inbox. A notice arriving no longer pushes another off: they show together (the newest 3), each for its own 10s.
+- A ring the owner picked for the whole screen goes after "Ring shown for", with no notice after it.
+
 ## 2.496.589
 
 What you will see:

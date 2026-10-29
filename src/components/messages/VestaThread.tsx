@@ -12,7 +12,7 @@ import ModalFooter from "@/components/common/ModalFooter";
 import { localStamp } from "@/fm/fmEngine";
 import { ASK_SAID, NEW_CONVERSATION, QUESTION_MAX, pressableOf, type Turn } from "@/messages/conversation";
 import { useConversation } from "@/messages/ConversationContext";
-import { unanswered } from "@/messages/conversationModel";
+import { unanswered, vestaWorking } from "@/messages/conversationModel";
 import { AnnouncementPhoto, PageLink, RecordButtons } from "./AnnouncementContent";
 
 /** One line of the thread: who said it, when, its words, the camera pictures VESTA looked at and the page it attached
@@ -32,13 +32,24 @@ export function TurnLine({ turn, canOpenPage }: { turn: Turn; canOpenPage: boole
   );
 }
 
+/** VESTA answering: its bubble with three dots, as every chat app shows "typing" (conversationModel.vestaWorking). */
+export function WorkingBubble() {
+  return (
+    <div className="vesta-turn answered vesta-working" role="status" aria-label="VESTA is answering">
+      <span className="vesta-working-dot" /><span className="vesta-working-dot" /><span className="vesta-working-dot" />
+    </div>
+  );
+}
+
 export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => void; canOpenPage: boolean }) {
   const { thread, ask } = useConversation();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
-  const lastKey = thread.lines.length ? `${thread.lines[thread.lines.length - 1].seq}` : "";
+  const working = vestaWorking(thread, Date.now());
+  // the dots come in view as a new line does
+  const lastKey = `${thread.lines.length ? thread.lines[thread.lines.length - 1].seq : ""}${working ? "…" : ""}`;
   // the newest line in view as it arrives, as a chat does
   useEffect(() => { end.current?.scrollIntoView?.({ block: "end" }); }, [lastKey]);
 
@@ -68,6 +79,7 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
           <p className="muted body-text messages-empty">Ask VESTA about the villa: what is on, what happened, what to check.</p>
         )}
         {thread.lines.map((t) => <TurnLine key={t.key} turn={t} canOpenPage={canOpenPage} />)}
+        {vestaWorking(thread, Date.now()) && <WorkingBubble />}
         {unanswered(thread.lines, Date.now()) && <p className="muted body-text">No answer came. Ask again.</p>}
         <div ref={end} />
       </div>

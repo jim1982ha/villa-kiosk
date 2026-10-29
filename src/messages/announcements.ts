@@ -148,24 +148,23 @@ export interface ShowSettings {
   ringsFullScreen: boolean;
 }
 
-/** How an announcement shows: full screen first for `fullScreenMs` (null: not full screen), then a notice for
- *  `noticeMs` (null: until dismissed or replaced; 0: no notice). */
-export interface HowShown { fullScreenMs: number | null; noticeMs: number | null }
+/** How an announcement shows: full screen first for `fullScreenMs` (null: not full screen), else a notice for
+ *  `noticeMs`. */
+export interface HowShown { fullScreenMs: number | null; noticeMs: number }
 
 /**
- * How a new announcement shows (ticket 16 of "One inbox", owner 2026-10-28). Its notice goes by itself after
- * ANNOUNCEMENT_NOTICE_MS, a problem included (owner, 2.496.562: "the user shall not have to press the X"); only one
- * offering a button stays, while the button can still be pressed (until the villa's rewrite withdraws it). A title the
- * owner picked takes the whole screen first, for "Ring shown for", on a tablet that allows it; then a notice that
- * stays carries on, any other is gone. A cleared one, or a
- * `rewrite` of one already shown (a ring answered, timed out, still open), never takes the screen again: it would
- * hold the screen a second "Ring shown for". Pure: tests/oracles/announcements.mjs.
+ * How a new announcement shows (ticket 16 of "One inbox", owner 2026-10-28). ⚠️ EVERY NOTICE GOES BY ITSELF AFTER
+ * ANNOUNCEMENT_NOTICE_MS, ONE TIME FOR ALL (owner, 2026-10-29: "this pill shall remain few seconds also, similarly to
+ * other notification pills … consistently and centrally defined … once the timer expires the pill shall disappear and
+ * the user will find the same card in the Cockpit"): one offering buttons (the doorbell's Unlock, an approval) too —
+ * its card keeps them in the Inbox. A title the owner picked takes the whole screen instead, for "Ring shown for", on a
+ * tablet that allows it, and then goes (no notice after it). A cleared one, or a `rewrite` of one already shown (a ring
+ * answered, timed out), never takes the screen again: it would hold the screen a second "Ring shown for". Pure:
+ * tests/oracles/announcements.mjs.
  */
 export function noticeFor(a: Announcement, s: ShowSettings, { rewrite = false } = {}): HowShown {
-  const stays = a.buttons.length > 0;
   const full = s.ringsFullScreen && !rewrite && !isOver(a) && s.fullScreenFor.includes(a.title);
-  if (!full) return { fullScreenMs: null, noticeMs: stays ? null : ANNOUNCEMENT_NOTICE_MS };
-  return { fullScreenMs: s.ringShownForS * 1000, noticeMs: stays ? null : 0 };
+  return full ? { fullScreenMs: s.ringShownForS * 1000, noticeMs: 0 } : { fullScreenMs: null, noticeMs: ANNOUNCEMENT_NOTICE_MS };
 }
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };

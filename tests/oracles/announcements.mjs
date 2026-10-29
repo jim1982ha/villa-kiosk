@@ -126,40 +126,36 @@ const settingsSrc = src("components/settings/MessagesSettings.tsx");
 ck("\"Full screen for\" offers the titles of the villa's own announcements the page holds (never VESTA's cards), never a read of its own",
    /const \{ villa: kept, loaded \} = useAnnouncements\(\);/.test(settingsSrc) && !/fetchAnnouncements/.test(settingsSrc));
 
-console.log("\n  what is on screen, announcement by announcement (review Q round 2: a ring that stays, stays):");
+console.log("\n  what is on screen, announcement by announcement (owner, 2026-10-29: every notice its few seconds, none replacing another):");
 {
-  const { noticeStep, NO_NOTICE } = await import("@/messages/noticeModel");
+  const { noticeStep, NO_NOTICE, NOTICES_SHOWN } = await import("@/messages/noticeModel");
   const S = { fullScreenFor: ["🔔 Visitor at Gate A"], ringShownForS: 60, ringsFullScreen: true };
   const go = (state, ...events) => events.reduce(noticeStep, state);
   const arrive = (x, rewrite = false, settings = S) => ({ type: "arrived", announcement: x, rewrite, settings });
+  const seqs = (st) => st.shown.map((x) => x.announcement.seq).join();
   const ringB = { ...a(40), key: "ring-b", title: "🔔 Visitor at Gate B", buttons: [{ label: "Unlock", command: "/u" }] };
   const power = { ...a(41), title: "⚡ Power dropped", status: "⚠️ New alert" };
   let st = go(NO_NOTICE, arrive(ringB), arrive(power));
-  ck("a ring offering Unlock stays when another arrives; the other passes beside it for 10s",
-     st.staying.map((x) => x.seq).join() === "40" && st.passing?.announcement.seq === 41 && st.passing.ms === 10_000, st);
-  st = go(st, { type: "passingEnded", id: "41" });
-  ck("  ...the other gone, the ring is still there", st.staying.length === 1 && st.passing === null, st);
-  st = go(st, arrive({ ...ringB, seq: 42, buttons: [], status: "✅ Opened at 14:05" }, true));
-  ck("  ...its rewrite (answered) takes its place: the Unlock is gone, the answer passes",
-     st.staying.length === 0 && st.passing?.announcement.seq === 42, st);
+  ck("a ring offering Unlock and another arriving after it are BOTH shown, each for the one notice time (10s)",
+     seqs(st) === "40,41" && st.shown.every((x) => x.ms === ANNOUNCEMENT_NOTICE_MS), st);
+  st = go(st, { type: "noticeEnded", id: "40" });
+  ck("  ...the ring's time over, it goes (its card keeps the Unlock in the Inbox); the other is still there",
+     seqs(st) === "41", st);
+  st = go(NO_NOTICE, arrive(ringB), arrive({ ...ringB, seq: 42, buttons: [], status: "✅ Opened at 14:05" }, true));
+  ck("  ...a rewrite (answered) takes its place, for its own time", seqs(st) === "42" && st.steps.includes("42"), st);
   const ringA = { ...a(50), key: "ring-a", title: "🔔 Visitor at Gate A", buttons: [{ label: "Unlock", command: "/u" }] };
   st = go(NO_NOTICE, arrive(ringA), arrive(power));
-  ck("a picked ring takes the whole screen for \"Ring shown for\"; another arriving passes, the screen stays the ring's",
-     st.full?.announcement.seq === 50 && st.full.ms === 60_000 && st.passing?.announcement.seq === 41, st);
+  ck("a picked ring takes the whole screen for \"Ring shown for\"; another arriving shows its notice, the screen stays the ring's",
+     st.full?.announcement.seq === 50 && st.full.ms === 60_000 && seqs(st) === "41", st);
   st = go(st, { type: "fullEnded" });
-  ck("  ...its time over (or Close, or this tablet's switch off), it carries on as a notice while it offers Unlock",
-     st.full === null && st.staying.map((x) => x.seq).join() === "50", st);
+  ck("  ...its time over (or Close, or this tablet's switch off), it goes: no notice after it", st.full === null && seqs(st) === "41", st);
   ck("  ...not on a tablet that does not let rings take the screen, nor for its rewrite",
      go(NO_NOTICE, arrive(ringA, false, { ...S, ringsFullScreen: false })).full === null
      && go(NO_NOTICE, arrive(ringA, true)).full === null);
-  const ringB2 = { ...ringB, seq: 44, key: "ring-b2" };
-  ck("  ...two rings waiting both stay; a second picked ring takes the screen, the first keeps its notice and Unlock",
-     go(NO_NOTICE, arrive(ringB), arrive(ringB2)).staying.map((x) => x.seq).join() === "40,44"
-     && (() => { const t = go(NO_NOTICE, arrive(ringA), arrive({ ...ringA, seq: 51, key: "ring-a2" }));
-       return t.full?.announcement.seq === 51 && t.staying.map((x) => x.seq).join() === "50"; })());
-  ck("  ...a staying one goes with its ✕; an earlier timer never ends a later passing one",
-     go(NO_NOTICE, arrive(ringB), { type: "dismissed", id: "40" }).staying.length === 0
-     && go(NO_NOTICE, arrive(power), arrive({ ...power, seq: 43 }), { type: "passingEnded", id: "41" }).passing?.announcement.seq === 43);
+  const burst = Array.from({ length: NOTICES_SHOWN + 2 }, (_, k) => arrive({ ...power, seq: 60 + k }));
+  ck(`  ...a burst shows its newest ${NOTICES_SHOWN}, never a wall over the map; ✕ or its time ends one, never another`,
+     seqs(go(NO_NOTICE, ...burst)).split(",").length === NOTICES_SHOWN
+     && seqs(go(NO_NOTICE, arrive(ringB), arrive(power), { type: "dismissed", id: "40" })) === "41");
 }
 
 console.log("\n  one record of presses for the page (review Q 2):");
@@ -211,9 +207,9 @@ ck("  ...shown for 10s", ANNOUNCEMENT_NOTICE_MS === 10_000, ANNOUNCEMENT_NOTICE_
 globalThis.window = { location: { pathname: "/" } };   // the add-on's own address (no Ingress prefix)
 const photoHtml = draw(h(AnnouncementNoticeView, { announcement: { ...a(1), title: "🔔 Visitor", photo: "x.jpg" } }));
 // owner, 2026-10-28 (2.496.562): the pill's round ends around a photo read "pretty much wrong"; the photo keeps its size
-ck("  ...a ring's photo above its words, served by the add-on, the notice then square-cornered; none drawn without one",
+// (its squared corners are every notice's now: tests/oracles/notices.mjs)
+ck("  ...a ring's photo above its words, served by the add-on; none drawn without one",
    /<span class="vesta-notice-text"><img class="vesta-notice-photo" src="\/announcement-photo\/x\.jpg" alt=""\/>🔔 Visitor<\/span>/.test(photoHtml)
-   && /\.vesta-notice:has\(\.vesta-notice-photo\) \{ border-radius: 12px; \}/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8"))
    && !html.includes("<img"), photoHtml);
 
 console.log("\n  what a record says about itself:");
@@ -237,8 +233,8 @@ ck("  ...none without a key: the press must name its ring, or no automation can 
 ck("  ...a malformed button is left out, never drawn blank",
    parseAnnouncement({ seq: 8, message: ring, key: "k", buttons: [[["", "/x"], ["ok", 3], "z", ["Fine", "/f"]]] })
      ?.buttons.map((b) => b.label).join() === "Fine");
-ck("a notice offering a button stays until the rewrite withdraws it; any other goes after 10s",
-   noticeFor(offered, NONE_FULL).noticeMs === null
+ck("every notice goes after the one notice time, one offering a button too (owner, 2026-10-29: its card keeps it)",
+   noticeFor(offered, NONE_FULL).noticeMs === ANNOUNCEMENT_NOTICE_MS
    && noticeFor(parseAnnouncement({ seq: 9, message: ring, key: "run-1" }), NONE_FULL).noticeMs === ANNOUNCEMENT_NOTICE_MS);
 const pressed = [];
 const { RecordButtons, ButtonRow } = await import("@/components/messages/AnnouncementContent");
@@ -293,8 +289,8 @@ ck("a title the owner picked takes the whole screen for \"Ring shown for\" (its 
 ck("  ...a problem too: no notice once the full screen ends",
    JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "⚠️ New alert"), picked)) === JSON.stringify({ fullScreenMs: 45_000, noticeMs: 0 }),
    noticeFor(said("🔔 Visitor at Gate A", "⚠️ New alert"), picked));
-ck("  ...a ring offering its button stays as its notice, the button still pressable, until the villa withdraws it",
-   JSON.stringify(noticeFor({ ...offered, title: "🔔 Visitor at Gate A" }, picked)) === JSON.stringify({ fullScreenMs: 45_000, noticeMs: null }));
+ck("  ...a picked ring offering its button: its full screen, then gone (its card keeps the button)",
+   JSON.stringify(noticeFor({ ...offered, title: "🔔 Visitor at Gate A" }, picked)) === JSON.stringify({ fullScreenMs: 45_000, noticeMs: 0 }));
 ck("  ...never on a tablet that refuses full screen: its notice instead",
    JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "⚠️ New alert"), { ...picked, ringsFullScreen: false }))
      === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 }));
