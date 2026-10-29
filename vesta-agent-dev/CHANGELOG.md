@@ -1,3 +1,14 @@
+## 0.12.399
+
+What you will see:
+- Rules › Device kinds: a device's kind now comes from what the villa's system says it is made of (a light, a fan, a
+  climate unit, a switch shown as one of them), in any language, before its name. Its parts show beside its name
+  ("light + fan") and the row says "From the villa's system" instead of "Guessed". Your choices stay as they are.
+- A wall switch with a light and a fan measured by one power reading: the night check now judges the fan by its own
+  on and off (how long and how often it runs), and its running power only in the hours the light was off. The light
+  counts in the energy figures only. The reports leave such a fan out of their running-power charts.
+- A VMC is a fan: its name no longer makes it a light.
+
 ## 0.12.398
 
 What you will see:
