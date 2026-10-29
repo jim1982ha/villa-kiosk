@@ -1,10 +1,5 @@
 # Changelog
 
-## 0.6.378 (29 October 2026)
-
-- The agreement copied from the Kiosk (2.496.593): its `_asked` note (the tablet lists a request answered or over
-  under Closed). Nothing the Agent sends changes.
-
 ## 0.6.377 (29 October 2026)
 
 - An alert's buttons on the tablet are no longer flagged `closes` (AlertButtons.closes, IncidentThread.closes and
