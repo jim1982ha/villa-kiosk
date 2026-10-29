@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.379 (29 October 2026)
+
+- Hold to talk (ticket 23 of "One inbox"): a voice message's audio comes from any source (voice.AudioSource): a
+  Telegram file (TelegramAudio) or a question spoken on the tablet (tablet.Spoken: its WAV read once from the Kiosk,
+  GET /agent/v1/voice/<name>, the Kiosk since 2.496.597). The same skill, plan and transcriber for both; the words
+  heard go back onto the person's line ({key: "ask:<seq>", heard}). A tablet's spoken question no longer depends on
+  Telegram being on. The villa-concierge skill's voice script also reads the tablet's WAV (16 kHz, 16-bit, mono;
+  owner, 2026-10-29). The agreement copied from the Kiosk (2.496.597).
+
 ## 0.6.378 (29 October 2026)
 
 - The villa's maintenance mode is the VESTA Kiosk's switch (Advanced Settings › System, owner 2026-10-29), told in its

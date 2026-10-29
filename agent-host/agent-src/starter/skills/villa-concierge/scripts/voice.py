@@ -7,7 +7,9 @@
 
 Telegram sends a voice message as Ogg/Opus; Whisper and the villa system's
 speech-to-text take 16 kHz, 16-bit mono audio. This script decodes the audio
-(libopus, the system library), writes it as a WAV beside it, and answers the
+(libopus, the system library) — or reads the WAV a question spoken on the
+villa's wall tablet already is (16 kHz, 16-bit, mono) — writes it as a WAV
+beside it, and answers the
 PLAN the engine runs in order, stopping at the first words, all within the one
 time a voice message has (voice.timeout_s):
 
@@ -116,6 +118,29 @@ def decode_opus(data: bytes) -> bytes:
     return bytes(out[skip:])
 
 
+def read_wav(data: bytes) -> bytes:
+    """The PCM of a WAV already in the shape Whisper takes (16 kHz, 16-bit, mono): a question spoken on the villa's
+    wall tablet arrives so (owner, 2026-10-29: hold to talk). Any other WAV is refused, never converted."""
+    if data[8:12] != b"WAVE":
+        raise ValueError("not a WAV recording")
+    at, fmt = 12, None
+    while at + 8 <= len(data):
+        name, size = data[at:at + 4], struct.unpack_from("<I", data, at + 4)[0]
+        if name == b"fmt " and size >= 16:
+            fmt = struct.unpack_from("<HHIIHH", data, at + 8)
+        elif name == b"data":
+            if not fmt or fmt[0] != 1 or fmt[1] != 1 or fmt[2] != RATE or fmt[5] != 16:
+                raise ValueError(f"a recording that is not {RATE} Hz, 16-bit, mono")
+            return data[at + 8:at + 8 + size]
+        at += 8 + size + (size & 1)
+    raise ValueError("a WAV with no sound")
+
+
+def read_audio(data: bytes) -> bytes:
+    """16 kHz mono 16-bit PCM of a voice message: a Telegram voice note (Ogg/Opus) or the tablet's WAV."""
+    return read_wav(data) if data[:4] == b"RIFF" else decode_opus(data)
+
+
 def wav(pcm: bytes) -> bytes:
     return (b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt " +
             struct.pack("<IHHIIHH", 16, 1, 1, RATE, RATE * 2, 2, 16) + b"data" + struct.pack("<I", len(pcm)) + pcm)
@@ -164,7 +189,7 @@ def prepare(audio: str, language: str | None, stt: str | None = None, whisper_at
     """`whisper_at`: host:port or "off", over villa.voice.yaml's `whisper:`."""
     cfg = villa_settings()
     try:
-        pcm = decode_opus(open(audio, "rb").read())
+        pcm = read_audio(open(audio, "rb").read())
     except (ValueError, RuntimeError, OSError) as e:
         return {"error": f"This voice message could not be read ({e})."}
     if not pcm:

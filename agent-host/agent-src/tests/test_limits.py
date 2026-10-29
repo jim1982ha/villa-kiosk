@@ -209,6 +209,8 @@ NOT_LIMITS = {
     ("vesta_agent/layout.py", "lines[2:]"): "a message's lines after its heading",
     ("vesta_shared/page.py", "(list(m) + [\"\"])[:3]"): "three fields of a match, padded",
     ("starter/skills/villa-concierge/scripts/voice.py", "packets[2:]"): "the audio packets after the stream's two headers",
+    ("starter/skills/villa-concierge/scripts/voice.py", "data[:4]"): "a WAV's RIFF tag",
+    ("starter/skills/villa-concierge/scripts/voice.py", "data[8:12]"): "a WAV's WAVE tag",
     # batch sizes of reads that go on to the end (every batch is read)
     ("vesta_shared/ha_client.py", "'limit': 50"): "a batch of a read that pages to its end",
     ("vesta_shared/ha_client.py", "'limit': 100"): "a batch of a read that pages to its end",

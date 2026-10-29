@@ -379,11 +379,14 @@ class Kiosk:
         self._lock = asyncio.Lock()
 
     async def _req(self, method: str, path: str, body: dict | None = None,
-                   timeout_s: float | None = None) -> tuple[int, dict]:
+                   timeout_s: float | None = None, raw: bool = False) -> tuple[int, dict | bytes]:
+        """(status, its JSON object); with `raw`, a 200's bytes as they came (a spoken question's WAV)."""
         timeout = aiohttp.ClientTimeout(total=timeout_s or kiosk_timeout_s())
         try:
             async with aiohttp.ClientSession(timeout=timeout, headers=self.headers) as http:
                 async with http.request(method, f"{self.url}{path}", json=body) as r:
+                    if raw and r.status == 200:
+                        return r.status, await r.read()
                     try:
                         data = await r.json(content_type=None)
                     except ValueError:
@@ -513,6 +516,14 @@ class Kiosk:
         if status != 200:
             raise KioskError(f"/agent/v1/inbox answered {status}", status=status)
         return data
+
+    async def voice(self, name: str) -> bytes | None:
+        """A question spoken on a tablet (ticket 23 of "One inbox", hold to talk): its WAV, read ONCE — the Kiosk deletes
+        it as it answers (GET /agent/v1/voice/<name>, the Kiosk since 2.496.597). None when it keeps none by that name
+        (read already, older than the agreement's askKeptSeconds, or a Kiosk with no such door). KioskError when it
+        could not be reached."""
+        status, data = await self._req("GET", f"/agent/v1/voice/{name}", raw=True)
+        return data if status == 200 and isinstance(data, bytes) else None
 
     async def add_turn(self, record: dict) -> bool:
         """One turn of a tablet's conversation, added or replacing the turn of its key (POST

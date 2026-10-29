@@ -60,7 +60,7 @@ from .kiosk import Kiosk, KioskError, message_timeout_s
 from .kiosk_messages import KioskMessages
 from .alert_buttons import AlertButtons
 from .outcome import Outcome
-from .voice import Voice
+from .voice import TelegramAudio, Voice
 from .transcriber import villa_entity_ids
 from .tickets import Tickets
 from .places import tab, where
@@ -176,7 +176,7 @@ class Vesta:
         self.fault_offers = FaultOffers(self.state, self.delivery, self.tickets,
                                         lambda chat: self.s.in_folder(f"chats/{chat}").out_dir, facts=self.chat_facts)
         # a voice message's words (voice.py): the skill prepares the audio and the plan, transcriber.py runs it
-        self.voice = Voice(self.s, self.tg, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers,
+        self.voice = Voice(self.s, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers,
                            entity_ids=lambda: villa_entity_ids(self.reader))
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
@@ -593,13 +593,18 @@ class Vesta:
             return await self._safe(self._pressed(
                 f"{pressed.get('kind')}:{pressed.get('id')}", chat, self.policy().member(chat, chat), toast,
                 lambda who, parts: press.from_tablet(chat, who, parts, toast, name=person.name)))
-        event_type, m = tablet.as_message(chat, person, str(ask.get("text") or ""))
-        await self._safe(self.handle_message(event_type, m, person=person))
+        # a spoken question (ticket 23 of "One inbox", hold to talk): read as a voice note, its audio the tablet's
+        spoken = isinstance(ask.get("voice"), str) and bool(ask["voice"])
+        event_type, m = tablet.as_message(chat, person, str(ask.get("text") or ""), spoken=spoken)
+        await self._safe(self.handle_message(event_type, m, person=person,
+                                             audio=self.tablet.spoken(chat, ask) if spoken else None))
 
-    async def handle_message(self, event_type: str, m: dict, about: str | None = None, person: Person | None = None):
+    async def handle_message(self, event_type: str, m: dict, about: str | None = None, person: Person | None = None,
+                             audio=None):
         """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30): intake.py decides.
         `about`: what the answer a command offer was under had read (command_offers.subject) — given by the press only,
-        never read from an event. `person`: a tablet's profile (on_tablet), never read from an event."""
+        never read from an event. `person`: a tablet's profile (on_tablet), never read from an event. `audio`: a voice
+        message's audio when it is not a Telegram file (voice.AudioSource: a question spoken on the tablet)."""
         got = self.gate(event_type, m, person)
         from_id = m.get("user_id")
         if got.action != "drop":
@@ -639,7 +644,8 @@ class Vesta:
         try:
             text, spoken = got.text, None
             if got.voice_file is not None:
-                heard = await self.voice.transcribe(got.chat, got.person, got.voice_file)
+                heard = await self.voice.transcribe(got.chat, got.person,
+                                                    audio or TelegramAudio(self.tg, got.voice_file))
                 text = intake.without_mention(heard.text if heard else None, self.bot_username)
                 spoken = heard.language if heard else None
             image = None

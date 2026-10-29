@@ -46,5 +46,7 @@ def test_the_kiosk_stand_in_is_the_real_kiosk_with_only_its_transport_replaced()
     assert added <= {"held", "refuses", "person_closes", "person_reopens", "person_moves", "person_renames", "ticket", "tickets",
                      "notes", "ticket_documents", "titles", "numbers", "origins", "resolved", "reopened", "readings", "cleared",
                      # what a person does at a tablet, and what it shows (ticket 21 of "One inbox")
-                     "person_asks", "person_presses", "conversation", "answer"}, added
+                     "person_asks", "person_presses", "conversation", "answer",
+                     # a question spoken there (ticket 23)
+                     "person_speaks"}, added
     assert FakeKiosk().enabled is True and FakeKiosk().info

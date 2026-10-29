@@ -50,9 +50,23 @@ class FakeKiosk(Kiosk):
         self.turns: dict[str, dict] = {}       # each conversation turn the agent wrote, by key (a rewrite replaces it)
         self.turns_pushed: list[dict] = []     # ...and every write, in order
         self.keeps_turns = True                # False plays an older Kiosk (404): no inbox, no conversation
+        self.voices: dict[str, bytes] = {}     # each spoken question's WAV still kept (person_speaks), read once
+        self.heard: dict[str, str] = {}        # the words the agent heard, by the person's line (ask:<seq>)
 
     # ------------------------------------------------------------------ the one thing replaced: the transport
     async def _req(self, method, path, body=None, **_):
+        if path.startswith("/agent/v1/voice/"):
+            # the add-on's rule (_take_voice): the sound read ONCE, then gone
+            data = self.voices.pop(path.rsplit("/", 1)[1], None) if self.keeps_turns else None
+            return (200, data) if data is not None else (404, {"error": "not found"})
+        if path == "/agent/v1/conversation-turn" and "heard" in (body or {}):
+            # the add-on's rule (_heard_line): onto a spoken question of that profile, once
+            ask = next((a for a in self.asks if f"ask:{a['seq']}" == body.get("key")), None)
+            if (ask is None or "voice" not in ask or ask["profile"] != body.get("profile") or body["key"] in self.heard
+                    or set(body) != {"key", "profile", "heard"}):
+                return 400, {"error": "not a spoken question"}
+            self.heard[body["key"]] = body["heard"].strip()
+            return 200, {"ok": True}
         if path.startswith("/agent/v1/inbox"):
             if not self.keeps_turns:
                 return 404, {"error": "not found"}
@@ -120,6 +134,14 @@ class FakeKiosk(Kiosk):
     def person_asks(self, profile: str, text: str) -> dict:
         """A question typed on a tablet signed in as `profile`, kept in the inbox as the add-on keeps it (stamped)."""
         ask = {"seq": (self.asks[-1]["seq"] if self.asks else 0) + 1, "at": PERSON_AT, "profile": profile, "text": text}
+        self.asks.append(ask)
+        return ask
+
+    def person_speaks(self, profile: str, wav: bytes) -> dict:
+        """A question spoken on a tablet signed in as `profile` (hold to talk): its WAV kept apart, the ask naming it."""
+        name = f"{len(self.voices) + len(self.asks) + 1:032x}"
+        self.voices[name] = wav
+        ask = {"seq": (self.asks[-1]["seq"] if self.asks else 0) + 1, "at": PERSON_AT, "profile": profile, "voice": name}
         self.asks.append(ask)
         return ask
 

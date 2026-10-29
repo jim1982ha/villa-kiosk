@@ -47,10 +47,12 @@ def person_of(profile: str | None) -> Person | None:
     return tablet_person(chat) if chat is not None else None
 
 
-def as_message(chat: int, person: Person, text: str) -> tuple[str, dict]:
-    """A tablet's question as the gate reads a Telegram message (intake.gate): a "/command" as a command, anything else
-    as text. (event type, message)."""
+def as_message(chat: int, person: Person, text: str, spoken: bool = False) -> tuple[str, dict]:
+    """A tablet's question as the gate reads a Telegram message (intake.gate): a "/command" as a command, a spoken one
+    as a voice note (its audio is the tablet's: `Spoken`), anything else as text. (event type, message)."""
     m = {"chat_id": chat, "user_id": chat, "from_first": person.name}
+    if spoken:
+        return "telegram_attachment", {**m, "file_mime_type": "audio/wav", "file_id": ""}
     words = (text or "").strip()
     if words.startswith("/"):
         cmd, _, rest = words.partition(" ")
@@ -61,6 +63,27 @@ def as_message(chat: int, person: Person, text: str) -> tuple[str, dict]:
 def turn_key(mid) -> str:
     """A turn's key at the Kiosk: its message id (the Kiosk replaces a turn by it; `ask:` keys are the Kiosk's own)."""
     return f"turn:{int(mid)}"
+
+
+class Spoken:
+    """A question spoken on a tablet (ticket 23 of "One inbox", hold to talk), as voice.Voice reads a voice message: its
+    WAV fetched from the Kiosk ONCE (the Kiosk deletes it as it answers), and the words heard written onto the person's
+    own line of the thread (`heard`): the tablet then shows them as the question."""
+    suffix = ".wav"
+
+    def __init__(self, sink: "Tablet", chat: int, ask: dict):
+        self.sink, self.chat, self.seq, self.name = sink, chat, ask.get("seq"), str(ask.get("voice") or "")
+
+    async def fetch(self, cid: int) -> bytes | str | None:
+        try:
+            data = await asyncio.wait_for(self.sink.kiosk.voice(self.name), self.sink._timeout_s())
+        except (KioskError, asyncio.TimeoutError) as e:
+            log.warning("A spoken question could not be fetched from the tablet (%s)", type(e).__name__)
+            return "Your spoken question could not be fetched from the tablet. Hold to talk again, or type it."
+        return data or "Your spoken question is no longer kept. Hold to talk again, or type it."
+
+    async def heard(self, words: str) -> None:
+        await self.sink.heard(self.chat, self.seq, words)
 
 
 def photos_per_turn() -> int:
@@ -127,6 +150,22 @@ class Tablet:
                 rec["text"] = (rec["text"] + "\n\n" if rec["text"] else "") + "(A file came with this answer: the tablet cannot show it.)"
         mid = self._mid()
         return mid if await self._write(mid, {"key": turn_key(mid), **rec}) else None
+
+    async def heard(self, chat: int, ask: int | None, words: str) -> bool:
+        """The words heard in a spoken question, onto the person's own line (`ask:<seq>`, the Kiosk's): the one write the
+        agent makes to a person's line, once (the Kiosk refuses any other)."""
+        if not isinstance(ask, int) or not words.strip():
+            return False
+        try:
+            return await asyncio.wait_for(self.kiosk.add_turn(
+                {"key": f"ask:{ask}", "profile": profile_of(chat), "heard": words.strip()}), self._timeout_s())
+        except (KioskError, asyncio.TimeoutError) as e:
+            log.warning("The words heard could not be written to the tablet (%s)", type(e).__name__)
+            return False
+
+    def spoken(self, chat: int, ask: dict) -> Spoken:
+        """A spoken question's audio, for voice.Voice."""
+        return Spoken(self, chat, ask)
 
     async def answer(self, chat: int, press: int | None, text: str) -> bool:
         """A press's short answer (Telegram's toast), back to the tablet that pressed: a turn naming the press, shown

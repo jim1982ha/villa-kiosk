@@ -22,6 +22,7 @@ class KioskServer:
         self.rev = "r1"
         self.heartbeats = 0
         self.conflict_once = False
+        self.voices: dict[str, bytes] = {}
 
     def app(self):
         a = web.Application()
@@ -56,6 +57,12 @@ class KioskServer:
             self.doc, self.rev = body["data"], self.rev + "+"
             return web.json_response({"ok": True})
 
+        async def voice(req):
+            # a spoken question's WAV, read once (the Kiosk's _take_voice)
+            data = self.voices.pop(req.match_info["name"], None) if authed(req) else None
+            return web.Response(body=data, content_type="audio/wav") if data else web.json_response({}, status=404)
+
+        a.router.add_get("/agent/v1/voice/{name}", voice)
         a.router.add_get("/agent/v1/info", info)
         a.router.add_post("/agent/v1/heartbeat", heartbeat)
         a.router.add_get("/agent/v1/fm-data", get)
@@ -99,6 +106,22 @@ def test_kiosk_agreement_heartbeat_and_tickets():
                 raise AssertionError("a refused token must raise")
             except KioskError:
                 pass
+        finally:
+            await runner.cleanup()
+    asyncio.run(go())
+
+
+def test_a_spoken_questions_wav_is_read_as_it_came_once():
+    # ticket 23 of "One inbox": the tablet's WAV crosses the real transport as bytes, never as JSON
+    async def go():
+        fake = KioskServer()
+        wav = b"RIFF\x24\x00\x00\x00WAVE" + bytes(range(256))
+        fake.voices["a" * 32] = wav
+        runner, url = await _serve(fake.app())
+        try:
+            k = Kiosk(url, TOKEN)
+            assert await k.voice("a" * 32) == wav
+            assert await k.voice("a" * 32) is None                               # gone once read
         finally:
             await runner.cleanup()
     asyncio.run(go())
