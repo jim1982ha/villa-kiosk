@@ -139,7 +139,7 @@ ck("  ...drawn by the conversation exactly when the rule says", elements(parseTs
 console.log("\n  a question asked:");
 const sent = [];
 const answering = (status) => async (url, init) => {
-  sent.push({ url, type: init.headers["Content-Type"], body: typeof init.body === "string" ? JSON.parse(init.body) : init.body });
+  sent.push({ url, type: init.headers["Content-Type"], measure: init.headers["X-Recording"], body: typeof init.body === "string" ? JSON.parse(init.body) : init.body });
   return { ok: status === 200, status };
 };
 ck("sent as WORDS ONLY: no profile, no role (the add-on stamps who asks)",
@@ -154,6 +154,13 @@ sent.length = 0;
 ck("a spoken question goes to the same door as its recording, as audio/wav, nothing else with it",
    (await askVesta(wav, answering(200))) === "sent" && sent[0].url.endsWith("vesta-ask") && sent[0].type === "audio/wav"
    && sent[0].body === wav, sent);
+sent.length = 0;
+const m = { heldMs: 1500, openMs: 1400, rate: 48000, micRate: 48000, blocks: 40, missing: 0, peakDb: -20 };
+await askVesta(wav, answering(200), m);
+await askVesta("typed", answering(200), m);
+ck("  ...with what the page measured of it (X-Recording, the add-on's log line); a typed one never",
+   sent[0].measure === "heldMs=1500;openMs=1400;rate=48000;micRate=48000;blocks=40;missing=0;peakDb=-20"
+   && sent[1].measure === undefined, sent);
 ck("  ...and its outcomes are a typed question's", (await askVesta(wav, answering(503))) === "offline"
    && (await askVesta(wav, answering(429))) === "busy");
 ck("\"New conversation\" is Telegram's /new, read by the Agent's own gate", NEW_CONVERSATION === "/new");

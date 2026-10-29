@@ -4,7 +4,7 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { encodeWav, VOICE, canRecord, playSpeech, startRecording } = await import("@/messages/voice");
+const { encodeWav, VOICE, canRecord, playSpeech, startRecording, missingBlocks, measureHeader } = await import("@/messages/voice");
 const { elements, guardsOf, parseTsx } = await import("../consistency/jsx.mjs");
 
 /** The WAV read back: its header fields and its samples. */
@@ -76,6 +76,14 @@ const context = (await import("node:fs")).readFileSync(new URL("../../src/messag
 ck("  ...and the session exists only where canRecord says the page can record",
    /useState\(\(\) => canRecord\(\) \? new TalkSession\(/.test(context));
 
+
+console.log("\n  what the page recorded, measured (a question badly understood, 2026-10-29):");
+const step = 2048 / 48000;
+ck("no block missing when each plays one block after the last", missingBlocks([0, step, 2 * step, 3 * step], step) === 0);
+ck("  ...two missing in a gap of three blocks, one in a gap of two", missingBlocks([0, 3 * step, 5 * step], step) === 3);
+ck("the measure as the add-on reads it: whole numbers, its names", measureHeader({ heldMs: 3120.4, openMs: 3001,
+  rate: 48000, micRate: 24000, blocks: 70, missing: 2, peakDb: -12.6 })
+  === "heldMs=3120;openMs=3001;rate=48000;micRate=24000;blocks=70;missing=2;peakDb=-13");
 
 // VESTA's answer said aloud (ticket 24): the REAL player, over a stand-in for the page's Web Audio that records what it
 // is asked (a context per `new`, its sounds started and stopped)

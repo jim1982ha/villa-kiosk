@@ -143,6 +143,30 @@ export async function playSpeech(sound: () => Promise<ArrayBuffer | null>, atThe
 /** What became of asking for the microphone: recording; the person or the browser refused it; there is none. */
 export type Listening = "listening" | "refused" | "none";
 
+// ⚠️ WHAT THE PAGE RECORDED, MEASURED (owner, 2026-10-29: "my speech is badly understood, while I am saying the exact
+// thing as in Telegram", from the same MacBook): the villa's Whisper was unsure of the language of every tablet question
+// (26%) and heard the same words well from Telegram's own recorder. Two suspects lie in this recorder: the sound read at
+// a rate it is not (the page's audio started before the microphone opened: some machines change the rate under it), or
+// blocks of sound lost while the page's thread was busy (the 3D villa, the orb). Each question says which, in the
+// add-on's log, before anything is changed.
+/** A recording's measure: how long the button was held and the microphone open, the page's and the microphone's rates,
+ *  how many blocks of sound came and how many were missing between them, and the loudest sample (dB below full). */
+export interface RecordingMeasure { heldMs: number; openMs: number; rate: number; micRate: number; blocks: number;
+  missing: number; peakDb: number }
+
+/** Blocks missing between those that came: each block says when it plays (`times`, seconds), `step` apart when none is
+ *  lost. Pure: tests/oracles/voice_wav.mjs. */
+export function missingBlocks(times: readonly number[], step: number): number {
+  let lost = 0;
+  for (let i = 1; i < times.length; i++) lost += Math.max(0, Math.round((times[i] - times[i - 1]) / step) - 1);
+  return lost;
+}
+
+/** The measure as the add-on reads it (its X-Recording header: key=value, `;` apart, whole numbers only). Pure. */
+export const measureHeader = (m: RecordingMeasure): string =>
+  (["heldMs", "openMs", "rate", "micRate", "blocks", "missing", "peakDb"] as const)
+    .map((k) => `${k}=${Math.round(m[k])}`).join(";");
+
 /** One spoken question being recorded. */
 export interface Recording {
   /** Ask for the microphone and record from it (once: a second call answers the first's outcome). */
@@ -151,6 +175,8 @@ export interface Recording {
   stop(): Promise<Blob | null>;
   /** Stop and keep nothing. */
   cancel(): void;
+  /** What was recorded, measured (after stop). */
+  measure(): RecordingMeasure;
 }
 
 /** A recording, begun AT THE PRESS (the page's audio resumed inside the gesture); the microphone opens at `listen()`.
@@ -166,6 +192,9 @@ export function startRecording(onLevel?: (level: number) => void): Recording {
   let source: MediaStreamAudioSourceNode | null = null;
   let ended = false;
   let asked: Promise<Listening> | null = null;
+  const pressed = performance.now();
+  let opened = 0, stopped = 0, micRate = 0, peak = 0;
+  const times: number[] = [];
   const release = () => {
     ended = true;
     source?.disconnect();
@@ -184,6 +213,8 @@ export function startRecording(onLevel?: (level: number) => void): Recording {
     allowed = true;
     // let go while the browser was still asking: the microphone goes back at once
     if (ended) { release(); return "none"; }
+    opened = performance.now();
+    try { micRate = stream.getAudioTracks()[0]?.getSettings?.().sampleRate ?? 0; } catch { micRate = 0; }
     source = ctx.createMediaStreamSource(stream);
     // one input channel: a stereo microphone is mixed down to it by the node itself; 2048 samples (about 40ms) a
     // block, so the orb follows the voice and little is left unread when the finger lifts
@@ -191,6 +222,8 @@ export function startRecording(onLevel?: (level: number) => void): Recording {
     node.onaudioprocess = (e) => {
       const block = new Float32Array(e.inputBuffer.getChannelData(0));
       chunks.push(block);
+      times.push(e.playbackTime);
+      for (let i = 0; i < block.length; i++) peak = Math.max(peak, Math.abs(block[i]));
       if (onLevel) {
         let sum = 0;
         for (let i = 0; i < block.length; i++) sum += block[i] * block[i];
@@ -205,6 +238,7 @@ export function startRecording(onLevel?: (level: number) => void): Recording {
     listen() { return (asked ??= open()); },
     async stop() {
       const rate = ctx.sampleRate;
+      stopped = performance.now();
       release();
       const length = chunks.reduce((n, c) => n + c.length, 0);
       if (!length) return null;
@@ -213,5 +247,10 @@ export function startRecording(onLevel?: (level: number) => void): Recording {
       return new Blob([encodeWav(all, rate).buffer as ArrayBuffer], { type: "audio/wav" });
     },
     cancel: release,
+    measure: () => ({
+      heldMs: (stopped || performance.now()) - pressed, openMs: opened ? (stopped || performance.now()) - opened : 0,
+      rate: ctx.sampleRate, micRate, blocks: times.length, missing: missingBlocks(times, 2048 / ctx.sampleRate),
+      peakDb: peak > 0 ? 20 * Math.log10(peak) : -100,
+    }),
   };
 }

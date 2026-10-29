@@ -1,3 +1,11 @@
+## 2.496.601
+
+What you will see:
+- Nothing changes on screen. Each question spoken to VESTA now writes one line in this app's log, saying what the page
+  recorded: how long you held the button, how long the sound is, the microphone's rate and the page's, any piece of
+  sound lost, and how loud it was. It is there to find why the tablet's spoken questions are badly understood while
+  the same words through Telegram are not.
+
 ## 2.496.600
 
 What you will see (with VESTA Agent 0.12.396):

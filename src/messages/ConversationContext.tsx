@@ -14,14 +14,15 @@ import { ASK_SAID, LISTEN_SAID, askVesta, fetchConversation, fetchSpeech, vestaR
 import { answersOf, arrivedSpeech, mergeTurns, playsAloud, threadView, type ThreadView } from "./conversationModel";
 import { pauseFor, watchFeed } from "./feed";
 import { TALK_IDLE, TalkSession, type TalkView } from "./talk";
-import { VOICE, canRecord, microphoneAllowed, playSpeech, startRecording, stopSpeech, watchMicrophone } from "./voice";
+import { VOICE, canRecord, microphoneAllowed, playSpeech, startRecording, stopSpeech, watchMicrophone,
+  type RecordingMeasure } from "./voice";
 
 interface Conversation {
   thread: ThreadView;
   /** VESTA's short answers to this profile's presses, by press number (conversationModel.answersOf). */
   answers: ReadonlyMap<number, string>;
-  /** Ask VESTA, words or a spoken question's WAV (the add-on stamps who asks): what became of it. */
-  ask: (question: string | Blob) => Promise<AskOutcome>;
+  /** Ask VESTA, words or a spoken question's WAV (the add-on stamps who asks), with its measure: what became of it. */
+  ask: (question: string | Blob, measure?: RecordingMeasure) => Promise<AskOutcome>;
   /** Why the last question did not go (ASK_SAID, or a recording's TALK_SAID), null once one went. */
   said: string | null;
   /** Say why a spoken question was not even recorded (the microphone refused, nothing heard). */
@@ -51,9 +52,9 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
   const [said, tell] = useState<string | null>(null);
   // when this page sent its spoken question: its answer is said aloud here only (conversationModel.playsAloud)
   const spokenAt = useRef<number | null>(null);
-  const ask = useCallback(async (question: string | Blob) => {
+  const ask = useCallback(async (question: string | Blob, measure?: RecordingMeasure) => {
     tell(null);
-    const out = await askVesta(question, backendFetch);
+    const out = await askVesta(question, backendFetch, measure);
     tell(out === "sent" ? null : ASK_SAID[out]);
     if (out === "sent" && typeof question !== "string") spokenAt.current = Date.now();
     return out;

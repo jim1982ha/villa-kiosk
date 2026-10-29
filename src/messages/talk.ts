@@ -7,7 +7,7 @@
 // check drives it press by press (tests/oracles/talk_session.mjs). The buttons only hand it their pointer.
 
 import { TALK_SAID } from "./conversation";
-import type { Listening, Recording } from "./voice";
+import type { Listening, Recording, RecordingMeasure } from "./voice";
 
 /** Where the hold began: the top bar (the conversation not open yet: the big orb) or the conversation itself. */
 export type TalkPlace = "bar" | "thread";
@@ -21,7 +21,8 @@ export interface TalkDeps {
   record: (onLevel: (level: number) => void) => Recording;
   /** The microphone may open at the touch (voice.microphoneAllowed): the person allowed it. */
   allowed: () => boolean;
-  send: (wav: Blob) => Promise<unknown>;
+  /** The recording sent, with its measure (the add-on's log says what the page recorded). */
+  send: (wav: Blob, measure: RecordingMeasure) => Promise<unknown>;
   tell: (line: string | null) => void;
   after: (ms: number, fn: () => void) => unknown;
   cancel: (timer: unknown) => void;
@@ -127,7 +128,7 @@ export class TalkSession {
     this.show({ phase: "sending", place: p.place });
     p.open();
     const wav = await p.rec.stop();
-    if (wav) await this.deps.send(wav);
+    if (wav) await this.deps.send(wav, p.rec.measure());
     else this.deps.tell(TALK_SAID.silent);
     this.show(TALK_IDLE);
   }

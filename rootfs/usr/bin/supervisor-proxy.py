@@ -4313,6 +4313,26 @@ def _wav_refused(data: bytes) -> str | None:
     return None
 
 
+#: What the page measured of a spoken question (messages/voice.ts measureHeader, owner 2026-10-29: tablet questions were
+#: badly understood, the same words from Telegram well): whole numbers only, these names only.
+RECORDING_KEYS = ("heldMs", "openMs", "rate", "micRate", "blocks", "missing", "peakDb")
+RECORDING_RE = re.compile(r"^(?:[A-Za-z]{1,10}=-?\d{1,7})(?:;[A-Za-z]{1,10}=-?\d{1,7}){0,9}$")
+
+
+def _recording_line(header: str | None, data: bytes, profile: str) -> str:
+    """The add-on's log line for a spoken question: what the page measured beside the sound that came (a page that
+    measured nothing, or sent something else: the sound alone). Never the sound. Pure — tests/agent-interface.py."""
+    sound = max(0, len(data) - 44) / 2 / max(1, int(VOICE.get("rate") or 1))
+    line = f"[proxy] a spoken question ({profile}): {sound:.1f}s of sound"
+    m = dict(p.split("=") for p in header.split(";")) if header and RECORDING_RE.match(header) else {}
+    if not all(k in m for k in RECORDING_KEYS):
+        return line + " (the page measured nothing)"
+    n = {k: int(m[k]) for k in RECORDING_KEYS}
+    return (line + f"; held {n['heldMs'] / 1000:.1f}s, microphone open {n['openMs'] / 1000:.1f}s; page {n['rate']} Hz, "
+            f"microphone {n['micRate'] or 'not said'}{' Hz' if n['micRate'] else ''}; {n['missing']} of "
+            f"{n['blocks'] + n['missing']} blocks missing; loudest {n['peakDb']} dB")
+
+
 def _sweep_voices() -> None:
     """Delete every kept sound older than askKeptSeconds: its question is no longer collected. Blocking."""
     try:
@@ -4534,6 +4554,8 @@ async def vesta_ask_handler(request: web.Request) -> web.Response:
         return web.json_response({"error": "Too many questions at once: wait a minute."}, status=429)
     at = _now_iso()
     # a spoken one: the inbox names its sound, the thread shows it as spoken until the Agent writes the words heard
+    if data is not None:
+        print(_recording_line(request.headers.get("X-Recording"), data, profile), flush=True)
     asked, shown = (({"voice": await asyncio.to_thread(_keep_voice, data)}, {"voice": True}) if data is not None
                     else ({"text": text.strip()}, {"text": text.strip()}))
     ask = await ASKED.add(lambda seq: {"seq": seq, "at": at, "profile": profile, **asked})

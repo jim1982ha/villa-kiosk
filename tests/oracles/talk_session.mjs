@@ -19,11 +19,12 @@ function bench({ allowed = true, listening = "listening", wav = "WAV" } = {}) {
     listen: async () => { log.push("listen"); return listening; },
     stop: async () => { log.push("stop"); return wav; },
     cancel: () => log.push("cancel"),
+    measure: () => "MEASURE",
   });
   const s = new TalkSession({
     record: (onLevel) => { level = onLevel; log.push("record"); return rec(); },
     allowed: () => allowed,
-    send: async (w) => { log.push(`send ${w}`); },
+    send: async (w, m) => { log.push(`send ${w}`); if (m) log.push(`measured ${m}`); },
     tell: (line) => log.push(`tell ${line}`),
     after: (ms, fn) => { const id = ++next; timers.set(id, { ms, fn }); return id; },
     cancel: (id) => timers.delete(id),
@@ -73,6 +74,7 @@ console.log("\n  a hold from the top bar:");
   ck("  ...the orb goes and the conversation shows BEFORE the sound is sent",
      b.log.indexOf("open bar") < b.log.indexOf("send WAV") && b.views.includes("sending@bar"), b.log);
   ck("  ...the recording is sent, and the session rests", b.log.includes("send WAV") && b.s.now === TALK_IDLE, b.log);
+  ck("  ...with what the page measured of it (the add-on's log line)", b.log.includes("measured MEASURE"), b.log);
 }
 {
   const b = bench({ allowed: false });

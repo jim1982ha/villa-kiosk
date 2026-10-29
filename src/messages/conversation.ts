@@ -7,6 +7,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import { backendFetch } from "@/auth/sessionLost";
+import { measureHeader, type RecordingMeasure } from "./voice";
 import { fetchFeed, type FeedRead } from "./feed";
 import { vestaButtons, type AnnouncementButton, type Pressable } from "./announcements";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
@@ -111,12 +112,15 @@ export const NEW_CONVERSATION = "/new";
  *  `send` is backendFetch (a check passes its own). */
 export async function askVesta(
   question: string | Blob, send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status">>,
+  measure?: RecordingMeasure,
 ): Promise<AskOutcome> {
   const spoken = typeof question !== "string";
   try {
     const r = await send(ingressPath("vesta-ask"), {
       method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": spoken ? "audio/wav" : "application/json" },
+      headers: { "Content-Type": spoken ? "audio/wav" : "application/json",
+        // what the page recorded, measured (messages/voice): the add-on's log line, nothing kept
+        ...(spoken && measure ? { "X-Recording": measureHeader(measure) } : {}) },
       body: spoken ? question : JSON.stringify({ text: question }),
     });
     return r.ok ? "sent" : r.status === 503 ? "offline" : r.status === 429 ? "busy" : "failed";

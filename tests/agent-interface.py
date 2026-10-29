@@ -820,6 +820,25 @@ async def main() -> None:
     ck("  ...once, and never over a typed question: the person's words are the person's (400, 400)",
        r.status == 400 and r2.status == 400, (r.status, r2.status))
 
+    sound = proxy._recording_line("heldMs=3120;openMs=3001;rate=48000;micRate=24000;blocks=70;missing=2;peakDb=-13",
+                                  said, "owner")
+    ck("what the page measured of a spoken question is one log line beside the sound that came",
+       sound == "[proxy] a spoken question (owner): 1.0s of sound; held 3.1s, microphone open 3.0s; page 48000 Hz, "
+                "microphone 24000 Hz; 2 of 72 blocks missing; loudest -13 dB", sound)
+    import contextlib
+    import io
+    printed = io.StringIO()
+    with contextlib.redirect_stdout(printed):
+        await post("/vesta-ask", headers={**cookie("owner"), "Content-Type": "audio/wav",
+                                          "X-Recording": "heldMs=1500;openMs=1400;rate=48000;micRate=48000;"
+                                                         "blocks=40;missing=0;peakDb=-20"}, data=said)
+    ck("  ...written by the door a spoken question comes through, from the page's X-Recording",
+       "held 1.5s, microphone open 1.4s; page 48000 Hz, microphone 48000 Hz; 0 of 40 blocks" in printed.getvalue(),
+       printed.getvalue())
+    ck("  ...a page that measured nothing, or sent anything else, gives the sound alone",
+       all(proxy._recording_line(h, said, "owner").endswith("1.0s of sound (the page measured nothing)")
+           for h in (None, "", "heldMs=1", "x=1;y=2" * 40, "heldMs=1;rm -rf /")), sound)
+
     # ── An answer said aloud (ticket 24 of "One inbox") ─────────────────────────────────────────────────────────────
     print("\n  an answer said aloud:")
     reset_lockout()
