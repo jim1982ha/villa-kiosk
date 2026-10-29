@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.381 (29 October 2026)
+
+- Review R, round 2: intake._shared (the chat's own: policy.tablet_profile) replaces Question.shared, so a command
+  offer built in Telegram's shape for a tablet chat is judged as the tablet; /whoami names the role in its words
+  (message_format.ROLE_WORDS); IncidentThread.tell_open picks the copy whose Status, told for everyone, holds the most
+  steps, and a copy no count draws again comes last; timeutil fails loudly when the agreement names no `moment`.
+
 ## 0.6.380 (29 October 2026)
 
 - Architecture review R (2026-10-29): a tablet's question enters the gate as itself (intake.Question:

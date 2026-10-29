@@ -120,8 +120,8 @@ class IncidentThread:
         """At start: each open incident's card kept for the tablet, as its newest copy stands — how many. ⚠️ ALERT #83
         (owner, 2026-10-29): the tablet keeps a card from the incident's next step on (since engine 0.6.359), and an
         incident with no step since (its one "still not fixed" sent) had none: the tablet showed its short list
-        while Telegram showed the card. The newest copy is the one whose own Status leaves the fewest steps to its
-        bottom line; its Status told for everyone (the tablet is everyone's), as every step's card is now."""
+        while Telegram showed the card. The newest copy is the one whose Status, told for everyone, holds the most steps
+        before its bottom line; its Status told for everyone (the tablet is everyone's), as every step's card is now."""
         told = 0
         for iid in open_incidents:
             if self.mirror is None or str(iid) in self._told:
@@ -131,11 +131,17 @@ class IncidentThread:
                 h = layout.head_of((rec.get("parts") or {}).get("head"))
                 if h is None:
                     continue
-                story = self.story_of(int(iid), chat, h["history"]) if self.story_of and "story" not in h else None
-                left = story[0] if story else 0
-                if best is None or left < best[0]:
-                    parts = rec["parts"] if story is None else {**rec["parts"], "head": {**h, "story": story[1]}}
-                    best = (left, parts, rec.get("kb") if rec.get("buttons") else None)
+                if "story" in h:
+                    told_steps, parts = h["story"], rec["parts"]
+                else:
+                    story = self.story_of(int(iid), chat, h["history"]) if self.story_of else None
+                    # ⚠️ ONE WHOSE LINES NO COUNT DRAWS AGAIN COMES LAST (round 2): it tells its own chat's steps only
+                    told_steps, parts = (story[1], {**rec["parts"], "head": {**h, "story": story[1]}}) if story \
+                        else (None, rec["parts"])
+                # the newest copy tells the most steps before its bottom line
+                score = -1 if told_steps is None else len(told_steps)
+                if best is None or score > best[0]:
+                    best = (score, parts, rec.get("kb") if rec.get("buttons") else None)
             if best is not None:
                 self.tell(iid, best[1], best[2])
                 told += 1

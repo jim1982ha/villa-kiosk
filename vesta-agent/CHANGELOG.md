@@ -1,3 +1,11 @@
+## 0.12.395
+
+What you will see:
+- "/whoami" on the facility manager's tablet ends "VESTA answers you as Facility Manager." (it said "fm"); the owner's
+  says "Owner".
+- When VESTA starts, an open alert's card on the tablet is drawn from the copy that tells the most steps, never from
+  an older copy that listed one person's steps only.
+
 ## 0.12.394
 
 What you will see (with VESTA (dev2) 2.496.598):

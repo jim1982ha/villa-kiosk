@@ -78,6 +78,11 @@ def day_label(d: date, weekday: bool = False, long: bool = False, year: bool = F
 #: {time}." with its clock (message_format.jinja_words writes this format into it). Locale-free directives only: the
 #: same text on any machine.
 MOMENT: dict = agreement.section("moment")
+if not (isinstance(MOMENT.get("format"), str) and isinstance(MOMENT.get("date"), str)):
+    # ⚠️ ONE LOUD FAILURE, NEVER A GUESS (round 2 of review R): a second format typed here would be the copy the
+    # agreement exists to end; the image ships the file (agent-host/tests/test_kiosk_contract.py holds it to the Kiosk's)
+    raise RuntimeError("The agreement with the Kiosk (agent-contract.json) names no `moment` format: copy the Kiosk's "
+                       "file (agent-host/tools/release.py ship does)")
 MOMENT_FORMAT: str = MOMENT["format"]
 
 

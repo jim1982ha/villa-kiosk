@@ -71,6 +71,7 @@ from .command_offers import CommandOffers
 from .command_request import Request, Requests
 from vesta_shared.limits import limit
 from vesta_shared.messaging import SIREN_TITLE
+from vesta_shared.message_format import ROLE_WORDS
 from .fault_offers import FaultOffers
 from .skills import SEEDED, Skills, script_env
 from .state import State
@@ -634,7 +635,8 @@ class Vesta:
         if got.action == "whoami":
             if got.person is not None:
                 # a tablet: who is signed in there is the answer (no Telegram id to tell)
-                await self.delivery.send(got.chat, f"You are {got.person.name}; VESTA answers you as {got.person.role}.")
+                await self.delivery.send(got.chat, f"You are {got.person.name}; VESTA answers you as "
+                                                   f"{ROLE_WORDS.get(got.person.role, got.person.role)}.")
                 return
             await self.delivery.send(got.chat, f"Your Telegram id: {from_id}. This chat id: {got.chat}.")
             log.info("whoami: person %s (%s) in chat %s", from_id, q.first_name, got.chat)

@@ -213,16 +213,23 @@ def test_a_slow_kiosk_never_delays_the_message_and_loses_only_its_copy(agent, ki
         await gate.wait()
         return True
     kiosk.keep_message = stuck
-    agent.messages._timeout_s = lambda: 0.05
 
     async def go():
-        t0 = asyncio.get_running_loop().time()
-        await alert(agent)
-        assert asyncio.get_running_loop().time() - t0 < 1, "the alert did not wait for the Kiosk"
-        await asyncio.wait_for(agent.messages.settle(), 2)          # the limit ends the push, never the gate
+        # ⚠️ WAITS ON EVENTS, NEVER A STOPWATCH (git-gates-ci "Tests wait on events"; it failed twice on a busy machine
+        # with "< 1 s"): the Kiosk's push may take 60s here, so an alert that waited for it could not end within 30s
+        agent.messages._timeout_s = lambda: 60
+        await asyncio.wait_for(alert(agent), 30)
+        assert not gate.is_set(), "the alert ended while the Kiosk's push was still stuck"
+        gate.set()
+        await asyncio.wait_for(agent.messages.settle(), 30)
+        # ...and a push the Kiosk never answers ends at its limit, never at the gate
+        gate.clear()
+        agent.messages._timeout_s = lambda: 0.05
+        agent.messages.keep(kiosk_messages.of_note("note:slow", "T", "Owner", "words"))
+        await asyncio.wait_for(agent.messages.settle(), 30)
     asyncio.run(go())
     assert any(SUMMARY in t for _c, t, _k in agent.tg.sent) or agent.tg.edits, "Telegram had the alert"
-    assert agent.messages._last == {}, "a push that timed out is tried again at the message's next change"
+    assert "note:slow" not in agent.messages._last, "a push that timed out is tried again at the message's next change"
 
 
 def test_a_kiosk_that_cannot_be_reached_or_keeps_none_changes_nothing(agent, kiosk):
@@ -516,6 +523,9 @@ def test_an_open_alert_with_no_step_since_the_tablet_kept_cards_gets_its_card_at
     for chat, rec in agent.state.incident_chats(1):       # copies drawn before their heading held every step
         head = dict(rec["parts"]["head"])
         head.pop("story", None)
+        if chat == FM_CHAT:
+            # ...one of them in an older wording no count draws again: it must never be the one told (round 2)
+            head["history"] = ["- Alert sent long ago, in an older wording (to: FM)"]
         agent.state.set_incident_message(1, chat, {**rec, "parts": {**rec["parts"], "head": head}})
     agent.state.db.close()
     again = Vesta(agent.s, telegram=agent.tg, reader=agent.reader, kiosk=agent.kiosk)

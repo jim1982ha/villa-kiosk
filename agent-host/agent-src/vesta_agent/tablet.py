@@ -51,10 +51,10 @@ def person_of(profile: str | None) -> Person | None:
 
 def question(chat: int, person: Person, ask: dict, audio=None) -> intake.Question:
     """A tablet's question as the gate reads it (intake.Question): a "/command" as a command, a spoken one by its audio
-    (`Spoken`), anything else as words. ⚠️ NOT SHARED: only the agent reads a tablet's conversation, so what is not the
-    agent's ("/help") is answered there, never left to the time a question is kept."""
+    (`Spoken`), anything else as words. Only the agent reads a tablet's conversation (intake._shared), so what is not
+    the agent's ("/help") is answered there, never left to the time a question is kept."""
     words = str(ask.get("text") or "").strip()
-    q = intake.Question(chat, chat, person.name, person=person, shared=False)
+    q = intake.Question(chat, chat, person.name, person=person)
     if audio is not None:
         return replace(q, audio=audio)
     if words.startswith("/"):

@@ -104,7 +104,12 @@ def test_new_conversation_and_a_command_go_through_the_gate_as_on_telegram(agent
     kiosk.person_asks("owner", "/whoami")
     collect(agent)
     # no Telegram id to tell at the tablet: who is signed in there (it went unanswered until review R)
-    assert kiosk.conversation("owner")[-1]["text"] == "You are Owner at the tablet; VESTA answers you as owner."
+    assert kiosk.conversation("owner")[-1]["text"] == "You are Owner at the tablet; VESTA answers you as Owner."
+    # the role in its words, never its code (round 2: the facility manager's tablet ended "…answers you as fm.")
+    kiosk.person_asks("ops", "/whoami")
+    collect(agent)
+    assert kiosk.conversation("ops")[-1]["text"].endswith("VESTA answers you as Facility Manager."), \
+        kiosk.conversation("ops")[-1]
 
 
 @pytest.mark.parametrize("typed, told", [
@@ -349,3 +354,17 @@ def test_with_no_telegram_chat_a_request_waits_on_the_tablet_and_is_approved_the
     settled = kiosk.messages[card["key"]]
     assert "buttons" not in settled and any("Approved on" in line for line in settled["status"])   # settled on the tablet
     assert "Approved on" in kiosk.conversation("owner")[-1]["text"]                                    # and the answer says so
+
+
+def test_a_tablet_conversation_is_never_shared_whoever_built_the_question():
+    """Round 2 of review R: whether others read a place is the chat's own, so a command offer pressed on a tablet
+    (built in Telegram's shape by command_offers.typed) is judged as the tablet it was pressed on."""
+    from vesta_agent import intake
+    chat = tablet.chat_of("owner")
+    q = intake.from_telegram("telegram_command", {"chat_id": chat, "user_id": chat, "command": "/help", "args": []})
+    got = intake.gate(q, type("P", (), {"destinations": [], "roles_in": lambda *a: [], "person": lambda *a: None,
+                                         "member": lambda *a: tablet.person_of("owner")})(), "bot", lambda *a: False)
+    assert got.action == "told", got
+    q = intake.from_telegram("telegram_command", {"chat_id": OWNER, "user_id": OWNER, "command": "/help", "args": []})
+    assert intake.gate(q, type("P", (), {"destinations": [], "roles_in": lambda *a: [], "person": lambda *a: None,
+                                         "member": lambda *a: None})(), "bot", lambda *a: False).action == "drop"

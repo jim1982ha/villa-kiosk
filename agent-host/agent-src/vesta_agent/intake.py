@@ -23,7 +23,7 @@ from datetime import datetime, time, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-from .policy import reset_at, silence_reset_hours
+from .policy import reset_at, silence_reset_hours, tablet_profile
 
 OWN_COMMANDS = {"/ask", "/new", "/whoami"}
 
@@ -34,7 +34,8 @@ class Question:
     (tablet.question). ⚠️ NEVER ONE DRESSED AS THE OTHER (architecture review R, 2026-10-29): the tablet's question was
     made into a Telegram event to reach the gate, and Telegram's rule for what is not the agent's (a command for the
     villa's automations or another bot, said in the same chat) left "/help" on the tablet unanswered: dots for the time a
-    question is kept, then "No answer came". `shared` is that difference, said by the place itself."""
+    question is kept, then "No answer came". Whether others read the place too is the chat's own (`_shared`), never a
+    field a builder sets (round 2: a command offer pressed on a tablet came through Telegram's shape)."""
     chat: int | None
     user_id: object = None
     first_name: str | None = None
@@ -48,7 +49,6 @@ class Question:
     unread_file: str | None = None       # a file the agent does not read: its type
     reply_to: object = None
     person: object = None                # who asks, when the place knows it (a tablet's profile, stamped by the Kiosk)
-    shared: bool = True                  # others read this place too (Telegram): what is not the agent's goes unanswered
 
 
 def from_telegram(event_type: str, m: dict) -> Question:
@@ -91,9 +91,15 @@ class Intake:
         return self.voice_file is not None or self.audio is not None
 
 
+def _shared(chat: int) -> bool:
+    """Others read this place too: a Telegram chat (the villa's automations, other bots), never a tablet's conversation
+    (policy.tablet_profile: the People module's one answer)."""
+    return tablet_profile(chat) is None
+
+
 def _not_ours(q: Question, chat: int, group: bool, line: str) -> Intake:
     """What is not the agent's: unanswered where others read too (Telegram), told where only the agent does."""
-    return Intake("drop", chat, group=group) if q.shared else Intake("told", chat, q.person, line)
+    return Intake("drop", chat, group=group) if _shared(chat) else Intake("told", chat, q.person, line)
 
 
 def command_name(cmd: str, bot_username: str | None) -> tuple[str, bool]:
