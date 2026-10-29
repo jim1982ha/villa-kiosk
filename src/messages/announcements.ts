@@ -58,6 +58,8 @@ export interface AnnouncementButton {
   acts?: boolean;
   /** The question asked first, in the tablet's one confirmation box (an approval: owner, 2026-10-28). */
   confirm?: string;
+  /** Its press settles its alert as done (VESTA flags an alert's Done): beside an issue's own Close, left out. */
+  closes?: boolean;
 }
 
 /** What may be pressed: a villa announcement, one of VESTA's messages, a turn of VESTA's conversation. */
@@ -74,15 +76,18 @@ export function vestaButtons(raw: unknown): AnnouncementButton[] {
     if (![r.label, r.kind, r.id].every((x) => typeof x === "string" && x)) return [];
     const rules = BUTTON_KINDS[r.kind as string];
     return [{ label: r.label as string, command: `${r.kind}:${r.id}`, acts: rules?.acts ?? true,
-      ...(rules?.confirm ? { confirm: rules.confirm } : {}) }];
+      ...(rules?.confirm ? { confirm: rules.confirm } : {}), ...(r.closes === true ? { closes: true } : {}) }];
   });
 }
 
 /** ⚠️ THE ONE RULE OF WHO IS OFFERED A BUTTON (owner, 2026-10-29: "consistently", "DRY"): every profile the villa's own
  *  (the doorbell's Unlock) and VESTA's that do not act (Continue); one that acts, only a profile that may act (`mayAct`:
- *  the owner, the facility manager — a guest gets answers only). Read by every screen that draws buttons. Pure. */
-export function offeredButtons(buttons: readonly AnnouncementButton[], mayAct: boolean): AnnouncementButton[] {
-  return buttons.filter((b) => !b.acts || mayAct);
+ *  the owner, the facility manager — a guest gets answers only). `besideClose`: drawn above an issue's own Close, the
+ *  button that closes its alert is left out (owner, 2026-10-29: Need help only, beside Close). Read by every screen that
+ *  draws buttons. Pure. */
+export function offeredButtons(buttons: readonly AnnouncementButton[], mayAct: boolean, besideClose = false):
+  AnnouncementButton[] {
+  return buttons.filter((b) => (!b.acts || mayAct) && !(besideClose && b.closes));
 }
 
 /** Where a problem is: raised, still open, cleared. null: the announcement says none (a weekly test, a digest). */

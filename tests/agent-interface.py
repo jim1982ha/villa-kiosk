@@ -751,6 +751,14 @@ async def main() -> None:
     await post("/agent/v1/vesta-message", headers=bearer(), json={
         "key": "thread:ap1", "title": "Approval request", "body": "Turn on the pool light?",
         "buttons": [{"label": "Approve", "kind": "a", "id": "ap1:y"}, {"label": "Refuse", "kind": "a", "id": "ap1:n"}]})
+    await post("/agent/v1/vesta-message", headers=bearer(), json={
+        "key": "incident:77", "title": "#77-P2 (new)", "body": "Door open",
+        "buttons": [{"label": "Done", "kind": "i", "id": "77:done", "closes": True},
+                    {"label": "Need help", "kind": "i", "id": "77:need_help", "closes": "yes"}]})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    card = next(m for m in body["messages"] if m["key"] == "incident:77")
+    ck("an alert's button that closes it is kept flagged (closes: true only), for the issue card's own Close",
+       [b.get("closes") for b in card["buttons"]] == [True, None], card["buttons"])
     r = await post("/vesta-press", json={"key": "thread:ap1", "command": "a:ap1:y"})
     ck("no session: refused", r.status == 401, r.status)
     r = await post("/vesta-press", headers=cookie("guest"), json={"key": "thread:ap1", "command": "a:ap1:y"})

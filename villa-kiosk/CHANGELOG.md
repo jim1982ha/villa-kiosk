@@ -1,3 +1,10 @@
+## 2.496.588
+
+What you will see (with VESTA Agent 0.12.386):
+- Cockpit › Inbox, an open issue from an alert: VESTA's card above it shows only Need help; the issue's own Close
+  (below) does what Done does. Done stays where there is no Close: the alert's notice and its card under
+  Notifications.
+
 ## 2.496.587
 
 What you will see (needs VESTA Agent 0.12.385):
