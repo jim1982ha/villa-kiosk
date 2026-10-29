@@ -682,6 +682,14 @@
     "incidentKey": "incident:{number}",
     "keptOnRewrite": ["photo", "page", "report"]
   },
+  "_conversation": "Talking to VESTA on the tablet (ticket 21 of \"One inbox\", 2026-10-29). ⚠️ THE KIOSK NEVER CALLS THE AGENT: a question typed on a tablet is kept in an inbox the Agent collects (GET /agent/v1/inbox?after=<seq>, held open up to `waitSeconds` until one comes: {asks: [{seq, at, profile, text}], last, first}), and VESTA's answers are written back as conversation turns (POST /agent/v1/conversation-turn), which the tablet reads at /vesta-conversation. `profile` is the signed-in profile, STAMPED BY THE KIOSK'S PROXY from the session, never sent by the page; `profiles` maps each profile to the role the Agent answers it with (owner, fm, or guest: answers only, no tool that acts, no approval). One conversation per profile, apart from every Telegram chat. A question is answered only while it is younger than `askKeptSeconds` (the inbox keeps none longer; the tablet then says no answer came); a profile asks at most `asksPerMinute` questions a minute (each costs an AI answer). A turn: `key` (the Agent's own: one record per key, a rewrite REPLACES it, so a \"being prepared\" answer becomes its result; `ask:` keys are the proxy's, for the person's own questions, and refused from the Agent), `profile`, `text`, `at`, `photos` (the camera pictures the answer carries, base64 JPEG or PNG, at most `limits.photos`), `page` (an HTML page uploaded first to /agent/v1/fm-document) and `gone` (true: the answer was withdrawn, as a deleted Telegram message: the tablet no longer shows it). Kept the records-kept days. An older Kiosk has no such routes (404): the Agent collects nothing.",
+  "conversation": {
+    "profiles": {"owner": "owner", "ops": "fm", "guest": "guest"},
+    "waitSeconds": 25,
+    "askKeptSeconds": 600,
+    "asksPerMinute": 6,
+    "limits": {"key": 200, "text": 16000, "question": 2000, "photos": 4, "photoBytes": 3000000}
+  },
   "_stageMarks": "What starts an alert's bottom line, by its stage (review Q 3, 2026-10-28): the VESTA Agent writes it (vesta_shared/message_format.py STAGE_ICONS, and the villa's message template it generates) and the Kiosk reads an announcement's stage back from it (src/messages/announcements.ts stageOf): new, existing, and the two ends, watch (cleared, still watched) and closed. Read from here by both: a mark changed on one side alone made a cleared alarm read as new on the tablet.",
   "stageMarks": {
     "new": "⚠️",

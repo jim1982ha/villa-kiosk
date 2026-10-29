@@ -488,3 +488,19 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   font-family: inherit; cursor: pointer; min-height: var(--touch-min); }
 .messages-section .cockpit-issues-head { margin-top: 12px; }
 .messages-section .cockpit-issues-head .settings-section-title { margin: 0; }
+/* VESTA's thread (ticket 21 of "One inbox"): pinned above the list; open, its lines in the detail pane with the box to
+   ask under them — the person's own lines set apart, as in any chat */
+.messages-thread { border-bottom: 1px solid var(--hairline); }
+.vesta-thread { display: flex; flex-direction: column; gap: 10px; min-height: 100%; }
+.vesta-thread-lines { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; }
+.vesta-turn { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px;
+  background: var(--bg-input); max-width: 92%; align-self: flex-start; }
+.vesta-turn.asked { background: var(--accent-soft); align-self: flex-end; }
+.vesta-turn-head { display: flex; align-items: baseline; gap: 10px; font-size: var(--text-xs); }
+.vesta-turn-head b { font-size: var(--text-sm); }
+.vesta-turn-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-base); }
+.vesta-turn .announcement-full-photo { max-height: 320px; align-self: flex-start; }
+.vesta-thread-ask { display: flex; gap: 8px; align-items: flex-end; position: sticky; bottom: 0; padding-top: 6px;
+  background: var(--bg-modal); }
+.vesta-thread-ask textarea { flex: 1 1 auto; min-width: 0; resize: vertical; font: inherit; font-size: var(--text-base);
+  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hairline); background: var(--bg-input); color: var(--text-primary); }

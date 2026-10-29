@@ -41,6 +41,9 @@ export interface Screen {
    *  null otherwise. Kept while the Cockpit hands a device over and is reopened by Back; cleared when the Cockpit is
    *  closed or opened anew. */
   faultsFocus: string[] | null;
+  /** Messages opens on VESTA's thread ("Ask VESTA", ticket 21 of "One inbox"); cleared when the Cockpit is closed or
+   *  opened anew. */
+  threadFocus: boolean;
   /** A guest's problem report: the device it is about, "" for none (the
    *  Messages' "Report a problem"); null when no report is open. */
   guestReportFor: string | null;
@@ -54,8 +57,8 @@ export interface Screen {
 
 export const START: Screen = {
   nav: NO_PANEL, windows: NO_SURFACES, list: null,
-  cockpitTab: "messages", settingsTab: "general", faultFor: null, ticketFor: null, faultsFocus: null, guestReportFor: null, editorFocus: null,
-  panelReturn: null,
+  cockpitTab: "messages", settingsTab: "general", faultFor: null, ticketFor: null, faultsFocus: null, threadFocus: false, guestReportFor: null,
+  editorFocus: null, panelReturn: null,
 };
 
 export type ScreenAction =
@@ -91,6 +94,8 @@ export type ScreenAction =
   /** A device window's warning: the Cockpit's Messages with the open issue of `ids` (the device, its linked entity)
    *  marked; closing it gives the device back. */
   | { type: "openFaults"; ids: string[] }
+  /** "Ask VESTA": the Cockpit's Messages with VESTA's thread open. */
+  | { type: "askVesta" }
   /** An open issue's "Edit ticket": the Tickets tab, that record's form open. */
   | { type: "editTicket"; id: string }
   | { type: "ticketEditOpened" }
@@ -112,6 +117,7 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
       return { ...s, windows: win(s.windows, a.window, true), cockpitTab: a.tab ?? s.cockpitTab,
         settingsTab: a.window === "settings" ? a.settingsTab ?? "general" : s.settingsTab,
         faultsFocus: a.window === "cockpit" ? null : s.faultsFocus,
+        threadFocus: a.window === "cockpit" ? false : s.threadFocus,
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     }
     case "closeWindow":
@@ -119,6 +125,7 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
         faultFor: a.window === "cockpit" ? null : s.faultFor,
         ticketFor: a.window === "cockpit" ? null : s.ticketFor,
         faultsFocus: a.window === "cockpit" ? null : s.faultsFocus,
+        threadFocus: a.window === "cockpit" ? false : s.threadFocus,
         editorFocus: a.window === "configEditor" ? null : s.editorFocus };
     case "cockpitTab": return { ...s, cockpitTab: a.tab };
     case "settingsTab": return { ...s, settingsTab: a.tab };
@@ -169,8 +176,12 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
     case "openFaults":
       // Messages, where a device's faults are its open issue (owner, 2026-10-24); the device comes back on close
       if (!doors.facility || a.ids.length === 0) return s;
-      return { ...s, nav: NO_PANEL, faultsFocus: a.ids, cockpitTab: "messages", windows: win(s.windows, "cockpit", true),
+      return { ...s, nav: NO_PANEL, faultsFocus: a.ids, threadFocus: false, cockpitTab: "messages",
+        windows: win(s.windows, "cockpit", true),
         panelReturn: { to: "cockpit", nav: s.nav } };
+    case "askVesta":
+      if (!mayOpen("cockpit", doors)) return s;
+      return { ...s, faultsFocus: null, threadFocus: true, cockpitTab: "messages", windows: win(s.windows, "cockpit", true) };
     case "editTicket": return doors.facility ? { ...s, ticketFor: a.id, cockpitTab: "tickets" } : s;
     case "ticketEditOpened": return s.ticketFor === null ? s : { ...s, ticketFor: null };
     case "reportProblem": return { ...s, guestReportFor: "" };

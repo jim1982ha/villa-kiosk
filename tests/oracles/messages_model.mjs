@@ -154,10 +154,10 @@ ck("a guest (one tab, Messages) gets no tab strip: the strip is drawn only with 
 const tab = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
 ck("  ...the tab lists, counts and opens what messagesView says, from the open issues and the page's announcements",
    /const \{ kept, unread, unreadReports, shown \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, announcements: kept, filter, selected,/.test(tab)
-   && /view\.filters\.map\(/.test(tab) && /const item = raising \? null : view\.selected;/.test(tab)
+   && /view\.filters\.map\(/.test(tab) && /const item = raising \|\| threadOpen \? null : view\.selected;/.test(tab)
    && /const \{ issues: showsIssues, notifications: showsNotes, reports: showsReports \} = view\.shows;/.test(tab));
-ck("  ...a phone shows the item someone chose (a line, a warning, the ticket form), else the list",
-   /const reading = !!raising \|\| view\.openedBy === "asked" \|\| view\.openedBy === "focus";/.test(tab)
+ck("  ...a phone shows the item someone chose (a line, a warning, the ticket form, VESTA's thread), else the list",
+   /const reading = !!raising \|\| threadOpen \|\| view\.openedBy === "asked" \|\| view\.openedBy === "focus";/.test(tab)
    && /className=\{`messages\$\{reading \? " reading" : ""\}`\}/.test(tab));
 
 console.log("\n  the unread mark, drawn where the model says (ticket 18):");

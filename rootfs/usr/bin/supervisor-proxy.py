@@ -3868,10 +3868,11 @@ def _write_announcement_photo(body: bytes, kept_as: str) -> str:
     return name
 
 
-def _keep_pushed_photo(raw) -> str | None:
+def _keep_pushed_photo(raw, cap: int | None = None) -> str | None:
     """A photo the VESTA Agent pushed (base64 of a JPEG or a PNG) kept in the photo folder, or None when it is not the
-    picture it says (its first bytes) or is past the contract's cap. Blocking: called on a worker thread."""
-    cap = int(VESTA_MESSAGE_LIMITS.get("photoBytes") or 0)
+    picture it says (its first bytes) or is past the contract's cap (`cap`: a conversation turn's; a message's by default).
+    Blocking: called on a worker thread."""
+    cap = int(VESTA_MESSAGE_LIMITS.get("photoBytes") or 0) if cap is None else cap
     if not isinstance(raw, str) or not raw or len(raw) > cap * 4 // 3 + 8:
         return None
     try:
@@ -3906,12 +3907,21 @@ def _current_photo(items: list, now: float) -> str | None:
 ANNOUNCEMENT_PHOTO_GRACE_S = 120
 
 
+def _photos_named(records) -> set:
+    """Every kept photo `records` name: an announcement's or a message's `photo`, a conversation turn's `photos`. Pure."""
+    named = set()
+    for a in records if isinstance(records, list) else ():
+        if isinstance(a, dict):
+            named |= {a.get("photo")} | set(a.get("photos") if isinstance(a.get("photos"), list) else ())
+    return named
+
+
 def _sweep_announcement_photos(_stored, kept) -> None:
-    """Delete every kept photo no kept announcement or VESTA message names: its record expired, or a rewrite brought its
-    own."""
-    named = {a.get("photo") for a in kept if isinstance(a, dict)} if isinstance(kept, list) else set()
-    for feed in (ANNOUNCED, MESSAGED):          # ⚠️ BOTH FEEDS SHARE THE FOLDER: this one names its own from `kept`
-        named |= {a.get("photo") for a in feed.items() if isinstance(a, dict)}
+    """Delete every kept photo no kept announcement, VESTA message or conversation turn names: its record expired, or a
+    rewrite brought its own."""
+    named = _photos_named(kept)
+    for feed in (ANNOUNCED, MESSAGED, CONVERSED):   # ⚠️ THE FEEDS SHARE THE FOLDER: this one names its own from `kept`
+        named |= _photos_named(feed.items())
     try:
         files = os.listdir(_data(ANNOUNCEMENT_PHOTO_DIR))
     except OSError:
@@ -4124,7 +4134,8 @@ def _report_pages() -> set:
     """Every page a kept VESTA message names (a report's, in each of its languages): a fault's write never sweeps them as
     unattached — a report's page lives with its message, the records-kept days, never with a ticket (ticket 20)."""
     named = set()
-    for m in MESSAGED.items():
+    # ...and an answer's page in the tablet's conversation (ticket 21), the records-kept days too
+    for m in [*MESSAGED.items(), *CONVERSED.items()]:
         if isinstance(m, dict):
             named |= {m.get("page")} | {w.get("page") for w in (m.get("languages") or {}).values() if isinstance(w, dict)}
     return {p for p in named if isinstance(p, str) and p}
@@ -4212,6 +4223,186 @@ async def agent_vesta_message_handler(request: web.Request) -> web.Response:
 
 
 vesta_messages_handler = _feed_handler(MESSAGED, "messages")
+
+
+# ── Talking to VESTA on the tablet (agent-contract.json `conversation`) ─────────────────────────────────────────────
+# Ticket 21 of "One inbox" (owner, 2026-10-28): a question typed on a tablet, answered by VESTA in its thread. ⚠️ THE
+# KIOSK NEVER CALLS THE AGENT: the question waits in an inbox the Agent collects (its long read, like a page's), and the
+# Agent writes each answer back as a conversation turn. ⚠️ WHO ASKS IS THE SESSION'S PROFILE, STAMPED HERE: the page sends
+# words only, so no page can speak as the owner; the Agent answers each profile in its own conversation, with its role's
+# rights (a guest: answers only), apart from every Telegram chat — and a page reads its own profile's conversation only.
+CONVERSATION = dict(AGENT_CONTRACT_TABLE.get("conversation") or {})
+CONVERSATION_LIMITS: dict = dict(CONVERSATION.get("limits") or {})
+#: The Kiosk's profiles the Agent answers, each with its role (the agreement's one table).
+CONVERSATION_PROFILES: dict = dict(CONVERSATION.get("profiles") or {})
+#: A question the Agent has not collected by then is dropped: an answer an hour late is no answer.
+ASK_KEPT_S = int(CONVERSATION.get("askKeptSeconds") or 0)
+#: The person's own lines are the add-on's: their key starts so, and the Agent may not write one.
+ASK_KEY = "ask:"
+#: At most this many questions per profile in a minute: each one costs an AI answer, and a guest's tablet is anyone's.
+ASKS_PER_MINUTE = int(CONVERSATION.get("asksPerMinute") or 0)
+ASKS_MAX_BYTES = 200_000
+CONVERSATION_MAX_BYTES = 2_000_000
+
+
+def _asks_kept(items, now: float) -> list:
+    """The questions still to collect: none older than the agreement's askKeptSeconds, then the newest that fit. Pure."""
+    kept = [a for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)] if isinstance(items, list) else []
+    kept = [a for a in kept if 0 <= now - (_iso_epoch(a.get("at")) or 0) <= ASK_KEPT_S]
+    return _telemetry_ring_after(kept, len(kept), ASKS_MAX_BYTES)
+
+
+def _turns_with(stored: list, rec: dict) -> list:
+    """The conversation with `rec` added — or REPLACING the turn of its key, whole (a "being prepared" answer becomes its
+    result; a withdrawn one keeps no picture). Pure — tests/store-doors.py drives it."""
+    return [t for t in stored if not (isinstance(t, dict) and t.get("key") == rec["key"])] + [rec]
+
+
+def _turn_record(body, seq: int, now_iso: str) -> dict | None:
+    """The record kept for one turn the Agent wrote, or None when it is not one: a key that is not a person's line, a
+    profile of the agreement's, and words, a picture, a page or a withdrawal. Pure — tests/store-doors.py drives it. The
+    pictures are not in it: they are kept apart (_keep_turn_photos)."""
+    if not CONVERSATION_LIMITS or not isinstance(body, dict):
+        return None
+    key = body.get("key")
+    if (not isinstance(key, str) or not key.strip() or key.strip().startswith(ASK_KEY)
+            or len(key) > int(CONVERSATION_LIMITS.get("key") or 0) or body.get("profile") not in CONVERSATION_PROFILES):
+        return None
+    rec = {"seq": seq, "key": key.strip(), "profile": body["profile"], "from": "vesta",
+           "at": body["at"] if _iso_epoch(body.get("at")) is not None else now_iso}
+    if body.get("gone") is True:
+        return {**rec, "gone": True}
+    if isinstance(body.get("text"), str) and body["text"].strip():
+        rec["text"] = body["text"].strip()[:int(CONVERSATION_LIMITS.get("text") or 0)]
+    if page := _vm_page(body.get("page")):
+        rec["page"] = page
+    photos = body.get("photos")
+    has_photo = isinstance(photos, list) and any(isinstance(p, str) and p for p in photos)
+    return rec if ("text" in rec or "page" in rec or has_photo) else None
+
+
+def _keep_turn_photos(raw) -> list:
+    """A turn's pictures (base64) kept in the photo folder, the first the agreement allows; one that is not a picture is
+    left out. Blocking: called on a worker thread."""
+    raws = [p for p in raw if isinstance(p, str) and p] if isinstance(raw, list) else []
+    kept = (_keep_pushed_photo(p, int(CONVERSATION_LIMITS.get("photoBytes") or 0))
+            for p in raws[:int(CONVERSATION_LIMITS.get("photos") or 0)])
+    return [k for k in kept if k]
+
+
+ASKS = JsonStore("vesta-asks.json", [], ASKS_MAX_BYTES + 20_000)
+TURNS = JsonStore("vesta-conversation.json", [], CONVERSATION_MAX_BYTES + 100_000)
+#: The questions waiting for the Agent: collected by its long read, gone after askKeptSeconds.
+ASKED = Feed(ASKS, lambda items: _asks_kept(items, time.time()))
+#: The tablet's conversations, every profile's in one list (each page reads its own): one line per key, kept the
+#: records-kept days, a picture swept with the turn that named it.
+CONVERSED = Feed(TURNS, lambda items: _announcements_kept(items if isinstance(items, list) else [], time.time(),
+                                                          _evidence_retention_days(), CONVERSATION_MAX_BYTES),
+                 after=_sweep_announcement_photos)
+
+
+def _vesta_online() -> bool:
+    """Whether the VESTA Agent is running now (its heartbeat, _agent_presence): without it, nobody answers."""
+    return _agent_presence().get("state") == "online"
+
+
+def _after_of(request: web.Request) -> int | None | web.Response:
+    """A long read's `?after=<seq>` (None without one), or the 400 to answer when it is not a number."""
+    try:
+        return int(request.query["after"]) if "after" in request.query else None
+    except ValueError:
+        return web.json_response({"error": "after must be a number"}, status=400)
+
+
+def _asked_lately(items: list, profile: str, now: float) -> int:
+    """How many questions this profile asked in the last minute. Pure."""
+    return sum(1 for a in items if isinstance(a, dict) and a.get("profile") == profile
+               and 0 <= now - (_iso_epoch(a.get("at")) or 0) < 60)
+
+
+async def vesta_ask_handler(request: web.Request) -> web.Response:
+    """`{"text"}` — every profile: the question kept for the Agent, stamped with this session's profile, and shown in the
+    profile's conversation at once. 503 while VESTA is not running (nobody would answer), 429 past ASKS_PER_MINUTE, 400
+    for anything but words."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    text = body.get("text")
+    longest = int(CONVERSATION_LIMITS.get("question") or 0)
+    if not CONVERSATION_PROFILES or set(body) != {"text"} or not isinstance(text, str) or not text.strip() \
+            or len(text) > longest:
+        return web.json_response({"error": f"A question is words, at most {longest} characters."}, status=400)
+    profile = _role_for(request)
+    if profile not in CONVERSATION_PROFILES:
+        return _forbidden("This profile does not talk to VESTA.")
+    if not _vesta_online():
+        return web.json_response({"error": "VESTA is not running."}, status=503)
+    if _asked_lately(await asyncio.to_thread(ASKED.items), profile, time.time()) >= ASKS_PER_MINUTE:
+        return web.json_response({"error": "Too many questions at once: wait a minute."}, status=429)
+    at, words = _now_iso(), text.strip()
+    ask = await ASKED.add(lambda seq: {"seq": seq, "at": at, "profile": profile, "text": words})
+    await CONVERSED.add(lambda seq: {"seq": seq, "key": f"{ASK_KEY}{ask['seq']}", "profile": profile, "from": "person",
+                                     "at": at, "text": words}, _turns_with)
+    return web.json_response({"ok": True})
+
+
+async def vesta_conversation_handler(request: web.Request) -> web.Response:
+    """This session's profile's conversation — `{"turns": [...], "last", "first", "kept", "vesta": "online"|"offline"}`,
+    every profile; with `?after=<seq>` the newer turns, the answer waiting up to ANNOUNCEMENT_WAIT_S for one (Feed). ⚠️
+    ONLY ITS OWN: a guest never reads what the owner asked. A profile that may not view cameras gets no picture."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    if isinstance(after := _after_of(request), web.Response):
+        return after
+    profile = _role_for(request)
+    items, last, first = await CONVERSED.read(after, ANNOUNCEMENT_WAIT_S)
+    own = [t for t in items if t.get("profile") == profile]
+    kept = [t["seq"] for t in await asyncio.to_thread(CONVERSED.items) if t.get("profile") == profile]
+    if not _may(profile, "viewCameras"):
+        own = [{k: v for k, v in t.items() if k != "photos"} for t in own]
+    return web.json_response({"turns": own, "last": last, "first": first, "kept": kept,
+                              "vesta": "online" if _vesta_online() else "offline"},
+                             headers={"Cache-Control": "no-store"})
+
+
+async def agent_inbox_handler(request: web.Request) -> web.Response:
+    """The Agent's long read of the tablets' questions (token-gated, `agentRead`): `{"asks": [...], "last", "first"}`,
+    with `?after=<seq>` the newer ones, held open up to the agreement's waitSeconds for one to come. 404 when the agreement
+    names no conversation (the door says nothing)."""
+    if (refused := _agent_refuse(request, "agentRead")) is not None:
+        return refused
+    if not CONVERSATION_PROFILES:
+        return web.json_response({"error": "not found"}, status=404)
+    if isinstance(after := _after_of(request), web.Response):
+        return after
+    items, last, first = await ASKED.read(after, min(int(CONVERSATION.get("waitSeconds") or 0), ANNOUNCEMENT_WAIT_S))
+    return web.json_response({"asks": items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
+
+
+async def agent_conversation_turn_handler(request: web.Request) -> web.Response:
+    """The Agent's answer as a turn (token-gated, `agentWrite`): added, or replacing the turn of its key. 404 when the
+    agreement names no conversation; 400 for a body that is not a turn (a person's key, a profile it does not name, no
+    words)."""
+    if (refused := _agent_refuse(request, "agentWrite")) is not None:
+        return refused
+    if not CONVERSATION_LIMITS:
+        return web.json_response({"error": "not found"}, status=404)
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    said = _turn_record(body, 0, _now_iso())
+    photos = [] if said is None or said.get("gone") else await asyncio.to_thread(_keep_turn_photos, body.get("photos"))
+    if said is None or not (said.get("gone") or "text" in said or "page" in said or photos):
+        return web.json_response({"error": "a turn names its key and a profile, and says something"}, status=400)
+
+    def record(seq: int) -> dict:
+        rec = _turn_record(body, seq, _now_iso())
+        return {**rec, "photos": photos} if photos else rec
+
+    rec = await CONVERSED.add(record, _turns_with)
+    return web.json_response({"ok": True, "seq": rec["seq"]})
 
 
 # ── A message erased (owner, 2026-10-29) ─────────────────────────────────────────────────────────────────────────────
@@ -4605,6 +4796,9 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_get("/vesta-messages", vesta_messages_handler)
     app.router.add_post("/announcement-press", announcement_press_handler)
     app.router.add_post("/message-erase", message_erase_handler)
+    # Talking to VESTA (every profile, each its own conversation).
+    app.router.add_post("/vesta-ask", vesta_ask_handler)
+    app.router.add_get("/vesta-conversation", vesta_conversation_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
     app.router.add_get("/agent/v1/info", agent_info_handler)
@@ -4614,6 +4808,8 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_post("/agent/v1/fm-evidence", agent_fm_evidence_handler)
     app.router.add_post("/agent/v1/fm-document", agent_fm_document_handler)
     app.router.add_post("/agent/v1/vesta-message", agent_vesta_message_handler)
+    app.router.add_get("/agent/v1/inbox", agent_inbox_handler)
+    app.router.add_post("/agent/v1/conversation-turn", agent_conversation_turn_handler)
     app.router.add_post("/agent/v1/heartbeat", agent_heartbeat_handler)
     return app
 

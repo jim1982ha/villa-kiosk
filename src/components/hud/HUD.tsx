@@ -30,7 +30,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, Bot,
+  Minus, Plus, CircleHelp, TriangleAlert, Bot, MessageCircle,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -56,6 +56,7 @@ import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import type { VillaHealthLevel } from "@/config/attention";
 import { formatCountBadge } from "@/utils/countBadge";
 import { useAgent } from "@/agent/AgentContext";
+import { useConversation } from "@/messages/ConversationContext";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { countOf } from "@/utils/countOf";
 
@@ -99,6 +100,8 @@ interface Props {
   /** Open the Cockpit — mounted by the Dashboard beside the other windows
    *  (pages/surfaces); with `doors.agent` its button is the robot. */
   onOpenCockpit: () => void;
+  /** "Ask VESTA" (the phone's menu, while VESTA runs): the Cockpit's Messages with VESTA's thread open. */
+  onAskVesta: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
@@ -128,7 +131,7 @@ export default function HUD({
   doors, onOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  onOpenCockpit, onOpenCategory, onOpenPresence,
+  onOpenCockpit, onAskVesta, onOpenCategory, onOpenPresence,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -153,6 +156,12 @@ export default function HUD({
   const { status: agentStatus } = useAgent();
   const agentOnline = agentStatus?.state === "online";
   const agentTitle = `VESTA Agent, ${agentOnline ? "online" : "offline"}`;
+  // ⚠️ THE ROBOT ONLY WHILE VESTA RUNS (ticket 21 of "One inbox", owner 2026-10-28: "the robot, microphone and VESTA's
+  // thread hidden while VESTA is not running, so that nothing on screen is dead"): without its heartbeat the Cockpit's
+  // button is the ⚠ again. Its presence is the agent's own (/agent-status, the profiles that see it); "Ask VESTA" reads
+  // the conversation's, which the add-on tells every profile, a guest too.
+  const robot = doors.agent && agentOnline;
+  const { thread } = useConversation();
   // The agent's presence as the dot on its robot — the top bar's and the
   // phone menu's are this one element (.status-dot, 2.496.247).
   const agentDot = <span className={`status-dot ${agentOnline ? "on" : "warn"}`} aria-hidden="true" />;
@@ -583,14 +592,14 @@ export default function HUD({
                 (top right) stays the Cockpit's, the agent's presence dot sits
                 bottom right. Without one, the ⚠ as before. */}
             <button
-              className={`icon-btn${doors.agent ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
+              className={`icon-btn${robot ? " agent-btn" : ""}${HEALTH_CLASS[health.level]}`}
               onClick={onOpenCockpit}
               title={(attentionGroups.length > 0 ? health.summary : "Cockpit, villa status at a glance")
-                + (doors.agent ? ` · ${agentTitle}` : "") + unreadSaid}
-              aria-label={`Open Cockpit, villa status at a glance${doors.agent ? ` (${agentTitle})` : ""}${unreadSaid}`}
+                + (robot ? ` · ${agentTitle}` : "") + unreadSaid}
+              aria-label={`Open Cockpit, villa status at a glance${robot ? ` (${agentTitle})` : ""}${unreadSaid}`}
             >
-              {doors.agent ? <Bot size={24} /> : <TriangleAlert size={24} />}
-              {doors.agent && agentDot}
+              {robot ? <Bot size={24} /> : <TriangleAlert size={24} />}
+              {robot && agentDot}
               {unreadMark}
               {attentionGroups.length > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
@@ -662,21 +671,28 @@ export default function HUD({
                   role="menuitem"
                   className="hud-menu-item"
                   onClick={() => { setMenuOpen(false); onOpenCockpit(); }}
-                  title={doors.agent ? agentTitle : undefined}
+                  title={robot ? agentTitle : undefined}
                 >
                   {/* The agent's presence is the dot on its robot, as in the
                       top bar (owner, 2.496.247) — no "· agent online" text. */}
                   <span className="hud-menu-glyph">
-                    {doors.agent ? <Bot size={18} /> : <TriangleAlert size={18} />}
-                    {doors.agent && agentDot}
+                    {robot ? <Bot size={18} /> : <TriangleAlert size={18} />}
+                    {robot && agentDot}
                   </span>
                   <span>
                     Cockpit{attentionGroups.length > 0 ? ` (${formatCountBadge(attentionGroups.length)})` : ""}
-                    {doors.agent && <span className="sr-only">{`, ${agentTitle}`}</span>}
+                    {robot && <span className="sr-only">{`, ${agentTitle}`}</span>}
                     {unreadSaid && <span className="sr-only">{unreadSaid}</span>}
                   </span>
                   {unreadMark}
                 </button>
+                {/* VESTA's thread straight away (spec story 31; ticket 21 of "One inbox"), every profile, while VESTA runs */}
+                {thread.shown && (
+                  <button role="menuitem" className="hud-menu-item" onClick={() => { setMenuOpen(false); onAskVesta(); }}>
+                    <span className="hud-menu-glyph"><MessageCircle size={18} aria-hidden="true" /></span>
+                    <span>Ask VESTA</span>
+                  </button>
+                )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus
                     — one row, not two menu items, since it's a single
                     stepper rather than two independent actions. Doesn't

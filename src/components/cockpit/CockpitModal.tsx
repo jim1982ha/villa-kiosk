@@ -48,6 +48,8 @@ export interface CockpitModalProps {
   onReportProblem: () => void;
   /** The devices whose open issue Messages opens (a device window's warning). */
   focusFaults?: readonly string[];
+  /** Messages opens on VESTA's thread ("Ask VESTA"). */
+  openThread?: boolean;
   /** The header's gear: Settings, open on its Messages tab (ticket 16 of "One inbox"); absent for a profile that may
    *  not open Settings. */
   onOpenSettings?: () => void;
@@ -61,7 +63,7 @@ const MESSAGES_TAB: ModalTab<CockpitTab> = { id: "messages", label: "Messages", 
 
 export default function CockpitModal({
   onClose, onOpenEntity, doors, tab, onTab, reportFaultFor, onFaultFormOpened,
-  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults, onOpenSettings,
+  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults, openThread, onOpenSettings,
 }: CockpitModalProps) {
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
   const tabs: ModalTab<CockpitTab>[] = doors.facility ? [MESSAGES_TAB, ...FACILITY_TABS] : [MESSAGES_TAB];
@@ -124,7 +126,7 @@ export default function CockpitModal({
         ) : (
           <MessagesTab onOpenEntity={onOpenEntity} doors={doors} reportFaultFor={reportFaultFor}
             onFaultFormOpened={onFaultFormOpened} onEditTicket={onEditTicket} onReportProblem={onReportProblem}
-            focusFaults={focusFaults} />
+            focusFaults={focusFaults} openThread={openThread} />
         )}
       </div>
 

@@ -9,7 +9,7 @@
 // screen in turn.
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bell, CheckCircle2, ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
+import { ArrowLeft, Bell, Bot, CheckCircle2, ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Doors } from "@/auth/doors";
 import { useHA } from "@/ha/HAStateStore";
@@ -32,6 +32,9 @@ import { SourceIcons } from "@/components/fm/sourceIcons";
 import InfoTip from "@/components/common/InfoTip";
 import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
+import VestaThread from "@/components/messages/VestaThread";
+import { useConversation } from "@/messages/ConversationContext";
+import { THREAD_KEY, type ThreadView } from "@/messages/conversationModel";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
 import type { PressState } from "@/messages/presses";
 import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
@@ -59,6 +62,24 @@ export function MessageRow({ item, selected, onSelect, hold }: {
       </span>
       {row.time && <span className="messages-row-time">{row.time}</span>}
       {hold && <span className="fm-erasable-dot" aria-hidden="true" />}
+    </button>
+  );
+}
+
+/** VESTA's thread, pinned above the list while VESTA runs (ticket 21 of "One inbox"): its name, its last line and when.
+ *  Pure: a check draws it. */
+export function ThreadRow({ thread, selected, onSelect }: {
+  thread: ThreadView; selected: boolean; onSelect: (key: string) => void;
+}) {
+  return (
+    <button type="button" className={`messages-row messages-thread${selected ? " on" : ""}`} aria-current={selected || undefined}
+      onClick={() => onSelect(THREAD_KEY)}>
+      <span className="messages-row-icon"><Bot size={18} aria-hidden="true" /></span>
+      <span className="messages-row-text">
+        <b>VESTA</b>
+        <span>{thread.preview}</span>
+      </span>
+      {thread.at && <span className="messages-row-time">{localStamp(thread.at)}</span>}
     </button>
   );
 }
@@ -141,7 +162,7 @@ function rowOf(item: MessageItem) {
 }
 
 export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket,
-  onReportProblem, focusFaults }: {
+  onReportProblem, focusFaults, openThread }: {
   onOpenEntity: (entityId: string) => void;
   /** What this profile may do (auth/doors): `facility` takes faults on and opens tickets, `reportFault` reports a
    *  problem. */
@@ -155,6 +176,8 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   onReportProblem: () => void;
   /** The devices whose issue opens (a device window's warning, screen "openFaults"). */
   focusFaults?: readonly string[];
+  /** VESTA's thread opens ("Ask VESTA", screen "askVesta"). */
+  openThread?: boolean;
 }) {
   const { entities } = useHA();
   const { config, resolvedRooms } = useConfig();
@@ -167,6 +190,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
 
   const { open, watched } = useCockpitIssues();
   const { kept, unread, unreadReports, shown } = useAnnouncements();
+  const { thread } = useConversation();
   // something unread: opened on Notifications, the newest open (ticket 18 of "One inbox"); a warning or the wrench first
   const [filter, setFilter] = useState<MessagesFilter>(
     () => openingFilter(unread, { warning: !!focusFaults?.length, form: !!reportFaultFor && canManage }, unreadReports));
@@ -189,6 +213,13 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
     setFilter("issues");
     setFocusDone(false);
   }, [focusKey]);
+  // "Ask VESTA": its thread open
+  useEffect(() => {
+    if (!openThread) return;
+    setSelected(THREAD_KEY);
+    setRaising(null);
+    setFocusDone(true);
+  }, [openThread]);
   const isFocus = focusKey && !focusDone
     ? (card: CardView) => cardFocused(card.entityId, focusFaults, devices.deviceOf) : undefined;
 
@@ -204,10 +235,12 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   // the list again (a phone's Back): nothing asked, the warning's issue let go
   const back = () => { setSelected(null); setRaising(null); setFocusDone(true); };
   const { issues: showsIssues, notifications: showsNotes, reports: showsReports } = view.shows;
-  const item = raising ? null : view.selected;
-  // A phone shows the item someone chose (a line, a warning, the ticket form), else the list: an item that went (an
-  // issue cleared, the form done) never leaves another open in its place.
-  const reading = !!raising || view.openedBy === "asked" || view.openedBy === "focus";
+  // VESTA's thread, when chosen and while VESTA runs: it is not one of the list's items (messagesView), it is pinned
+  const threadOpen = !raising && selected === THREAD_KEY && thread.shown;
+  const item = raising || threadOpen ? null : view.selected;
+  // A phone shows the item someone chose (a line, a warning, the ticket form, the thread), else the list: an item that
+  // went (an issue cleared, the form done) never leaves another open in its place.
+  const reading = !!raising || threadOpen || view.openedBy === "asked" || view.openedBy === "focus";
   // read on this tablet once in view, as the model says (messagesModel.readOnScreen)
   const onScreen = readOnScreen(filter, { notifications: paged.page, reports: reportsPaged.page }, item, kept);
   const onScreenKey = onScreen.map(idOf).join(",");
@@ -229,6 +262,8 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           ))}
         </div>
         <div className="messages-scroll">
+          {/* VESTA's thread, pinned above every filter's list (ticket 21 of "One inbox"); gone while VESTA is stopped */}
+          {thread.shown && <ThreadRow thread={thread} selected={threadOpen} onSelect={choose} />}
           {showsIssues && (
             <MessagesSection title="Open issues" count={open.length} open={folds.issues} onToggle={() => fold("issues")}
               actions={canManage ? (
@@ -293,7 +328,8 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
               focused={!!isFocus?.(item.card)} />)}
         {item?.kind === "notification" && <NotificationDetail item={item} />}
         {item?.kind === "report" && <ReportDetail announcement={item.announcement} canOpenPage={canManage} />}
-        {!raising && !item && <p className="muted body-text messages-empty">Nothing to show.</p>}
+        {threadOpen && <VestaThread canOpenPage={canManage} />}
+        {!raising && !item && !threadOpen && <p className="muted body-text messages-empty">Nothing to show.</p>}
       </div>
     </div>
   );

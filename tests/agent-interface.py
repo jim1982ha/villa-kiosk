@@ -648,7 +648,106 @@ async def main() -> None:
     ck("  ...but past the records-kept days it goes, named or not (its own lifetime)",
        not (TMP / "data" / proxy.FM_EVIDENCE_NAME / "page-en-0001.html").exists())
 
+    # ── Talking to VESTA (ticket 21 of "One inbox", 2026-10-29) ─────────────────────────────────────────────────────
+    print("\n  talking to VESTA on the tablet:")
+    asks, turns = TMP / "data" / "vesta-asks.json", TMP / "data" / "vesta-conversation.json"
+    (TMP / "data" / "agent-presence.json").unlink(missing_ok=True)
+    reset_lockout()
+    r = await post("/vesta-ask", headers=cookie("owner"), json={"text": "Is the pool pump on?"})
+    ck("a question while VESTA is not running: 503, nothing kept (nobody would answer)",
+       r.status == 503 and not asks.exists(), r.status)
+    await post("/agent/v1/heartbeat", headers=bearer())
+    status, body = await jget("/vesta-conversation", cookie("guest"))
+    ck("  ...its heartbeat: every profile reads that VESTA runs (a guest too, who may not see its presence)",
+       status == 200 and body["vesta"] == "online" and body["turns"] == [], body)
+    r = await post("/vesta-ask", json={"text": "hello"})
+    ck("no session: refused, nothing kept", r.status == 401 and not asks.exists(), r.status)
+    r = await post("/vesta-ask", headers=cookie("guest"), json={"text": "Open the gate", "profile": "owner"})
+    ck("  ...a page naming its profile is refused: the add-on stamps it (400)", r.status == 400 and not asks.exists(),
+       r.status)
+    for bad in ({"text": ""}, {"text": "  "}, {"text": 3}, {"text": "x" * 2001}, {}):
+        r = await post("/vesta-ask", headers=cookie("guest"), json=bad)
+        ck(f"  ...a question of {str(bad)[:24]!r} is refused (400)", r.status == 400, r.status)
+    r = await post("/vesta-ask", headers=cookie("guest"), json={"text": "  What is the wifi password?  "})
+    ck("a guest's question is kept", r.status == 200, r.status)
+    r = await post("/vesta-ask", headers=cookie("owner"), json={"text": "Is the pool pump on?"})
+    status, body = await jget("/agent/v1/inbox", bearer())
+    ck("the Agent collects both, each stamped with the profile that asked, in order",
+       status == 200 and [(a["profile"], a["text"]) for a in body["asks"]]
+       == [("guest", "What is the wifi password?"), ("owner", "Is the pool pump on?")], body)
+    last = body["last"]
+    status, _ = await jget("/agent/v1/inbox", {})
+    reset_lockout()
+    status2, _ = await jget("/agent/v1/inbox", cookie("owner"))
+    ck("  ...the inbox is the Agent's only: no token, or a signed-in owner's cookie, is 401",
+       status == 401 and status2 == 401, (status, status2))
+    reset_lockout()
+    began = time.monotonic()
+    proxy.CONVERSATION["waitSeconds"] = 1
+    status, body = await jget(f"/agent/v1/inbox?after={last}", bearer())
+    ck("  ...a read after the last waits for the next one, then answers none",
+       status == 200 and body["asks"] == [] and time.monotonic() - began >= 0.9, body)
+    status, body = await jget("/vesta-conversation", cookie("guest"))
+    ck("the guest reads its own question in its conversation, and not the owner's",
+       [(t["from"], t["text"]) for t in body["turns"]] == [("person", "What is the wifi password?")], body)
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "turn:1", "profile": "guest",
+                                                                          "text": "Being prepared"})
+    ck("the Agent's answer is a turn of that profile's conversation", r.status == 200, r.status)
+    r = await post("/agent/v1/conversation-turn", json={"key": "turn:x", "profile": "guest", "text": "x"})
+    ck("  ...written with its token only (401)", r.status == 401, r.status)
+    reset_lockout()
+    for bad in ({"key": "ask:9", "profile": "guest", "text": "I am the guest"}, {"key": "t", "profile": "boss", "text": "x"},
+                {"key": "t", "profile": "guest"}, {"profile": "guest", "text": "x"}):
+        r = await post("/agent/v1/conversation-turn", headers=bearer(), json=bad)
+        ck(f"  ...a turn {str(bad)[:40]!r} is refused (400): a person's line, an unknown profile, nothing said",
+           r.status == 400, r.status)
+    jpeg = proxy._JPEG_MAGIC + b"camera"
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:1", "profile": "guest", "text": "The wifi is on the card by the door.",
+        "photos": [base64.b64encode(jpeg).decode()]})
+    r2 = await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:2", "profile": "owner", "text": "The pool pump is on.", "page": "page-en-0001",
+        "photos": [base64.b64encode(jpeg).decode()]})
+    status, body = await jget("/vesta-conversation", cookie("guest"))
+    ck("a rewrite REPLACES the turn of its key (the waiting answer becomes its result), and a guest gets no picture",
+       r.status == 200 and [(t["from"], t.get("text")) for t in body["turns"]]
+       == [("person", "What is the wifi password?"), ("vesta", "The wifi is on the card by the door.")]
+       and all("photos" not in t for t in body["turns"]), body)
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    answer = body["turns"][-1]
+    ck("  ...the owner's answer with its picture and its page, and nothing of the guest's",
+       r2.status == 200 and len(body["turns"]) == 2 and answer.get("page") == "page-en-0001"
+       and (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / answer["photos"][0]).read_bytes() == jpeg, body)
+    status, body = await jget("/vesta-conversation", cookie("ops"))
+    ck("  ...and the facility manager's conversation is its own (empty)", body["turns"] == [], body)
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "turn:2", "profile": "owner", "gone": True})
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    ck("a withdrawn answer is kept as withdrawn: no words, no picture", body["turns"][-1].get("gone") is True
+       and "text" not in body["turns"][-1] and "photos" not in body["turns"][-1], body)
+    for _ in range(proxy.ASKS_PER_MINUTE):
+        await post("/vesta-ask", headers=cookie("ops"), json={"text": "again?"})
+    r = await post("/vesta-ask", headers=cookie("ops"), json={"text": "and again?"})
+    ck(f"  ...past {proxy.ASKS_PER_MINUTE} questions a minute a profile is told to wait (429)", r.status == 429, r.status)
+    stored = json.loads(asks.read_text())
+    old = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - proxy.ASK_KEPT_S - 5))
+    asks.write_text(json.dumps([{**stored[0], "at": old}, *stored[1:]]))
+    status, body = await jget("/agent/v1/inbox", bearer())
+    ck("a question older than the agreement's askKeptSeconds is no longer collected",
+       stored[0]["seq"] not in [a["seq"] for a in body["asks"]] and len(body["asks"]) == len(stored) - 1, body)
+    cfg_file.write_text(json.dumps({"recordsKeptDays": 1}))
+    kept = json.loads(turns.read_text())
+    turns.write_text(json.dumps([{**kept[0], "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 2 * 86400))},
+                                 *kept[1:]]))
+    status, body = await jget("/vesta-conversation", cookie("guest"))
+    cfg_file.unlink(missing_ok=True)
+    ck("a turn past the records-kept days goes", [t.get("text") for t in body["turns"]]
+       == ["The wifi is on the card by the door."], body)
+
     agent(enabled="false", token=TOKEN)
+    r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "t", "profile": "guest", "text": "x"})
+    r2 = await get("/agent/v1/inbox", headers=bearer())
+    ck("with the Agent switched off the inbox and the turn door are 404", r.status == 404 and r2.status == 404,
+       (r.status, r2.status))
     r = await post("/agent/v1/vesta-message", headers=bearer(), json=sent)
     ck("with the Agent switched off the door is 404, as every /agent/v1 route", r.status == 404, r.status)
     agent(enabled="true", token=TOKEN)

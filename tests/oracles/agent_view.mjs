@@ -60,9 +60,12 @@ ck("  ...and no window of its own any more (2.496.443)", !/AgentModal|shown\("ag
   const cockpit = strip((src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/IssueCard.tsx")));
   ck("the agent's presence is the Cockpit button's robot and dot only (no robot button of its own)",
      !/onOpenAgent/.test(hud));
-  ck("  ...the Cockpit button shows the robot and the presence dot only with the agent's door, the ⚠ without",
-     /\{doors\.agent \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
-     && /\{doors\.agent && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{agentOnline/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
+  // ⚠️ ONLY WHILE IT RUNS (ticket 21 of "One inbox", owner 2026-10-28: nothing dead on screen): the robot is the agent's
+  // door AND its heartbeat; stopped, the ⚠
+  ck("  ...the Cockpit button shows the robot and the presence dot only with the agent's door while it runs, the ⚠ without",
+     /const robot = doors\.agent && agentOnline;/.test(hud)
+     && /\{robot \? <Bot size=\{24\} \/> : <TriangleAlert size=\{24\} \/>\}/.test(hud)
+     && /\{robot && agentDot\}/.test(hud) && /const agentDot = <span className=\{`status-dot \$\{agentOnline/.test(hud) && !/onOpenAgent \?|onOpenAgent &&/.test(hud));
   ck("  ...and the Cockpit's footer has no 'VESTA Agent' (one footer: Close)",
      /<ModalFooter onClose=\{onClose\} \/>/.test(cockpit) && !/VESTA Agent/.test(cockpit));
 }

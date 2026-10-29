@@ -15,6 +15,7 @@ import ConnectionBanner from "@/components/hud/ConnectionBanner";
 import UpdateBanner from "@/components/hud/UpdateBanner";
 import AnnouncementNotice from "@/components/hud/AnnouncementNotice";
 import { AnnouncementsProvider } from "@/messages/AnnouncementsContext";
+import { ConversationProvider } from "@/messages/ConversationContext";
 import AppNotice, { AppNoticeContext, type AppNoticeMessage } from "@/components/hud/AppNotice";
 import { NoticeStack } from "@/components/hud/Notice";
 import FirstRunTips from "@/components/hud/FirstRunTips";
@@ -706,6 +707,8 @@ export default function Dashboard() {
     <AppNoticeContext.Provider value={setNotice}>
     {/* the page's one watch on the villa's announcements: the notice and the Cockpit's Notifications read it */}
     <AnnouncementsProvider>
+    {/* ...and on this profile's conversation with VESTA: the robot, Messages' pinned thread and "Ask VESTA" read it */}
+    <ConversationProvider>
       <BabylonCanvas
         key={modelKey}
         onManager={setManager}
@@ -754,6 +757,7 @@ export default function Dashboard() {
         onApplyOverviewDefault={applyOverviewDefault}
         onSaveOverviewDefault={saveOverviewDefault}
         onOpenCockpit={() => go({ type: "openWindow", window: "cockpit", tab: "messages" })}
+        onAskVesta={() => go({ type: "askVesta" })}
         onOpenCategory={(category) => go({ type: "openList", list: { kind: "category", category } })}
         onOpenPresence={() => openSurface("presence")}
       />
@@ -873,6 +877,7 @@ export default function Dashboard() {
           onTicketEditOpened={() => go({ type: "ticketEditOpened" })}
           onReportProblem={() => go({ type: "reportProblem" })}
           focusFaults={screen.faultsFocus ?? undefined}
+          openThread={screen.threadFocus}
           onOpenSettings={doors.settings ? () => go({ type: "openWindow", window: "settings", settingsTab: "messages" }) : undefined}
         />
       )}
@@ -920,6 +925,7 @@ export default function Dashboard() {
           viewHeadingDeg={manager ? () => manager.viewHeadingDeg() : undefined}
         />
       )}
+    </ConversationProvider>
     </AnnouncementsProvider>
     </AppNoticeContext.Provider>
     </VillaModelProvider>
