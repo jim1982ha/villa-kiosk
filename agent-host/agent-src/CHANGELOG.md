@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.382 (29 October 2026)
+
+- VESTA answers aloud (ticket 24 of "One inbox"): speech.Speech asks the text-to-speech the villa's preferred voice
+  pipeline names (ha_client.voice_pipeline, ha_manage_pipeline `list` only: read_guard.READ_ACTIONS) through
+  /api/tts_get_url, MP3, and reads the sound by its path, never its url. app._aloud, for a question spoken on the
+  tablet only: Tablet.speak uploads it (Kiosk.add_speech, /agent/v1/speech) and names it on the answer's turn
+  (`speech`); with none named, Tablet.note adds speech.NO_VOICE (NOT_SPOKEN when the voice failed). An edit of a turn
+  drops its sound. New limit speech.timeout_s (apart from a voice message's one clock); the sound is made after the answer, outside the
+  conversation's lock (Tablet.later). The agreement copied from the Kiosk 2.496.600.
+
 ## 0.6.381 (29 October 2026)
 
 - Review R, round 2: intake._shared (the chat's own: policy.tablet_profile) replaces Question.shared, so a command

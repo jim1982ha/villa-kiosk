@@ -118,6 +118,11 @@ class HABase:
         None: a client that cannot read them (a test's stand-in), so a reader falls back."""
         return None
 
+    def voice_pipeline(self) -> dict | None:
+        """The villa's preferred voice pipeline (its speech-to-text, text-to-speech, their languages and voice), or None
+        when it has none: VESTA's spoken answers (vesta_agent.speech)."""
+        return None
+
 
 class HAError(RuntimeError):
     pass
@@ -364,6 +369,14 @@ class McpClient(HABase):
         body = self.tool("ha_manage_energy_prefs", {"mode": "get"})
         cfg = body.get("config") if isinstance(body, dict) else None
         return cfg if isinstance(cfg, dict) else None
+
+    def voice_pipeline(self):
+        # action "list" ONLY: the one READ_ACTIONS lets through (create, update, set_preferred and process write or act).
+        # ⚠️ "get" of "preferred" is refused by the villa's system (measured 2026-10-29): the list names the preferred one
+        body = self.tool("ha_manage_pipeline", {"action": "list"})
+        pipes = body.get("pipelines") if isinstance(body, dict) else None
+        return next((p for p in pipes or () if isinstance(p, dict) and p.get("id") == body.get("preferred_pipeline")),
+                    None)
 
     def tool_content(self, name: str, args: dict) -> list[dict]:
         """Raw MCP content blocks (images kept), for the camera snapshot."""

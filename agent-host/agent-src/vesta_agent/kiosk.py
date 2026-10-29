@@ -379,12 +379,15 @@ class Kiosk:
         self._lock = asyncio.Lock()
 
     async def _req(self, method: str, path: str, body: dict | None = None,
-                   timeout_s: float | None = None, raw: bool = False) -> tuple[int, dict | bytes]:
-        """(status, its JSON object); with `raw`, a 200's bytes as they came (a spoken question's WAV)."""
+                   timeout_s: float | None = None, raw: bool = False,
+                   content: tuple[bytes, str] | None = None) -> tuple[int, dict | bytes]:
+        """(status, its JSON object); with `raw`, a 200's bytes as they came (a spoken question's WAV). `content`: a body
+        of bytes and its type instead of JSON (an answer's sound)."""
         timeout = aiohttp.ClientTimeout(total=timeout_s or kiosk_timeout_s())
+        sent = {"data": content[0], "headers": {"Content-Type": content[1]}} if content else {"json": body}
         try:
             async with aiohttp.ClientSession(timeout=timeout, headers=self.headers) as http:
-                async with http.request(method, f"{self.url}{path}", json=body) as r:
+                async with http.request(method, f"{self.url}{path}", **sent) as r:
                     if raw and r.status == 200:
                         return r.status, await r.read()
                     try:
@@ -524,6 +527,17 @@ class Kiosk:
         could not be reached."""
         status, data = await self._req("GET", f"/agent/v1/voice/{name}", raw=True)
         return data if status == 200 and isinstance(data, bytes) else None
+
+    async def add_speech(self, audio: bytes, mime: str) -> str | None:
+        """An answer's sound (ticket 24 of "One inbox", VESTA answers aloud), kept for the turn that names it (POST
+        /agent/v1/speech, the Kiosk since 2.496.600): its name; None when refused or this Kiosk keeps none (404).
+        KioskError when it could not be reached."""
+        status, data = await self._req("POST", "/agent/v1/speech", content=(audio, mime))
+        if status == 200 and isinstance(data.get("name"), str):
+            return data["name"]
+        log.warning("The Kiosk did not keep an answer's sound: it answered %s%s", status,
+                    " (a Kiosk older than 2.496.600 plays none)" if status == 404 else "")
+        return None
 
     async def add_turn(self, record: dict) -> bool:
         """One turn of a tablet's conversation, added or replacing the turn of its key (POST

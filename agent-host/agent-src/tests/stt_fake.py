@@ -8,6 +8,11 @@ port, in its own thread, so the header the villa's system reads is the one check
 `answers`: a status (200: "words in <language>"), ("slow", seconds) — 200 after that wait, or ("json", body) — 200
 with that body (an empty text, an error result).
 `asked`: (entity, language) of each request, in order; `contents`: each X-Speech-Content header.
+
+The villa's TEXT-to-speech too (ticket 24 of "One inbox", VESTA answers aloud), on the same address as the villa's
+system serves both: POST /api/tts_get_url answers the sound's path (and an outside `url`, never to be fetched), GET
+that path answers `speech` (audio/mpeg). `tts`: its answers in turn, as `answers` (a status, or ("slow", seconds)). `spoken`: each request's body;
+`fetched`: each path read.
 """
 from __future__ import annotations
 
@@ -22,8 +27,11 @@ def language_of(header: str) -> str:
 
 
 class FakeSTT:
-    def __init__(self, answers=(200,)):
+    def __init__(self, answers=(200,), speech: bytes = b"", tts=(200,)):
         self.answers = list(answers)
+        self.speech, self.tts = speech, list(tts)
+        self.spoken: list[dict] = []
+        self.fetched: list[str] = []
         self.asked: list[tuple[str, str]] = []
         self.contents: list[str] = []
         self.tokens: list[str] = []
@@ -59,6 +67,8 @@ class FakeSTT:
         asyncio.set_event_loop(self.loop)
         app = web.Application()
         app.router.add_post("/api/stt/{entity}", self._stt)
+        app.router.add_post("/api/tts_get_url", self._tts_url)
+        app.router.add_get("/api/tts_proxy/{name}", self._tts_sound)
         runner = web.AppRunner(app)
         self.loop.run_until_complete(runner.setup())
         site = web.TCPSite(runner, "127.0.0.1", 0)
@@ -85,3 +95,18 @@ class FakeSTT:
         if answer != 200:
             return web.Response(status=answer)
         return web.json_response({"result": "success", "text": f"words in {lang}"})
+
+    async def _tts_url(self, request: web.Request):
+        self.spoken.append(await request.json())
+        answer = self.tts[min(len(self.spoken), len(self.tts)) - 1]
+        if isinstance(answer, tuple) and answer[0] == "slow":
+            await asyncio.sleep(answer[1])
+            answer = 200
+        if answer != 200:
+            return web.Response(status=answer)
+        return web.json_response({"url": "https://outside.invalid/api/tts_proxy/answer.mp3",
+                                  "path": "/api/tts_proxy/answer.mp3"})
+
+    async def _tts_sound(self, request: web.Request):
+        self.fetched.append(request.path)
+        return web.Response(body=self.speech, content_type="audio/mpeg")

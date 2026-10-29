@@ -62,6 +62,7 @@ from .alert_buttons import AlertButtons
 from .outcome import Outcome
 from .voice import TelegramAudio, Voice
 from .transcriber import villa_entity_ids
+from . import speech
 from .tickets import Tickets
 from .places import tab, where
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
@@ -179,6 +180,8 @@ class Vesta:
         # a voice message's words (voice.py): the skill prepares the audio and the plan, transcriber.py runs it
         self.voice = Voice(self.s, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers,
                            entity_ids=lambda: villa_entity_ids(self.reader))
+        # the villa's own voice, for the answer to a question spoken on the tablet (speech.py, ticket 24 of "One inbox")
+        self.speech = speech.Speech(self.s, self.reader, self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
         self.notices = Notices(self.state, self.policy, settings.timezone, name=incidents.name,
@@ -680,8 +683,10 @@ class Vesta:
                 return
             if not text and image is None:
                 return
+            # a question spoken on the tablet (its audio the tablet's: intake.Question.audio) is answered aloud too
             await self.converse(got.chat, got.person, text, voice=got.spoken, image=image, held=held,
-                                invoked=got.invoked, spoken=spoken, about=about if got.invoked else None)
+                                invoked=got.invoked, spoken=spoken, about=about if got.invoked else None,
+                                aloud=got.audio is not None and self.tablet.owns(got.chat))
         finally:
             held()
 
@@ -732,23 +737,26 @@ class Vesta:
     async def converse(self, cid: int, person: Person | None, text: str,
                        resume: str | None = "auto", is_continue: bool = False, voice: bool = False,
                        image: tuple[str, str] | None = None, held=None, invoked: str | None = None,
-                       request: Request | None = None, spoken: str | None = None, about: str | None = None):
+                       request: Request | None = None, spoken: str | None = None, about: str | None = None,
+                       aloud: bool = False):
         """`about`: what the answer whose button started this request had read (command_offers.subject), told to the AI
         with the question: a command starts a fresh conversation. `image`: a photo the person sent (base64, mime), `text` its caption: the AI looks at it. `held`: the chat's
         "typing…" taken when the message arrived (handle_message), carried on until the answer goes. `invoked`: the
         command skill the person's "/command" called (a new request); `request`: the one a Continue continues.
         `spoken`: the language Whisper said it heard a voice message in (transcriber.Heard), said beside it; None
-        when it did not say (the villa's Whisper never does: instructions.md rule 6 then reads the words)."""
+        when it did not say (the villa's Whisper never does: instructions.md rule 6 then reads the words). `aloud`: the
+        answer is spoken too (a question spoken on the tablet: _aloud)."""
         if request is None and not is_continue:
             request = self.requests.begin(invoked)
         # what they asked, kept until it is answered: a restart in between is said at the next start (chat_jobs)
         asked = ("Continue" if is_continue else text or ("a photo" if image else "a voice message" if voice else "…"))
         async with self.delivery.typing(cid, held=held) as answered, self.chat_jobs.answering(cid, asked):
             await self._converse(cid, person, text, resume, is_continue, voice, answered, image, request, spoken,
-                                 about)
+                                 about, aloud)
 
     async def _converse(self, cid, person, text, resume, is_continue, voice, answered, image=None,
-                        request: Request | None = None, spoken: str | None = None, about: str | None = None):
+                        request: Request | None = None, spoken: str | None = None, about: str | None = None,
+                        aloud: bool = False):
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
@@ -820,6 +828,25 @@ class Vesta:
             # a request this answer told of, shown in another chat: each of its steps rewrites this answer (approvals.py)
             self.approvals.answered(res.approvals, cid, mid, reply.text)
             await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
+            if aloud:
+                # after the answer, outside this conversation's lock: the next question never waits on the voice
+                self.tablet.later(self._aloud(cid, mid, reply.text))
+
+    async def _aloud(self, cid: int, mid: int | None, text: str) -> None:
+        """The answer `mid` (its words already on the tablet: nobody waits on the voice to read them) said by the villa's
+        voice (speech.Speech), its sound named on the turn; else the turn says why it was not spoken."""
+        if not mid or not text:
+            return
+        began = time.monotonic()
+        said = await self.speech.say(text)
+        if isinstance(said, speech.Said):
+            if await self.tablet.speak(cid, mid, said.audio, said.mime):
+                log.info("Answer spoken in the tablet's conversation (%s, %d KB, %.1f s)", tablet.profile_of(cid),
+                         len(said.audio) // 1024, time.monotonic() - began)
+                return
+            said = speech.Silent(speech.FAILED, "the sound not named on the answer (tablet.Tablet.speak logs why)")
+        log.info("Answer not spoken in the tablet's conversation (%s): %s", tablet.profile_of(cid), said.why)
+        await self.tablet.note(cid, mid, speech.NO_VOICE if said.kind == speech.NONE else speech.NOT_SPOKEN)
 
     async def _delivered(self, request: Request, cid: int, person, res, asked: str):
         """⚠️ WHAT A COMMAND SKILL'S ANSWER CARRIES, CHECKED — NEVER LEFT TO THE AI (owner, 2026-10-11: "make sure this

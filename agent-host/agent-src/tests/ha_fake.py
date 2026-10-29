@@ -33,10 +33,11 @@ class _Session:
 
 class FakeHA:
     def __init__(self, tools=(), images: dict[str, str] | None = None, answers: dict[str, str] | None = None,
-                 states: dict[str, dict] | None = None, version: str = "8.6.0"):
+                 states: dict[str, dict] | None = None, version: str = "8.6.0", pipeline: dict | None = None):
         self.tools, self.images, self.answers = list(tools), dict(images or {}), dict(answers or {})
         self._states, self.version, self.calls = dict(states or {}), version, []
         self.mcp = _Session(self)
+        self.pipeline = pipeline                # the villa's voice settings (None: it has none)
 
     def states(self, entity_ids=None) -> dict[str, dict]:
         return {e: s for e, s in self._states.items() if entity_ids is None or e in entity_ids}
@@ -47,6 +48,9 @@ class FakeHA:
 
     def all_entity_ids(self, fresh: bool = False) -> list[str]:
         return sorted(self._states)
+
+    def voice_pipeline(self) -> dict | None:
+        return dict(self.pipeline) if self.pipeline else None
 
     def tool_content(self, name: str, args: dict) -> list[dict]:
         return self.mcp.call_raw(name, args).get("content", [])

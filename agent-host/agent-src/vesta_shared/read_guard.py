@@ -26,7 +26,11 @@ WRITE_TOOLS = {"ha_call_service"}
 #: blueprint can do (investigate's automation_able). ha_manage_energy_prefs mode `get`: the villa's Energy settings
 #: (vesta_shared.energy_setup) — ⚠️ ITS ARGUMENT IS `mode`, NOT `action`: set / add_device / remove_device / add_source
 #: rewrite the owner's Energy dashboard (ha-mcp marks the tool destructive), so every mode but get stays refused.
-READ_ACTIONS = {"ha_manage_blueprints": ("action", {"get"}), "ha_manage_energy_prefs": ("mode", {"get"})}
+#: ha_manage_pipeline `list`: the villa's voice settings, which name the text-to-speech VESTA's spoken answers use
+#: (vesta_agent.speech); create / update / set_preferred change them, `process` runs a sentence through the villa's
+#: assistant (it ACTS: "turn on the light" turns it on).
+READ_ACTIONS = {"ha_manage_blueprints": ("action", {"get"}), "ha_manage_energy_prefs": ("mode", {"get"}),
+                "ha_manage_pipeline": ("action", {"list"})}
 #: Arguments pinned to these values. ha_get_logs can read other apps' container logs (source "supervisor"), which may
 #: print secrets: only the logbook and the system log.
 ARG_VALUES: dict[str, dict[str, set]] = {"ha_get_logs": {"source": {"logbook", "system"}}}

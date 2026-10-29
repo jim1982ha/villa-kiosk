@@ -1,3 +1,12 @@
+## 0.12.396
+
+What you will see (with VESTA (dev2) 2.496.600):
+- Ask VESTA by holding the microphone on the tablet: VESTA writes its answer, then says it aloud in the villa's own
+  voice (the text-to-speech chosen in the villa's voice assistant settings). A typed question is answered in words
+  only, as before.
+- If the voice assistant settings name no text-to-speech, the answer stays in words and says "Spoken answers need the
+  villa's voice to be installed."; if the voice fails, it says "This answer could not be spoken."
+
 ## 0.12.395
 
 What you will see:

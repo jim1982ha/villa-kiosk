@@ -176,6 +176,27 @@ class Tablet:
         """A spoken question's audio, for voice.Voice."""
         return Spoken(self, chat, ask)
 
+    async def speak(self, chat: int, mid: int, audio: bytes, mime: str) -> bool:
+        """`mid`'s turn carries its sound (ticket 24 of "One inbox", VESTA answers aloud): uploaded first, then named on
+        the turn (`speech`), its words, buttons and pictures kept. The tablet that asked plays it as it arrives. False:
+        the turn is not one of this run's, or the Kiosk did not keep the sound."""
+        was = self._turns.get(int(mid))
+        if was is None:
+            return False
+        try:
+            name = await asyncio.wait_for(self.kiosk.add_speech(audio, mime), self._timeout_s())
+        except (KioskError, asyncio.TimeoutError) as e:
+            log.warning("An answer's sound could not be kept for the tablet (%s)", type(e).__name__)
+            return False
+        return bool(name) and await self._write(int(mid), {**was, "speech": name})
+
+    async def note(self, chat: int, mid: int, line: str) -> bool:
+        """`mid`'s turn with `line` under its words (an answer not spoken says why), all else kept."""
+        was = self._turns.get(int(mid))
+        if was is None:
+            return False
+        return await self._write(int(mid), {**was, "text": (f"{was['text']}\n\n" if was.get("text") else "") + line})
+
     async def answer(self, chat: int, press: int | None, text: str) -> bool:
         """A press's short answer (Telegram's toast), back to the tablet that pressed: a turn naming the press, shown
         under its button, never as a line of the conversation."""
@@ -241,10 +262,11 @@ class Tablet:
             pass                               # the tablet's dots are a courtesy: the answer itself never waits on them
 
     async def edit(self, chat: int, mid: int, text: str, keyboard: dict | None = None) -> bool:
-        """`mid`'s turn says `text` now, its buttons gone or `keyboard`'s (its pictures and page kept): the Kiosk replaces it
-        by its key."""
+        """`mid`'s turn says `text` now, its buttons gone or `keyboard`'s, its sound gone (its pictures and page kept): the
+        Kiosk replaces it by its key."""
         was = self._turns.get(int(mid)) or {"key": turn_key(mid), "profile": profile_of(chat)}
-        rec = {k: v for k, v in was.items() if k != "buttons"}
+        # its sound goes too: it said the words being replaced
+        rec = {k: v for k, v in was.items() if k not in ("buttons", "speech")}
         return await self._write(int(mid), {**rec, "text": text, **({"buttons": b} if (b := buttons_of(keyboard)) else {})})
 
     async def delete(self, chat: int, mid: int) -> bool:
@@ -313,6 +335,13 @@ class Tablet:
         self._after = last
         self.state.set_tablet_after(last)
         return 0.0
+
+    def later(self, work) -> None:
+        """`work` run beside the conversation (an answer's sound, app._aloud), held like a collected question: `idle`
+        waits for it too."""
+        task = asyncio.create_task(work)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     async def idle(self) -> None:
         """Until every question collected has been handled (the tests)."""

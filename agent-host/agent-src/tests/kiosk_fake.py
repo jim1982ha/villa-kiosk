@@ -53,9 +53,19 @@ class FakeKiosk(Kiosk):
         self.keeps_turns = True                # False plays an older Kiosk (404): no inbox, no conversation
         self.voices: dict[str, bytes] = {}     # each spoken question's WAV still kept (person_speaks), read once
         self.heard: dict[str, str] = {}        # the words the agent heard, by the person's line (ask:<seq>)
+        self.speeches: dict[str, tuple] = {}   # each answer's sound kept (/agent/v1/speech): name → (bytes, type)
 
     # ------------------------------------------------------------------ the one thing replaced: the transport
-    async def _req(self, method, path, body=None, **_):
+    async def _req(self, method, path, body=None, content=None, **_):
+        if path == "/agent/v1/speech":
+            # the add-on's rule (_keep_speech): a sound of a kind it plays, under the agreement's cap, kept under a name
+            data, kind = content
+            if not self.keeps_turns or kind not in CONVERSATION["voice"]["answerTypes"] \
+                    or len(data) > CONVERSATION["voice"]["answerBytes"]:
+                return (404, {"error": "not found"}) if not self.keeps_turns else (400, {"error": "not a sound"})
+            name = f"{len(self.speeches) + 1:032x}"
+            self.speeches[name] = (data, kind)
+            return 200, {"name": name}
         if path.startswith("/agent/v1/voice/"):
             # the add-on's rule (_take_voice): the sound read ONCE, then gone
             data = self.voices.pop(path.rsplit("/", 1)[1], None) if self.keeps_turns else None

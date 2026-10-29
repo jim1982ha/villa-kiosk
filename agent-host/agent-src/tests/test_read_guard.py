@@ -31,6 +31,10 @@ CASES = [
     ("ha_manage_energy_prefs", {}, "only its get mode"),
     ("ha_manage_blueprints", {"action": "get"}, None),
     ("ha_manage_blueprints", {"action": "import"}, "only its get action"),
+    # the villa's voice settings (VESTA's spoken answers): read, never changed, never a sentence run through them
+    ("ha_manage_pipeline", {"action": "list"}, None),
+    ("ha_manage_pipeline", {"action": "update", "pipeline_id": "p"}, "only its list action"),
+    ("ha_manage_pipeline", {"action": "process", "sentence": "x"}, "only its list action"),
 ]
 
 
@@ -96,3 +100,16 @@ def test_the_ais_own_reads(tmp_path):
     out = asyncio.run(tools["ha_get_logs"].handler({"source": "system", "bogus": 1}))
     assert out.get("is_error") and "Argument not allowed for ha_get_logs: bogus" in out["content"][0]["text"]
     assert len(ha.calls) == before
+
+
+def test_the_voice_settings_are_the_preferred_pipelines():
+    import json
+
+    class Pipelines(Session):
+        def call_raw(self, name, args):
+            self.calls.append((name, args))
+            return {"content": [{"type": "text", "text": json.dumps({"success": True, "preferred_pipeline": "p2",
+                    "pipelines": [{"id": "p1", "tts_engine": "tts.other"}, {"id": "p2", "tts_engine": "tts.test_voice"}]})}]}
+    s = Pipelines()
+    assert McpClient(url="http://x", zone="UTC", session=s).voice_pipeline()["tts_engine"] == "tts.test_voice"
+    assert s.calls == [("ha_manage_pipeline", {"action": "list"})]
