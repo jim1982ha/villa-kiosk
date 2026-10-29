@@ -728,6 +728,11 @@ async def main() -> None:
        and (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / answer["photos"][0]).read_bytes() == jpeg, body)
     status, body = await jget("/vesta-conversation", cookie("ops"))
     ck("  ...and the facility manager's conversation is its own (empty)", body["turns"] == [], body)
+    # architecture review, 2026-10-30: the conversation's pictures share the photo folder; ops may view cameras too
+    r = await get(f"/announcement-photo/{answer['photos'][0]}", headers=cookie("owner"))
+    r2 = await get(f"/announcement-photo/{answer['photos'][0]}", headers=cookie("ops"))
+    ck("  ...the picture of an answer goes to the profile it answered only (404 for another, cameras or not)",
+       r.status == 200 and r2.status == 404, (r.status, r2.status))
     # what a turn may hold: the agreement's examples, the Agent's test copy of the add-on replays the same ones
     for ex in proxy.CONVERSATION["turnExamples"]:
         r = await post("/agent/v1/conversation-turn", headers=bearer(), json=ex["turn"])
@@ -769,6 +774,13 @@ async def main() -> None:
             + b"data" + struct.pack("<I", len(pcm)) + pcm)
 
     said = wav()
+    # architecture review, 2026-10-30: a voice was swept only when another came — the Agent's every read sweeps it now
+    stale = TMP / "data" / proxy.VOICE_DIR / ("a" * 32)
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_bytes(said)
+    os.utime(stale, (time.time() - proxy.ASK_KEPT_S - 5,) * 2)
+    await jget("/agent/v1/inbox", bearer())
+    ck("a spoken question past the time it is kept goes at the Agent's next read, whoever asks", not stale.exists())
     asks.unlink(missing_ok=True)
     r = await post("/vesta-ask", headers={**cookie("owner"), "Content-Type": "audio/wav"}, data=said)
     status, body = await jget("/agent/v1/inbox", bearer())
@@ -880,17 +892,15 @@ async def main() -> None:
     bad = next((t for t in body["turns"] if t["key"] == "turn:aloud-bad"), {})
     ck("  ...a sound is never a turn on its own (400), and a name not the add-on's is not kept",
        r.status == 400 and r2.status == 200 and "speech" not in bad, (r.status, bad))
-    grace, proxy.ANNOUNCEMENT_PHOTO_GRACE_S = proxy.ANNOUNCEMENT_PHOTO_GRACE_S, 120   # set to none above, for the photos
     orphan = TMP / "data" / proxy.SPEECH_DIR / ("1" * 32 + ".mp3")
     orphan.write_bytes(mp3)
-    os.utime(orphan, (time.time() - proxy.ANNOUNCEMENT_PHOTO_GRACE_S - 5,) * 2)
+    os.utime(orphan, (time.time() - proxy.SPEECH_GRACE_S - 5,) * 2)
     young = TMP / "data" / proxy.SPEECH_DIR / ("2" * 32 + ".mp3")
     young.write_bytes(mp3)
     await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "turn:sweep", "profile": "owner", "text": "x"})
     ck("a sound no turn names is swept at the next write; one just uploaded (its turn on the way) and a named one stay",
        not orphan.exists() and young.exists() and (TMP / "data" / proxy.SPEECH_DIR / sound).exists(),
        sorted(p.name for p in (TMP / "data" / proxy.SPEECH_DIR).iterdir()))
-    proxy.ANNOUNCEMENT_PHOTO_GRACE_S = grace
 
     # ── VESTA's buttons pressed on a tablet (ticket 22 of "One inbox") ───────────────────────────────────────────────
     print("\n  VESTA's buttons pressed on a tablet:")

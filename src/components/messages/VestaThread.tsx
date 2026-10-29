@@ -11,8 +11,7 @@ import { Mic, RotateCcw, Send, Volume2 } from "lucide-react";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 
-import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, TALK_SAID, fetchSpeech, pressableOf, type Turn } from "@/messages/conversation";
-import { playSpeech } from "@/messages/voice";
+import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, TALK_SAID, pressableOf, type Turn } from "@/messages/conversation";
 import { useConversation } from "@/messages/ConversationContext";
 import { unanswered, vestaWorking } from "@/messages/conversationModel";
 import { AnnouncementPhoto, PageLink, RecordButtons } from "./AnnouncementContent";
@@ -22,18 +21,20 @@ import TalkButton from "./TalkButton";
  *  ("Open the page" only for a profile the add-on serves pages to). A spoken question (hold to talk) carries the
  *  microphone, and says it was spoken until VESTA heard its words; an answer said aloud offers Listen. Pure: a check
  *  draws it. */
-export function TurnLine({ turn, canOpenPage }: { turn: Turn; canOpenPage: boolean }) {
+export function TurnLine({ turn, canOpenPage, onListen }: { turn: Turn; canOpenPage: boolean;
+  /** Listen pressed (the page's speaker: messages/speaker); none: no Listen drawn. */
+  onListen?: (name: string) => void }) {
   return (
     <div className={`vesta-turn ${turn.from === "person" ? "asked" : "answered"}${turn.voice ? " vesta-turn-spoken" : ""}`}>
       <div className="vesta-turn-head">
         <b>{turn.from === "person" ? "You" : "VESTA"}</b>
         {turn.voice && <Mic size={14} aria-label="spoken" />}
         {turn.at && <span className="muted">{momentText(turn.at)}</span>}
-        {turn.speech && (
+        {turn.speech && onListen && (
           // the answer said aloud (ticket 24): played as it came on the tablet that asked; heard again from here, an
           // icon at the end of the line (owner, 2026-10-29: not a button the width of the answer)
           <button type="button" className="btn ghost vesta-turn-listen" aria-label="Listen" title="Listen"
-            onClick={() => { const name = turn.speech; if (name) void playSpeech(() => fetchSpeech(name), true); }}>
+            onClick={() => { if (turn.speech) onListen(turn.speech); }}>
             <Volume2 size={18} aria-hidden />
           </button>
         )}
@@ -57,7 +58,7 @@ export function WorkingBubble() {
 }
 
 export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => void; canOpenPage: boolean }) {
-  const { thread, ask, said, tell, talker } = useConversation();
+  const { thread, ask, said, tell, talker, talk, listen } = useConversation();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const end = useRef<HTMLDivElement>(null);
@@ -90,7 +91,7 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
         {thread.lines.length === 0 && (
           <p className="muted body-text messages-empty">Ask VESTA about the villa: what is on, what happened, what to check.</p>
         )}
-        {thread.lines.map((t) => <TurnLine key={t.key} turn={t} canOpenPage={canOpenPage} />)}
+        {thread.lines.map((t) => <TurnLine key={t.key} turn={t} canOpenPage={canOpenPage} onListen={listen} />)}
         {vestaWorking(thread, Date.now()) && <WorkingBubble />}
         {unanswered(thread.lines, Date.now()) && <p className="muted body-text">No answer came. Ask again.</p>}
         <div ref={end} />
@@ -105,7 +106,8 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
           <TalkButton place="thread" onOpen={() => undefined} onTap={() => tell(TALK_SAID.hold)} className="btn"
             idle="Hold to talk to VESTA" />
         )}
-        <button type="submit" className="btn primary" disabled={sending || !text.trim()}>
+        {/* one question at a time: never typed while a spoken one is still sending (talk.phase) */}
+        <button type="submit" className="btn primary" disabled={sending || talk.phase === "sending" || !text.trim()}>
           <Send size={16} aria-hidden /> Ask
         </button>
       </form>

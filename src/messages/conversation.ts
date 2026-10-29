@@ -103,6 +103,10 @@ export const TALK_SAID: Record<"refused" | "none" | "silent" | "quiet" | "cut" |
  *  the question: the screen locked, a call): Listen plays it. */
 export const LISTEN_SAID = "Tap Listen to hear VESTA's answer.";
 
+/** The line under the box when Listen was pressed and the answer's sound could not be played (no longer kept, or the
+ *  tablet refused it). */
+export const LISTEN_FAILED = "This answer's sound could not be played.";
+
 /** What a spoken question's line says until VESTA has heard its words. */
 export const SPOKEN_WAITING = "Spoken question";
 

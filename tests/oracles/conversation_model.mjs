@@ -174,18 +174,18 @@ ck("an answer: VESTA's words, its picture and its page for a profile served page
 ck("  ...no page offered to a profile the add-on serves none (a guest)", !guest.includes("Open the page"));
 ck("  ...the person's own question reads as theirs",
    draw(h(TurnLine, { turn: turn(1, { from: "person" }), canOpenPage: false })).includes("You"));
-ck("an answer said aloud offers Listen; one in words only does not",
-   draw(h(TurnLine, { turn: turn(4, { speech: "ab.mp3" }), canOpenPage: false })).includes("Listen")
-   && !draw(h(TurnLine, { turn: turn(4), canOpenPage: false })).includes("Listen"));
+ck("an answer said aloud offers Listen, given the page's speaker; one in words only does not",
+   draw(h(TurnLine, { turn: turn(4, { speech: "ab.mp3" }), canOpenPage: false, onListen: () => {} })).includes("Listen")
+   && !draw(h(TurnLine, { turn: turn(4), canOpenPage: false, onListen: () => {} })).includes("Listen"));
 const listen = elements(parseTsx("components/messages/VestaThread.tsx"), "button")
   .find((b) => (propText(b, "className") || "").includes("vesta-turn-listen"));
-ck("  ...Listen plays the turn's own sound from the press itself (an iPad starts a page's sound only there)",
-   /playSpeech\(\(\) => fetchSpeech\(name\), true\)/.test(propText(listen, "onClick") || ""), propText(listen, "onClick"));
+ck("  ...Listen hands the turn's own sound to the page's speaker (messages/speaker: played from the press, tests/oracles/speaker.mjs)",
+   (propText(listen, "onClick") || "").includes("onListen(turn.speech)"), propText(listen, "onClick"));
 const provider = readFileSync(new URL("../../src/messages/ConversationContext.tsx", import.meta.url), "utf8");
-ck("  ...an answer that arrives plays only by playsAloud, and one that cannot start says to tap Listen",
-   /if \(name && playsAloud\(spokenAt\.current, Date\.now\(\)\)\)/.test(provider)
-   && /playSpeech\(\(\) => fetchSpeech\(name\), false\)\.then\(\(played\) => \{ if \(!played\) tell\(LISTEN_SAID\); \}\)/.test(provider)
-   && /if \(out === "sent" && typeof question !== "string"\) spokenAt\.current = Date\.now\(\);/.test(provider));
+ck("  ...the provider tells the one speaker what happened: a spoken question sent, each read, a profile gone",
+   /new Speaker\(\{ play: playSpeech, stop: stopSpeech, sound: fetchSpeech/.test(provider)
+   && /if \(out === "sent" && typeof question !== "string"\) speaker\.asked\(\);/.test(provider)
+   && /speaker\.read\(state\.turns\)/.test(provider) && /\(\) => speaker\.close\(\), \[role, speaker\]/.test(provider));
 const fresh = threadView([turn(1, { from: "person", text: "Is the pump on?" }), turn(2), turn(3, { from: "person", text: "/new" }),
   turn(4, { text: "New conversation." }), turn(5, { from: "person", text: "And the lights?" })], true);
 ck("\"New conversation\" empties the thread: only what came after the last /new shows (owner, 2026-10-29)",

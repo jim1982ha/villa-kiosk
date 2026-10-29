@@ -3788,12 +3788,72 @@ ANNOUNCEMENT_BUTTON_TEXT_MAX = 64
 #: snapshot taken for it. The add-on copies it into its own store the moment the announcement arrives, so the next
 #: ring cannot change it and it lives exactly as long as its announcement.
 MEDIA_DIR = "/media"
+class KeptFiles:
+    """Files kept for the tablet in one folder of the add-on's: each under a name of the add-on's own (32 hex, then
+    the ending of its kind), written whole (atomic_write), read by that name only, swept by ONE rule — older than
+    `max_age_s`, or, given the names the records still name, named by none and older than `grace_s` (a file is kept
+    BEFORE the record naming it is written: a sweep in between must not take it for an orphan).
+
+    ⚠️ ONE MECHANISM FOR THE TABLET'S FILES (architecture review, 2026-10-30): the spoken questions, the answers' sounds
+    and the photos each named, wrote and swept their own way — a spoken question was swept only when another came, so it
+    outlived the time it is kept for; the sounds' sweep borrowed the photos' grace. Who may READ each kind stays its
+    door's (a photo: viewCameras or the current ring; a sound: the profile its turn answered; a voice: the Agent once).
+    The Facility documents and evidence are not these: their ids are the page's, their life the records-kept days'."""
+
+    def __init__(self, folder: str, endings: tuple[str, ...], grace_s=lambda: 0, max_age_s=lambda: None):
+        self.folder, self.grace_s, self.max_age_s = folder, grace_s, max_age_s
+        self.re = re.compile(r"^[0-9a-f]{32}(?:" + "|".join(re.escape(e) for e in endings) + r")$")
+
+    def path(self, name: str) -> str | None:
+        """Where `name` is kept, or None for a name that is not one of this folder's own."""
+        return _data(self.folder, name) if isinstance(name, str) and self.re.match(name) else None
+
+    def keep(self, data: bytes, ending: str = "") -> str:
+        """`data` kept under a new name; its name. Blocking."""
+        os.makedirs(_data(self.folder), exist_ok=True)
+        name = secrets.token_hex(16) + ending
+        atomic_write(_data(self.folder, name), lambda out: out.write(data))
+        return name
+
+    def take(self, name: str) -> bytes | None:
+        """A kept file read ONCE and deleted; None when there is none by that name. Blocking."""
+        path = self.path(name)
+        if path is None:
+            return None
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            os.remove(path)
+        except OSError:
+            return None
+        return data
+
+    def sweep(self, named: set | None = None) -> None:
+        """Delete what is past its age, and (given `named`) what no record names past the grace. Blocking."""
+        try:
+            names = os.listdir(_data(self.folder))
+        except OSError:
+            return
+        now, age, grace = time.time(), self.max_age_s(), self.grace_s()
+        for name in names:
+            if not self.re.match(name):
+                continue
+            try:
+                kept_for = now - os.path.getmtime(_data(self.folder, name))
+                if (age is not None and kept_for > age) or (named is not None and name not in named and kept_for >= grace):
+                    os.remove(_data(self.folder, name))
+            except OSError:
+                pass
+
+
 ANNOUNCEMENT_PHOTO_DIR = "announcement-photos"
 #: A photo's name ending → (the name it is kept under, its type, its first bytes). Its cap is an evidence photo's.
 ANNOUNCEMENT_PHOTO_TYPES = {".jpg": (".jpg", "image/jpeg", _JPEG_MAGIC), ".jpeg": (".jpg", "image/jpeg", _JPEG_MAGIC),
                             ".png": (".png", "image/png", b"\x89PNG")}
 ANNOUNCEMENT_PHOTO_MAX_BYTES = FM_EVIDENCE_MAX_BYTES
-ANNOUNCEMENT_PHOTO_RE = re.compile(r"^[0-9a-f]{32}\.(?:jpg|png)$")
+#: every kept photo, a ring's, a VESTA message's, a conversation turn's: one folder, one sweep (KeptFiles)
+PHOTOS = KeptFiles(ANNOUNCEMENT_PHOTO_DIR, (".jpg", ".png"), grace_s=lambda: ANNOUNCEMENT_PHOTO_GRACE_S)
+ANNOUNCEMENT_PHOTO_RE = PHOTOS.re
 
 
 def _announcement_buttons(raw) -> list:
@@ -3871,10 +3931,7 @@ def _copy_announcement_photo(src: str) -> str | None:
 def _write_announcement_photo(body: bytes, kept_as: str) -> str:
     """`body` written under a new id ("<hex>.jpg") in the photo folder; its name. ONE FOLDER FOR EVERY KEPT PHOTO (a ring's,
     a snapshot under VESTA's alert): one sweep, one serving rule. Blocking: called on a worker thread."""
-    name = secrets.token_hex(16) + kept_as
-    os.makedirs(_data(ANNOUNCEMENT_PHOTO_DIR), exist_ok=True)
-    atomic_write(_data(ANNOUNCEMENT_PHOTO_DIR, name), lambda out: out.write(body))
-    return name
+    return PHOTOS.keep(body, kept_as)
 
 
 def _keep_pushed_photo(raw, cap: int | None = None) -> str | None:
@@ -3931,22 +3988,7 @@ def _sweep_announcement_photos(_stored, kept) -> None:
     named = _photos_named(kept)
     for feed in (ANNOUNCED, MESSAGED, CONVERSED):   # ⚠️ THE FEEDS SHARE THE FOLDER: this one names its own from `kept`
         named |= _photos_named(feed.items())
-    try:
-        files = os.listdir(_data(ANNOUNCEMENT_PHOTO_DIR))
-    except OSError:
-        return
-    young = time.time() - ANNOUNCEMENT_PHOTO_GRACE_S
-    for name in files:
-        path = _data(ANNOUNCEMENT_PHOTO_DIR, name)
-        try:
-            fresh = os.path.getmtime(path) > young
-        except OSError:
-            continue
-        if name not in named and ANNOUNCEMENT_PHOTO_RE.match(name) and not fresh:
-            try:
-                os.remove(_data(ANNOUNCEMENT_PHOTO_DIR, name))
-            except OSError:
-                pass
+    PHOTOS.sweep(named)
 
 
 def _announcements_with(stored: list, rec: dict) -> list:
@@ -4103,16 +4145,25 @@ announcements_handler = _feed_handler(ANNOUNCED, "announcements")
 
 
 async def announcement_photo_handler(request: web.Request) -> web.StreamResponse:
-    """One announcement's photo, by the id its record names — to a profile that may view cameras, and to any other
-    only while it is the current notification's (ANNOUNCEMENT_CURRENT_S)."""
+    """One kept photo, by the id its record names — to a profile that may view cameras, and to any other only while it
+    is the current notification's (ANNOUNCEMENT_CURRENT_S). ⚠️ A CONVERSATION'S PICTURE IS ITS PROFILE'S (architecture
+    review, 2026-10-30): the pictures an answer carries share the folder, and any profile that may view cameras could
+    fetch another profile's by its id — guarded only by an id no one can guess. One named by a conversation turn alone
+    (no announcement nor VESTA message names it) goes to the profile whose turn it is, as an answer's sound does."""
     if (refused := _refuse(request)) is not None:
         return refused
     name = request.match_info.get("id", "")
-    path = _data(ANNOUNCEMENT_PHOTO_DIR, name)
-    if not ANNOUNCEMENT_PHOTO_RE.match(name) or not os.path.isfile(path):
+    path = PHOTOS.path(name)
+    if path is None or not os.path.isfile(path):
         return web.json_response({"error": "no such photo"}, status=404)
-    if not _may(_role_for(request), "viewCameras") and name not in await _current_photos():
+    profile = _role_for(request)
+    if not _may(profile, "viewCameras") and name not in await _current_photos():
         return _forbidden("This profile sees a ring's photo only while it is the current notification.")
+    turns = [t for t in await asyncio.to_thread(CONVERSED.items) if isinstance(t, dict) and name in (t.get("photos") or [])]
+    shared = name in _photos_named(await asyncio.to_thread(ANNOUNCED.items)) \
+        or name in _photos_named(await asyncio.to_thread(MESSAGED.items))
+    if turns and not shared and not any(t.get("profile") == profile for t in turns):
+        return web.json_response({"error": "no such photo"}, status=404)
     _, ctype, _ = ANNOUNCEMENT_PHOTO_TYPES[os.path.splitext(name)[1]]
     return web.FileResponse(path, headers={"Content-Type": ctype, "Cache-Control": "no-store"})
 
@@ -4286,7 +4337,9 @@ CONVERSATION_MAX_BYTES = 2_000_000
 # random id the ask carries, read by the Agent ONCE and gone (a voice is the person's), never kept past askKeptSeconds.
 VOICE: dict = dict(CONVERSATION.get("voice") or {})
 VOICE_DIR = "vesta-voice"
-VOICE_NAME_RE = re.compile(r"^[0-9a-f]{32}$")
+#: the spoken questions' WAVs: no ending, each kept until the Agent reads it once, never past askKeptSeconds (KeptFiles)
+VOICES = KeptFiles(VOICE_DIR, ("",), max_age_s=lambda: ASK_KEPT_S)
+VOICE_NAME_RE = VOICES.re
 
 
 def _wav_refused(data: bytes) -> str | None:
@@ -4333,43 +4386,16 @@ def _recording_line(header: str | None, data: bytes, profile: str) -> str:
             f"{n['blocks'] + n['missing']} blocks missing; loudest {n['peakDb']} dB")
 
 
-def _sweep_voices() -> None:
-    """Delete every kept sound older than askKeptSeconds: its question is no longer collected. Blocking."""
-    try:
-        names = os.listdir(_data(VOICE_DIR))
-    except OSError:
-        return
-    old = time.time() - ASK_KEPT_S
-    for name in names:
-        try:
-            if os.path.getmtime(_data(VOICE_DIR, name)) < old:
-                os.remove(_data(VOICE_DIR, name))
-        except OSError:
-            pass
-
-
 def _keep_voice(data: bytes) -> str:
     """Keep a spoken question's WAV for the Agent: its name. Blocking: called on a worker thread."""
-    _sweep_voices()
-    os.makedirs(_data(VOICE_DIR), exist_ok=True)
-    name = secrets.token_hex(16)
-    with open(_data(VOICE_DIR, name), "wb") as f:
-        f.write(data)
-    return name
+    VOICES.sweep()
+    return VOICES.keep(data)
 
 
 def _take_voice(name: str) -> bytes | None:
     """A kept WAV, read once and deleted; None when there is none by that name. Blocking."""
-    _sweep_voices()
-    if not VOICE_NAME_RE.match(name or ""):
-        return None
-    try:
-        with open(_data(VOICE_DIR, name), "rb") as f:
-            data = f.read()
-        os.remove(_data(VOICE_DIR, name))
-    except OSError:
-        return None
-    return data
+    VOICES.sweep()
+    return VOICES.take(name)
 
 
 # ⚠️ AN ANSWER SPOKEN ALOUD (ticket 24 of "One inbox", owner 2026-10-28: "use piper path only first"): VESTA's answer to a
@@ -4378,7 +4404,11 @@ def _take_voice(name: str) -> bytes | None:
 # only to the profile whose turn names it. Only the agreement's voice.answerTypes, each told by its first bytes.
 SPEECH_DIR = "vesta-speech"
 SPEECH_ENDINGS = {"audio/mpeg": ".mp3", "audio/wav": ".wav"}
-SPEECH_RE = re.compile(r"^[0-9a-f]{32}\.(?:mp3|wav)$")
+#: How long a sound uploaded before its turn may wait for the turn naming it (the Agent writes it at once)
+SPEECH_GRACE_S = 120
+#: the answers' sounds: kept while a turn names them (KeptFiles)
+SPEECHES = KeptFiles(SPEECH_DIR, tuple(SPEECH_ENDINGS.values()), grace_s=lambda: SPEECH_GRACE_S)
+SPEECH_RE = SPEECHES.re
 
 
 def _speech_refused(data: bytes, kind: str) -> str | None:
@@ -4399,27 +4429,13 @@ def _speech_refused(data: bytes, kind: str) -> str | None:
 
 def _keep_speech(data: bytes, kind: str) -> str:
     """Keep an answer's sound for the turn that will name it: its name. Blocking: called on a worker thread."""
-    os.makedirs(_data(SPEECH_DIR), exist_ok=True)
-    name = secrets.token_hex(16) + SPEECH_ENDINGS[kind]
-    atomic_write(_data(SPEECH_DIR, name), lambda out: out.write(data))
-    return name
+    return SPEECHES.keep(data, SPEECH_ENDINGS[kind])
 
 
 def _sweep_speech(kept) -> None:
     """Delete every answer's sound no kept turn names (its turn expired, or a rewrite left it), unless younger than
-    ANNOUNCEMENT_PHOTO_GRACE_S: it is uploaded BEFORE the turn that names it. Blocking."""
-    named = {t.get("speech") for t in kept if isinstance(t, dict)} if isinstance(kept, list) else set()
-    try:
-        names = os.listdir(_data(SPEECH_DIR))
-    except OSError:
-        return
-    young = time.time() - ANNOUNCEMENT_PHOTO_GRACE_S
-    for name in names:
-        try:
-            if name not in named and SPEECH_RE.match(name) and os.path.getmtime(_data(SPEECH_DIR, name)) <= young:
-                os.remove(_data(SPEECH_DIR, name))
-        except OSError:
-            pass
+    SPEECH_GRACE_S: it is uploaded BEFORE the turn that names it. Blocking."""
+    SPEECHES.sweep({t.get("speech") for t in kept if isinstance(t, dict)} if isinstance(kept, list) else set())
 
 
 def _after_conversation(stored, kept) -> None:
@@ -4623,6 +4639,9 @@ async def agent_inbox_handler(request: web.Request) -> web.Response:
         return web.json_response({"error": "not found"}, status=404)
     if isinstance(after := _after_of(request), web.Response):
         return after
+    # the spoken questions past their time go at each read (KeptFiles): a voice never outlives askKeptSeconds by much,
+    # however long no one asks again
+    await asyncio.to_thread(VOICES.sweep)
     items, last, first = await ASKED.read(after, min(int(CONVERSATION.get("waitSeconds") or 0), ANNOUNCEMENT_WAIT_S))
     return web.json_response({"asks": items, "last": last, "first": first}, headers={"Cache-Control": "no-store"})
 
