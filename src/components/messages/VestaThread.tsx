@@ -10,10 +10,10 @@ import { RotateCcw, Send } from "lucide-react";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 import { localStamp } from "@/fm/fmEngine";
-import { ASK_SAID, NEW_CONVERSATION, QUESTION_MAX, type Turn } from "@/messages/conversation";
+import { ASK_SAID, NEW_CONVERSATION, QUESTION_MAX, pressableOf, type Turn } from "@/messages/conversation";
 import { useConversation } from "@/messages/ConversationContext";
 import { unanswered } from "@/messages/conversationModel";
-import { AnnouncementPhoto, PageLink } from "./AnnouncementContent";
+import { AnnouncementPhoto, PageLink, RecordButtons } from "./AnnouncementContent";
 
 /** One line of the thread: who said it, when, its words, the camera pictures VESTA looked at and the page it attached
  *  ("Open the page" only for a profile the add-on serves pages to). Pure: a check draws it. */
@@ -27,6 +27,7 @@ export function TurnLine({ turn, canOpenPage }: { turn: Turn; canOpenPage: boole
       {turn.photos.map((id) => <AnnouncementPhoto key={id} id={id} className="announcement-full-photo" />)}
       {turn.text && <p className="vesta-turn-text">{turn.text}</p>}
       {turn.page && canOpenPage && <PageLink page={turn.page} />}
+      {turn.buttons.length > 0 && <RecordButtons record={pressableOf(turn)} />}
     </div>
   );
 }

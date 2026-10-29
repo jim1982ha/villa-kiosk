@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
   type ReactNode } from "react";
 import { backendFetch } from "@/auth/sessionLost";
 import { readJson, writeJson } from "@/utils/storedJson";
-import { fetchAnnouncements, fetchVestaMessages, pressButton, type Announcement } from "./announcements";
+import { fetchAnnouncements, fetchVestaMessages, pressOf, type Announcement, type Pressable } from "./announcements";
 import { pauseFor, watchFeed, type FeedRead } from "./feed";
 import { afterRead, isReport, markShown, shownTogether, unreadOf } from "./messagesModel";
 import { pressesOf, type PressState, type Presses } from "./presses";
@@ -89,7 +89,7 @@ export function AnnouncementsProvider({ children }: { children: ReactNode }) {
     return next.length === r.length && next.every((id, i) => id === r[i]) ? r : next;
   }), [kept]);
   useEffect(() => { writeJson(READ_KEY, read); }, [read]);
-  const presses = useMemo(() => pressesOf((key, command) => pressButton(key, command, backendFetch)), []);
+  const presses = useMemo(() => pressesOf((a, command) => pressOf(a, command, backendFetch)), []);
   // the open and watched issues: VESTA's card of an alert listed with its issue is read there, never unread here
   const { open, watched } = useCockpitIssues();
   const issueCards = useMemo(() => [...open, ...watched], [open, watched]);
@@ -103,11 +103,15 @@ export const useAnnouncements = (): AnnouncementsAndUnread => useContext(Announc
 
 const NOTHING_PRESSED: PressState = Object.freeze({}) as PressState;
 
-/** Pressing `a`'s buttons, from any screen: what became of each press (the page's one record), and a press. */
-export function useAnnouncementPress(a: Announcement | null): { presses: PressState; press: (command: string) => void } {
+/** Pressing `a`'s buttons, from any screen — a villa announcement, one of VESTA's messages or a turn of its conversation:
+ *  what became of each press (the page's one record), a press, and the number VESTA's answer to one names. */
+export function useAnnouncementPress(a: Pressable | null): {
+  presses: PressState; press: (command: string) => void; numberOf: (command: string) => number | undefined;
+} {
   const { presses } = useAnnouncements();
   const snapshot = () => (a ? presses.get(a) : NOTHING_PRESSED);
   // the same snapshot drawn on a server (a check draws a card that owns its press)
   const state = useSyncExternalStore(presses.subscribe, snapshot, snapshot);
-  return { presses: state, press: (command) => { if (a) presses.press(a, command); } };
+  return { presses: state, press: (command) => { if (a) presses.press(a, command); },
+    numberOf: (command) => (a ? presses.numberOf(a, command) : undefined) };
 }

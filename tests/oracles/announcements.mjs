@@ -166,7 +166,7 @@ console.log("\n  one record of presses for the page (review Q 2):");
 {
   const sent = [];
   let answer;
-  const presses = pressesOf((key, command) => { sent.push([key, command]); return new Promise((r) => { answer = r; }); });
+  const presses = pressesOf((rec, command) => { sent.push([rec.key, command]); return new Promise((r) => { answer = r; }); });
   const ring = { ...a(20), key: "run-9", buttons: [{ label: "Unlock", command: "/unlock" }] };
   let told = 0;
   presses.subscribe(() => { told += 1; });
@@ -187,10 +187,12 @@ console.log("\n  one record of presses for the page (review Q 2):");
   ck("  ...one that failed may be pressed again; a rewrite (a new number) starts afresh",
      failing.get(other)["/unlock"] === "failed" && Object.keys(presses.get({ ...ring, seq: 22 })).length === 0);
   const content = src("components/messages/AnnouncementContent.tsx");
-  ck("  ...no screen keeps its own: the notice and Messages read the page's one (AnnouncementsContext)",
-     !/function useAnnouncementPress|PressState>\(/.test(content) && /useAnnouncementPress\(/.test(src("components/cockpit/MessagesTab.tsx"))
-     && /from "@\/messages\/AnnouncementsContext"/.test(src("components/cockpit/MessagesTab.tsx"))
-     && /useAnnouncementPress, useAnnouncements \} from "@\/messages\/AnnouncementsContext"/.test(notice));
+  // ⚠️ ONE BUTTON ROW (owner, 2026-10-29: "DRY, centralising all the configuration and layout"): RecordButtons presses
+  // through the page's one record, and every screen that shows a record's buttons draws it
+  ck("  ...no screen keeps its own: one button row (RecordButtons) presses through the page's one (AnnouncementsContext)",
+     !/function useAnnouncementPress|PressState>\(/.test(content) && /useAnnouncementPress\(record\)/.test(content)
+     && ["components/hud/AnnouncementNotice.tsx", "components/cockpit/MessagesTab.tsx", "components/messages/VestaThread.tsx"]
+       .every((f) => /<RecordButtons record=/.test(src(f)) && !/useAnnouncementPress/.test(src(f))));
 }
 
 console.log("\n  one wording on every screen (review Q 5):");
@@ -239,12 +241,14 @@ ck("a notice offering a button stays until the rewrite withdraws it; any other g
    noticeFor(offered, NONE_FULL).noticeMs === null
    && noticeFor(parseAnnouncement({ seq: 9, message: ring, key: "run-1" }), NONE_FULL).noticeMs === ANNOUNCEMENT_NOTICE_MS);
 const pressed = [];
-const btnHtml = draw(h(AnnouncementNoticeView, { announcement: offered, onPress: () => {}, onDismiss: () => {}, presses: {} }));
+const { RecordButtons, ButtonRow } = await import("@/components/messages/AnnouncementContent");
+const btnHtml = draw(h(AnnouncementNoticeView, { announcement: offered, onDismiss: () => {},
+  buttons: h(RecordButtons, { record: offered }) }));
 ck("each button drawn with the announcement's own label (the Kiosk names no device and no command)",
    /<button[^>]*class="[^"]*\bvesta-notice-action\b[^"]*"[^>]*>🔓 Unlock<\/button>/.test(btnHtml) && btnHtml.includes(">Later</button>")
    && !btnHtml.includes("/unlock"), btnHtml);
 ck("  ...with its ✕ while it stays", btnHtml.includes('aria-label="Dismiss"'), btnHtml);
-const sentHtml = draw(h(AnnouncementNoticeView, { announcement: offered, onPress: () => {}, presses: { "/unlock": "sent" } }));
+const sentHtml = draw(h(ButtonRow, { buttons: offered.buttons, onPress: () => {}, presses: { "/unlock": "sent" } }));
 ck("  ...a pressed button is not pressed twice, and says what happened",
    /<button[^>]*disabled=""[^>]*>🔓 Unlock<\/button>/.test(sentHtml) && sentHtml.includes(PRESS_SAID.sent), sentHtml);
 const replies = { 200: "sent", 409: "withdrawn", 502: "failed", 401: "failed" };
@@ -301,12 +305,12 @@ ck("  ...nor for a title not picked, nor when the ring is answered (its cleared 
 
 const { AnnouncementFullScreenView } = await import("@/components/hud/AnnouncementNotice");
 const fullHtml = draw(h(AnnouncementFullScreenView, { announcement: { ...offered, photo: "x.jpg", text: "Someone is at the door.\nGate A",
-  status: "⚠️ New alert" }, onPress: () => {}, onDismiss: () => {}, presses: {} }));
+  status: "⚠️ New alert" }, onDismiss: () => {}, buttons: h(RecordButtons, { record: offered }) }));
 ck("full screen: its title, then its photo large, all it says, its bottom line, its buttons, and Close",
    /class="announcement-full-photo" src="\/announcement-photo\/x\.jpg"/.test(fullHtml) && fullHtml.includes(">🔔 Visitor at Gate A</h2>")
    && fullHtml.includes("Gate A</p>") && fullHtml.includes("⚠️ New alert") && fullHtml.includes(">🔓 Unlock</button>")
    && /class="modal-footer"[\s\S]*Close/.test(fullHtml), fullHtml);
-const problemHtml = draw(h(AnnouncementNoticeView, { announcement: said("🔥 Overload", "⚠️ New alert"), onDismiss: () => {}, onPress: () => {} }));
+const problemHtml = draw(h(AnnouncementNoticeView, { announcement: said("🔥 Overload", "⚠️ New alert"), onDismiss: () => {} }));
 ck("a notice that goes by itself carries no ✕ (a problem included): nothing to press", !problemHtml.includes('aria-label="Dismiss"'), problemHtml);
 ck("  ...the tablet's notice decides by this rule (the notice model calls it), with the villa's and this tablet's settings",
    /noticeFor\(a, e\.settings, \{ rewrite: e\.rewrite \}\)/.test(src("messages/noticeModel.ts"))

@@ -15,14 +15,15 @@ const { START, screenReducer } = await import("@/pages/screen");
 const { TurnLine } = await import("@/components/messages/VestaThread");
 
 const turn = (seq, extra = {}) => ({ seq, key: `k${seq}`, from: "vesta", at: `2026-10-29T10:0${seq % 10}:00Z`, text: `T${seq}`,
-  photos: [], page: null, gone: false, ...extra });
+  photos: [], page: null, gone: false, buttons: [], answers: null, ...extra });
 const J = JSON.stringify;
 
 console.log("  a turn as the add-on sends it:");
 ck("read whole: who said it, when, its words, its pictures and page",
    J(parseTurn({ seq: 3, key: "turn:9", from: "vesta", at: "2026-10-29T10:00:00Z", text: "On.", photos: ["a.jpg", 4],
-                 page: "p1" })) === J({ seq: 3, key: "turn:9", from: "vesta", at: "2026-10-29T10:00:00Z", text: "On.",
-                                         photos: ["a.jpg"], page: "p1", gone: false }));
+                 page: "p1", buttons: [{ label: "Continue", kind: "c", id: "k1" }, { label: "x" }], answers: 7 }))
+   === J({ seq: 3, key: "turn:9", from: "vesta", at: "2026-10-29T10:00:00Z", text: "On.", photos: ["a.jpg"], page: "p1",
+           gone: false, buttons: [{ label: "Continue", command: "c:k1", acts: false }], answers: 7 }));
 ck("  ...a withdrawn one says so; one with no number, key or speaker is no turn",
    parseTurn({ seq: 1, key: "k", from: "vesta", gone: true })?.gone === true
    && [{ key: "k", from: "vesta" }, { seq: 1, from: "vesta" }, { seq: 1, key: "k", from: "admin" }, null, "x"]
@@ -54,6 +55,38 @@ ck("a read says VESTA runs only when the add-on says online",
    vestaRuns({ said: { vesta: "online" } }) && !vestaRuns({ said: { vesta: "offline" } }) && !vestaRuns({ said: {} }));
 
 globalThis.window = globalThis.window ?? { location: { pathname: "/" } };   // the add-on's own address (no Ingress prefix)
+console.log("\n  VESTA's buttons on the tablet (ticket 22 of \"One inbox\"; owner, 2026-10-29: \"consistently\", \"DRY\"):");
+const { vestaButtons, offeredButtons, pressOf, parseVestaMessage } = await import("@/messages/announcements");
+const { answersOf } = await import("@/messages/conversationModel");
+const approval = parseVestaMessage({ seq: 4, key: "thread:ap1", title: "Approval request", body: "Turn on the pool light?",
+  buttons: [{ label: "Approve", kind: "a", id: "ap1:y" }, { label: "Refuse", kind: "a", id: "ap1:n" }] });
+ck("a VESTA message carries its buttons, each with its kind's rules from the agreement (an approval acts, and asks first)",
+   J(approval.buttons.map((b) => [b.label, b.command, b.acts, !!b.confirm])) === J([["Approve", "a:ap1:y", true, true],
+     ["Refuse", "a:ap1:n", true, true]]));
+ck("  ...one that acts is never offered to a guest; one that does not (Continue), and the villa's own (Unlock), to all",
+   offeredButtons(approval.buttons, false).length === 0 && offeredButtons(approval.buttons, true).length === 2
+   && offeredButtons(vestaButtons([{ label: "Continue", kind: "c", id: "k" }]), false).length === 1
+   && offeredButtons([{ label: "Unlock", command: "/unlock" }], false).length === 1);
+ck("  ...a kind the agreement does not know acts (never offered to a guest)", vestaButtons([{ label: "X", kind: "z", id: "1" }])[0].acts === true);
+const doors = [];
+const knock = async (url, init) => { doors.push([url, JSON.parse(init.body)]); return { ok: true, status: 200, json: async () => ({ press: 12 }) }; };
+const vestaPress = await pressOf(approval, "a:ap1:y", knock);
+await pressOf({ seq: 1, key: "run-1", buttons: [] }, "/unlock", knock);
+await pressOf({ seq: 2, key: "turn:9", buttons: [], feed: "turn" }, "c:k1", knock);
+ck("one door per kind of record: VESTA's messages and turns to VESTA, the villa's own to its press event",
+   J(doors.map(([u, b]) => [u.split("/").pop(), b.key])) === J([["vesta-press", "thread:ap1"], ["announcement-press", "run-1"],
+     ["vesta-press", "turn:9"]]) && vestaPress.outcome === "sent" && vestaPress.press === 12, doors);
+const { pressOrAsk } = await import("@/components/messages/AnnouncementContent");
+const asked = [], sentNow = [];
+pressOrAsk(approval.buttons[0], (q) => asked.push(q), (c) => sentNow.push(c));
+pressOrAsk({ label: "Continue", command: "c:k1" }, (q) => asked.push(q), (c) => sentNow.push(c));
+ck("an approval asks first in the one confirmation box (owner, 2026-10-28), sent only once confirmed; Continue at once",
+   asked.length === 1 && asked[0].confirmLabel === "Approve" && J(sentNow) === J(["c:k1"])
+   && (asked[0].run(), J(sentNow) === J(["c:k1", "a:ap1:y"])));
+const answered = [turn(5, { key: "press:12", text: "Approved.", answers: 12 }), turn(6)];
+ck("VESTA's short answer to a press is shown under its button, never as a line of the conversation",
+   answersOf(answered).get(12) === "Approved." && J(threadView(answered, true).lines.map((t) => t.seq)) === J([6]));
+
 console.log("\n  a question asked:");
 const sent = [];
 const answering = (status) => async (url, init) => { sent.push({ url, body: JSON.parse(init.body) }); return { ok: status === 200, status }; };

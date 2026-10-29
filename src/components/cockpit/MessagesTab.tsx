@@ -18,7 +18,7 @@ import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
 import type { CardView } from "@/config/cockpitCard";
 import { localStamp } from "@/fm/fmEngine";
-import { useAnnouncementPress, useAnnouncements } from "@/messages/AnnouncementsContext";
+import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { useSuperadminDelete } from "@/hooks/useSuperadminDelete";
 import type { LongPressHandlers } from "@/hooks/useLongPress";
@@ -30,7 +30,7 @@ import FaultTiming from "@/components/fm/FaultTiming";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import InfoTip from "@/components/common/InfoTip";
 import { Pager, usePaged } from "@/components/common/Paged";
-import { AnnouncementActions, AnnouncementContent, PageLink } from "@/components/messages/AnnouncementContent";
+import { AnnouncementContent, PageLink, RecordButtons } from "@/components/messages/AnnouncementContent";
 import RecordCard from "@/components/fm/RecordCard";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
 import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
@@ -313,14 +313,12 @@ export function ReportDetail({ announcement: a, canOpenPage }: { announcement: A
  *  way as the Issue cards, text colour, font, size"): its frame, title and text sizes are an issue's (RecordCard), its
  *  buttons under it on the right. ⚠️ IT OWNS ITS PRESS (architecture review 2026-10-29 #4): the screens each decided
  *  whether to pass one — an issue's card and a report passed none — so whatever buttons a message carries are pressed
- *  here, the same wherever it shows (useAnnouncementPress, the page's one record of presses). */
+ *  here, the same wherever it shows (RecordButtons, the one button row). */
 export function NoteDetail({ announcement: a, children }: { announcement: Announcement; children?: ReactNode }) {
-  const { presses, press } = useAnnouncementPress(a);
   return (
     <RecordCard title={a.title}
       titlePills={a.at ? <span className="fm-entity-chip fm-chip-static">{localStamp(a.at)}</span> : undefined}
       body={<div className="messages-card-body"><AnnouncementContent announcement={a} />{children}</div>}
-      actions={a.buttons.length > 0
-        ? <AnnouncementActions announcement={a} onPress={press} presses={presses} /> : undefined} />
+      actions={a.buttons.length > 0 ? <RecordButtons record={a} /> : undefined} />
   );
 }

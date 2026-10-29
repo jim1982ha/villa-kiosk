@@ -32,7 +32,12 @@ export interface ThreadView {
 
 /** What the conversation shows, from this profile's turns and whether VESTA runs. */
 export function threadView(turns: readonly Turn[], online: boolean): ThreadView {
-  return { shown: online, lines: turns.filter((t) => !t.gone) };
+  return { shown: online, lines: turns.filter((t) => !t.gone && t.answers === null) };
+}
+
+/** VESTA's short answers to this profile's presses, by the press's number (shown under the button pressed). Pure. */
+export function answersOf(turns: readonly Turn[]): ReadonlyMap<number, string> {
+  return new Map(turns.flatMap((t) => (t.answers !== null && t.text ? [[t.answers, t.text] as const] : [])));
 }
 
 /** Whether the last question had no answer and never will: nothing from VESTA after it, and older than the add-on keeps

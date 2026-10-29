@@ -1,3 +1,15 @@
+## 2.496.587
+
+What you will see (needs VESTA Agent 0.12.385):
+- VESTA's buttons on the tablet, the same everywhere a message shows (its notice at the top, its full screen, its card
+  in the Inbox, VESTA's conversation): Approve / Refuse on an approval request, Done / Need help on an alert, VESTA's
+  offers (record a fault, investigate) and Continue. Pressing one does what the same button does on Telegram, and
+  every copy (Telegram's too) then says who decided.
+- Approve and Refuse ask first, in the same confirmation box as running a scene: "Approve or refuse this request? It
+  cannot be taken back."
+- VESTA's short answer to a press shows under the button (as Telegram's pop-up does).
+- A guest is offered only buttons that do not act (Continue); the doorbell's Unlock stays for every profile, as before.
+
 ## 2.496.586
 
 What you will see:

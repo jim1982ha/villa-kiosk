@@ -4130,6 +4130,22 @@ def _vm_lines(value, list_name: str, line_name: str) -> list:
     return [x for x in out if x][:int(VESTA_MESSAGE_LIMITS.get(list_name) or 0)]
 
 
+def _vm_buttons(value) -> list:
+    """VESTA's buttons as a record carries them ([{label, kind, id}]: its own kind and id, never a device or a command),
+    the first the agreement allows; one missing a part is left out. ONE reading for a VESTA message and a conversation
+    turn alike."""
+    out = []
+    for b in value if isinstance(value, list) else []:
+        made = {f: _vm_text(b.get(f), f) for f in ("label", "kind", "id")} if isinstance(b, dict) else {}
+        if all(made.values()) and len(out) < int(VESTA_MESSAGE_LIMITS.get("buttons") or 0):
+            out.append(made)
+    return out
+
+
+#: Each button kind's rules for the tablet (agent-contract.json vestaMessage.buttonKinds): `acts`, never a guest's.
+BUTTON_KINDS: dict = dict((AGENT_CONTRACT_TABLE.get("vestaMessage") or {}).get("buttonKinds") or {})
+
+
 def _vm_page(value) -> str:
     """A report's page: a document id as the upload takes it (FM_EVIDENCE_ID_RE); anything else is none."""
     return value if isinstance(value, str) and FM_EVIDENCE_ID_RE.fullmatch(value) else ""
@@ -4176,13 +4192,7 @@ def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
         rec["page"] = page
     if _vm_language(body.get("language")):
         rec["language"] = body["language"]
-    buttons = []
-    for b in body.get("buttons") if isinstance(body.get("buttons"), list) else []:
-        made = {f: _vm_text(b.get(f2), f2) for f, f2 in (("label", "label"), ("kind", "kind"), ("id", "id"))} \
-            if isinstance(b, dict) else {}
-        if all(made.values()) and len(buttons) < int(VESTA_MESSAGE_LIMITS.get("buttons") or 0):
-            buttons.append(made)
-    if buttons:
+    if buttons := _vm_buttons(body.get("buttons")):
         rec["buttons"] = buttons
     langs = {}
     for code, words in (body.get("languages") or {}).items() if isinstance(body.get("languages"), dict) else ():
@@ -4287,6 +4297,11 @@ def _turn_record(body, seq: int, now_iso: str) -> dict | None:
         rec["text"] = body["text"].strip()[:int(CONVERSATION_LIMITS.get("text") or 0)]
     if page := _vm_page(body.get("page")):
         rec["page"] = page
+    if buttons := _vm_buttons(body.get("buttons")):
+        rec["buttons"] = buttons
+    # a press's short answer (its toast): shown under the button pressed, never as a line of the conversation
+    if isinstance(body.get("answers"), int) and not isinstance(body.get("answers"), bool):
+        rec["answers"] = body["answers"]
     photos = body.get("photos")
     has_photo = isinstance(photos, list) and any(isinstance(p, str) and p for p in photos)
     return rec if ("text" in rec or "page" in rec or has_photo) else None
@@ -4357,6 +4372,47 @@ async def vesta_ask_handler(request: web.Request) -> web.Response:
 vesta_conversation_handler = _feed_handler(
     CONVERSED, "turns", own=lambda t, profile: t.get("profile") == profile,
     said=lambda: {"vesta": "online" if _vesta_online() else "offline"})
+
+
+def _offers(records: list, key, command, profile: str) -> bool:
+    """Whether a kept VESTA record with this key offers the button `command` ("<kind>:<id>") — a VESTA message (every
+    profile's) or a turn of the presser's own conversation. Pure: tests/store-doors.py drives it."""
+    if not isinstance(key, str) or not key or not isinstance(command, str) or ":" not in command:
+        return False
+    return any(isinstance(r, dict) and r.get("key") == key and r.get("profile", profile) == profile
+               and any(f"{b.get('kind')}:{b.get('id')}" == command for b in r.get("buttons") or [])
+               for r in records)
+
+
+async def vesta_press_handler(request: web.Request) -> web.Response:
+    """`{"key", "command"}` — one of VESTA's buttons pressed on a tablet (ticket 22 of "One inbox"): kept in the inbox for
+    the Agent, stamped with this session's profile, as a question is. 409 when no kept record offers that button (any
+    more), 403 for a guest's button that acts (agent-contract.json vestaMessage.buttonKinds), 503 while VESTA is not
+    running. Answers the press's number: VESTA's short answer comes back in the conversation as `answers`."""
+    if (refused := _refuse(request)) is not None:
+        return refused
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    if not CONVERSATION_PROFILES or set(body) != {"key", "command"} or not isinstance(body.get("command"), str):
+        return web.json_response({"error": "a press names a key and a command, nothing else"}, status=400)
+    profile = _role_for(request)
+    if profile not in CONVERSATION_PROFILES:
+        return _forbidden("This profile does not talk to VESTA.")
+    kind, _, bid = body["command"].partition(":")
+    if (BUTTON_KINDS.get(kind) or {}).get("acts", True) and not _may(profile, "viewAgent"):
+        return _forbidden("A guest gets answers only: this button is for the owner or the facility manager.")
+    held = [*await asyncio.to_thread(MESSAGED.items), *await asyncio.to_thread(CONVERSED.items)]
+    if not _offers(held, body["key"], body["command"], profile):
+        return web.json_response({"error": "This button is no longer offered."}, status=409)
+    if not _vesta_online():
+        return web.json_response({"error": "VESTA is not running."}, status=503)
+    if _asked_lately(await asyncio.to_thread(ASKED.items), profile, time.time()) >= ASKS_PER_MINUTE:
+        return web.json_response({"error": "Too many at once: wait a minute."}, status=429)
+    at = _now_iso()
+    ask = await ASKED.add(lambda seq: {"seq": seq, "at": at, "profile": profile,
+                                       "press": {"key": body["key"], "kind": kind, "id": bid}})
+    return web.json_response({"ok": True, "press": ask["seq"]})
 
 
 async def agent_inbox_handler(request: web.Request) -> web.Response:
@@ -4791,6 +4847,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     # Talking to VESTA (every profile, each its own conversation).
     app.router.add_post("/vesta-ask", vesta_ask_handler)
     app.router.add_get("/vesta-conversation", vesta_conversation_handler)
+    app.router.add_post("/vesta-press", vesta_press_handler)
     app.router.add_put("/kiosk-rooms", kiosk_rooms_put_handler)
     # The VESTA Agent interface v1 (bearer token; 404 while agent_token is empty).
     app.router.add_get("/agent/v1/info", agent_info_handler)

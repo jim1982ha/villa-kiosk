@@ -7,6 +7,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import { fetchFeed, type FeedRead } from "./feed";
+import { vestaButtons, type AnnouncementButton, type Pressable } from "./announcements";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 /** One line of the conversation: the person's question, or VESTA's answer. */
@@ -25,6 +26,10 @@ export interface Turn {
   page: string | null;
   /** VESTA withdrew it (as a message deleted on Telegram): not shown. */
   gone: boolean;
+  /** VESTA's buttons under it (Continue, an offer), read as a message's are (announcements.vestaButtons). */
+  buttons: AnnouncementButton[];
+  /** A press's short answer: the number of the press it answers (shown under that button, never as a line). */
+  answers: number | null;
 }
 
 /** The longest question the add-on keeps (agent-contract.json conversation.limits.question). */
@@ -40,6 +45,8 @@ export function parseTurn(raw: unknown): Turn | null {
     photos: Array.isArray(r.photos) ? r.photos.filter((p): p is string => typeof p === "string") : [],
     page: typeof r.page === "string" && r.page ? r.page : null,
     gone: r.gone === true,
+    buttons: vestaButtons(r.buttons),
+    answers: typeof r.answers === "number" ? r.answers : null,
   };
 }
 
@@ -77,3 +84,6 @@ export async function askVesta(
     return "failed";
   }
 }
+
+/** A turn as its buttons are pressed (announcements.pressOf: VESTA's door). */
+export const pressableOf = (t: Turn): Pressable => ({ seq: t.seq, key: t.key, buttons: t.buttons, feed: "turn" });

@@ -743,6 +743,43 @@ async def main() -> None:
     ck("a turn past the records-kept days goes", [t.get("text") for t in body["turns"]]
        == ["The wifi is on the card by the door."], body)
 
+    # ── VESTA's buttons pressed on a tablet (ticket 22 of "One inbox") ───────────────────────────────────────────────
+    print("\n  VESTA's buttons pressed on a tablet:")
+    reset_lockout()
+    asks.unlink(missing_ok=True)
+    await post("/agent/v1/heartbeat", headers=bearer())
+    await post("/agent/v1/vesta-message", headers=bearer(), json={
+        "key": "thread:ap1", "title": "Approval request", "body": "Turn on the pool light?",
+        "buttons": [{"label": "Approve", "kind": "a", "id": "ap1:y"}, {"label": "Refuse", "kind": "a", "id": "ap1:n"}]})
+    r = await post("/vesta-press", json={"key": "thread:ap1", "command": "a:ap1:y"})
+    ck("no session: refused", r.status == 401, r.status)
+    r = await post("/vesta-press", headers=cookie("guest"), json={"key": "thread:ap1", "command": "a:ap1:y"})
+    ck("  ...a guest's press of a button that acts is refused (403): answers only", r.status == 403, r.status)
+    r = await post("/vesta-press", headers=cookie("owner"), json={"key": "thread:ap1", "command": "a:ap1:x"})
+    ck("  ...a button the record does not offer is refused (409)", r.status == 409, r.status)
+    r = await post("/vesta-press", headers=cookie("owner"), json={"key": "thread:ap1", "command": "a:ap1:y", "profile": "x"})
+    ck("  ...a press naming more than its key and command is refused (400)", r.status == 400, r.status)
+    r = await post("/vesta-press", headers=cookie("owner"), json={"key": "thread:ap1", "command": "a:ap1:y"})
+    pressed = await r.json()
+    status, body = await jget("/agent/v1/inbox", bearer())
+    ck("an owner's press is kept for the Agent, stamped owner, with the record and the button, and answered its number",
+       r.status == 200 and [(a["profile"], a.get("press")) for a in body["asks"]]
+       == [("owner", {"key": "thread:ap1", "kind": "a", "id": "ap1:y"})] and pressed["press"] == body["asks"][0]["seq"],
+       (pressed, body))
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={
+        "key": "turn:9", "profile": "guest", "text": "Stopped at the limit.",
+        "buttons": [{"label": "Continue", "kind": "c", "id": "k1"}]})
+    r = await post("/vesta-press", headers=cookie("guest"), json={"key": "turn:9", "command": "c:k1"})
+    r2 = await post("/vesta-press", headers=cookie("owner"), json={"key": "turn:9", "command": "c:k1"})
+    ck("a button of a guest's own answer that does not act: pressed by that guest, by no other profile (409)",
+       r.status == 200 and r2.status == 409, (r.status, r2.status))
+    await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "press:1", "profile": "owner",
+                                                                      "text": "Approved.", "answers": 1})
+    status, body = await jget("/vesta-conversation", cookie("owner"))
+    told = next(t for t in body["turns"] if t["key"] == "press:1")
+    ck("  ...a press's short answer comes back in the presser's conversation, naming the press", told.get("answers") == 1,
+       told)
+
     agent(enabled="false", token=TOKEN)
     r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "t", "profile": "guest", "text": "x"})
     r2 = await get("/agent/v1/inbox", headers=bearer())

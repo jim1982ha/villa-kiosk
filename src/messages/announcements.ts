@@ -50,7 +50,40 @@ export interface Announcement {
   page?: string;
 }
 
-export interface AnnouncementButton { label: string; command: string }
+export interface AnnouncementButton {
+  label: string;
+  /** What a press sends: the villa's own command (the doorbell's Unlock), or VESTA's "<kind>:<id>". */
+  command: string;
+  /** It acts (VESTA's kinds: agent-contract.json vestaMessage.buttonKinds): never offered to a guest. */
+  acts?: boolean;
+  /** The question asked first, in the tablet's one confirmation box (an approval: owner, 2026-10-28). */
+  confirm?: string;
+}
+
+/** What may be pressed: a villa announcement, one of VESTA's messages, a turn of VESTA's conversation. */
+export interface Pressable { seq: number; key: string | null; buttons: AnnouncementButton[]; feed?: "vesta" | "turn" }
+
+/** Each of VESTA's button kinds' rules for the tablet, read from the agreement both sides read. */
+const BUTTON_KINDS = AGENT_CONTRACT.vestaMessage.buttonKinds as Record<string, { acts?: boolean; confirm?: string }>;
+
+/** VESTA's buttons as a record carries them ([{label, kind, id}]), with their kind's rules; a malformed one left out.
+ *  ONE reading for its messages and its conversation's turns (ticket 22 of "One inbox"). Pure. */
+export function vestaButtons(raw: unknown): AnnouncementButton[] {
+  return (Array.isArray(raw) ? raw : []).flatMap((b): AnnouncementButton[] => {
+    const r = b && typeof b === "object" ? (b as Record<string, unknown>) : {};
+    if (![r.label, r.kind, r.id].every((x) => typeof x === "string" && x)) return [];
+    const rules = BUTTON_KINDS[r.kind as string];
+    return [{ label: r.label as string, command: `${r.kind}:${r.id}`, acts: rules?.acts ?? true,
+      ...(rules?.confirm ? { confirm: rules.confirm } : {}) }];
+  });
+}
+
+/** ⚠️ THE ONE RULE OF WHO IS OFFERED A BUTTON (owner, 2026-10-29: "consistently", "DRY"): every profile the villa's own
+ *  (the doorbell's Unlock) and VESTA's that do not act (Continue); one that acts, only a profile that may act (`mayAct`:
+ *  the owner, the facility manager — a guest gets answers only). Read by every screen that draws buttons. Pure. */
+export function offeredButtons(buttons: readonly AnnouncementButton[], mayAct: boolean): AnnouncementButton[] {
+  return buttons.filter((b) => !b.acts || mayAct);
+}
 
 /** Where a problem is: raised, still open, cleared. null: the announcement says none (a weekly test, a digest). */
 export type Stage = "new" | "existing" | "closed";
@@ -199,9 +232,8 @@ const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is
 /**
  * One of VESTA's cards as the add-on keeps it (agent-contract.json `vestaMessage`), read as an announcement so every
  * screen draws it the way it draws the villa's: its title as Telegram heads it ("#91-P2 (new)"), "To:", its alert and
- * "What to do", its Status story and bottom line, its snapshot. ⚠️ ITS BUTTONS ARE NOT DRAWN: VESTA's Done and Need help
- * are pressed on Telegram until the tablet can press them (ticket 22 of "One inbox"); a button that does nothing is not
- * shown. null for anything this build cannot read. Pure: tests/oracles/messages_model.mjs.
+ * "What to do", its Status story and bottom line, its snapshot, its buttons (ticket 22 of "One inbox": pressed on the
+ * tablet as on Telegram, vestaButtons). null for anything this build cannot read. Pure: tests/oracles/messages_model.mjs.
  */
 export function parseVestaMessage(raw: unknown): Announcement | null {
   const r = numbered(raw);
@@ -214,7 +246,7 @@ export function parseVestaMessage(raw: unknown): Announcement | null {
   return {
     seq: r.seq, at: atOf(r), title, to: typeof r.to === "string" ? r.to : "", text,
     status: lines[lines.length - 1] ?? "", story: lines.slice(0, -1), photo: photoOf(r),
-    key: r.key, buttons: [], feed: "vesta", takes: strings(r.takes),
+    key: r.key, buttons: vestaButtons(r.buttons), feed: "vesta", takes: strings(r.takes),
     ...(typeof r.stage === "string" && r.stage ? { vestaStage: r.stage } : {}),
     ...(typeof r.report === "string" && r.report ? { report: r.report } : {}),
     ...(typeof shown.page === "string" && shown.page ? { page: shown.page } : {}),
@@ -260,14 +292,36 @@ export const PRESS_SAID: Record<PressOutcome, string> = {
 export async function pressButton(
   key: string, command: string, send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status">>,
 ): Promise<PressOutcome> {
+  return (await pressAt("announcement-press", key, command, send)).outcome;
+}
+
+/** What a press came to: its outcome, and — one of VESTA's buttons — its number, which VESTA's short answer names. */
+export interface PressResult { outcome: PressOutcome; press?: number }
+
+/** ⚠️ ONE DOOR PER KIND OF RECORD, CHOSEN HERE (ticket 22 of "One inbox"): the villa's own buttons go to its press event
+ *  (/announcement-press), VESTA's — a message's or a conversation turn's — to VESTA (/vesta-press, kept for it as a
+ *  question is). Every screen presses through this. `send` is backendFetch (a check passes its own). */
+export function pressOf(
+  a: Pressable, command: string, send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status"> & { json?: () => Promise<unknown> }>,
+): Promise<PressResult> {
+  return a.key ? pressAt(a.feed ? "vesta-press" : "announcement-press", a.key, command, send)
+    : Promise.resolve({ outcome: "failed" });
+}
+
+async function pressAt(
+  door: string, key: string, command: string,
+  send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status"> & { json?: () => Promise<unknown> }>,
+): Promise<PressResult> {
   try {
-    const r = await send(ingressPath("announcement-press"), {
+    const r = await send(ingressPath(door), {
       method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key, command }),
     });
-    return r.ok ? "sent" : r.status === 409 ? "withdrawn" : "failed";
+    if (!r.ok) return { outcome: r.status === 409 ? "withdrawn" : "failed" };
+    const body = r.json ? ((await r.json().catch(() => null)) as { press?: unknown } | null) : null;
+    return { outcome: "sent", ...(typeof body?.press === "number" ? { press: body.press } : {}) };
   } catch {
-    return "failed";
+    return { outcome: "failed" };
   }
 }
 
