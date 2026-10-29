@@ -166,6 +166,7 @@ class Vesta:
                                      delete=(self.delivery.delete if self.tg else None))
         self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
                                     thread=self.thread, run_job=self.run_code_job, facts=self.chat_facts)
+        self.thread.closes = self.buttons.closes             # the tablet's issue card: its own Close stands for Done
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                settle_alert=self.thread.close, timezone=settings.timezone,
                                story=lambda iid: self.notices.story(iid), restate_alert=self._alert_taken,

@@ -50,15 +50,18 @@ def _lines(lines, list_name: str, line_name: str) -> list[str]:
     return [x for x in (_cut(line, line_name) for line in lines or ()) if x][:n]
 
 
-def buttons_of(keyboard: dict | None) -> list[dict]:
+def buttons_of(keyboard: dict | None, closes=None) -> list[dict]:
     """A Telegram keyboard as the record's buttons: each the agent's own kind and id (button_data) with its label —
-    never a device or a command. A button the agent did not write is left out."""
+    never a device or a command. A button the agent did not write is left out. `closes(kind, parts)`: whether its press
+    settles its alert as done (an alert's Done: AlertButtons.closes) — the tablet does not draw it beside the issue's own
+    Close (owner, 2026-10-29)."""
     out = []
     for row in (keyboard or {}).get("inline_keyboard") or ():
         for b in row:
             kind, parts = button_data.read(str(b.get("callback_data") or ""))
             if kind:
-                out.append({"label": _cut(b.get("text"), "label"), "kind": kind, "id": ":".join(parts)})
+                out.append({"label": _cut(b.get("text"), "label"), "kind": kind, "id": ":".join(parts),
+                            **({"closes": True} if closes and closes(kind, parts) else {})})
     return out
 
 
@@ -68,7 +71,7 @@ def roles_of(to: str) -> list[str]:
 
 
 def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | None = None, to: str | None = None,
-             takes: list[str] | None = None) -> dict:
+             takes: list[str] | None = None, closes=None) -> dict:
     """The record of a message drawn as `layout` parts `p`: its title and "To:", the Status lines (the history, then where it
     stands), its stage, the words it was drawn in besides English when the agent holds them, its buttons. `to`: the "To:"
     of every chat's copy together (IncidentThread.tell), else this copy's; `takes`: the villa's runs it stands for."""
@@ -88,7 +91,7 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
         "lead": p.get("lead"), "body": layout.body_shown(p, h),
         "status": _lines([*(h["history"] if h else []), status], "status", "statusLine"),
         "stage": (h or {}).get("word") or said.get("stage") or "", "mark": p.get("mark") or "",
-        "buttons": buttons_of(keyboard), "languages": languages,
+        "buttons": buttons_of(keyboard, closes), "languages": languages,
     }
     return _finished(rec, photo)
 

@@ -55,6 +55,17 @@ class AlertButtons:
         return {"inline_keyboard": [[{"text": b["label"], "callback_data": button_data.make(button_data.ALERT, iid, b["option"])}
                                      for b in self.of(self.skills.get(skill_name))]]}
 
+    def closes(self, kind: str, parts: list[str]) -> bool:
+        """Whether this button, pressed, settles its alert as done: an alert's button with no mark of its own (the
+        skill's Done; Need help carries "help"). The tablet's issue card has its own Close for that (owner, 2026-10-29:
+        Need help only, beside Close)."""
+        if kind != button_data.ALERT or len(parts) != 2 or not parts[0].isdigit():
+            return False
+        iid, opt = parts
+        skill_name = next((k for c in self.thread.shown(int(iid)) if (k := self.state.alert_skill(iid, c))), None)
+        button = next((b for b in self.of(self.skills.get(skill_name) if skill_name else None) if b["option"] == opt), None)
+        return button is not None and not button.get("mark")
+
     async def press(self, chat: int, parts: list[str], person, toast: Callable[[str], Awaitable],
                     name: str | None = None, pressed: int | None = None, anywhere: bool = False) -> None:
         """A button on an alert (button_data: its incident and option; the presser is a registered person): the

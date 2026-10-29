@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.375 (29 October 2026)
+
+- A tablet record's alert button whose press settles the alert as done (the skill's button with no mark: Done) is
+  flagged `closes` (AlertButtons.closes, through IncidentThread.closes to kiosk_messages.buttons_of): the tablet leaves
+  it out beside an issue's own Close (owner, 2026-10-29). Agreement copied from Kiosk 2.496.588.
+
 ## 0.6.374 (29 October 2026)
 
 - Ticket 22 of "One inbox" (VESTA's buttons on the tablet): the inbox brings presses ({key, kind, id}, stamped by the
