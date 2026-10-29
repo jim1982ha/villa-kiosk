@@ -1,3 +1,18 @@
+## 0.12.394
+
+What you will see (with VESTA (dev2) 2.496.598):
+- On the tablet, "/help", "/status", "/whoami" or "/ask" alone are answered at once ("VESTA has no /help command.
+  Write your question in your own words.", "You are Owner at the tablet; VESTA answers you as owner.", "Write your
+  question after /ask."), instead of the dots for 10min then "No answer came". Telegram is unchanged: there, such a
+  command may be meant for the villa's automations or another bot.
+- An alert's card on the tablet lists every step, whoever it was sent to. Before, once VESTA chased the owner, the
+  card kept the owner's line only and lost the facility manager's alert and reminder.
+- An alert still open with no step since 28/10 (like #83) gets its full card on the tablet when VESTA starts: its
+  "To:", "What to do" and Status, as on Telegram.
+- Dates in VESTA's messages and on the tablet are now one format from one place: "24/10/2026 19:05".
+- A VESTA Agent release copies the rules it shares with the tablet's app by itself (one release had waited a day on a
+  copy made by hand).
+
 ## 0.12.393
 
 What you will see (with VESTA (dev2) 2.496.597):

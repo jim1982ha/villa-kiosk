@@ -7,8 +7,8 @@ never says — and the agreement (agent-contract.json `conversation.profiles`) m
 answers it with: owner, fm, or guest (answers only: tool_access.GUEST).
 
 ⚠️ A CONVERSATION LIKE A CHAT, NEVER A TELEGRAM CHAT. Each profile is one conversation, with its own AI session, apart
-from every Telegram chat: it enters where a Telegram message does (app.handle_message: the intake gate, so /investigate,
-/proposal and /new work as there; then converse), under a chat id no Telegram chat can have (Telegram's ids have at most
+from every Telegram chat: it enters the gate a Telegram message does, as itself (`question`; app.handle_question: the
+intake gate, so /investigate, /proposal and /new work as there; then converse), under a chat id no Telegram chat can have (Telegram's ids have at most
 52 significant bits). Delivery sends to it through this module instead of Telegram (`Tablet`, Delivery's second sink,
 chosen by conversation): a message is a turn, an edit replaces it (a "being prepared" answer becomes its result), a
 deletion withdraws it. Nobody is added to People.
@@ -18,10 +18,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from dataclasses import replace
 from typing import Awaitable, Callable
 
 from vesta_shared import agreement
 
+from . import intake
 from .kiosk import KioskError, kiosk_timeout_s
 from .kiosk_messages import buttons_of
 from .policy import Person, tablet_chat, tablet_person, tablet_profile, tablet_profiles
@@ -47,22 +49,29 @@ def person_of(profile: str | None) -> Person | None:
     return tablet_person(chat) if chat is not None else None
 
 
-def as_message(chat: int, person: Person, text: str, spoken: bool = False) -> tuple[str, dict]:
-    """A tablet's question as the gate reads a Telegram message (intake.gate): a "/command" as a command, a spoken one
-    as a voice note (its audio is the tablet's: `Spoken`), anything else as text. (event type, message)."""
-    m = {"chat_id": chat, "user_id": chat, "from_first": person.name}
-    if spoken:
-        return "telegram_attachment", {**m, "file_mime_type": "audio/wav", "file_id": ""}
-    words = (text or "").strip()
+def question(chat: int, person: Person, ask: dict, audio=None) -> intake.Question:
+    """A tablet's question as the gate reads it (intake.Question): a "/command" as a command, a spoken one by its audio
+    (`Spoken`), anything else as words. ⚠️ NOT SHARED: only the agent reads a tablet's conversation, so what is not the
+    agent's ("/help") is answered there, never left to the time a question is kept."""
+    words = str(ask.get("text") or "").strip()
+    q = intake.Question(chat, chat, person.name, person=person, shared=False)
+    if audio is not None:
+        return replace(q, audio=audio)
     if words.startswith("/"):
         cmd, _, rest = words.partition(" ")
-        return "telegram_command", {**m, "command": cmd, "args": rest.split()}
-    return "telegram_text", {**m, "text": words}
+        return replace(q, command=cmd, args=tuple(rest.split()))
+    return replace(q, text=words)
+
+
+def key(kind: str, of) -> str:
+    """A turn's key at the Kiosk, of its kind (the agreement's conversation.keys: `turn` an answer, `press` a press's
+    short answer, `typing` VESTA answering, `ask` the person's own line, the Kiosk's)."""
+    return f"{agreement.section('conversation')['keys'][kind]}{of}"
 
 
 def turn_key(mid) -> str:
-    """A turn's key at the Kiosk: its message id (the Kiosk replaces a turn by it; `ask:` keys are the Kiosk's own)."""
-    return f"turn:{int(mid)}"
+    """A turn's key at the Kiosk: its message id (the Kiosk replaces a turn by it)."""
+    return key("turn", int(mid))
 
 
 class Spoken:
@@ -158,7 +167,7 @@ class Tablet:
             return False
         try:
             return await asyncio.wait_for(self.kiosk.add_turn(
-                {"key": f"ask:{ask}", "profile": profile_of(chat), "heard": words.strip()}), self._timeout_s())
+                {"key": key("ask", ask), "profile": profile_of(chat), "heard": words.strip()}), self._timeout_s())
         except (KioskError, asyncio.TimeoutError) as e:
             log.warning("The words heard could not be written to the tablet (%s)", type(e).__name__)
             return False
@@ -172,7 +181,7 @@ class Tablet:
         under its button, never as a line of the conversation."""
         if not isinstance(press, int) or not text:
             return False
-        return await self._write(self._mid(), {"key": f"press:{press}", "profile": profile_of(chat), "text": text,
+        return await self._write(self._mid(), {"key": key("press", press), "profile": profile_of(chat), "text": text,
                                                "answers": press})
 
     async def reply(self, chat: int, text: str, *, keyboard: dict | None = None, photos=()) -> int | None:
@@ -216,14 +225,14 @@ class Tablet:
         return release
 
     async def _working_loop(self, chat: int, stop: asyncio.Event) -> None:
-        key = {"key": f"typing:{profile_of(chat)}", "profile": profile_of(chat)}
+        typing = {"key": key("typing", profile_of(chat)), "profile": profile_of(chat)}
         while not stop.is_set():
-            await self._say_working(dict(key, typing=True))
+            await self._say_working(dict(typing, typing=True))
             try:
                 await asyncio.wait_for(stop.wait(), timeout=TYPING_EVERY_S)
             except asyncio.TimeoutError:
                 pass
-        await self._say_working(dict(key, gone=True))
+        await self._say_working(dict(typing, gone=True))
 
     async def _say_working(self, record: dict) -> None:
         try:

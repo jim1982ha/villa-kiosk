@@ -33,7 +33,7 @@ def _Policy():
 
 
 def gate(e):
-    return intake.gate("telegram_attachment", e, _Policy(), "Villa_Test_bot", lambda c, m: m == 500)
+    return intake.gate(intake.from_telegram("telegram_attachment", e), _Policy(), "Villa_Test_bot", lambda c, m: m == 500)
 
 
 def test_a_photo_is_read_by_the_rules_of_a_text_message():

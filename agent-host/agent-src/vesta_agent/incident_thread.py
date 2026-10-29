@@ -72,6 +72,9 @@ class IncidentThread:
         # inbox"). None: not kept. Called at every change that is the incident's own step, never at a retry or a redraw
         # in another language (`tell` of _show): the tablet's record is the latest step, not whichever chat was drawn last.
         self.mirror = None
+        # notice.Notices.story_of (incident, chat, its lines): a copy drawn before its heading held every step, told for
+        # everyone (tell_open). None: its own steps
+        self.story_of = None
         # incidents.Incidents.name: how the incident is named ("#9-P2") in a pointer to its newer message; its number
         # alone until set
         self.name = incident_tag
@@ -112,6 +115,31 @@ class IncidentThread:
         self.mirror(kiosk_messages.of_parts(kiosk_messages.thread_key(iid), parts, keyboard=keyboard,
                                             photo=kiosk_messages.photo_b64(photo), to=AND.join(roles) if roles else None,
                                             takes=self.state.incident_runs(iid)))
+
+    def tell_open(self, open_incidents) -> int:
+        """At start: each open incident's card kept for the tablet, as its newest copy stands — how many. ⚠️ ALERT #83
+        (owner, 2026-10-29): the tablet keeps a card from the incident's next step on (since engine 0.6.359), and an
+        incident with no step since (its one "still not fixed" sent) had none: the tablet showed its short list
+        while Telegram showed the card. The newest copy is the one whose own Status leaves the fewest steps to its
+        bottom line; its Status told for everyone (the tablet is everyone's), as every step's card is now."""
+        told = 0
+        for iid in open_incidents:
+            if self.mirror is None or str(iid) in self._told:
+                continue
+            best = None
+            for chat, rec in self.state.incident_chats(iid):
+                h = layout.head_of((rec.get("parts") or {}).get("head"))
+                if h is None:
+                    continue
+                story = self.story_of(int(iid), chat, h["history"]) if self.story_of and "story" not in h else None
+                left = story[0] if story else 0
+                if best is None or left < best[0]:
+                    parts = rec["parts"] if story is None else {**rec["parts"], "head": {**h, "story": story[1]}}
+                    best = (left, parts, rec.get("kb") if rec.get("buttons") else None)
+            if best is not None:
+                self.tell(iid, best[1], best[2])
+                told += 1
+        return told
 
     async def _post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
                     keyboard: dict | None = None, photo=None) -> None:

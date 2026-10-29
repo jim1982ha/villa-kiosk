@@ -87,7 +87,8 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
         "key": key, "title": layout.title_line(h) if h else "", "to": to if to is not None else (h["to"] if h else ""),
         "takes": takes or [],
         "lead": p.get("lead"), "body": layout.body_shown(p, h),
-        "status": _lines([*(h["history"] if h else []), status], "status", "statusLine"),
+        # the tablet is everyone's: every step, whoever it went to (layout.head's `story`), else this copy's own
+        "status": _lines([*((h.get("story") or h["history"]) if h else []), status], "status", "statusLine"),
         "stage": (h or {}).get("word") or said.get("stage") or "", "mark": p.get("mark") or "",
         "buttons": buttons_of(keyboard), "languages": languages,
     }

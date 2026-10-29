@@ -1,6 +1,8 @@
 {
   "_what": "The agreement between the VESTA Kiosk and the VESTA Agent (the /agent/v1 interface), declared ONCE. The Kiosk's proxy (rootfs/usr/bin/supervisor-proxy.py) checks against it, the app (src/agent/agentApi.ts) reads its lists, and the VESTA Agent host keeps a copy (agent-host/contract/agent-contract.json) that its CI compares with this file. A change a version-1 agent cannot survive is a new version, not an edit to this one.",
   "version": 1,
+  "_moment": "How a moment and a day are written in text a person reads, by both apps (owner, 2026-10-29: alert #83 said \"24/10/2026 19:05\" on Telegram and \"2026-10-24 19:05\" on the tablet; the owner chose day first, everywhere). strftime directives, only %d %m %Y %H %M: on the villa's clock, the same on every screen whatever the reader's locale.",
+  "moment": {"format": "%d/%m/%Y %H:%M", "date": "%d/%m/%Y"},
   "status": {
     "states": [
       "not_configured",
@@ -701,7 +703,22 @@
     "typingSeconds": 180,
     "asksPerMinute": 6,
     "limits": {"key": 200, "text": 16000, "question": 2000, "photos": 4, "photoBytes": 3000000},
-    "voice": {"rate": 16000, "seconds": 30}
+    "voice": {"rate": 16000, "seconds": 30},
+    "keys": {"ask": "ask:", "turn": "turn:", "press": "press:", "typing": "typing:"},
+    "_turnExamples": "What a turn may hold, by example (architecture review R, 2026-10-29: the add-on's rule, the page's reading and the Agent's test copy of the add-on had each written it down apart). Both apps replay them: the Kiosk through its own door (tests/agent-interface.py), the Agent through its test copy of the add-on (tests/test_contract_turns.py). `kept`: the add-on keeps it (200) or refuses it (400). `keys`: the kinds of key, by their start: `ask` the person's own lines (the add-on's), `turn` an answer, `press` a press's short answer, `typing` VESTA answering. Profile ops: the Kiosk replays them after the checks that read its conversation.",
+    "turnExamples": [
+      {"why": "an answer in words", "kept": true, "turn": {"key": "turn:9001", "profile": "ops", "text": "The pool pump is on."}},
+      {"why": "a rewrite of that answer (a being-prepared answer becomes its result)", "kept": true, "turn": {"key": "turn:9001", "profile": "ops", "text": "Done."}},
+      {"why": "withdrawn, as a deleted Telegram message", "kept": true, "turn": {"key": "turn:9001", "profile": "ops", "gone": true}},
+      {"why": "VESTA is answering (the dots)", "kept": true, "turn": {"key": "typing:ops", "profile": "ops", "typing": true}},
+      {"why": "a press's short answer", "kept": true, "turn": {"key": "press:7", "profile": "ops", "text": "Sent.", "answers": 7}},
+      {"why": "never the person's own line", "kept": false, "turn": {"key": "ask:9", "profile": "ops", "text": "I am the person"}},
+      {"why": "a profile the agreement does not name", "kept": false, "turn": {"key": "turn:9002", "profile": "boss", "text": "x"}},
+      {"why": "nothing said", "kept": false, "turn": {"key": "turn:9003", "profile": "ops"}},
+      {"why": "only spaces", "kept": false, "turn": {"key": "turn:9004", "profile": "ops", "text": "   "}},
+      {"why": "no key", "kept": false, "turn": {"profile": "ops", "text": "x"}},
+      {"why": "a key longer than limits.key", "kept": false, "turn": {"key": "turn:99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", "profile": "ops", "text": "x"}}
+    ]
   },
   "_stageMarks": "What starts an alert's bottom line, by its stage (review Q 3, 2026-10-28): the VESTA Agent writes it (vesta_shared/message_format.py STAGE_ICONS, and the villa's message template it generates) and the Kiosk reads an announcement's stage back from it (src/messages/announcements.ts stageOf): new, existing, and the two ends, watch (cleared, still watched) and closed. Read from here by both: a mark changed on one side alone made a cleared alarm read as new on the tablet.",
   "stageMarks": {

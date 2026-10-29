@@ -54,17 +54,20 @@ def fill_time(text: str | None, now: datetime, zone: str) -> str:
     thread's close and restate, and a taken-over message each replaced it by hand."""
     return (text or "").replace("{time}", moment_label(now, zone))
 
-def head(title: str, to: str = "", history=(), word: str | None = None, lang: str | None = None) -> dict:
+def head(title: str, to: str = "", history=(), word: str | None = None, lang: str | None = None, story=None) -> dict:
     """A message's heading as facts, never as text: its `title` ("#9-P2", "Approval request"), who it is for (`to`,
     the "To:" line's words), an incident's `history` (its "- …" lines and dividers), for an incident, its title's
     `word` ("new", "existing", "closed": the title reads "#9-P2 (existing)") and the language its chat reads (`lang`,
-    a code; none: English) — the Status section is drawn in it (status_words; owner, 2026-10-23).
+    a code; none: English) — the Status section is drawn in it (status_words; owner, 2026-10-23). `story`: an
+    incident's EVERY step, whoever it went to (the chat's `history` lists its own): the tablet's card, which is
+    everyone's, tells it (kiosk_messages.of_parts; alert #83, owner 2026-10-29: after the escalation to the owner, the
+    tablet's card kept the owner's line alone and lost the facility manager's alert and reminder).
 
     ⚠️ FACTS UNTIL DRAWN (architecture review, 2026-10-17): the heading was written as text, then read back — its stage
     word by a pattern, its title rewritten by another, its "To:" and history by splitting lines — so a wording change
     could quietly drop a card's ✅ or its "(closed)". Only a record stored before 0.12.230 is read from text (`head_of`)."""
     h = {"title": (title or "").strip(), "to": (to or "").strip(), "history": [x for x in history if x],
-         "word": word or None}
+         "word": word or None, **({"story": [x for x in story if x]} if story is not None else {})}
     # English is said by no key: a heading recorded before (and every English one) stays exactly as it was
     return {**h, "lang": lang} if lang and status_words.lang_of(lang) != "en" else h
 
@@ -73,7 +76,8 @@ def head_of(h) -> dict | None:
     """A heading as facts: one written by `head`, or one recorded as text (before 0.12.230: "#9-P2 (existing)" / "To: …" /
     its history; before 0.12.175 "For: JM"). None for no heading."""
     if isinstance(h, dict):
-        return head(h.get("title") or "", h.get("to") or "", h.get("history") or (), h.get("word"), h.get("lang"))
+        return head(h.get("title") or "", h.get("to") or "", h.get("history") or (), h.get("word"), h.get("lang"),
+                    h.get("story"))
     lines = [x for x in (h or "").strip().split("\n") if x]
     if not lines:
         return None

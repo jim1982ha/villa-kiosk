@@ -248,6 +248,31 @@ def ci_failures(sha: str, fetch=None) -> list[str] | None:
         return None
     return [str(r.get("name") or r.get("id")) for r in runs if r.get("status") == "completed" and r.get("conclusion") == "failure"]
 
+#: The agreement with the VESTA Kiosk: the Kiosk's file on its branch, and this app's copy of it.
+KIOSK_AGREEMENT, KIOSK_BRANCH = "rootfs/usr/share/vesta/agent-contract.json", "dev2"
+AGREEMENT_COPY = "agent-host/rootfs/opt/vesta/host/agent-contract.json"
+
+
+def copy_agreement(dry_run: bool) -> bool:
+    """⚠️ THE AGREEMENT IS COPIED BY THE RELEASE, NEVER BY HAND (architecture review R, 2026-10-29: 0.12.389 never
+    published, and an Agent release waited a day, because the copy was made after the Kiosk's release, by hand). The
+    Kiosk's file on its branch replaces this app's copy and ships with the release; the gate that compares them stays
+    (test_kiosk_contract.py: the Kiosk must have published it first). True when it changed. Nothing when the Kiosk's
+    branch cannot be read: that gate says so."""
+    git("fetch", "-q", "origin", KIOSK_BRANCH, check=False)
+    theirs = subprocess.run(["git", "show", f"origin/{KIOSK_BRANCH}:{KIOSK_AGREEMENT}"], cwd=ROOT,
+                            capture_output=True, text=True)
+    mine = ROOT / AGREEMENT_COPY
+    if theirs.returncode != 0 or (mine.exists() and mine.read_text() == theirs.stdout):
+        return False
+    print(f"  the agreement copied from the Kiosk ({KIOSK_BRANCH})" + (" (dry run: not written)" if dry_run else ""))
+    if not dry_run:
+        mine.parent.mkdir(parents=True, exist_ok=True)
+        mine.write_text(theirs.stdout)
+        git("add", AGREEMENT_COPY)
+    return True
+
+
 def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: float, gates=run_gates) -> int:
     git("fetch", "-q", "origin", BRANCH, "main")
     if git("rev-parse", "--abbrev-ref", "HEAD").strip() == "main":
@@ -268,6 +293,7 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
                 print(f"⏳ {top} is already committed ({sha[:8]}) and pushed, NOT published yet: read the CI run for it.")
                 return 3
             raise ReleaseError(f"{top} is already committed ({sha[:8]}) but NOT pushed: push it (git push origin HEAD:{BRANCH})")
+    copy_agreement(dry_run)
     unstaged = git("diff", "--name-only").strip()
     if unstaged:
         raise ReleaseError("unstaged changes in tracked files: stage what ships (by name) or stash the rest\n  "

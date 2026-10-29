@@ -171,6 +171,27 @@ class Ship(unittest.TestCase):
         self.s.ship()
         self.assertFalse((self.s.repo / "agent-host/agent-src/starter/shipped-skills.json").exists())
 
+    def test_the_release_copies_the_kiosks_agreement_itself(self):
+        # architecture review R, 2026-10-29: the copy was made by hand after the Kiosk's release; one release stopped on it
+        self.s.write("agent-host/rootfs/opt/vesta/host/agent-contract.json", '{"version": 1}\n')
+        sh(self.s.repo, "git", "add", "-A"); sh(self.s.repo, "git", "commit", "-q", "-m", "copy")
+        sh(self.s.repo, "git", "push", "-q", "origin", "HEAD:agent-dev")
+        kiosk = self.s.tmp / "kiosk"
+        sh(self.s.tmp, "git", "clone", "-q", str(self.s.origin), str(kiosk))
+        for k, v in (("user.name", "k"), ("user.email", "k@k")):
+            sh(kiosk, "git", "config", k, v)
+        (kiosk / "rootfs/usr/share/vesta").mkdir(parents=True)
+        (kiosk / "rootfs/usr/share/vesta/agent-contract.json").write_text('{"version": 2}\n')
+        sh(kiosk, "git", "add", "-A"); sh(kiosk, "git", "commit", "-q", "-m", "kiosk")
+        sh(kiosk, "git", "push", "-q", "origin", "HEAD:dev2")
+        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- x\n\n## 1.0.0\n")
+        self.s.stage("vesta-agent/CHANGELOG.md")
+        code, calls, err = self.s.ship()
+        self.assertEqual(code, 3, err)
+        files = set(sh(self.s.repo, "git", "show", "--name-only", "--format=", "HEAD").split())
+        self.assertIn("agent-host/rootfs/opt/vesta/host/agent-contract.json", files)
+        self.assertEqual(self.s.read("agent-host/rootfs/opt/vesta/host/agent-contract.json"), '{"version": 2}\n')
+
     def test_a_failing_gate_commits_nothing(self):
         self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- x\n\n## 1.0.0\n")
         self.s.stage("vesta-agent/CHANGELOG.md")

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.380 (29 October 2026)
+
+- Architecture review R (2026-10-29): a tablet's question enters the gate as itself (intake.Question:
+  `from_telegram`, tablet.question), never dressed as a Telegram event with an empty file id and its audio on the
+  side; `shared` (others read this place too) decides what is left unanswered: on a tablet it is told ("told"),
+  and /whoami says who is signed in. app.handle_question is the one way in; app.judge the one gate call.
+- The tablet's alert card tells every step (layout.head `story`, drawn by Notices.heading for chat 0;
+  kiosk_messages.of_parts): the Status was the last-drawn chat's own steps (alert #83, owner 2026-10-29).
+  IncidentThread.tell_open at start keeps every open incident's card as its newest copy stands
+  (Notices.story_of rebuilds an older copy's story).
+- Turn keys from the agreement (conversation.keys: tablet.key); the test copy of the add-on held to the agreement's
+  turnExamples (tests/test_contract_turns.py), the same examples the Kiosk replays.
+- timeutil.MOMENT_FORMAT and day_label(numeric) from the agreement's `moment` (one format, both apps). The
+  agreement copied from the Kiosk (2.496.598).
+
 ## 0.6.379 (29 October 2026)
 
 - Hold to talk (ticket 23 of "One inbox"): a voice message's audio comes from any source (voice.AudioSource): a

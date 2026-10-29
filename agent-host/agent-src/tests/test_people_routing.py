@@ -526,7 +526,7 @@ def test_who_acts_with_which_role_is_one_answer_everywhere(chat, who, known_as, 
     pol = Policy({"people": PEOPLE})
     m = pol.member(who, chat)
     assert (m.role if m else None) == known_as
-    got = intake.gate("telegram_text", {"chat_id": chat, "user_id": who, "text": "@bot hi"}, pol, "bot", lambda *a: False)
+    got = intake.gate(intake.from_telegram("telegram_text", {"chat_id": chat, "user_id": who, "text": "@bot hi"}), pol, "bot", lambda *a: False)
     assert (got.person.role if got.action == "converse" else None) == acts
     assert pol.knows_chat(chat) is bool(acts)
     assert Routing(pol).approver_chats("any", chat) == ([chat] if acts else [FABIEN, JM])

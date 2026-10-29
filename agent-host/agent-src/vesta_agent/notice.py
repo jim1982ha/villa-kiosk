@@ -244,7 +244,8 @@ class Notices:
             label = incident_tag(incident)
         word = self.word(int(incident), stage, bool(history))
         return layout.head(label, who,
-                           self.history_lines(int(incident), chat, before), word, self.lang(chat))
+                           self.history_lines(int(incident), chat, before), word, self.lang(chat),
+                           story=self.history_lines(int(incident), 0, before))
 
     def to_line(self, incident: int, also=(), history: list[dict] | None = None) -> str | None:
         """The "To:" of every copy of `incident` — the SAME in every chat: every role the incident went to (its
@@ -281,6 +282,15 @@ class Notices:
             # a step is kept as facts (stage, moment, roles, count) and worded by `_line`, the Kiosk's card's writer too
             lines.append(f"- {self._line(h, lang)}")
         return lines
+
+    def story_of(self, incident: int, chat: int, shown) -> tuple[int, list[str]] | None:
+        """A copy of `incident` in `chat` that showed the Status lines `shown` (its own steps), told for everyone: (how
+        many of the newest steps it left to its bottom line, every step before them, whoever it went to) — None when no
+        count draws its lines again (a copy drawn by an older wording)."""
+        for n in range(len(self.state.incident_history(incident)) + 1):
+            if self.history_lines(incident, chat, n) == list(shown):
+                return n, self.history_lines(incident, 0, n)
+        return None
 
     def concerns(self, chat: int, roles) -> bool:
         """Is a step sent to `roles` one of chat `chat`'s — a role of the chat's among them (a chat with no role, or a

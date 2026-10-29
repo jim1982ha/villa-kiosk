@@ -31,6 +31,7 @@ TICKET_FIELDS = sorted(_AGREEMENT["ticket"]["fields"])
 TICKET_CHECKS = list(_AGREEMENT["ticket"]["checks"])
 #: What a message's rewrite keeps of the record it replaces, as the add-on keeps it (vestaMessage.keptOnRewrite)
 KEPT_ON_REWRITE = tuple(_AGREEMENT["vestaMessage"]["keptOnRewrite"])
+CONVERSATION = _AGREEMENT["conversation"]
 
 
 class FakeKiosk(Kiosk):
@@ -61,7 +62,7 @@ class FakeKiosk(Kiosk):
             return (200, data) if data is not None else (404, {"error": "not found"})
         if path == "/agent/v1/conversation-turn" and "heard" in (body or {}):
             # the add-on's rule (_heard_line): onto a spoken question of that profile, once
-            ask = next((a for a in self.asks if f"ask:{a['seq']}" == body.get("key")), None)
+            ask = next((a for a in self.asks if f"{CONVERSATION['keys']['ask']}{a['seq']}" == body.get("key")), None)
             if (ask is None or "voice" not in ask or ask["profile"] != body.get("profile") or body["key"] in self.heard
                     or set(body) != {"key", "profile", "heard"}):
                 return 400, {"error": "not a spoken question"}
@@ -77,10 +78,13 @@ class FakeKiosk(Kiosk):
         if path == "/agent/v1/conversation-turn":
             if not self.keeps_turns:
                 return 404, {"error": "not found"}
-            # the add-on's rule (_turn_record): never a person's line, a profile it names, something said or withdrawn
-            if (str(body.get("key", "")).startswith("ask:") or body.get("profile") not in _AGREEMENT["conversation"]["profiles"]
-                    or not (body.get("text") or body.get("photos") or body.get("page") or body.get("gone")
-                            or body.get("typing"))):
+            # the add-on's rule (_turn_record), held to the agreement's examples (test_contract_turns.py): a key that is
+            # not a person's line and not too long, a profile it names, something said or withdrawn
+            key, said = body.get("key"), isinstance(body.get("text"), str) and body["text"].strip()
+            if (not isinstance(key, str) or not key.strip() or key.strip().startswith(CONVERSATION["keys"]["ask"])
+                    or len(key) > CONVERSATION["limits"]["key"] or body.get("profile") not in CONVERSATION["profiles"]
+                    or not (body.get("gone") is True or said or body.get("photos") or body.get("page")
+                            or body.get("typing") is True)):
                 return 400, {"error": "not a turn"}
             self.turns_pushed.append(copy.deepcopy(body))
             self.turns[body["key"]] = copy.deepcopy(body)

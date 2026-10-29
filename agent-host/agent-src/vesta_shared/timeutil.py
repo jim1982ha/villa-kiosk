@@ -8,6 +8,8 @@ import math
 from datetime import datetime, date, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from . import agreement
+
 
 def local_day(ms: int, zone: "str | ZoneInfo") -> date:
     """The villa's day of a Home Assistant statistics row's `start` (milliseconds, UTC).
@@ -63,17 +65,20 @@ def day_label(d: date, weekday: bool = False, long: bool = False, year: bool = F
     if short:
         return f"{d:%a}"
     if numeric:
-        return f"{d:%d}/{d:%m}/{d.year}"
+        return d.strftime(MOMENT["date"])
     out = f"{d.day} {d:%B}" if long else f"{d.day} {d:%b}"
     if weekday or long:
         out = f"{d:%A} {out}" if long else f"{d:%a} {out}"
     return f"{out} {d.year}" if year else out
 
 
-#: How every notice writes a moment ("11/10/2026 07:05"): `moment_label`, and the villa's own alert template, which
-#: fills "Cleared on {time}." with its clock (message_format.jinja_words writes this format into it). Locale-free
-#: directives only: the same text on any machine.
-MOMENT_FORMAT = "%d/%m/%Y %H:%M"
+#: How every notice writes a moment ("11/10/2026 07:05") and a day ("11/10/2026"): ⚠️ THE AGREEMENT'S, the tablet writes
+#: the same (agent-contract.json `moment`; owner, 2026-10-29: alert #83 said "24/10/2026 19:05" on Telegram and
+#: "2026-10-24 19:05" on the tablet). `moment_label`, and the villa's own alert template, which fills "Cleared on
+#: {time}." with its clock (message_format.jinja_words writes this format into it). Locale-free directives only: the
+#: same text on any machine.
+MOMENT: dict = agreement.section("moment")
+MOMENT_FORMAT: str = MOMENT["format"]
 
 
 def moment_label(d: datetime, zone: "str | ZoneInfo") -> str:

@@ -14,6 +14,7 @@ from ha_fake import FakeHA, tool
 from kiosk_fake import FakeKiosk
 from telegram_fake import BOT
 from vesta_agent import kiosk_messages
+from vesta_agent.app import Vesta
 from vesta_agent.ha_events import CONTEXT_KEY
 
 OWNER, FM = 111, 222
@@ -492,3 +493,40 @@ def test_a_copy_the_kiosk_refused_is_pushed_again_unchanged(agent, kiosk):
         v.messages.keep(rec)
     scenario(agent, twice)
     assert kiosk.messages.get("note:x", {}).get("body") == "Pump idle", kiosk.messages
+
+
+def test_the_tablets_card_tells_every_step_whoever_the_last_copy_was_drawn_for(agent, kiosk):
+    """Alert #83 (owner, 2026-10-29): Telegram's copy for the owner lists the steps sent to the owner (each chat its own
+    steps, 2026-10-18), but the tablet is everyone's: its card's Status is the whole story, as its short list is, never
+    the last chat's that happened to be drawn."""
+    scenario(agent, alert, lambda v: tick(v, 20), lambda v: tick(v, 50))
+    status = kiosk.messages["incident:1"]["status"]
+    assert any("Escalation sent" in line for line in status), status
+    assert any("Alert sent" in line and "FM" in line for line in status), status
+    assert any("Reminder sent" in line for line in status), status
+    assert sum("Escalation sent" in line for line in status) == 1, status
+
+
+def test_an_open_alert_with_no_step_since_the_tablet_kept_cards_gets_its_card_at_start(agent, kiosk):
+    """Alert #83 (owner, 2026-10-29): no step since before the tablet kept alert cards, so the tablet showed the short
+    list while Telegram showed the card. At start, every open alert's card is kept as its newest copy stands, its
+    Status told for everyone; its "To:" names everyone it went to."""
+    scenario(agent, alert, lambda v: tick(v, 20), lambda v: tick(v, 50))
+    kiosk.messages.clear()
+    for chat, rec in agent.state.incident_chats(1):       # copies drawn before their heading held every step
+        head = dict(rec["parts"]["head"])
+        head.pop("story", None)
+        agent.state.set_incident_message(1, chat, {**rec, "parts": {**rec["parts"], "head": head}})
+    agent.state.db.close()
+    again = Vesta(agent.s, telegram=agent.tg, reader=agent.reader, kiosk=agent.kiosk)
+
+    async def start(v):
+        await v.start()
+        await v.messages.settle()
+    asyncio.run(start(again))
+    rec = kiosk.messages["incident:1"]
+    assert set(rec["roles"]) == {"FM", "Owner"}, rec
+    assert any("Escalation sent" in line for line in rec["status"]), rec["status"]
+    assert any("Alert sent" in line for line in rec["status"]) and any("Reminder sent" in line for line in rec["status"])
+    assert sum("Escalation sent" in line for line in rec["status"]) == 1, rec["status"]
+    assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Need help"], rec

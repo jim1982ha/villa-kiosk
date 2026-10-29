@@ -103,7 +103,24 @@ def test_new_conversation_and_a_command_go_through_the_gate_as_on_telegram(agent
     assert ai.runs == []                                                    # neither reached the AI
     kiosk.person_asks("owner", "/whoami")
     collect(agent)
-    assert "Telegram id" not in kiosk.conversation("owner")[-1]["text"]     # no Telegram id to tell at the tablet
+    # no Telegram id to tell at the tablet: who is signed in there (it went unanswered until review R)
+    assert kiosk.conversation("owner")[-1]["text"] == "You are Owner at the tablet; VESTA answers you as owner."
+
+
+@pytest.mark.parametrize("typed, told", [
+    ("/help", "VESTA has no /help command. Write your question in your own words."),
+    ("/status now", "VESTA has no /status command. Write your question in your own words."),
+    ("/ask", "Write your question after /ask."),
+])
+def test_what_telegram_leaves_unanswered_is_answered_on_the_tablet(agent, kiosk, monkeypatch, typed, told):
+    """Architecture review R (2026-10-29): Telegram leaves a command that is not VESTA's to the villa's automations or
+    another bot reading the same chat; only VESTA reads the tablet, where silence was the dots for the time a question is
+    kept, then "No answer came"."""
+    ai = FakeAI("ok").install(monkeypatch)
+    kiosk.person_asks("owner", typed)
+    collect(agent)
+    assert [t["text"] for t in kiosk.conversation("owner") if t.get("text")][-1] == told
+    assert ai.runs == []
 
 
 def test_vesta_cannot_answer_right_now_on_the_tablet_as_on_telegram(agent, kiosk, monkeypatch):

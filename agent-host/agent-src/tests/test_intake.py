@@ -50,18 +50,18 @@ def ev(chat, user, text="hi", **k):
     ("telegram_text", ev(OWNER, OWNER, f"@{BOT}"), "drop", ""),                                 # nothing left to say
 ])
 def test_what_the_agent_does_with_each_message(etype, m, action, text):
-    got = intake.gate(etype, m, Pol(), BOT, lambda cid, mid: mid == 5)
+    got = intake.gate(intake.from_telegram(etype, m), Pol(), BOT, lambda cid, mid: mid == 5)
     assert (got.action, got.text) == (action, text)
 
 
 def test_a_voice_message_is_handed_on_to_be_transcribed():
-    got = intake.gate("telegram_attachment", {"chat_id": OWNER, "user_id": OWNER, "file_mime_type": "audio/ogg",
-                                              "file_id": "f1"}, Pol(), BOT, lambda *a: False)
+    got = intake.gate(intake.from_telegram("telegram_attachment", {"chat_id": OWNER, "user_id": OWNER, "file_mime_type": "audio/ogg",
+                                              "file_id": "f1"}), Pol(), BOT, lambda *a: False)
     assert got.action == "converse" and got.voice_file == "f1" and got.person.role == "owner"
 
 
 def test_an_unlisted_group_is_recorded_as_ignored():
-    assert intake.gate("telegram_text", ev(OTHER_GROUP, OWNER), Pol(), BOT, lambda *a: False).why == \
+    assert intake.gate(intake.from_telegram("telegram_text", ev(OTHER_GROUP, OWNER)), Pol(), BOT, lambda *a: False).why == \
         "group not listed in People"
 
 
@@ -116,25 +116,25 @@ CMDS = {"/investigate": "investigate"}
     ("telegram_command", ev(OWNER, OWNER, "", command="/ask", args=["what", "happened?"]), None, "what happened?"),
 ])
 def test_only_the_command_calls_its_skill(etype, m, invoked, text):
-    got = intake.gate(etype, m, Pol(), BOT, lambda c, mid: False, CMDS)
+    got = intake.gate(intake.from_telegram(etype, m), Pol(), BOT, lambda c, mid: False, CMDS)
     assert (got.action, got.invoked, got.text) == ("converse", invoked, text)
 
 
 def test_the_command_alone_still_reaches_the_agent_which_asks_for_the_question():
-    got = intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/investigate", args=[]), Pol(), BOT,
+    got = intake.gate(intake.from_telegram("telegram_command", ev(OWNER, OWNER, "", command="/investigate", args=[])), Pol(), BOT,
                       lambda c, mid: False, CMDS)
     assert (got.action, got.invoked, got.text) == ("converse", "investigate", "")
     # a command no skill declares is still Home Assistant's — "/investigation" too, since 0.12.163 (owner: only /investigate)
-    assert intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/investigation", args=["x"]), Pol(), BOT,
+    assert intake.gate(intake.from_telegram("telegram_command", ev(OWNER, OWNER, "", command="/investigation", args=["x"])), Pol(), BOT,
                        lambda c, mid: False, CMDS).action == "drop"
-    assert intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/lights", args=[]), Pol(), BOT,
+    assert intake.gate(intake.from_telegram("telegram_command", ev(OWNER, OWNER, "", command="/lights", args=[])), Pol(), BOT,
                        lambda c, mid: False, CMDS).action == "drop"
 
 
 def test_a_switched_off_skills_command_is_answered_never_dropped():
     # review 32: "/investigate" with the skill switched off was silence — no reply, nothing in the log
-    got = intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/investigate", args=["the", "pump"]), Pol(), BOT,
+    got = intake.gate(intake.from_telegram("telegram_command", ev(OWNER, OWNER, "", command="/investigate", args=["the", "pump"])), Pol(), BOT,
                       lambda c, mid: False, {}, {"/investigate": "investigate"})
     assert (got.action, got.invoked) == ("command_off", "investigate")
-    assert intake.gate("telegram_command", ev(OWNER, OWNER, "", command="/lights", args=[]), Pol(), BOT,
+    assert intake.gate(intake.from_telegram("telegram_command", ev(OWNER, OWNER, "", command="/lights", args=[])), Pol(), BOT,
                        lambda c, mid: False, {}, {"/investigate": "investigate"}).action == "drop"   # still HA's

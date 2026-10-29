@@ -55,7 +55,7 @@ from .translation import Translations, alert_names, incident_names, names_second
 from .villa_messages import VillaMessages
 from .incident_thread import IncidentThread
 
-from .housekeeping import tidy
+from .housekeeping import open_incidents, tidy
 from .kiosk import Kiosk, KioskError, message_timeout_s
 from .kiosk_messages import KioskMessages
 from .alert_buttons import AlertButtons
@@ -186,6 +186,7 @@ class Vesta:
         self.thread.name = incidents.name                    # "#9-P2" in a pointer, as the title names it
         self.thread.retitle = self.notices.retitle           # a settled copy of a closed incident is headed "Closed"
         self.thread.reheading = self.notices.heading         # a replaced status: every earlier step listed again
+        self.thread.story_of = self.notices.story_of         # an older copy's Status told for everyone (tell_open)
         self.thread.language = self.notices.lang             # each chat's Status in its own language (owner, 2026-10-23)
         self.thread.restatus = self.notices.restatus
         # putting one message in one chat (posting.py): the alerts and the approval requests both use it
@@ -327,6 +328,10 @@ class Vesta:
                 await self.kiosk.check()
                 log.info("VESTA Kiosk: agreement %s", self.kiosk.info.get("contract"))
                 await self._safe(self.tickets.repair())
+                # every open alert's card on the tablet, the ones with no step since the tablet kept cards too
+                told = self.thread.tell_open(open_incidents(self.s.store_path))
+                if told:
+                    log.info("VESTA Kiosk: %s open alert card(s) kept for the tablet as they stand", told)
             except KioskError as e:
                 log.warning("VESTA Kiosk: %s", e)
         await self.refresh_server_tools()
@@ -568,13 +573,16 @@ class Vesta:
         Store(self.s.store_path).beat("ha_events", datetime.now(timezone.utc).isoformat())
 
     # ------------------------------------------------------------------ messages
-    def gate(self, event_type: str, m: dict, person: Person | None = None) -> intake.Intake:
-        """What the agent does with this message, by the villa's rules now (intake.gate): a message that arrived, and
-        the one a command offer's button stands for (command_offers.py) — judged by the same rule. `person`: a tablet's
-        profile, as the Kiosk stamped it (tablet.py)."""
+    def gate(self, event_type: str, m: dict) -> intake.Intake:
+        """What the agent does with this Telegram message, by the villa's rules now (`judge`): a message that arrived,
+        and the one a command offer's button stands for (command_offers.py) — judged by the same rule."""
+        return self.judge(intake.from_telegram(event_type, m))
+
+    def judge(self, q: intake.Question) -> intake.Intake:
+        """What the agent does with this message, from wherever it came (intake.gate)."""
         on = self.skills.commands()
-        return intake.gate(event_type, m, self.policy(), self.bot_username, self.state.is_own_message, on,
-                           {c: s for c, s in self.skills.commands(include_off=True).items() if c not in on}, person=person)
+        return intake.gate(q, self.policy(), self.bot_username, self.state.is_own_message, on,
+                           {c: s for c, s in self.skills.commands(include_off=True).items() if c not in on})
 
     async def on_tablet(self, ask: dict) -> None:
         """A question typed on a tablet (tablet.Tablet.listen): it enters where a Telegram message does — the gate, so
@@ -595,18 +603,19 @@ class Vesta:
                 lambda who, parts: press.from_tablet(chat, who, parts, toast, name=person.name)))
         # a spoken question (ticket 23 of "One inbox", hold to talk): read as a voice note, its audio the tablet's
         spoken = isinstance(ask.get("voice"), str) and bool(ask["voice"])
-        event_type, m = tablet.as_message(chat, person, str(ask.get("text") or ""), spoken=spoken)
-        await self._safe(self.handle_message(event_type, m, person=person,
-                                             audio=self.tablet.spoken(chat, ask) if spoken else None))
+        await self._safe(self.handle_question(
+            tablet.question(chat, person, ask, self.tablet.spoken(chat, ask) if spoken else None)))
 
-    async def handle_message(self, event_type: str, m: dict, about: str | None = None, person: Person | None = None,
-                             audio=None):
-        """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30): intake.py decides.
-        `about`: what the answer a command offer was under had read (command_offers.subject) — given by the press only,
-        never read from an event. `person`: a tablet's profile (on_tablet), never read from an event. `audio`: a voice
-        message's audio when it is not a Telegram file (voice.AudioSource: a question spoken on the tablet)."""
-        got = self.gate(event_type, m, person)
-        from_id = m.get("user_id")
+    async def handle_message(self, event_type: str, m: dict, about: str | None = None):
+        """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30). `about`: what the answer
+        a command offer was under had read (command_offers.subject) — given by the press only, never read from an
+        event."""
+        await self.handle_question(intake.from_telegram(event_type, m), about, event_type)
+
+    async def handle_question(self, q: intake.Question, about: str | None = None, event_type: str = ""):
+        """A message from Telegram or a tablet (intake.Question): intake.py decides."""
+        got = self.judge(q)
+        from_id = q.user_id
         if got.action != "drop":
             # ⚠️ THE START OF THE TIMELINE (owner, 2026-10-09: the log must cover "the moment the message to request a
             # report is sent / read by the agent" until the report is shown): when the message reached the agent
@@ -619,12 +628,19 @@ class Vesta:
             if got.why:
                 self.state.log("ignored", {"reason": got.why, "chat": got.chat})
             return
+        if got.action == "told":
+            await self.delivery.send(got.chat, got.text)
+            return
         if got.action == "whoami":
+            if got.person is not None:
+                # a tablet: who is signed in there is the answer (no Telegram id to tell)
+                await self.delivery.send(got.chat, f"You are {got.person.name}; VESTA answers you as {got.person.role}.")
+                return
             await self.delivery.send(got.chat, f"Your Telegram id: {from_id}. This chat id: {got.chat}.")
-            log.info("whoami: person %s (%s) in chat %s", from_id, m.get("from_first"), got.chat)
+            log.info("whoami: person %s (%s) in chat %s", from_id, q.first_name, got.chat)
             return
         if got.action == "unregistered":
-            log.info("Unregistered sender: id %s (%s) in chat %s", from_id, m.get("from_first"), got.chat)
+            log.info("Unregistered sender: id %s (%s) in chat %s", from_id, q.first_name, got.chat)
             self.state.log("unknown_sender", {"telegram_id": from_id, "chat": got.chat})
             if not got.group:
                 await self.delivery.send(got.chat, f"{NOT_REGISTERED} Your Telegram id is {from_id}.")
@@ -643,14 +659,14 @@ class Vesta:
         held = self.delivery.hold(got.chat)
         try:
             text, spoken = got.text, None
-            if got.voice_file is not None:
+            if got.spoken:
                 heard = await self.voice.transcribe(got.chat, got.person,
-                                                    audio or TelegramAudio(self.tg, got.voice_file))
+                                                    got.audio or TelegramAudio(self.tg, got.voice_file or ""))
                 text = intake.without_mention(heard.text if heard else None, self.bot_username)
                 spoken = heard.language if heard else None
             image = None
             if got.photo_file is not None:
-                image = await self._photo(got.chat, got.photo_file, str(m.get("file_mime_type") or "image/jpeg"))
+                image = await self._photo(got.chat, got.photo_file, q.mime or "image/jpeg")
                 if image is None:
                     return
             if got.invoked and not text and image is None:
@@ -662,7 +678,7 @@ class Vesta:
                 return
             if not text and image is None:
                 return
-            await self.converse(got.chat, got.person, text, voice=got.voice_file is not None, image=image, held=held,
+            await self.converse(got.chat, got.person, text, voice=got.spoken, image=image, held=held,
                                 invoked=got.invoked, spoken=spoken, about=about if got.invoked else None)
         finally:
             held()
