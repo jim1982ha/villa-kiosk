@@ -59,7 +59,8 @@ def test_without_a_skill_for_voice_the_person_is_told(tmp_path):
 
 
 def test_the_engine_no_longer_dictates_the_reply_language():
-    src = open(app_module.__file__, encoding="utf-8").read()
+    from vesta_agent import answering
+    src = open(app_module.__file__, encoding="utf-8").read() + open(answering.__file__, encoding="utf-8").read()
     assert "language saved for them" in src and "Answer in {lang}" not in src
 
 

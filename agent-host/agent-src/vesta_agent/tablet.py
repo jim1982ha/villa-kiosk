@@ -337,7 +337,7 @@ class Tablet:
         return 0.0
 
     def later(self, work) -> None:
-        """`work` run beside the conversation (an answer's sound, app._aloud), held like a collected question: `idle`
+        """`work` run beside the conversation (an answer's sound, speech.Aloud.answer), held like a collected question: `idle`
         waits for it too."""
         task = asyncio.create_task(work)
         self._tasks.add(task)

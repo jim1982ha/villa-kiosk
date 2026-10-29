@@ -62,7 +62,7 @@ from .alert_buttons import AlertButtons
 from .outcome import Outcome
 from .voice import TelegramAudio, Voice
 from .transcriber import villa_entity_ids
-from . import missed_alerts, speech
+from . import answering, missed_alerts, speech
 from .tickets import Tickets
 from .places import tab, where
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
@@ -181,7 +181,8 @@ class Vesta:
         self.voice = Voice(self.s, self.skills, self.code_command, self.delivery.send, self.state, self.cf_headers,
                            entity_ids=lambda: villa_entity_ids(self.reader))
         # the villa's own voice, for the answer to a question spoken on the tablet (speech.py, ticket 24 of "One inbox")
-        self.speech = speech.Speech(self.s, self.reader, self.cf_headers, choose=self._choose_voice)
+        self.aloud = speech.Aloud(self.s, self.reader, self.tablet, self.state, self.skills, self.code_command,
+                                  self.cf_headers)
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
         self.notices = Notices(self.state, self.policy, settings.timezone, name=incidents.name,
@@ -216,6 +217,9 @@ class Vesta:
         self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
                                    post=self.poster.post, timezone_name=settings.timezone, safe=self._safe,
                                    edit=self.delivery.edit, tablet_keeps=lambda: self.kiosk.enabled)
+        # what follows every answer, in its order (answering.py)
+        self.answering = answering.Answering(self.delivery, self.fault_offers, self.approvals, self.chat_jobs,
+                                             self.tablet.later, self.aloud)
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
                                notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone,
@@ -763,7 +767,7 @@ class Vesta:
         command skill the person's "/command" called (a new request); `request`: the one a Continue continues.
         `spoken`: the language Whisper said it heard a voice message in (transcriber.Heard), said beside it; None
         when it did not say (the villa's Whisper never does: instructions.md rule 6 then reads the words). `aloud`: the
-        answer is spoken too (a question spoken on the tablet: _aloud)."""
+        answer is spoken too (a question spoken on the tablet: speech.Aloud)."""
         if request is None and not is_continue:
             request = self.requests.begin(invoked)
         # what they asked, kept until it is answered: a restart in between is said at the next start (chat_jobs)
@@ -785,30 +789,17 @@ class Vesta:
             lang = Language.of(person.language).name if person else "English"
             if is_continue:
                 prompt = "Continue exactly where you stopped. Do not repeat what you already wrote."
-            else:
-                # ⚠️ THE LANGUAGE OF THE ANSWER IS THE SKILL'S RULE (owner, 2026-10-05): the
-                # engine says which language is saved for the person, never "answer in it".
-                said = ("a photo (attached: look at it) with this message" if image and text else
-                        "a photo (attached: look at it), with no message" if image else
-                        (f"a voice message, as transcribed (spoken in {Language.name_of(spoken)})" if spoken else
-                         "a voice message, as transcribed") if voice else "a message")
-                # ⚠️ WHERE IT WAS WRITTEN, AND HOW THAT PLACE SHOWS THE ANSWER: a tablet's conversation (tablet.WHERE) is
-                # no Telegram chat (ticket 21 of "One inbox")
-                where = tablet.WHERE if tablet.profile_of(cid) else self.policy().chat_label(cid)
-                prompt = (f"{said[0].upper() + said[1:]} from {person.name if person else 'someone'} (role "
-                          f"{person.role if person else '?'}; language saved for them: {lang}) in the {where}:\n"
-                          f"\"\"\"{text}\"\"\"")
             # a skill only its command starts (skills.Skill.command): this turn's request, or — for a Continue — the one
             # its button carries (state.new_continuation): its id, its offers, its web searches (command_request.py)
             sk = request.skill if request else None
-            if sk is not None and not is_continue:
-                prompt = (f"{person.name if person else 'The person'} wrote /{sk.command}: this is a request for the "
-                          f"{sk.name} skill. Read it with read_skill and follow it.\n\n{prompt}")
-                if about:
-                    # ⚠️ A FOLLOW-UP'S SUBJECT (review, 2026-10-23): pressed under "and why did it keep starting?", the
-                    # fresh conversation had only those words — what the answer it came from read is said with them
-                    prompt += (f"\nThe question follows an answer that read these devices (and periods); it is about "
-                               f"them unless it names others:\nabout: {about}")
+            if not is_continue:
+                # ⚠️ WHERE IT WAS WRITTEN, AND HOW THAT PLACE SHOWS THE ANSWER: a tablet's conversation (tablet.WHERE) is
+                # no Telegram chat (ticket 21 of "One inbox"); the words of the question: answering.question_words
+                where = tablet.WHERE if tablet.profile_of(cid) else self.policy().chat_label(cid)
+                prompt = answering.question_words(
+                    text, image=bool(image), voice=bool(voice), spoken=spoken, who=person.name if person else None,
+                    role=person.role if person else None, language=lang, where=where, skill=sk,
+                    command_by=person.name if person else None, about=about)
             told_at = None
             if not is_continue:
                 checked = await asyncio.to_thread(self.before_answer)
@@ -840,52 +831,9 @@ class Vesta:
                 may_start_job=lambda: tool_access.may_start_job(pol, self.server_tools, person, cid),
                 is_continue=is_continue, person_id=person.telegram_id if person else None, request=request)
             answered()                                       # "typing…" ends: the answer is going out
-            # the camera pictures the AI looked at go with it (Toolbox.photos)
-            mid = await self.delivery.reply(cid, reply.text, keyboard=reply.keyboard, photos=res.photos)
-            self.fault_offers.delivered(reply.offered, mid)
-            # a request this answer told of, shown in another chat: each of its steps rewrites this answer (approvals.py)
-            self.approvals.answered(res.approvals, cid, mid, reply.text)
-            await self.chat_jobs.replied(cid, mid)            # this turn's jobs: their waiting message, their "typing…"
-            if aloud:
-                # after the answer, outside this conversation's lock: the next question never waits on the voice
-                self.tablet.later(self._aloud(cid, mid, reply.text))
-
-    async def _choose_voice(self, text: str, pipeline: dict) -> dict | None:
-        """The skill's choice of language and voice for an answer (on_event.answer_aloud: skills before code), or None
-        when no skill makes one (the voice settings' own voice). The words go to it in a file, removed after."""
-        hook = next(iter(self.skills.handlers("answer_aloud")), None)
-        if not hook:
-            return None
-        folder = os.path.join(self.s.out_dir, "voice")
-        os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, f"answer-{time.time_ns()}.txt")
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(text)
-            return await asyncio.to_thread(self.code_command, hook[0], hook[1],
-                                           {"text": path, "language": str(pipeline.get("tts_language") or ""),
-                                            "voice": str(pipeline.get("tts_voice") or "")}, speech.speak_s())
-        finally:
-            try:
-                os.remove(path)
-            except OSError:
-                pass
-
-    async def _aloud(self, cid: int, mid: int | None, text: str) -> None:
-        """The answer `mid` (its words already on the tablet: nobody waits on the voice to read them) said by the villa's
-        voice (speech.Speech), its sound named on the turn; else the turn says why it was not spoken."""
-        if not mid or not text:
-            return
-        began = time.monotonic()
-        said = await self.speech.say(text)
-        if isinstance(said, speech.Said):
-            if await self.tablet.speak(cid, mid, said.audio, said.mime):
-                log.info("Answer spoken in the tablet's conversation (%s, %d KB, %.1f s)", tablet.profile_of(cid),
-                         len(said.audio) // 1024, time.monotonic() - began)
-                return
-            said = speech.Silent(speech.FAILED, "the sound not named on the answer (tablet.Tablet.speak logs why)")
-        log.info("Answer not spoken in the tablet's conversation (%s): %s", tablet.profile_of(cid), said.why)
-        await self.tablet.note(cid, mid, said.say or (speech.NO_VOICE if said.kind == speech.NONE else speech.NOT_SPOKEN))
+            # what follows the answer, in its order (answering.Answering): sent with the camera pictures the AI looked
+            # at, its offers, its approvals, its jobs, its voice
+            await self.answering.deliver(cid, reply, res.photos, res.approvals, aloud=aloud)
 
     async def _delivered(self, request: Request, cid: int, person, res, asked: str):
         """⚠️ WHAT A COMMAND SKILL'S ANSWER CARRIES, CHECKED — NEVER LEFT TO THE AI (owner, 2026-10-11: "make sure this

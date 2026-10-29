@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.387 (30 October 2026)
+
+- Architecture review (2026-10-30): speech.Aloud owns a spoken answer whole (the skill's choice, ONE clock shared by the
+  settings' read, the choice and the sound, the turn, a record of kind "aloud"); app._aloud and app._choose_voice
+  gone. answering.py: question_words (the question as the AI reads it) and Answering.deliver (what follows an answer,
+  in its order), out of app.Vesta._converse; tests/test_answering.py.
+
 ## 0.6.386 (30 October 2026)
 
 - The owner's end-to-end test (2026-10-30): missed_alerts.py takes in at start every vesta_critical_event an automation

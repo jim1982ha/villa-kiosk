@@ -161,9 +161,9 @@ def test_a_choice_of_voice_that_fails_is_never_the_english_voice(tmp_path, monke
     # the skill's script stopped (its answer {}): the answer stays in words, never said by the settings' own voice
     v, kiosk = _agent(tmp_path, {**VOICE_SET, "tts_language": "en_US"})
 
-    async def broken(text, pipeline):
+    async def broken(text, pipeline, seconds):
         return {}
-    v.speech.choose = broken
+    v.aloud.speech.choose = broken
     villa = _answered(v, kiosk, monkeypatch, answer=FRENCH)
     assert villa.spoken == [] and kiosk.conversation("owner")[-1]["text"].endswith(speech.NOT_SPOKEN)
 
@@ -180,3 +180,28 @@ def test_one_skill_says_a_spoken_answers_voice_and_writes_out_a_voice_message(tm
         again = [sk.name for sk, _ in v.skills.handlers("answer_aloud")]
     assert used == again == ["villa-concierge"]
     assert sum("only villa-concierge's is used" in r.message for r in caplog.records) == 1
+
+
+def test_every_spoken_answer_leaves_one_record(tmp_path, monkeypatch):
+    import json
+    v, kiosk = _agent(tmp_path, VOICE_SET)
+    _answered(v, kiosk, monkeypatch)
+    v2, kiosk2 = _agent(tmp_path / "b", {**VOICE_SET, "tts_engine": None})
+    _answered(v2, kiosk2, monkeypatch)
+    said = [json.loads(r["detail"]) for r in v.state.calls("aloud")]
+    unsaid = [json.loads(r["detail"]) for r in v2.state.calls("aloud")]
+    assert [(r["spoken"], r["bytes"]) for r in said] == [(True, len(SOUND))]
+    assert [(r["spoken"], r["why"]) for r in unsaid] == [(False, "no text-to-speech in the villa's voice settings")]
+
+
+def test_one_clock_for_the_whole_spoken_answer(tmp_path, monkeypatch):
+    # the skill's choice took the whole limit: the sound is not asked for after it (it had a fresh limit of its own)
+    v, kiosk = _agent(tmp_path, VOICE_SET)
+    monkeypatch.setattr(speech, "speak_s", lambda: 1)
+
+    async def slow(text, pipeline, seconds):
+        await asyncio.sleep(1.2)
+        return {"language": "en", "voice": "test-voice"}
+    v.aloud.speech.choose = slow
+    villa = _answered(v, kiosk, monkeypatch)
+    assert villa.spoken == [] and kiosk.conversation("owner")[-1]["text"].endswith(speech.NOT_SPOKEN)
