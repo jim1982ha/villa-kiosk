@@ -1,3 +1,12 @@
+## 2.496.593
+
+What you will see:
+- The Cockpit's Notifications hold only what still waits for someone. Anything finished goes to Issues › Closed: a
+  request approved, refused or no longer valid, a doorbell ring opened or missed, an alert that ended. One rule for
+  every message that offers buttons, today's and later ones.
+- Closed counts "closed items" and its (i) says what it holds.
+- Messages that arrived before this update stay where they are; every one from now on is placed this way.
+
 ## 2.496.592
 
 What you will see:
