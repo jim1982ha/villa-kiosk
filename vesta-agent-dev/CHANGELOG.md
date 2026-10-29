@@ -1,3 +1,13 @@
+## 0.12.402
+
+What you will see:
+- Done or Need help pressed on the tablet and on Telegram at the same moment is handled once: the second press is told
+  the alert is already handled, never carried out twice. A press on the tablet after one chat's copy was already
+  settled is still carried out.
+- An alert handed over during a restart is never taken in a second time, however long the catch-up looks back.
+- A step sent to no one (an alert that went to the daily digest), when its card is redrawn in another chat's language,
+  now reads "(to: digest)" as everywhere else, never "(to: nobody)".
+
 ## 0.12.401
 
 What you will see:
