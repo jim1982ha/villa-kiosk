@@ -225,10 +225,12 @@ def prepare(audio: str, language: str | None, stt: str | None = None, whisper_at
 #: it holds most. A word in two lists ("la": French, Spanish, Italian) counts for each: the others decide.
 WORDS = {
     "en": "the and is are you your it this that to of in on for with be was have not what which there".split(),
-    "fr": "le la les et est sont vous votre je de du des un une dans pour avec pas ce cette qui que il elle".split(),
+    "fr": "le la les et est sont vous votre je j ai de du des un une dans pour avec pas ce cette qui que qu il elle au aux "
+          "sur mais ou c n".split(),
     "de": "der die das und ist sind sie ich nicht ein eine mit für auf den dem zu im ihr".split(),
-    "es": "el la los las y es son usted su de del un una en para con no que esta este".split(),
-    "it": "il lo la gli le e è sono lei suo di del un una in per con non che questo questa".split(),
+    "es": "el la los las y es son usted su de del un una en para con no que esta este he ha al lo por pero muy".split(),
+    "it": "il lo la gli le e è sono lei suo di del un una in per con non che questo questa ho ha della delle nella alla ma"
+          .split(),
     "nl": "de het een en is zijn u uw ik niet van in op voor met dat deze die".split(),
     "id": "yang dan di ini itu dengan untuk tidak dari ke ada adalah saya anda akan sudah bisa".split(),
 }
@@ -249,6 +251,10 @@ NAMES = {"en": "English", "fr": "French", "id": "Indonesian", "de": "German", "e
 #: prepared): Korean by its Hangul, Japanese by its kana (its text holds Chinese characters too), Chinese by its
 #: characters alone. A share of the letters is enough (an answer quotes a device's Latin name now and then): a third, a
 #: tenth for the kana (a Japanese sentence holds more Chinese characters than kana).
+#: ⚠️ A LANGUAGE'S OWN ACCENTED LETTERS COUNT TOO (owner, 2026-10-30: "J'ai éteint la lumière … de la salle de sport."
+#: was read in English): its common words were "la" and "de", French and Spanish alike, and a tie fell back to the voice
+#: settings' language. Each accented letter counts for every language that writes it, like a shared word.
+LETTERS = {"fr": "éèêàçùâîôûëïœ", "es": "ñáíóúé¿¡", "it": "àèìòù", "de": "äöüß", "nl": "ëï"}
 SCRIPTS = (("ko", ((0xAC00, 0xD7A3), (0x1100, 0x11FF), (0x3130, 0x318F)), 3),
            ("ja", ((0x3040, 0x30FF),), 10),
            ("zh", ((0x4E00, 0x9FFF), (0x3400, 0x4DBF)), 3))
@@ -263,7 +269,9 @@ def language_of(text: str, words: dict) -> str | None:
         if letters and sum(any(a <= c <= b for a, b in ranges) for c in letters) * share >= len(letters):
             return lang
     seen = [w for w in re.split(r"[^\w]+", text.lower()) if w]
-    score = {lang: sum(w in set(ws) for w in seen) for lang, ws in words.items()}
+    low = text.lower()
+    score = {lang: sum(w in set(ws) for w in seen) + sum(low.count(c) for c in LETTERS.get(lang, ""))
+             for lang, ws in words.items()}
     best = sorted(score.items(), key=lambda kv: -kv[1])
     if not best or best[0][1] == 0 or (len(best) > 1 and best[1][1] == best[0][1]):
         return None

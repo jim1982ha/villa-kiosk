@@ -170,6 +170,17 @@ def test_every_language_of_the_page_is_told_from_its_words_or_its_letters():
     assert set(LANGUAGES) <= set(voice.NAMES)
     # a device's Latin name quoted in a Korean answer still reads as Korean
     assert voice.language_of("Pool Pump 펌프가 켜져 있습니다.", voice.WORDS) == "ko"
+    # ⚠️ A SHORT ANSWER, ITS COMMON WORDS SHARED (owner, 2026-10-30: "J'ai éteint la lumière … de la salle de sport." was
+    # said by the English voice: "la" and "de" are Spanish too, and a tie fell back to the settings' language)
+    short = {"fr": "J'ai éteint la lumière Ceiling de la salle de sport.",
+             "es": "He encendido la luz del gimnasio.",
+             "it": "Ho spento la luce della palestra.",
+             "en": "I have turned off the Ceiling light."}
+    # and one with no common word at all: its accented letters decide
+    short["fr"] = "Lumière éteinte."
+    assert voice.language_of("J'ai éteint la lumière Ceiling de la salle de sport.", voice.WORDS) == "fr"
+    assert voice.language_of("J'ai ouvert la porte de la cuisine.", voice.WORDS) == "fr"      # no accent: its words
+    assert {lang: voice.language_of(text, voice.WORDS) for lang, text in short.items()} == {k: k for k in short}
 
 
 def test_a_choice_of_voice_that_fails_is_never_the_english_voice(tmp_path, monkeypatch):

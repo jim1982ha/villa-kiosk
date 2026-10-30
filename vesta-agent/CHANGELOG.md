@@ -1,3 +1,10 @@
+## 0.12.404
+
+What you will see:
+- A short spoken answer in French ("J'ai éteint la lumière…") is said by the French voice, no longer by the English
+  one. Its few common words were Spanish too, and VESTA fell back to English; French words like "j'ai" and the accents
+  now decide. Short Spanish and Italian answers are told apart the same way.
+
 ## 0.12.403
 
 What you will see:

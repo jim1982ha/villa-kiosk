@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.390 (30 October 2026)
+
+- villa-concierge voice.py language_of: each language's accented letters count (LETTERS), and more common words
+  (French j, ai, qu, au, aux, sur, mais, ou, c, n; Spanish he, ha, al, lo, por, pero, muy; Italian ho, ha, della,
+  delle, nella, alla, ma): a short French answer tied with Spanish and went to the settings' English voice.
+
 ## 0.6.389 (30 October 2026)
 
 - villa-concierge voice.py: PIPER_VOICES, a Piper voice for each language of the page but Japanese (each checked in
