@@ -1,3 +1,10 @@
+## 0.12.406
+
+What you will see:
+- A question to VESTA, spoken or typed, no longer waits about 40s on the check of the villa's status that comes before
+  every answer while devices are offline: the check no longer reads back since when each one is offline, which its
+  lines never said. "Turn on the gym light" took 48s; it should now take about 15s.
+
 ## 0.12.405
 
 What you will see:

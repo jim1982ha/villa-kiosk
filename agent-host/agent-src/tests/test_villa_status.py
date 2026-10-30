@@ -84,3 +84,24 @@ def test_a_device_on_the_villas_critical_list_offline_is_red_the_others_amber(tm
     states = {"sensor.jacuzzi_pump_power": {"state": "unavailable"}, "sensor.jet_pump_power": {"state": "unavailable"}}
     s = concierge.status(pack, states, Store(str(tmp_path / "s.sqlite")))
     assert s["colour"] == "red" and s["problems"] == ["Jacuzzi pump plug offline"] and s["offline"] == ["Jet pump plug"]
+
+
+def test_the_status_before_an_answer_reads_no_history(tmp_path, monkeypatch, capsys):
+    # owner, 2026-10-30: a spoken "turn on the gym light" waited 41.5 s on this check, which read since when each
+    # offline device went, device by device, for lines that never say how long: the status reads the states only
+    import json
+    import concierge
+    from fixture_client import FixtureClient
+    pack = str(tmp_path / "pack.json")
+    with open(pack, "w", encoding="utf-8") as f:
+        f.write(_pack().to_json())
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {
+        "sensor.jacuzzi_pump_power": {"state": "unavailable", "last_changed": "2026-10-20T00:00:00+00:00"},
+        "sensor.pool_pump_power": {"state": "0.0", "last_changed": "2026-10-20T00:00:00+00:00"}}}))
+    read = []
+    monkeypatch.setattr(FixtureClient, "history", lambda self, ids, start, end: read.append(list(ids)) or {})
+    concierge.main(["status", "--pack", pack, "--store", str(tmp_path / "s.sqlite"), "--fixture-dir", str(fx)])
+    assert "Offline (1): Jacuzzi pump plug" in json.loads(capsys.readouterr().out)["text"]
+    assert read == []

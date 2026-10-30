@@ -39,7 +39,7 @@ def _names(items: list[str]) -> str:
     return "; ".join(items[:SHOW]) + (f"; and {len(items) - SHOW} more" if len(items) > SHOW else "")
 
 
-def status(pack: KnowledgePack, states: dict, store: Store | None, history=None) -> dict:
+def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
     """The chat equivalent of the kiosk light: green / amber / red, and EVERY reason by name.
 
     ⚠️ NAMED, NOT COUNTED (owner, 2026-10-10: asked "what's the status of the villa now?" the agent said everything
@@ -52,7 +52,10 @@ def status(pack: KnowledgePack, states: dict, store: Store | None, history=None)
     # ⚠️ ONE "OFFLINE" (architecture review 30, then round 3 of 2026-10-19): the one reading of the night check and the
     # reports — "unknown" is not offline, a device per row, the villa's critical list (pack.is_critical), a device the
     # villa's system knows nothing about left out — with no minimum: the chat says every one
-    for g in devices_offline(pack, states, datetime.now(timezone.utc), watched_kinds(), history=history):
+    # ⚠️ NO HISTORY READ (owner, 2026-10-30: a spoken "turn on the gym light" waited 41.5 s on this check): since when
+    # each device is offline was read back device by device, about 200 reads of the villa's system, for lines that
+    # name the devices and never say how long
+    for g in devices_offline(pack, states, datetime.now(timezone.utc), watched_kinds()):
         if g.critical:
             problems.append(f"{g.name} offline")
         else:
@@ -154,8 +157,7 @@ def main(argv=None):
     pack, store, cli = s.pack, s.store, s.live_client
     if a.cmd == "status":
         # a device asleep between its reports reads its last real state (vesta_shared.asleep), never "unavailable"
-        res = status(pack, read_states(cli, pack, datetime.now(timezone.utc)) if cli else {}, store,
-                     history=cli.history if cli else None)
+        res = status(pack, read_states(cli, pack, datetime.now(timezone.utc)) if cli else {}, store)
     else:
         areas = place(pack, a.where)
         res = {"targets": find(pack, a.what, a.where),

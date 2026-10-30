@@ -189,12 +189,12 @@ def test_a_restart_is_not_a_new_outage_and_three_unrelated_drops_are_not_an_inte
 
 
 def test_every_caller_reads_since_when_from_history():
-    # the night check, its recheck, the reports' table and the chat status: each hands its client's history over
+    # the night check, its recheck and the reports' table: each hands its client's history over (the chat status
+    # names devices and never says how long: tests/test_villa_status.py)
     # (and the night check and its recheck ask whether the device answers through any entity, the close's question)
     files = {"preventive-maintenance/scripts/nightly.py": "history=cli.history, states_of=cli.states)",
              "preventive-maintenance/scripts/recheck.py": "history=client().history, states_of=client().states)",
-             "reports/scripts/facts.py": 'history=getattr(getattr(self, "cli", None), "history", None))',
-             "villa-concierge/scripts/concierge.py": "history=cli.history if cli else None)"}
+             "reports/scripts/facts.py": 'history=getattr(getattr(self, "cli", None), "history", None))'}
     for f, call in files.items():
         assert call in open(os.path.join(STARTER_SKILLS, f), encoding="utf-8").read(), f
 

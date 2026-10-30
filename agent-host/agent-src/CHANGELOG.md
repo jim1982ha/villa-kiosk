@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.392 (30 October 2026)
+
+- villa-concierge's `concierge.py status` reads no history: devices_offline is called without it (offline_since only
+  moved `since`, which the status never shows); measured 41.5s, about 200 ha-mcp reads, before a spoken question.
+
 ## 0.6.391 (30 October 2026)
 
 - A spoken question's status check (Vesta.before_answer) starts with the transcription and is awaited by the turn
