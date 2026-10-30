@@ -56,7 +56,7 @@ def _write(path: str, data: bytes) -> None:
         raise
 
 
-TEXT_KINDS = ("policy", "instructions", "file", "limits", "kinds")    # what Undo writes back as text (UI.text_change)
+TEXT_KINDS = ("policy", "instructions", "file", "limits", "kinds", "links")    # what Undo writes back as text (UI.text_change)
 
 
 def undoable(ch: dict) -> bool:
@@ -176,8 +176,10 @@ class PageFiles:
             return self.s.instructions_path
         if t["kind"] == "limits":                       # the Limits tab's file (vesta_shared.limits)
             return os.path.join(self.s.config_dir, LIMITS_FILE)
-        if t["kind"] == "kinds":                        # Rules › Device kinds' file (vesta_shared.asset_kinds)
+        if t["kind"] == "kinds":                        # Knowledge › Device kinds' file (vesta_shared.asset_kinds)
             return self.s.asset_kinds_path
+        if t["kind"] == "links":                        # Knowledge › Device links' file (vesta_shared.asset_links)
+            return self.s.asset_links_path
         return os.path.join(self.skill_dir(t["skill"]), self.rel(t["path"]))
 
     def text_now(self, t: dict) -> str | None:
@@ -229,6 +231,11 @@ class PageFiles:
         if target["kind"] == "kinds":
             from vesta_shared.asset_kinds import problems as kinds_problems
             if probs := kinds_problems(text):
+                raise Refused(probs)
+            return
+        if target["kind"] == "links":
+            from vesta_shared.asset_links import problems as links_problems
+            if probs := links_problems(text):
                 raise Refused(probs)
             return
         rel = LIMITS_FILE if target["kind"] == "limits" else str(target.get("path") or "")

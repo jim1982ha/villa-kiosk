@@ -18,7 +18,10 @@ import re
 #: the page's top tabs: key (its address, #rules) → its name. index.html is filled from it (architecture review 9: the
 #: names were typed there, and again as the first word of every place below — checked against this at import)
 # "limits": the Limits tab (owner, 2026-10-20: every limit on one page, perhaps for a while only — ui/limits_tab.py)
-TABS = {"overview": "Overview", "rules": "Rules", "skills": "Skills", "costs": "Costs", "limits": "Limits"}
+# "knowledge": what the agent knows of the villa and keeps outside policy.yaml (owner, 2026-10-30: "the Rule tab
+# exclusively contain feature defined in the policy.yaml file", the rest in ONE dedicated tab — ui/static/knowledge.js)
+TABS = {"overview": "Overview", "rules": "Rules", "knowledge": "Knowledge", "skills": "Skills", "costs": "Costs",
+        "limits": "Limits"}
 
 #: key → (the title the page shows, the place it sits in: a top tab, or "Tab › Card")
 PLACES: dict[str, tuple[str, str]] = {
@@ -34,12 +37,19 @@ PLACES: dict[str, tuple[str, str]] = {
     "people": ("People", "Rules"),
     "actions": ("Allowed actions", "Rules"),
     "protected": ("Protected devices", "Rules"),
-    # what each device is, guessed or chosen (owner, 2026-10-28: a picker, never typed JSON — vesta_shared.asset_kinds)
-    "kinds": ("Device kinds", "Rules"),
     "tools": ("AI tools", "Rules"),
     "ha_tools": ("Villa system tools", "Rules › AI tools"),
     "agent_tools": ("Agent tools", "Rules › AI tools"),
     "tool_roles": ("Tools by role", "Rules › AI tools"),
+    # Knowledge: its sub-tabs (core.js tabbed), in this order
+    # what each device is, guessed or chosen (owner, 2026-10-28: a picker, never typed JSON — vesta_shared.asset_kinds)
+    "kinds": ("Device kinds", "Knowledge"),
+    # which helpers belong to each device, guessed or chosen (owner, 2026-10-30 — vesta_shared.asset_links)
+    "links": ("Device links", "Knowledge"),
+    # the VESTA Kiosk's devices unavailable by design, as the agent was last told them (shown, never edited here)
+    "asleep": ("Asleep between reports", "Knowledge"),
+    # the alert cards' sentences kept translated (phrases.py), and Forget Translations
+    "translations": ("Translations", "Knowledge"),
     # Skills (owner, 2026-10-08: short names like the others — "Skill tools" beside "AI tools" and "Agent tools")
     "skill_about": ("About", "Skills"),
     "skill_files": ("Files", "Skills"),
@@ -65,7 +75,8 @@ assert all(place.split(" › ")[0] in TABS.values() for _, place in PLACES.value
 #: the order of a tab's sections, top to bottom, by place key (architecture review 9: the order was a line of code,
 #: and every "move X below Y" edited it and the test that quoted it). The page draws its sections in this order.
 ORDER = {
-    "rules": ["acting", "people", "actions", "protected", "kinds", "ai", "tools"],   # AI tools below AI brains (owner, 2026-10-08)
+    "rules": ["acting", "people", "actions", "protected", "ai", "tools"],   # AI tools below AI brains (owner, 2026-10-08)
+    "knowledge": ["kinds", "links", "asleep", "translations"],
 }
 assert all(k in PLACES for keys in ORDER.values() for k in keys), "an ordered section with no place"
 

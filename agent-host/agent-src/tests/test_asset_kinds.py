@@ -1,4 +1,4 @@
-"""Rules › Device kinds (owner, 2026-10-28): what each device is, guessed from its name or chosen on the VESTA Agent page
+"""Knowledge › Device kinds (owner, 2026-10-28): what each device is, guessed from its name or chosen on the VESTA Agent page
 with a drop-down — the choice read by knowledge_pack.asset_kind, so the night check follows it from its next run; the
 old helper of the villa's system moved into the page's file once, at the agent's start, and never read again."""
 from __future__ import annotations
@@ -77,7 +77,7 @@ def test_a_kind_chosen_on_the_page_is_the_one_the_night_check_follows_and_back_t
     assert asset_kinds.chosen(s.asset_kinds_path) == {SLUG: "motor"}
     assert _night_reads_it(monkeypatch, s.pack_path)
     (change,) = files.history.rows(5)
-    assert change["place"] == "Rules" and change["what"] == "Example LED strip set to Motor (guessed Lighting)"
+    assert change["place"] == "Knowledge" and change["what"] == "Example LED strip set to Motor (guessed Lighting)"
 
     # back to the guess: the choice is gone, the night check skips it again
     card = kinds.save(s, files, SLUG, None)
@@ -140,7 +140,7 @@ def test_the_old_helper_is_moved_once_at_start_and_never_read_again(tmp_path, mo
     assert KnowledgePack.load(s.pack_path).assets[SLUG]["kind"] == "meter"
     assert [(r["kind"], r["chosen"]) for r in kinds.rows(s)["rows"]] == [("meter", True)]
     (moved,) = files.history.rows(5)
-    assert moved["place"] == "Release" and moved["what"] == "Rules › Device kinds: 1 set in the villa's system before, kept here"
+    assert moved["place"] == "Release" and moved["what"] == "Knowledge › Device kinds: 1 set in the villa's system before, kept here"
 
     # every later start: the helper is not even asked for, whatever it says now
     later = _Villa('{"example_led_strip": "motor"}')
@@ -173,7 +173,7 @@ def test_the_device_kinds_card_says_which_devices_and_explains_in_sections():
     # and "where the device list is coming from?": the card says which devices, the (i) is in titled sections with lists
     import os
     from helpers import ROOT
-    js = open(os.path.join(ROOT, "vesta_agent", "ui", "static", "rules.js"), encoding="utf-8").read()
+    js = open(os.path.join(ROOT, "vesta_agent", "ui", "static", "knowledge.js"), encoding="utf-8").read()
     start = js.index("export function kindsCard")
     card = js[start:js.find("\nexport function", start + 1) if js.find("\nexport function", start + 1) > 0 else len(js)]
     for head in ("Which devices are listed", "What the kind changes", "Where the kind comes from", "To correct a kind"):

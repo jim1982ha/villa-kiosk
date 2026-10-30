@@ -577,8 +577,7 @@ def test_the_tools_are_cards_four_a_row_and_the_ai_notes_are_behind_an_info():
     assert 'withInfo("Limit (US$)", limitNote)' in js and "At their limits" not in js.split("const ai =")[1][:400]
     assert "Everything switched on, by role" not in js
     # the New conversation menu lines up with the brain and the limit: its name under it, not a label above it
-    # "Forget Translations" on its line, right of the menu (owner, 2026-10-23)
-    assert re.search(r'\{ cls: "with-caption", v: \[h\("div", \{ class: "forget-row" \},\s*sel\(SCHEMA\.resets', js)
+    assert re.search(r'\{ cls: "with-caption", v: \[\s*sel\(SCHEMA\.resets', js)
 
 
 def test_copying_a_setup_uses_only_the_pages_public_methods_and_each_exists():
@@ -1025,10 +1024,15 @@ def test_a_skills_frequent_checks_say_their_rhythm_and_link_to_its_setting(ui):
 
 def test_asleep_between_reports_says_where_it_is_set_behind_its_titles_info_never_under_it():
     # owner, 2026-10-24: "remove this text … and show it in a (i) icon next to the 'asleep between report' title"
-    js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "rules.js").read_text()
-    at = js.index('field(withInfo("Asleep between reports", "Set in the VESTA Kiosk')
+    # owner, 2026-10-30: the Kiosk's list is not kept in policy.yaml, so it is Knowledge › Asleep between reports
+    from helpers import body_of, page_js
+    js = page_js()
+    card = body_of(js, "asleepCard")
     assert js.count("Set in the VESTA Kiosk") == 1
-    assert '[h("span", { class: "muted" }, "None")])),' in js[at:at + 900]          # the field ends: no hint under it
+    # card(): its lead is the title's (i) whenever the card has content (core.card), and the chips end the card
+    assert 'card(place("asleep"), "Set in the VESTA Kiosk' in card
+    assert card.rstrip().endswith(': [h("span", { class: "muted" }, "None")]));\n}') or \
+        '[h("span", { class: "muted" }, "None")]));' in card
 
 
 def test_a_numbered_step_keeps_its_own_number_when_its_points_split_the_list():

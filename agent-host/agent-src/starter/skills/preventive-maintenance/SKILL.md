@@ -84,7 +84,7 @@ closure, and never raise the same thing twice.
 | Check | Family | What it catches | Threshold source |
 |---|---|---|---|
 | PM-POWER-CHANGE | power | The steady running draw of a continuously running pump moved versus its `baseline_days` median at equal run hours. A sudden change gets a date (change point), a slow one is called a drift. Lower draw at equal hours means less water moved. | `<asset>_drift_pct` helper, else behaviour `drift_pct` |
-| PM-RUNHOURS | power | A scheduled asset ran `schedule_dev_pct` shorter or longer than its `schedule.<asset>_expected_runtime`, with the hours of missing data stated. | `vesta_schedule_dev_pct` |
+| PM-RUNHOURS | power | A scheduled asset ran `schedule_dev_pct` shorter or longer than its schedule (`schedule.<asset>_expected_runtime`, or the one linked in Knowledge › Device links), with the hours of missing data stated. | `vesta_schedule_dev_pct` |
 | PM-ENERGY-CHANGE | energy | Daily kWh of a scheduled or metered asset collapsed or jumped versus its `baseline_days` median. This is how a cycling pressure pump (never a full hour on) is watched. | `vesta_energy_drop_pct`, `vesta_energy_rise_pct` |
 | PM-RUN-SAG | power | Within one run the draw fell by `sag_pct` or more from the first quarter to the last quarter of the run (air, basket filling). Report only. | `vesta_sag_pct` |
 | PM-EXPECTED-SILENT | power | An intermittent, usage-driven asset was scheduled and did not run. Report only, never a task. | schedule helper |
@@ -102,8 +102,9 @@ counter or a power baseline helper, or a name with pump, fan, compressor, jet),
 "lighting" (light, LED, VMC circuits), "meter" (the main meter, its phases,
 template averages), "appliance" (the rest). Only motors get the physics checks
 below; lighting and meters are read by roi-energy and never chased here. The
-owner corrects a guess on the VESTA Agent page (Rules › Device kinds); the pack
-gives every script the kind chosen there.
+owner corrects a guess on the VESTA Agent page (Knowledge › Device kinds), and
+links a device's schedule, normal power and run hours there (Knowledge › Device
+links); the pack gives every script the kind and the links chosen there.
 
 How a motor is classified, automatically, from its own last `baseline_days`:
 "continuous" (runs in blocks of `night.continuous_full_hours` or more: filtration, circulation), "cycling"

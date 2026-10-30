@@ -1,4 +1,4 @@
-"""Rules › Device kinds: each device the agent reads power or energy for, with the kind it guessed, and the kind the
+"""Knowledge › Device kinds: each device the agent reads power or energy for, with the kind it guessed, and the kind the
 owner chose instead (vesta_shared.asset_kinds), saved through the page's one writer (changes.PageFiles).
 
 ⚠️ ONLY WHERE A KIND CHANGES SOMETHING: the kind decides what the night check, the reports and the energy figures do
@@ -12,7 +12,7 @@ from vesta_shared.knowledge_pack import KnowledgePack, asset_kind, guessed_kind,
 
 from .changes import PageFiles, Refused, _read
 
-PLACE = "Rules"
+PLACE = "Knowledge"
 
 
 def _measured(a: dict) -> bool:

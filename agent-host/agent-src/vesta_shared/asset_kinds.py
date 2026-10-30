@@ -1,5 +1,5 @@
 """What each of the villa's devices is (motor, lighting, meter, appliance): guessed from its name, or chosen by the owner
-on the VESTA Agent page (Rules › Device kinds), kept in asset_kinds.yaml beside policy.yaml.
+on the VESTA Agent page (Knowledge › Device kinds), kept in asset_kinds.yaml beside policy.yaml.
 
 ⚠️ ONE PLACE TO CORRECT A GUESS (owner, 2026-10-28: "the picker replaces the text box"). A guess was corrected by typing
 JSON into a helper of the villa's system (input_text.vesta_asset_kinds = {"slug": "motor"}): no list of what was
@@ -32,7 +32,7 @@ KINDS: dict[str, tuple[str, str]] = {
 }
 
 #: what the file says of itself, above the choices
-HEADER = ("# What each device is, as chosen on the VESTA Agent page (Rules > Device kinds). A device not listed\n"
+HEADER = ("# What each device is, as chosen on the VESTA Agent page (Knowledge > Device kinds). A device not listed\n"
           "# keeps the kind the agent guesses from its name. Kinds: " + ", ".join(KINDS) + ".\n")
 
 

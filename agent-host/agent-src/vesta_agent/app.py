@@ -266,9 +266,11 @@ class Vesta:
                 return os.path.getmtime(path)
             except (OSError, TypeError):
                 return None
-        m = (mtime(self.s.pack_path), mtime(path_beside(self.s.pack_path)), mtime(self.s.asset_kinds_path))
+        m = (mtime(self.s.pack_path), mtime(path_beside(self.s.pack_path)), mtime(self.s.asset_kinds_path),
+             mtime(self.s.asset_links_path))
         if m != self._pack_mtime:
-            self._pack, self._pack_mtime = KnowledgePack.read(self.s.pack_path, self.s.asset_kinds_path), m
+            self._pack, self._pack_mtime = KnowledgePack.read(self.s.pack_path, self.s.asset_kinds_path,
+                                                              self.s.asset_links_path), m
         return self._pack
 
     def name_of(self, entity_id: str) -> str:

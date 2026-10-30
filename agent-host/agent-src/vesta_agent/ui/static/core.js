@@ -311,7 +311,7 @@ export function field(label, input, hint) {
 
 // A table of many rows, 10 to a page (owner, 2026-10-01): `head` the column titles, `rows` arrays of cells;
 // a cell is a node, a text, or {v, cls}. Newest first is the caller's order; `nav`: the pager's words for a list in
-// another order (Rules › Device kinds, by name: "‹ Previous", "Next ›", "devices").
+// another order (Knowledge › Device kinds, by name: "‹ Previous", "Next ›", "devices").
 export function paged(head, rows, per = 10, { cls = "", widths = null, nav = ["‹ Newer", "Older ›", "rows"] } = {}) {
   const body = h("tbody");
   // each cell carries its column's name: on a phone the row becomes a card, every value labelled (app.css);

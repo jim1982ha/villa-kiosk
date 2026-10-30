@@ -484,9 +484,18 @@ def test_the_rules_tab_comes_in_one_answer(ui):
         return await (await c.get("/api/rules", headers=HDR)).json()
     v = call(ui, fn)
     assert {"text", "rev", "form", "problems", "profiles", "schema", "jobs", "entities", "tools"} <= set(v)
-    # no job for the alert cards' translation (owner, 2026-10-23): its line is the Chat answers row's (`translations`)
+    # no job for the alert cards' translation (owner, 2026-10-23)
     assert [j["name"] for j in v["jobs"]] == ["fm-daily", "fm-weekly", "owner-monthly"]
-    assert v["translations"] == {}
+    # ⚠️ ONLY WHAT policy.yaml HOLDS (owner, 2026-10-30): what is kept elsewhere is the Knowledge tab's answer
+    assert not {"translations", "unavailable_by_design", "kinds", "links"} & set(v)
+
+
+def test_the_knowledge_tab_comes_in_one_answer(ui):
+    async def fn(c):
+        return await (await c.get("/api/knowledge", headers=HDR)).json()
+    v = call(ui, fn)
+    assert {"kinds", "links", "asleep", "translations", "languages"} <= set(v)
+    assert v["translations"] == {} and v["asleep"] == []
 
 
 def test_a_skills_own_files_cannot_be_deleted_and_the_list_says_so(ui):
@@ -549,7 +558,7 @@ def test_a_skills_when_rows_name_every_way_the_engine_starts_it(ui):
     assert when_it_runs(dataclasses.replace(sk, translate={"instructions": "i"}))[-2] == \
         {"when": "an alert card in non-english", "job": None, "script": None, "kind": None,
          "note": "its text put in the chat's language by the AI, with the Chat answers brain and limit "
-                 "(Rules › AI brains and limits, where Forget Translations is)"}
+                 "(Rules › AI brains and limits; what it keeps in Knowledge › Translations)"}
 
 
 def test_a_skill_pages_tools_heading_is_the_agents_one_verdict(ui):

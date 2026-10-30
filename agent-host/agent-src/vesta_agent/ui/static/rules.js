@@ -1,5 +1,5 @@
 // VESTA Agent page — the Rules tab (policy.yaml): the forms, the file, and AI tools.
-import { api, ask, card, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, markDirty, page, paged, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
+import { api, card, dropdown, editTable, field, fill, floating, go, h, infoButton, inOrder, jobsBanner, jump, markDirty, page, pagedBlock, place, plural, problemsBox, reasons, saveWith, setBar, tabbed, table, tableRow, tell, titleWithInfo, toast, toggleCard, $view, where, withInfo } from "./core.js";
 import { fileEditor } from "./viewer.js";
 
 // ---------------------------------------------------------------- rules (policy.yaml)
@@ -102,12 +102,10 @@ export function rulesForms(doc, jobs = [], tools = null) {
       limitInput(f.settings.reply_limit_usd, (v) => (f.settings.reply_limit_usd = v), W("settings.reply_limit_usd"), "for each reply"),
       // the chats' own setting, on the chats' line (owner, 2026-10-06): their tools are "everything switched on, by
       // role" — said in the (i) of its "AI tools" column
-      // the menu on the line of the brain and the limit, its name under it like theirs ("for each reply")
-      // "Forget Translations" on the same line, right of the menu (owner, 2026-10-23); doc.translations: null when no
-      // skill translates its alert cards
-      { cls: "with-caption", v: [h("div", { class: "forget-row" },
+      // the menu on the line of the brain and the limit, its name under it like theirs ("for each reply"); "Forget
+      // Translations" is the Knowledge tab's (owner, 2026-10-30: the Rules tab holds only what policy.yaml holds)
+      { cls: "with-caption", v: [
         sel(SCHEMA.resets, f.settings.conversation_reset, (v) => (f.settings.conversation_reset = v), W("settings.conversation_reset")),
-        doc.translations ? forgetButton() : null),
         h("div", { class: "muted" }, W("settings.conversation_reset"))] },
       { cls: "x", v: null }]),
     ...skillsOf().map(skillRow));
@@ -136,22 +134,6 @@ export function rulesForms(doc, jobs = [], tools = null) {
         if (f.settings.skill_brains) delete f.settings.skill_brains[skill];
         its.forEach((j) => (j.skill_ai = null));
         drawAi(); markDirty(); } }, "×") }]);
-  }
-  // the alert translation's memory (phrases.py): "Forget Translations" forgets them all (every language but English:
-  // English is never translated; owner, 2026-10-23: no language menu), asked in the page's own dialog (core.ask:
-  // never the browser's confirm). Not a change of the file: done at once; the next alert cards are translated again.
-  function forgetButton() {
-    const all = Object.values(doc.translations).reduce((n, k) => n + k, 0);
-    return h("button", { type: "button", class: "btn ghost", title: plural(all, "translation kept", "translations kept"),
-      onclick: async () => {
-        if (!(await ask({ title: "Forget every translation?", ok: "Forget", danger: true,
-          text: "The next alert cards are translated again by the AI, at the cost of each run." }))) return;
-        try {
-          const res = await api("POST", "api/translations/forget", { lang: null });
-          doc.translations = res.kept; drawAi();
-          toast(`${plural(res.forgot, "translation", "translations")} forgotten.`);
-        } catch (e) { tell("Not forgotten", reasons(e)); }
-      } }, "Forget Translations");
   }
   drawAi();
   const ai = card(place("ai"), "Which brain answers the chats and runs each skill's AI jobs, and the most ONE reply or ONE run may cost (one chat reply, or one run of any AI job of a skill, not a monthly budget; one brain and one limit for all the AI jobs of a skill), and which tools a report gets: what the person who asks may use (on schedule, everything switched on). A reply that reaches its limit stops and offers Continue; a report that reaches it is still sent with what is done. A skill that is not set does not run its AI jobs.",
@@ -275,18 +257,10 @@ export function rulesForms(doc, jobs = [], tools = null) {
     h("div", { class: "grid" },
       field(W("owner_only_entities"), many("owner_only_entities", SCHEMA.actionable), "An action on these waits for the owner's Approve, whoever asks (locks, the gate, the siren)."),
       field(W("excluded_entities"), many("excluded_entities", null), "Never acted on, never reported (a test device)."),
-      // ⚠️ THE KIOSK'S LIST, SHOWN HERE (owner, 2026-10-21): one list, kept in the VESTA Kiosk; the agent reads it
-      // (vesta_shared.asleep) and never edits it — so it is said here, not offered as a field to change
-      // its explanation behind the title's (i), in line (owner, 2026-10-24: "remove this text … show it in a (i)")
-      field(withInfo("Asleep between reports", "Set in the VESTA Kiosk (Advanced Settings › Devices › Asleep between reports). The agent never reports these devices offline and reads their last real state."), h("div", { class: "chips" },
-        (doc.unavailable_by_design || []).length
-          ? doc.unavailable_by_design.map((id) => h("span", { class: "chip", title: id }, ENT.byId[id] ? ENT.byId[id].name : id))
-          : [h("span", { class: "muted" }, "None")])),
+      // the VESTA Kiosk's "Asleep between reports" and the hidden devices are the Knowledge tab's (owner, 2026-10-30)
       field(W("siren_entity"), picker(() => (f.siren_entity ? [f.siren_entity] : []), (v) => (f.siren_entity = v[0] || null), SCHEMA.siren_domains, true),
             "The siren the alert desk may ask the owner to sound."),
-      field(W("siren_auto_off_min"), h("input", { type: "number", ...bounds("siren_auto_off_min"), value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))),
-    // in the page, not behind the (i) (owner, 2026-10-15): hiding is done in the villa's system, not here (knowledge_pack)
-    h("p", { class: "muted" }, "Devices hidden in the villa's system are ignored by the agent: left out of the villa status, the reports and what the AI is told."));
+      field(W("siren_auto_off_min"), h("input", { type: "number", ...bounds("siren_auto_off_min"), value: f.siren_auto_off_min, oninput: on((t) => (f.siren_auto_off_min = num(t.value))) }))));
 
   const save = async () => {
     const res = await saveWith(probs, () => api("PUT", "api/policy/form", { form: f, rev: doc.rev }),
@@ -296,85 +270,10 @@ export function rulesForms(doc, jobs = [], tools = null) {
   acting.id = "rules-acting"; services.id = "rules-services";
   setBar({ save, discard: () => rules("forms"), idle: "Changes apply within seconds, no restart." });
   const canUse = tools ? toolsCard(f, tools, () => rules("forms")) : null;
-  const kinds = doc.kinds ? kindsCard(doc.kinds, probs) : null;
   fill($view, doc.problems.length ? problemsBox(doc.problems, "To fix in this file:") : null, probs,
     jobsBanner(missing, () => rules("forms")),
-    inOrder("rules", { acting, people, actions: services, protected: devices, kinds, ai, tools: canUse }));   // places.ORDER
+    inOrder("rules", { acting, people, actions: services, protected: devices, ai, tools: canUse }));   // places.ORDER
   if (jumpToTools && canUse) { jumpToTools = false; requestAnimationFrame(() => canUse.scrollIntoView({ block: "start" })); }
-}
-
-// ---------------------------------------------------------------- rules › device kinds
-// ⚠️ A PICKER, NEVER TYPED (owner, 2026-10-28): what each device is (vesta_shared.asset_kinds) was corrected by typing
-// JSON into a helper of the villa's system. Each device the agent reads power or energy for is a row: its kind in a
-// drop-down, whether it is the agent's guess or a choice made here, and a way back to the guess. SAVED AT ONCE, like a
-// switch of the page's own (ui/kinds.py: through the page's one writer, in Page changes, undoable), so it never waits
-// for the bar of the agent rules above, which it does not touch. The kinds' names and words are the agent's.
-let KIND_SEARCH = "";
-export function kindsCard(data, probs) {
-  const names = Object.fromEntries(data.kinds.map(([k, name]) => [k, name]));
-  // ⚠️ WHAT THE SECTION IS FOR, IN FULL (owner, 2026-10-30: "I still don't understand what the Device kinds section is
-  // used for"), THEN READABLE (owner, 2026-10-30: "barely understandable and very poorly formatted" — one block of six
-  // run-on paragraphs): which devices are listed and why, what each kind changes as a list, where the kind comes from,
-  // how to correct it. The kinds' words are the agent's (asset_kinds.KINDS), split at their colon: what it is, what VESTA does.
-  const part = (title, ...body) => [h("p", { class: "tip-head" }, title), ...body];
-  const items = (pairs) => h("ul", { class: "tip-list" }, pairs.map(([b, rest]) => h("li", {}, h("b", {}, b), rest ? ` ${rest}` : "")));
-  const kindItem = ([, name, words]) => {
-    const at = words.indexOf(": ");
-    return at < 0 ? [name, words] : [`${name} (${words.slice(0, at).toLowerCase()})`, words.slice(at + 2)];
-  };
-  const info = h("div", { class: "tip-doc" },
-    ...part("Which devices are listed",
-      h("p", {}, `Every device that measures its own power or energy (a smart plug, a relay with a meter, a power meter): ${data.rows.length} on this villa. Devices hidden in the villa's system are left out.`)),
-    ...part("What the kind changes", items(data.kinds.map(kindItem))),
-    ...part("Why it matters",
-      h("p", {}, "A pump that runs longer, starts more often or draws a different power than usual is often the first sign of wear, a leak or a blockage. A light left on or a meter's total is not a fault.")),
-    ...part("Where the kind comes from", items([
-      ["From the villa's system:", "what the device is made of there (a light, a fan, a climate unit)."],
-      ["Guessed:", "from its name, when the villa's system does not say."],
-      ["Chosen here:", "your choice, which always wins."]])),
-    ...part("To correct a kind",
-      h("p", {}, "Pick the right one in its list. It applies from the next night check and report. \"Back to the guess\" undoes it.")),
-    ...part("\"light + fan\"",
-      h("p", {}, "A wall switch driving a light and a fan on one power reading: VESTA checks the fan by its own on and off, reads the power only while the light is off, and counts the light in the energy figures only.")));
-  const list = h("div");
-  const save = async (r, kind) => {
-    try {
-      Object.assign(data, await api("PUT", "api/kinds", { slug: r.slug, kind }));
-      fill(probs);
-      toast(kind ? `Saved: ${r.name} is ${names[kind]}` : (r.guess ? `Saved: ${r.name} back to its guess, ${names[r.guess]}` : `Removed: ${r.name}`));
-    } catch (e) {
-      fill(probs, problemsBox(reasons(e), `${r.name} not saved:`));
-      probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
-    }
-    draw();
-  };
-  const row = (r) => [
-    [h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null,
-      r.parts ? h("span", { class: "muted" }, ` · ${r.parts}`) : null],
-    dropdown(data.kinds.map(([k, name]) => [k, k === r.guess ? `${name} (${r.source === "system" ? "the villa's system" : "guess"})` : name]), r.kind, (v) => save(r, v), `${r.name}, kind`),
-    h("span", { class: "chips" },
-      r.gone ? h("span", { class: "chip warn" }, "No longer found")
-        : h("span", { class: r.chosen ? "chip" : "chip gray" },
-          r.chosen ? "Chosen here" : r.source === "system" ? "From the villa's system" : "Guessed"),
-      r.chosen ? h("button", { type: "button", class: "btn ghost", onclick: () => save(r, null) }, r.gone ? "Remove" : "Back to the guess") : null),
-  ];
-  const draw = () => {
-    const q = KIND_SEARCH.trim().toLowerCase();
-    const shown = data.rows.filter((r) => !q || `${r.name} ${r.area} ${r.slug}`.toLowerCase().includes(q));
-    fill(list, data.rows.length
-      ? (shown.length ? paged(["Device", "Kind", "Set by"], shown.map(row), 10,
-          { cls: "kinds", widths: ["44%", "26%", "30%"], nav: ["‹ Previous", "Next ›", "devices"] })
-        : h("p", { class: "muted" }, "No device matches the search."))
-      : h("p", { class: "muted" }, data.built ? "No device with a power or energy reading." : "The agent has not read the villa's devices yet."));
-  };
-  const search = h("input", { type: "search", placeholder: "Search the devices", value: KIND_SEARCH, "aria-label": "Search the devices",
-    oninput: (e) => { KIND_SEARCH = e.target.value; draw(); } });
-  draw();
-  // which devices, said on the card itself too (owner, 2026-10-30: "where the device list is coming from?")
-  const which = h("p", { class: "muted" }, `${data.rows.length} devices that measure their own power or energy.`);
-  const c = card(place("kinds"), info, which, data.rows.length ? h("div", { class: "limits-search" }, search) : null, list);
-  c.id = "rules-kinds";
-  return c;
 }
 
 // ---------------------------------------------------------------- rules › what the AI can use

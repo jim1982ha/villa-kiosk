@@ -34,7 +34,7 @@ from ..history import History, file_change
 from ..places import ORDER, PLACES, TABS
 from ..skills import FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES, Skills, switch_command, to_trash
 from ..state import State
-from . import kinds, setup_copy
+from . import kinds, links, setup_copy
 from .changes import PageFiles, Refused, _read, _write, page_policy, rev, rules_problems, undoable
 from .limits_tab import LimitsTab, ref as limits_ref
 from .policy_doc import apply_form, to_form
@@ -128,7 +128,9 @@ class UI:
         r.add_post("/api/translations/forget", self.translations_forget)
         r.add_get("/api/entities", self.entities)
         r.add_get("/api/costs", self.costs)
+        r.add_get("/api/knowledge", self.knowledge_view)
         r.add_put("/api/kinds", self.kinds_put)
+        r.add_put("/api/links", self.links_put)
         r.add_get("/api/limits", self.limits_get)
         r.add_put("/api/limits", self.limits_put)
         r.add_get("/api/skills", self.skills_list)
@@ -236,12 +238,12 @@ class UI:
                  "tools": None if sk.tools is None else [tool_access.label(t, listed) for t in sk.tools]}
                 # ⚠️ NOT THE ALERT CARDS' TRANSLATION (owner, 2026-10-23: "I shall not see a dedicated Job for this"):
                 # it runs with the Chat answers' brain and limit (turn.translation_terms), so it is never listed, set
-                # or added here — `_translations` is its line, beside the Chat answers row
+                # or added here — what it keeps is `_translations`, Knowledge › Translations
                 for sk, j in ai_jobs(every)]
 
     def _translations(self) -> dict[str, int] | None:
-        """How many sentence patterns of the alert cards are kept translated, per language — what "Forget the
-        translations" (Rules › AI brains and limits, under the Chat answers row) forgets; None when no skill translates
+        """How many sentence patterns of the alert cards are kept translated, per language — what "Forget
+        Translations" (Knowledge › Translations) forgets; None when no skill translates
         its alert cards (no line)."""
         from ..skills import translators
         return self._translations_kept() if translators(self.skills.all()) else None
@@ -256,7 +258,7 @@ class UI:
             return {}
 
     async def translations_forget(self, request):
-        """"Forget the translations" (Rules › AI brains and limits, under the Chat answers row): every sentence pattern
+        """"Forget Translations" (Knowledge › Translations): every sentence pattern
         kept translated — and every failure remembered — of one language, or of all; the next cards ask the AI again
         (phrases.Phrases.forget). Not a file: nothing to undo, the AI translates them again."""
         from ..phrases import Phrases
@@ -335,15 +337,26 @@ class UI:
     async def rules_view(self, _request):
         """The Rules tab in ONE answer (architecture review 9: four requests in a row, joined on the page): the file and
         its form, the AI jobs, the devices for the pickers, the tools. Built from a lenient reading of policy.yaml, so a
-        broken file still answers, its problems named."""
+        broken file still answers, its problems named. ⚠️ ONLY WHAT policy.yaml HOLDS (owner, 2026-10-30): what is kept
+        anywhere else is the Knowledge tab's (knowledge_view)."""
+        return web.json_response({**self._policy_doc(), "jobs": self._jobs(), **self._entities(), "tools": self._tools()})
+
+    async def knowledge_view(self, _request):
+        """The Knowledge tab in ONE answer: what the agent knows of the villa and keeps outside policy.yaml (owner,
+        2026-10-30: the Rules tab holds only what policy.yaml holds, the rest in one tab)."""
         from vesta_shared.asleep import listed
-        return web.json_response({**self._policy_doc(), "jobs": self._jobs(), **self._entities(), "tools": self._tools(),
-                                  # the alert cards' translations kept, per language (None: no skill translates)
-                                  "translations": self._translations(),
-                                  # the VESTA Kiosk's list, as the agent was last told it (shown, never edited here)
-                                  "unavailable_by_design": sorted(listed(self.s.pack_path)),
-                                  # Rules › Device kinds: each device's guessed kind and the owner's choice (ui/kinds.py)
-                                  "kinds": kinds.rows(self.s)})
+        from vesta_shared.knowledge_pack import KnowledgePack
+        from ..policy import LANGUAGES
+        pack = KnowledgePack.read(self.s.pack_path)
+        return web.json_response({
+            # Knowledge › Device kinds: each device's guessed kind and the owner's choice (ui/kinds.py)
+            "kinds": kinds.rows(self.s),
+            # Knowledge › Device links: each device's helpers, found by their name or chosen (ui/links.py)
+            "links": links.rows(self.s),
+            # the VESTA Kiosk's list, as the agent was last told it (shown, never edited here), by name
+            "asleep": [{"id": i, "name": pack.name_of(i, i) if pack else i} for i in sorted(listed(self.s.pack_path))],
+            # the alert cards' translations kept, per language (None: no skill translates), and the languages' names
+            "translations": self._translations(), "languages": LANGUAGES})
 
     async def policy_get(self, _request):
         return web.json_response(self._policy_doc())
@@ -362,12 +375,21 @@ class UI:
 
     # ------------------------------------------------------------------ device kinds
     async def kinds_put(self, request):
-        """Rules › Device kinds: one device's kind chosen, or back to the guess (`kind` null)."""
+        """Knowledge › Device kinds: one device's kind chosen, or back to the guess (`kind` null)."""
         body = await request.json()
         slug, kind = body.get("slug"), body.get("kind")
         if not isinstance(slug, str) or not slug or not (kind is None or isinstance(kind, str)):
             raise Refused(["No device or kind sent."])
         return web.json_response(kinds.save(self.s, self.files, slug, kind))
+
+    async def links_put(self, request):
+        """Knowledge › Device links: one device's link chosen (`value`: a helper's id, "" for None), or back to the
+        guess (`value` null)."""
+        body = await request.json()
+        slug, role, value = body.get("slug"), body.get("role"), body.get("value")
+        if not isinstance(slug, str) or not slug or not isinstance(role, str) or not (value is None or isinstance(value, str)):
+            raise Refused(["No device or link sent."])
+        return web.json_response(links.save(self.s, self.files, slug, role, value))
 
     # ------------------------------------------------------------------ limits
     async def limits_get(self, _request):

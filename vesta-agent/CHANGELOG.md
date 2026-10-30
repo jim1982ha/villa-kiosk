@@ -1,3 +1,12 @@
+## 0.12.413
+
+What you will see:
+- A new Knowledge tab on VESTA's page, beside Rules. Device kinds, Asleep between reports and Forget Translations move
+  there, so Rules now shows only what policy.yaml holds.
+- New Knowledge › Device links: for each device, choose its schedule, its normal power and its run-hours helper from
+  the villa's helpers, by name, or switch one off with None. "Back to the guess" undoes a choice; the next night check
+  uses it. A device with no schedule linked says so: "No schedule linked: the run-hours check is off for it".
+
 ## 0.12.412
 
 What you will see:

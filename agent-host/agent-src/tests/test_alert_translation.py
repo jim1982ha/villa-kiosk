@@ -381,7 +381,7 @@ def test_the_skills_page_says_it_uses_the_chat_answers_brain_never_an_ai_job(tmp
     assert sk.jobs_default is None and set(sk.translate) == {"instructions"}
     row = next(r for r in when_it_runs(sk) if "non-english" in r["when"])
     assert row == {"when": "an alert card in non-english", "job": None, "script": None, "kind": None,
-                   "note": f"its text put in the chat's language by the AI, with the Chat answers brain and limit ({where('ai')}, where Forget Translations is)"}
+                   "note": f"its text put in the chat's language by the AI, with the Chat answers brain and limit ({where('ai')}; what it keeps in {where('translations')})"}
     assert not [r for r in when_it_runs(sk) if r["kind"] == "ai"]
 
 
@@ -513,8 +513,8 @@ def test_forget_the_translations_on_the_page_one_language_then_all(tmp_path, mon
             out = []
             for body in steps:
                 if body == "jobs":
-                    # beside the Chat answers row (Rules' one answer), never on a job's line
-                    out.append((await (await c.get("/api/rules", headers=hdr)).json())["translations"])
+                    # the Knowledge tab's (owner, 2026-10-30: not kept in policy.yaml), never on a job's line
+                    out.append((await (await c.get("/api/knowledge", headers=hdr)).json())["translations"])
                 else:
                     r = await c.post("/api/translations/forget", json=body, headers=hdr)
                     out.append((r.status, await r.json()))
@@ -540,27 +540,25 @@ def test_forget_the_translations_on_the_page_one_language_then_all(tmp_path, mon
 
 def test_the_page_offers_forget_in_its_own_dialog():
     from helpers import body_of, page_js
-    js = body_of(page_js(), "rulesForms")
-    js = js[js.index("function forgetButton"):]
-    js = js[:js.index("\n  drawAi();")]
+    js = body_of(page_js(), "translationsCard")
     assert 'api("POST", "api/translations/forget", { lang: null })' in js and "await ask(" in js and "confirm(" not in js
     # owner, 2026-10-23: "Forget Translations", every language but English, no language menu
     assert '"Forget Translations"' in js and "dropdown(" not in js
 
 
-def test_the_chat_answers_row_says_it_also_translates_the_alert_cards_and_holds_forget():
-    # owner, 2026-10-23: the Chat answers row shows what its brain also does; "Forget the translations" sits there,
-    # never under a skill's row (there is no job row for it any more)
+def test_the_chat_answers_row_says_it_also_translates_the_alert_cards_and_forget_is_the_knowledge_tabs():
+    # owner, 2026-10-23: the Chat answers row shows what its brain also does, never under a skill's row (there is no
+    # job row for it any more); owner, 2026-10-30: "Forget Translations" is not kept in policy.yaml, so it left the
+    # Rules tab for Knowledge › Translations (the tab's sub-tabs: places.ORDER)
     from helpers import body_of, page_js
+    from vesta_agent.places import ORDER, PLACES
     js = body_of(page_js(), "rulesForms")
-    # owner, 2026-10-23: its line says only "replies in the chats"; "Forget Translations" on the line of the
-    # "Delete conversation context at" menu, right of it
+    # owner, 2026-10-23: its line says only "replies in the chats"
     chat = js[js.index('h("b", {}, "Chat answers")'):js.index("sel(PROFILES, f.settings.profile")]
     assert 'h("div", { class: "muted" }, "replies in the chats")]' in chat and "forget" not in chat.lower()
-    reset = js[js.index('{ cls: "with-caption", v: [h("div", { class: "forget-row" }'):js.index("...skillsOf().map(skillRow)")]
-    assert reset.index("SCHEMA.resets") < reset.index("doc.translations ? forgetButton() : null")
-    skill_row = js[js.index("function skillRow"):js.index("// the alert translation's memory")]
-    assert "forgetButton" not in skill_row and "translations" not in skill_row
+    assert "api/translations" not in js and "doc.translations" not in js and '"Forget Translations"' not in js
+    assert PLACES["translations"][1] == "Knowledge" and "translations" in ORDER["knowledge"]
+    assert 'translations: () => translationsCard(v)' in body_of(page_js(), "knowledge")
 
 
 def test_the_costs_tab_counts_a_translation_with_the_chat_replies_on_its_own_row(tmp_path):

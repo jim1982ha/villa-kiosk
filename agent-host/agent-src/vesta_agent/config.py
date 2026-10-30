@@ -77,6 +77,12 @@ class Settings:
         return os.path.join(self.config_dir, FILE)
 
     @property
+    def asset_links_path(self) -> str:
+        """Each device's helpers as the owner chose them on the page (vesta_shared.asset_links), beside policy.yaml."""
+        from vesta_shared.asset_links import FILE
+        return os.path.join(self.config_dir, FILE)
+
+    @property
     def instructions_path(self) -> str:
         return os.path.join(self.config_dir, "instructions.md")
 

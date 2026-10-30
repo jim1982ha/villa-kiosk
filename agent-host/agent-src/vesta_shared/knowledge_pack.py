@@ -34,7 +34,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
-from . import asset_kinds
+from . import asset_kinds, asset_links
 from .asset_kinds import KINDS
 from .limits import limit
 
@@ -136,6 +136,19 @@ def asset_kind(a, chosen: dict[str, str] | None = None) -> str:
     return k if k in KINDS else guessed_kind(a)
 
 
+def asset_link(a, role: str, chosen: dict[str, dict[str, str]] | None = None) -> str | None:
+    """The asset's helper for `role` (asset_links.ROLES: its schedule, normal power, run hours): the owner's choice on
+    the VESTA Agent page (`chosen`: {slug: {role: helper id, or "" for None}}), else the one its name rule found.
+    ⚠️ THE ONE ANSWER (owner, 2026-10-30), as asset_kind: the pack's build and its every reading ask here."""
+    mine = (chosen or {}).get(str(_field(a, "slug"))) or {}
+    if role in mine:
+        return mine[role] or None
+    guessed = _field(a, "guessed")
+    if isinstance(guessed, dict) and role in guessed:
+        return guessed[role]
+    return _field(a, asset_links.ROLES[role][0])       # a pack built before guesses were kept (PACK_RULES 5)
+
+
 def family_of(e: dict) -> str | None:
     """Decide the family from unit, device_class, state_class and domain."""
     eid = e["entity_id"]
@@ -198,6 +211,9 @@ class Asset:
     critical: bool = False
     kind: str = "appliance"   # motor | lighting | meter | appliance: decides which maintenance rules apply
     parts: dict = field(default_factory=dict)  # {"motor": [fan.…], "light": [light.…]}: its device's parts (parts_of)
+    # {link: helper id or None}: the helpers its name rule found (asset_links.ROLES), kept so a choice on the page can
+    # be taken back to them (links_are)
+    guessed: dict = field(default_factory=dict)
 
 
 #: ⚠️ A NEW RULE IN build_pack IS A FORMAT CHANGE (2026-10-15): the pack is rebuilt at 01:30, so an update that leaves out
@@ -206,8 +222,9 @@ class Asset:
 #: (app.pack_needs_build). 1: hidden entities left out (0.6.197). 2: the villa's critical devices from its own rule, and
 #: the hidden entities named (0.6.234). 3: a device the owner named is kept as such (devices' "named": a Wi-Fi client
 #: is not the villa's, 0.6.248). 4: the days of detailed history the villa's system keeps, measured (0.6.265) — rebuilt
-#: at start, so an update measures it at once instead of at the next 01:30 (owner, 2026-10-20).
-PACK_RULES = 4
+#: at start, so an update measures it at once instead of at the next 01:30 (owner, 2026-10-20). 5: each asset's
+#: guessed links kept beside its links (asset_links, owner 2026-10-30), so a choice of the page can be taken back.
+PACK_RULES = 5
 
 
 
@@ -478,11 +495,19 @@ class KnowledgePack:
             if isinstance(a, dict):
                 a["kind"] = asset_kind(a, chosen)
 
+    def links_are(self, chosen: dict[str, dict[str, str]]) -> None:
+        """Each asset's helpers as asset_link answers them with the owner's choices `chosen`
+        ({slug: {link: helper id, or "" for None}})."""
+        for a in self.assets.values():
+            if isinstance(a, dict):
+                for role, (fld, *_rest) in asset_links.ROLES.items():
+                    a[fld] = asset_link(a, role, chosen)
+
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=1, ensure_ascii=False)
 
     @classmethod
-    def load(cls, path: str, kinds_path: str | None = None) -> "KnowledgePack":
+    def load(cls, path: str, kinds_path: str | None = None, links_path: str | None = None) -> "KnowledgePack":
         """The pack at `path`, with the VESTA Kiosk's devices unavailable by design kept beside it (vesta_shared.asleep):
         ⚠️ READ WITH THE PACK, ONE WAY (architecture review, 2026-10-21): the checks read the list through an environment
         variable, the agent's tools set it by hand and the Rules page read the file — a fourth reader forgetting it
@@ -491,16 +516,19 @@ class KnowledgePack:
         with open(path, encoding="utf-8") as f:
             pack = cls(**json.load(f))
         pack.asleep_are(listed(path))
+        # ⚠️ THE OWNER'S LINKS, READ WITH THE PACK (owner, 2026-10-30), BEFORE THE KINDS: a linked schedule marks a
+        # motor in the kind guess (guessed_kind)
+        pack.links_are(asset_links.chosen(links_path))
         # ⚠️ THE OWNER'S KINDS, READ WITH THE PACK (owner, 2026-10-28): a kind chosen on the VESTA Agent page counts
         # from the next run, never only from the next rebuild of the device list (vesta_shared.asset_kinds)
         pack.kinds_are(asset_kinds.chosen(kinds_path))
         return pack
 
     @classmethod
-    def read(cls, path: str, kinds_path: str | None = None) -> "KnowledgePack | None":
+    def read(cls, path: str, kinds_path: str | None = None, links_path: str | None = None) -> "KnowledgePack | None":
         """The pack, or None when it is not built yet or cannot be read (the callers show what they can)."""
         try:
-            return cls.load(path, kinds_path)
+            return cls.load(path, kinds_path, links_path)
         except (OSError, ValueError, TypeError):
             return None
 
@@ -576,6 +604,7 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         assets[slug] = a
 
     chosen = asset_kinds.chosen()
+    links = asset_links.chosen()
     # merge assets whose slug is a longer spelling of another one
     # (sensor.garden_spa_blower_pump_energy belongs to blower_pump, an invented example),
     # plus explicit aliases from input_text.vesta_asset_aliases = {"long": "short"}
@@ -608,12 +637,11 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
     for slug, a in assets.items():
         a.parts = parts_of(a.entities.values(), devices_of, ents, power_on_device)
         sch = f"schedule.{slug}_expected_runtime"
-        if sch in schedules:
-            a.schedule = sch
-        if f"{slug}_power_baseline" in helper_by_obj:
-            a.baseline_helper = f"input_number.{slug}_power_baseline"
-        if f"{slug}_runtime_hours" in helper_by_obj:
-            a.counter = f"counter.{slug}_runtime_hours"
+        a.guessed = {"schedule": sch if sch in schedules else None,
+                     "baseline": f"input_number.{slug}_power_baseline" if f"{slug}_power_baseline" in helper_by_obj else None,
+                     "counter": f"counter.{slug}_runtime_hours" if f"{slug}_runtime_hours" in helper_by_obj else None}
+        for role, (fld, *_rest) in asset_links.ROLES.items():
+            setattr(a, fld, asset_link(a, role, links))
         prefix = slug + "_"
         for obj, h in helper_by_obj.items():
             if obj.startswith(prefix) and h.get("helper_type") in ("input_number", "input_text", "input_select") \

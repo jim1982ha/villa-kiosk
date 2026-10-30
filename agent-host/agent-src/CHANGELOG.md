@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.399 (30 October 2026)
+
+- places.TABS gains "knowledge" (ui/static/knowledge.js): Device kinds, Device links, Asleep between reports,
+  Translations; Rules (rules.js) holds policy.yaml only. vesta_shared.asset_links (asset_links.yaml, beside
+  asset_kinds.yaml) links an asset's schedule / power baseline / runtime-hours helper, chosen first, the name rule
+  after, applied where knowledge_pack attaches helpers; ui/links.py through the page's one writer. Pack format 5.
+
 ## 0.6.398 (30 October 2026)
 
 - Rules › Device kinds: the card's (i) is a node of titled sections (tip-doc, tip-head, tip-list in app.css), the kinds
