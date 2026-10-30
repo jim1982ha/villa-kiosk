@@ -8,7 +8,7 @@ import { h, draw } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
 const { messagesView, mergeAnnouncements, FILTERS, unreadOf, markShown, openingFilter, readOnScreen, shownTogether,
   afterRead, cardsOfIssue } = await import("@/messages/messagesModel");
-const { parseVestaMessage } = await import("@/messages/announcements");
+const { parseVestaMessage, inLanguage } = await import("@/messages/announcements");
 const { noticeStep, NO_NOTICE } = await import("@/messages/noticeModel");
 
 const card = (key, extra = {}) => ({ key, title: `Device ${key}`, lead: null, nextCheck: null, actions: [], lines: [], ...extra });
@@ -59,12 +59,14 @@ ck("which parts each filter shows (the tab draws those, never its own rule)",
 console.log("\n  the facility manager's reports (ticket 20 of \"One inbox\"):");
 const digest = parseVestaMessage({ seq: 30, at: "2026-10-29T07:00:00+08:00", key: "note:d1", title: "Daily digest", to: "FM",
   body: "New since yesterday", report: "reports:fm-daily" });
-const weekly = parseVestaMessage({ seq: 31, at: "2026-10-29T08:00:00+08:00", key: "note:w1", title: "Weekly report", to: "FM",
+// a tablet reads VESTA's records through the provider's one pick (announcements.inLanguage), English by default
+const weeklyAsWritten = parseVestaMessage({ seq: 31, at: "2026-10-29T08:00:00+08:00", key: "note:w1", title: "Weekly report", to: "FM",
   body: "Deux choses", report: "reports:fm-weekly", page: "page-fr-0001", language: "fr",
   languages: { en: { body: "Two things", page: "page-en-0001" }, de: { body: "Zwei", page: "page-de-0001" } } });
-const french = parseVestaMessage({ seq: 32, at: "2026-10-29T08:01:00+08:00", key: "note:w2", title: "Rapport", to: "FM",
+const weekly = weeklyAsWritten && inLanguage(weeklyAsWritten, "en");
+const french = inLanguage(parseVestaMessage({ seq: 32, at: "2026-10-29T08:01:00+08:00", key: "note:w2", title: "Rapport", to: "FM",
   body: "Trois choses", report: "reports:fm-weekly", page: "page-fr-0002", language: "fr",
-  languages: { de: { body: "Drei", page: "page-de-0002" } } });
+  languages: { de: { body: "Drei", page: "page-de-0002" } } }), "en");
 const card91 = parseVestaMessage({ seq: 33, at: "2026-10-29T09:00:00+08:00", key: "incident:91", title: "#91-P2 (new)",
   body: "Door open", status: ["⚠️ New alert"], stage: "new" });
 ck("a report is read with its job and its page; a card is no report",

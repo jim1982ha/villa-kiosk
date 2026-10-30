@@ -419,6 +419,12 @@ export interface DeviceMarks {
   faults: ReadonlySet<string>;
 }
 
+/** The marks of the villa's look facts (deviceGroups.lookFacts, the ones its devices answer from) and the devices with an
+ *  amber issue: the facts themselves, never rebuilt, so the map and the lists read the same answer. Pure. */
+export function marksOf(facts: Pick<DeviceMarks, "critical" | "isHidden">, faults: ReadonlySet<string>): DeviceMarks {
+  return { critical: facts.critical, isHidden: facts.isHidden, faults };
+}
+
 /** The marks as a LookSource reads them (`config` with its entity map: `{ entityMap, ...lookMarks(marks) }`). */
 export function lookMarks(m: DeviceMarks): Pick<LookSource["config"], "isCritical" | "isHidden" | "hasFault"> {
   return { isCritical: (id) => m.critical.has(id), isHidden: m.isHidden, hasFault: (id) => m.faults.has(id) };

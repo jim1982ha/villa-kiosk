@@ -12,7 +12,7 @@ import InfoTip from "@/components/common/InfoTip";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { useDeviceIdentity } from "@/config/VillaModel";
+import { useDeviceIdentity, useRecordRoom } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
 import { faultTitle, keptDays, STAGE_WORDS, stageOf, ticketStats, type FmRetention } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
@@ -28,7 +28,6 @@ import WorkButtons, { useConfirmedClose } from "./WorkButtons";
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { formatMoney } from "@/utils/money";
-import { cleanRoom } from "@/config/devicePlace";
 import Tip from "@/components/common/Tip";
 import { DAY_MS } from "@/utils/localDay";
 import { fmtDuration } from "@/components/panels/chartUtils";
@@ -41,7 +40,10 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   editTicket?: string;
   onEditOpened?: () => void;
 }) {
-  const { data, retention, removeTicket } = useFmData();
+  const { data, retention, removeTicket, helpTickets } = useFmData();
+  const roomOf = useRecordRoom();
+  /** Why the last Need help did not land, on its card. */
+  const [helpFailed, setHelpFailed] = useState<{ key: string; text: string } | null>(null);
   const terms = useFmTerms();
   const { deviceOfRecord } = useDeviceIdentity();
   const label = useEntityLabel();
@@ -67,8 +69,14 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt)), [data.tickets]);
   const editing = editingId ? data.tickets.find((t) => t.id === editingId) : undefined;
 
-  /** A button that is not a Close (deviceWork): Mark resolved, Reopen — the stage change, recorded in its form. */
-  const onAction = (a: WorkAction) => {
+  /** A button that is not a Close (deviceWork): Done, Reopen — the stage change, recorded in its form; Need help — the
+   *  "help" step on its records, the same write as an issue card's (the VESTA Agent asks the owner to act). */
+  const onAction = (a: WorkAction, cardKey?: string) => {
+    if (a.step.kind === "help") {
+      setHelpFailed(null);
+      void helpTickets(a.ids).then(({ done, note }) => { if (!done && note && cardKey) setHelpFailed({ key: cardKey, text: note }); });
+      return;
+    }
     if (a.step.kind !== "stage") return;
     setStaging({ tickets: a.ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t), to: a.step.to });
   };
@@ -85,8 +93,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         erase={{ title: "Erase this record", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => setEditingId(t.id)}
         pills={<>
-          {/* the room stored on the ticket when it was opened (never re-resolved), cleaned as every room is */}
-          {cleanRoom(t.room) && <span className="fm-clause">{cleanRoom(t.room)}</span>}
+          {/* its device's room now, the stored one only with no device (owner, 2026-10-30: devicePlace.recordRoomNow) */}
+          {roomOf(t) && <span className="fm-clause">{roomOf(t)}</span>}
           {/* a guest reports a symptom from inside the villa, not a diagnosis */}
           {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
           <AgentMark record={t} />
@@ -112,13 +120,13 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
    *  bottom (owner, 2026-10-14: the device's name above it said again what its chip says; the pill and the buttons sat
    *  outside the card). */
   const ticket = (g: DeviceWork) => {
-    const problem = closer.problemFor(g.key);
+    const problem = closer.problemFor(g.key) ?? (helpFailed?.key === g.key ? helpFailed.text : null);
     return (
       <div key={g.key} className="fm-record-card">
         <div className="fm-ticket-records">
           {g.records.map((t, i) => record(t, i === 0 ? stagePill(t) : undefined,
             i === 0 ? <WorkButtons actions={ticketActions(g.records.map(workRecord))} cardKey={g.key} closer={closer}
-              onAction={onAction} /> : undefined, false))}
+              onAction={(a) => onAction(a, g.key)} /> : undefined, false))}
         </div>
         {problem && <div className="fm-inline-error fm-row-confirm" role="alert">{problem}</div>}
       </div>

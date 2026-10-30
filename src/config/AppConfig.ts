@@ -191,6 +191,12 @@ export interface AppConfig {
    * is empty until the owner picks, so nothing changes before then.
    */
   ringsFullScreen: boolean;
+  /**
+   * The language THIS tablet reads VESTA's cards and reports in (Settings › Messages; ticket 28 of "One inbox", owner
+   * 2026-10-30): per tablet, as a Telegram chat has its own language. A card VESTA holds only as written stays so; the
+   * villa's own announcements and the Kiosk's own words stay English. English by default.
+   */
+  tabletLanguage: string;
   theme: "dark" | "light" | "auto" | "night";
   /** The storey being shown. 1-based; see TeleportPoint.floor for why this
    *  is not a two-value union. */
@@ -388,6 +394,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   fullScreenFor: [],
   ringShownForS: RING_SHOWN_FOR_S_DEFAULT,
   ringsFullScreen: true,
+  tabletLanguage: "en",
   theme: "auto",
   currentFloor: 1,
   entityMap: ENTITY_MAP,

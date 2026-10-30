@@ -51,7 +51,18 @@ export interface Announcement {
   report?: string;
   /** A report's page: the add-on's document id, opened in the document viewer (fmApi.documentUrl). */
   page?: string;
+  /** VESTA's card: the line above its words ("🚨 …"), kept apart so a version in another language keeps it. */
+  lead?: string;
+  /** VESTA's card: the language its words are written in (a report names it; none said: English). */
+  language?: string;
+  /** VESTA's card: its words in other languages, by code (agent-contract.json vestaMessage `languages`): which one a
+   *  tablet shows is that tablet's (inLanguage). */
+  versions?: Record<string, LanguageVersion>;
 }
+
+/** One of VESTA's cards in another language: its words, its bottom line, a report's page; each absent when VESTA holds
+ *  it only as written. */
+export interface LanguageVersion { body?: string; status?: string; page?: string }
 
 export interface AnnouncementButton {
   label: string;
@@ -253,8 +264,9 @@ export function parseVestaMessage(raw: unknown): Announcement | null {
   const r = numbered(raw);
   if (!r || typeof r.key !== "string" || !r.key) return null;
   const lines = strings(r.status);
-  const shown = inTabletLanguage(r);
-  const text = [r.lead, shown.body].filter((x): x is string => typeof x === "string" && x.trim() !== "").join("\n");
+  const lead = typeof r.lead === "string" && r.lead.trim() ? r.lead : undefined;
+  const text = withLead(lead, r.body);
+  const versions = versionsOf(r.languages);
   const title = typeof r.title === "string" ? r.title : "";
   if (!title && !text && !lines.length) return null;
   return {
@@ -264,23 +276,78 @@ export function parseVestaMessage(raw: unknown): Announcement | null {
     ...(r.asked === true ? { asked: true } : {}),
     ...(typeof r.stage === "string" && r.stage ? { vestaStage: r.stage } : {}),
     ...(typeof r.report === "string" && r.report ? { report: r.report } : {}),
-    ...(typeof shown.page === "string" && shown.page ? { page: shown.page } : {}),
+    ...(typeof r.page === "string" && r.page ? { page: r.page } : {}),
+    ...(lead ? { lead } : {}),
+    ...(typeof r.language === "string" && r.language ? { language: r.language } : {}),
+    ...(versions ? { versions } : {}),
   };
 }
 
-/** The language the tablet reads: English (a tablet language is ticket 28 of "One inbox", parked: owner 2026-10-28). */
-const TABLET_LANGUAGE = "en";
+/** A card's words under its lead line. */
+const withLead = (lead: string | undefined, body: unknown): string =>
+  [lead, body].filter((x): x is string => typeof x === "string" && x.trim() !== "").join("\n");
 
-/** A record's words and page in the tablet's language when VESTA wrote them in it (its `languages`), else as written
- *  (owner, spec story 38). */
-function inTabletLanguage(r: Record<string, unknown>): { body: unknown; page: unknown } {
-  const langs = r.languages && typeof r.languages === "object" ? (r.languages as Record<string, unknown>) : {};
-  const there = langs[TABLET_LANGUAGE];
-  if (r.language !== TABLET_LANGUAGE && there && typeof there === "object" && typeof (there as { body?: unknown }).body === "string") {
-    const t = there as { body: string; page?: unknown };
-    return { body: t.body, page: t.page };
+/** The `languages` of a stored card, read: each version's words, its bottom line (the last of its `status`), its page. */
+function versionsOf(raw: unknown): Record<string, LanguageVersion> | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: Record<string, LanguageVersion> = {};
+  for (const [code, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(code) || !v || typeof v !== "object") continue;
+    const w = v as Record<string, unknown>;
+    const status = strings(w.status);
+    const one: LanguageVersion = {
+      ...(typeof w.body === "string" && w.body.trim() ? { body: w.body } : {}),
+      ...(status.length ? { status: status[status.length - 1] } : {}),
+      ...(typeof w.page === "string" && w.page ? { page: w.page } : {}),
+    };
+    if (Object.keys(one).length) out[code] = one;
   }
-  return { body: r.body, page: r.page };
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** The language a tablet reads when nobody picked one (Settings › Messages): English. */
+export const DEFAULT_TABLET_LANGUAGE = "en";
+
+/**
+ * `a` as THIS tablet reads it: VESTA's card in `lang` when VESTA holds its words in it (its words under the same lead
+ * line, its bottom line, a report's page; each kept as written where that version has none), else as written. The
+ * villa's own announcements are always as written. ⚠️ ONE PICK (ticket 28 of "One inbox", owner 2026-10-30: "do this
+ * now"): every screen that shows VESTA's words reads the provider's records (AnnouncementsContext), picked here once —
+ * the notice, the Inbox's cards, Notifications, Reports and their pages. Pure: tests/oracles/announcements.mjs.
+ */
+export function inLanguage(a: Announcement, lang: string): Announcement {
+  if (a.feed !== "vesta" || lang === (a.language ?? DEFAULT_TABLET_LANGUAGE)) return a;
+  const v = a.versions?.[lang];
+  if (!v) return a;
+  return {
+    ...a, language: lang,
+    ...(v.body !== undefined ? { text: withLead(a.lead, v.body) } : {}),
+    ...(v.status !== undefined ? { status: v.status } : {}),
+    ...(v.page !== undefined ? { page: v.page } : {}),
+  };
+}
+
+/** The languages a tablet may read VESTA's cards in: English, and every language `kept` holds a card's words in. */
+export function languagesOf(kept: readonly Announcement[]): string[] {
+  const codes = new Set<string>([DEFAULT_TABLET_LANGUAGE]);
+  for (const a of kept) {
+    if (a.feed !== "vesta") continue;
+    if (a.language) codes.add(a.language);
+    for (const code of Object.keys(a.versions ?? {})) codes.add(code);
+  }
+  return [DEFAULT_TABLET_LANGUAGE, ...[...codes].filter((c) => c !== DEFAULT_TABLET_LANGUAGE).sort()];
+}
+
+/** A language's name, in English ("fr" → "French"): the browser's own names, the code itself where it has none (an older
+ *  iPad without Intl.DisplayNames). */
+export function languageName(code: string): string {
+  try {
+    const names = typeof Intl !== "undefined" && "DisplayNames" in Intl
+      ? new Intl.DisplayNames(["en"], { type: "language" }) : null;
+    return names?.of(code) ?? code.toUpperCase();
+  } catch {
+    return code.toUpperCase();
+  }
 }
 
 /** VESTA's cards, a read of the add-on's feed (messages/feed), as the announcements are read. */

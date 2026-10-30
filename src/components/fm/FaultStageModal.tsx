@@ -24,6 +24,8 @@ import Window from "@/components/common/Window";
 import { useState } from "react";
 
 import { useFmData } from "@/fm/FmDataContext";
+import { WORK_ACTIONS } from "@/fm/deviceWork";
+import { useRecordRoom } from "@/config/VillaModel";
 import { faultTitle, parseAmount } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
@@ -37,8 +39,9 @@ const STAGE_COPY: Record<FmTicketStatus, { title: string; cta: string; note: str
     title: "Open a ticket", cta: "Open Ticket",
     note: "What you found / what's being done (optional)",
   },
+  // the Tickets tab's Done (owner, 2026-10-30): its button's own word, from the one wording (deviceWork.WORK_ACTIONS)
   resolved: {
-    title: "Resolve the ticket", cta: "Mark resolved",
+    title: WORK_ACTIONS.ticketDone.label, cta: WORK_ACTIONS.ticketDone.label,
     note: "What was done (optional)",
   },
 };
@@ -53,6 +56,7 @@ export default function FaultStageModal({
   onClose: () => void;
 }) {
   const { advanceTickets } = useFmData();
+  const roomOf = useRecordRoom();
   const ticket = tickets[0];
   // Escape + Back + focus trap + focus restore, from ONE hook — see
   // useModalA11y. It registers useBackToClose itself, so calling both would
@@ -84,7 +88,8 @@ export default function FaultStageModal({
             note: note.trim() || undefined,
             entityId: ticket.entityId,
             deviceLabel: ticket.deviceLabel,
-            room: ticket.room,
+            // where the work was done: its device's room now (devicePlace.recordRoomNow), as the ticket shows it
+            room: roomOf(ticket) || undefined,
           }
         : undefined,
     );

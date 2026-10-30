@@ -38,4 +38,22 @@ ck("the device lists read the one answer (useRoomFloors), and nothing else decid
    /floorOfRoom\(roomFloors, room\)/.test(read("components/panels/SummaryGroupPanel.tsx"))
    && !/function resolveEntityFloor/.test(read("config/EntityMap.ts")));
 
+// owner, 2026-10-30 ("I agree with your recommendation"): a stored record's room follows its device — the Tickets tab
+// showed the room saved when the ticket was opened, the Inbox the device's current one
+{
+  const now = { "lock.door": "Storage Room", "sensor.door_battery": "Storage Room" };
+  ck("a ticket on a device shows the device's room now, never the one stored when it was opened",
+     P.recordRoomNow(now, { key: "lock.door", entityId: "sensor.door_battery" }, "Laundry Room") === "Storage Room");
+  ck("  ...the stored room only when it names no device, or its device is gone",
+     P.recordRoomNow(now, null, "Laundry Room") === "Laundry Room" && P.recordRoomNow(now, null, undefined) === "");
+  ck("  ...a device with no room keeps the stored one, as an Inbox card does (deviceRoomOrRecord)",
+     P.recordRoomNow({}, { key: "lock.x", entityId: "lock.x" }, "Hall") === "Hall"
+     && P.recordRoomNow({}, { key: "lock.x", entityId: "lock.x" }, "Hall") === P.deviceRoomOrRecord({}, "lock.x", "lock.x", "Hall"));
+  const at = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
+  ck("  ...every screen showing a ticket's room asks the one hook: the Tickets tab, and a cost written for a ticket's work",
+     /\{roomOf\(t\) && <span className="fm-clause">\{roomOf\(t\)\}<\/span>\}/.test(at("components/fm/TicketsTab.tsx"))
+     && !/cleanRoom\(t\.room\)/.test(at("components/fm/TicketsTab.tsx"))
+     && /room: roomOf\(ticket\) \|\| undefined/.test(at("components/fm/FaultStageModal.tsx"))
+     && /recordRoomNow\(resolvedRooms/.test(at("config/VillaModel.tsx")));
+}
 done("✅ one floor per room, the same in every list");

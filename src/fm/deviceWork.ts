@@ -63,10 +63,10 @@ export function ticketCards(records: readonly FmTicket[], deviceOfRecord: (field
 
 /** Every button a card of open work can carry. An issue card's (the Inbox's): Done · Need help · Open Ticket (or Edit
  *  Ticket), `doneNew` / `helpNew` on a card with no record yet (only what the villa's system reports: a fault for its
- *  device is raised with the press). A Tickets card's: Mark resolved · Close (`closeTicket`, that ticket's records).
- *  Done and Close close with nothing done and no cost (fmCommands' closeTickets). */
+ *  device is raised with the press). A Tickets card's: Done · Need help · Close (`ticketDone`: the resolve form, work
+ *  done; `closeTicket`: that ticket's records closed with nothing done and no cost, fmCommands' closeTickets). */
 export type WorkActionKind = "done" | "needHelp" | "doneNew" | "helpNew" | "openTicket" | "raiseTicket" | "editTicket"
-  | "markResolved" | "closeTicket" | "reopen";
+  | "ticketDone" | "closeTicket" | "reopen";
 
 /** What a button does once pressed: record a stage change (FaultStageModal, to `to`), open the record's form, open
  *  the ticket form pointed at a device, ask for help on the records (a "help" step: the VESTA Agent asks the owner to
@@ -84,21 +84,27 @@ export type WorkStep =
 
 export interface WorkActionSpec { label: string; step: WorkStep }
 
+/** The words Done and Need help say on every card, the Inbox's and the Tickets tab's alike. */
+const DONE = "Done";
+const NEED_HELP = "Need help";
+
 /** ONE wording per action. */
 export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // ⚠️ DONE · NEED HELP · OPEN TICKET ON EVERY ISSUE CARD (owner, 2026-10-30: "a unique configuration … Done and Close
   // shall do the same thing"): an alert's card had VESTA's Done · Need help, a fault's Open Ticket · Close
   // ⚠️ A DONE IS WORK DONE, WHEREVER IT IS PRESSED (owner, 2026-10-30, review round 4: Done on Telegram filed a
   // completion in Recent work, the same Done on the Cockpit card a "Closed without action" gone after 90 days)
-  done: { label: "Done", step: { kind: "close", question: "Done? VESTA checks it again before it closes.", confirmLabel: "Done", work: true } },
-  needHelp: { label: "Need help", step: { kind: "help" } },
-  doneNew: { label: "Done", step: { kind: "raiseThen", then: "done" } },
-  helpNew: { label: "Need help", step: { kind: "raiseThen", then: "help" } },
+  done: { label: DONE, step: { kind: "close", question: "Done? VESTA checks it again before it closes.", confirmLabel: DONE, work: true } },
+  needHelp: { label: NEED_HELP, step: { kind: "help" } },
+  doneNew: { label: DONE, step: { kind: "raiseThen", then: "done" } },
+  helpNew: { label: NEED_HELP, step: { kind: "raiseThen", then: "help" } },
   openTicket: { label: "Open Ticket", step: { kind: "stage", to: "in_progress" } },
   // a card with no record yet (only what the villa's system reports): the same words, the ticket form for its device
   raiseTicket: { label: "Open Ticket", step: { kind: "raise" } },
   editTicket: { label: "Edit Ticket", step: { kind: "edit" } },
-  markResolved: { label: "Mark resolved", step: { kind: "stage", to: "resolved" } },
+  // ⚠️ THE TICKETS TAB SAYS DONE TOO (owner, 2026-10-30: "I agree with your recommendation"): its "Mark resolved" was
+  // the same work done as the Inbox's Done, in other words; it keeps its form (what was done, cost, photos)
+  ticketDone: { label: DONE, step: { kind: "stage", to: "resolved" } },
   closeTicket: { label: "Close", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "Close ticket" } },
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
 };
@@ -132,10 +138,11 @@ export function overviewActions(records: readonly WorkRecord[], device?: string)
   ];
 }
 
-/** The buttons of a ticket in progress (a Tickets card): "Mark resolved" and "Close" — both on every record of it. */
+/** The buttons of a ticket in progress (a Tickets card): Done (its resolve form: work done), Need help (the same "help"
+ *  step as an issue card's: the VESTA Agent asks the owner to act) and Close (nothing done) — each on every record of it. */
 export function ticketActions(records: readonly WorkRecord[]): WorkAction[] {
   const ids = records.filter((r) => r.stage === "ticket").map((r) => r.id);
-  return ids.length ? [action("markResolved", ids), action("closeTicket", ids)] : [];
+  return ids.length ? [action("ticketDone", ids), action("needHelp", ids), action("closeTicket", ids)] : [];
 }
 
 /** A closed record's one button: "Reopen" — it is a fault again, back on the Overview. */

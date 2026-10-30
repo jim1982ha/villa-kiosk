@@ -14,7 +14,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { deviceLook, lookMarks, mapLookSource, NO_MARKS, sameMarks, storeLookSource } = await import("@/utils/deviceActivity");
+const { deviceLook, lookMarks, mapLookSource, NO_MARKS, sameMarks, storeLookSource, marksOf } = await import("@/utils/deviceActivity");
+const { villaDevices, lookFacts, deviceFolding } = await import("@/config/deviceGroups");
 
 const ent = (id, state, attributes = {}) => ({ entity_id: id, state, attributes });
 
@@ -140,10 +141,11 @@ console.log("\n  the callers ask it (pin the caller):");
   // by each drawing itself (six releases each repaired one that had forgotten one). Each now takes VillaModel `marks`.
   const vm = src("config/VillaModel.tsx");
   ck("the map takes the villa model's marks; the open window's header, the room chooser and the list rows the same marks as the profile sees the villa",
-     /marks: \{ critical: criticalSet, isHidden, faults: issues\.amber \}/.test(vm) && /deviceIssues\(groupAttention\(attention\.attentionItems\)\)/.test(vm)
+     /marks: marksOf\(facts, issues\.amber\)/.test(vm) && (vm.match(/villaDevices\(\{[^}]*\bfacts \}\)/g) ?? []).length === 2
+     && /const facts = useMemo\(\(\) => lookFacts\(/.test(vm) && /deviceIssues\(groupAttention\(attention\.attentionItems\)\)/.test(vm)
      && /const villa = useVillaModelValue\(villaSets\);/.test(db) && /<VillaModelProvider value=\{villa\}>/.test(db)
      && /const marks = villa\.marks;/.test(db) && /manager\?\.setDeviceMarks\(marks\)/.test(db)
-     && /const sees = visibleTo\(role, \{ mapped: mappedEntityIds, entityMap, entities \}\);\s+return \{ critical: criticalSet, isHidden, faults: faultsFor\(attention, \(id\) => sees\.has\(id\)\) \};/.test(vm)
+     && /const sees = visibleTo\(role, \{ mapped: mappedEntityIds, entityMap, entities \}\);\s+return marksOf\(facts, faultsFor\(attention, \(id\) => sees\.has\(id\)\)\);/.test(vm)
      && /const windowMarks = useMemo\(\(\) => villa\.marksFor\(role\), \[villa, role\]\);/.test(db)
      && /useOpenPanelActions\(\{[^}]*\bmarks: windowMarks,/.test(db) && /config: \{ \.\.\.config, \.\.\.lookMarks\(marks\) \}/.test(db)
      && /storeLookSource\(entities, \{ \.\.\.config, \.\.\.lookMarks\(windowMarks\) \}\)/.test(db)
@@ -160,6 +162,32 @@ console.log("\n  the callers ask it (pin the caller):");
   const all = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? all(join(d, e.name)) : /\.tsx?$/.test(e.name) ? [join(d, e.name)] : []);
   const root = new URL("../../src/", import.meta.url).pathname;
   const naming = all(root).filter((f) => /\b(isCritical|hasFault)\b/.test(src(relative(root, f)))).map((f) => relative(root, f)).sort();
+  // ⚠️ ONE BUILDER FOR THE MAP AND THE LISTS (review A card 2, 2026-10-22; owner "do this too", 2026-10-30): the map's
+  // marks and the villa's devices (the lists, the Cockpit) answer from the same facts, built once — driven by value
+  {
+    const ent2 = (id, state) => ({ entity_id: id, state, attributes: {} });
+    const entities = { "lock.c": ent2("lock.c", "unavailable"), "sensor.c_battery": ent2("sensor.c_battery", "40"),
+      "light.h": ent2("light.h", "on"), "switch.p": ent2("switch.p", "off") };
+    const entityMap = Object.fromEntries(Object.keys(entities).map((id) => [id, { entityId: id, type: id.split(".")[0] }]));
+    const entityDeviceIds = { "lock.c": "dev-lock", "sensor.c_battery": "dev-lock", "light.h": "dev-h", "switch.p": "dev-p" };
+    const folding = deviceFolding(entityMap, [], entityDeviceIds);
+    const input = { critical: new Set(["sensor.c_battery"]), hidden: new Set(["light.h"]), entityDeviceIds, deviceUnits: {} };
+    const facts = lookFacts(input, folding);
+    const devices = villaDevices({ entityMap, deviceGroups: [], dismissed: new Set(), mappedEntityIds: new Set(Object.keys(entities)),
+      entities, folding, ...input, facts });
+    const marks = marksOf(devices.facts, new Set());
+    const L2 = lookMarks(marks);
+    const ids = Object.keys(entities);
+    ck("the map's marks and the villa's devices answer from ONE set of facts: the very same objects",
+       devices.facts === facts && marks.critical === facts.critical && marks.isHidden === devices.isHidden, devices.facts === facts);
+    ck("  ...so the map and a list agree on every device: critical (folded onto its lock) and hidden alike",
+       ids.every((id) => L2.isCritical(id) === devices.isCritical(id) && L2.isHidden(id) === devices.isHidden(id))
+       && devices.isCritical("lock.c") && L2.isHidden("light.h") && !devices.ids.includes("light.h"),
+       ids.map((id) => [id, L2.isCritical(id), devices.isCritical(id), L2.isHidden(id), devices.isHidden(id)]));
+    const looks = storeLookSource(entities, { entityMap, ...L2 });
+    ck("  ...and the map paints the critical lock red as the Cockpit counts it critical",
+       deviceLook("lock.c", looks).mark === "critical" && devices.isCritical("lock.c"), deviceLook("lock.c", looks).mark);
+  }
   const hid = (id) => id === "light.h";
   const m = { critical: new Set(["lock.c"]), isHidden: hid, faults: new Set(["pump.f"]) };
   const L = lookMarks(m);

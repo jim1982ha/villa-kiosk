@@ -194,10 +194,9 @@ function selectableDeviceIds(
   entities: Record<string, HassEntity>,
   dismissed: ReadonlySet<string>,
   repOf: ReadonlyMap<string, string>,
-  hidden: ReadonlySet<string>,
+  isHidden: (entityId: string) => boolean,
 ): string[] {
   const reps = new Set<string>();
-  const isHidden = hiddenIn(hidden, repOf);
   for (const id of new Set([...mappedEntityIds, ...Object.keys(entityMap)])) {
     if (entityMap[id]?.disabled) continue;
     if (!mappedEntityIds.has(id) && !entities[id]) continue;
@@ -323,6 +322,30 @@ export interface VillaDeviceInput {
   /** device_id → the whole device it is a part of (registryResolve.deviceUnits): a critical part makes the whole's
    *  placed devices critical (criticalDevices). Absent: each device is its own whole. */
   deviceUnits?: Readonly<Record<string, string>>;
+  /** The villa's marks of each device as the villa model built them ONCE (lookFacts): handed in, they are the very
+   *  objects the map's marks hold. Absent: built here from `critical`, `hidden` and the fold. */
+  facts?: LookFacts;
+}
+
+/** What the villa says of each device besides its state, folded onto its device: on the critical list, hidden in the
+ *  villa's system.
+ *  ⚠️ ONE BUILDER FOR THE MAP AND THE LISTS (architecture review A card 2, 2026-10-22; owner "do this too", 2026-10-30):
+ *  the villa model built the critical set and the hidden test for the map's marks, and villaDevices built them again
+ *  for the device list and the Cockpit, from the same inputs: two answers that only agreed because nothing had changed
+ *  one of them yet. Built once (VillaModel), handed to villaDevices and to the marks, they are the same objects. */
+export interface LookFacts {
+  critical: ReadonlySet<string>;
+  isHidden: (entityId: string) => boolean;
+}
+
+/** The villa's look facts (criticalDevices, hiddenIn), from its critical list, its hidden entities and the fold. They
+ *  change only with the registry, the critical list and the config, never per state push (the map repaints on them). */
+export function lookFacts(input: Pick<VillaDeviceInput, "critical" | "hidden" | "entityDeviceIds" | "deviceUnits">,
+  folding: ReadonlyMap<string, string>): LookFacts {
+  return {
+    critical: criticalDevices(input.critical, folding, input.entityDeviceIds, input.deviceUnits),
+    isHidden: hiddenIn(input.hidden, folding),
+  };
 }
 
 export interface VillaDevices {
@@ -343,12 +366,15 @@ export interface VillaDevices {
   isCritical(entityId: string): boolean;
   /** Hidden in the villa's system (hiddenIn): never one of `ids`, and never red or amber anywhere (its look). */
   isHidden(entityId: string): boolean;
+  /** The facts both answer from (lookFacts): the map's marks hold the same ones (VillaModel). */
+  readonly facts: LookFacts;
 }
 
 export function villaDevices(input: VillaDeviceInput): VillaDevices {
   const folding = input.folding ?? deviceFolding(input.entityMap, input.deviceGroups, input.entityDeviceIds);
+  const facts = input.facts ?? lookFacts(input, folding);
   const ids = selectableDeviceIds(input.entityMap, input.mappedEntityIds, input.entities, input.dismissed, folding,
-    input.hidden);
+    facts.isHidden);
   const set = new Set(ids);
   return {
     ids,
@@ -361,9 +387,9 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     has: (id) => set.has(id),
     deviceOf: (id) => deviceOf(folding, id),
     deviceOfRecord: recordDeviceOf(folding, (id) => id in input.entities),
-    isCritical: ((crit) => (id: string) => crit.has(id))(criticalDevices(input.critical, folding, input.entityDeviceIds,
-      input.deviceUnits)),
-    isHidden: hiddenIn(input.hidden, folding),
+    isCritical: (id) => facts.critical.has(id),
+    isHidden: facts.isHidden,
+    facts,
   };
 }
 
