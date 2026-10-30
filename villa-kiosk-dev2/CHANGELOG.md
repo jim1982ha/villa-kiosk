@@ -1,3 +1,12 @@
+## 2.496.611
+
+What you will see:
+- A device's row in Cockpit › Inbox › Issues, and its card's title, now show an icon for every kind of problem the
+  card holds: the onsen pump shows the alert's icon and the night check's moon, no longer the alert's alone.
+- On a card that shows VESTA's message of an alert, the device's other problems come first, each as one "Also: …"
+  line under the card's name, then the alert with its icon and its Status. Before, the onsen pump's night-check line
+  sat under #96's Status lines and read as part of its history. The card is no taller.
+
 ## 2.496.610
 
 What you will see:
