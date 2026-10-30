@@ -2131,13 +2131,14 @@ def _fm_guest_write_ok(old, new) -> bool:
 
 
 def _fm_guest_steps_ok(updates) -> bool:
-    """A guest report's history: none, or the one raising step — open, no kind, by the Guest profile's name
-    (GUEST_LABEL, the role table's) or nobody."""
+    """A guest report's history: none, or the one raising step — open, no kind, by the Guest profile (its id `role`,
+    and its name GUEST_LABEL, the role table's) or nobody."""
     if updates is None:
         return True
     return (isinstance(updates, list) and len(updates) <= 1
             and all(isinstance(u, dict) and u.get("status") == "open" and not u.get("kind")
-                    and u.get("by") in (None, GUEST_LABEL) and not u.get("who") for u in updates))
+                    and u.get("by") in (None, GUEST_LABEL) and u.get("role") in (None, "guest")
+                    and not u.get("who") for u in updates))
 
 
 def _fm_reader_view(request: web.Request, stored):
@@ -3210,11 +3211,12 @@ def _prune_fm_evidence() -> int:
 
 
 async def fm_evidence_post_handler(request: web.Request) -> web.Response:
-    """Store one evidence photo. Owner or facility manager only — this is an
-    operator action, never a guest one."""
-    # Guests too: a photo of the cracked panel is the most useful thing a
-    # guest can contribute, and is worthless if they cannot attach it. What a
-    # guest may then DO with it stays narrow — see _fm_guest_write_ok.
+    """Store one evidence photo, for every profile that may report a fault
+    (`reportFault`), guests included: a photo of the cracked panel is the most
+    useful thing a guest can contribute, and is worthless if they cannot attach
+    it. What a guest may then DO with it stays narrow — see _fm_guest_write_ok.
+    A refusal says why in its `error` (the app shows it: utils/storeSave
+    refusalOf)."""
     if (refused := _refuse(request, "reportFault",
                            "You do not have permission to add evidence.")) is not None:
         return refused

@@ -27,6 +27,7 @@
 // tests/oracles/fm_records.mjs fails when they and the table part.
 import FM_RECORDS from "../../rootfs/usr/share/vesta/fm-records.json" with { type: "json" };
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
+import type { Role } from "@/auth/roles";
 
 /** Who last created or changed a record, when it was not a person
  *  (docs/agent-integration/PLAN.md F6). Set by the ADD-ON, never by this app:
@@ -82,9 +83,12 @@ export interface FmCompletion extends FmProvenance {
   ticketId?: string;
   /** ISO timestamp of when the work was done (not when it was logged). */
   at: string;
-  /** Who RECORDED it: the signed-in profile ("Facility manager"), or the VESTA Agent (stamped by the Kiosk's proxy).
-   *  A completion written before 2.496.428 from a fault may hold the typed name here instead — workedBy reads both. */
+  /** Who RECORDED it: the signed-in profile's label ("Facility Manager"), or the VESTA Agent (stamped by the Kiosk's
+   *  proxy). A completion written before 2.496.428 from a fault, or before 2.496.623 from a schedule, may hold the typed
+   *  name here instead — workedBy reads both. */
   by: string;
+  /** The profile that recorded it (roles.authorStamp): its words are read from the role table, never from `by`. */
+  role?: Role;
   /** Who DID the work, when a name was given: typed in the Kiosk ("Resolved by"), or the person a VESTA Agent
    *  completion is for. Absent: the recorder did it. Read through fmEngine.workedBy — the same two fields as a step's. */
   who?: string;
@@ -141,8 +145,12 @@ export interface FmTicketUpdate {
   at: string;
   /** The status this update moved the fault TO. */
   status: FmTicketStatus;
-  /** The profile that recorded it ("Facility manager"), or "VESTA Agent". */
+  /** The words of who recorded it: the profile's label when stamped ("Facility Manager"), or "VESTA Agent". Shown
+   *  through roles.authorWords, which reads `role` first. */
   by?: string;
+  /** The profile that recorded it (roles.authorStamp, since 2.496.623). ⚠️ A STEP STORED ONLY ITS PROFILE'S WORDS
+   *  before: a renamed profile left its old steps under the old name (architecture review round 8, 2026-10-30). */
+  role?: Role;
   /** The name typed for who handles it or did the work ("Wayan / AC contractor"). */
   who?: string;
   note?: string;

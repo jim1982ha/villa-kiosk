@@ -20,6 +20,7 @@ import { copyText } from "@/utils/clipboard";
 import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfProbe";
 import type { TelemetryKind } from "@/utils/telemetry";
 import { backendFetch } from "@/auth/sessionLost";
+import { refusalOf } from "@/utils/storeSave";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 
@@ -331,8 +332,13 @@ export default function TelemetryPanel() {
       const r = await backendFetch(ingressPath(`telemetry${clear ? "?clear=1" : ""}`),
         { credentials: "same-origin" });
       if (r.status === 404) { setError("This add-on build has no telemetry endpoint yet."); setEvents([]); return; }
-      if (r.status === 403) { setError("Owner profile required to read telemetry."); setEvents([]); return; }
-      if (!r.ok) { setError(`Couldn't load telemetry (HTTP ${r.status}).`); setEvents([]); return; }
+      // a refusal says the add-on's own reason (utils/storeSave refusalOf), never one guessed from the status
+      if (!r.ok) {
+        const why = await refusalOf(r);
+        setError(why ? `The add-on refused: ${why}` : `Couldn't load telemetry (HTTP ${r.status}).`);
+        setEvents([]);
+        return;
+      }
       const d = (await r.json()) as { events?: TelemetryEvent[] };
       // A clearing read RETURNS the events it deleted — that is the endpoint's
       // whole "read and empty in one trip" contract, and it is right for a

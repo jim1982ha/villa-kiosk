@@ -87,7 +87,7 @@ ck("  ...counted as an open fault, listed on the Overview, absent from Tickets",
 
 console.log("\n  Mark in progress: one ticket per device, each fault its own record:");
 let d = fm([rec("a", "sensor.pump_energy"), rec("b", "sensor.pump_power"), rec("c", "lock.door")]);
-d = E.withTicketsAdvanced(d, ["a", "b"], "in_progress", { who: "Wayan", photoIds: [] }, undefined, k, "Owner");
+d = E.withTicketsAdvanced(d, ["a", "b"], "in_progress", { who: "Wayan", photoIds: [] }, undefined, k, "owner");
 const inProg = d.tickets.filter((t) => t.status === "in_progress");
 ck("both of the pump's faults are in progress, in one edit; the lock's is untouched",
    inProg.map((t) => t.id).sort().join() === "a,b" && d.tickets.find((t) => t.id === "c").status === "open");
@@ -474,7 +474,7 @@ console.log("\n  a Need help pressed is said on its card, and asked once (archit
   const { applyFmCommand } = await import("@/fm/fmCommands");
   const { momentText } = await import("@/utils/dateText");
   const at = "2026-10-30T09:20:00.000Z";
-  const press = (d, ids) => applyFmCommand(d, { type: "helpTickets", ids }, { now: at, id: (p) => `${p}-x`, by: "Owner" });
+  const press = (d, ids) => applyFmCommand(d, { type: "helpTickets", ids }, { now: at, id: (p) => `${p}-x`, by: "owner" });
   const pump = [rec("a", "sensor.pump_power"), { ...rec("b", "sensor.pump_energy"), status: "in_progress" }];
   const before = fm(pump), after = press(before, ["a", "b"]);
   // the Inbox's card, built as Messages builds it, from the records

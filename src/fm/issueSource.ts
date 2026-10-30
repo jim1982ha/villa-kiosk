@@ -3,7 +3,7 @@
 // issue", drawn as an icon in place of the warning sign — components/fm/sourceIcons.tsx; the legend is the (i)'s).
 // Pure: tests/oracles/live_issues.mjs drives it by value.
 
-import { ROLE_LABELS } from "@/auth/roles";
+import { roleOfStamp, type Role } from "@/auth/roles";
 import { AGENT_ORIGINS, AGENT_SOURCE, type FmTicket } from "./fmTypes";
 
 /** live: what the Kiosk's map shows right now (unavailable, missing, a red badge) — clears by itself. alert / night /
@@ -27,6 +27,10 @@ export const ISSUE_SOURCES: readonly IssueSource[] =
 /** The sources only a VESTA Agent produces: the legend leaves them out when there is none (agentView.agentVisible). */
 export const AGENT_SOURCES: ReadonlySet<IssueSource> = new Set(["alert", "night", "chat"]);
 
+/** The source of a ticket a profile opened ("Open a ticket"); a guest's comes through Report a problem (reportedBy),
+ *  so a guest-stamped first step is a person's. */
+const SOURCE_OF_PROFILE: Record<Role, IssueSource> = { owner: "owner", ops: "fm", guest: "person" };
+
 /** A fault's source — from what its record says, never from its words: the Agent's `origin` (or its alert number),
  *  a guest's mark, else the profile its first step names (fmCommands.addTicket stamps it). */
 export function faultSource(t: Pick<FmTicket, "source" | "origin" | "alertNumber" | "reportedBy" | "updates">): IssueSource {
@@ -38,6 +42,7 @@ export function faultSource(t: Pick<FmTicket, "source" | "origin" | "alertNumber
     // within minutes; the one it cannot is a fault a chat made before then — so a fault without one reads as Chat.
     return typeof t.alertNumber === "number" ? "alert" : "chat";
   }
-  const by = t.updates?.[0]?.by;
-  return by === ROLE_LABELS.owner ? "owner" : by === ROLE_LABELS.ops ? "fm" : "person";
+  // its profile's id, or the words an older step was stamped with read as one (roles.roleOfStamp)
+  const role = roleOfStamp(t.updates?.[0]);
+  return role ? SOURCE_OF_PROFILE[role] : "person";
 }

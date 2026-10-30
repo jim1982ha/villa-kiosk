@@ -23,10 +23,10 @@ const lessDone = E.withoutCompletion(c1, done.id);
 ck("erasing the completion erases its cost too (one event)", lessDone.completions.length === 0 && lessDone.costs.length === 0);
 
 const t0 = { ...EMPTY_FM_DATA, tickets: [{ id: "t1", status: "open", openedAt: "2026-09-26T00:00:00.000Z", photoIds: ["a"], title: "Leak" }] };
-const picked = E.withTicketAdvanced(t0, "t1", "in_progress", { who: "Op", photoIds: ["b"] }, undefined, k("2026-09-27T08:00:00.000Z"), "Facility manager");
+const picked = E.withTicketAdvanced(t0, "t1", "in_progress", { who: "Op", photoIds: ["b"] }, undefined, k("2026-09-27T08:00:00.000Z"), "ops");
 ck("picking a fault up is a step: no completion, no resolution time, the photo joins the fault",
    picked.completions.length === 0 && picked.tickets[0].resolvedAt === undefined && picked.tickets[0].photoIds.join() === "a,b" && picked.tickets[0].updates.length === 1);
-const fixed = E.withTicketAdvanced(picked, "t1", "resolved", { who: "Op", note: "Fixed", photoIds: ["c"] }, cost, k("2026-09-27T12:00:00.000Z"), "Owner");
+const fixed = E.withTicketAdvanced(picked, "t1", "resolved", { who: "Op", note: "Fixed", photoIds: ["c"] }, cost, k("2026-09-27T12:00:00.000Z"), "owner");
 ck("resolving files ONE completion linked to the fault, with its cost, stamped now",
    fixed.completions.length === 1 && fixed.completions[0].ticketId === "t1" && fixed.costs.length === 1
    && fixed.completions[0].costId === fixed.costs[0].id && fixed.tickets[0].resolvedAt === "2026-09-27T12:00:00.000Z");
@@ -42,24 +42,26 @@ ck("reopening clears the resolution time (a stale one corrupts every MTTR figure
   ck("  ...and moving an OPEN fault to open is no reopening",
      E.withTicketAdvanced(t0, "t1", "open", { photoIds: [] }, undefined, k()).tickets[0].updates.at(-1).kind === undefined);
   ck("every step records the profile that recorded it and the name typed for who did it",
-     p.by === "Facility manager" && p.who === "Op" && f.by === "Owner" && f.who === "Op", [p, f]);
+     p.by === "Facility Manager" && p.role === "ops" && p.who === "Op" && f.by === "Owner" && f.role === "owner" && f.who === "Op", [p, f]);
   // ⚠️ A DELIBERATE REVERSAL (owner, 2026-10-19): this pinned `completions[0].by === "Op"` — the typed name in `by`,
   // while an Agent completion's `by` is the recorder (the agent) and `who` the person. A person's completion is now
   // written like a step: `by` the profile, `who` the typed name; workedBy is the one reader, old rows included.
-  const bare = E.withTicketAdvanced(picked, "t1", "resolved", { photoIds: [] }, undefined, k(), "Owner").completions[0];
+  const bare = E.withTicketAdvanced(picked, "t1", "resolved", { photoIds: [] }, undefined, k(), "owner").completions[0];
   ck("  ...the completion too: `by` the profile that recorded it, `who` the typed name (absent when none was typed)",
-     fixed.completions[0].by === "Owner" && fixed.completions[0].who === "Op" && bare.by === "Owner" && !("who" in bare),
+     fixed.completions[0].by === "Owner" && fixed.completions[0].role === "owner" && fixed.completions[0].who === "Op"
+     && bare.by === "Owner" && bare.role === "owner" && !("who" in bare),
      [fixed.completions[0], bare]);
   ck("  ...and the work done reads the typed name, else the profile's, old rows included (workedBy)",
-     E.workedBy(fixed.completions[0]) === "Op" && E.workedBy(bare) === "Owner" && E.workedBy({ by: "Op" }) === "Op");
+     E.workedBy(fixed.completions[0]) === "Op" && E.workedBy(bare) === "Owner" && E.workedBy({ by: "Op" }) === "Op"
+     && E.workedBy({ by: "Facility manager" }) === "Facility Manager");
 }
 ck("an unknown fault changes nothing", E.withTicketAdvanced(t0, "nope", "resolved", { photoIds: [] }, cost, k()) === t0);
 {
   // review 29: a person's rename is a step — who, the title before and after — and a patch that keeps the title is none
-  const renamed = E.withTicketPatch(t0, "t1", { title: "Leak — part ordered" }, { now: "2026-09-27T14:00:00.000Z" }, "Facility manager");
+  const renamed = E.withTicketPatch(t0, "t1", { title: "Leak — part ordered" }, { now: "2026-09-27T14:00:00.000Z" }, "ops");
   const step = renamed.tickets[0].updates?.at(-1);
   ck("a rename in the editor records a retitled step with who, the title before and after",
-     step && step.kind === "retitled" && step.by === "Facility manager" && step.was === "Leak" && step.title === "Leak — part ordered"
+     step && step.kind === "retitled" && step.by === "Facility Manager" && step.role === "ops" && step.was === "Leak" && step.title === "Leak — part ordered"
      && step.status === "open", step);
   ck("  ...a patch that does not change the title records no step",
      E.withTicketPatch(t0, "t1", { note: "x", title: "Leak" }, { now: "later" }).tickets[0].updates === undefined);
@@ -87,7 +89,7 @@ ck("a patch to resolved stamps the time; one that keeps it keeps it",
 
 const ctx = readFileSync(new URL("../../src/fm/FmDataContext.tsx", import.meta.url), "utf8");
 ck("the provider writes nothing itself: every change is one applyFmCommand, who and when stamped there",
-   /mutate\(\(d\) => applyFmCommand\(d, cmd, \{ \.\.\.stamp\(\), by: role \? ROLE_LABELS\[role\] : undefined \}\), elevation\)/.test(ctx)
+   /mutate\(\(d\) => applyFmCommand\(d, cmd, \{ \.\.\.stamp\(\), by: role \?\? undefined \}\), elevation\)/.test(ctx)
    && !/=> \(\{\s*\.\.\.d,/.test(ctx) && !/resolvedAt:/.test(ctx) && !/withTicket|withCompletion|withoutCost/.test(ctx));
 
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }

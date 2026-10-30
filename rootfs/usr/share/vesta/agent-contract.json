@@ -12,7 +12,7 @@
   },
   "_entityPattern": "An entity id as the VESTA Agent may name one (kiosk-rooms, the villa model): the Kiosk's proxy checks every id against it before it reaches a template. (Until 2.496.445 this sat in `message`, with the message channel the agent never used: /agent/v1/messages and /choices were removed with the Kiosk's agent window.)",
   "entityPattern": "^[a-z_]+\\.[a-z0-9_]+$",
-  "_ticketUpdate": "One step in a Facility fault's history (FmTicketUpdate in src/fm/fmTypes.ts; the VESTA Agent writes them through /agent/v1/fm-data). `kind` says what the step is, so neither side reads a note's first words: none = a status step (raised, picked up, resolved; `by` the profile that recorded it, `who` the name typed for who does the work); reopened = a resolved fault open again (`by` who reopened it); retitled = the VESTA Agent changed the title (`title` the new one, `was` the one before); reading = what the VESTA Agent reads now on a fault whose title a person changed (`title`): the person's title stays; noted = a line of what happened about the fault on Telegram (a reminder or an escalation sent, a button pressed), `note` its words and `at` when — it changes neither the status nor the title, and a Kiosk lists it in /agent/v1/info `step_kinds` before the VESTA Agent writes one; cleared = resolved with no work done (the Kiosk's \"Close — no action needed\", the agent's own clearing of a problem gone) — never a repair in any figure; help = a person pressed Need help on the fault's card (`by` who, `at` when): it changes neither the status nor the title, and the VESTA Agent asks the owner to act (an alert's escalation, or an alert opened already escalated for a fault with none). A step the VESTA Agent writes carries `title` when it gives the fault one, and `was` when it changes it. A completion the agent writes for a person's Done carries `who`, the person (its `by` is the agent's, stamped by the Kiosk).",
+  "_ticketUpdate": "One step in a Facility fault's history (FmTicketUpdate in src/fm/fmTypes.ts; the VESTA Agent writes them through /agent/v1/fm-data). `kind` says what the step is, so neither side reads a note's first words: none = a status step (raised, picked up, resolved; `by` the profile that recorded it, `who` the name typed for who does the work). A step a person's profile writes carries `role`, the profile's id (owner, ops, guest), beside `by`, its label: its words are `profiles.<role>` (2.496.623; older steps carry `by` only); reopened = a resolved fault open again (`by` who reopened it); retitled = the VESTA Agent changed the title (`title` the new one, `was` the one before); reading = what the VESTA Agent reads now on a fault whose title a person changed (`title`): the person's title stays; noted = a line of what happened about the fault on Telegram (a reminder or an escalation sent, a button pressed), `note` its words and `at` when — it changes neither the status nor the title, and a Kiosk lists it in /agent/v1/info `step_kinds` before the VESTA Agent writes one; cleared = resolved with no work done (the Kiosk's \"Close — no action needed\", the agent's own clearing of a problem gone) — never a repair in any figure; help = a person pressed Need help on the fault's card (`by` who, `at` when): it changes neither the status nor the title, and the VESTA Agent asks the owner to act (an alert's escalation, or an alert opened already escalated for a fault with none). A step the VESTA Agent writes carries `title` when it gives the fault one, and `was` when it changes it. A completion the agent writes for a person's Done carries `who`, the person (its `by` is the agent's, stamped by the Kiosk).",
   "ticketUpdate": {
     "kinds": [
       "reopened",
@@ -509,7 +509,8 @@
           "photoIds": [],
           "who": "Jean-Marie",
           "note": "On my way",
-          "by": "Owner"
+          "by": "Owner",
+          "role": "owner"
         }
       ]
     },
@@ -727,6 +728,46 @@
       {"why": "no key", "kept": false, "turn": {"profile": "ops", "text": "x"}},
       {"why": "a key longer than limits.key", "kept": false, "turn": {"key": "turn:99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", "profile": "ops", "text": "x"}}
     ]
+  },
+  "_profiles": "Each Kiosk profile's words and what it may read, for the VESTA Agent (architecture review round 8, 2026-10-30): DERIVED from the Kiosk's role table (rootfs/usr/share/vesta/roles.json) and its read rule (ha-commands.json `readDomains`), and held equal to them by tests/oracles/agent_profiles.mjs and tests/proxy-rules.py, so the Agent asks the agreement and never copies the rule. Keyed by profile (owner, ops, guest: conversation.profiles names the role the Agent answers each with). WORDS: `label` the profile's name on the tablet, Telegram and every report (\"Facility Manager\"); `short` where space is tight (an alert card's \"To: FM\"); `initials` the round badge; `description` the line under it on the sign-in card. A step a profile writes on a Facility fault (ticketUpdate) carries `role`, the profile's id, beside `by`, its label: read the words from `role` here (a step written before 2.496.623 carries `by` only, one of `label` or `formerLabels`; a step with neither is the VESTA Agent's or nobody's, `by` as written). READS: what a person signed in as that profile is shown on the tablet, so VESTA answering that person on the tablet tells them no more. An entity X may be read when ALL of these hold: (1) X's domain (the part of its id before the dot) is in `domains` (\"all\": every domain) - what the Kiosk's proxy relays to that profile at all (_read_allowed: `readDomains`, a camera only to a profile shown cameras; a light's scene choice, ha-commands.json `sceneSelect`, to every profile); (2) X's device type is not in `deniedTypes` - the type is the device's `type` in /agent/v1/villa-model, which is its domain unless the owner set another in Advanced Settings (src/auth/permissions.ts isTypeAllowed matches the type EXACTLY: \"binary_sensor\" hides every binary sensor, motion, presence, occupancy, door, window and leak alike, whatever its device_class; \"camera\" every camera, its pictures and its video too); (3) X's device category is in `categories` (\"all\": every category) - the category is the device's `category` in /agent/v1/villa-model, the map group the Kiosk shows it in (the Kiosk's own answer, owner's picks included: never re-derive it); a device the villa model gives no category is judged by (1) and (2) alone (permissions.isMappingAllowed; config/villaVisibility visibleTo). `people`: who is home and since when (the `seePeople` capability), in any form: a person, a tracker, an occupancy count or a summary of who arrived. NOT CARRIED: the tablet also lists, for a profile without `listUnmappedDevices`, only the devices placed on the 3D map; the Agent knows no map, and judges an off-map device by the rules above.",
+  "profiles": {
+    "owner": {
+      "label": "Owner",
+      "short": "Owner",
+      "initials": "O",
+      "description": "Everything at a glance: protection, energy, water, internet.",
+      "reads": {
+        "domains": "all",
+        "deniedTypes": [],
+        "categories": "all",
+        "people": true
+      }
+    },
+    "ops": {
+      "label": "Facility Manager",
+      "short": "FM",
+      "initials": "FM",
+      "description": "On-site view: device health, batteries, what needs attention.",
+      "formerLabels": ["Facility manager"],
+      "reads": {
+        "domains": ["light", "climate", "lock", "camera", "cover", "fan", "binary_sensor", "sensor", "media_player", "switch", "input_boolean", "assist_satellite", "sun", "scene", "weather"],
+        "deniedTypes": [],
+        "categories": "all",
+        "people": false
+      }
+    },
+    "guest": {
+      "label": "Guest",
+      "short": "Guest",
+      "initials": "G",
+      "description": "Enjoy the villa: comfort, lights, music and doors.",
+      "reads": {
+        "domains": ["light", "climate", "lock", "cover", "fan", "binary_sensor", "sensor", "media_player", "switch", "input_boolean", "assist_satellite", "sun", "scene", "weather"],
+        "deniedTypes": ["camera", "binary_sensor"],
+        "categories": ["comfort", "light", "network", "access_control"],
+        "people": false
+      }
+    }
   },
   "_stageMarks": "What starts an alert's bottom line, by its stage (review Q 3, 2026-10-28): the VESTA Agent writes it (vesta_shared/message_format.py STAGE_ICONS, and the villa's message template it generates) and the Kiosk reads an announcement's stage back from it (src/messages/announcements.ts stageOf): new, existing, and the two ends, watch (cleared, still watched) and closed. Read from here by both: a mark changed on one side alone made a cleared alarm read as new on the tablet.",
   "stageMarks": {

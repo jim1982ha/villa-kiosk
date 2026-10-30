@@ -26,6 +26,8 @@ import RecordCard from "./RecordCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import FormActions from "./FormActions";
+import WorkerPicker from "./WorkerPicker";
+import { useWorkFields } from "./useWorkFields";
 import Tip from "@/components/common/Tip";
 
 /** The engine's sentence (fmEngine.dueLine — the recap's too) with the date in the reader's locale. Same wording
@@ -173,17 +175,14 @@ function LogCompletion({
   scheduleId: string;
   onCancel: () => void;
   onSave: (
-    c: { scheduleId: string; at: string; by: string; note?: string; photoIds: string[] },
+    c: { scheduleId: string; at: string; by: string; who?: string; note?: string; photoIds: string[] },
     cost?: { amountIdr: number; label: string; category: "minor" | "major" },
   ) => Promise<string | null>;   // null = saved/queued; else why it was refused
   onOpenEntity: (id: string) => void;
 }) {
   const { data } = useFmData();
   const schedule = data.schedules.find((s) => s.id === scheduleId);
-  const [by, setBy] = useState("");
-  const [note, setNote] = useState("");
-  const [photoIds, setPhotoIds] = useState<string[]>([]);
-  const [amount, setAmount] = useState("");
+  const { who, setWho, note, setNote, photoIds, setPhotoIds, amount, setAmount, work } = useWorkFields();
   const [saving, setSaving] = useState(false);
   /** Why the save was refused — the form keeps what was typed (2.496.252). */
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -194,11 +193,11 @@ function LogCompletion({
     <div className="fm-form">
       <h3>Log: {schedule?.title}</h3>
 
-      <label className="fm-field">
+      {/* the names already given, picked (WorkerPicker); `by` is the signed-in profile, stamped by the store */}
+      <div className="fm-field">
         <span>Done by</span>
-        <input value={by} onChange={(e) => setBy(e.target.value)}
-          placeholder="Name or company" />
-      </label>
+        <WorkerPicker value={who} onChange={setWho} placeholder="Name or company" />
+      </div>
 
       <NotesField
         label="Note (optional)"
@@ -222,7 +221,7 @@ function LogCompletion({
             setSaving(true);
             setSaveError(null);
             const refused = await onSave(
-              { scheduleId, at: new Date().toISOString(), by: by.trim(), note: note.trim() || undefined, photoIds },
+              { scheduleId, at: new Date().toISOString(), by: "", ...work() },
               amountIdr > 0
                 ? { amountIdr, label: schedule?.title ?? "Maintenance", category: "minor" }
                 : undefined,

@@ -41,10 +41,13 @@ ck("the sample — made from an alert — reads as an alert, its number kept", f
 const k = { now: "2026-10-15T01:09:00.000Z", id: (p) => `${p}-1` };
 const fault = { ...T.sample, status: "open", updates: T.sample.updates.slice(0, 2) };
 const data = { schedules: [], completions: [], costs: [], tickets: [fault], savedDocuments: [] };
-const after = E.withTicketsAdvanced(data, [fault.id], "in_progress", { who: "Jean-Marie", photoIds: [] }, undefined, k, "Owner");
+const after = E.withTicketsAdvanced(data, [fault.id], "in_progress", { who: "Jean-Marie", photoIds: [] }, undefined, k, "owner");
 const step = after.tickets[0].updates.at(-1);
 ck("\"Open Ticket\" writes the agreement's take-on step: in progress, no kind, not the agent's stamp",
-   step.status === T.takenStep.status && !step.kind && step.by !== T.agentStamp && step.by === "Owner", step);
+   step.status === T.takenStep.status && !step.kind && step.by !== T.agentStamp && step.by === "Owner" && step.role === "owner", step);
+// the sample's person's step is the shape a Kiosk writes since 2.496.623: the profile's id beside its words
+ck("  ...the agreement's sample step carries the profile's id and words, as the Kiosk writes them",
+   T.sample.updates.some((u) => u.role === "owner" && u.by === after.tickets[0].updates.at(-1).by));
 ck("  ...and the sample's own take-on step is one too",
    T.sample.updates.filter((u) => u.status === "in_progress" && !u.kind && u.by !== T.agentStamp).length === 1);
 

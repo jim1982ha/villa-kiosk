@@ -137,8 +137,13 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
     { at: at(5), status: "in_progress", by: "VESTA Agent", kind: "reading", title: "Front door unavailable", photoIds: [] }] };
   const renamedByHand = { ...t, title: "Motion battery — ordered", updates: [...t.updates,
     { at: at(5), status: "in_progress", by: "Facility manager", kind: "retitled", title: "Motion battery — ordered", was: "Motion battery at 7%", photoIds: [] }] };
-  ck("a person's rename says what it was and who renamed it (review 29)",
-     faultNoteLines(renamedByHand, stamp).at(-1) === "Was: Motion battery at 7% (renamed by Facility manager, 10-10 05)", faultNoteLines(renamedByHand, stamp));
+  // the step stored the profile's words of its day ("Facility manager", to 2.496.622): read as that profile, named as it
+  // is called now (architecture review round 8, 2026-10-30: roles.authorWords)
+  ck("a person's rename says what it was and who renamed it (review 29), the profile named as it is called now",
+     faultNoteLines(renamedByHand, stamp).at(-1) === "Was: Motion battery at 7% (renamed by Facility Manager, 10-10 05)", faultNoteLines(renamedByHand, stamp));
+  const byId = { ...renamedByHand, updates: renamedByHand.updates.map((u, i, all) => i === all.length - 1 ? { ...u, by: "Ops", role: "ops" } : u) };
+  ck("  ...a step that carries the profile's id is named from it, whatever words it stored",
+     faultNoteLines(byId, stamp).at(-1) === "Was: Motion battery at 7% (renamed by Facility Manager, 10-10 05)", faultNoteLines(byId, stamp));
   const reopenedRenamed = { ...t, status: "open", title: "Pump plug offline again", updates: [...t.updates,
     { at: at(6), status: "resolved", by: "VESTA Agent", note: "Cleared: the check no longer sees it.", photoIds: [] },
     { at: at(7), status: "open", by: "VESTA Agent", kind: "reopened", title: "Pump plug offline again",

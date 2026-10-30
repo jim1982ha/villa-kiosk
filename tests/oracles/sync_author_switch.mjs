@@ -73,7 +73,7 @@ await page.act(async () => { await started; }); await turn();
 srv.putDelay = 1;
 for (let i = 0; i < 2; i++) { await page.act(async () => { await fm.reload(); }); await turn(); }
 ck("the facility manager's Started lands and stays after the next profile's refreshes", status() === "in_progress"
-   && srv.puts.length === 1 && /in_progress by Facility manager/.test(steps()), { puts: srv.puts, steps: steps() });
+   && srv.puts.length === 1 && /in_progress by Facility Manager/.test(steps()), { puts: srv.puts, steps: steps() });
 ck("  ...and the next profile's screen shows it", fm.data.tickets.find((t) => t.id === "t1").status === "in_progress");
 
 console.log("\n  k3, work held for another profile:");
@@ -82,7 +82,7 @@ srv.down = true;
 await page.act(async () => { await fm.advanceTickets(["t1"], "in_progress", { photoIds: [] }); });
 await page.act(async () => { prof.login("guest"); await sleep(5); }); await turn();
 ck("a guest, who may not send the facility manager's work, is told it waits on this tablet",
-   fm.heldFor.length === 1 && heldLine(fm.heldFor) === "Work by the facility manager is waiting on this tablet: it is sent as soon as someone allowed to send it signs in here.",
+   fm.heldFor.length === 1 && heldLine(fm.heldFor) === "Work by the Facility Manager is waiting on this tablet: it is sent as soon as someone allowed to send it signs in here.",
    fm.heldFor);
 await page.act(async () => { await fm.addTicket({ title: "Shower drain blocked", photoIds: [], reportedBy: "guest" }); });
 await page.act(async () => { prof.login("owner"); await sleep(5); }); await turn();
@@ -90,7 +90,7 @@ srv.down = false;
 for (let i = 0; i < 3; i++) { await page.act(async () => { await fm.reload(); }); await turn(); }
 const drain = srv.data.tickets.find((t) => t.title === "Shower drain blocked");
 ck("the owner sends both: the facility manager's Started and the guest's report, each step under its own author",
-   status() === "in_progress" && /in_progress by Facility manager/.test(steps()) && !!drain && drain.updates.every((u) => u.by === "Guest"),
+   status() === "in_progress" && /in_progress by Facility Manager/.test(steps()) && !!drain && drain.updates.every((u) => u.by === "Guest"),
    { steps: steps(), drain: drain?.updates });
 ck("  ...nothing is left kept on the tablet, nothing said waiting, and the 04:00 reload no longer waits",
    kept().length === 0 && fm.heldFor.length === 0 && !unsentWorkHeld(), { kept: kept(), held: fm.heldFor });

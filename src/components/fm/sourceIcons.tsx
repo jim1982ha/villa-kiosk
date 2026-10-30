@@ -5,7 +5,7 @@
 
 import { CalendarCog, MessageCircle, MoonStar, Radio, Siren, UserRound } from "lucide-react";
 import type { AriaAttributes, ComponentType } from "react";
-import { ROLE_INITIALS, type Role } from "@/auth/roles";
+import { ROLE_INITIALS, ROLE_LABELS, type Role } from "@/auth/roles";
 import type { AttentionSeverity } from "@/config/attention";
 import type { IssueSource } from "@/fm/issueSource";
 
@@ -34,7 +34,8 @@ export const SOURCE_ICON: Record<IssueSource, IconType> = {
  *  (owner: "keep the night icon so that user knows it has been created by the nightly check"). */
 export const SOURCE_WORDS: Record<IssueSource, string> = {
   live: "Live", alert: "Alert", night: "Maintenance check", chat: "Chat",
-  owner: "Owner", fm: "Facility manager", person: "Person", guest: "Guest", schedule: "Schedule",
+  // a profile's source is its name, from the one role table (architecture review round 8, 2026-10-30)
+  owner: ROLE_LABELS.owner, fm: ROLE_LABELS.ops, person: "Person", guest: ROLE_LABELS.guest, schedule: "Schedule",
 };
 
 /** A problem's source icons, stacked when a line holds two (a device's live state and its fault). Each in its

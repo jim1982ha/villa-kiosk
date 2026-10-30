@@ -1,3 +1,18 @@
+## 2.496.623
+
+What you will see:
+- The facility profile is called "Facility Manager" everywhere on the tablet: the sign-in card, "Signed in as", a
+  ticket's history ("in progress since 14:20 by Facility Manager") and the (i) beside Open a ticket. Tickets saved
+  before say it too.
+- "Done by" in the Today tab, and "Who's handling it" or "Who did the work" when you open a ticket or press Done on
+  it, now list the names already recorded: type a few letters to find one, or tap "Use ..." for a new name. One
+  person is no longer recorded three ways ("Wayan", "wayan").
+- A photo the tablet refuses now says the real reason, as given by the tablet's server, instead of "Only the owner
+  or facility manager can add photos." (guests may add photos). Device telemetry's refusal does the same.
+- VESTA is now told what each profile may see on the tablet. Once VESTA is updated to read it, a guest asking VESTA
+  on the tablet hears only about what the guest's own tablet shows: no people, no motion or door sensors, no
+  cameras. Until then nothing changes.
+
 ## 2.496.622
 
 What you will see:

@@ -2,16 +2,22 @@
   "_what": "What each profile may see and do, declared ONCE. The app (src/auth/permissions.ts) imports this file to decide what each profile is SHOWN; the proxy (rootfs/usr/bin/supervisor-proxy.py, ROLE_CAPABILITIES) reads it to decide what each profile may DO. Change a profile's rights HERE, and nowhere else. Capability names are described where the app declares them (the Capability list in permissions.ts); tests/oracles/role_table.mjs and tests/proxy-rules.py fail on a name neither side knows.",
   "_viewCameras": "Not written as a capability: a profile may view cameras exactly when 'camera' is not among its deniedTypes. The proxy derives viewCameras from that, so the two cannot disagree.",
   "_administer": "Server-side only: exempt from the Home Assistant allow-lists and the service confinement, may revoke every session and read telemetry. The app never asks for it.",
-  "_label": "A profile's display name, declared ONCE (architecture review, 2026-10-19): the sign-in card and 'Signed in as' (src/auth/roles.ts ROLE_LABELS), the stamp on every step a profile writes on a fault ('by Guest', fmCommands) and the word a card reads back to say who raised it (fm/issueSource) — and the name the proxy accepts on a guest's own report (_fm_guest_steps_ok, GUEST_LABEL). It was written in the app and copied as a literal into the proxy and its test. Stored records keep the word they were stamped with: change a label and older steps still read the old one.",
+  "_label": "A profile's words, declared ONCE (architecture review, 2026-10-19; round 8, 2026-10-30): `label` its name on the sign-in card, 'Signed in as', the source of a fault and every report (src/auth/roles.ts ROLE_LABELS); `short` where space is tight (an alert card's 'To: FM'); `initials` the round signed-in badge and a fault's source icon; `description` the line under it on the sign-in card. The VESTA Agent reads the same words from the agreement (agent-contract.json `profiles`, held equal to this table by tests/oracles/agent_profiles.mjs). A step a profile writes on a fault stores its id (`role`) beside its label (`by`, the words the VESTA Agent wrote to Telegram before it read `role`), so a renamed profile renames its old steps too. `formerLabels`: the words a step was stamped with before it carried `role` (fm steps written until 2.496.622 said 'Facility manager'): read as that profile. The proxy accepts a guest's own report only as the Guest's (`role` guest, `by` its label: _fm_guest_steps_ok, GUEST_LABEL).",
   "profiles": {
     "guest": {
       "label": "Guest",
+      "short": "Guest",
+      "initials": "G",
+      "description": "Enjoy the villa: comfort, lights, music and doors.",
       "allowedCategories": ["comfort", "light", "network", "access_control"],
       "deniedTypes": ["camera", "binary_sensor"],
       "capabilities": ["controlEntities", "openSettings", "customizeAppearance", "reportFault"]
     },
     "owner": {
       "label": "Owner",
+      "short": "Owner",
+      "initials": "O",
+      "description": "Everything at a glance: protection, energy, water, internet.",
       "allowedCategories": "all",
       "deniedTypes": [],
       "capabilities": [
@@ -21,7 +27,11 @@
       ]
     },
     "ops": {
-      "label": "Facility manager",
+      "label": "Facility Manager",
+      "short": "FM",
+      "initials": "FM",
+      "description": "On-site view: device health, batteries, what needs attention.",
+      "formerLabels": ["Facility manager"],
       "allowedCategories": "all",
       "deniedTypes": [],
       "capabilities": [
