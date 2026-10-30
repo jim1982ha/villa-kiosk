@@ -73,6 +73,7 @@ from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device re
 from vesta_shared.limits import limit  # noqa: E402
 from vesta_shared.offline import device_answers, watched_kinds  # noqa: E402  (a device that answers is not offline)
 from vesta_shared.past import Logbook  # noqa: E402
+from vesta_shared.history_memory import remembered  # noqa: E402  (the offline devices' past, kept between ticks)
 import rules as R  # noqa: E402
 
 
@@ -173,8 +174,10 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_m
     ids = sorted({r["entity_id"] for fam in watched_kinds() for r in pack.entities(fam)})
     at = now.astimezone(ZoneInfo(zone))
     found, moved = [], []
+    # since when each device is offline, from the past kept between ticks (HISTORY_KEPT): read again whole on every
+    # tick, that was the recheck's 41.9 s, then 89.6 s (owner, 2026-10-30)
     for f in N.offline_findings(pack, client().states(ids), at, params, set(N.alerted_offline(store, pack)),
-                                history=client().history, states_of=client().states):
+                                history=remembered(client(), store, HISTORY_KEPT, now), states_of=client().states):
         row = store.open_finding(f.rule_id, f.entity_id)
         if row:
             moved += Problems(store).seen(row["id"], now.isoformat(), settle_minutes)
@@ -205,6 +208,8 @@ DAY_SETTLE_MINUTES = limit("recheck.day_settle_minutes", 15, unit="minutes", gro
 #: a day. The rows a count needs are kept (the restarts, and every row of an entity that went offline), and each tick
 #: reads only the minutes since the last one: the same count as a whole read (test_recheck_all).
 LOOPBOOK = "pm-loopbook"
+#: The offline devices' past kept between ticks (vesta_shared.history_memory), for since when each is offline.
+HISTORY_KEPT = "pm-offline-history"
 
 
 def _battery_rows(pack, f: dict) -> list[dict]:

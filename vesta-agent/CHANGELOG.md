@@ -1,3 +1,16 @@
+## 0.12.407
+
+What you will see:
+- VESTA's check of every open problem, every 5min, no longer re-reads each offline device's last week one device at a
+  time: it took 41.9s, then 89.6s this afternoon, and should now take a few seconds. Everything else that reads a
+  device's past (the night check, the reports, VESTA's answers) asks for all the devices at once, so it is faster too.
+- Every alert VESTA follows now shows on the tablet as on Telegram, with its message and Done / Need help, even when
+  the tablet missed it (its app restarting, or VESTA started while it was down): VESTA sends it again within a few
+  minutes.
+- A short spoken answer ("D'accord.") is said in the language you asked in, no longer by the English voice. With
+  `languages: [en, fr]` in the villa-concierge skill's villa.voice.yaml, VESTA only ever tells your languages apart
+  among those.
+
 ## 0.12.406
 
 What you will see:

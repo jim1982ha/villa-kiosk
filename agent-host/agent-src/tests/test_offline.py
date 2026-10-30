@@ -193,7 +193,8 @@ def test_every_caller_reads_since_when_from_history():
     # names devices and never says how long: tests/test_villa_status.py)
     # (and the night check and its recheck ask whether the device answers through any entity, the close's question)
     files = {"preventive-maintenance/scripts/nightly.py": "history=cli.history, states_of=cli.states)",
-             "preventive-maintenance/scripts/recheck.py": "history=client().history, states_of=client().states)",
+             "preventive-maintenance/scripts/recheck.py":
+                 "history=remembered(client(), store, HISTORY_KEPT, now), states_of=client().states)",
              "reports/scripts/facts.py": 'history=getattr(getattr(self, "cli", None), "history", None))'}
     for f, call in files.items():
         assert call in open(os.path.join(STARTER_SKILLS, f), encoding="utf-8").read(), f

@@ -102,8 +102,15 @@ def inbox_timeout_s() -> float:
 def message_timeout_s() -> float:
     return limit("kiosk.message_timeout_s", 10, unit="seconds", group="run", lo=2, hi=120,
                  says="How long the agent waits for the VESTA Kiosk to keep a message for the tablet.",
-                 reached="That copy is not kept for the tablet; Telegram's message is unaffected, and the next change "
-                         "of the message tries again.", told="")
+                 reached="That copy is not kept for the tablet yet; Telegram's message is unaffected, and the copy is "
+                         "sent again (kiosk.message_retry_s).", told="")
+
+
+def message_retry_s() -> float:
+    return limit("kiosk.message_retry_s", 300, unit="seconds", group="run", lo=30, hi=3600,
+                 says="How often a message the VESTA Kiosk did not keep for the tablet (unreachable, restarting, "
+                      "refused) is sent to it again.",
+                 reached="The copy is sent again; the newest copy of each message, never an older one.", told="")
 
 
 class KioskError(RuntimeError):

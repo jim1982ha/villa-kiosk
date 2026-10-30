@@ -104,6 +104,13 @@ class Voice:
                 await self.send(cid, str(plan.get("error") or "This voice message could not be prepared."))
                 return None
             heard = await self.transcriber.run(cid, plan, deadline, started)
+            if isinstance(heard, Heard) and heard.language and isinstance(plan.get("languages"), list) \
+                    and plan["languages"] and str(heard.language).split("-")[0].split("_")[0].lower() \
+                    not in {str(c).lower() for c in plan["languages"]}:
+                # ⚠️ A LANGUAGE OUTSIDE THE VILLA'S IS NOT BELIEVED (architecture review, 2026-10-30, round 3): the
+                # skill names the languages spoken here (villa.voice.yaml `languages:`); one a speech-to-text says it
+                # heard outside them is a guess, never told to the AI as the language the person spoke
+                heard = heard._replace(language=None)
             if isinstance(heard, Heard):
                 await source.heard(heard.text)
                 return heard

@@ -550,3 +550,73 @@ def test_a_step_posted_on_an_alert_keeps_whose_it_is_for_its_redraw(agent, kiosk
     scenario(agent, alert)
     said = [layout.of(rec).get("said") for _c, rec in agent.state.incident_chats(1)]
     assert said and all(isinstance(x, dict) and x.get("incident") == 1 for x in said), said
+
+
+def _owed_now(v):
+    """The housekeeping pass, with what is owed due now (kiosk.message_retry_s reached)."""
+    async def go(_v):
+        v.messages._retry_s = lambda: 0
+        await v.housekeeping()
+    return go
+
+
+def test_a_copy_the_kiosk_could_not_keep_is_sent_again_without_a_new_step(agent, kiosk):
+    # architecture review 2026-10-30, round 3: #97, escalated, kept the tablet's short lines with Open Ticket and Close
+    # while Telegram showed VESTA's card: a copy not kept was tried again only at the alert's next change
+    kiosk.unreachable = True
+    scenario(agent, alert)
+    assert kiosk.messages == {} and agent.tg.sent, "Telegram had the alert; the tablet had nothing yet"
+    kiosk.unreachable = False
+    scenario(agent, _owed_now(agent))
+    rec = kiosk.messages.get("incident:1")
+    assert rec and [b["label"] for b in rec.get("buttons", [])] == ["Done", "Need help"], rec
+    pushed = len(kiosk.pushed)
+    scenario(agent, _owed_now(agent))
+    assert len(kiosk.pushed) == pushed, "nothing owed once kept: never pushed again"
+
+
+def test_an_alert_closed_while_owed_is_sent_closed_never_open(agent, kiosk):
+    async def closed(v):
+        await v.thread.close(1, "Closed on {time}: cleared.")
+
+    # its open copy not kept, then its closed one kept: the open one is no longer owed
+    kiosk.unreachable = True
+    scenario(agent, alert)
+    kiosk.unreachable = False
+    scenario(agent, closed, _owed_now(agent))
+    assert len(kiosk.pushed) == 1, kiosk.pushed
+    rec = kiosk.messages["incident:1"]
+    assert "Closed on" in rec["status"][-1] and "buttons" not in rec, rec
+    # neither kept: the closed one is the one owed
+    kiosk.messages.clear()
+    kiosk.pushed.clear()
+    kiosk.unreachable = True
+    scenario(agent, lambda v: alert(v, context="RUN-2", mid=600))
+    iid = max(int(k.split(":")[1]) for k, _r in agent.messages._owed.items())
+
+    async def closed2(v):
+        await v.thread.close(iid, "Closed on {time}: cleared.")
+    scenario(agent, closed2)
+    kiosk.unreachable = False
+    scenario(agent, _owed_now(agent))
+    rec = kiosk.messages[f"incident:{iid}"]
+    assert "Closed on" in rec["status"][-1] and "buttons" not in rec and len(kiosk.pushed) == 1, kiosk.pushed
+
+
+def test_open_alerts_reach_a_kiosk_that_was_down_when_the_agent_started(agent, kiosk):
+    scenario(agent, alert, lambda v: tick(v, 20))
+    kiosk.messages.clear()
+    agent.state.db.close()
+    kiosk.unreachable = True
+    again = Vesta(agent.s, telegram=agent.tg, reader=agent.reader, kiosk=agent.kiosk)
+
+    async def start(v):
+        await v.start()
+        await v.messages.settle()
+    asyncio.run(start(again))
+    assert kiosk.messages == {}
+    kiosk.unreachable = False
+    scenario(again, _owed_now(again))
+    rec = kiosk.messages.get("incident:1")
+    assert rec and any("Reminder sent" in line for line in rec["status"]), rec
+    assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Need help"], rec

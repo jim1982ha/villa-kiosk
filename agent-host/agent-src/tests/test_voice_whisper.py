@@ -167,6 +167,16 @@ def through_agent(tmp_path, voice_yaml: dict, whisper=None, stt_answers=(200,), 
     return v.conversed, stt.languages, voice_record(v), v, w
 
 
+def test_a_language_heard_outside_the_villa_s_own_is_never_told_to_the_ai(tmp_path):
+    # architecture review, 2026-10-30, round 3 (Whisper's log: an English question "Detected language 'fr' with
+    # probability 0.51"): villa.voice.yaml names the languages spoken here; a language a speech-to-text says it heard
+    # outside them is a guess, never "spoken in …" to the AI. One of them is told as before.
+    conversed, *_ = through_agent(tmp_path, {"languages": ["en", "de"]}, FRENCH_SAID, language="en")
+    assert [t["text"] for t in conversed] == [FRENCH["text"]] and conversed[0]["spoken"] is None
+    conversed, *_ = through_agent(tmp_path / "b", {"languages": ["en", "fr"]}, FRENCH_SAID, language="en")
+    assert conversed[0]["spoken"] == "fr"
+
+
 def test_whispers_french_words_reach_the_ai_and_the_villa_is_not_asked(tmp_path):
     conversed, asked, rec, v, w = through_agent(tmp_path, {}, language="en")
     assert [t["text"] for t in conversed] == [FRENCH["text"]] and asked == [] and w.connections == 1

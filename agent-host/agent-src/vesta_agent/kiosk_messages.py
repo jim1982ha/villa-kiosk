@@ -7,8 +7,15 @@ call `KioskMessages` with the very parts they drew; nothing here composes a sent
 the Kiosk replaces when the message is rewritten — the tablet shows the message as it stands, as Telegram does.
 
 ⚠️ NEVER IN THE CRITICAL PATH. The push runs in the background with a time limit (kiosk.message_timeout_s): an alert never
-waits on it, a Kiosk that is down or slow loses that copy and nothing else, and the next change of the message tries
-again. The Agent stopped, the villa's own first version (its announcement) is all the tablet has.
+waits on it, and a Kiosk that is down or slow delays that copy and nothing else. The Agent stopped, the villa's own first
+version (its announcement) is all the tablet has.
+
+⚠️ A COPY NOT KEPT IS OWED, NOT LOST (architecture review 2026-10-30, round 3: #97, escalated, showed its short lines
+with Open Ticket and Close on the tablet while #98 showed VESTA's card with Done and Need help). A copy the Kiosk did not
+keep (unreachable, restarting, refused) was tried again only at the message's next change, and an alert with no step
+after it kept the tablet's short list for good. Now the newest copy of each such message is owed and sent again at the
+housekeeping pass (kiosk.message_retry_s) until the Kiosk keeps it, and a newer copy replaces the one owed: an alert
+closed meanwhile is sent closed, never as it stood before.
 
 The record's shape is the agreement's (agent-contract.json `vestaMessage`): its limits are read from there.
 """
@@ -18,6 +25,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 from datetime import datetime, timezone
 
 from vesta_shared import agreement
@@ -168,9 +176,12 @@ class KioskMessages:
     """Keeps records for the tablet, in the background (see the module's note). One push in flight per key, the newest
     waiting: a message changed twice in a row is pushed in order, never both at once."""
 
-    def __init__(self, kiosk, timeout_s):
+    def __init__(self, kiosk, timeout_s, retry_s=lambda: 300.0):
         self.kiosk = kiosk
         self._timeout_s = timeout_s            # kiosk.message_timeout_s: read at each push (the Limits tab applies at once)
+        self._retry_s = retry_s                # kiosk.message_retry_s: how often what is owed is sent again
+        self._owed: dict[str, dict] = {}       # key → its newest copy the Kiosk did not keep, as drawn (see the module's note)
+        self._tried = time.monotonic()
         self._pending: dict[str, dict] = {}
         self._running: dict[str, asyncio.Task] = {}
         self._last: dict[str, str] = {}        # key → what was last pushed, to skip an identical one
@@ -190,6 +201,7 @@ class KioskMessages:
             return
         self._last.pop(key, None)
         self._last[key] = same
+        self._owed.pop(key, None)              # this copy is newer than the one owed: it is the one to send
         while len(self._last) > REMEMBERED:
             self._last.pop(next(iter(self._last)))
         self._pending[key] = rec
@@ -239,24 +251,46 @@ class KioskMessages:
 
     async def _drain(self, key: str) -> None:
         while key in self._pending:
-            rec = self._pending.pop(key)
+            drawn = self._pending.pop(key)
             try:
-                rec = await self._with_pages(rec)
+                rec = await self._with_pages(drawn)
                 kept = await asyncio.wait_for(self.kiosk.keep_message(rec), self._timeout_s())
                 if not kept:
                     # ⚠️ REFUSED IS NOT KEPT (architecture review 2026-10-29, round 3): remembered, the same copy told
                     # again (a retry, a run taken over) was skipped and the tablet kept an earlier step
-                    self._last.pop(key, None)
+                    self._owe(key, drawn)
                 if self._unreached and kept:
                     log.info("The Kiosk keeps the agent's messages for the tablet again")
                 self._unreached = self._unreached and not kept
             except Exception as e:  # noqa: BLE001 — a push never harms what is being said
-                self._last.pop(key, None)      # not kept: the next draw of the same words tries again
+                self._owe(key, drawn)
                 if not self._unreached:
                     self._unreached = True
-                    log.warning("A message could not be kept for the tablet (%s); it is tried again at its next change",
+                    log.warning("A message could not be kept for the tablet (%s); it is sent again later",
                                 type(e).__name__)
         self._running.pop(key, None)
+
+    def _owe(self, key: str, drawn: dict) -> None:
+        """`drawn` was not kept: forgotten as pushed (the same copy told again is sent), and owed — unless a newer copy
+        of its key already waits, which is the one to send. As drawn, its pages still files: a retry uploads them."""
+        self._last.pop(key, None)
+        if key in self._pending:
+            return
+        self._owed.pop(key, None)
+        self._owed[key] = drawn
+        while len(self._owed) > REMEMBERED:
+            self._owed.pop(next(iter(self._owed)))
+
+    def retry(self) -> int:
+        """The housekeeping pass: every copy owed sent again, at most once per kiosk.message_retry_s — how many."""
+        if not self._owed or time.monotonic() - self._tried < self._retry_s():
+            return 0
+        self._tried = time.monotonic()
+        owed, self._owed = self._owed, {}
+        for rec in owed.values():
+            self.keep(rec)
+        log.info("VESTA Kiosk: %s message(s) the tablet did not get sent again", len(owed))
+        return len(owed)
 
     async def settle(self) -> None:
         """Wait for every push started (the tests; a stop)."""

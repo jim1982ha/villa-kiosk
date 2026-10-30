@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.393 (30 October 2026)
+
+- McpClient._history reads a slice's quiet entities in one ha_get_history (history.batch_entities; a busy one goes on
+  alone, its cut per entity); history_memory.remembered keeps the settled past between ticks (history.settled_minutes,
+  history.kept_rows), used by recheck's offline check; held_since reads up to the latest last_changed.
+- KioskMessages owes a copy the Kiosk did not keep and sends the newest again at housekeeping (kiosk.message_retry_s,
+  a newer copy replacing it); tell_open runs at start even when the Kiosk check fails.
+- villa-concierge tells a spoken exchange's language once (voice.py asked_language: the question's words, else a
+  speech-to-text's language among villa.voice.yaml `languages:`, else the saved one); answering.Asked is carried to
+  answer_aloud (--question/--heard/--saved); a heard language outside the villa's is not told to the AI.
+
 ## 0.6.392 (30 October 2026)
 
 - villa-concierge's `concierge.py status` reads no history: devices_offline is called without it (offline_since only

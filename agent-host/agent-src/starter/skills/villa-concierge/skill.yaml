@@ -18,4 +18,6 @@ on_event:
   voice_message: "voice.py prepare --audio {audio} --language {language}"
   # An answer to a question spoken on the tablet, said aloud: which language its words are in, and the voice that says
   # it (the voice settings' own for their language; villa.voice.yaml `voices:` for another). No voice: why, in words.
-  answer_aloud: "voice.py speak --text {text} --language {language} --voice {voice}"
+  # {question}, {heard}, {saved}: the words it answers, the language a speech-to-text said it heard, the person's saved
+  # language: the language of the exchange, told once, when the answer's own words are too few to tell.
+  answer_aloud: "voice.py speak --text {text} --language {language} --voice {voice} --question {question} --heard {heard} --saved {saved}"

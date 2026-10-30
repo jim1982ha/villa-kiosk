@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, NamedTuple
 
 from .policy import Language
 
@@ -97,6 +97,17 @@ def question_words(text: str, *, image: bool, voice: bool, spoken: str | None, w
     return prompt
 
 
+class Asked(NamedTuple):
+    """What a spoken answer's voice is told of the question it answers (speech.Aloud): its words, the language a
+    speech-to-text said it heard them in (None: it said none), the person's saved language. ⚠️ THE LANGUAGE OF THE
+    EXCHANGE IS THE SKILL'S, TOLD ONCE (architecture review, 2026-10-30, round 3): the engine carries these to the
+    skill that chooses the voice (on_event.answer_aloud), which tells the question's language once; the engine never
+    guesses one."""
+    question: str
+    heard: str | None
+    saved: str | None
+
+
 class Answering:
     """What follows an answer, in this order, for every conversation (a Telegram chat and a tablet alike): the answer
     sent with the camera pictures the AI looked at (Delivery.reply); the fault offers it carries remembered under it;
@@ -108,7 +119,8 @@ class Answering:
         self.delivery, self.fault_offers, self.approvals, self.chat_jobs = delivery, fault_offers, approvals, chat_jobs
         self.later, self.aloud = later, aloud
 
-    async def deliver(self, cid: int, reply, photos, approvals, aloud: bool = False, timeline=None) -> int | None:
+    async def deliver(self, cid: int, reply, photos, approvals, aloud: bool = False, timeline=None,
+                      asked: Asked | None = None) -> int | None:
         """The answer `reply` (turn_reply.Reply) sent and followed; its message id."""
         mid = await self.delivery.reply(cid, reply.text, keyboard=reply.keyboard, photos=photos)
         self.fault_offers.delivered(reply.offered, mid)
@@ -117,8 +129,8 @@ class Answering:
         if timeline is not None:
             timeline.mark("answer on the tablet")
         if aloud:
-            self.later(self.aloud.answer(cid, mid, reply.text, timeline))
+            self.later(self.aloud.answer(cid, mid, reply.text, timeline, asked))
         return mid
 
 
-__all__ = ["question_words", "Answering", "Ask", "Timeline"]
+__all__ = ["question_words", "Answering", "Ask", "Asked", "Timeline"]

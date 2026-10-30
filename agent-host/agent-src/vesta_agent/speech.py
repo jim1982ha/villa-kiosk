@@ -62,7 +62,7 @@ class Silent(NamedTuple):
 
 #: The skill's choice of language and voice for an answer (on_event.answer_aloud): (the words, the voice settings, the
 #: seconds left) -> {"language", "voice"} | {"say"} | None (no skill: the settings' own voice).
-Choose = Callable[[str, dict, float], Awaitable[dict | None]]
+Choose = Callable[[str, dict, float, object], Awaitable[dict | None]]
 
 
 class Speech:
@@ -72,12 +72,13 @@ class Speech:
         self.headers = headers or {}    # Cloudflare Access, when the villa's system is reached through it
         self.choose = choose            # the skill's choice of language and voice (Aloud._choose)
 
-    async def say(self, text: str, deadline: float | None = None) -> Said | Silent:
+    async def say(self, text: str, deadline: float | None = None, asked=None) -> Said | Silent:
         """`text` in the villa's voice, before `deadline` (time.monotonic(); speak_s() from now when not given). ⚠️ IN
         THE ANSWER'S OWN LANGUAGE (owner, 2026-10-29: a French answer read by the English voice): the skill tells the
         language and names its voice, or says why there is none; never another language's voice. ⚠️ ONE CLOCK
         (architecture review, 2026-10-30): reading the settings, the skill's choice and the sound each had the whole
-        limit, so an answer could take twice the setting; each now gets what is left."""
+        limit, so an answer could take twice the setting; each now gets what is left. `asked`: the question it answers
+        (answering.Asked), for the skill's choice of language."""
         deadline = deadline if deadline is not None else time.monotonic() + speak_s()
 
         def left() -> float:
@@ -95,7 +96,7 @@ class Speech:
         if self.choose is not None:
             if left() <= 0:
                 return Silent(FAILED, "no time left to choose the voice")
-            chosen = await self.choose(text, pipeline, left())
+            chosen = await self.choose(text, pipeline, left(), asked)
             # None: no skill chooses (the settings' own voice). ⚠️ A CHOICE THAT FAILED IS NO CHOICE (architecture
             # review, 2026-10-30): its script answered {} when it stopped or timed out, read as "no skill", and a French
             # answer went to the English voice again — never read by another language's voice
@@ -149,34 +150,43 @@ class Aloud:
         self.s, self.tablet, self.state, self.skills, self.code_command = settings, tablet, state, skills, code_command
         self.speech = Speech(settings, reader, headers, choose=self._choose)
 
-    async def _choose(self, text: str, pipeline: dict, seconds: float) -> dict | None:
-        """The skill's choice, or None when no skill makes one. The words go to it in a file, removed after."""
+    async def _choose(self, text: str, pipeline: dict, seconds: float, asked=None) -> dict | None:
+        """The skill's choice, or None when no skill makes one. The words, and the question's (answering.Asked), go to
+        it in files, removed after."""
         import os
         hook = next(iter(self.skills.handlers("answer_aloud")), None)
         if not hook:
             return None
         folder = os.path.join(self.s.out_dir, "voice")
         os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, f"answer-{time.time_ns()}.txt")
+        stamp = time.time_ns()
+        path = os.path.join(folder, f"answer-{stamp}.txt")
+        question = os.path.join(folder, f"question-{stamp}.txt")
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(text)
+            with open(question, "w", encoding="utf-8") as f:
+                f.write(asked.question if asked else "")
             return await asyncio.to_thread(self.code_command, hook[0], hook[1],
                                            {"text": path, "language": str(pipeline.get("tts_language") or ""),
-                                            "voice": str(pipeline.get("tts_voice") or "")}, max(1, int(seconds)))
+                                            "voice": str(pipeline.get("tts_voice") or ""), "question": question,
+                                            "heard": str((asked.heard if asked else None) or ""),
+                                            "saved": str((asked.saved if asked else None) or "")},
+                                           max(1, int(seconds)))
         finally:
-            try:
-                os.remove(path)
-            except OSError:
-                pass
+            for f in (path, question):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
 
-    async def answer(self, cid: int, mid: int | None, text: str, timeline=None) -> bool:
+    async def answer(self, cid: int, mid: int | None, text: str, timeline=None, asked=None) -> bool:
         """The answer `mid` (its words already on the tablet: nobody waits on the voice to read them) said aloud, its
         sound named on the turn; else the turn says why it was not spoken. Whether it was spoken."""
         if not mid or not text:
             return False
         began = time.monotonic()
-        said = await self.speech.say(text, began + speak_s())
+        said = await self.speech.say(text, began + speak_s(), asked)
         if isinstance(said, Said):
             if await self.tablet.speak(cid, mid, said.audio, said.mime):
                 self._record(cid, True, None, len(said.audio), began)

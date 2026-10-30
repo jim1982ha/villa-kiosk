@@ -274,6 +274,12 @@ def history_max_calls() -> int:
                  told="person")
 
 
+def history_batch_entities() -> int:
+    return limit("history.batch_entities", 25, unit="devices", group="read", lo=1, hi=100,
+                 says="Devices whose history a skill asks for together, in one read of the villa's system.",
+                 reached="The next devices are asked for in another read.", told="")
+
+
 def history_slice_pages() -> int:
     return limit("history.slice_pages", 20, unit="pages", group="read", lo=1, hi=200,
                  says="Pages read of the shortest stretch of a very busy device's history.",
@@ -475,13 +481,71 @@ class McpClient(HABase):
         return History(rows, start, end, cut, self.kept_from(now))
 
     def _history(self, entity_ids, start, end) -> tuple[dict[str, list[dict]], dict[str, datetime]]:
+        """({entity: its rows}, {entity: where its reading stopped}) over [start, end).
+
+        ⚠️ ONE READ FOR EVERY DEVICE, NOT ONE EACH (owner, 2026-10-30: the 5-minute recheck took 41.9 s, then 89.6 s,
+        197 reads in an hour, each of ONE device: a device's week was 7 reads, twenty devices 140). The quiet devices
+        of a slice are asked together (history_batch_entities at a time), the slices growing as one device's did. A
+        device whose slice holds more than a page leaves the group there and is read on its own (_history_one: halved
+        slices, then pages) from where the group had got."""
+        ids = list(dict.fromkeys(entity_ids))
+        a, b = start.astimezone(timezone.utc), end.astimezone(timezone.utc)
         out: dict[str, list[dict]] = {}
         cut: dict[str, datetime] = {}
-        for eid in entity_ids:
-            out[eid], stopped = self._history_one(eid, start.astimezone(timezone.utc), end.astimezone(timezone.utc))
+        if len(ids) == 1:                                       # one device: its own slices, as it always was
+            out[ids[0]], stopped = self._history_one(ids[0], a, b)
             if stopped is not None:
-                cut[eid] = stopped
+                cut[ids[0]] = stopped
+            return out, cut
+        size = history_batch_entities()
+        for i in range(0, len(ids), size):
+            got, stopped = self._history_group(ids[i:i + size], a, b)
+            out.update(got)
+            cut.update(stopped)
         return out, cut
+
+    def _history_group(self, ids, start, end) -> tuple[dict[str, list[dict]], dict[str, datetime]]:
+        """_history of a few devices read together: one ha_get_history per slice for all those still quiet (the tool
+        takes a list of ids, its limit is per device, its offset must be 0 with several)."""
+        page = history_page()
+        rows: dict[str, list[dict]] = {e: [] for e in ids}
+        cut: dict[str, datetime] = {}
+        group = list(ids)
+        at, span, calls = start, history_first_slice(), 0
+        max_span, max_calls = history_max_slice(), history_max_calls()
+
+        def joined(eid, batch):
+            if rows[eid] and batch and batch[0].get("state") == rows[eid][-1].get("state"):
+                batch = batch[1:]                               # the carried-over state, stamped at the slice's start
+            rows[eid].extend(batch)
+
+        while group and at < end and calls < max_calls:
+            to = min(end, at + span)
+            body = self.tool("ha_get_history", {
+                "entity_ids": group, "source": "history", "order": "asc", "minimal_response": True,
+                "significant_changes_only": False, "limit": page, "offset": 0,
+                "start_time": at.isoformat(), "end_time": to.isoformat()})
+            calls += 1
+            answered = {e.get("entity_id"): e for e in body.get("entities") or [] if isinstance(e, dict)}
+            busy = [e for e in group if (answered.get(e) or {}).get("has_more")]
+            most = 0
+            for eid in group:
+                if eid not in busy:
+                    batch = (answered.get(eid) or {}).get("states") or []
+                    most = max(most, len(batch))
+                    joined(eid, batch)
+            for eid in busy:                                    # more than a page here: its own slices from here
+                batch, stopped = self._history_one(eid, at, end)
+                joined(eid, batch)
+                if stopped is not None:
+                    cut[eid] = stopped
+            group = [e for e in group if e not in busy]
+            at = to
+            if most < page // 4:
+                span = min(span * 2, max_span)
+        if at < end:                                            # the call cap: nothing read after `at`
+            cut.update({e: at for e in group})
+        return rows, cut
 
     def _history_one(self, eid, start, end) -> tuple[list[dict], datetime | None]:
         """(the rows, where the reading stopped before `end` — None when it read to the end)."""

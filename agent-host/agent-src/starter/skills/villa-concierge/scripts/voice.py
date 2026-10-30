@@ -3,8 +3,11 @@
 
   voice.py prepare --audio voice.ogg --language fr [--stt stt.x] [--whisper host:port|off] [--fixture-dir DIR]
   voice.py speak --text answer.txt --language en_US --voice en_US-lessac-medium
+                 [--question question.txt --heard fr --saved en]
 
-(prepare --language: the person's saved language. speak --language/--voice: the villa's voice settings' own.)
+(prepare --language: the person's saved language. speak --language/--voice: the villa's voice settings' own;
+--question: the words the answer replies to, --heard: the language a speech-to-text said it heard them in, --saved:
+the person's saved language.)
 
 `speak` (ticket 24 of "One inbox", VESTA answers aloud; owner 2026-10-29: "I spoke in French and Piper responded in
 English despite the response being written in French"): the voice an answer is said in. VESTA answers in the language
@@ -54,6 +57,14 @@ Every choice is the villa's, in ../villa.voice.yaml (optional, kept by updates):
     fr: fr_FR-siwis-medium     PIPER_VOICES (the text-to-speech's own voice name; its language is the name's start)
   words:                       more common words telling a language (beside WORDS)
     id: [yang, dan, di, ini]
+  languages: [en, fr]          the languages spoken in this villa: a language is only ever told among them (and the
+                               voice settings' own), and one a speech-to-text says it heard outside them is not believed
+
+⚠️ ONE LANGUAGE FOR THE EXCHANGE, TOLD ONCE (architecture review, 2026-10-30, round 3: "Can you turn on the light in
+the gym?" was "Detected language 'fr' with probability 0.51" in Whisper's own log): the question's language is told
+here, once, from the question's own words (Whisper, over Wyoming, says no language at all; when a speech-to-text does,
+it is believed only among `languages`), else the person's saved language. An answer whose own words are too few to tell
+("OK.") is said in the question's language, no longer in the voice settings' just because they are the settings'.
 """
 
 from __future__ import annotations
@@ -215,8 +226,10 @@ def prepare(audio: str, language: str | None, stt: str | None = None, whisper_at
     out = os.path.splitext(audio)[0] + ".wav"
     with open(out, "wb") as f:
         f.write(wav(pcm))
+    among = household(cfg)
     return {"wav": out, "seconds": round(len(pcm) / 2 / RATE, 1),
             "attempts": attempts(fixed, language, direct, entity), "down": DOWN,
+            **({"languages": sorted(among)} if among else {}),
             **({} if entity else {"no_stt": NO_STT})}
 
 
@@ -260,31 +273,58 @@ SCRIPTS = (("ko", ((0xAC00, 0xD7A3), (0x1100, 0x11FF), (0x3130, 0x318F)), 3),
            ("zh", ((0x4E00, 0x9FFF), (0x3400, 0x4DBF)), 3))
 
 
-def language_of(text: str, words: dict) -> str | None:
+def language_of(text: str, words: dict, among: set | None = None) -> str | None:
     """The language whose common words `text` holds most (a tie, or none at all: None); one written without spaces by
-    its letters (SCRIPTS) first."""
+    its letters (SCRIPTS) first. `among`: only these languages are told (villa.voice.yaml `languages:`); None: all."""
     import re
     letters = [ord(c) for c in text if c.isalpha()]
     for lang, ranges, share in SCRIPTS:
+        if among is not None and lang not in among:
+            continue
         if letters and sum(any(a <= c <= b for a, b in ranges) for c in letters) * share >= len(letters):
             return lang
     seen = [w for w in re.split(r"[^\w]+", text.lower()) if w]
     low = text.lower()
     score = {lang: sum(w in set(ws) for w in seen) + sum(low.count(c) for c in LETTERS.get(lang, ""))
-             for lang, ws in words.items()}
+             for lang, ws in words.items() if among is None or lang in among}
     best = sorted(score.items(), key=lambda kv: -kv[1])
     if not best or best[0][1] == 0 or (len(best) > 1 and best[1][1] == best[0][1]):
         return None
     return best[0][0]
 
 
-def speak(text: str, language: str | None, voice: str | None) -> dict:
+def household(cfg: dict) -> set | None:
+    """villa.voice.yaml `languages:`, the languages spoken in this villa (codes); None when it names none."""
+    got = cfg.get("languages")
+    names = {str(c).strip().lower() for c in got if str(c).strip()} if isinstance(got, list) else set()
+    return names or None
+
+
+def code(language: str | None) -> str | None:
+    """"fr" of "fr", "fr_FR" or "fr-FR"; None of nothing."""
+    return str(language or "").replace("-", "_").split("_")[0].lower() or None
+
+
+def asked_language(question: str | None, heard: str | None, saved: str | None, words: dict,
+                   among: set | None) -> str | None:
+    """THE language of the exchange (module doc): the question's own words, else the language a speech-to-text said it
+    heard when it is one of the villa's, else the person's saved language."""
+    heard = code(heard)
+    return (language_of(question or "", words, among)
+            or (heard if heard and (among is None or heard in among) else None) or code(saved))
+
+
+def speak(text: str, language: str | None, voice: str | None, question: str | None = None,
+          heard: str | None = None, saved: str | None = None) -> dict:
     """The language and voice `text` is said in, or what the person reads instead (module doc)."""
     cfg = villa_settings()
     words = {**WORDS, **{str(k): [str(w).lower() for w in v] for k, v in (cfg.get("words") or {}).items()
                          if isinstance(v, list)}}
-    own = str(language or "").replace("-", "_").split("_")[0].lower() or None
-    said = language_of(text, words) or own
+    own = code(language)
+    among = household(cfg)
+    among = among | {own} if among is not None and own else among
+    asked = asked_language(question, heard, saved, words, among) if (question or heard or saved) else None
+    said = language_of(text, words, among) or asked or own
     if said == own:
         return {"language": language, "voice": voice}
     import re
@@ -303,6 +343,9 @@ def main(argv=None):
     ap.add_argument("--audio")
     ap.add_argument("--text", help="speak: a file holding the answer's words")
     ap.add_argument("--voice", help="speak: the villa's voice settings' own voice")
+    ap.add_argument("--question", help="speak: a file holding the words the answer replies to")
+    ap.add_argument("--heard", help="speak: the language a speech-to-text said it heard the question in")
+    ap.add_argument("--saved", help="speak: the person's saved language")
     ap.add_argument("--language")
     ap.add_argument("--stt")
     ap.add_argument("--whisper", help="host:port, or off (over villa.voice.yaml's whisper:)")
@@ -310,7 +353,9 @@ def main(argv=None):
     script.arguments(ap, store="optional")   # the engine gives every hook the store; this one does not need it
     a = ap.parse_args(argv)
     if a.cmd == "speak":
-        print(json.dumps(speak(open(a.text, encoding="utf-8").read() if a.text else "", a.language, a.voice)))
+        question = open(a.question, encoding="utf-8").read() if a.question else None
+        print(json.dumps(speak(open(a.text, encoding="utf-8").read() if a.text else "", a.language, a.voice,
+                               question, a.heard or None, a.saved or None)))
         return 0
     if not a.audio:
         ap.error("prepare needs --audio")

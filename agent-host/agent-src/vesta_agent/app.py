@@ -56,7 +56,7 @@ from .villa_messages import VillaMessages
 from .incident_thread import IncidentThread
 
 from .housekeeping import open_incidents, tidy
-from .kiosk import Kiosk, KioskError, message_timeout_s
+from .kiosk import Kiosk, KioskError, message_retry_s, message_timeout_s
 from .kiosk_messages import KioskMessages
 from .alert_buttons import AlertButtons
 from .outcome import Outcome
@@ -178,7 +178,7 @@ class Vesta:
                                watching=incidents.watching)
         # every message written on Telegram is also kept for the tablet, in the background (kiosk_messages.py): the thread
         # keeps an alert's, an approval's and a snapshot's, the poster a note sent on its own
-        self.messages = KioskMessages(self.kiosk, message_timeout_s)
+        self.messages = KioskMessages(self.kiosk, message_timeout_s, message_retry_s)
         # what each chat shows of an incident (incident_thread.py), and an alert's buttons and their press: its words (each
         # chat's heading, Status and language) are the notices'; an alert card's own words are drawn by the translations,
         # which are built on the thread (hence the late lookup)
@@ -340,12 +340,15 @@ class Vesta:
                 await self.kiosk.check()
                 log.info("VESTA Kiosk: agreement %s", self.kiosk.info.get("contract"))
                 await self._safe(self.tickets.repair())
-                # every open alert's card on the tablet, the ones with no step since the tablet kept cards too
-                told = self.thread.tell_open(open_incidents(self.s.store_path))
-                if told:
-                    log.info("VESTA Kiosk: %s open alert card(s) kept for the tablet as they stand", told)
             except KioskError as e:
                 log.warning("VESTA Kiosk: %s", e)
+            # every open alert's card on the tablet, the ones with no step since the tablet kept cards too
+            # ⚠️ EVEN WITH THE KIOSK DOWN AT START (architecture review 2026-10-30, round 3): told only after its check
+            # answered, a Kiosk restarting with the Agent never got the open cards; now what it cannot keep is owed
+            # and sent again (kiosk_messages.py)
+            told = self.thread.tell_open(open_incidents(self.s.store_path))
+            if told:
+                log.info("VESTA Kiosk: %s open alert card(s) kept for the tablet as they stand", told)
         await self.refresh_server_tools()
         # a device still being followed when the agent stopped (an approved curtain): followed again (approvals.py)
         await self._safe(self.approvals.resume())
@@ -837,7 +840,9 @@ class Vesta:
             answered()                                       # "typing…" ends: the answer is going out
             # what follows the answer, in its order (answering.Answering): sent with the camera pictures the AI looked
             # at, its offers, its approvals, its jobs, its voice
-            await self.answering.deliver(cid, reply, res.photos, res.approvals, aloud=ask.aloud, timeline=ask.timeline)
+            await self.answering.deliver(cid, reply, res.photos, res.approvals, aloud=ask.aloud, timeline=ask.timeline,
+                                         asked=answering.Asked(text or "", ask.spoken,
+                                                               person.language if person else None))
 
     def before_answer(self) -> str:
         """What each skill's `before_answer` check says now (skills.Skill.before_answer: its script's "text"), for the
@@ -990,6 +995,8 @@ class Vesta:
         await self._safe(self.approvals.expire())
         # a copy Telegram did not take the last change of (a network blip): tried again (incident_thread.py)
         await self._safe(self.thread.catch_up())
+        # ...and a copy the tablet did not get (the Kiosk down, restarting, refusing): sent again (kiosk_messages.py)
+        self.messages.retry()
 
     # ------------------------------------------------------------------ the VESTA Agent page's requests
     async def on_request(self, req: dict) -> dict:

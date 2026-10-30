@@ -97,8 +97,11 @@ def held_since(history, held: dict[str, tuple[str, datetime]], now: datetime,
     if history is None or not since:
         return dict(since)
     start = min(since.values()) - timedelta(days=history_days())
+    # read up to the latest last_changed, not to now (owner, 2026-10-30: the 5-minute recheck read every offline
+    # device's days since its restart clock, then dropped them): only rows up to each entity's own last_changed count
+    end = max(since.values()) + timedelta(seconds=1)
     try:
-        rows = history(sorted(since), start, now) or {}
+        rows = history(sorted(since), start, end) or {}
     except Exception:  # noqa: BLE001 — the restart's clock, as before, rather than no answer
         return dict(since)
     out = dict(since)

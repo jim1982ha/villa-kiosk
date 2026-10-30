@@ -20,13 +20,14 @@ VOICE_SET = {"tts_engine": "tts.test_voice", "tts_language": "en", "tts_voice": 
 SOUND = b"ID3\x04\x00" + b"\x00" * 200          # the first bytes of an MP3, as the villa's system answers one
 
 
-def _answered(v, kiosk, monkeypatch, answer="The pool pump is on.", spoken=True, tts=(200,), then_typed=False):
+def _answered(v, kiosk, monkeypatch, answer="The pool pump is on.", spoken=True, tts=(200,), then_typed=False,
+              heard=(200,)):
     FakeAI(answer).install(monkeypatch)
     if spoken:
         kiosk.person_speaks("owner", _tablet_wav())
     else:
         kiosk.person_asks("owner", "Is the pool pump on?")
-    with FakeSTT([200], speech=SOUND, tts=tts) as villa:
+    with FakeSTT(list(heard), speech=SOUND, tts=tts) as villa:
         v.s.ha_url = villa.url
 
         async def go():
@@ -42,10 +43,10 @@ def _answered(v, kiosk, monkeypatch, answer="The pool pump is on.", spoken=True,
     return villa
 
 
-def _agent(tmp_path, pipeline, voice_yaml=None):
+def _agent(tmp_path, pipeline, voice_yaml=None, language="fr"):
     kiosk = FakeKiosk()
     return voice_agent(tmp_path, kiosk=kiosk, converse=True, reader=FakeHA(pipeline=pipeline),
-                       voice_yaml=voice_yaml), kiosk
+                       voice_yaml=voice_yaml, language=language), kiosk
 
 
 def test_the_answer_to_a_spoken_question_carries_the_villas_voice(tmp_path, monkeypatch):
@@ -183,11 +184,42 @@ def test_every_language_of_the_page_is_told_from_its_words_or_its_letters():
     assert {lang: voice.language_of(text, voice.WORDS) for lang, text in short.items()} == {k: k for k in short}
 
 
+def _said_in(tmp_path, monkeypatch, question: str, answer: str, language: str, voice_yaml=None) -> list:
+    """The (language, voice) a spoken question's answer was said in: the question heard as `question`, the person's
+    saved language `language`, the voice settings English (a Piper voice: each language has its own)."""
+    v, kiosk = _agent(tmp_path, {**VOICE_SET, "tts_language": "en_US", "tts_voice": "en_US-lessac-medium"},
+                      voice_yaml=voice_yaml, language=language)
+    villa = _answered(v, kiosk, monkeypatch, answer=answer, heard=[("json", {"result": "success", "text": question})])
+    return [(b["language"], b["options"].get("voice")) for b in villa.spoken]
+
+
+def test_an_answer_too_short_to_tell_is_said_in_the_question_s_language(tmp_path, monkeypatch):
+    # architecture review, 2026-10-30, round 3: "D'accord." holds no word or letter that tells its language; it was
+    # said by the voice settings' English voice. The language of the exchange is the question's, told once from its
+    # own words, whatever the person's saved language
+    assert _said_in(tmp_path, monkeypatch, "Allume la lumière de la salle de sport.", "D'accord.", "en") == [
+        ("fr_FR", "fr_FR-siwis-medium")]
+    # a question too short to tell either: the person's saved language (at the tablet: English, policy.tablet_person)
+    assert _said_in(tmp_path / "b", monkeypatch, "Gym?", "D'accord.", "en") == [("en_US", "en_US-lessac-medium")]
+    # an answer whose own words tell its language still wins: VESTA answered in English
+    assert _said_in(tmp_path / "c", monkeypatch, "Allume la lumière de la salle de sport.",
+                    "The light is on.", "fr") == [("en_US", "en_US-lessac-medium")]
+
+
+def test_the_villa_s_languages_are_the_only_ones_an_answer_is_told_in(tmp_path, monkeypatch):
+    # "la", "de": French and Spanish alike; a villa where Spanish is not spoken never hears its answer as Spanish
+    v_yaml = {"languages": ["en", "es"]}
+    assert _said_in(tmp_path, monkeypatch, "Gym?", "La luz de la cocina.", "en", v_yaml) == [
+        ("es_ES", "es_ES-davefx-medium")]
+    assert _said_in(tmp_path / "b", monkeypatch, "Gym?", "La porte de la cuisine.", "en", {"languages": ["en", "fr"]}) \
+        == [("fr_FR", "fr_FR-siwis-medium")]
+
+
 def test_a_choice_of_voice_that_fails_is_never_the_english_voice(tmp_path, monkeypatch):
     # the skill's script stopped (its answer {}): the answer stays in words, never said by the settings' own voice
     v, kiosk = _agent(tmp_path, {**VOICE_SET, "tts_language": "en_US"})
 
-    async def broken(text, pipeline, seconds):
+    async def broken(text, pipeline, seconds, asked=None):
         return {}
     v.aloud.speech.choose = broken
     villa = _answered(v, kiosk, monkeypatch, answer=FRENCH)
@@ -225,7 +257,7 @@ def test_one_clock_for_the_whole_spoken_answer(tmp_path, monkeypatch):
     v, kiosk = _agent(tmp_path, VOICE_SET)
     monkeypatch.setattr(speech, "speak_s", lambda: 1)
 
-    async def slow(text, pipeline, seconds):
+    async def slow(text, pipeline, seconds, asked=None):
         await asyncio.sleep(1.2)
         return {"language": "en", "voice": "test-voice"}
     v.aloud.speech.choose = slow

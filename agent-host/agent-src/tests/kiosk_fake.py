@@ -19,7 +19,7 @@ import copy
 import json
 from pathlib import Path
 
-from vesta_agent.kiosk import CLEARED, READING, REOPENED, RETITLED, Kiosk, _mine
+from vesta_agent.kiosk import CLEARED, READING, REOPENED, RETITLED, Kiosk, KioskError, _mine
 
 PERSON_AT = "2026-10-01T08:00:00.000Z"
 #: The step kinds this Kiosk shows, the fault fields and check words it reads (/agent/v1/info `step_kinds`,
@@ -47,6 +47,7 @@ class FakeKiosk(Kiosk):
         self.messages: dict[str, dict] = {}    # …and what the tablet holds: the last of each key (the add-on replaces by key)
         self.keeps_messages = True             # False plays an older Kiosk (404): it keeps none
         self.message_refusals = 0              # how many pushes it answers 500 first (a Kiosk restarting)
+        self.unreachable = False               # True plays a Kiosk down: every request fails to connect
         self.asks: list[dict] = []             # the tablets' questions it keeps (person_asks), numbered as the add-on does
         self.turns: dict[str, dict] = {}       # each conversation turn the agent wrote, by key (a rewrite replaces it)
         self.turns_pushed: list[dict] = []     # ...and every write, in order
@@ -57,6 +58,8 @@ class FakeKiosk(Kiosk):
 
     # ------------------------------------------------------------------ the one thing replaced: the transport
     async def _req(self, method, path, body=None, content=None, **_):
+        if self.unreachable:
+            raise KioskError(f"{method} {path}: ClientConnectorError")
         if path == "/agent/v1/speech":
             # the add-on's rule (_keep_speech): a sound of a kind it plays, under the agreement's cap, kept under a name
             data, kind = content
