@@ -251,6 +251,12 @@ const btnHtml = draw(h(AnnouncementNoticeView, { announcement: offered, onDismis
 ck("each button drawn with the announcement's own label (the Kiosk names no device and no command)",
    /<button[^>]*class="[^"]*\bvesta-notice-action\b[^"]*"[^>]*>🔓 Unlock<\/button>/.test(btnHtml) && btnHtml.includes(">Later</button>")
    && !btnHtml.includes("/unlock"), btnHtml);
+{
+  const { CARD_BUTTON } = await import("@/components/fm/WorkButtons");
+  const cls = /<button[^>]*class="([^"]*)"[^>]*>🔓 Unlock<\/button>/.exec(btnHtml)?.[1] ?? "";
+  ck("  ...in the one look of every button on a card, a work button's (owner, 2026-10-30: Done filled beside Open Ticket outlined)",
+     CARD_BUTTON.split(" ").every((c) => cls.split(" ").includes(c)) && !cls.split(" ").includes("primary"), cls);
+}
 ck("  ...with its ✕ while it stays", btnHtml.includes('aria-label="Dismiss"'), btnHtml);
 const sentHtml = draw(h(ButtonRow, { buttons: offered.buttons, onPress: () => {}, presses: { "/unlock": "sent" } }));
 ck("  ...a pressed button is not pressed twice, and says what happened",

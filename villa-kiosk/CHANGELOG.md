@@ -1,3 +1,11 @@
+## 2.496.609
+
+What you will see:
+- Every button on an Inbox card has the same look: VESTA's Done and Need help are now outlined, like Open Ticket and
+  Close beside them. The doorbell's Unlock in the pop-up over the map follows the same look.
+- The app's log no longer fills with a long error when a page is reloaded while it is still loading a chart: one
+  short line says the page left.
+
 ## 2.496.608
 
 What you will see:

@@ -40,6 +40,11 @@ export function useConfirmedClose(): ConfirmedClose {
   };
 }
 
+/** ⚠️ ONE LOOK FOR EVERY BUTTON ON A CARD (owner, 2026-10-30: Done · Need help were filled green beside Open Ticket ·
+ *  Close outlined, on the same Inbox): a card's work buttons and its record's buttons (AnnouncementContent.ButtonRow:
+ *  VESTA's Done, the doorbell's Unlock) both draw with this. */
+export const CARD_BUTTON = "btn ghost";
+
 /** The Overview's buttons carry an icon (the Tickets tab's wrench for Open Ticket, owner 2026-10-14). */
 const ICON: Partial<Record<WorkActionKind, ReactNode>> = {
   openTicket: <Wrench size={14} aria-hidden />,
@@ -69,7 +74,7 @@ export default function WorkButtons({ actions, cardKey, closer, onAction, name, 
       onConfirm={() => closer.close(cardKey, asked.ids)} onCancel={closer.cancel} />;
   }
   const buttons = actions.map((a) => (
-    <button key={a.kind} type="button" className="btn ghost"
+    <button key={a.kind} type="button" className={CARD_BUTTON}
       aria-label={a.step.kind === "close" && name ? `${a.label} “${name}”` : undefined}
       onClick={() => (a.step.kind === "close" ? closer.ask(cardKey) : onAction(a))}>
       {ICON[a.kind]}{ICON[a.kind] ? " " : null}{a.label}
