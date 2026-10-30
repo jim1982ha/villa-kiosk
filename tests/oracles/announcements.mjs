@@ -340,7 +340,14 @@ ck("full screen: its title, then its photo large, all it says, its bottom line, 
    && fullHtml.includes("Gate A</p>") && fullHtml.includes("⚠️ New alert") && fullHtml.includes(">🔓 Unlock</button>")
    && /class="modal-footer"[\s\S]*Close/.test(fullHtml), fullHtml);
 const problemHtml = draw(h(AnnouncementNoticeView, { announcement: said("🔥 Overload", "⚠️ New alert"), onDismiss: () => {} }));
-ck("a notice that goes by itself carries no ✕ (a problem included): nothing to press", !problemHtml.includes('aria-label="Dismiss"'), problemHtml);
+ck("a notice that goes by itself carries its ✕ too (owner, 2026-10-30: closed before its 10s)", problemHtml.includes('aria-label="Dismiss"'), problemHtml);
+{
+  const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
+  const view = elements(parseTsx("components/hud/AnnouncementNotice.tsx"), "NoticeView");
+  ck("  ...its ✕ tells the notices' record (noticeModel \"dismissed\"), whatever the notice offers",
+     view.length === 1 && /onDismiss/.test(propText(view[0], "onDismiss") || "") && !/buttons\.length/.test(view[0].getText()),
+     view.map((v) => v.getText().slice(0, 120)));
+}
 ck("  ...the tablet's notice decides by this rule (the notice model calls it), with the villa's and this tablet's settings",
    /noticeFor\(a, e\.settings, \{ rewrite: e\.rewrite \}\)/.test(src("messages/noticeModel.ts"))
    && /send\(\{ type: "arrived", announcement, rewrite, settings: settings\.current \}\)/.test(src("components/hud/AnnouncementNotice.tsx")));

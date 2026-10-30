@@ -1,3 +1,11 @@
+## 2.496.618
+
+What you will see:
+- Every notice at the top of the screen has its ✕ on the right: a camera's person detected, motion, a doorbell ring,
+  an alert, a failed tap. Press it to close the notice before its time is up. Two have none, on purpose: the "new
+  version" notice (the whole notice is the button that reloads) and the "connection lost" banner (it goes by itself
+  once the connection is back).
+
 ## 2.496.617
 
 What you will see:

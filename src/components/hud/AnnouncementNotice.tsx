@@ -23,8 +23,8 @@ import { AnnouncementContent, AnnouncementPhoto, RecordButtons } from "@/compone
 /** One announcement, drawn — pure (a check draws it): its photo above its words when it has one (a ring's snapshot,
  *  the notice then square-cornered: 08-shared.css), its title and the first line of what it says, then `buttons` (its
  *  RecordButtons: the doorbell's Unlock, an approval's Approve / Refuse). A rewrite of the same record replaces it in
- *  place (the add-on's key). Only a notice offering a button stays (noticeFor), so only it carries a ✕; every other goes
- *  by itself. */
+ *  place (the add-on's key). Its ✕ (NoticeView: every notice's) closes it before its time (`onDismiss`: the notices'
+ *  record, noticeModel "dismissed"). */
 export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step = false }: {
   announcement: Announcement;
   onDismiss?: () => void;
@@ -36,7 +36,7 @@ export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step 
   const { title, line } = announcementWords(announcement, { step });
   const words = line ? `${title} · ${line}` : title;
   return (
-    <NoticeView tone="info" icon={<Bell size={16} />} onDismiss={announcement.buttons.length ? onDismiss : undefined}>
+    <NoticeView tone="info" icon={<Bell size={16} />} onDismiss={onDismiss}>
       {announcement.photo && <AnnouncementPhoto id={announcement.photo} className="vesta-notice-photo" />}
       {words}
       {buttons}
