@@ -1,3 +1,17 @@
+## 0.12.418
+
+What you will see:
+- A guest asking VESTA on the tablet is now answered only from what the guest's tablet shows: no people, no motion or
+  door sensors, no cameras, nothing from a group of devices the guest's map hides, and not the villa's status (offline
+  devices, open alerts, locks). A question about something hidden gets "not something I can tell you". On VESTA's
+  page, Rules › AI tools › Tools by role now fills the Guest column with what a guest's VESTA may use; the old line
+  "a guest gets no answer at all for now" is gone.
+- The Facility Manager has one name everywhere: "Facility Manager" in VESTA's messages and in an alert's history
+  ("Ticket opened in the Cockpit on … (Facility Manager)"), "FM" only on an alert card where space is tight. Steps
+  saved earlier as "Facility manager" read the new way too.
+- A device's running time on a report's chart says "ran 1h 30min" instead of "ran 90min", and the chat reset choice
+  says "After 8h of silence".
+
 ## 0.12.417
 
 What you will see:
