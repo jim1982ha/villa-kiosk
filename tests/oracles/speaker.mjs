@@ -73,4 +73,26 @@ console.log("\n  a profile that goes:");
      b.log.join() === "stop", b.log);
 }
 
+console.log("  an answer being said can be stopped (owner, 2026-10-30):");
+{
+  const ends = [];
+  const told = [];
+  const s = new Speaker({
+    play: async (sound, _touch, ended) => { await sound(); ends.push(ended); return true; },
+    stop: () => told.push("stop"), sound: async (n) => n, tell: () => undefined, now: () => 0,
+  });
+  s.watch((n) => told.push(`playing ${n}`));
+  await s.listen("a.mp3");
+  ck("Listen pressed: its sound is the one being said (its line shows Stop)", s.playing === "a.mp3", s.playing);
+  s.stop();
+  ck("  ...Stop: the speaker stops and nothing is being said (Listen again)", s.playing === null
+     && told.join() === "playing a.mp3,stop,playing null", told);
+  await s.listen("a.mp3");
+  await s.listen("b.mp3");
+  ends[1]();                                             // the first replay's end arrives after the second began
+  ck("  ...the end of a sound another replaced never clears the one being said", s.playing === "b.mp3", s.playing);
+  ends[2]();
+  ck("  ...said to its end: Listen again", s.playing === null, s.playing);
+}
+
 done("✅ VESTA's answer said aloud: played where it was asked, said when it cannot");

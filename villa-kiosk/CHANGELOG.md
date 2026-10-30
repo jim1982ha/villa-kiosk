@@ -1,3 +1,14 @@
+## 2.496.613
+
+What you will see:
+- VESTA's conversation follows each step: a spoken question's words as they come in and VESTA's typing dots stay in
+  view at the bottom, and VESTA's answer comes into view from its first words (a long answer is read from its start).
+  Before, the dots of a spoken question could sit below the window.
+- While an answer is being read aloud, its speaker icon is a Stop button: press it to stop the voice. It turns back to
+  the speaker once the answer is said or stopped.
+- Notifications with nothing waiting while finished items are under Issues › Closed (an answered doorbell ring) says
+  "Nothing waiting. Answered rings and finished items are under Issues › Closed." instead of "Nothing announced yet."
+
 ## 2.496.612
 
 What you will see:

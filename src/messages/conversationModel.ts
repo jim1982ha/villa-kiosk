@@ -73,6 +73,19 @@ export function unanswered(lines: readonly Turn[], now: number): boolean {
   return !!last && last.from === "person" && now - (Date.parse(last.at) || now) > ASK_KEPT_MS;
 }
 
+/** Where the conversation follows to, and when: `key` changes at each step the person should see (a line added, a
+ *  spoken question's words come in, the dots appear or go, an answer rewritten); `to` "answer" brings VESTA's newest
+ *  answer's START into view (a long answer is read from its first words), "end" the bottom (a question, its words,
+ *  the dots). ⚠️ THE CONVERSATION STAYED BEHIND (owner, 2026-10-30: after a spoken question "the chat section is not
+ *  scrolling automatically where the typing dots are appearing", and an answer should get the focus "as per user
+ *  normal expectation"): it followed only a NEW line — a spoken question is one line that grows from "Spoken
+ *  question" to its words, and the answer was brought in by its end. Pure. */
+export function followOf(view: ThreadView, working: boolean): { key: string; to: "answer" | "end"; answer?: string } {
+  const last = view.lines[view.lines.length - 1];
+  const key = last ? `${last.seq}:${last.key}:${last.text.length}:${last.photos.length}:${working ? "…" : ""}` : working ? "…" : "";
+  return last && last.from === "vesta" && !working ? { key, to: "answer", answer: last.key } : { key, to: "end" };
+}
+
 /** ⚠️ "VESTA IS ANSWERING" (owner, 2026-10-29: "a running indicator in the chat response bubble while VESTA is thinking
  *  or waiting for an answer … consistent with standard used in the market"): the dots in VESTA's bubble, as every chat
  *  app shows them — while VESTA says it is working (Telegram's "typing…", said again every minute: believed TYPING_MS

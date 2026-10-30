@@ -113,8 +113,9 @@ export function stopSpeech(): void {
 
 /** Play an answer's sound. `atTheTouch`: called from the person's press (its own context resumed there, before the sound
  *  is fetched); otherwise only the context a press already started, and nothing when there is none (the page then
- *  offers Listen). Whether it plays. */
-export async function playSpeech(sound: () => Promise<ArrayBuffer | null>, atTheTouch: boolean): Promise<boolean> {
+ *  offers Listen). `ended`: told once the sound is over. Whether it plays. */
+export async function playSpeech(sound: () => Promise<ArrayBuffer | null>, atTheTouch: boolean,
+  ended?: () => void): Promise<boolean> {
   let ctx: AudioContext | null;
   try {
     ctx = atTheTouch ? audioAtTheTouch() : pageAudio;
@@ -131,7 +132,8 @@ export async function playSpeech(sound: () => Promise<ArrayBuffer | null>, atThe
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
-    source.onended = () => { if (speaking === source) speaking = null; };
+    // `ended`: the sound is over, said to its end or stopped (messages/speaker: Listen's Stop goes back to Listen)
+    source.onended = () => { if (speaking === source) speaking = null; ended?.(); };
     source.start(0);
     speaking = source;
     return ctx.state === "running";

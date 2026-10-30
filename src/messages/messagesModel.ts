@@ -41,6 +41,9 @@ export interface MessagesView {
   closed: MessageItem[];
   /** VESTA's reports, newest first: their own filter and section, never among the notifications. */
   reports: MessageItem[];
+  /** What Notifications says when it lists nothing (NOTHING_YET, or NOTHING_WAITING when finished records sit under
+   *  Issues › Closed). */
+  notificationsEmpty: string;
   /** The item open on the right: the one asked for when listed, else the issue a device window's warning asked
    *  for, else the first listed; null when nothing is listed. */
   selected: MessageItem | null;
@@ -214,6 +217,13 @@ export function openingFilter(unread: number, opening: { warning?: boolean; form
   return unread > unreadReports ? "notifications" : "reports";
 }
 
+/** Notifications listing nothing, and nothing anywhere else either. */
+export const NOTHING_YET = "Nothing announced yet.";
+/** ⚠️ "NOTHING ANNOUNCED YET" WAS NOT TRUE (owner, 2026-10-30: the doorbell had rung twice, both rings answered and so
+ *  under Issues › Closed, while Notifications said nothing had been announced): what Notifications says when what was
+ *  announced is finished, and where it went. */
+export const NOTHING_WAITING = "Nothing waiting. Answered rings and finished items are under Issues › Closed.";
+
 export function messagesView({ open, watched, announcements, filter, selected, focus }: {
   open: readonly CardView[];
   watched: readonly CardView[];
@@ -260,6 +270,7 @@ export function messagesView({ open, watched, announcements, filter, selected, f
     notifications,
     closed,
     reports,
+    notificationsEmpty: announcements.some((a) => !inWatch.has(a) && placeOf(a) === "closed") ? NOTHING_WAITING : NOTHING_YET,
     selected: asked ?? focused ?? first ?? null,
     openedBy: asked ? "asked" : focused ? "focus" : first ? "first" : null,
     shows: { issues: showIssues, notifications: showNotes, reports: showReports },

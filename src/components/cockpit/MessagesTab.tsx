@@ -255,7 +255,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
             <MessagesSection title="Notifications" open={folds.notes} onToggle={() => fold("notes")}>
               {paged.page.map((n) => <ErasableMessageRow key={n.key} item={n} selected={item?.key === n.key} onSelect={choose} />)}
               {view.notifications.length === 0
-                ? <p className="muted body-text messages-empty">Nothing announced yet.</p>
+                ? <p className="muted body-text messages-empty">{view.notificationsEmpty}</p>
                 : <Pager paged={paged} unit="notification" />}
             </MessagesSection>
           )}

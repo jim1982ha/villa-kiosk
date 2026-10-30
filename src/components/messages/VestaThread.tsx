@@ -7,13 +7,13 @@
 
 import { momentText } from "@/utils/dateText";
 import { useEffect, useRef, useState } from "react";
-import { Mic, RotateCcw, Send, Volume2 } from "lucide-react";
+import { Mic, RotateCcw, Send, Square, Volume2 } from "lucide-react";
 import Window from "@/components/common/Window";
 import ModalFooter from "@/components/common/ModalFooter";
 
 import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, TALK_SAID, pressableOf, type Turn } from "@/messages/conversation";
 import { useConversation } from "@/messages/ConversationContext";
-import { unanswered, vestaWorking } from "@/messages/conversationModel";
+import { followOf, unanswered, vestaWorking } from "@/messages/conversationModel";
 import { AnnouncementPhoto, PageLink, RecordButtons } from "./AnnouncementContent";
 import TalkButton from "./TalkButton";
 
@@ -21,16 +21,23 @@ import TalkButton from "./TalkButton";
  *  ("Open the page" only for a profile the add-on serves pages to). A spoken question (hold to talk) carries the
  *  microphone, and says it was spoken until VESTA heard its words; an answer said aloud offers Listen. Pure: a check
  *  draws it. */
-export function TurnLine({ turn, canOpenPage, onListen }: { turn: Turn; canOpenPage: boolean;
+export function TurnLine({ turn, canOpenPage, onListen, playing = false, onStop }: { turn: Turn; canOpenPage: boolean;
   /** Listen pressed (the page's speaker: messages/speaker); none: no Listen drawn. */
-  onListen?: (name: string) => void }) {
+  onListen?: (name: string) => void;
+  /** Its sound is being said now: Stop in Listen's place (onStop: Stop pressed). */
+  playing?: boolean; onStop?: () => void }) {
   return (
-    <div className={`vesta-turn ${turn.from === "person" ? "asked" : "answered"}${turn.voice ? " vesta-turn-spoken" : ""}`}>
+    <div data-turn={turn.key} className={`vesta-turn ${turn.from === "person" ? "asked" : "answered"}${turn.voice ? " vesta-turn-spoken" : ""}`}>
       <div className="vesta-turn-head">
         <b>{turn.from === "person" ? "You" : "VESTA"}</b>
         {turn.voice && <Mic size={14} aria-label="spoken" />}
         {turn.at && <span className="muted">{momentText(turn.at)}</span>}
-        {turn.speech && onListen && (
+        {turn.speech && playing && onStop ? (
+          // being said now: Stop in Listen's place, back to Listen once it ends or is stopped (owner, 2026-10-30)
+          <button type="button" className="btn ghost vesta-turn-listen" aria-label="Stop" title="Stop" onClick={onStop}>
+            <Square size={16} aria-hidden />
+          </button>
+        ) : turn.speech && onListen && (
           // the answer said aloud (ticket 24): played as it came on the tablet that asked; heard again from here, an
           // icon at the end of the line (owner, 2026-10-29: not a button the width of the answer)
           <button type="button" className="btn ghost vesta-turn-listen" aria-label="Listen" title="Listen"
@@ -58,15 +65,17 @@ export function WorkingBubble() {
 }
 
 export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => void; canOpenPage: boolean }) {
-  const { thread, ask, said, tell, talker, talk, listen } = useConversation();
+  const { thread, ask, said, tell, talker, talk, listen, playing, stopListening } = useConversation();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   const working = vestaWorking(thread, Date.now());
-  // the dots come in view as a new line does
-  const lastKey = `${thread.lines.length ? thread.lines[thread.lines.length - 1].seq : ""}${working ? "…" : ""}`;
-  // the newest line in view as it arrives, as a chat does
-  useEffect(() => { end.current?.scrollIntoView?.({ block: "end" }); }, [lastKey]);
+  // each step in view as it comes, as a chat does: a question and the dots at the bottom, an answer from its start
+  const follow = followOf(thread, working);
+  useEffect(() => {
+    const answer = follow.answer ? end.current?.parentElement?.querySelector(`[data-turn="${CSS.escape(follow.answer)}"]`) : null;
+    (answer ?? end.current)?.scrollIntoView?.({ block: follow.to === "answer" ? "start" : "end" });
+  }, [follow.key, follow.to, follow.answer]);
 
   const send = async (words: string) => {
     setSending(true);
@@ -91,7 +100,8 @@ export default function VestaWindow({ onClose, canOpenPage }: { onClose: () => v
         {thread.lines.length === 0 && (
           <p className="muted body-text messages-empty">Ask VESTA about the villa: what is on, what happened, what to check.</p>
         )}
-        {thread.lines.map((t) => <TurnLine key={t.key} turn={t} canOpenPage={canOpenPage} onListen={listen} />)}
+        {thread.lines.map((t) => <TurnLine key={t.key} turn={t} canOpenPage={canOpenPage} onListen={listen}
+          playing={!!t.speech && t.speech === playing} onStop={stopListening} />)}
         {vestaWorking(thread, Date.now()) && <WorkingBubble />}
         {unanswered(thread.lines, Date.now()) && <p className="muted body-text">No answer came. Ask again.</p>}
         <div ref={end} />

@@ -10,7 +10,7 @@ import { elements, guardsOf, parseTsx, propText } from "../consistency/jsx.mjs";
 import ts from "typescript";
 import { readFileSync } from "node:fs";
 const { parseTurn, askVesta, vestaRuns, NEW_CONVERSATION, SPOKEN_WAITING } = await import("@/messages/conversation");
-const { mergeTurns, threadView, unanswered, arrivedSpeech, playsAloud } = await import("@/messages/conversationModel");
+const { mergeTurns, threadView, unanswered, arrivedSpeech, playsAloud, followOf } = await import("@/messages/conversationModel");
 const { START, screenReducer } = await import("@/pages/screen");
 const { TurnLine } = await import("@/components/messages/VestaThread");
 const AGENT_CONTRACT = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
@@ -177,8 +177,40 @@ ck("  ...the person's own question reads as theirs",
 ck("an answer said aloud offers Listen, given the page's speaker; one in words only does not",
    draw(h(TurnLine, { turn: turn(4, { speech: "ab.mp3" }), canOpenPage: false, onListen: () => {} })).includes("Listen")
    && !draw(h(TurnLine, { turn: turn(4), canOpenPage: false, onListen: () => {} })).includes("Listen"));
+// owner, 2026-10-30: after a spoken question "the chat section is not scrolling automatically where the typing dots
+// are appearing", and an answer should get the focus: the conversation follows each step, an answer from its start
+{
+  const asked = turn(7, { from: "person", key: "ask:7", voice: true, text: "" });
+  const heard = { ...asked, text: "Is the pump on?" };
+  const view = (lines) => ({ lines, typingAt: null, online: true });
+  const k = (lines, w) => followOf(view(lines), w).key;
+  ck("the conversation follows a spoken question's words coming in, and the dots appearing",
+     k([asked], false) !== k([heard], false) && k([heard], false) !== k([heard], true)
+     && followOf(view([heard]), true).to === "end", [k([asked], false), k([heard], false), k([heard], true)]);
+  const answer = turn(8, { key: "turn:8", text: "Yes, it is on." });
+  const f = followOf(view([heard, answer]), false);
+  ck("  ...and brings VESTA's answer into view from its start", f.to === "answer" && f.answer === "turn:8"
+     && f.key !== k([heard], true), f);
+  ck("  ...the component scrolls to that answer's line by its key (data-turn), else to the end",
+     /data-turn=\{turn\.key\}/.test(readFileSync(new URL("../../src/components/messages/VestaThread.tsx", import.meta.url), "utf8"))
+     && /block: follow\.to === "answer" \? "start" : "end"/.test(readFileSync(new URL("../../src/components/messages/VestaThread.tsx", import.meta.url), "utf8")));
+}
+// owner, 2026-10-30: "make sure the user can stop the voice streaming / replay, by showing a stop button instead of
+// the Play button": the line whose sound is being said shows Stop, never Listen beside it; any other shows Listen
+{
+  let stopped = 0;
+  const saying = draw(h(TurnLine, { turn: turn(4, { speech: "ab.mp3" }), canOpenPage: false, onListen: () => {},
+    playing: true, onStop: () => { stopped += 1; } }));
+  ck("an answer being said shows Stop in Listen's place", saying.includes('aria-label="Stop"') && !saying.includes('aria-label="Listen"'), saying);
+  const stopButton = elements(parseTsx("components/messages/VestaThread.tsx"), "button")
+    .find((b) => (propText(b, "aria-label") || "").includes("Stop"));
+  ck("  ...Stop stops the page's one speaker (messages/speaker.stop, the provider's stopListening)",
+     !!stopButton && /onClick=\{onStop\}/.test(stopButton.getText())
+     && /playing=\{!!t\.speech && t\.speech === playing\} onStop=\{stopListening\}/.test(
+       readFileSync(new URL("../../src/components/messages/VestaThread.tsx", import.meta.url), "utf8")), stopped);
+}
 const listen = elements(parseTsx("components/messages/VestaThread.tsx"), "button")
-  .find((b) => (propText(b, "className") || "").includes("vesta-turn-listen"));
+  .find((b) => (propText(b, "className") || "").includes("vesta-turn-listen") && (propText(b, "aria-label") || "").includes("Listen"));
 ck("  ...Listen hands the turn's own sound to the page's speaker (messages/speaker: played from the press, tests/oracles/speaker.mjs)",
    (propText(listen, "onClick") || "").includes("onListen(turn.speech)"), propText(listen, "onClick"));
 const provider = readFileSync(new URL("../../src/messages/ConversationContext.tsx", import.meta.url), "utf8");

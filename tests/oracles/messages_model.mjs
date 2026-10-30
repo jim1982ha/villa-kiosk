@@ -445,4 +445,17 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
        elements(parseTsx("components/cockpit/MessagesTab.tsx"), "FoldedRows").find((e) => propText(e, "title") === '"Closed"')));
 }
 
+// owner, 2026-10-30: two doorbell rings, both answered (so under Issues › Closed), and Notifications said "Nothing
+// announced yet"
+{
+  const { NOTHING_YET, NOTHING_WAITING } = await import("@/messages/messagesModel");
+  const answered = ann(9, { asked: true, buttons: [] });
+  const none = messagesView({ open: [], watched: [], announcements: [], filter: "notifications", selected: null });
+  const done_ = messagesView({ open: [], watched: [], announcements: [answered], filter: "notifications", selected: null });
+  ck("Notifications empty with a finished ring under Closed says where it went; with nothing at all, nothing yet",
+     done_.notifications.length === 0 && done_.notificationsEmpty === NOTHING_WAITING && none.notificationsEmpty === NOTHING_YET
+     && NOTHING_WAITING.includes("Issues › Closed"), [done_.notificationsEmpty, none.notificationsEmpty]);
+  ck("  ...the tab says the view's words", readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8")
+     .includes("{view.notificationsEmpty}") && !readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8").includes("Nothing announced yet."));
+}
 done("✅ the Messages model: what the tab lists, its counts and the item open on the right");
