@@ -18,8 +18,8 @@ import { useStateSince } from "@/hooks/useStateSince";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCriticalDevices } from "@/ha/criticalDevices";
-import { villaDevices, criticalDevices, deviceFolding, deviceOf, deviceReadings, hiddenIn, recordDeviceOf, type VillaDevices } from "./deviceGroups";
-import type { DeviceMarks } from "@/utils/deviceActivity";
+import { villaDevices, deviceFolding, deviceOf, deviceReadings, lookFacts, recordDeviceOf, type VillaDevices } from "./deviceGroups";
+import { marksOf, type DeviceMarks } from "@/utils/deviceActivity";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
@@ -109,21 +109,21 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
   // Which entity stands for which device — a function of CONFIG and the
   // registry, so it is computed when those change, not on every state push.
   const { folding } = useDeviceIdentity();
+  // the villa's look facts (critical, hidden), built ONCE: the devices below answer from them and the map's marks hold
+  // them (deviceGroups.lookFacts). They change only with the registry, the critical list and the config, never per
+  // state push (the map repaints on them)
+  const facts = useMemo(() => lookFacts({ critical, hidden, entityDeviceIds, deviceUnits }, folding),
+    [critical, hidden, entityDeviceIds, deviceUnits, folding]);
   const devices = useMemo(
     () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, mappedEntityIds, entities,
-      entityDeviceIds, folding, critical, deviceUnits }),
-    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, entities, entityDeviceIds, folding, critical, deviceUnits],
+      entityDeviceIds, folding, critical, deviceUnits, facts }),
+    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, entities, entityDeviceIds, folding, critical, deviceUnits, facts],
   );
   const visibleDevices = useMemo(
     () => villaDevices({ entityMap, deviceGroups, dismissed: dismissedIds, hidden, mappedEntityIds, entities: visibleEntities,
-      entityDeviceIds, folding, critical, deviceUnits }),
-    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical, deviceUnits],
+      entityDeviceIds, folding, critical, deviceUnits, facts }),
+    [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical, deviceUnits, facts],
   );
-  // the marks' two lists change only with the registry, the critical list and the cards, never per state push (the map
-  // repaints on them): folded as `devices` folds them
-  const criticalSet = useMemo(() => criticalDevices(critical, folding, entityDeviceIds, deviceUnits),
-    [critical, folding, entityDeviceIds, deviceUnits]);
-  const isHidden = useMemo(() => hiddenIn(hidden, folding), [hidden, folding]);
   // since when a device waiting to close reads as it does: its history, never its last_changed (useStateSince)
   const closingIds = useMemo(() => closingEntities(fmData, entities), [fmData, entities]);
   const sinceOf = useStateSince(closingIds);
@@ -153,13 +153,13 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
     (): VillaModel => ({
       ...sets, devices, visibleDevices, attention, settings, issues,
       visibleTo: (role) => visibleTo(role, { mapped: mappedEntityIds, entityMap, entities }),
-      marks: { critical: criticalSet, isHidden, faults: issues.amber },
+      marks: marksOf(facts, issues.amber),
       marksFor: (role) => {
         const sees = visibleTo(role, { mapped: mappedEntityIds, entityMap, entities });
-        return { critical: criticalSet, isHidden, faults: faultsFor(attention, (id) => sees.has(id)) };
+        return marksOf(facts, faultsFor(attention, (id) => sees.has(id)));
       },
     }),
-    [sets, mappedEntityIds, devices, visibleDevices, attention, settings, entityMap, entities, issues, criticalSet, isHidden],
+    [sets, mappedEntityIds, devices, visibleDevices, attention, settings, entityMap, entities, issues, facts],
   );
 }
 

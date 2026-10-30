@@ -9,7 +9,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
   type ReactNode } from "react";
 import { backendFetch } from "@/auth/sessionLost";
 import { readJson, writeJson } from "@/utils/storedJson";
-import { fetchAnnouncements, fetchVestaMessages, pressOf, type Announcement, type Pressable } from "./announcements";
+import { fetchAnnouncements, fetchVestaMessages, inLanguage, pressOf, type Announcement, type Pressable } from "./announcements";
+import { useConfig } from "@/config/ConfigContext";
 import { pauseFor, watchFeed, type FeedRead } from "./feed";
 import { afterRead, isReport, markShown, shownTogether, unreadOf } from "./messagesModel";
 import { pressesOf, type PressState, type Presses } from "./presses";
@@ -70,7 +71,15 @@ export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   // ⚠️ TWO FEEDS, ONE LIST (tickets 26-27 of "One inbox"): the villa's announcements and VESTA's cards are read apart
   // (each its own numbers) and shown together, a card in place of the villa's messages it took over
   const villa = useFeed(fetchAnnouncements);
-  const vesta = useFeed(fetchVestaMessages);
+  const vestaRead = useFeed(fetchVestaMessages);
+  // ⚠️ VESTA'S WORDS IN THIS TABLET'S LANGUAGE, PICKED ONCE (ticket 28 of "One inbox"): every screen reads these records
+  // (the notice, the Inbox's cards, Notifications, Reports), so none picks a version of its own
+  const { config } = useConfig();
+  const lang = config.tabletLanguage;
+  const vesta = useMemo<FeedState>(() => ({
+    ...vestaRead, kept: vestaRead.kept.map((a) => inLanguage(a, lang)),
+    fresh: vestaRead.fresh ? { ...vestaRead.fresh, arrived: vestaRead.fresh.arrived.map((x) => ({ ...x, announcement: inLanguage(x.announcement, lang) })) } : null,
+  }), [vestaRead, lang]);
   // what just came: the arrivals of the feed whose read is new only — the other feed's last read was shown already
   const seen = useRef({ villa: 0, vesta: 0, fresh: null as Announcements["fresh"] });
   const state = useMemo<Announcements>(() => {

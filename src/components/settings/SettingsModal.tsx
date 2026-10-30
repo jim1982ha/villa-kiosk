@@ -30,6 +30,8 @@ import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import type { SceneManager } from "@/babylon/SceneManager";
 import InfoTip from "@/components/common/InfoTip";
 import { fmtDuration } from "@/components/panels/chartUtils";
+import { useAnnouncements } from "@/messages/AnnouncementsContext";
+import { languageName, languagesOf } from "@/messages/announcements";
 
 /** Settings' tabs (ticket 16 of "One inbox", owner 2026-10-28): General, all it held before; Messages, how this
  *  tablet shows the villa's announcements. */
@@ -75,7 +77,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
   const SETTINGS_KEYS = [
     "badgeStyle", "eyeHeight", "highlightInteractive", "naturalScrolling",
     "render", "showSummaryBar", "siteTitle", "theme",
-    "walkSpeed", "ringsFullScreen",
+    "walkSpeed", "ringsFullScreen", "tabletLanguage",
     // ⚠️ THE VILLA'S, NOT THIS DEVICE'S (owner, 2026-10-22: moved here from Advanced Settings): a shared key
     // (deviceConfig), so writing it reaches every tablet — through the same draft as every other option here, Save
     // keeping it and Cancel putting it back.
@@ -88,6 +90,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
   ] as const;
   const slice = useDraftedSlice(SETTINGS_KEYS);
   const v = slice.view;
+  const { kept } = useAnnouncements();
   // The 3D view follows what this dialog shows (hooks/useScenePreview): a slider is felt while it is dragged, and
   // Cancel puts the view back by the same path. ⚠️ NO SLIDER MOVES THE SCENE ITSELF (to 2.496.499, Cancel within the
   // half-second the write waits left the camera at the cancelled eye height).
@@ -178,6 +181,19 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
             <SegmentedGroup ariaLabel="Rings full screen on this tablet"
               active={v.ringsFullScreen ? "on" : null} onChange={() => slice.set({ ringsFullScreen: !v.ringsFullScreen }, { now: true })}
               options={[{ key: "on", title: "Let a ring take the whole screen on this tablet", label: <><Maximize size={16} /> Rings full screen on this tablet</> }]} />
+          </div>
+          {/* ticket 28 of "One inbox" (owner, 2026-10-30): this tablet's language for VESTA's words, from the languages
+              VESTA holds them in (messages/announcements languagesOf), the current pick kept even if none holds it now */}
+          <TipTitle title="VESTA's language on this tablet" tip={<>
+            VESTA's messages, alerts and reports on this tablet, in the language picked, when VESTA wrote them in it
+            (as it does for each Telegram chat's language). Anything VESTA wrote only in one language, the villa's own
+            announcements and the tablet's buttons and menus stay as they are.
+          </>} />
+          <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <SegmentedGroup ariaLabel="VESTA's language on this tablet" active={v.tabletLanguage}
+              onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
+              options={[...new Set([...languagesOf(kept), v.tabletLanguage])].map((code) => (
+                { key: code, title: `VESTA's words in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
           </div>
         </>
       )}

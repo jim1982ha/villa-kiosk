@@ -366,5 +366,51 @@ ck("each title the store holds, once, in order, without the ones already picked"
    JSON.stringify(announcedTitles(kept, ["🔥 Overload"])) === JSON.stringify(["🔔 Visitor at Gate A", "Weekly test"]),
    announcedTitles(kept, ["🔥 Overload"]));
 
+console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inbox\", owner 2026-10-30):");
+{
+  const { parseVestaMessage, inLanguage, languagesOf, languageName, DEFAULT_TABLET_LANGUAGE } = await import("@/messages/announcements");
+  const { announcementWords } = await import("@/messages/messagesModel");
+  const { AnnouncementContent } = await import("@/components/messages/AnnouncementContent");
+  const { DEFAULT_CONFIG } = await import("@/config/AppConfig");
+  const J = JSON.stringify;
+  const card = parseVestaMessage({ seq: 5, key: "incident:91", title: "#91-P2 (existing)", to: "Owner & FM",
+    lead: "🔓 Door unlocked", body: "Door open for 10min", status: ["Alert sent 09:20 (to: FM)", "⚠️ Still open"],
+    languages: { fr: { body: "Porte ouverte depuis 10min", status: ["⚠️ Toujours ouverte"] }, de: { status: ["⚠️ Noch offen"] } } });
+  const fr = inLanguage(card, "fr"), de = inLanguage(card, "de");
+  ck("VESTA's card read in the tablet's language: its words under the same lead line, its bottom line",
+     fr.text === "🔓 Door unlocked\nPorte ouverte depuis 10min" && fr.status === "⚠️ Toujours ouverte"
+     && fr.title === card.title && J(fr.story) === J(card.story) && fr.to === card.to, fr);
+  ck("  ...a version holding only its bottom line keeps the words as written", de.text === card.text && de.status === "⚠️ Noch offen", de);
+  ck("  ...a language VESTA did not write it in, or English, leaves it as written (the same record)",
+     inLanguage(card, "it") === card && inLanguage(card, DEFAULT_TABLET_LANGUAGE) === card, card);
+  const ring = { seq: 1, at: "", title: "Visitor", to: "", text: "Someone is at the door.", status: "", photo: null, key: "r1",
+    buttons: [], versions: { fr: { body: "Quelqu'un" } } };
+  ck("  ...the villa's own announcement is always as written", inLanguage(ring, "fr") === ring);
+  // the notice's line is a card's first line: VESTA's lead line, when it has one, is sent in English only (the Agent's
+  // `languages` hold body and status) — a card without one shows its words in the tablet's language there too
+  const noLead = inLanguage(parseVestaMessage({ seq: 7, key: "note:n1", title: "Note", body: "Pump checked",
+    languages: { fr: { body: "Pompe vérifiée" } } }), "fr");
+  ck("  ...every screen's words follow: the notice's line", announcementWords(noLead).line === "Pompe vérifiée", announcementWords(noLead));
+  ck("  ...and the card's body as drawn", draw(h(AnnouncementContent, { announcement: fr })).includes("Porte ouverte depuis 10min"));
+  ck("the languages offered: English first, then every language VESTA holds a card's words in, each once",
+     J(languagesOf([card, ring, { ...card, seq: 6, language: "id", versions: undefined }])) === J(["en", "de", "fr", "id"]), languagesOf([card]));
+  ck("  ...named in English (the code itself without the browser's names)", languageName("fr") === "French" && languageName("en") === "English");
+  ck("  ...English by default on every tablet", DEFAULT_CONFIG.tabletLanguage === "en");
+  const provider = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");
+  ck("ONE pick: the provider every screen reads applies it to VESTA's records and to what just came, with this tablet's language",
+     /kept: vestaRead\.kept\.map\(\(a\) => inLanguage\(a, lang\)\)/.test(provider)
+     && /announcement: inLanguage\(x\.announcement, lang\)/.test(provider) && /const lang = config\.tabletLanguage;/.test(provider));
+  const { readdirSync, statSync } = await import("node:fs");
+  const walk = (d) => readdirSync(d).flatMap((f) => { const p = `${d}/${f}`; return statSync(p).isDirectory() ? walk(p) : [p]; });
+  const root = new URL("../../src", import.meta.url).pathname;
+  const pickers = walk(root).filter((f) => /\.(ts|tsx)$/.test(f) && !f.endsWith("messages/announcements.ts")
+    && /\.versions\b/.test(readFileSync(f, "utf8")));
+  ck("  ...no screen picks a version itself", pickers.length === 0, pickers);
+  const settings = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
+  ck("the tablet's own setting, in Settings › Messages, in this dialog's draft (Save / Cancel)",
+     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="VESTA's language on this tablet"/.test(settings)
+     && /languagesOf\(kept\)/.test(settings));
+}
+
 done("✅ the villa's announcements: read into words, shown once, each in the one notice");
 
