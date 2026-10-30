@@ -51,7 +51,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nouvelle alerte", "still_open": "Toujours en cours",
         "earlier": ("… {n} notification précédente", "… {n} notifications précédentes"),
         "units": ("s", "min", "h", "j"),
-        "cockpit": {"closed": "Clôturé dans le Cockpit", "taken": "Ticket ouvert dans le Cockpit", "reopened": "Rouvert dans le Cockpit",
+        "cockpit": {"closed": "Terminé dans le Cockpit", "help": "Aide demandée dans le Cockpit", "taken": "Ticket ouvert dans le Cockpit", "reopened": "Rouvert dans le Cockpit",
                     "look_again": "Merci de vérifier à nouveau."},
     },
     "id": {
@@ -66,7 +66,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Peringatan baru", "still_open": "Masih terbuka",
         "earlier": ("… {n} pemberitahuan sebelumnya", "… {n} pemberitahuan sebelumnya"),
         "units": ("dtk", "mnt", "jam", "hr"),
-        "cockpit": {"closed": "Ditutup di Cockpit", "taken": "Tiket dibuka di Cockpit", "reopened": "Dibuka kembali di Cockpit",
+        "cockpit": {"closed": "Selesai di Cockpit", "help": "Bantuan diminta di Cockpit", "taken": "Tiket dibuka di Cockpit", "reopened": "Dibuka kembali di Cockpit",
                     "look_again": "Mohon periksa lagi."},
     },
     "de": {
@@ -81,7 +81,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Neuer Alarm", "still_open": "Weiterhin offen",
         "earlier": ("… {n} frühere Meldung", "… {n} frühere Meldungen"),
         "units": ("s", "Min.", "Std.", "Tg."),
-        "cockpit": {"closed": "Im Cockpit geschlossen", "taken": "Ticket im Cockpit eröffnet", "reopened": "Im Cockpit wieder geöffnet",
+        "cockpit": {"closed": "Im Cockpit erledigt", "help": "Hilfe im Cockpit angefordert", "taken": "Ticket im Cockpit eröffnet", "reopened": "Im Cockpit wieder geöffnet",
                     "look_again": "Bitte noch einmal prüfen."},
     },
     "es": {
@@ -96,7 +96,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nueva alerta", "still_open": "Sigue abierta",
         "earlier": ("… {n} aviso anterior", "… {n} avisos anteriores"),
         "units": ("s", "min", "h", "d"),
-        "cockpit": {"closed": "Cerrado en el Cockpit", "taken": "Ticket abierto en el Cockpit", "reopened": "Reabierto en el Cockpit",
+        "cockpit": {"closed": "Hecho en el Cockpit", "help": "Ayuda pedida en el Cockpit", "taken": "Ticket abierto en el Cockpit", "reopened": "Reabierto en el Cockpit",
                     "look_again": "Por favor, revíselo de nuevo."},
     },
     "it": {
@@ -111,7 +111,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nuovo avviso", "still_open": "Ancora aperto",
         "earlier": ("… {n} notifica precedente", "… {n} notifiche precedenti"),
         "units": ("s", "min", "h", "g"),
-        "cockpit": {"closed": "Chiuso nel Cockpit", "taken": "Ticket aperto nel Cockpit", "reopened": "Riaperto nel Cockpit",
+        "cockpit": {"closed": "Fatto nel Cockpit", "help": "Aiuto chiesto nel Cockpit", "taken": "Ticket aperto nel Cockpit", "reopened": "Riaperto nel Cockpit",
                     "look_again": "Si prega di ricontrollare."},
     },
     "nl": {
@@ -126,7 +126,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nieuwe melding", "still_open": "Nog open",
         "earlier": ("… {n} eerdere melding", "… {n} eerdere meldingen"),
         "units": ("s", "min", "u", "d"),
-        "cockpit": {"closed": "Gesloten in de Cockpit", "taken": "Ticket geopend in de Cockpit", "reopened": "Heropend in de Cockpit",
+        "cockpit": {"closed": "Gedaan in de Cockpit", "help": "Hulp gevraagd in de Cockpit", "taken": "Ticket geopend in de Cockpit", "reopened": "Heropend in de Cockpit",
                     "look_again": "Kijk er alstublieft opnieuw naar."},
     },
     "zh": {
@@ -140,7 +140,7 @@ WORDS: dict[str, dict] = {
         "colon": "：", "stop": "。", "sep": "，", "new_alert": "新警报", "still_open": "仍未解决",
         "earlier": ("… 之前 {n} 条通知", "… 之前 {n} 条通知"),
         "units": ("秒", "分钟", "小时", "天"), "tight": True,
-        "cockpit": {"closed": "已在 Cockpit 中关闭", "taken": "已在 Cockpit 中开单", "reopened": "已在 Cockpit 中重新打开",
+        "cockpit": {"closed": "已在 Cockpit 中完成", "help": "已在 Cockpit 中请求协助", "taken": "已在 Cockpit 中开单", "reopened": "已在 Cockpit 中重新打开",
                     "look_again": "请再次检查。"},
     },
     "ja": {
@@ -154,7 +154,7 @@ WORDS: dict[str, dict] = {
         "colon": "：", "stop": "。", "sep": "、", "new_alert": "新しいアラート", "still_open": "未解決",
         "earlier": ("… 以前の通知 {n} 件", "… 以前の通知 {n} 件"),
         "units": ("秒", "分", "時間", "日"), "tight": True,
-        "cockpit": {"closed": "Cockpitで完了", "taken": "Cockpitでチケット作成", "reopened": "Cockpitで再オープン",
+        "cockpit": {"closed": "Cockpitで完了", "help": "Cockpitで支援を依頼", "taken": "Cockpitでチケット作成", "reopened": "Cockpitで再オープン",
                     "look_again": "もう一度確認してください。"},
     },
     "ko": {
@@ -168,7 +168,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "새 알림", "still_open": "아직 열림",
         "earlier": ("… 이전 알림 {n}건", "… 이전 알림 {n}건"),
         "units": ("초", "분", "시간", "일"), "tight": True,
-        "cockpit": {"closed": "Cockpit에서 종료됨", "taken": "Cockpit에서 티켓 생성됨", "reopened": "Cockpit에서 다시 열림",
+        "cockpit": {"closed": "Cockpit에서 완료됨", "help": "Cockpit에서 도움 요청됨", "taken": "Cockpit에서 티켓 생성됨", "reopened": "Cockpit에서 다시 열림",
                     "look_again": "다시 확인해 주세요."},
     },
 }

@@ -37,11 +37,11 @@ def test_the_cockpit_lines_read_as_before_in_english_and_in_each_language():
     at = "2026-10-11T07:05:00Z"
     closed, taken = kiosk_words.closed("JM", at, "UTC"), kiosk_words.taken("FM", at, "UTC")
     reopened = kiosk_words.reopened("Owner", at, "UTC", "Pump weak")
-    assert str(closed) == "Closed in the Cockpit on 11/10/2026 07:05 (JM)"
-    assert str(kiosk_words.closed("JM", at, "UTC", end=True)) == "Closed in the Cockpit on 11/10/2026 07:05 (JM)."
+    assert str(closed) == "Done in the Cockpit on 11/10/2026 07:05 (JM)"
+    assert str(kiosk_words.closed("JM", at, "UTC", end=True)) == "Done in the Cockpit on 11/10/2026 07:05 (JM)."
     assert str(taken) == "Ticket opened in the Cockpit on 11/10/2026 07:05 (FM)."
     assert str(reopened) == "Reopened in the Cockpit on 11/10/2026 07:05 (Owner): Pump weak. Please look again."
-    assert closed.langs["fr"] == "Clôturé dans le Cockpit le 11/10/2026 07:05 (JM)"
+    assert closed.langs["fr"] == "Terminé dans le Cockpit le 11/10/2026 07:05 (JM)"
     assert taken.langs["de"] == "Ticket im Cockpit eröffnet am 11/10/2026 07:05 (FM)."
     assert reopened.langs["zh"] == "11/10/2026 07:05 已在 Cockpit 中重新打开 (Owner)：Pump weak。请再次检查。"
     assert set(closed.langs) == set(status_words.LANGS[1:])
@@ -98,9 +98,9 @@ def test_a_fault_closed_in_the_cockpit_is_said_in_each_chats_language_and_its_ch
     v, k, uid = villa(tmp_path)
     k.person_closes(uid, by="Luc", at="2026-10-15T00:40:00.000Z", cockpit=True)
     run(v.tickets.repair())
-    assert status(v, FM_FR)[-1] == "✅ Clôturé dans le Cockpit le 15/10/2026 00:40 (Luc).", status(v, FM_FR)
-    assert status(v, FM_DE)[-1] == "✅ Im Cockpit geschlossen am 15/10/2026 00:40 (Luc).", status(v, FM_DE)
-    assert status(v, GROUP)[-1] == "✅ Closed in the Cockpit on 15/10/2026 00:40 (Luc).", status(v, GROUP)
+    assert status(v, FM_FR)[-1] == "✅ Terminé dans le Cockpit le 15/10/2026 00:40 (Luc).", status(v, FM_FR)
+    assert status(v, FM_DE)[-1] == "✅ Im Cockpit erledigt am 15/10/2026 00:40 (Luc).", status(v, FM_DE)
+    assert status(v, GROUP)[-1] == "✅ Done in the Cockpit on 15/10/2026 00:40 (Luc).", status(v, GROUP)
     # the desk's read-again after it names the close in each language (alert_watch CHECK, kept by kiosk_words.stored)
     import importlib.util
     import os
@@ -111,7 +111,7 @@ def test_a_fault_closed_in_the_cockpit_is_said_in_each_chats_language_and_its_ch
     from vesta_shared import alert_watch
     from vesta_shared.store import notes_of
     who = desk.relabel(notes_of(Store(v.s.store_path).incident(1))[alert_watch.CHECK])
-    assert str(who) == "Closed in the Cockpit on 15/10/2026 00:40 (Luc)" and who.lang("fr").startswith("Clôturé dans le Cockpit")
+    assert str(who) == "Done in the Cockpit on 15/10/2026 00:40 (Luc)" and who.lang("fr").startswith("Terminé dans le Cockpit")
 
 
 def test_a_fault_reopened_in_the_cockpit_is_asked_again_in_each_chats_language(tmp_path):

@@ -48,5 +48,7 @@ def test_the_kiosk_stand_in_is_the_real_kiosk_with_only_its_transport_replaced()
                      # what a person does at a tablet, and what it shows (ticket 21 of "One inbox")
                      "person_asks", "person_presses", "conversation", "answer",
                      # a question spoken there (ticket 23)
-                     "person_speaks"}, added
+                     "person_speaks",
+                     # Need help pressed on a card (owner, 2026-10-30)
+                     "person_helps"}, added
     assert FakeKiosk().enabled is True and FakeKiosk().info

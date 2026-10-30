@@ -150,6 +150,10 @@ def _kind(name: str) -> str:
 
 
 REOPENED, RETITLED, READING, NOTED, CLEARED = (_kind(k) for k in ("reopened", "retitled", "reading", "noted", "cleared"))
+#: A person's Need help on the fault's card (owner, 2026-10-30): read, never written by this engine.
+HELP = _kind("help")
+#: The kinds only a person writes (the Kiosk's cards): this engine reads them and writes none.
+PERSON_KINDS: tuple[str, ...] = (HELP,)
 #: This agent's title step before the kinds (0.12.150 and earlier), still read. ⚠️ NOT IN THE AGREEMENT: the Kiosk reads
 #: the same words in its src/fm/faultNotes.ts (its twin of this line); the agreement names no key for it, and that file
 #: is the Kiosk's to change (a Kiosk release) — so this literal stays, beside its twin's name.
@@ -243,10 +247,10 @@ def cleared_step(step: dict) -> bool:
 
 def fault_of(t: dict) -> dict:
     """One Facility fault as the agent reads it: {status, title, agent_title, resolved_at, by, cleared, reopened_at,
-    reopened_by, taken_at, taken_by, noted, note, …} — `by` who closed it, on a closed fault ("Facility manager"; its last
+    reopened_by, taken_at, taken_by, help_at, help_by, noted, note, …} — `by` who closed it, on a closed fault ("Facility manager"; its last
     close's step), on an open one who last moved it (its last step), `agent_title` the title the agent last gave it (None: never said),
     `cleared` whether its last close was one with no work done — the agent's own clearing — (None: no step closed it),
-    `reopened_*` / `taken_*` a PERSON's last reopening / "Open Ticket", from its steps. Pure: what a person did is
+    `reopened_*` / `taken_*` / `help_*` a PERSON's last reopening / "Open Ticket" / Need help, from its steps. Pure: what a person did is
     read from the Kiosk's steps here and nowhere else (architecture review scan 2, 2026-10-19: the reading sat in
     closures inside the network call — testable only through a fake Kiosk).
 
@@ -265,11 +269,13 @@ def fault_of(t: dict) -> dict:
     took = [u for u in ups if taken_step(u)]
     close = last_close(ups)
     reopens = [u for u in ups if u.get("kind") == REOPENED]
+    helps = [u for u in ups if u.get("kind") == HELP]
     return {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
             "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
             # who: on a closed fault, the person of its last close; on an open one, of its last step (taken on, moved)
             "by": (str(close.get("who") or close.get("by") or "") if close and t.get("status") == "resolved"
                    else last("who") or last("by")),
+            "entity_id": str(t.get("entityId") or ""),
             "alert_number": t.get("alertNumber"), "alert_priority": t.get("alertPriority"), "origin": t.get("origin"),
             "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
             "closes_at": t.get("closesAt"), "confirms_by": t.get("confirmsBy"),
@@ -282,7 +288,10 @@ def fault_of(t: dict) -> dict:
             **({"reopened_at": str(reopens[-1].get("at") or ""),
                 "reopened_by": str(reopens[-1].get("who") or reopens[-1].get("by") or "")} if reopens else {}),
             **({"taken_at": str(took[-1].get("at") or ""),
-                "taken_by": str(took[-1].get("who") or took[-1].get("by") or "")} if took else {})}
+                "taken_by": str(took[-1].get("who") or took[-1].get("by") or "")} if took else {}),
+            # a person's last Need help on its card (owner, 2026-10-30): the owner is asked to act
+            **({"help_at": str(helps[-1].get("at") or ""),
+                "help_by": str(helps[-1].get("by") or helps[-1].get("who") or "")} if helps else {})}
 
 
 #: One change the agent makes to an open fault: the ticket as it stands → the ticket changed, None when it has nothing

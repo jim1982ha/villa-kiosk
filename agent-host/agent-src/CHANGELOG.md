@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.395 (30 October 2026)
+
+- The agreement's ticketUpdate kind "help" (a person asked for help on a fault): tickets._helps reads it
+  (kiosk.fault_of help_at/help_by), Problems.help_in_kiosk hands it to the desk; desk.need_help is the one function of
+  Telegram's reply and the Kiosk's mail; a fault with no incident gets an incident already escalated and linked to it
+  (Notes.HELP_OF), whose close closes the fault and the reverse. kiosk_words/status_words: "Done in the Cockpit".
+
 ## 0.6.394 (30 October 2026)
 
 - McpSession opens its session once (`ready`), not before every call when ha-mcp answers with no session id; it counts

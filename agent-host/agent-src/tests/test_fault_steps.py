@@ -649,7 +649,9 @@ def _kinds_and_fields(t: dict) -> tuple[set, set]:
 def test_a_kiosk_that_lists_everything_gets_every_kind_and_field_the_agent_writes():
     kinds, fields = _kinds_and_fields(_every_write(FakeKiosk()))
     agreed = json.load(open(CONTRACT))
-    assert kinds == set(agreed["ticketUpdate"]["kinds"]) and fields == set(agreed["ticket"]["fields"]), (kinds, fields)
+    # every kind but a person's own (Need help: the Kiosk's card writes it, the agent reads it)
+    from vesta_agent.kiosk import PERSON_KINDS
+    assert kinds == set(agreed["ticketUpdate"]["kinds"]) - set(PERSON_KINDS) and fields == set(agreed["ticket"]["fields"]), (kinds, fields)
 
 
 def test_a_kiosk_that_lists_nothing_gets_only_the_agreements_base_sets():

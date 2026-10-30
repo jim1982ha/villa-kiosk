@@ -60,6 +60,13 @@ def closed(by: str, iso: str | None, zone: str, end: bool = False) -> Words:
     return _every(lambda lang: SW.cockpit("closed", at, by, lang) + (SW.stop(lang) if end else ""))
 
 
+def helped(by: str, iso: str | None, zone: str) -> Words:
+    """"Need help in the Cockpit on 30/10/2026 17:20 (JM)" in every language — a person pressed Need help on a card in
+    the VESTA Kiosk: the owner is asked to act (owner, 2026-10-30). No full stop: the desk's sentence goes on."""
+    at = when(iso, zone)
+    return _every(lambda lang: SW.cockpit("help", at, by, lang))
+
+
 def taken(by: str, iso: str | None, zone: str) -> Words:
     """"Ticket opened in the Cockpit on 15/10/2026 00:40 (Facility manager)." in every language — someone took an
     alert's fault on in the VESTA Kiosk ("Open Ticket"): its Telegram chase stops (owner, 2026-10-15)."""

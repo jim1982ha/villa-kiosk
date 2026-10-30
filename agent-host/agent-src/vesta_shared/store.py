@@ -123,6 +123,13 @@ class Notes:
     WATCH_OVER = "watch_over"
     KIOSK_REOPENED = "kiosk_reopened"                            # mail: who reopened its fault in the Kiosk, and when
     UNREACHED = "unreached"                                      # mail: Telegram refused every chat of the FM's
+    # ⚠️ NEED HELP ON EVERY CARD (owner, 2026-10-30: every Cockpit card offers Done · Need help · Open Ticket): mail, who
+    # pressed Need help on this alert's card in the Kiosk, and when (kiosk_words.helped) — the desk escalates it as a
+    # Telegram Need help does
+    KIOSK_HELP = "kiosk_help"
+    # the alert's claim, on an alert the desk opened for a Need help on a fault that had none (a night-check finding, a
+    # person's ticket): what it stands for, "task:<id>" or "kiosk:<ticket id>" — its close closes that too
+    HELP_OF = "help_of"
 
 
 def notes_of(inc) -> dict:

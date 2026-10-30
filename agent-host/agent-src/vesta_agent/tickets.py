@@ -272,6 +272,7 @@ class Tickets:
                 log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
         if closed:
             log.info("Kiosk tickets closed by a person: %d task(s) closed with them", closed)
+        await self._helps(problems, held)
         # ⚠️ AN ALERT TAKEN ON IN THE KIOSK IS NO LONGER CHASED (owner, 2026-10-15): "Open Ticket" on its card, and
         # Telegram kept reminding the facility manager, then escalating to the owner — of a job someone had taken
         for t in problems.open_tasks():
@@ -284,6 +285,36 @@ class Tickets:
                 await self.restate_alert(iid, said)
             if iid:
                 log.info("Incident #%s taken on in the Kiosk: no longer chased", iid)
+
+    async def _helps(self, problems: Problems, held: dict[str, dict]) -> None:
+        """A person's Need help on a card in the Kiosk (owner, 2026-10-30: every card offers Done · Need help · Open
+        Ticket) reaches the owner: an alert's through its desk, any other fault's through an alert the desk opens already
+        escalated (Problems.help_in_kiosk). A person's ticket whose standing alert closed (a Done on Telegram) is resolved
+        here; one a person closed in the Kiosk closes its standing alert."""
+        tasks = {t.get("todo_uid"): t for t in problems.open_tasks() if t.get("todo_uid")}
+        for uid, card in held.items():
+            if not card.get("help_at") or card["status"] == "resolved":
+                continue
+            task = tasks.get(uid)
+            if task is None and uid.startswith(MINE):
+                continue                                 # the agent's fault of no open task: nothing stands for it
+            said = kiosk_words.helped(card.get("help_by") or "", card["help_at"], self.timezone)
+            subject = f"task:{int(task['id'])}" if task else f"kiosk:{uid}"
+            iid = problems.help_in_kiosk(subject, said, card["help_at"], task=task, title=card.get("title") or "",
+                                         entity_id=card.get("entity_id") or "")
+            log.info("Need help pressed in the Kiosk on %s: %s", uid,
+                     f"incident #{iid} escalated" if iid else "the owner is asked by the alert desk")
+        for uid, r in problems.help_resolves().items():
+            if (held.get(uid) or {}).get("status") not in (None, "resolved"):
+                await self.kiosk.resolve_ticket(uid, note=r.get("note") or None, who=r.get("who") or None)
+        for uid, card in held.items():
+            if card["status"] != "resolved" or uid.startswith(MINE):
+                continue
+            if iid := problems.help_standing(f"kiosk:{uid}"):
+                said = kiosk_words.closed(card.get("by") or "", card.get("resolved_at"), self.timezone)
+                problems.closed_help(iid, said, at=card.get("resolved_at"))
+                note = kiosk_close_note(card, self.timezone)
+                await self.settle_alert(iid, note, note_in=note.langs or None)
 
     async def _converge(self, problems: Problems, held: dict[str, dict]) -> dict[str, int]:
         """Step 3: each fault says what its task says (Problems.card). A close is redone for two days (a resolve that did

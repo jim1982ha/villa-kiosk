@@ -221,8 +221,8 @@ def test_a_fault_closed_in_the_kiosk_says_who_and_when_on_telegram():
     # owner, 2026-10-10: a Close in the Cockpit must act on the Telegram messages like a button: who, and when
     from vesta_agent.tickets import kiosk_close_note
     note = kiosk_close_note({"by": "Facility manager", "resolved_at": "2026-10-10T09:13:00.000Z"}, "Asia/Singapore")
-    assert note == "Closed in the Cockpit on 10/10/2026 17:13 (Facility manager)."
-    assert kiosk_close_note({}, "UTC") == "Closed in the Cockpit on {time}."     # an older Kiosk: noticed now
+    assert note == "Done in the Cockpit on 10/10/2026 17:13 (Facility manager)."
+    assert kiosk_close_note({}, "UTC") == "Done in the Cockpit on {time}."     # an older Kiosk: noticed now
 
 
 def test_the_kiosk_is_read_every_five_minutes(agent, monkeypatch):

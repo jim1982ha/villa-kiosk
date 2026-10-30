@@ -37,6 +37,19 @@ CLOSED_IN_KIOSK = "closed_in_kiosk"    # a person closed the fault in the VESTA 
 TASK_SEVERITIES = ("P2", "P3")
 STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 
+# ⚠️ NEED HELP ON EVERY CARD (owner, 2026-10-30: "Done / Need Help / Open Ticket consistently for all of them"): a Need
+# help pressed in the Kiosk on a fault with no alert (a night-check finding, a person's ticket) reaches the owner as an
+# alert the desk opens already escalated, standing for that fault (Notes.HELP_OF: "task:<id>" or "kiosk:<ticket id>").
+#: The store's mail for it: the Need helps waiting for the desk ({subject: …}), the last one read of each subject (its
+#: moment: one press told once), and the person tickets whose alert closed, for the engine to resolve ({ticket: …}).
+HELP_ASKED, HELP_TOLD, HELP_RESOLVE = "kiosk-help-asked", "kiosk-help-told", "kiosk-help-resolve"
+#: The key of the alert standing for a subject's Need help (`help_key`): one open at a time per subject.
+HELP_KEY = "kiosk_help|{subject}"
+
+
+def help_key(subject: str) -> str:
+    return HELP_KEY.format(subject=subject)
+
 _ORDER = result.PRIORITY_ORDER
 
 def alert_line(p: dict) -> str:
@@ -213,7 +226,11 @@ class Problems:
         task moved (result.moved)."""
         alert_watch.close(self.store, iid, state, now_iso, person=person, can_come_back=can_come_back, t=terms,
                           **fields)
-        return result.moved(self.settle(f"incident:{int(iid)}", note=note, who=who))
+        moved = self.settle(f"incident:{int(iid)}", note=note, who=who)
+        # an alert standing for a fault's Need help: its close closes that fault too (a Done on Telegram, the desk's)
+        if of := notes_of(self.store.incident(iid)).get(Notes.HELP_OF):
+            moved = [*moved, *self._help_closed(str(of), note, who)]
+        return result.moved(moved)
 
     def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
         """The night check no longer sees a finding: it closes, its task is cleared (its Kiosk fault follows: the
@@ -392,6 +409,9 @@ class Problems:
         task = self.store.task(task_id)
         self.close(task_id, CLOSED_IN_KIOSK)
         kind, sid = self._source(task)
+        # a Done in the Kiosk on a fault whose Need help the owner was asked about: the alert standing for it closes too
+        if kind != "incident" and (standing := self.help_standing(f"task:{int(task_id)}")):
+            kind, sid = "incident", standing
         if kind == "incident" and sid:
             inc = self.store.incident(sid)
             if inc and not inc.get("closed_at"):
@@ -431,6 +451,74 @@ class Problems:
                 self.store.reopening_told(task_id)
                 return sid
         return None
+
+    def help_in_kiosk(self, subject: str, said, at: str, *, task: dict | None = None, title: str = "",
+                      entity_id: str = "") -> int | None:
+        """A person pressed Need help on a fault's card in the VESTA Kiosk (`at`: when the Kiosk recorded it; `said`:
+        kiosk_words.helped): the owner is asked to act. `subject`: "task:<id>" (a fault of the agent's, `task`) or
+        "kiosk:<ticket id>" (a person's ticket, `title` and `entity_id` its own). Told once per press (HELP_TOLD).
+        An alert's fault: mail to the alert desk (Notes.KIOSK_HELP), which escalates it as a Telegram Need help does —
+        returns that incident's id. Any other: the alert standing for it, when one is open, gets the mail; else the desk
+        opens one already escalated (HELP_ASKED) — returns None."""
+        told = self.store.cache_get(HELP_TOLD) or {}
+        if not at or (told.get(subject) or "") >= at:
+            return None
+        self.store.cache_put(HELP_TOLD, {**told, subject: at})
+        kind, sid = self._source(task)
+        standing = self.store.find_open_incident(help_key(subject))
+        iid = sid if kind == "incident" and sid else (int(standing["id"]) if standing else None)
+        inc = self.store.incident(iid) if iid else None
+        if inc and not inc.get("closed_at"):
+            self.store.note(iid, {Notes.KIOSK_HELP: kiosk_words.stored(said)})
+            return iid
+        if kind == "incident":
+            return None                                   # its alert is over: nothing to escalate
+        asked = self.store.cache_get(HELP_ASKED) or {}
+        self.store.cache_put(HELP_ASKED, {**asked, subject: {
+            "said": kiosk_words.stored(said), "at": at, "title": title or self.current_title(task or {}),
+            "entity_id": entity_id or (task or {}).get("entity_id") or "", "rule_id": (task or {}).get("rule_id") or ""}})
+        return None
+
+    def help_asked(self) -> dict[str, dict]:
+        """The Need helps waiting for the desk ({subject: {said, at, title, entity_id, rule_id}}), taken: read once."""
+        asked = self.store.cache_get(HELP_ASKED) or {}
+        if asked:
+            self.store.cache_put(HELP_ASKED, {})
+        return asked
+
+    def help_standing(self, subject: str) -> int | None:
+        """The open alert standing for `subject`'s Need help, if any."""
+        row = self.store.find_open_incident(help_key(subject))
+        return int(row["id"]) if row else None
+
+    def _help_closed(self, subject: str, note: str, who: str | None) -> list[int]:
+        """The alert standing for `subject` closed: its fault closes with it — a task as a person's Done, a person's
+        ticket resolved by the engine (HELP_RESOLVE). The tasks moved."""
+        kind, _, ref = subject.partition(":")
+        if kind == "task" and ref.isdigit():
+            task = self.store.task(int(ref))
+            if task and task.get("status") == "open":
+                self.close(int(ref), DONE, note, who)
+                return [int(ref)]
+        elif kind == "kiosk" and ref:
+            waiting = self.store.cache_get(HELP_RESOLVE) or {}
+            self.store.cache_put(HELP_RESOLVE, {**waiting, ref: {"note": note, "who": who}})
+            return [0]                                    # the engine's repair resolves it (its faults changed)
+        return []
+
+    def closed_help(self, iid: int, said, at: str | None = None) -> None:
+        """A person closed in the Kiosk the ticket alert `iid` stands for: the alert closes as their Done, read again
+        as any Done (alert_watch.close)."""
+        when = _moment(at)
+        alert_watch.close(self.store, iid, Incident.DONE, when.isoformat() if when else self.store.now(),
+                          person=kiosk_words.stored(said), reply="Done in the Cockpit")
+
+    def help_resolves(self) -> dict[str, dict]:
+        """The person tickets whose Need help alert closed ({ticket id: {note, who}}), taken: the engine resolves them."""
+        waiting = self.store.cache_get(HELP_RESOLVE) or {}
+        if waiting:
+            self.store.cache_put(HELP_RESOLVE, {})
+        return waiting
 
     def taken_in_kiosk(self, task_id: int, said: str) -> int | None:
         """A person took the task's fault on in the VESTA Kiosk ("Open Ticket"): the alert it came from is no longer
@@ -612,6 +700,8 @@ class Problems:
         it had come back (review 25 forbade exactly that). The words travel on the task, as the close's do."""
         kind, sid = self._source(task)
         title = self.current_title(task)
+        # the alert standing for its Need help (owner, 2026-10-30): its number and its Telegram story on the card
+        standing = self.help_standing(f"task:{int(task['id'])}") if kind != "incident" and task.get("id") else None
         # a duration in its words, worded by the Kiosk when it shows the card (architecture review, 2026-10-15): the
         # title with "{since}" where the night's words were, and the moment they count from (the rule's since_of)
         row = self.store.finding(sid) if kind == "finding" else None
@@ -623,10 +713,11 @@ class Problems:
         return {"open": task.get("status") == "open", "title": title, "closes_at": closes or None,
                 "confirms_by": self.confirms_by(task, next_night),
                 "pattern": pattern, "since": d.get("since") if pattern else None,
-                "number": sid if kind == "incident" else None,
+                "number": sid if kind == "incident" else standing,
                 # its priority as the alert's title writes it after the number ("#5-P2", owner 2026-10-28): the Kiosk's
                 # ticket is named the same; kept current, as a priority can change
-                "priority": priority_of(self.store.incident(sid)) if kind == "incident" else None,
+                "priority": priority_of(self.store.incident(sid if kind == "incident" else standing))
+                if kind == "incident" or standing else None,
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
                 "origin": agreed("origins", {"incident": "alert", "finding": "night"}.get(kind or "", "")),
                 # how it is read again, the card's "Next check" (owner, 2026-10-15)

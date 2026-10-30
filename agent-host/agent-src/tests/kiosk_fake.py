@@ -19,7 +19,7 @@ import copy
 import json
 from pathlib import Path
 
-from vesta_agent.kiosk import CLEARED, READING, REOPENED, RETITLED, Kiosk, KioskError, _mine
+from vesta_agent.kiosk import CLEARED, HELP, READING, REOPENED, RETITLED, Kiosk, KioskError, _mine
 
 PERSON_AT = "2026-10-01T08:00:00.000Z"
 #: The step kinds this Kiosk shows, the fault fields and check words it reads (/agent/v1/info `step_kinds`,
@@ -209,6 +209,10 @@ class FakeKiosk(Kiosk):
     def person_reopens(self, tid: str, by: str = "Owner", at: str = "2099-01-01T00:00:00.000Z") -> None:
         self.ticket(tid).pop("resolvedAt", None)
         self._step(tid, {"at": at, "status": "open", "by": by, "kind": REOPENED}, status="open")
+
+    def person_helps(self, tid: str, by: str = "JM", at: str = PERSON_AT) -> None:
+        """Need help pressed on its card in the Cockpit: a step of kind "help", its status unchanged."""
+        self._step(tid, {"at": at, "status": self.ticket(tid)["status"], "by": by, "kind": HELP})
 
     def person_moves(self, tid: str, by: str = "Facility manager", at: str = PERSON_AT) -> None:
         """Picked up ("Open ticket" in the Cockpit): in progress, the person's step last."""

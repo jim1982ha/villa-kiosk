@@ -40,7 +40,7 @@ from vesta_shared import alert_watch as W  # noqa: E402  (a closed alert's watch
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared.maintenance import on as maintenance_on  # noqa: E402  (the villa's maintenance mode: the Kiosk's)
 from vesta_shared.timeutil import day_time_label, moment_label, villa_time  # noqa: E402
-from vesta_shared.problems import AGAIN_DAYS, Problems, incident_runs, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import AGAIN_DAYS, Problems, help_key, incident_runs, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
@@ -1145,12 +1145,7 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
             pressed = watched(pressed, W.minutes(store.incident(iid)))   # and on the alert in every other chat (settle below)
         out["send"].append(here(monitoring.only(act.langs) if checks else pressed, "closed"))
     elif option == "need_help":
-        store.update_incident(iid, state=Incident.ESCALATED, reply=label, escalated_at=now.isoformat(),
-                              assignee=CHASE["escalates_to"])
-        # ONE sentence in every chat (owner, 2026-10-11: one incident, one picture — "over to you" / "the owner has been
-        # told" were two)
-        helped = say("asked_to_act", pressed=act, role=role_in(CHASE["escalates_to"])).only(act.langs)
-        out["send"] += tell(inc["severity"], "escalated", incident=iid, mark=button.get("mark"), **about(inc, helped))
+        helped = need_help(store, inc, act, now, out, mark=button.get("mark"), reply=label)
         out["send"].append(here(helped, "pressed", mark=button.get("mark")))
     else:
         store.update_incident(iid, reply=label)
@@ -1161,6 +1156,44 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         out["settle"] = [R.settle(iid, pressed, mark=button.get("mark"), note_in=pressed.langs)]
     store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "option": option})
     return out
+
+
+def need_help(store: Store, inc: dict, pressed: Said, now: datetime, out: dict, mark: str | None = None,
+              reply: str = "Need help") -> Said:
+    """Need help on alert `inc`, wherever it was pressed (a Telegram button, a Cockpit card): escalated to the chase's
+    escalates_to, told to them with the buttons, in ONE sentence ("{pressed}: Owner is asked to act."). The
+    sentence, for the chat it was pressed in."""
+    store.update_incident(inc["id"], state=Incident.ESCALATED, reply=reply, escalated_at=now.isoformat(),
+                          assignee=CHASE["escalates_to"])
+    # ONE sentence in every chat (owner, 2026-10-11: one incident, one picture — "over to you" / "the owner has been
+    # told" were two)
+    helped = say("asked_to_act", pressed=pressed, role=role_in(CHASE["escalates_to"])).only(pressed.langs)
+    out["send"] += tell(inc["severity"], "escalated", incident=inc["id"], mark=mark, **about(inc, helped))
+    return helped
+
+
+def help_alerts(store: Store, now: datetime, out: dict) -> list[int]:
+    """⚠️ NEED HELP ON A FAULT WITH NO ALERT (owner, 2026-10-30: every Cockpit card offers Done · Need help · Open Ticket):
+    a night-check finding or a person's ticket gets an alert of its own, already escalated to the chase's escalates_to,
+    standing for that fault (Notes.HELP_OF) — its Done on Telegram closes the fault, the fault's Done in the Cockpit
+    closes it (Problems.close_incident, closed_in_kiosk). One open per fault (problems.help_key). Its ids."""
+    made = []
+    for subject, h in Problems(store).help_asked().items():
+        if store.find_open_incident(help_key(subject)):
+            continue
+        title = str(h.get("title") or "")
+        iid = store.new_incident(help_key(subject), str(h.get("rule_id") or "kiosk_help"), str(h.get("entity_id") or ""),
+                                 "P2", {Notes.MESSAGE: title, Notes.HELP_OF: subject}, now.isoformat())
+        carry_to(store, iid, "P2")
+        store.update_incident(iid, state=Incident.ESCALATED, asked_at=now.isoformat(), escalated_at=now.isoformat(),
+                              assignee=CHASE["escalates_to"])
+        pressed = kiosk_words.read(h.get("said"))
+        helped = say("asked_to_act", pressed=Said(str(pressed), getattr(pressed, "langs", None)),
+                     role=role_in(CHASE["escalates_to"]))
+        out["send"] += tell("P2", "escalated", incident=iid, text=title, **_status(helped))
+        out["actions"].append(R.faults_changed())       # the fault's card carries the alert's number and story
+        made.append(iid)
+    return made
 
 
 def tick(store: Store, now: datetime, params: VillaParams | None = None, client=None, zone: str | None = None) -> dict:
@@ -1176,6 +1209,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out, terms(params))
         out["rule_gone"] = rule_gone(store, now, client, params.behaviour("clear_minutes"), out)
     out["watch_over"] = watch_over(store, now, out, zone)
+    out["helped"] = help_alerts(store, now, out)
     for inc in store.incidents(open_only=True):
         p = notes_of(inc)
         # the route's "what to do" edited while the alert is open (a villa's rules.yaml): the Kiosk fault's note and
@@ -1183,6 +1217,12 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         carry_check(store, inc["id"], route_for(inc["rule_id"], p.get(Notes.BLUEPRINT)), p)
         carry_to(store, inc["id"], inc["severity"], p)     # an incident of an older desk gets it at the next tick
         W.carry(store, inc["id"], terms(params), p)       # a close in the Cockpit knows its watch at once (alert_watch.close)
+        if p.get(Notes.KIOSK_HELP):
+            # Need help pressed on its card in the Cockpit: the same escalation as the Telegram button's
+            asked = kiosk_words.read(store.take_note(inc["id"], Notes.KIOSK_HELP))
+            need_help(store, inc, Said(str(asked), getattr(asked, "langs", None)), now, out)
+            out["escalated"].append(inc["id"])
+            continue
         said = store.take_note(inc["id"], Notes.KIOSK_REOPENED, assignee=CHASE["asks"]) \
             if p.get(Notes.KIOSK_REOPENED) else None
         if said:

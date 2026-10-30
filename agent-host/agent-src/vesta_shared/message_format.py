@@ -115,7 +115,10 @@ def acted(what: str, when: str, who: str = "") -> str:
 #: What a person did in the VESTA Kiosk's Cockpit, as a line names it (vesta_shared.kiosk_words writes the line; each
 #: other language's in status_words, key for key): closed its fault, took it on ("Open Ticket"), reopened it — and the
 #: ask after a reopening. ⚠️ ONE NAME FOR THE PLACE (architecture review, 2026-10-15): "the Cockpit", where it was done.
-COCKPIT = {"closed": "Closed in the Cockpit", "taken": "Ticket opened in the Cockpit",
+# ⚠️ "DONE", AS THE CARD'S BUTTON SAYS IT (owner, 2026-10-30: every card offers Done · Need help · Open Ticket, Done
+# and Close doing the same): a close in the Cockpit is said "Done in the Cockpit", a Need help pressed there "Need
+# help in the Cockpit"
+COCKPIT = {"closed": "Done in the Cockpit", "help": "Need help in the Cockpit", "taken": "Ticket opened in the Cockpit",
            "reopened": "Reopened in the Cockpit", "look_again": "Please look again."}
 
 
