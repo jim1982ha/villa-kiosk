@@ -3,6 +3,8 @@ could mean anything, a command cannot. The number is the proposal's own (the sto
 the reply names the proposal, and answering again changes the answer."""
 from __future__ import annotations
 
+import itertools
+
 import asyncio
 import json
 
@@ -13,6 +15,9 @@ from vesta_shared.store import Store
 OWNER, FM = 111, 222
 PEOPLE = [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}, {"telegram_id": FM, "name": "FM", "role": "fm"}]
 
+
+#: each update's own id, as Telegram gives one to each (the agent takes each in once: missed_at_start.key)
+_IDS = itertools.count(1)
 
 def run(coro):
     return asyncio.run(coro)
@@ -39,7 +44,7 @@ def _answer(v, monkeypatch, who: int, words: str) -> list:
         said.append(await call["call"]("run_skill_script", {"skill": "proposals", "script": "answer.py", "args": [
             "answer", "--number", number, "--choice", choice]}))
     FakeAI("ok", act=act).install(monkeypatch)
-    run(v.on_ha_event("telegram_command", {"id": 1, "chat_id": who, "user_id": who, "from_first": "X", "bot": BOT,
+    run(v.on_ha_event("telegram_command", {"id": next(_IDS), "chat_id": who, "user_id": who, "from_first": "X", "bot": BOT,
                                            "command": "/proposal", "args": words.split()}))
     assert seen, "the /proposal command did not reach the AI"
     return [(r.get("is_error", False), r["content"][0]["text"]) for r in said]

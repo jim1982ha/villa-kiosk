@@ -548,7 +548,7 @@ class State:
                      reached="An older one of the villa's alerts gets its story in a new message.", told="")
 
     # The villa's handovers taken in (app.on_critical), by their own `incident_id` and phase: one taken in live is never
-    # taken in again by the catch-up at start (missed_alerts.py). Kept the villa messages' hours, as their messages are.
+    # taken in again by the catch-up at start (missed_at_start.py). Kept the villa messages' hours, as their messages are.
     def alert_seen(self, key: str, at: datetime | None = None) -> bool:
         """Whether this handover was taken in already; it counts as taken in from now."""
         now = at or utcnow()
@@ -557,11 +557,34 @@ class State:
         self.put(f"alertseen:{key}", now.isoformat())
         # ⚠️ AT LEAST AS LONG AS THE CATCH-UP LOOKS BACK (architecture review, 2026-10-30): kept the villa messages' hours
         # only, a handover taken in live and forgotten before a long stop was taken in again by the catch-up at start
-        from .missed_alerts import catch_up_hours
+        from .missed_at_start import catch_up_hours
         cutoff = (now - timedelta(hours=max(self.ha_sent_keep_h(), catch_up_hours()))).isoformat()
         with self._lock:
             self.db.execute("delete from kv where k like 'alertseen:%' and v < ?", (cutoff,))
             self.db.commit()
+        return False
+
+    # People's Telegram updates taken in (app.on_ha_event), by their own id (missed_at_start.key): one taken in live is
+    # never taken in again by the catch-up at start, nor one the catch-up took (or answered "too late") at the next start.
+    def update_seen(self, key: str, at: datetime | None = None) -> bool:
+        """Whether this Telegram update was taken in already; it counts as taken in from now."""
+        now = at or utcnow()
+        if self.get(f"updateseen:{key}") is not None:
+            return True
+        self.put(f"updateseen:{key}", now.isoformat())
+        from .missed_at_start import catch_up_hours
+        cutoff = (now - timedelta(hours=catch_up_hours())).isoformat()
+        with self._lock:
+            self.db.execute("delete from kv where k like 'updateseen:%' and v < ?", (cutoff,))
+            self.db.commit()
+        return False
+
+    def updates_recorded(self, now: datetime | None = None) -> bool:
+        """Whether an earlier start of this engine already recorded the updates it took in (update_seen); it counts as
+        recording from now. The catch-up reads the Telegram updates of a stop only then (app.Vesta.catch_up)."""
+        if self.get("updates:recorded_since") is not None:
+            return True
+        self.put("updates:recorded_since", (now or utcnow()).isoformat())
         return False
 
     def note_ha_sent(self, context_id: str, chat: int | str, message_id: int | str, at: datetime | None = None) -> None:

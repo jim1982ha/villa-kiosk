@@ -41,7 +41,7 @@ def catch_up(v, last_heard: datetime | None) -> int:
     async def go():
         connected = asyncio.Event()
         connected.set()
-        return await v.catch_up_alerts(connected, last_heard.isoformat() if last_heard else None)
+        return await v.catch_up(connected, last_heard.isoformat() if last_heard else None)
     return asyncio.run(go())
 
 
@@ -81,7 +81,7 @@ def test_the_agent_catches_up_each_time_it_starts_listening_from_its_last_beat()
     from vesta_agent.app import Vesta
     src = inspect.getsource(Vesta.main)
     assert src.index('last_beat("ha_events")') < src.index("HaEvents(")
-    assert "self.catch_up_alerts(events.connected, last_heard)" in src
+    assert "self.catch_up(events.connected, last_heard)" in src
 
 
 def test_a_rules_repeat_of_an_open_alert_is_its_own_handover(tmp_path):
@@ -94,10 +94,10 @@ def test_a_rules_repeat_of_an_open_alert_is_its_own_handover(tmp_path):
 
 def test_a_handover_is_remembered_as_long_as_the_catch_up_looks_back(tmp_path, monkeypatch):
     # the villa messages kept 1 hour, the catch-up 6: one taken in 3 hours before a stop is still known as taken in
-    from vesta_agent import missed_alerts
+    from vesta_agent import missed_at_start
     from vesta_agent.state import State
     monkeypatch.setattr(State, "ha_sent_keep_h", staticmethod(lambda: 1))
-    monkeypatch.setattr(missed_alerts, "catch_up_hours", lambda: 6)
+    monkeypatch.setattr(missed_at_start, "catch_up_hours", lambda: 6)
     v = agent(tmp_path, [])
     early = NOW - timedelta(hours=3)
     assert v.state.alert_seen("i-1:opened:t", at=early) is False

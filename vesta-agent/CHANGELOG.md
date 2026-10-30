@@ -1,3 +1,16 @@
+## 0.12.417
+
+What you will see:
+- A button pressed or a question sent on Telegram while VESTA was restarting (an update takes about 20s) is now acted
+  on when VESTA is back, once, in the order they were sent: a Done pressed then takes the buttons off the alert, a
+  question gets its answer. A press or a question older than 15min (VESTA's Limits tab, telegram.catch_up_minutes) is
+  not acted on; VESTA replies to it with one line instead, for example "VESTA was restarting when you pressed Done on
+  #93-P1; press it again."
+- When Telegram asks VESTA to slow down for a few seconds, or does not answer for a moment, the message is sent again
+  instead of being lost: an answer with several pictures, or a long reply in parts, now arrives whole, each part once.
+  How long VESTA waits for Telegram is on VESTA's Limits tab (telegram.retry_wait_max_s, 30s; telegram.retry_pause_s,
+  2s).
+
 ## 0.12.416
 
 What you will see:

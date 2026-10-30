@@ -4,6 +4,8 @@ leaves a group, and sends nothing while Telegram is off. Field names as captured
 live on 2026-09-30; ids invented."""
 from __future__ import annotations
 
+import itertools
+
 import asyncio
 import json
 import re
@@ -37,8 +39,11 @@ def agent(tmp_path):
     return v
 
 
+_IDS = itertools.count(1)          # a message's own id, as Telegram gives each one (the agent takes each in once)
+
+
 def text_event(chat, user, text, reply_to=None):
-    d = {"id": 1, "chat_id": chat, "text": text, "user_id": user, "from_first": "X", "bot": BOT}
+    d = {"id": next(_IDS), "chat_id": chat, "text": text, "user_id": user, "from_first": "X", "bot": BOT}
     if reply_to:
         d["reply_to_message_id"] = reply_to
         d["message_thread_id"] = reply_to          # what a group reply carries too (live capture)

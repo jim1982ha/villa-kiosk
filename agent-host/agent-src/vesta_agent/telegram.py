@@ -12,11 +12,12 @@ file itself) — the voice message a person sent, which no event carries.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 import aiohttp
 
@@ -109,30 +110,53 @@ class Telegram:
             await self.http.close()
 
     async def api(self, method: str, **data) -> Any:
-        assert self.http is not None
-        try:
-            async with self.http.post(f"{self.base}/{method}", json=data) as r:
-                body = await r.json(content_type=None)
-        except Exception as e:  # never log the URL: it holds the token
-            raise TelegramError(f"{method}: {type(e).__name__}") from None
-        if not body.get("ok"):
-            if body.get("error_code") == 409:
-                raise TelegramError("409 Conflict: a program is reading this bot with getUpdates while Home Assistant receives it")
-            raise _failed(method, body)
-        return body.get("result")
+        return await self._call(method, lambda: {"json": data})
 
-    async def _post_form(self, method: str, form: aiohttp.FormData) -> dict:
+    async def _post_form(self, method: str, form) -> dict:
         """A file upload (sendDocument, sendPhoto). ⚠️ FAILS AS api() FAILS: these posted directly, so a network
-        error escaped as something other than TelegramError, past every caller's `except TelegramError`."""
+        error escaped as something other than TelegramError, past every caller's `except TelegramError`. `form`: a
+        callable making the form, since a form once posted cannot be posted again (the retry, `_call`)."""
+        return await self._call(method, lambda: {"data": form()}) or {}
+
+    async def _call(self, method: str, request: Callable[[], dict]) -> Any:
+        """One call to Telegram, tried a second time when the first did not get through for a moment.
+
+        ⚠️ A "SLOW DOWN" IS WAITED OUT, A BLIP TRIED AGAIN (architecture review, round 9: Telegram's "too many
+        requests, retry in 3s" stopped an answer with four pictures after the second, and a report was never sent
+        again; only the alert cards and the tablet's copies had a retry of their own). A 429 is waited out for the
+        time Telegram names, when it is within telegram.retry_wait_max_s; a 5xx, a timeout or a network error is
+        tried once more after telegram.retry_pause_s. A 4xx refusal is never tried again: the same call would be
+        refused the same way. A long message is sent part by part through here, so a part tried again never sends
+        the parts before it a second time."""
         assert self.http is not None
-        try:
-            async with self.http.post(f"{self.base}/{method}", data=form) as r:
-                body = await r.json(content_type=None)
-        except Exception as e:  # never log the URL: it holds the token
-            raise TelegramError(f"{method}: {type(e).__name__}") from None
-        if not body.get("ok"):
-            raise _failed(method, body)
-        return body.get("result") or {}
+        for attempt in (1, 2):
+            wait = None
+            try:
+                async with self.http.post(f"{self.base}/{method}", **request()) as r:
+                    status = getattr(r, "status", None)
+                    body = await r.json(content_type=None)
+            except Exception as e:  # never log the URL: it holds the token
+                error, wait = TelegramError(f"{method}: {type(e).__name__}"), retry_pause_s()
+            else:
+                if not isinstance(body, dict):
+                    body = {"ok": False, "error_code": status, "description": f"HTTP {status}"}
+                if body.get("ok"):
+                    return body.get("result")
+                code = body.get("error_code")
+                if code == 409:
+                    raise TelegramError("409 Conflict: a program is reading this bot with getUpdates while Home Assistant receives it")
+                error = _failed(method, body)
+                if code == 429:
+                    after = (body.get("parameters") or {}).get("retry_after")
+                    if isinstance(after, (int, float)) and not isinstance(after, bool) and 0 <= after <= retry_wait_max_s():
+                        wait = after
+                elif isinstance(code, int) and code >= 500:
+                    wait = retry_pause_s()
+            if wait is None or attempt == 2:
+                raise error
+            log.warning("%s, tried again in %ss", error, wait)
+            await asyncio.sleep(wait)
+        raise AssertionError("unreachable")
 
     async def send(self, chat_id: int, text: str, keyboard: dict | None = None, document: str | None = None,
                    photo_b64: tuple[str, str] | None = None, reply_to: int | None = None) -> list[int]:
@@ -153,26 +177,32 @@ class Telegram:
 
     async def _part(self, chat_id: int, part: Part, document: str | None, photo_b64) -> dict:
         if part.media:
-            form = aiohttp.FormData()
-            form.add_field("chat_id", str(chat_id))
-            form.add_field("caption", part.text)
-            for k, v in _italic("caption_entities", part.text).items():
-                form.add_field(k, json.dumps(v))
-            if part.keyboard:
-                form.add_field("reply_markup", json.dumps(part.keyboard))
-            if part.reply_to:
-                form.add_field("reply_parameters", json.dumps({"message_id": part.reply_to, "allow_sending_without_reply": True}))
+            def form(name, content, **file) -> aiohttp.FormData:
+                f = aiohttp.FormData()
+                f.add_field("chat_id", str(chat_id))
+                f.add_field("caption", part.text)
+                for k, v in _italic("caption_entities", part.text).items():
+                    f.add_field(k, json.dumps(v))
+                if part.keyboard:
+                    f.add_field("reply_markup", json.dumps(part.keyboard))
+                if part.reply_to:
+                    f.add_field("reply_parameters", json.dumps({"message_id": part.reply_to, "allow_sending_without_reply": True}))
+                f.add_field(name, content, **file)
+                return f
             if part.media == "document":
                 try:
                     with open(document, "rb") as f:
-                        form.add_field("document", f.read(), filename=os.path.basename(document))
+                        content = f.read()
                 except OSError as e:
                     raise TelegramError(f"sendDocument: the file cannot be read ({type(e).__name__})") from None
-                return await self._post_form("sendDocument", form)
+                return await self._post_form("sendDocument", lambda: form(
+                    "document", content, filename=os.path.basename(document)))
             import base64
             data_b64, mime = photo_b64
-            form.add_field("photo", base64.b64decode(data_b64), filename="snapshot.jpg", content_type=mime or "image/jpeg")
-            return await self._post_form("sendPhoto", form)     # refused: an error, never the caption alone
+            photo = base64.b64decode(data_b64)
+            # refused: an error, never the caption alone
+            return await self._post_form("sendPhoto", lambda: form(
+                "photo", photo, filename="snapshot.jpg", content_type=mime or "image/jpeg"))
         data: dict[str, Any] = {"chat_id": chat_id, "text": part.text, **_italic("entities", part.text)}
         if part.keyboard:
             data["reply_markup"] = part.keyboard
@@ -300,3 +330,17 @@ def toast_chars() -> int:
                  says="The longest short notice shown at the top of Telegram after a button press (Telegram's own "
                       "maximum is 200).",
                  reached="The rest of the notice is cut.", told="")
+
+
+def retry_wait_max_s() -> int:
+    return limit("telegram.retry_wait_max_s", 30, unit="seconds", group="run", lo=0, hi=300,
+                 says="The longest the agent waits when Telegram asks it to slow down (\"too many requests, retry in 3s\") "
+                      "before sending the message again.",
+                 reached="A longer wait is not made: that message is not sent, and the agent's log says so.", told="")
+
+
+def retry_pause_s() -> int:
+    return limit("telegram.retry_pause_s", 2, unit="seconds", group="run", lo=0, hi=60,
+                 says="How long the agent waits before sending a message a second time when Telegram did not answer "
+                      "(a network blip, Telegram busy).",
+                 reached="A longer pause: such a message arrives that much later.", told="")

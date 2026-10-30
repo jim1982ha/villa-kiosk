@@ -3,6 +3,8 @@ pump, the agent answered "Ticket created for the facility manager" — "I never 
 answer creates it, once; a scheduled job, with nobody to press, still creates it at once."""
 from __future__ import annotations
 
+import itertools
+
 import asyncio
 import dataclasses
 import os
@@ -15,6 +17,9 @@ from vesta_agent.fault_offers import CREATE as OFFER_BUTTON, DECLINE as NO_OFFER
 JM = 111
 PEOPLE = [{"telegram_id": JM, "name": "JM", "role": "owner"}]
 
+
+#: each update's own id, as Telegram gives one to each (the agent takes each in once: missed_at_start.key)
+_IDS = itertools.count(1)
 
 def run(coro):
     return asyncio.run(coro)
@@ -40,7 +45,7 @@ def _press(v, which=0):
     mid = v.tg.next_id
     _, text, kb = v.tg.sent[-1]
     data = kb["inline_keyboard"][-1][which]["callback_data"]
-    run(v.on_ha_event("telegram_callback", {"id": "cb", "data": data, "chat_id": JM, "user_id": JM, "bot": BOT,
+    run(v.on_ha_event("telegram_callback", {"id": f"cb{next(_IDS)}", "data": data, "chat_id": JM, "user_id": JM, "bot": BOT,
                                             "message": {"message_id": mid, "chat": {"id": JM}, "text": text}}))
 
 
@@ -200,7 +205,7 @@ def test_a_continue_goes_on_with_the_skill_its_turn_was_called_for(tmp_path, mon
     stop["now"] = False
     run(v.converse(JM, v.policy().person(JM), "thanks"))                                 # a word in between
     assert said[-1].get("is_error")                                                      # (not an investigation)
-    run(v.on_ha_event("telegram_callback", {"id": "cb", "data": cont_data, "chat_id": JM, "user_id": JM, "bot": BOT,
+    run(v.on_ha_event("telegram_callback", {"id": f"cb{next(_IDS)}", "data": cont_data, "chat_id": JM, "user_id": JM, "bot": BOT,
                                             "message": {"message_id": 1001, "chat": {"id": JM}, "text": "x"}}))
     assert not said[-1].get("is_error")                                                  # the Continue: still investigating
 
@@ -308,7 +313,7 @@ def test_buttons_telegram_refuses_on_the_page_come_on_their_own(tmp_path, monkey
 def _press_create_under_the_page(v):
     (_, mid, kb), = v.tg.buttoned
     data = kb["inline_keyboard"][-1][0]["callback_data"]
-    run(v.on_ha_event("telegram_callback", {"id": "cb", "data": data, "chat_id": JM, "user_id": JM, "bot": BOT,
+    run(v.on_ha_event("telegram_callback", {"id": f"cb{next(_IDS)}", "data": data, "chat_id": JM, "user_id": JM, "bot": BOT,
                                             "message": {"message_id": mid, "chat": {"id": JM}, "caption": "x"}}))
 
 
@@ -359,7 +364,7 @@ def test_a_press_on_a_page_message_keeps_its_decision_within_the_caption(tmp_pat
     (_, mid, kb), = v.tg.buttoned
     data = kb["inline_keyboard"][-1][0]["callback_data"]
     caption = "Water heater on the night of 9 October\\nTo: JM\\n" + "It ran. " * 120
-    run(v.on_ha_event("telegram_callback", {"id": "cb", "data": data, "chat_id": JM, "user_id": JM, "bot": BOT,
+    run(v.on_ha_event("telegram_callback", {"id": f"cb{next(_IDS)}", "data": data, "chat_id": JM, "user_id": JM, "bot": BOT,
                                             "message": {"message_id": mid, "chat": {"id": JM}, "caption": caption}}))
     (_, _, edited), = v.tg.edits
     assert len(edited) <= CAPTION and edited.endswith("Fault created for the facility manager by JM: "
@@ -400,7 +405,7 @@ def test_an_investigation_offers_one_fault_even_across_its_continue(tmp_path, mo
     (cont,) = [b["callback_data"] for _, _, kb in v.tg.sent if kb for row in kb["inline_keyboard"] for b in row
                if b["callback_data"].startswith("c:")]
     stop["now"] = False
-    run(v.on_ha_event("telegram_callback", {"id": "cb", "data": cont, "chat_id": JM, "user_id": JM, "bot": BOT,
+    run(v.on_ha_event("telegram_callback", {"id": f"cb{next(_IDS)}", "data": cont, "chat_id": JM, "user_id": JM, "bot": BOT,
                                             "message": {"message_id": 1001, "chat": {"id": JM}, "text": "x"}}))
     offers = v.state.db.execute("select title from ticket_offers").fetchall()
     assert [o[0] for o in offers] == ["Check the float switch"]
@@ -524,7 +529,7 @@ def test_an_investigation_keeps_its_web_searches_across_a_restart_before_its_con
                     if b["callback_data"].startswith("c:")]
     v = restarted(v)                                                                     # an update in between
     stop["now"] = False
-    run(v.on_ha_event("telegram_callback", {"id": "cb", "data": cont_data, "chat_id": JM, "user_id": JM, "bot": BOT,
+    run(v.on_ha_event("telegram_callback", {"id": f"cb{next(_IDS)}", "data": cont_data, "chat_id": JM, "user_id": JM, "bot": BOT,
                                             "message": {"message_id": 1001, "chat": {"id": JM}, "text": "x"}}))
     assert said and json.loads(json.loads(said[0]["content"][0]["text"])["searched"]) == ["pump runs without stopping causes"]
 

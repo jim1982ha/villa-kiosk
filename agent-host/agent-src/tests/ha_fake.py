@@ -34,13 +34,16 @@ class _Session:
 class FakeHA:
     def __init__(self, tools=(), images: dict[str, str] | None = None, answers: dict[str, str] | None = None,
                  states: dict[str, dict] | None = None, version: str = "8.6.0", pipeline: dict | None = None,
-                 rules: list[dict] | None = None, traces: dict[str, list[dict]] | None = None):
+                 rules: list[dict] | None = None, traces: dict[str, list[dict]] | None = None,
+                 history: dict[str, list[dict]] | None = None):
         self.tools, self.images, self.answers = list(tools), dict(images or {}), dict(answers or {})
         self._states, self.version, self.calls = dict(states or {}), version, []
         self.mcp = _Session(self)
         self.pipeline = pipeline                # the villa's voice settings (None: it has none)
         # the villa's rules naming a text (rules_mentioning) and each automation's runs: [{run_id, start, actions}]
         self.rules, self.traces = list(rules or []), dict(traces or {})
+        # each entity's recorded rows with their attributes, as ha_get_history gives them (minimal_response false)
+        self.history = dict(history or {})
 
     def states(self, entity_ids=None) -> dict[str, dict]:
         return {e: s for e, s in self._states.items() if entity_ids is None or e in entity_ids}
@@ -56,8 +59,12 @@ class FakeHA:
         return [dict(r) for r in self.rules]
 
     def tool(self, name: str, args: dict, partial: bool = False):
-        """ha_get_automation_traces as ha-mcp answers it: a rule's runs listed, or one run's steps (`run_id`)."""
+        """ha_get_automation_traces as ha-mcp answers it: a rule's runs listed, or one run's steps (`run_id`); and
+        ha_get_history of the rows given (`history`), in one page."""
         self.calls.append((name, dict(args or {})))
+        if name == "ha_get_history":
+            rows = self.history.get(args.get("entity_ids"), [])
+            return {"entities": [{"entity_id": args.get("entity_ids"), "states": list(rows), "has_more": False}]}
         if name != "ha_get_automation_traces":
             return {}
         runs = self.traces.get(args.get("automation_id"), [])

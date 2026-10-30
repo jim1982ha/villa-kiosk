@@ -62,7 +62,7 @@ from .alert_buttons import AlertButtons
 from .outcome import Outcome
 from .voice import TelegramAudio, Voice
 from .transcriber import villa_entity_ids
-from . import answering, missed_alerts, speech
+from . import answering, missed_at_start, speech
 from .tickets import Tickets
 from .places import where
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
@@ -548,6 +548,11 @@ class Vesta:
             if ctx and chat is not None and mid is not None:
                 self.state.note_ha_sent(str(ctx), int(chat), int(mid))
             return None
+        # once each, whichever way it came: the socket, or the catch-up at start (missed_at_start.py)
+        seen = missed_at_start.key(event_type, data)
+        if seen and self.state.update_seen(seen):
+            log.info("Telegram update already taken in: %s", seen)
+            return None
         bot = data.get("bot") or {}
         if bot.get("username"):
             self.bot_username = bot["username"]
@@ -556,7 +561,7 @@ class Vesta:
         return await self.handle_message(event_type, data)
 
     async def on_critical(self, event: dict) -> None:
-        # once each, whichever way it came: the socket, or the catch-up at start (missed_alerts.py)
+        # once each, whichever way it came: the socket, or the catch-up at start (missed_at_start.py)
         # ⚠️ BY ITS MOMENT TOO: a rule's repeat ("still there") is a new handover under the same incident id and phase
         if event.get("incident_id") and event.get("timestamp") and self.state.alert_seen(
                 f"{event['incident_id']}:{event.get('phase') or ''}:{event['timestamp']}"):
@@ -600,18 +605,59 @@ class Vesta:
             log.info("The alert's device names could not be read from the villa's system (%s): the names already "
                      "known are used", type(e).__name__)
 
-    async def catch_up_alerts(self, connected: asyncio.Event, last_heard: str | None) -> int:
-        """Once the villa is heard again: every alert handed over while the agent was not listening, taken in in time
-        order (missed_alerts.py). How many."""
+    async def catch_up(self, connected: asyncio.Event, last_heard: str | None) -> int:
+        """Once the villa is heard again: every alert handed over and every Telegram update people sent while the agent
+        was not listening, taken in in time order (missed_at_start.py) through the socket's own handlers. A press or a
+        message older than telegram.catch_up_minutes is not acted on: the person is told (_too_late). How many."""
         await connected.wait()
-        span = missed_alerts.window(last_heard, datetime.now(timezone.utc))
+        now = datetime.now(timezone.utc)
+        span = missed_at_start.window(last_heard, now)
+        # ⚠️ NOT AT THE FIRST START OF AN ENGINE THAT RECORDS THEM (round 9): the engine before kept no record of the updates
+        # it took in live, so the minute before its stop would be answered a second time
+        telegram = self.state.updates_recorded(now)
         if span is None:
             return 0
-        found = await asyncio.to_thread(missed_alerts.missed, self.reader, *span)
-        for event in found:
-            log.info("Alert handed over while the agent was not listening: %s", event.get("label") or event.get("rule_id"))
-            await self.on_critical(event)
+        found = await asyncio.to_thread(missed_at_start.missed, self.reader, *span, telegram)
+        late = timedelta(minutes=missed_at_start.catch_up_minutes())
+        for m in found:
+            if m.event_type == missed_at_start.EVENT:
+                log.info("Alert handed over while the agent was not listening: %s", m.data.get("label") or m.data.get("rule_id"))
+                await self.on_critical(m.data)
+            elif now - m.at > late:
+                await self._too_late(m)
+            else:
+                log.info("Telegram %s sent while the agent was not listening, taken up now", m.event_type)
+                await self._safe(self.on_ha_event(m.event_type, m.data))
         return len(found)
+
+    async def _too_late(self, m: "missed_at_start.Missed") -> None:
+        """A press or a question older than telegram.catch_up_minutes, sent while the agent was restarting: one line, in
+        reply to it, never acted on (the alert it pressed may have moved on; the question's answer would be stale). Only
+        what the agent would have taken (a press on its own message, a question for it), and once."""
+        seen = missed_at_start.key(m.event_type, m.data)
+        if not seen or self.state.update_seen(seen):
+            return
+        q = m.data
+        if m.event_type == "telegram_callback":
+            msg = q.get("message") or {}
+            cid = q.get("chat_id") or (msg.get("chat") or {}).get("id")
+            if not self.state.is_own_message(cid, msg.get("message_id")):
+                return
+            data = q.get("data") or ""
+            kind, parts = button_data.read(data)
+
+            async def silent(_text):
+                return None
+            p = press.from_telegram(q, int(cid), None, parts, silent)
+            label = next((b.get("text") for row in p.rows for b in row if b.get("callback_data") == data), None) or "a button"
+            on = f" on {Incidents(self.s.store_path).name(parts[0])}" if kind == button_data.ALERT else ""
+            await self.delivery.send(p.chat, f"VESTA was restarting when you pressed {label}{on}; press it again.",
+                                     reply_to=p.mid)
+            return
+        got = self.judge(intake.from_telegram(m.event_type, q))
+        if got.action == "converse" and got.chat is not None:
+            await self.delivery.send(got.chat, "VESTA was restarting when you sent this; send it again if you still "
+                                               "need an answer.", reply_to=q.get("id"))
 
     def beat(self) -> None:
         from vesta_shared.store import Store
@@ -1115,7 +1161,7 @@ class Vesta:
             last_heard = Store(self.s.store_path).last_beat("ha_events")
             events = HaEvents(self.s.ha_url, self.s.ha_token, self.on_ha_event, self.beat, headers=self.cf_headers)
             tasks.append(asyncio.create_task(events.run(stop)))
-            tasks.append(asyncio.create_task(self._safe(self.catch_up_alerts(events.connected, last_heard))))
+            tasks.append(asyncio.create_task(self._safe(self.catch_up(events.connected, last_heard))))
         if self.kiosk.enabled:
             tasks.append(asyncio.create_task(self.kiosk.heartbeats(stop, cadence=self.kiosk_cadence,
                                                                    answered=self.kiosk_answered)))

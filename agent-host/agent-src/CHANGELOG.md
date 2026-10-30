@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.403 (31 October 2026)
+
+- Telegram input missed during a restart (architecture review round 9, card 1): missed_alerts.py widened into
+  missed_at_start.py, one reader at start of what the villa handed over while the agent was away: the alerts (as
+  before) and people's Telegram updates, read from the bots' event entities' history (found by their `event_types`
+  naming telegram_callback, never by id; each row's attributes are the update's data, its state its moment). Fed in
+  time order to on_ha_event by Vesta.catch_up (was catch_up_alerts). Once each: missed_at_start.key (a press's callback
+  id, a message's chat and message id) and State.update_seen, checked by on_ha_event for live and caught-up updates
+  alike. Older than telegram.catch_up_minutes (15): Vesta._too_late replies one line to a press on the agent's own
+  message or a question for it, and acts on nothing. Not at the first start of this engine (State.updates_recorded):
+  the engine before kept no record of what it took in live. Fixtures now give each update its own id.
+- Telegram retry (card 2): Telegram._call, the one path of api() and _post_form: a 429 is waited out for its
+  parameters.retry_after when within telegram.retry_wait_max_s (30), a 5xx, a timeout or a network error tried once
+  more after telegram.retry_pause_s (2); a 4xx never. Per part, so a long message goes on from the part that failed;
+  a file's form is rebuilt for the second try. Not collapsed with IncidentThread's owed edits (a later redraw of the
+  latest state, 2h) nor KioskMessages' owed copies (the Kiosk, not Telegram): different jobs, both kept.
+- agent-contract.json copied from the Kiosk 2.496.623 (profiles, _profiles, ticket step role); not read yet.
+
 ## 0.6.402 (31 October 2026)
 
 - One reader of a schedule's wording (architecture review round 9, card 3): vesta_shared.when.Spec.parse(text) with
