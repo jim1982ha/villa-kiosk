@@ -1,3 +1,12 @@
+## 2.496.620
+
+What you will see:
+- In the Tickets tab, a ticket's buttons are Done · Need help · Close. Done is what "Mark resolved" did: work done,
+  with what was done, its cost and photos. Need help asks the Owner to act, as on a card in the Inbox. Close still
+  closes with nothing done.
+- A ticket shows its device's current room everywhere, in the Inbox and the Tickets tab alike. The room saved when it
+  was opened shows only when the ticket has no device, or its device is gone.
+
 ## 2.496.619
 
 What you will see:
