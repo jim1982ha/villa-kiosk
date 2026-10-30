@@ -1,3 +1,14 @@
+## 0.12.410
+
+What you will see:
+- The reports say where each Done was given: "Done on Telegram (JM)", "Done on the tablet (JM)" or "Done in the
+  Cockpit (JM)", never "Done (Closed in the Cockpit)".
+- A press on the tablet's alert notice is noted as made on the tablet, not on Telegram.
+- When a fault done on Telegram is still there afterwards, the Facility Manager reads "Done on Telegram on …, but
+  still there", no longer "Closed in the Cockpit".
+- A Done in the Cockpit (now work done, with the VESTA tablet app 2.496.617) is taken as the person's Done, re-checked
+  as before, and counted once in Recent work.
+
 ## 0.12.409
 
 What you will see:
