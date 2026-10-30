@@ -12,7 +12,7 @@
 // colour of the notice's own: contact lost = unavailable (amber), a sensor triggered = active (green), a failure =
 // alert (red). `info` — news that is no device's state (a new version, a floor not modelled) — is the VESTA accent.
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { STATUS_COLOR } from "@/utils/stateColors";
@@ -35,24 +35,34 @@ export interface NoticeProps {
   children: ReactNode;
   /** The whole notice is the button (a new version: tap to reload). */
   onTap?: () => void;
-  /** A notice that stays until dismissed carries its ✕. */
+  /** Told when its ✕ is pressed (the notice also hides itself). */
   onDismiss?: () => void;
+  /** No ✕: a banner that says a state while it lasts (the connection lost), gone by itself once it is over. */
+  stays?: boolean;
   /** "alert" interrupts a screen reader (a failure); "status" waits its turn. */
   role?: "status" | "alert";
   /** Hidden while the fullscreen camera is open: the villa's own news never covers the live picture. */
   belowCamera?: boolean;
 }
 
-/** One notice, drawn — pure (a check draws it). */
-export function NoticeView({ tone, icon, children, onTap, onDismiss, role = "status", belowCamera }: NoticeProps) {
+/** One notice, drawn — pure (a check draws it).
+ *  ⚠️ EVERY NOTICE HAS ITS ✕ (owner, 2026-10-30: "I don't see the close X icon on the right of this notification …
+ *  add consistently to all notification, so clicking on it will close it before the 10sec"): only a notice offering a
+ *  button carried one. Every notice that passes by itself closes at its ✕; not the one that IS a button (a new version:
+ *  tap to reload — a ✕ inside it would be a button in a button) nor a banner that `stays` while its state lasts. */
+export function NoticeView({ tone, icon, children, onTap, onDismiss, role = "status", belowCamera, stays }: NoticeProps) {
+  const [closed, setClosed] = useState(false);
+  if (closed) return null;
+  const closable = !onTap && !stays;
   const className = `vesta-notice${onTap ? " tappable" : ""}${belowCamera ? " below-camera" : ""}`;
   const style = { "--tone": TONE[tone] } as React.CSSProperties;
   const inner = (
     <>
       {icon}
       <span className="vesta-notice-text">{children}</span>
-      {onDismiss && (
-        <button type="button" className="vesta-notice-dismiss" onClick={onDismiss} aria-label="Dismiss">
+      {closable && (
+        <button type="button" className="vesta-notice-dismiss" aria-label="Dismiss"
+          onClick={(e) => { e.stopPropagation(); setClosed(true); onDismiss?.(); }}>
           <X size={16} />
         </button>
       )}

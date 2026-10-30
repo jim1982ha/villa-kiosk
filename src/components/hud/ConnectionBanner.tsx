@@ -61,7 +61,7 @@ export default function ConnectionBanner() {
   // thing that has to fit: it is reconnecting, so nothing will respond yet. Drawn as every notice is (Notice), in the
   // map's "contact lost" amber.
   return (
-    <NoticeView tone="unavailable" icon={<WifiOff size={16} />}>
+    <NoticeView tone="unavailable" icon={<WifiOff size={16} />} stays>
       <span className="conn-banner-full">
         Disconnected, reconnecting…
         {" "}

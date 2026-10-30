@@ -20,9 +20,17 @@ ck("every tone is the same element, the same classes, the same inner layout — 
 ck("  ...each status tone IS the map legend's colour (STATUS_COLOR), the news tone the accent",
    tones[0].includes(`--tone:${STATUS_COLOR.active}`) && tones[1].includes(`--tone:${STATUS_COLOR.unavailable}`)
    && tones[2].includes(`--tone:${STATUS_COLOR.alert}`) && tones[3].includes("--tone:var(--accent)"), tones.map((t) => t.match(/--tone:[^;"]+/)?.[0]));
-ck("  ...a notice that acts is the same pill as a button; one that stays has its Dismiss",
-   /^<button type="button" class="vesta-notice tappable"/.test(draw(h(NoticeView, { tone: "info", icon, onTap: () => {} }, "x")))
-   && /aria-label="Dismiss"/.test(draw(h(NoticeView, { tone: "alert", icon, onDismiss: () => {} }, "x"))));
+// owner, 2026-10-30: "add consistently to all notification, so clicking on it will close it before the 10sec"
+const tap = draw(h(NoticeView, { tone: "info", icon, onTap: () => {} }, "x"));
+ck("  ...a notice that acts is the same pill as a button, with no ✕ inside it",
+   /^<button type="button" class="vesta-notice tappable"/.test(tap) && !/aria-label="Dismiss"/.test(tap), tap);
+ck("  ...every notice that passes by itself has its ✕, with or without someone told of it; a banner that stays has none",
+   ["active", "unavailable", "alert", "info"].every((t) => /aria-label="Dismiss"/.test(draw(h(NoticeView, { tone: t, icon }, "x"))))
+   && /aria-label="Dismiss"/.test(draw(h(NoticeView, { tone: "alert", icon, onDismiss: () => {} }, "x")))
+   && !/aria-label="Dismiss"/.test(draw(h(NoticeView, { tone: "unavailable", icon, stays: true }, "x"))));
+ck("  ...the connection banner is the one that stays (its state lasts until the connection is back)",
+   /<NoticeView tone="unavailable" icon=\{<WifiOff size=\{16\} \/>\} stays>/.test(
+     readFileSync(new URL("../../src/components/hud/ConnectionBanner.tsx", import.meta.url), "utf8")));
 // ⚠️ ONE SHAPE (owner, 2026-10-29): the squared corners are the notice's own, never a case's (a photo's, a button's)
 {
   const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
