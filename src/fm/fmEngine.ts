@@ -728,6 +728,22 @@ export function withTicketsHelped(d: FmData, ids: readonly string[], k: Pick<FmS
   };
 }
 
+/** A Need help that stands: who pressed it (the profile) and when. */
+export interface HelpAsked { at: string; by?: string }
+
+/** ⚠️ A NEED HELP NOTHING HAS ANSWERED YET (architecture review round 6, 2026-10-30: pressed, the card stayed exactly as
+ *  it was, so it looked failed and was pressed again, asking twice): the record's latest "help" step while it is open
+ *  and the VESTA Agent has written no line of its story after it ("noted": the escalation it sent then says the rest).
+ *  AFTER IN THE LIST, never by `at`: the tablet stamps the press with its own clock, the Agent its line with the
+ *  server's, and a tablet a minute ahead would have kept the press unanswered for good. undefined otherwise. */
+export function standingHelp(t: Pick<FmTicket, "status" | "updates">): HelpAsked | undefined {
+  if (isTicketResolved(t)) return undefined;
+  const ups = t.updates ?? [];
+  const i = ups.map((u) => u.kind).lastIndexOf("help");
+  if (i < 0 || ups.slice(i + 1).some((u) => u.kind === "noted")) return undefined;
+  return { at: ups[i].at, ...(ups[i].by ? { by: ups[i].by } : {}) };
+}
+
 // ── Rules that lived in the screens (round 13, 2.496.183) ─────────────────
 // Each was written in a component or the store's context, where only a regex
 // could reach it, and several already disagreed with the engine or with each

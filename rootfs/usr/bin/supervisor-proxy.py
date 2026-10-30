@@ -2935,7 +2935,7 @@ def _store_get_handler(store: JsonStore, key: str, what: str, *,
 
 def _store_put_handler(store: JsonStore, key: str, what: str, *,
                        capability: str = "editConfig", merge=None, guard=None,
-                       after=None, view=None, require_rev: bool = False, gate=None, tidy=None):
+                       after=None, view=None, require_rev: bool = False, gate=None, tidy=None, landed=None):
     """The whole-document PUT door of one store: `{key: document, "rev"?}`.
 
     `capability` defaults to editConfig — owner-only, because shared state is
@@ -2947,7 +2947,9 @@ def _store_put_handler(store: JsonStore, key: str, what: str, *,
     the document to write; `guard(request, body, stored, new)` then judges the
     merged result and may refuse it by returning a response (a superadmin
     elevation before any record is DELETED); `after(stored, new)` runs once the
-    write has landed (the evidence sweep). `tidy(document)` drops what the
+    write has landed (the evidence sweep); `landed(stored, new)`, awaited once
+    the write has landed and the store's lock is let go (waking the VESTA Agent:
+    _fm_wake_agent). `tidy(document)` drops what the
     store no longer keeps — from the stored copy AND from what was sent, before
     merge and guard, so an expired record is never a removal a guard judges nor
     one a stale copy brings back (_fm_expire). `view` is applied to the 409 body
@@ -3026,13 +3028,15 @@ def _store_put_handler(store: JsonStore, key: str, what: str, *,
             return new
 
         try:
-            _, _, rev = await store.update(change, after)
+            stored, new, rev = await store.update(change, after)
         except Veto as refused:
             return refused.response
         except StoreUnreadable:
             return _store_unreadable_response(key)
         except StoreTooLarge:
             return web.json_response({"error": f"{key} payload too large"}, status=413)
+        if landed is not None:
+            await landed(stored, new)
         return web.json_response({"ok": True, "rev": rev})
 
     return put_handler
@@ -3325,7 +3329,10 @@ fm_data_put_handler = _store_put_handler(
     # alone would be far too broad. Everything else about the maintenance
     # record stays owner/ops.
     capability="reportFault", view=_fm_reader_view, merge=_fm_writer_merge,
-    guard=_fm_write_guard, after=_fm_after_write, tidy=_fm_expire)
+    guard=_fm_write_guard, after=_fm_after_write, tidy=_fm_expire,
+    # a person's step the VESTA Agent acts on wakes it at once (_fm_wake_agent, defined with the inbox below). Only on
+    # the people's door: the Agent's own writes (/agent/v1/fm-data) never wake it again.
+    landed=lambda stored, new: _fm_wake_agent(stored, new))
 
 
 # ══ The VESTA Agent interface v1 ═════════════════════════════════════════════
@@ -4672,6 +4679,67 @@ async def vesta_press_handler(request: web.Request) -> web.Response:
     ask = await ASKED.add(lambda seq: {"seq": seq, "at": at, "profile": profile,
                                        "press": {"key": body["key"], "kind": kind, "id": bid}})
     return web.json_response({"ok": True, "press": ask["seq"]})
+
+
+#: ⚠️ A CARD'S PRESS REACHES VESTA AT ONCE (architecture review round 6, 2026-10-30): Done, Need help, Open Ticket, Close
+#: and Reopen on a card are Facility record writes, which the VESTA Agent read only every 5 minutes, so a Need help on the
+#: tablet reached the owner up to 5min late while a press on one of VESTA's own buttons came at once. Such a write now
+#: also leaves the inbox's item the agreement names (conversation.recordsChanged), and the Agent's long read wakes on it.
+#: Its fields besides seq and at; empty: an agreement that names none, nothing added.
+RECORDS_CHANGED: dict = dict(CONVERSATION.get("recordsChanged") or {})
+#: The steps a person writes on a fault that the VESTA Agent acts on: its Need help, a no-action close, a reopening (the
+#: step's `kind`), and a step with no kind that takes it on or resolves it (its `status`). A title edit, a photo added or
+#: a guest's report wake nothing: the 5-minute read still sees them.
+FM_WAKING_KINDS = frozenset({"help", "cleared", "reopened"})
+FM_WAKING_STATUSES = frozenset({"in_progress", "resolved"})
+
+
+def _fm_steps_added(old, new) -> list:
+    """The steps a write added to the faults, each record's against what it held before (a new record: all of its own).
+    Pure — tests/agent-interface.py drives it."""
+    def steps(doc) -> dict:
+        tickets = doc.get("tickets") if isinstance(doc, dict) else None
+        return {t["id"]: [u for u in (t.get("updates") or []) if isinstance(u, dict)]
+                for t in (tickets if isinstance(tickets, list) else []) if isinstance(t, dict) and isinstance(t.get("id"), str)}
+    before = steps(old)
+    added = []
+    for tid, ups in steps(new).items():
+        had = [json.dumps(u, sort_keys=True) for u in before.get(tid, [])]
+        for u in ups:
+            seen = json.dumps(u, sort_keys=True)
+            if seen in had:
+                had.remove(seen)
+            else:
+                added.append(u)
+    return added
+
+
+def _fm_wakes_agent(old, new) -> bool:
+    """Whether a person's write added a step the VESTA Agent acts on (FM_WAKING_KINDS, FM_WAKING_STATUSES). Pure."""
+    return any(u.get("kind") in FM_WAKING_KINDS or (not u.get("kind") and u.get("status") in FM_WAKING_STATUSES)
+               for u in _fm_steps_added(old, new))
+
+
+def _is_records_changed(item) -> bool:
+    """Is this inbox item the records-changed one (RECORDS_CHANGED)? Pure."""
+    return bool(RECORDS_CHANGED) and isinstance(item, dict) and all(item.get(k) == v for k, v in RECORDS_CHANGED.items())
+
+
+def _with_records_changed(stored: list, rec: dict) -> list:
+    """The inbox with `rec`, the records-changed item, REPLACING any such item still kept: ONE waits at most, so presses
+    close together cost the Agent one read of the records, not one each. Pure — tests/agent-interface.py drives it."""
+    return [a for a in stored if not _is_records_changed(a)] + [rec]
+
+
+async def _fm_wake_agent(old, new) -> None:
+    """After a person's write to the Facility records (fm_data_put_handler `landed`): the inbox's records-changed item,
+    when it added a step the Agent acts on. ⚠️ NO PROFILE ON IT: an Agent that does not know the item reads it as a
+    question from no profile it answers and drops it (VESTA Agent 0.12.413, app.on_tablet: logged, nobody told), and it
+    never counts against a person's questions a minute (_asked_lately)."""
+    # off the loop: it reads every step of the records, and this loop relays every tablet's websocket
+    if not CONVERSATION_PROFILES or not RECORDS_CHANGED or not await asyncio.to_thread(_fm_wakes_agent, old, new):
+        return
+    await ASKED.add(lambda seq: {"seq": seq, "at": _now_iso(), **RECORDS_CHANGED}, _with_records_changed)
 
 
 async def agent_inbox_handler(request: web.Request) -> web.Response:

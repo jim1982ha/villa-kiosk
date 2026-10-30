@@ -44,7 +44,7 @@ export function carriesWorkOf(role: Role | null | undefined, other: string): boo
   return !!role && other in rank && rank[role] >= rank[other];
 }
 
-interface FmDataContextValue {
+export interface FmDataContextValue {
   data: FmData;
   /** False until the record has been READ — screens show a loading state rather
    *  than an empty maintenance record, which would read as "nothing is due".

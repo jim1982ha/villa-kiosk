@@ -15,7 +15,7 @@ import { alarmText, rowText } from "@/config/reading";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
-import { alertNumberOf, DUE_WORDS, faultTitle, fmAttention, stageOf, type FmStage } from "@/fm/fmEngine";
+import { alertNumberOf, DUE_WORDS, faultTitle, fmAttention, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import { notedStory } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
@@ -71,6 +71,8 @@ export interface AttentionItem {
   openedAt?: string;
   /** Set on a fault: its short story on Telegram, in time order (faultNotes.notedStory — "Escalation sent to Owner"). */
   story?: { note: string; at: string }[];
+  /** Set on a fault: the Need help pressed on it that nothing has answered yet (fmEngine.standingHelp). */
+  help?: HelpAsked;
   /** Set on a fault an alert raised: the number its Telegram messages carry ("#91"), which names VESTA's card of it
    *  (messagesModel.cardsOfIssue). */
   alertNumber?: number;
@@ -406,6 +408,7 @@ export function buildAttentionItems(opts: {
       ticketId: t.id,
       stage: stageOf(t),
       story: notedStory(t),
+      help: standingHelp(t),
       openedAt: t.openedAt,
       ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t) } : {}),
       source: faultSource(t),

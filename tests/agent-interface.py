@@ -977,6 +977,59 @@ async def main() -> None:
     ck("  ...a press's short answer comes back in the presser's conversation, naming the press", told.get("answers") == 1,
        told)
 
+    # ── A card's press wakes VESTA at once (architecture review round 6, 2026-10-30) ───────────────────────────────
+    print("\n  a person's step on a fault wakes VESTA at once:")
+    asks.unlink(missing_ok=True)
+    woke = proxy.AGENT_CONTRACT_TABLE["conversation"]["recordsChanged"]
+    fault = {"id": "t9", "title": "Pool pump: Unavailable", "status": "open", "openedAt": "2026-10-30T09:00:00Z",
+             "photoIds": [], "updates": [{"at": "2026-10-30T09:00:00Z", "status": "open", "by": "Owner", "photoIds": []}]}
+    (TMP / "data" / "fm-data.json").write_text(json.dumps({"schedules": [], "completions": [], "costs": [],
+                                                            "tickets": [fault], "savedDocuments": []}))
+
+    async def person_writes(step=None, **change):
+        _, doc = await jget("/fm-data", cookie("owner"))
+        t = next(x for x in doc["data"]["tickets"] if x["id"] == "t9")
+        t.update(change)
+        if step:
+            t["updates"] = [*t.get("updates", []), {"at": "2026-10-30T09:20:00Z", "photoIds": [], "by": "Owner", **step}]
+        r = await put("/fm-data", headers=cookie("owner"), json={"data": doc["data"], "rev": doc["rev"]})
+        return r.status
+
+    async def woken():
+        _, body = await jget("/agent/v1/inbox", bearer())
+        return [a for a in body["asks"] if "profile" not in a]
+
+    status = await person_writes({"status": "open", "kind": "help"})
+    got = await woken()
+    ck("Need help pressed on a card: the inbox holds the agreement's records-changed item, with no profile",
+       status == 200 and len(got) == 1 and {k: v for k, v in got[0].items() if k not in ("seq", "at")} == woke
+       and woke == {"records": "changed"}, (status, got))
+    first = got[0]["seq"] if got else None
+    status = await person_writes({"status": "in_progress"}, status="in_progress")
+    got = await woken()
+    ck("  ...a second press soon after: still ONE such item, the newer one (one read of the records for both)",
+       status == 200 and len(got) == 1 and got[0]["seq"] > first, (status, got))
+    last = got[0]["seq"] if got else None
+    status = await person_writes(title="Pool pump: not running")
+    status2 = await person_writes({"status": "in_progress", "kind": "noted", "note": "x"})
+    ck("  ...a title edit, or a step VESTA does not act on, wakes nothing",
+       (status, status2) == (200, 200) and [a["seq"] for a in await woken()] == [last], await woken())
+    _, doc = await jget("/agent/v1/fm-data", bearer())
+    t = next(x for x in doc["data"]["tickets"] if x["id"] == "t9")
+    t["status"], t["resolvedAt"], t["updates"] = "resolved", "2026-10-30T09:30:00Z", [*t["updates"], {"at": "2026-10-30T09:30:00Z", "status": "resolved",
+                                                             "kind": "cleared", "photoIds": []}]
+    r = await put("/agent/v1/fm-data", headers=bearer(), json={"data": doc["data"], "rev": doc["rev"]})
+    ck("  ...the Agent's own write never wakes it again", r.status == 200 and [a["seq"] for a in await woken()] == [last],
+       (r.status, await r.text(), await woken()))
+    ck("  ...each step the Agent acts on wakes it: Done, Close, Reopen, Open Ticket, Need help; a guest's report does not",
+       [proxy._fm_wakes_agent({"tickets": [fault]}, {"tickets": [{**fault, "updates": [*fault["updates"], u]}]}) for u in (
+           {"status": "resolved"}, {"status": "resolved", "kind": "cleared"}, {"status": "open", "kind": "reopened"},
+           {"status": "in_progress"}, {"status": "open", "kind": "help"}, {"status": "open", "kind": "noted"},
+           {"status": "open", "kind": "retitled"})] == [True, True, True, True, True, False, False]
+       and not proxy._fm_wakes_agent({"tickets": []}, {"tickets": [fault]})
+       and proxy._fm_wakes_agent({"tickets": []}, {"tickets": [{**fault, "updates": [*fault["updates"],
+                                                                                    {"status": "open", "kind": "help"}]}]}))
+
     agent(enabled="false", token=TOKEN)
     r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "t", "profile": "guest", "text": "x"})
     r2 = await get("/agent/v1/inbox", headers=bearer())

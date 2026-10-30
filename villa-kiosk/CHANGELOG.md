@@ -1,3 +1,14 @@
+## 2.496.621
+
+What you will see:
+- Need help on a card now shows at once what it did: the card says "🆘 Need help asked" with the time and who pressed
+  it, and its Need help button goes away, so it is never asked twice. The same line, in the same place, in the Inbox
+  and in the Tickets tab. Once VESTA has sent the alert on, its own line in the card's story takes over and Need help
+  comes back.
+- A press on a card (Done, Need help, Open Ticket, Close, Reopen) reaches VESTA within seconds instead of up to 5min,
+  once VESTA is updated to listen for it. Until then nothing changes: VESTA still reads them every 5min.
+- Done or Need help on a device that has no room no longer files the ticket in a room called "Other".
+
 ## 2.496.620
 
 What you will see:

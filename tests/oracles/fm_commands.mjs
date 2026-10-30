@@ -96,14 +96,22 @@ console.log("\n  Done · Need help · Open Ticket on every issue card (owner, 20
     const wb = (await import("node:fs")).readFileSync(new URL("../../src/components/fm/WorkButtons.tsx", import.meta.url), "utf8");
     ck("  ...the one confirm flow sends a work Done through the resolving command, a Close through the no-action one",
        /work \? advanceTickets\(ids, "resolved", DONE_STEP\) : closeTickets\(ids\)/.test(wb)
-       && /closer\.close\(cardKey, asked\.ids, work\)/.test(wb));
+       && /work\.close\(cardKey, confirming\.ids, asWork\)/.test(wb));
   }
   ck("  ...Need help on it: raised and asked for help in ONE write, still open",
      helpNew.tickets[0].status === "open" && last(helpNew.tickets[0]).kind === "help", helpNew.tickets[0]);
   const { raisedFor } = await import("@/components/cockpit/IssueCard");
-  const r = raisedFor({ title: "LED Strip", room: "Living Room", lines: [{ text: "" }, { text: "Unavailable" }] }, "light.example");
-  ck("  ...the fault it raises is titled by the device and what its line says, in its room, for its device",
+  const { recordPlace } = await import("@/fm/recordPlace");
+  const lines = [{ text: "" }, { text: "Unavailable" }];
+  const rooms = { "light.example": "Living Room", "light.roomless": "" };
+  // the card's room line as IssueCard draws it ("Other" for a device in no room) is passed too: it must never be stored
+  const r = raisedFor({ title: "LED Strip", room: "Somewhere else", lines }, recordPlace("light.example", "LED Strip", rooms));
+  ck("  ...the fault it raises is titled by the device and what its line says, at its device's place (fm/recordPlace)",
      r.title === "LED Strip: Unavailable" && r.entityId === "light.example" && r.room === "Living Room" && r.deviceLabel === "LED Strip", r);
+  // ⚠️ "OTHER" STORED AS A ROOM (architecture review round 6, 2026-10-30): the card's room line was saved as the ticket's
+  // room, and "Other" is a label for no room — a pill on the Tickets tab no other record of it showed
+  const none = raisedFor({ title: "LED Strip", room: "Other", lines }, recordPlace("light.roomless", "LED Strip", rooms));
+  ck("  ...a device in no room: no room stored, never \"Other\"", none.entityId === "light.roomless" && !("room" in none), none);
 }
 
 done("✅ every Facility change is one command, who and when stamped there");
