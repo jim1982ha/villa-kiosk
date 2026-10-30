@@ -36,14 +36,6 @@ HEADER = ("# What each device is, as chosen on the VESTA Agent page (Knowledge >
           "# keeps the kind the agent guesses from its name. Kinds: " + ", ".join(KINDS) + ".\n")
 
 
-def path() -> str:
-    """asset_kinds.yaml: beside policy.yaml (VESTA_POLICY, the scripts' environment), else in the agent's config folder
-    (the engine's and the page's) — limits.yaml's own rule (vesta_shared.limits.path)."""
-    if os.environ.get("VESTA_POLICY"):
-        return os.path.join(os.path.dirname(os.environ["VESTA_POLICY"]), FILE)
-    return os.path.join(os.environ.get("VESTA_AGENT_CONFIG_DIR") or "/config/agent", FILE)
-
-
 def valid(mapping) -> dict[str, str]:
     """The entries of `mapping` that name a kind: {slug: kind}; anything else left out."""
     if not isinstance(mapping, dict):
@@ -72,15 +64,6 @@ def problems(text: str) -> list[str]:
     if not isinstance(kinds, dict):
         return [f"{FILE}: kinds is not a list of devices and their kind."]
     return [f"{k}: {v!r} is not a kind ({', '.join(KINDS)})." for k, v in kinds.items() if str(v) not in KINDS]
-
-
-def chosen(p: str | None = None) -> dict[str, str]:
-    """The owner's choices: {asset slug: kind}; {} when the file is not there or cannot be read."""
-    try:
-        with open(p or path(), encoding="utf-8") as f:
-            return parse(f.read())
-    except OSError:
-        return {}
 
 
 def text_of(kinds: dict[str, str]) -> str:

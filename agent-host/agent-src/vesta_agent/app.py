@@ -109,6 +109,8 @@ def pack_needs_build(path: str) -> bool:
 
 #: How often the agent reads the VESTA Kiosk's faults (one closed in the Cockpit settles its alert's messages).
 KIOSK_EVERY_S = 300
+#: A person's presses on the Kiosk's cards this close together are read as one (the wake, Vesta.records_changed)
+RECORDS_GROUP_S = 10.0
 
 
 def photo_max_bytes() -> int:
@@ -242,6 +244,8 @@ class Vesta:
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
         self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
+        self._records = None              # the wake's read of the Kiosk's faults: running, and pressed again since
+        self.scheduler: Scheduler | None = None
         self._pack = None
         self._pack_mtime = None
 
@@ -259,6 +263,7 @@ class Vesta:
         """The knowledge pack, read again when a rebuild changes it, the Kiosk's list beside it or the owner's device
         kinds change (None until it is built)."""
         from vesta_shared.asleep import path_beside
+        from vesta_shared.choice_files import CHOICES
         from vesta_shared.knowledge_pack import KnowledgePack
 
         def mtime(path):
@@ -266,11 +271,10 @@ class Vesta:
                 return os.path.getmtime(path)
             except (OSError, TypeError):
                 return None
-        m = (mtime(self.s.pack_path), mtime(path_beside(self.s.pack_path)), mtime(self.s.asset_kinds_path),
-             mtime(self.s.asset_links_path))
+        m = (mtime(self.s.pack_path), mtime(path_beside(self.s.pack_path)),
+             *(mtime(c.path(self.s.config_dir)) for c in CHOICES))
         if m != self._pack_mtime:
-            self._pack, self._pack_mtime = KnowledgePack.read(self.s.pack_path, self.s.asset_kinds_path,
-                                                              self.s.asset_links_path), m
+            self._pack, self._pack_mtime = KnowledgePack.read(self.s.pack_path, self.s.config_dir), m
         return self._pack
 
     def name_of(self, entity_id: str) -> str:
@@ -433,7 +437,7 @@ class Vesta:
                 return None
             return (self.reader.states([asset_kinds.OLD_HELPER]).get(asset_kinds.OLD_HELPER) or {}).get("state")
         try:
-            done = asset_kinds.migrate(self.s.asset_kinds_path, state)
+            done = asset_kinds.migrate(self.s.choice_path("kinds"), state)
         except Exception as e:  # noqa: BLE001 — the villa's system not readable now: tried again at the next start
             log.warning("The device kinds set in the villa's system could not be read (%s): tried again at the next "
                         "start", type(e).__name__)
@@ -446,7 +450,7 @@ class Vesta:
         History(self.s.history_path).record(
             "Release", f"{where('kinds')}: {len(kinds)} set in the villa's system before, kept here", {"kind": "kinds"},
             None, text)
-        log.info("Device kinds moved from %s to %s: %s", asset_kinds.OLD_HELPER, self.s.asset_kinds_path,
+        log.info("Device kinds moved from %s to %s: %s", asset_kinds.OLD_HELPER, self.s.choice_path("kinds"),
                  ", ".join(f"{k} {v}" for k, v in sorted(kinds.items())))
         return kinds
 
@@ -622,6 +626,8 @@ class Vesta:
     async def on_tablet(self, ask: dict) -> None:
         """A question typed on a tablet (tablet.Tablet.listen): it enters where a Telegram message does — the gate, so
         /investigate, /proposal and /new work as there — in its profile's own conversation, as that profile's role."""
+        if tablet.records_changed(ask):
+            return await self.records_changed()
         profile = ask.get("profile")
         person, chat = tablet.person_of(profile), tablet.chat_of(profile)
         if person is None or chat is None:
@@ -642,6 +648,34 @@ class Vesta:
         timeline = answering.Timeline(str(profile), _seconds_since(ask.get("at"))) if spoken else None
         await self._safe(self.handle_question(
             tablet.question(chat, person, ask, self.tablet.spoken(chat, ask) if spoken else None), timeline=timeline))
+
+    async def records_changed(self) -> None:
+        """⚠️ A PRESS ON THE TABLET REACHES TELEGRAM WITHIN SECONDS (architecture review round 6, 2026-10-30): a Need help
+        or a Done pressed on a card in the Kiosk waited for the next read of its faults, up to 5 minutes, then for the
+        alert desk's next look, up to 5 more. The Kiosk now leaves a wake in the inbox (tablet.records_changed): the
+        faults are read at once (tickets.repair: a Done takes the alert's buttons off, a Need help is handed to the
+        desk), and a Need help handed starts the desk's frequent check now (Scheduler.frequent_now). Presses within
+        RECORDS_GROUP_S of a read are one more read after it, never one each. The 5-minute read stays the safety net."""
+        if self._records is not None:
+            self._records = True                 # a read is running: one more after it
+            return
+        self._records = False
+        try:
+            while True:
+                try:
+                    got = await self.tickets.repair() or {}
+                except Exception:  # noqa: BLE001 — the 5-minute read tries again
+                    log.exception("The Kiosk's faults could not be read after a press")
+                    got = {}
+                if got.get("helped") and self.scheduler is not None:
+                    # the skills that answer alerts' buttons (skill.yaml on_reply: the alert desk) take the Need help now
+                    self.scheduler.frequent_now(lambda sk: bool(sk.on_reply))
+                await asyncio.sleep(RECORDS_GROUP_S)
+                if not self._records:
+                    return
+                self._records = False
+        finally:
+            self._records = None
 
     async def handle_message(self, event_type: str, m: dict, about: str | None = None):
         """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30). `about`: what the answer

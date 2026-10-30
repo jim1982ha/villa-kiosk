@@ -49,6 +49,13 @@ def person_of(profile: str | None) -> Person | None:
     return tablet_person(chat) if chat is not None else None
 
 
+def records_changed(ask: dict) -> bool:
+    """The inbox item is no question but the Kiosk's wake (the agreement's conversation.recordsChanged): a person
+    pressed Done, Need help, Open Ticket, Close or Reopen on a card. Its fields are the agreement's, never typed here."""
+    mark = agreement.section("conversation").get("recordsChanged")
+    return isinstance(mark, dict) and bool(mark) and all(ask.get(k) == v for k, v in mark.items())
+
+
 def question(chat: int, person: Person, ask: dict, audio=None) -> intake.Question:
     """A tablet's question as the gate reads it (intake.Question): a "/command" as a command, a spoken one by its audio
     (`Spoken`), anything else as words. Only the agent reads a tablet's conversation (intake._shared), so what is not

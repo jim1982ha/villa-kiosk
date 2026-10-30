@@ -90,7 +90,7 @@ def test_an_open_task_without_its_ticket_gets_one_once(agent):
     assert run(v.tickets.repair())["created"] == 1
     assert kiosk.tickets == [("Battery low", "sensor.example_battery")]
     assert st.task(lost)["todo_uid"] == "t1"
-    assert run(v.tickets.repair()) == {"created": 0, "reopened": 0, "resolved": 0}   # nothing left to repair
+    assert run(v.tickets.repair()) == {"created": 0, "reopened": 0, "resolved": 0, "helped": 0}   # nothing left to repair
 
 
 def test_the_tasks_and_the_kiosks_tickets_agree(agent):

@@ -17,6 +17,7 @@ import shutil
 import tempfile
 
 import yaml
+from vesta_shared.choice_files import BY_KIND as CHOICE_FILES
 from vesta_shared.limits import FILE as LIMITS_FILE
 
 from ..config import Settings
@@ -56,7 +57,8 @@ def _write(path: str, data: bytes) -> None:
         raise
 
 
-TEXT_KINDS = ("policy", "instructions", "file", "limits", "kinds", "links")    # what Undo writes back as text (UI.text_change)
+# what Undo writes back as text (UI.text_change): the Knowledge tab's choice files each by its row of the one table
+TEXT_KINDS = ("policy", "instructions", "file", "limits", *CHOICE_FILES)
 
 
 def undoable(ch: dict) -> bool:
@@ -176,10 +178,8 @@ class PageFiles:
             return self.s.instructions_path
         if t["kind"] == "limits":                       # the Limits tab's file (vesta_shared.limits)
             return os.path.join(self.s.config_dir, LIMITS_FILE)
-        if t["kind"] == "kinds":                        # Knowledge › Device kinds' file (vesta_shared.asset_kinds)
-            return self.s.asset_kinds_path
-        if t["kind"] == "links":                        # Knowledge › Device links' file (vesta_shared.asset_links)
-            return self.s.asset_links_path
+        if t["kind"] in CHOICE_FILES:                   # a file of the Knowledge tab (vesta_shared.choice_files)
+            return self.s.choice_path(t["kind"])
         return os.path.join(self.skill_dir(t["skill"]), self.rel(t["path"]))
 
     def text_now(self, t: dict) -> str | None:
@@ -228,14 +228,8 @@ class PageFiles:
             if probs:
                 raise Refused(probs)
             return
-        if target["kind"] == "kinds":
-            from vesta_shared.asset_kinds import problems as kinds_problems
-            if probs := kinds_problems(text):
-                raise Refused(probs)
-            return
-        if target["kind"] == "links":
-            from vesta_shared.asset_links import problems as links_problems
-            if probs := links_problems(text):
+        if target["kind"] in CHOICE_FILES:
+            if probs := CHOICE_FILES[target["kind"]].problems(text):
                 raise Refused(probs)
             return
         rel = LIMITS_FILE if target["kind"] == "limits" else str(target.get("path") or "")

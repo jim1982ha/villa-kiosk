@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.400 (30 October 2026)
+
+- The Kiosk's wake (agreement conversation.recordsChanged, Kiosk 2.496.621): tablet.records_changed recognises the
+  profile-less inbox item before the "names no profile" path; Vesta.records_changed reads the faults at once
+  (tickets.repair, grouped: presses within RECORDS_GROUP_S are one more read after it) and, when repair handed a Need
+  help (its result's new `helped`, HelpLink.new), starts the frequent check of the skills that answer alerts' buttons
+  now (Scheduler.frequent_now; one already running is run again after it). The 5-minute read stays.
+- vesta_shared.choice_files: the Knowledge tab's choice files in one table (CHOICES: links, then kinds; ChoiceFile.path,
+  chosen, problems). PageFiles (TEXT_KINDS, text_path, check_text), KnowledgePack.load/read(path, config_dir) and
+  Vesta.pack iterate it; Settings.choice_path(kind) replaces asset_kinds_path / asset_links_path; asset_kinds and
+  asset_links lose their copies of path() and chosen(). tests/test_choice_files.py drives every row through check,
+  write, Page changes, Undo and the pack.
+
 ## 0.6.399 (30 October 2026)
 
 - places.TABS gains "knowledge" (ui/static/knowledge.js): Device kinds, Device links, Asleep between reports,

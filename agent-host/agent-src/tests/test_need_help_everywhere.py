@@ -117,3 +117,49 @@ def test_a_persons_ticket_done_in_the_cockpit_closes_its_need_help_alert(tmp_pat
     k.person_closes("tk-2", by="JM", cockpit=True)
     run(v.tickets.repair())
     assert st.incident(iid)["closed_at"] is not None
+
+
+def wake(v, k, monkeypatch):
+    """A press on a card in the Kiosk, as the agent meets it running: the Kiosk's wake collected from the inbox
+    (tablet.collect → on_tablet), the scheduler the app runs, no 5-minute read and no tick of the clock."""
+    from vesta_agent import app
+    from vesta_agent.scheduler import Scheduler
+    monkeypatch.setattr(app, "RECORDS_GROUP_S", 0.0)
+
+    async def go():
+        v.scheduler = Scheduler(v.s, v.skills, v.state, v.run_code_job, v.jobs.run, lambda: asyncio.sleep(0), None, v.work)
+        k.records_changed()
+        k.records_changed()                                  # two presses close together: one item, one read
+        await v.tablet.collect(v.on_tablet)
+        await v.tablet.idle()
+        await v.scheduler.idle()
+    run(go())
+
+
+def test_need_help_pressed_on_the_tablet_reaches_the_owner_on_telegram_at_once(tmp_path, monkeypatch, caplog):
+    # architecture review round 6, 2026-10-30: up to 5 minutes for the agent's read, then up to 5 for the desk's look
+    k = FakeKiosk()
+    v = make_agent(tmp_path, PEOPLE, kiosk=k, skills=["alert-desk"])
+    st = Store(v.s.store_path)
+    finding_task(st, k)
+    k.person_helps("t-pump", by="JM")
+    v._kiosk_read = float("inf")                            # the 5-minute read never comes: only the wake can do it
+    caplog.set_level("INFO")
+    wake(v, k, monkeypatch)
+    (inc,) = st.incidents()
+    assert inc["state"] == "escalated"
+    owner = [t for c, t, kb in v.tg.sent if c == OWNER and kb]
+    assert owner and "Owner is asked to act." in owner[0], v.tg.sent
+    assert "names no profile" not in caplog.text
+
+
+def test_done_pressed_on_the_tablet_takes_the_buttons_off_the_telegram_alert_at_once(tmp_path, monkeypatch):
+    from test_cockpit_languages import villa as alert_villa
+    v, k, uid = alert_villa(tmp_path)                       # an alert sent with its buttons, its fault in the Cockpit
+    assert v.tg.sent and any(kb for _c, _t, kb in v.tg.sent)
+    v.tg.edit_keyboards.clear()
+    k.person_closes(uid, by="JM", cockpit=True)
+    v._kiosk_read = float("inf")
+    wake(v, k, monkeypatch)
+    assert Store(v.s.store_path).incident(1)["closed_at"] is not None
+    assert v.tg.edit_keyboards and all(kb is None for kb in v.tg.edit_keyboards), v.tg.edit_keyboards

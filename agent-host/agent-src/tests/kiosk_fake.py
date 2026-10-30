@@ -169,6 +169,14 @@ class FakeKiosk(Kiosk):
         self.asks.append(ask)
         return ask
 
+    def records_changed(self) -> dict:
+        """A person's step on a card (Done, Need help, …) leaving the wake in the inbox as the add-on does (the agreement's
+        conversation.recordsChanged, no profile): ONE kept at most, a newer one replacing it."""
+        ask = {"seq": (self.asks[-1]["seq"] if self.asks else 0) + 1, "at": PERSON_AT, **CONVERSATION["recordsChanged"]}
+        self.asks = [a for a in self.asks if not all(a.get(k) == v for k, v in CONVERSATION["recordsChanged"].items())]
+        self.asks.append(ask)
+        return ask
+
     def conversation(self, profile: str) -> list[dict]:
         """What the tablet of `profile` shows of VESTA's answers, in order: each turn as it stands, none withdrawn."""
         return [t for t in self.turns.values() if t.get("profile") == profile and not t.get("gone") and "answers" not in t

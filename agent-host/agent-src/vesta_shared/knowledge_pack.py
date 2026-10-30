@@ -34,7 +34,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
-from . import asset_kinds, asset_links
+from . import asset_links
+from .choice_files import BY_KIND, CHOICES
 from .asset_kinds import KINDS
 from .limits import limit
 
@@ -507,28 +508,29 @@ class KnowledgePack:
         return json.dumps(asdict(self), indent=1, ensure_ascii=False)
 
     @classmethod
-    def load(cls, path: str, kinds_path: str | None = None, links_path: str | None = None) -> "KnowledgePack":
+    def load(cls, path: str, config_dir: str | None = None) -> "KnowledgePack":
         """The pack at `path`, with the VESTA Kiosk's devices unavailable by design kept beside it (vesta_shared.asleep):
         ⚠️ READ WITH THE PACK, ONE WAY (architecture review, 2026-10-21): the checks read the list through an environment
         variable, the agent's tools set it by hand and the Rules page read the file — a fourth reader forgetting it
-        would call a sleeping door sensor offline again."""
+        would call a sleeping door sensor offline again.
+
+        And the owner's choices of the Knowledge tab (choice_files.CHOICES, in its order: the links before the kinds),
+        from the agent's config folder `config_dir`, else where a script finds them (ChoiceFile.path)."""
         from .asleep import listed
         with open(path, encoding="utf-8") as f:
             pack = cls(**json.load(f))
         pack.asleep_are(listed(path))
-        # ⚠️ THE OWNER'S LINKS, READ WITH THE PACK (owner, 2026-10-30), BEFORE THE KINDS: a linked schedule marks a
-        # motor in the kind guess (guessed_kind)
-        pack.links_are(asset_links.chosen(links_path))
-        # ⚠️ THE OWNER'S KINDS, READ WITH THE PACK (owner, 2026-10-28): a kind chosen on the VESTA Agent page counts
-        # from the next run, never only from the next rebuild of the device list (vesta_shared.asset_kinds)
-        pack.kinds_are(asset_kinds.chosen(kinds_path))
+        # ⚠️ THE OWNER'S CHOICES, READ WITH THE PACK (owner, 2026-10-28 and 2026-10-30): a kind or a link chosen on the
+        # VESTA Agent page counts from the next run, never only from the next rebuild of the device list
+        for c in CHOICES:
+            getattr(pack, c.apply)(c.chosen(config_dir))
         return pack
 
     @classmethod
-    def read(cls, path: str, kinds_path: str | None = None, links_path: str | None = None) -> "KnowledgePack | None":
+    def read(cls, path: str, config_dir: str | None = None) -> "KnowledgePack | None":
         """The pack, or None when it is not built yet or cannot be read (the callers show what they can)."""
         try:
-            return cls.load(path, kinds_path, links_path)
+            return cls.load(path, config_dir)
         except (OSError, ValueError, TypeError):
             return None
 
@@ -603,8 +605,8 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         a.area = a.area or area
         assets[slug] = a
 
-    chosen = asset_kinds.chosen()
-    links = asset_links.chosen()
+    chosen = BY_KIND["kinds"].chosen()
+    links = BY_KIND["links"].chosen()
     # merge assets whose slug is a longer spelling of another one
     # (sensor.garden_spa_blower_pump_energy belongs to blower_pump, an invented example),
     # plus explicit aliases from input_text.vesta_asset_aliases = {"long": "short"}

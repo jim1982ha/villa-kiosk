@@ -13,7 +13,6 @@ from the next run. A choice of "" is "None": that link switched off, whatever th
 from __future__ import annotations
 
 import io
-import os
 
 import yaml
 
@@ -36,14 +35,6 @@ ROLES: dict[str, tuple[str, str, str, str]] = {
 HEADER = ("# Which helpers belong to each device, as chosen on the VESTA Agent page (Knowledge > Device links).\n"
           "# A link not listed keeps the helper the agent finds by its name; \"\" is None: that link off.\n"
           "# Links: " + ", ".join(ROLES) + ".\n")
-
-
-def path() -> str:
-    """asset_links.yaml: beside policy.yaml (VESTA_POLICY, the scripts' environment), else in the agent's config folder
-    (the engine's and the page's), as asset_kinds.yaml (vesta_shared.asset_kinds.path)."""
-    if os.environ.get("VESTA_POLICY"):
-        return os.path.join(os.path.dirname(os.environ["VESTA_POLICY"]), FILE)
-    return os.path.join(os.environ.get("VESTA_AGENT_CONFIG_DIR") or "/config/agent", FILE)
 
 
 def fits(role: str, value) -> bool:
@@ -96,16 +87,6 @@ def problems(text: str) -> list[str]:
             elif not fits(r, v):
                 out.append(f"{slug}: {v!r} is not a {ROLES[r][2]} helper, nor \"\" (None).")
     return out
-
-
-def chosen(p: str | None = None) -> dict[str, dict[str, str]]:
-    """The owner's choices: {asset slug: {role: helper id, or "" for None}}; {} when the file is not there or cannot
-    be read."""
-    try:
-        with open(p or path(), encoding="utf-8") as f:
-            return parse(f.read())
-    except OSError:
-        return {}
 
 
 def text_of(links: dict[str, dict[str, str]]) -> str:

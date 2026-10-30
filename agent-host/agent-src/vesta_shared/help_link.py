@@ -46,6 +46,10 @@ class HelpLink:
         """The incident key of the alert standing for `subject`."""
         return _KEY.format(subject=subject)
 
+    def new(self, subject: str, at: str) -> bool:
+        """Whether the press made at `at` on `subject`'s card was not handed over yet (`asked` tells each press once)."""
+        return bool(at) and ((self.store.cache_get(_TOLD) or {}).get(subject) or "") < at
+
     def asked(self, subject: str, said, at: str, *, task: dict | None = None, title: str = "",
               entity_id: str = "") -> int | None:
         """A person pressed Need help on a fault's card in the VESTA Kiosk (`at`: when the Kiosk recorded it; `said`:
@@ -53,10 +57,9 @@ class HelpLink:
         `title` and `entity_id` its own). Told once per press. An alert's fault, or one an alert already stands for:
         mail to the alert desk (Notes.KIOSK_HELP), which escalates it as a Telegram Need help does — returns that
         incident's id. Any other: waiting for the desk to open one already escalated (`waiting`) — returns None."""
-        told = self.store.cache_get(_TOLD) or {}
-        if not at or (told.get(subject) or "") >= at:
+        if not self.new(subject, at):
             return None
-        self.store.cache_put(_TOLD, {**told, subject: at})
+        self.store.cache_put(_TOLD, {**(self.store.cache_get(_TOLD) or {}), subject: at})
         kind, sid = self.problems._source(task)
         iid = sid if kind == "incident" and sid else self.standing(subject)
         inc = self.store.incident(iid) if iid else None

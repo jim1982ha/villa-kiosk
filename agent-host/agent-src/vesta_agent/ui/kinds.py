@@ -8,6 +8,7 @@ a thermometer) is not listed — unless a kind was chosen for it, which stays sh
 from __future__ import annotations
 
 from vesta_shared import asset_kinds
+from vesta_shared.choice_files import BY_KIND
 from vesta_shared.knowledge_pack import KnowledgePack, asset_kind, guessed_kind, kind_from_parts
 
 from .changes import PageFiles, Refused, _read
@@ -35,8 +36,8 @@ def rows(settings) -> dict:
     """The card's answer: {rows, kinds, built}. A row: slug, name, area, guess, kind, chosen (set by the owner), gone (a
     choice for a device the villa no longer has), parts (what the villa's system says it is made of: "light + fan"),
     source ("system": the guess read from those parts; "name": from its name)."""
-    pack = KnowledgePack.read(settings.pack_path, settings.asset_kinds_path)
-    chosen = asset_kinds.chosen(settings.asset_kinds_path)
+    pack = KnowledgePack.read(settings.pack_path, settings.config_dir)
+    chosen = BY_KIND["kinds"].chosen(settings.config_dir)
     out = []
     for slug, a in (pack.assets if pack else {}).items():
         if not _measured(a) and slug not in chosen:
@@ -63,7 +64,7 @@ def save(settings, files: PageFiles, slug: str, kind: str | None) -> dict:
     row = next((r for r in now["rows"] if r["slug"] == slug), None)
     if row is None:
         raise Refused([f"No device {slug} in the agent's list of the villa's devices."], 404)
-    text = _read(settings.asset_kinds_path).decode("utf-8")
+    text = _read(settings.choice_path("kinds")).decode("utf-8")
     kinds = asset_kinds.parse(text)
     if kind is None:
         kinds.pop(slug, None)                   # back to the guess: a better guess later is followed

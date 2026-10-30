@@ -16,6 +16,7 @@ from vesta_agent.places import ORDER, PLACES, TABS
 from vesta_agent.ui import links
 from vesta_agent.ui.changes import PageFiles, Refused
 from vesta_shared import asset_links
+from vesta_shared.choice_files import BY_KIND
 from vesta_shared.knowledge_pack import KnowledgePack, build_pack
 
 SLUG = "example_pool_pump"
@@ -96,7 +97,7 @@ def test_a_schedule_chosen_on_the_page_is_the_one_the_night_check_reads_none_swi
     # the owner picks another schedule: saved at once, recorded, and the night check reads it from its next run
     card = links.save(s, files, SLUG, "schedule", OTHER)
     assert _row(card)["links"]["schedule"]["value"] == OTHER and _row(card)["links"]["schedule"]["source"] == "chosen"
-    assert asset_links.chosen(s.asset_links_path) == {SLUG: {"schedule": OTHER}}
+    assert BY_KIND["links"].chosen(s.config_dir) == {SLUG: {"schedule": OTHER}}
     (change,) = files.history.rows(5)
     assert change["place"] == "Knowledge" and change["what"] == \
         "Example pool pump: Schedule set to Example filtration hours (guessed Example pump plan)"
@@ -113,7 +114,7 @@ def test_a_schedule_chosen_on_the_page_is_the_one_the_night_check_reads_none_swi
     # back to the guess: the choice is gone, the name rule's schedule read again
     card = links.save(s, files, SLUG, "schedule", None)
     assert _row(card)["links"]["schedule"]["source"] == "guessed"
-    assert asset_links.chosen(s.asset_links_path) == {}
+    assert BY_KIND["links"].chosen(s.config_dir) == {}
     assert _expected(monkeypatch, s.pack_path)[0]["monday"] == 4.0
     assert files.history.rows(5)[0]["what"] == "Example pool pump: Schedule back to its guess, Example pump plan"
 
@@ -161,7 +162,7 @@ def test_the_page_refuses_a_link_a_helper_or_a_device_it_does_not_know(tmp_path,
                           asset_links.HEADER + f"links:\n  {SLUG}:\n    schedule: input_number.x\n")
     assert asset_links.parse(f"links:\n  {SLUG}:\n    schedule: input_number.x\n    counter: ''\n") == \
         {SLUG: {"counter": ""}}
-    assert not os.path.exists(s.asset_links_path)
+    assert not os.path.exists(s.choice_path("links"))
 
 
 def test_a_link_is_chosen_through_the_page_and_the_knowledge_tab_shows_it(tmp_path, monkeypatch):
@@ -176,7 +177,7 @@ def test_a_link_is_chosen_through_the_page_and_the_knowledge_tab_shows_it(tmp_pa
     (status, body), bad, tab = call(s, fn)
     assert status == 200 and _row(body)["links"]["schedule"]["source"] == "chosen" and bad == 400
     assert _row(tab["links"])["links"]["schedule"]["value"] == OTHER
-    assert asset_links.chosen(s.asset_links_path) == {SLUG: {"schedule": OTHER}}
+    assert BY_KIND["links"].chosen(s.config_dir) == {SLUG: {"schedule": OTHER}}
 
 
 def test_the_knowledge_tab_holds_every_part_of_the_page_not_kept_in_policy_yaml():

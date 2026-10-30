@@ -8,6 +8,7 @@ devices), and any other that has a link found or chosen, so it can be taken back
 from __future__ import annotations
 
 from vesta_shared import asset_links
+from vesta_shared.choice_files import BY_KIND
 from vesta_shared.knowledge_pack import KnowledgePack
 
 from .changes import PageFiles, Refused, _read
@@ -30,8 +31,8 @@ def rows(settings) -> dict:
     """The card's answer: {rows, roles, options, built}. A row: slug, name, area, gone (choices for a device the villa
     no longer has), links: per role, {value (the helper used, None: none), name (its name), guess (what the name rule
     found), source ("chosen": set here, "guessed": the name rule's, "none": nothing linked)}."""
-    pack = KnowledgePack.read(settings.pack_path, settings.asset_kinds_path, settings.asset_links_path)
-    chosen = asset_links.chosen(settings.asset_links_path)
+    pack = KnowledgePack.read(settings.pack_path, settings.config_dir)
+    chosen = BY_KIND["links"].chosen(settings.config_dir)
     name_of = (lambda i: pack.name_of(i, i)) if pack else (lambda i: i)
     out = []
     for slug, a in (pack.assets if pack else {}).items():
@@ -68,7 +69,7 @@ def save(settings, files: PageFiles, slug: str, role: str, value: str | None) ->
     names = dict((i, n) for i, n in now["options"][role])
     if value and value not in names:
         raise Refused([f"No such {asset_links.ROLES[role][2]} helper among the villa's helpers."])
-    links = asset_links.parse(_read(settings.asset_links_path).decode("utf-8"))
+    links = asset_links.parse(_read(settings.choice_path("links")).decode("utf-8"))
     mine = links.setdefault(slug, {})
     if value is None:
         mine.pop(role, None)                    # back to the guess: a helper named by the rule later is followed

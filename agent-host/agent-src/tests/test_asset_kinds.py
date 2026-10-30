@@ -13,6 +13,7 @@ from vesta_agent.history import History
 from vesta_agent.ui import kinds
 from vesta_agent.ui.changes import PageFiles, Refused
 from vesta_shared import asset_kinds
+from vesta_shared.choice_files import BY_KIND
 from vesta_shared.knowledge_pack import KnowledgePack, build_pack
 
 SLUG = "example_led_strip"
@@ -74,7 +75,7 @@ def test_a_kind_chosen_on_the_page_is_the_one_the_night_check_follows_and_back_t
     # the owner picks Motor: saved at once, recorded, and the night check reads it from its next run (no rebuild)
     card = kinds.save(s, files, SLUG, "motor")
     assert [(r["kind"], r["chosen"]) for r in card["rows"]] == [("motor", True)]
-    assert asset_kinds.chosen(s.asset_kinds_path) == {SLUG: "motor"}
+    assert BY_KIND["kinds"].chosen(s.config_dir) == {SLUG: "motor"}
     assert _night_reads_it(monkeypatch, s.pack_path)
     (change,) = files.history.rows(5)
     assert change["place"] == "Knowledge" and change["what"] == "Example LED strip set to Motor (guessed Lighting)"
@@ -99,7 +100,7 @@ def test_the_page_refuses_a_kind_or_a_device_it_does_not_know(tmp_path, monkeypa
     # a file written by hand with a wrong kind is refused by the writer (Undo, an import), never half read
     with pytest.raises(Refused):
         files.text_change("Rules", "by hand", {"kind": "kinds"}, "kinds:\n  example_led_strip: pump\n")
-    assert not os.path.exists(s.asset_kinds_path)
+    assert not os.path.exists(s.choice_path("kinds"))
 
 
 class _Villa:
@@ -131,12 +132,12 @@ def test_the_old_helper_is_moved_once_at_start_and_never_read_again(tmp_path, mo
 
     # a villa's system that does not answer: nothing written, tried again at the next start
     assert _Agent(s, _Villa(fails=True)).migrate_asset_kinds() is None
-    assert not os.path.exists(s.asset_kinds_path)
+    assert not os.path.exists(s.choice_path("kinds"))
 
     # the next start: the owner's value (a bad entry left out) is moved, and said in Page changes
     villa = _Villa('{"example_led_strip": "meter", "example_other": "bogus"}')
     assert _Agent(s, villa).migrate_asset_kinds() == {SLUG: "meter"}
-    assert asset_kinds.chosen(s.asset_kinds_path) == {SLUG: "meter"}
+    assert BY_KIND["kinds"].chosen(s.config_dir) == {SLUG: "meter"}
     assert KnowledgePack.load(s.pack_path).assets[SLUG]["kind"] == "meter"
     assert [(r["kind"], r["chosen"]) for r in kinds.rows(s)["rows"]] == [("meter", True)]
     (moved,) = files.history.rows(5)
@@ -145,13 +146,13 @@ def test_the_old_helper_is_moved_once_at_start_and_never_read_again(tmp_path, mo
     # every later start: the helper is not even asked for, whatever it says now
     later = _Villa('{"example_led_strip": "motor"}')
     assert _Agent(s, later).migrate_asset_kinds() is None and later.asked == 0
-    assert asset_kinds.chosen(s.asset_kinds_path) == {SLUG: "meter"}
+    assert BY_KIND["kinds"].chosen(s.config_dir) == {SLUG: "meter"}
 
 
 def test_a_villa_without_the_old_helper_gets_an_empty_file_once(tmp_path, monkeypatch):
     s, files = _setup(tmp_path, monkeypatch)
     assert _Agent(s, _Villa()).migrate_asset_kinds() is None
-    assert os.path.exists(s.asset_kinds_path) and asset_kinds.chosen(s.asset_kinds_path) == {}
+    assert os.path.exists(s.choice_path("kinds")) and BY_KIND["kinds"].chosen(s.config_dir) == {}
     assert files.history.rows(5) == []                          # nothing moved, nothing to say
     later = _Villa('{"example_led_strip": "motor"}')
     assert _Agent(s, later).migrate_asset_kinds() is None and later.asked == 0
@@ -163,9 +164,9 @@ def test_the_agents_own_start_moves_the_old_helper(tmp_path):
     from helpers import make_agent, restarted
     villa = make_agent(tmp_path, {"people": []}, telegram_on=False,
                        reader=FakeHA(states={asset_kinds.OLD_HELPER: {"state": '{"example_pump": "motor"}'}}))
-    assert not os.path.exists(villa.s.asset_kinds_path)
+    assert not os.path.exists(villa.s.choice_path("kinds"))
     restarted(villa)
-    assert asset_kinds.chosen(villa.s.asset_kinds_path) == {"example_pump": "motor"}
+    assert BY_KIND["kinds"].chosen(villa.s.config_dir) == {"example_pump": "motor"}
 
 
 def test_the_device_kinds_card_says_which_devices_and_explains_in_sections():

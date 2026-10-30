@@ -704,6 +704,10 @@
     "askKeptSeconds": 600,
     "typingSeconds": 180,
     "asksPerMinute": 6,
+    "_recordsChanged": "A person's step on a Facility record that the VESTA Agent acts on (architecture review round 6, 2026-10-30: Done, Need help, Open Ticket, Close or Reopen pressed on a card in the Kiosk; a status step to in_progress or resolved, or a step of kind help, cleared or reopened, written through the people's door /fm-data, never the Agent's own) adds to the same inbox an item {seq, at} plus these fields, and NO `profile`: it is no question and nobody is answered. The Agent reads the records again at once (its 5-minute read stays the safety net). ONE such item waits at most: a newer one replaces the one still kept, so presses close together are one read. An Agent that does not know it reads a question from no profile it answers, and drops it.",
+    "recordsChanged": {
+      "records": "changed"
+    },
     "limits": {"key": 200, "text": 16000, "question": 2000, "photos": 4, "photoBytes": 3000000},
     "voice": {"rate": 16000, "seconds": 30, "answerBytes": 4000000, "answerTypes": ["audio/mpeg", "audio/wav"]},
     "keys": {"ask": "ask:", "turn": "turn:", "press": "press:", "typing": "typing:"},

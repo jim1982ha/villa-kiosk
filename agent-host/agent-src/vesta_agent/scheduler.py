@@ -214,6 +214,33 @@ class Scheduler:
             return True
         return self.state.claim_job_slot(job, slot.isoformat(), ident)
 
+    def _frequent(self, sk):
+        """A skill's frequent check (skill.yaml `every_5_min`), run once."""
+        return self.run_code(sk, sk.every_5_min, limit(
+            "jobs.five_minute_timeout_s", 300, unit="seconds", group="run", lo=30, hi=3600,
+            says="How long a skill's frequent check (jobs.every_minutes) may run.",
+            reached="It is stopped and counts as failed.", told="person"))
+
+    def frequent_now(self, which) -> list[str]:
+        """The frequent check of each skill `which(skill)` picks, started now rather than at its next tick (a Need help
+        pressed on the tablet: app.Vesta.records_changed). One already running is run again after it: started before
+        the press, it may not have seen it. The tick's own clock is left as it is. What it started or queued."""
+        out = []
+        for sk in self.skills.all().values():
+            if not sk.every_5_min or not which(sk):
+                continue
+            key = f"{sk.name}:every_5_min"
+            running = self._running.get(key)
+            if running is not None and not running.done():
+                async def after(sk=sk, running=running, key=key):
+                    await asyncio.gather(running, return_exceptions=True)
+                    self._start(key, lambda: self._frequent(sk))
+                self._start(f"{key}:again", after)
+            else:
+                self._start(key, lambda sk=sk: self._frequent(sk))
+            out.append(key)
+        return out
+
     async def tick(self, now: datetime | None = None) -> list[str]:
         """One pass. Returns what it started, for the log and the tests."""
         now = now or datetime.now(ZoneInfo(self.s.timezone))
@@ -222,12 +249,7 @@ class Scheduler:
         if self._last_every is None or now - self._last_every >= every():
             self._last_every = now
             for sk in skills.values():
-                if sk.every_5_min and self._start(f"{sk.name}:every_5_min",
-                                                  lambda sk=sk: self.run_code(sk, sk.every_5_min, limit(
-                                                      "jobs.five_minute_timeout_s", 300, unit="seconds", group="run",
-                                                      lo=30, hi=3600,
-                                                      says="How long a skill's frequent check (jobs.every_minutes) may run.",
-                                                      reached="It is stopped and counts as failed.", told="person"))):
+                if sk.every_5_min and self._start(f"{sk.name}:every_5_min", lambda sk=sk: self._frequent(sk)):
                     started.append(f"{sk.name}:every_5_min")
         slot = slot_for(pack_at(), now)
         if slot and self._claim("engine:pack", slot):

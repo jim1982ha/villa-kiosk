@@ -139,7 +139,8 @@ class Tickets:
           2. every task is made what its problem's facts say (Problems.settle_all): over — closed, still there — open;
           3. every fault is made what its task says (Problems.card): open or closed — by whom, with which note —, its
              title and its alert's number; an open task without a fault gets one.
-        Returns how many faults it created, reopened and resolved: {created, reopened, resolved}.
+        Returns how many faults it created, reopened and resolved, and how many Need helps pressed in the Kiosk it handed
+        to the alert desk: {created, reopened, resolved, helped}.
         ⚠️ ONE COMPARISON, NOT NINE PATCHES (architecture review, 2026-10-14): each case was a pass of its own, and a
         close the Kiosk did not receive was redone as the agent's ("Closed: the problem is over.") — a Done pressed by
         Fabien lost his name and his repair. The card now comes from the task, whose close keeps who and why."""
@@ -147,7 +148,7 @@ class Tickets:
             return await self._repair()
 
     async def _repair(self) -> dict[str, int]:
-        nothing = {"created": 0, "reopened": 0, "resolved": 0}
+        nothing = {"created": 0, "reopened": 0, "resolved": 0, "helped": 0}
         if not self.kiosk.enabled:
             return nothing
         store = self._store()
@@ -158,7 +159,7 @@ class Tickets:
             log.warning("The Kiosk's tickets could not be read (%s)", type(e).__name__)
             return nothing
         await self.kiosk.refresh()                # a Kiosk updated since the agent started says what it shows now
-        await self._take_in(problems, held)
+        helped = await self._take_in(problems, held)
         # every problem's task as its facts say (Problems.settle_all): over — closed; still there — open (again)
         if moved := problems.settle_all(set(held)):
             now_open = sum(1 for tid in moved if (store.task(tid) or {}).get("status") == "open")
@@ -207,7 +208,7 @@ class Tickets:
         if unseen := problems.unseen():
             log.warning("%d open problem(s) have no Kiosk fault: %s", len(unseen),
                         ", ".join(f"{f['rule_id']} {f['entity_id']}" for f in unseen[:10]))
-        return {"created": made, **moved_cards}
+        return {"created": made, **moved_cards, "helped": helped}
 
     async def _close_doubles(self, problems: Problems, held: dict[str, dict]) -> int:
         """An open fault of the agent's that no task holds, for an alert whose task holds another fault, is a double of
@@ -231,9 +232,9 @@ class Tickets:
             log.info("Closed %d double Kiosk fault(s) of an alert that already had one", closed)
         return closed
 
-    async def _take_in(self, problems: Problems, held: dict[str, dict]) -> None:
+    async def _take_in(self, problems: Problems, held: dict[str, dict]) -> int:
         """Step 1: what a PERSON did to a fault in the Kiosk reaches its task. Only their gestures — every other
-        difference is the agent's to put right (_converge)."""
+        difference is the agent's to put right (_converge). How many Need helps it handed to the desk (_helps)."""
         closed = 0
         for t in problems.open_tasks():
             uid = t.get("todo_uid")
@@ -273,7 +274,7 @@ class Tickets:
                 log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
         if closed:
             log.info("Kiosk tickets closed by a person: %d task(s) closed with them", closed)
-        await self._helps(problems, held)
+        helped = await self._helps(problems, held)
         # ⚠️ AN ALERT TAKEN ON IN THE KIOSK IS NO LONGER CHASED (owner, 2026-10-15): "Open Ticket" on its card, and
         # Telegram kept reminding the facility manager, then escalating to the owner — of a job someone had taken
         for t in problems.open_tasks():
@@ -286,13 +287,16 @@ class Tickets:
                 await self.restate_alert(iid, said)
             if iid:
                 log.info("Incident #%s taken on in the Kiosk: no longer chased", iid)
+        return helped
 
-    async def _helps(self, problems: Problems, held: dict[str, dict]) -> None:
+    async def _helps(self, problems: Problems, held: dict[str, dict]) -> int:
         """A person's Need help on a card in the Kiosk (owner, 2026-10-30: every card offers Done · Need help · Open
         Ticket) reaches the owner: an alert's through its desk, any other fault's through an alert the desk opens already
         escalated (vesta_shared.help_link). A person's ticket whose standing alert closed (a Done on Telegram) is resolved
-        here; one a person closed in the Kiosk closes its standing alert, as their Done in the Cockpit."""
+        here; one a person closed in the Kiosk closes its standing alert, as their Done in the Cockpit. How many presses
+        it handed to the desk (the wake starts the desk at once: app.Vesta.records_changed)."""
         link = problems.help
+        handed = 0
         tasks = {t.get("todo_uid"): t for t in problems.open_tasks() if t.get("todo_uid")}
         for uid, card in held.items():
             if not card.get("help_at") or card["status"] == "resolved":
@@ -302,6 +306,7 @@ class Tickets:
                 continue                                 # the agent's fault of no open task: nothing stands for it
             said = kiosk_words.helped(card.get("help_by") or "", card["help_at"], self.timezone)
             subject = link.of_task(task["id"]) if task else link.of_ticket(uid)
+            handed += link.new(subject, card["help_at"])
             iid = link.asked(subject, said, card["help_at"], task=task, title=card.get("title") or "",
                              entity_id=card.get("entity_id") or "")
             log.info("Need help pressed in the Kiosk on %s: %s", uid,
@@ -317,6 +322,7 @@ class Tickets:
                 problems.person_done(iid, IN_COCKPIT, who=card.get("by") or None, at=card.get("resolved_at"), said=said)
                 note = kiosk_close_note(card, self.timezone)
                 await self.settle_alert(iid, note, note_in=note.langs or None)
+        return handed
 
     async def _converge(self, problems: Problems, held: dict[str, dict]) -> dict[str, int]:
         """Step 3: each fault says what its task says (Problems.card). A close is redone for two days (a resolve that did

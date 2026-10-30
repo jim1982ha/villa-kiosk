@@ -1046,3 +1046,14 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   min and max from (rules.js `bounds`). The Rules tab's "min" after the Approve buttons' number stays: the owner's
   wording (2026-10-07).
 
+
+## The Knowledge tab's choice files, one table (architecture review round 6, 2026-10-30)
+
+- **`vesta_shared.choice_files.CHOICES`**: one row per owner's choice file of the Knowledge tab (kind, module,
+  KnowledgePack method): `links` (asset_links.yaml) then `kinds` (asset_kinds.yaml), in the order the pack applies them
+  (a linked schedule marks a motor in the kind guess). `ChoiceFile.path(config_dir)` is the one rule for where the file
+  is (the agent's config folder, else beside VESTA_POLICY), `chosen` reads it through the module's `parse`, `problems`
+  is its check. Iterated by `PageFiles` (TEXT_KINDS: Undo; text_path; check_text), `KnowledgePack.load(path,
+  config_dir)` and `Vesta.pack`'s change times; `Settings.choice_path(kind)` for a page's own reads. The modules keep
+  only what differs (FILE, parse, problems, text_of; asset_kinds' migration). A new choice file is a module and a row:
+  tests/test_choice_files.py drives every row through check, write, Page changes, Undo and the pack.

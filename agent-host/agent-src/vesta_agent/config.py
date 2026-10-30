@@ -70,17 +70,11 @@ class Settings:
     def policy_path(self) -> str:
         return os.path.join(self.config_dir, "policy.yaml")
 
-    @property
-    def asset_kinds_path(self) -> str:
-        """Each device's kind as the owner chose it on the page (vesta_shared.asset_kinds), beside policy.yaml."""
-        from vesta_shared.asset_kinds import FILE
-        return os.path.join(self.config_dir, FILE)
-
-    @property
-    def asset_links_path(self) -> str:
-        """Each device's helpers as the owner chose them on the page (vesta_shared.asset_links), beside policy.yaml."""
-        from vesta_shared.asset_links import FILE
-        return os.path.join(self.config_dir, FILE)
+    def choice_path(self, kind: str) -> str:
+        """One of the owner's choice files of the Knowledge tab (vesta_shared.choice_files: "kinds", "links"), beside
+        policy.yaml."""
+        from vesta_shared.choice_files import BY_KIND
+        return BY_KIND[kind].path(self.config_dir)
 
     @property
     def instructions_path(self) -> str:
