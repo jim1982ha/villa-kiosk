@@ -1,3 +1,11 @@
+## 0.12.416
+
+What you will see:
+- A job set for day 29, 30 or 31 of each month now runs on the month's last day when the month is shorter (a report
+  set for the 31st comes on 30 November and on 28 February), and the job's line on VESTA's page says so.
+- A job set just before midnight (23:45, say) that VESTA missed during an update or a restart now still runs after
+  midnight, within the usual catch-up time, instead of being lost for the day.
+
 ## 0.12.415
 
 What you will see:
