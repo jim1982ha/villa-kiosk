@@ -1,3 +1,13 @@
+## 0.12.414
+
+What you will see:
+- Need help or Done pressed on a card on the tablet now reaches Telegram within seconds, not up to 10 minutes later:
+  Need help asks the owner at once, and Done takes the buttons off the alert. The regular check every few minutes
+  stays as a backup.
+- Nothing changes on the page: Device kinds and Device links save, undo and count from the next run as before. Under
+  the hood, the Knowledge tab's choices now go through one shared path, so a choice added there later is checked,
+  undoable and read by the night check without being wired by hand.
+
 ## 0.12.413
 
 What you will see:
