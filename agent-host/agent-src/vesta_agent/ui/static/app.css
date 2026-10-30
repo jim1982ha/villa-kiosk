@@ -479,6 +479,12 @@ button.info:hover, button.info[aria-expanded="true"] { color: var(--accent); bor
 button.info.alert, button.info.alert:hover, button.info.alert[aria-expanded="true"] { color: var(--status-danger); border-color: var(--status-danger);
   font-style: normal; font-weight: 700; }
 .tooltip.alert { border-left: 3px solid var(--status-danger); }
+/* a longer explanation in sections (Rules › Device kinds): a bold heading, then its words or a short list */
+.tooltip .tip-doc > p { margin: 0 0 8px; }
+.tooltip .tip-doc > .tip-head { margin: 10px 0 2px; font-weight: 700; }
+.tooltip .tip-doc > .tip-head:first-child { margin-top: 0; }
+.tooltip .tip-list { margin: 0 0 8px; padding-left: 18px; }
+.tooltip .tip-list li { margin: 2px 0; }
 .tooltip .tooltip-detail { margin-top: 6px; opacity: .75; font-family: var(--font-mono); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .card-title { margin: 0 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .card-title-right { margin-left: auto; }

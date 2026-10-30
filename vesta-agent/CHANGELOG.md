@@ -1,3 +1,10 @@
+## 0.12.412
+
+What you will see:
+- Rules › Device kinds: the (i) is now short titled sections: which devices are listed (every device that measures
+  its own power or energy, the number on this villa), what each kind changes, as a list, where the kind comes from,
+  how to correct it. The card itself also says how many devices it lists, and why.
+
 ## 0.12.411
 
 What you will see:

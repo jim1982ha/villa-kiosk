@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.398 (30 October 2026)
+
+- Rules › Device kinds: the card's (i) is a node of titled sections (tip-doc, tip-head, tip-list in app.css), the kinds
+  listed from asset_kinds.KINDS split at their colon; the card says how many devices it lists and why.
+
 ## 0.6.397 (30 October 2026)
 
 - ha_get_integration readable: read_guard.ARG_ONLY (entry_id, query, exact_match, limit, offset) and RESULT_KEEP / kept

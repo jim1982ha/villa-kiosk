@@ -166,3 +166,18 @@ def test_the_agents_own_start_moves_the_old_helper(tmp_path):
     assert not os.path.exists(villa.s.asset_kinds_path)
     restarted(villa)
     assert asset_kinds.chosen(villa.s.asset_kinds_path) == {"example_pump": "motor"}
+
+
+def test_the_device_kinds_card_says_which_devices_and_explains_in_sections():
+    # owner, 2026-10-30: the (i) was "barely understandable and very poorly formatted" (one block of run-on paragraphs),
+    # and "where the device list is coming from?": the card says which devices, the (i) is in titled sections with lists
+    import os
+    from helpers import ROOT
+    js = open(os.path.join(ROOT, "vesta_agent", "ui", "static", "rules.js"), encoding="utf-8").read()
+    start = js.index("export function kindsCard")
+    card = js[start:js.find("\nexport function", start + 1) if js.find("\nexport function", start + 1) > 0 else len(js)]
+    for head in ("Which devices are listed", "What the kind changes", "Where the kind comes from", "To correct a kind"):
+        assert f'part("{head}"' in card, head
+    assert "items(data.kinds.map(kindItem))" in card and '].join(" ")' not in card
+    assert "devices that measure their own power or energy" in card and "${data.rows.length}" in card
+    assert 'card(place("kinds"), info, which,' in card                         # said on the card, not only behind (i)

@@ -313,15 +313,29 @@ let KIND_SEARCH = "";
 export function kindsCard(data, probs) {
   const names = Object.fromEntries(data.kinds.map(([k, name]) => [k, name]));
   // ⚠️ WHAT THE SECTION IS FOR, IN FULL (owner, 2026-10-30: "I still don't understand what the Device kinds section is
-  // used for"): what VESTA does with a device's power, why the kind matters, where it comes from, how to correct it
-  const info = [
-    "VESTA watches every device that reports its power or its energy, and what it does with those readings depends on what the device is.",
-    `The kinds: ${data.kinds.map(([, name, words]) => `${name}: ${words}`).join(" ")}`,
-    "Why it matters: a pump that runs longer than usual, starts more often, or draws more or less power than before is often the first sign of wear, a leak or a blockage, so VESTA checks motors every night and charts them in the reports. A light left on or a meter's total is not a fault, so those are only counted in the energy figures.",
-    "Where the kind comes from: what the villa's system says the device is made of (a light, a fan, a climate unit), else its name. The last column says which: \"From the villa's system\", \"Guessed\" (from its name) or \"Chosen here\".",
-    "If a kind is wrong, choose the right one in its list: it applies from the next night check and report, and \"Back to the guess\" undoes it.",
-    "A wall switch with a light and a fan on one power reading shows \"light + fan\": VESTA checks the fan by its own on and off, reads its power only while the light is off, and counts the light in the energy figures only.",
-  ].join(" ");
+  // used for"), THEN READABLE (owner, 2026-10-30: "barely understandable and very poorly formatted" — one block of six
+  // run-on paragraphs): which devices are listed and why, what each kind changes as a list, where the kind comes from,
+  // how to correct it. The kinds' words are the agent's (asset_kinds.KINDS), split at their colon: what it is, what VESTA does.
+  const part = (title, ...body) => [h("p", { class: "tip-head" }, title), ...body];
+  const items = (pairs) => h("ul", { class: "tip-list" }, pairs.map(([b, rest]) => h("li", {}, h("b", {}, b), rest ? ` ${rest}` : "")));
+  const kindItem = ([, name, words]) => {
+    const at = words.indexOf(": ");
+    return at < 0 ? [name, words] : [`${name} (${words.slice(0, at).toLowerCase()})`, words.slice(at + 2)];
+  };
+  const info = h("div", { class: "tip-doc" },
+    ...part("Which devices are listed",
+      h("p", {}, `Every device that measures its own power or energy (a smart plug, a relay with a meter, a power meter): ${data.rows.length} on this villa. Devices hidden in the villa's system are left out.`)),
+    ...part("What the kind changes", items(data.kinds.map(kindItem))),
+    ...part("Why it matters",
+      h("p", {}, "A pump that runs longer, starts more often or draws a different power than usual is often the first sign of wear, a leak or a blockage. A light left on or a meter's total is not a fault.")),
+    ...part("Where the kind comes from", items([
+      ["From the villa's system:", "what the device is made of there (a light, a fan, a climate unit)."],
+      ["Guessed:", "from its name, when the villa's system does not say."],
+      ["Chosen here:", "your choice, which always wins."]])),
+    ...part("To correct a kind",
+      h("p", {}, "Pick the right one in its list. It applies from the next night check and report. \"Back to the guess\" undoes it.")),
+    ...part("\"light + fan\"",
+      h("p", {}, "A wall switch driving a light and a fan on one power reading: VESTA checks the fan by its own on and off, reads the power only while the light is off, and counts the light in the energy figures only.")));
   const list = h("div");
   const save = async (r, kind) => {
     try {
@@ -356,7 +370,9 @@ export function kindsCard(data, probs) {
   const search = h("input", { type: "search", placeholder: "Search the devices", value: KIND_SEARCH, "aria-label": "Search the devices",
     oninput: (e) => { KIND_SEARCH = e.target.value; draw(); } });
   draw();
-  const c = card(place("kinds"), info, data.rows.length ? h("div", { class: "limits-search" }, search) : null, list);
+  // which devices, said on the card itself too (owner, 2026-10-30: "where the device list is coming from?")
+  const which = h("p", { class: "muted" }, `${data.rows.length} devices that measure their own power or energy.`);
+  const c = card(place("kinds"), info, which, data.rows.length ? h("div", { class: "limits-search" }, search) : null, list);
   c.id = "rules-kinds";
   return c;
 }
