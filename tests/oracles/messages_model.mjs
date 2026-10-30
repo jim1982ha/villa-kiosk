@@ -222,8 +222,8 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   // owner, 2026-10-30: the onsen pump's night-check line, drawn under #96's Status, "feels like it belongs to the
   // history section": another problem of the device comes first, as "Also: …", then the alert with its icon
   const both = { ...issue, lead: { sources: ["alert", "night"], severities: ["warn", "warn"] }, lines: [
-    { ...issue.lines[0], icons: null, own: { sources: ["alert"], severities: ["warn"] } },
-    { key: "l2", text: "Pump ran shorter than expected", story: [], icons: { sources: ["night"], severities: ["warn"] } }] };
+    { ...issue.lines[0], own: { sources: ["alert"], severities: ["warn"] } },
+    { key: "l2", text: "Pump ran shorter than expected", story: [], own: { sources: ["night"], severities: ["warn"] } }] };
   const two = draw(h(AlertIssueCard, { card: both, messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} }));
   const at = (t) => two.indexOf(t);
   ck("  ...a device's other problem comes first, \"Also: …\", then the alert's message, never under its Status",

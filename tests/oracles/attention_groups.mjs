@@ -23,7 +23,9 @@ const { devicesOf } = await import("../consistency/devices.mjs");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const card = (g) => cockpitCard(g, null);
 const lineText = (g, n = 0) => card(g).lines[n]?.text;
-const lineIcon = (g, n = 0) => card(g).lines[n]?.icons;
+// where an open card draws a line's icons: config/cockpitCard.cardIcons, the one place (review round 4, 2026-10-30)
+const { cardIcons } = await import("@/config/cockpitCard");
+const lineIcon = (g, n = 0) => cardIcons(card(g)).lines[n] ?? null;
 
 const ent = (id, state, name) => ({ entity_id: id, state, attributes: { friendly_name: name } });
 const entities = {
@@ -103,9 +105,12 @@ ck("  ...an open fault's line is its text alone, one taken in hand still reads \
 ck("  ...and its line shows no icon of its own: the row's says it already",
    lineIcon(loneFault) === null && lineIcon(lone) === null);
 const mixed = battery.find((g) => g.key === "device:lock.door");
-ck("  ...while a row mixing sources marks the line whose source is not the row's (a person's fault under a live lock)",
-   mixed?.kind === "alarm" && mixed.items.map((_, n) => lineIcon(mixed, n)?.sources.join("+") ?? "").join(",") === ",person",
+ck("  ...while a row mixing sources marks each line with its own (a person's fault under a live lock), none before its name",
+   mixed?.kind === "alarm" && mixed.items.map((_, n) => lineIcon(mixed, n)?.sources.join("+") ?? "").join(",") === "live,person"
+   && cardIcons(card(mixed)).head === null && cardIcons(card(mixed)).column,
    mixed?.items.map((i, n) => [i.kind, lineIcon(mixed, n)]));
+ck("  ...and a row of one source draws its icons before its name only, none on its lines",
+   cardIcons(card(loneFault)).head !== null && cardIcons(card(loneFault)).lines.every((x) => x === null));
 const noDevice = groupAttention(build([ticket("t-n", "Pool pump noisy")])).find((g) => g.key === "item:fault:t-n");
 ck("  ...and a problem with no device stands for itself: its line says only its status, never its title twice",
    noDevice?.title === "Pool pump noisy" && lineText(noDevice) === "", noDevice);
@@ -297,10 +302,11 @@ console.log("\n  one way a problem's entity becomes its card's device, for the o
        c?.lines.map((l) => [l.alertNumber, l.text, l.openedAt]));
     ck("  ...and the row's icons say both problems, the alert's first: the list's row and the card's head draw them",
        c?.lead?.sources.join() === [...c.lines[0].own.sources, ...c.lines[1].own.sources].join()
-       && c.lead.sources.includes("night") && c.lines[1].icons?.sources.join() === "night", [c?.lead, c?.lines.map((l) => l.own)]);
-    const { headIcons } = await import("@/config/cockpitCard");
-    ck("  ...the open card draws each icon once: its name the first line's, the other line its own",
-       headIcons(c)?.sources.join() === c.lines[0].own.sources.join() && !headIcons(c).sources.includes("night"), headIcons(c));
+       && c.lead.sources.includes("night"), [c?.lead, c?.lines.map((l) => l.own)]);
+    const drawn = cardIcons(c);
+    ck("  ...the open card draws each icon once, beside its line, none before its name, its column kept",
+       drawn.head === null && drawn.column && drawn.lines[0]?.sources.join() === c.lines[0].own.sources.join()
+       && drawn.lines[1]?.sources.join() === "night", drawn);
   }
 }
 

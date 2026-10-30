@@ -494,8 +494,12 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-section .cockpit-issues-head .settings-section-title { margin: 0; }
 /* VESTA's conversation, its own window (ticket 21 of "One inbox"; owner, 2026-10-29: beside the robot, the windows' own
    frame): its lines scroll above the box to ask, the person's own lines set apart, as in any chat */
-.vesta-modal .modal-body.vesta-thread { display: flex; flex-direction: column; gap: 10px; }
-.vesta-thread-lines { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; }
+/* ⚠️ ONLY THE LINES SCROLL (owner, 2026-10-30: a spoken question's line and VESTA's dots sat half hidden at the
+   bottom): the whole body scrolled with the box to ask pinned over its bottom, so the newest line brought "into view"
+   landed behind the box. The body holds its height; the lines scroll above the box, which is never over them. */
+.vesta-modal .modal-body.vesta-thread { display: flex; flex-direction: column; gap: 10px; overflow: hidden; min-height: 0; }
+.vesta-thread-lines { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .vesta-turn { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px;
   background: var(--bg-input); max-width: 92%; align-self: flex-start; }
 .vesta-turn.asked { background: var(--accent-soft); align-self: flex-end; }
@@ -508,7 +512,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   border: 0; background: none; box-shadow: none; color: var(--text-secondary); }
 .vesta-turn-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-base); }
 .vesta-turn .announcement-full-photo { max-height: 320px; align-self: flex-start; }
-.vesta-thread-ask { display: flex; gap: 8px; align-items: flex-end; position: sticky; bottom: 0; padding-top: 6px;
+.vesta-thread-ask { display: flex; gap: 8px; align-items: flex-end; flex: 0 0 auto; padding-top: 6px;
   background: var(--bg-modal); }
 .vesta-thread-ask textarea { flex: 1 1 auto; min-width: 0; resize: vertical; font: inherit; font-size: var(--text-base);
   padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hairline); background: var(--bg-input); color: var(--text-primary); }

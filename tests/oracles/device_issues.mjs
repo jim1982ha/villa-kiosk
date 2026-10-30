@@ -35,7 +35,7 @@ function seen(id, { state, unavailable = [], tickets = [], schedules = [] }) {
   const sign = issueSeverity(att.attentionGroups, [id], (x) => x);
   const group = att.attentionGroups.find((g) => g.entityId === id);
   const card = group && cockpitCard(group, { checkMinutes: 5, nightlyAt: "02:00" });
-  const cardTone = !card ? null : worstOf([...(card.lead?.severities ?? []), ...card.lines.flatMap((l) => l.icons?.severities ?? [])]);
+  const cardTone = !card ? null : worstOf([...(card.lead?.severities ?? []), ...card.lines.flatMap((l) => l.own?.severities ?? [])]);
   return { mark, markTone: MARK_TONE[mark] ?? null, sign, cardTone };
 }
 

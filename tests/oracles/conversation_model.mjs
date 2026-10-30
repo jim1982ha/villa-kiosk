@@ -195,6 +195,16 @@ ck("an answer said aloud offers Listen, given the page's speaker; one in words o
      /data-turn=\{turn\.key\}/.test(readFileSync(new URL("../../src/components/messages/VestaThread.tsx", import.meta.url), "utf8"))
      && /block: follow\.to === "answer" \? "start" : "end"/.test(readFileSync(new URL("../../src/components/messages/VestaThread.tsx", import.meta.url), "utf8")));
 }
+// owner, 2026-10-30: the dots still half hidden — the box to ask was pinned over the scrolling body, so the newest
+// line scrolled "into view" sat behind it: only the lines scroll, above the box, which is never over them
+{
+  const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  const rule = (sel) => (new RegExp(`(^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{([^}]*)\\}`).exec(css) ?? [])[2] ?? "";
+  const lines = rule(".vesta-thread-lines"), ask = rule(".vesta-thread-ask"), body = rule(".vesta-modal .modal-body.vesta-thread");
+  ck("the conversation's lines are what scrolls, the box to ask beside them, never pinned over them",
+     /overflow-y:\s*auto/.test(lines) && /min-height:\s*0/.test(lines) && !/position:\s*sticky/.test(ask)
+     && /overflow:\s*hidden/.test(body), { lines, ask, body });
+}
 // owner, 2026-10-30: "make sure the user can stop the voice streaming / replay, by showing a stop button instead of
 // the Play button": the line whose sound is being said shows Stop, never Listen beside it; any other shows Listen
 {

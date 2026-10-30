@@ -1,3 +1,14 @@
+## 2.496.617
+
+What you will see:
+- Done on a card in Cockpit › Inbox › Issues now counts as work done, the same as Done on Telegram: it appears in
+  Recent work under the name of whoever pressed it, no longer as "Closed without action". Close in the Tickets tab
+  still closes with nothing done.
+- A card's icons are decided in one place: a card with problems from several sources shows each icon once, beside its
+  own line; a card of one kind shows its icon before its name.
+- In VESTA's conversation, the newest line and the typing dots are never hidden behind the box to ask: only the
+  conversation scrolls, above the box.
+
 ## 2.496.616
 
 What you will see:

@@ -77,8 +77,10 @@ export type WorkStep =
   | { kind: "edit" }
   | { kind: "raise" }
   | { kind: "help" }
-  | { kind: "raiseThen"; then: "close" | "help" }
-  | { kind: "close"; question: string; confirmLabel: string };
+  | { kind: "raiseThen"; then: "done" | "help" }
+  /** `work`: the records are resolved as work done (a completion with who did it, in Recent work, as a Done on Telegram
+   *  records it: the Agent's resolve_ticket); without, closed with no action (no completion, no cost). */
+  | { kind: "close"; question: string; confirmLabel: string; work?: true };
 
 export interface WorkActionSpec { label: string; step: WorkStep }
 
@@ -86,9 +88,11 @@ export interface WorkActionSpec { label: string; step: WorkStep }
 export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // ⚠️ DONE · NEED HELP · OPEN TICKET ON EVERY ISSUE CARD (owner, 2026-10-30: "a unique configuration … Done and Close
   // shall do the same thing"): an alert's card had VESTA's Done · Need help, a fault's Open Ticket · Close
-  done: { label: "Done", step: { kind: "close", question: "Done? VESTA checks it again before it closes.", confirmLabel: "Done" } },
+  // ⚠️ A DONE IS WORK DONE, WHEREVER IT IS PRESSED (owner, 2026-10-30, review round 4: Done on Telegram filed a
+  // completion in Recent work, the same Done on the Cockpit card a "Closed without action" gone after 90 days)
+  done: { label: "Done", step: { kind: "close", question: "Done? VESTA checks it again before it closes.", confirmLabel: "Done", work: true } },
   needHelp: { label: "Need help", step: { kind: "help" } },
-  doneNew: { label: "Done", step: { kind: "raiseThen", then: "close" } },
+  doneNew: { label: "Done", step: { kind: "raiseThen", then: "done" } },
   helpNew: { label: "Need help", step: { kind: "raiseThen", then: "help" } },
   openTicket: { label: "Open Ticket", step: { kind: "stage", to: "in_progress" } },
   // a card with no record yet (only what the villa's system reports): the same words, the ticket form for its device
