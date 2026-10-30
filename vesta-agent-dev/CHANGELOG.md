@@ -1,3 +1,16 @@
+## 0.12.415
+
+What you will see:
+- Maintenance mode now holds every new problem below P1, not only the villa's alerts: a device that goes offline, a
+  battery or a night check finding no longer sends the facility manager a message or opens a fault while it is on.
+  What was already open carries on as before. A problem still there when you turn maintenance mode off is taken up at
+  the next check (within a few minutes for a device offline, at the night check for the rest); one gone meanwhile is
+  never sent afterwards.
+- VESTA now asks the VESTA Kiosk which sensor says the villa is empty: the one picked in Settings › Villa, the same
+  one the presence tile follows. The siren request, "electricity while the villa is empty" and VESTA's answer to "is
+  the villa empty?" all read it. ⚠️ Pick it in the Kiosk's Settings › Villa if the presence tile shows nothing: until
+  one is picked VESTA cannot tell whether the villa is empty, and the siren is never offered.
+
 ## 0.12.414
 
 What you will see:
