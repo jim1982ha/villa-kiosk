@@ -5,7 +5,7 @@
 // buttons, Cancel puts them back, a close that did not land says why under the card. It was written out in each tab.
 
 import { useState, type ReactNode } from "react";
-import { Pencil, Wrench, X } from "lucide-react";
+import { Pencil, Wrench } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
 import type { WorkAction, WorkActionKind } from "@/fm/deviceWork";
 import InlineConfirm from "@/components/common/InlineConfirm";
@@ -50,9 +50,6 @@ const ICON: Partial<Record<WorkActionKind, ReactNode>> = {
   openTicket: <Wrench size={14} aria-hidden />,
   raiseTicket: <Wrench size={14} aria-hidden />,
   editTicket: <Pencil size={14} aria-hidden />,
-  closeDevice: <X size={14} />,
-  closeAll: <X size={14} />,
-  closeOne: <X size={14} />,
 };
 
 export default function WorkButtons({ actions, cardKey, closer, onAction, name, className }: {

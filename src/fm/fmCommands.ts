@@ -11,6 +11,7 @@
 import type { FmCompletion, FmCost, FmData, FmSavedDocument, FmSchedule, FmTicket, FmTicketStatus } from "./fmTypes";
 import {
   withCompletion, withoutCompletion, withoutCost, withoutTicket, withTicketPatch, withTicketsAdvanced, withTicketsClosed,
+  withTicketsHelped,
   type FmStamp, type TicketCost, type TicketStep,
 } from "./fmEngine";
 
@@ -24,11 +25,14 @@ export type FmCommand =
   | { type: "updateCost"; id: string; patch: Partial<FmCost> }
   | { type: "removeCost"; id: string }
   /** `asTicket`: a person's "Open a ticket" (owner, 2026-10-14) — the record starts as a TICKET in progress, taken on by
-   *  whoever opened it; without it, a FAULT waiting on the Overview (a guest's report). */
-  | { type: "addTicket"; ticket: Omit<FmTicket, "id" | "openedAt" | "status">; asTicket?: boolean }
+   *  whoever opened it; without it, a FAULT waiting on the Overview (a guest's report). `then`: Done or Need help
+   *  pressed on a card with no record yet (owner, 2026-10-30) — the fault raised and, in the same write, closed or
+   *  asked for help on. */
+  | { type: "addTicket"; ticket: Omit<FmTicket, "id" | "openedAt" | "status">; asTicket?: boolean; then?: "close" | "help" }
   | { type: "updateTicket"; id: string; patch: Partial<FmTicket> }
   | { type: "advanceTickets"; ids: readonly string[]; to: FmTicketStatus; step: TicketStep; cost?: TicketCost }
   | { type: "closeTickets"; ids: readonly string[] }
+  | { type: "helpTickets"; ids: readonly string[] }
   | { type: "removeTicket"; id: string }
   | { type: "removeCompletion"; id: string }
   | { type: "saveDocument"; doc: Omit<FmSavedDocument, "id" | "generatedAt"> }
@@ -60,11 +64,14 @@ export function applyFmCommand(d: FmData, c: FmCommand, k: FmActor): FmData {
       return withoutCost(d, c.id);
     case "addTicket": {
       // its first step says who opened it and how, as every later step says who did it
-      const status = c.asTicket ? "in_progress" : "open";
-      return { ...d, tickets: [...d.tickets, {
-        ...c.ticket, id: k.id("tk"), status, openedAt: k.now,
+      const status: FmTicketStatus = c.asTicket ? "in_progress" : "open";
+      const id = k.id("tk");
+      const added: FmData = { ...d, tickets: [...d.tickets, {
+        ...c.ticket, id, status, openedAt: k.now,
         updates: [{ at: k.now, status, photoIds: [], ...(by ? { by } : {}) }],
       }] };
+      return c.then === "close" ? withTicketsClosed(added, [id], k, by)
+        : c.then === "help" ? withTicketsHelped(added, [id], k, by) : added;
     }
     case "updateTicket":
       return withTicketPatch(d, c.id, c.patch, k, by);
@@ -72,6 +79,8 @@ export function applyFmCommand(d: FmData, c: FmCommand, k: FmActor): FmData {
       return withTicketsAdvanced(d, c.ids, c.to, c.step, c.cost, k, by);
     case "closeTickets":
       return withTicketsClosed(d, c.ids, k, by);
+    case "helpTickets":
+      return withTicketsHelped(d, c.ids, k, by);
     case "removeTicket":
       return withoutTicket(d, c.id);
     case "removeCompletion":

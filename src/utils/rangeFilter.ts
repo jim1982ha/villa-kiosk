@@ -219,6 +219,12 @@ export function nearerHandle(range: ValueRange | null | undefined, v: number, ax
   return v >= (at.lo + at.hi) / 2 ? "hi" : "lo";
 }
 
+/** The lowest and highest of a chart's own values (its readings unfiltered): a limit stays between them. null: none. */
+export function valueExtent(values: readonly number[]): ValueRange | null {
+  const vs = values.filter(Number.isFinite);
+  return vs.length ? { lo: Math.min(...vs), hi: Math.max(...vs) } : null;
+}
+
 /**
  * One handle moved to `v`: anywhere on the axis, exactly. At (or past) its own end of the axis it is no limit
  * (±Infinity); it never comes nearer the other than HANDLE_GAP_OF_AXIS, so it never reaches the other's end.
@@ -226,16 +232,20 @@ export function nearerHandle(range: ValueRange | null | undefined, v: number, ax
  * a top handle at 446 cut every running hour out): the finer values reach past the averages the axis shows.
  */
 export function moveHandle(range: ValueRange | null | undefined, which: "lo" | "hi", v: number,
-  axis: SliderAxis): ValueRange {
+  axis: SliderAxis, extent?: ValueRange | null): ValueRange {
   const r = range ?? { lo: -Infinity, hi: Infinity };
   const at = handleValues(r, axis), gap = (axis.hi - axis.lo) * HANDLE_GAP_OF_AXIS;
-  if (which === "hi") return { lo: r.lo, hi: v >= axis.hi ? Infinity : Math.max(v, at.lo + gap) };
-  return { lo: v <= axis.lo ? -Infinity : Math.min(v, at.hi - gap), hi: r.hi };
+  // ⚠️ A LIMIT STAYS AMONG THE CHART'S OWN VALUES (owner, 2026-10-30: a pump's power never below 0 read "≥ -1.5 kW"):
+  // at or past its lowest reading the lower handle limits nothing, at or past its highest the upper one; whatever the
+  // values are, a temperature below 0 included (the lower handle reaches its most negative reading, never beyond)
+  const floor = extent ? Math.max(axis.lo, extent.lo) : axis.lo, ceiling = extent ? Math.min(axis.hi, extent.hi) : axis.hi;
+  if (which === "hi") return { lo: r.lo, hi: v >= ceiling ? Infinity : Math.max(v, at.lo + gap) };
+  return { lo: v <= floor ? -Infinity : Math.min(v, at.hi - gap), hi: r.hi };
 }
 
 /** A key on a handle: the arrows a grain, Page Up/Down a tick step, Home/End the axis' ends. null: not a slider key. */
 export function keyMove(range: ValueRange | null | undefined, which: "lo" | "hi", key: string,
-  axis: SliderAxis): ValueRange | null {
+  axis: SliderAxis, extent?: ValueRange | null): ValueRange | null {
   const v = handleValues(range, axis)[which], g = handleGrain(axis.step);
   const to = key === "ArrowUp" || key === "ArrowRight" ? v + g
     : key === "ArrowDown" || key === "ArrowLeft" ? v - g
@@ -244,7 +254,7 @@ export function keyMove(range: ValueRange | null | undefined, which: "lo" | "hi"
     : key === "Home" ? axis.lo
     : key === "End" ? axis.hi
     : null;
-  return to === null ? null : moveHandle(range, which, to, axis);
+  return to === null ? null : moveHandle(range, which, to, axis, extent);
 }
 
 // ── Kept per chart, for one window ─────────────────────────────────────────

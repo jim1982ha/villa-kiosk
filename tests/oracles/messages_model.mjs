@@ -237,11 +237,14 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
      sourcesDrawn === 2 && icons >= 2, [sourcesDrawn, icons]);
   ck("  ...a card with only the alert says no \"Also\"", !draw(h(AlertIssueCard, { card: issue,
      messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} })).includes("Also:"));
-  const one = elements(parseTsx("components/cockpit/IssueCard.tsx"), "RecordButtons");
-  ck("  ...its buttons VESTA's own row (RecordButtons), the same as its notice and its Notifications card: no other",
-     one.length === 1 && propText(one[0], "record") === "a" && !/WorkButtons|onRaiseTicket/.test(
-       readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8")
-         .split("export function AlertIssueCard")[1]));
+  // owner, 2026-10-30: "a unique configuration … Done / Need Help / Open Ticket consistently for all of them" — the alert's
+  // card drew VESTA's own Done · Need help, a fault's Open Ticket · Close
+  const ic = parseTsx("components/cockpit/IssueCard.tsx");
+  const rows = elements(ic, "CardActions");
+  ck("  ...its buttons the row of every issue card (CardActions, the card's Done · Need help · Open Ticket), never VESTA's own",
+     rows.length === 2 && elements(ic, "RecordButtons").length === 0
+     && readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8")
+       .split("export function AlertIssueCard")[1].includes("<CardActions card={card}"), rows.map((r) => r.getText()));
   const tab = parseTsx("components/cockpit/MessagesTab.tsx");
   ck("  ...the Inbox draws it in place of the two stacked cards (no VESTA card above an issue's own)",
      elements(tab, "AlertIssueCard").length === 1 && elements(tab, "NoteDetail").every((e) => !/cardsOfIssue/.test(e.getText()))

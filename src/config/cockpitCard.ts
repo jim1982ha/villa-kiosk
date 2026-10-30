@@ -15,7 +15,7 @@
 
 import type { AgentCadence } from "@/agent/agentApi";
 import { nextCheck, nextCheckAt, nextCheckWhen } from "@/fm/faultTiming";
-import { lineActions, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
+import { overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { STAGE_WORDS } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, dayMonth, momentText } from "@/utils/dateText";
@@ -27,21 +27,11 @@ import { labelOf } from "./EntityMap";
 import { recordEntity, type VillaDevices } from "./deviceGroups";
 import { attentionSeverity, cardDevice, cardHead, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
 
-/** What a card's buttons do (owner, 2026-10-14) — on its records only (its own fault lines and those folded onto a
- *  live state's line by mergeFaults): fm/deviceWork.overviewActions' answer, in the order drawn. Empty when it holds
- *  none, so a card that is only what Home Assistant reports has no button. */
+/** What a card's buttons do (owner, 2026-10-14; one set on every card, 2026-10-30) — on its records (its own fault
+ *  lines and those folded onto a live state's line by mergeFaults), or its device when it holds none:
+ *  fm/deviceWork.overviewActions' answer, in the order drawn. Empty for a card with neither. */
 function cardActions(group: AttentionGroup): WorkAction[] {
-  return overviewActions(cardRecords(group), problemLines(group), group.entityId);
-}
-
-/** One line's own Close (deviceWork.lineActions): on a card holding several problems, each closes alone. */
-function itemActions(group: AttentionGroup, item: AttentionItem): WorkAction[] {
-  return lineActions(itemRecords(item), problemLines(group));
-}
-
-/** How many of a card's lines carry a record a person can close. */
-function problemLines(group: AttentionGroup): number {
-  return group.items.filter((i) => itemRecords(i).length > 0).length;
+  return overviewActions(cardRecords(group), group.entityId);
 }
 
 /** The records of one line — its fault, or the fault folded onto its live state, with their copies. */
@@ -193,8 +183,6 @@ export interface CardLine {
   /** When the VESTA Agent closes it if it stays as it is now — "Locked since 14:38 · closes at about 14:49 if it stays
    *  locked" (closingText); null when it is not waiting to close. */
   closing: string | null;
-  /** Its own Close, on a card holding several problems; [] otherwise. */
-  actions: WorkAction[];
 }
 
 /** `{ alertNumber }` when there is one, else nothing (an optional field stays absent). */
@@ -266,7 +254,6 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     openedAt: item.openedAt ?? item.fault?.openedAt ?? null,
     ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
     closing: closingText(item.closing ?? item.fault?.closing, now),
-    actions: itemActions(group, item),
   });
   return {
     key: group.key, title: group.title, room: group.room, entityId: group.entityId,
@@ -308,7 +295,7 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
       // issues' next-check pill (its time, then "within 5 min"), who closed it the line under its fault
       lead: null, nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
       lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, story: [], openedAt: t.openedAt ?? null,
-        closing: said.did, actions: [],
+        closing: said.did,
         ...alertNumberIn(alertNumberOf(t)) }],
     }];
   });

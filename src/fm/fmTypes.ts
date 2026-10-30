@@ -158,7 +158,7 @@ export interface FmTicketUpdate {
   was?: string;
 }
 
-export type FmTicketUpdateKind = "reopened" | "retitled" | "reading" | "noted" | "cleared";
+export type FmTicketUpdateKind = "reopened" | "retitled" | "reading" | "noted" | "cleared" | "help";
 /** The kinds that carry the status the fault already had and never change it (fmEngine.statusChanges), and the notes a
  *  close written before kinds existed said "nothing done" with — the agreement's, read by this app AND by the proxy's
  *  expiry of old closed faults (architecture review, 2026-10-15: the proxy kept its own copy, and it had drifted). */

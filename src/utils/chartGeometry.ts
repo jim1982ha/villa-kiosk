@@ -182,6 +182,21 @@ export function chartGeometry(
     window.from + Math.max(0, Math.min(1, (x - plot.left) / ((plot.right - plot.left) || 1))) * span;
   const range = (vs: number[], fromZero: boolean, units: readonly (string | undefined)[],
     limits?: { lo: number; hi: number }): [number, number] => {
+    // ⚠️ A RANGE NEVER WIDENS THE AXIS PAST WHAT IT WAS UNFILTERED (owner, 2026-10-30: "the baseline graph only shows
+    // values >0, when i start to filter from the lower boundary, the graph show negative values"): a lower limit near
+    // the floor pushed the axis below 0 by its margin, the slider then read the finger on that lower axis, and each move
+    // went further down (-1.5 kW, -2.4 kW). The axis a range gives is held inside the one the values give alone: 0 for
+    // a chart drawn from 0, the readings' own negative floor for one that goes below 0 (a grid export, a frost).
+    if (limits && (Number.isFinite(limits.lo) || Number.isFinite(limits.hi))) {
+      const [bl, bh] = range(vs, fromZero, units), [l, h] = ranged(vs, fromZero, units, limits);
+      const lo = Math.max(l, bl), hi = Math.min(h, bh);
+      return hi > lo ? [lo, hi] : [bl, bh];
+    }
+    return ranged(vs, fromZero, units, limits);
+  };
+  /** One scale's ends for its values and a range's limits, before range() holds them inside the unfiltered ones. */
+  function ranged(vs: number[], fromZero: boolean, units: readonly (string | undefined)[],
+    limits?: { lo: number; hi: number }): [number, number] {
     const L = limits ?? { lo: -Infinity, hi: Infinity };
     const finite = [L.lo, L.hi].filter(Number.isFinite);
     const margin = pad > 0 ? pad : LIMIT_MARGIN;
@@ -215,7 +230,7 @@ export function chartGeometry(
     if (Number.isFinite(L.hi) && L.hi > hi - m) hi = L.hi + m;
     if (Number.isFinite(L.lo) && L.lo < lo + m) lo = L.lo - m;
     return [lo, hi];
-  };
+  }
   const sharedInput = input.filter((s) => (s.scale ?? "shared") === "shared");
   const values = (s: ChartSeriesInput) => [...s.pts.map((p) => p.v), ...(s.holds ?? [])];
   const zero = fit === "zero";

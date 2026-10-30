@@ -244,9 +244,9 @@ ck("its state pill on the title line, Log and the bin inside on the right, its t
    && /class="fm-record-card state-due-soon"/.test(task), task.slice(0, 300));
 ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase on it", !/fm-erasable/.test(task));
 
-// owner, 2026-10-18: a problem's question was squeezed beside its words with full-size buttons, the words ran on, and
-// no button showed the mouse was on it. Drawn: the words cut on one line (whole on hover), a line's own buttons in
-// their own slot; in the stylesheets: every button lights under the mouse, the card does not light over a button.
+// owner, 2026-10-18: a problem's words ran on, and no button showed the mouse was on it. Drawn: the words cut on one line
+// (whole on hover); in the stylesheets: every button lights under the mouse, the card does not light over a button.
+// (Each line's own Close went on 2026-10-30: one Done closes everything on the card.)
 {
   const { readFileSync } = await import("node:fs");
   const css = (f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8");
@@ -255,18 +255,15 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   const [two] = groupAttention([
     { id: "fault:x", kind: "fault", title: words, detail: "Fault", entityId: "lock.door4", ticketId: "x", stage: "fault", source: "alert", device: dev },
     { id: "fault:y", kind: "fault", title: "Another", detail: "Fault", entityId: "lock.door4", ticketId: "y", stage: "fault", source: "alert", device: dev }]);
-  const card = draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {}, lineActions: () => btn("Close") }));
-  ck("  ...a problem's words sit in one cut line, whole on hover; its own Close in its own slot beside them",
+  const card = draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {} }));
+  ck("  ...a problem's words sit in one cut line, whole on hover; no line carries a button of its own",
      card.includes(`<span class="cockpit-attention-sub-title">${words}</span>`)
      && /<Tip text=\{line\.text\}><span className="cockpit-attention-sub-title">/.test(readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8"))
-     && (card.match(/<span class="cockpit-line-act">/g) ?? []).length === 2, card.slice(0, 600));
+     && !card.includes("cockpit-line-act"), card.slice(0, 600));
   const shared = css("08-shared.css"), fac = css("07-facility.css"), base = css("01-base.css");
-  ck("  ...cut with \"…\", and the cut words never push a line's Close off its line",
+  ck("  ...cut with \"…\", in the room the line has",
      /\.cockpit-attention-sub-title \{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;/.test(shared)
      && /\.cockpit-attention-sub-text \{[^}]*flex: 1 1 0;/.test(shared));
-  ck("  ...a line's question gets a row of its own, its two small buttons together",
-     /\.cockpit-line-act:has\(> \.modal-actions\) \{ flex: 1 1 100%; \}/.test(fac)
-     && /\.cockpit-line-act \.modal-actions \{[^}]*flex-wrap: nowrap;/.test(fac) && /\.cockpit-line-act \.modal-actions \.btn \{ min-height: 0;/.test(fac));
   ck("every button lights under the mouse, and the card does not light while the mouse is on any of its buttons",
      /@media \(hover: hover\) \{\s*\.btn:hover:not\(:disabled\) \{/.test(base)
      && /\.fm-record-card:has\(> \.fm-openable\):hover:not\(:has\(\.fm-record-actions:hover\)\):not\(:has\(button:hover\)\)/.test(fac));

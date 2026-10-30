@@ -52,9 +52,11 @@ export function RangeChip({ range, step, unit, state, kept, onClear }: {
   );
 }
 
-export default function ChartRangeSlider({ axis, top, bottom, height, range, unit, onChange }: {
+export default function ChartRangeSlider({ axis, extent, top, bottom, height, range, unit, onChange }: {
   /** The chart's left axis (chartGeometry series[0]). */
   axis: SliderAxis & { sy: (v: number) => number };
+  /** The chart's own lowest and highest values (rangeFilter.valueExtent): a limit stays between them. */
+  extent: ValueRange | null;
   /** The plot's top and bottom, in the drawing's px (the SVG's own). */
   top: number;
   bottom: number;
@@ -67,24 +69,31 @@ export default function ChartRangeSlider({ axis, top, bottom, height, range, uni
 }) {
   const rail = useRef<HTMLDivElement>(null);
   const drag = useRef<"lo" | "hi" | null>(null);
+  // ⚠️ THE AXIS HELD STILL UNDER A DRAGGING FINGER (owner, 2026-10-30): the chart re-fits its axis to the range each
+  // move, and read against the new axis the same finger meant another value: the handle ran away from it. From the
+  // press to the lift, the finger is read on the axis it pressed on; the chart re-fits once it is lifted.
+  const pressed = useRef<SliderAxis | null>(null);
   const at = handleValues(range, axis);
   const yHi = axis.sy(at.hi), yLo = axis.sy(at.lo);
-  const valueAt = (clientY: number) => {
+  const valueAt = (clientY: number, on: SliderAxis) => {
     const r = rail.current!.getBoundingClientRect();
-    return valueAtY(axis, { top, bottom }, ((clientY - r.top) * height) / (r.height || height));
+    return valueAtY(on, { top, bottom }, ((clientY - r.top) * height) / (r.height || height));
   };
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const v = valueAt(e.clientY);
+    pressed.current = { lo: axis.lo, hi: axis.hi, step: axis.step };
+    const v = valueAt(e.clientY, pressed.current);
     const on = (e.target as HTMLElement).dataset?.k;
-    drag.current = on === "lo" || on === "hi" ? on : nearerHandle(range, v, axis);
+    drag.current = on === "lo" || on === "hi" ? on : nearerHandle(range, v, pressed.current);
     e.currentTarget.setPointerCapture?.(e.pointerId);
     e.preventDefault();
-    onChange(moveHandle(range, drag.current, v, axis));
+    onChange(moveHandle(range, drag.current, v, pressed.current, extent));
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (drag.current) onChange(moveHandle(range, drag.current, valueAt(e.clientY), axis));
+    if (drag.current && pressed.current) {
+      onChange(moveHandle(range, drag.current, valueAt(e.clientY, pressed.current), pressed.current, extent));
+    }
   };
-  const end = () => { drag.current = null; };
+  const end = () => { drag.current = null; pressed.current = null; };
   const limited = (k: "lo" | "hi") => range !== null && Number.isFinite(range[k]);
   const thumb = (k: "lo" | "hi", y: number) => (
     <div className="chart-range-thumb" data-k={k} style={{ top: y }} role="slider" tabIndex={0}
@@ -92,7 +101,7 @@ export default function ChartRangeSlider({ axis, top, bottom, height, range, uni
       aria-valuemin={axis.lo} aria-valuemax={axis.hi} aria-valuenow={at[k]}
       aria-valuetext={limited(k) ? `${fmtLimit(at[k], axis.step)}${unit}` : k === "hi" ? "No upper limit" : "No lower limit"}
       onKeyDown={(e) => {
-        const r = keyMove(range, k, e.key, axis);
+        const r = keyMove(range, k, e.key, axis, extent);
         if (r) { e.preventDefault(); onChange(r); }
       }} />
   );

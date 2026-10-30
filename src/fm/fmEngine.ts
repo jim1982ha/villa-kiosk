@@ -714,6 +714,20 @@ export function withTicketsClosed(d: FmData, ids: readonly string[], k: Pick<FmS
   return ids.reduce((acc, id) => withTicketClosed(acc, id, k, by), d);
 }
 
+/** ⚠️ NEED HELP ON EVERY CARD (owner, 2026-10-30: Done · Need help · Open Ticket on every issue card): Need help pressed
+ *  on a card writes a "help" step on each of its open records, `by` the profile — its status unchanged (the agreement's
+ *  notStatusChanges); the VESTA Agent reads it and asks the owner to act. A closed record gets none. */
+export function withTicketsHelped(d: FmData, ids: readonly string[], k: Pick<FmStamp, "now">, by?: string): FmData {
+  const asked = new Set(ids);
+  return {
+    ...d,
+    tickets: d.tickets.map((t) => (!asked.has(t.id) || isTicketResolved(t) ? t : {
+      ...t,
+      updates: [...(t.updates ?? []), { at: k.now, status: t.status, kind: "help" as const, photoIds: [], ...(by ? { by } : {}) }],
+    })),
+  };
+}
+
 // ── Rules that lived in the screens (round 13, 2.496.183) ─────────────────
 // Each was written in a component or the store's context, where only a regex
 // could reach it, and several already disagreed with the engine or with each

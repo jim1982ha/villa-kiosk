@@ -20,7 +20,7 @@ import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
 import { NOT_KEPT_COLOR, STATUS_COLOR } from "@/utils/stateColors";
 import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage, keptWords } from "./chartUtils";
-import { activeRange, type KeptChart, type ValueRange } from "@/utils/rangeFilter";
+import { activeRange, valueExtent, type KeptChart, type ValueRange } from "@/utils/rangeFilter";
 import ChartRangeSlider, { RangeChip, rangeWords } from "./ChartRangeSlider";
 import { formatUnitValue } from "@/utils/entityValue";
 import { useChartPointer } from "./useChartPointer";
@@ -163,7 +163,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
           kept={kept ? keptWords(kept.count, kept.of, stepMs) : undefined} onClear={() => slid.onChange(null)} />}
       </ChartUnitLine>
       <div className="chart-with-axis">
-        {slid && <ChartRangeSlider axis={ax} top={TOP} bottom={BOT} height={H} range={on} unit={unit}
+        {slid && <ChartRangeSlider axis={ax} extent={valueExtent(slid.base.map((p) => p.v))} top={TOP} bottom={BOT} height={H} range={on} unit={unit}
           onChange={(r) => slid.onChange(activeRange(r))} />}
         <YAxis zoomable height={H} frame={H} ticks={leftAxis} cls={lines[0].cls?.split(" ")[0]} color={lines[0].color} />
         <div className="spark-wrap weather-chart-wrap">

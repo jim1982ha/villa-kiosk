@@ -30,7 +30,8 @@ console.log("  a card's buttons are its faults' only (fm/deviceWork, architectur
 const item = (id, kind, entityId, extra = {}) => ({ id, kind, title: id, detail: "", entityId, device: { key: deviceOf(entityId), label: "dev" }, ...extra });
 // a card's buttons as the owner reads them: "label → the records it acts on [what it asks first]"
 const said = (acts) => acts.map((a) => `${a.label} → ${[...a.ids].sort().join(",")}${a.step.kind === "close" ? ` [${a.step.question} / ${a.step.confirmLabel}]` : ""}${a.step.kind === "stage" ? ` (${a.step.to})` : ""}`);
-const OV_CLOSE = "[Close this? No action needed. / Close]", OV_ALL = "[Close all of them? No action needed. / Close all]", TK_CLOSE = "[Close this ticket? Nothing was done, no cost is recorded. / Close ticket]";
+// owner, 2026-10-30: Done · Need help · Open Ticket on every issue card, one Done closing everything on it
+const OV_DONE = "[Done? VESTA checks it again before it closes. / Done]", TK_CLOSE = "[Close this ticket? Nothing was done, no cost is recorded. / Close ticket]";
 const [pump] = groupAttention([
   item("unavailable:sensor.pump_power", "unavailable", "sensor.pump_power"),
   item("fault:a", "fault", "sensor.pump_energy", { ticketId: "a", stage: "fault" }),
@@ -38,24 +39,26 @@ const [pump] = groupAttention([
 ]);
 const acts = cardActions(pump);
 ck("a device's live state and its faults are ONE card", pump.items.length >= 2 && cardRecords(pump).length === 2, pump.items.map((i) => i.id));
-// two problems on the card (owner, 2026-10-18): its Close is "Close all"; each line closes alone (attention_groups)
-ck("  ...Open Ticket takes on its fault (adding it to the ticket); Close all closes both, the fault AND the ticket",
-   said(acts).join(" | ") === `Open Ticket → a (in_progress) | Close all → a,b ${OV_ALL}`, said(acts));
+ck("  ...Done and Need help act on both, the fault AND the ticket; Open Ticket takes on its fault (adding it to the ticket)",
+   said(acts).join(" | ") === `Done → a,b ${OV_DONE} | Need help → a,b | Open Ticket → a (in_progress)`, said(acts));
 const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" }),
   item("fault:c", "fault", "sensor.pump_energy", { ticketId: "c", stage: "ticket" })]);
 ck("  ...once every fault is a ticket, the button is Edit Ticket, on its first record",
-   said(cardActions(taken)).join(" | ") === `Edit Ticket → b | Close all → b,c ${OV_ALL}`, said(cardActions(taken)));
+   said(cardActions(taken)).join(" | ") === `Done → b,c ${OV_DONE} | Need help → b,c | Edit Ticket → b`, said(cardActions(taken)));
 const [lock] = groupAttention([item("alarm:lock.door", "alarm", "lock.door")]);
-// a card with no record: its one button opens a ticket for its device, the form already pointed at it (owner,
-// 2026-10-29: the Overview's Open Ticket was missing on a line only the villa's system reports)
-ck("a card that is only what Home Assistant reports: Open Ticket, for its device, opening the ticket form",
-   said(cardActions(lock)).join(" | ") === "Open Ticket → lock.door" && cardActions(lock)[0]?.step.kind === "raise", said(cardActions(lock)));
+// a card with no record: the same three for its device — Done and Need help raise its fault with the press, Open Ticket
+// opens the ticket form already pointed at it (owner, 2026-10-29; 2026-10-30)
+ck("a card that is only what Home Assistant reports: Done · Need help · Open Ticket, for its device",
+   said(cardActions(lock)).join(" | ") === "Done → lock.door | Need help → lock.door | Open Ticket → lock.door"
+   && cardActions(lock).map((a) => a.step.kind === "raiseThen" ? `raise+${a.step.then}` : a.step.kind).join() === "raise+close,raise+help,raise",
+   said(cardActions(lock)));
 const [lone] = groupAttention([{ id: "alarm:x", kind: "alarm", title: "Water leak", detail: "" }]);
 ck("  ...a problem on no device has nothing to open a ticket for: no button", cardActions(lone).length === 0, said(cardActions(lone)));
 const srcAt = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const IC = srcAt("components/cockpit/IssueCard.tsx"), MT = srcAt("components/cockpit/MessagesTab.tsx");
-ck("  ...pressed, it opens Messages' ticket form pointed at the device (the one \"Open a ticket\" form)",
-   /a\.step\.kind === "raise" \? onRaiseTicket\(a\.ids\[0\]\)/.test(IC)
+ck("  ...pressed, Open Ticket opens Messages' ticket form pointed at the device (the one \"Open a ticket\" form); Done and Need help raise it in one write",
+   /else if \(step\.kind === "raise"\) onRaiseTicket\(a\.ids\[0\]\);/.test(IC)
+   && /step\.kind === "raiseThen"\) void said\(addTicket\(raisedFor\(card, a\.ids\[0\]\), \{ then: step\.then \}\)\)/.test(IC)
    && /onRaiseTicket=\{\(entity\) => setRaising\(\{ entity \}\)\}/.test(MT));
 ck("a ticket in progress (Tickets): Mark resolved and Close, both on every record of it — its own Close question",
    said(W.ticketActions([{ id: "a", stage: "ticket" }, { id: "b", stage: "ticket" }])).join(" | ")
@@ -111,9 +114,9 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
   const tickets = W.ticketCards(records, fold);
   const counts = W.openCounts(records, fold);
   const has = (g, kind) => cardActions(g).some((a) => a.kind === kind);
-  ck("the counts are the cards: devices to take on = Overview cards with Open Ticket; in progress = Tickets cards; open = Overview cards with a Close",
+  ck("the counts are the cards: devices to take on = issue cards with Open Ticket; in progress = Tickets cards; open = issue cards with a Done",
      counts.faults === overview.filter((g) => has(g, "openTicket")).length && counts.tickets === tickets.length
-     && counts.total === overview.filter((g) => has(g, "closeDevice") || has(g, "closeAll")).length
+     && counts.total === overview.filter((g) => has(g, "done")).length
      && JSON.stringify(counts) === JSON.stringify({ faults: 3, tickets: 3, total: 5 }), { counts, overview: overview.map((g) => g.key), tickets: tickets.map((t) => t.key) });
   ck("  ...each record's card is the same device in both: a Tickets card holds exactly its Overview card's tickets",
      tickets.every((t) => { const g = overview.find((o) => o.key === t.key);
@@ -125,7 +128,7 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
      said(W.ticketActions(tickets.find((t) => t.key === "device:sensor.pump_power").records.map(W.workRecord))).join(" | ")
        === `Mark resolved → p2 (resolved) | Close → p2 ${TK_CLOSE}`
      && said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))).join(" | ")
-       === `Open Ticket → p1 (in_progress) | Close all → p1,p2 ${OV_ALL}`);
+       === `Done → p1,p2 ${OV_DONE} | Need help → p1,p2 | Open Ticket → p1 (in_progress)`);
   ck("  ...Tickets lists the device whose ticket was opened last first, never an open fault or a closed record",
      tickets.map((t) => t.key).join() === "item:fault:n2,device:lock.back,device:sensor.pump_power", tickets.map((t) => t.key));
 }
@@ -186,7 +189,7 @@ const [one] = offlineDevice("unavailable");
 ck("the fault on another entity of the device, itself unavailable, goes onto the device's Unavailable line",
    one.items.length === 1 && one.items[0].kind === "unavailable" && one.items[0].fault?.ticketId === "off"
    && lineText(one) === "Example has been offline for 9 h.", one.items.map((i) => i.id));
-ck("  ...its Close and Open ticket still act on it", said(cardActions(one)).join(" | ") === `Open Ticket → off (in_progress) | Close → off ${OV_CLOSE}`, said(cardActions(one)));
+ck("  ...its Done, Need help and Open Ticket still act on it", said(cardActions(one)).join(" | ") === `Done → off ${OV_DONE} | Need help → off | Open Ticket → off (in_progress)`, said(cardActions(one)));
 // a live state and the fault about the same entity, on one device's card: its ONE line, as drawn
 const attentionLine = ({ fault, ...state }) => {
   const dev = { key: "x.d", label: "D" };
@@ -418,7 +421,7 @@ ck("the Open issues title line (Messages): the (i) then Open a ticket, for the p
 // what each button names (its stage, its records), with no status or rule of its own
 ck("a card draws what cardActions says (no rule of its own)",
    /const acts = card\.actions;/.test(ov) && /<WorkButtons actions=\{acts\} cardKey=\{card\.key\} closer=\{closer\}/.test(ov)
-   && /a\.step\.kind === "stage" \? setStaging\(\{ tickets: records\(a\.ids\), to: a\.step\.to \}\)\s+: a\.step\.kind === "raise" \? onRaiseTicket\(a\.ids\[0\]\) : onEditTicket\(a\.ids\[0\]\)/.test(ov)
+   && /if \(step\.kind === "stage"\) setStaging\(\{ tickets: records\(a\.ids\), to: step\.to \}\);\s+else if \(step\.kind === "help"\) void said\(helpTickets\(a\.ids\)\);/.test(ov)
    && !/closeTickets|InlineConfirm|in_progress"|"resolved"/.test(ov + tt));
 
 console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
@@ -428,14 +431,14 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   const drawButtons = (actions, asking = null, extra = {}) => draw(h(WorkButtons,
     { actions, cardKey: "device:x", closer: closer(asking), onAction: () => {}, ...extra }));
   const ovActs = cardActions(pump), tkActs = W.ticketActions([{ id: "a", stage: "ticket" }]);
-  ck("an Overview card: Open Ticket with its wrench, Close with its cross, in their row, Close named for a screen reader",
+  ck("an issue card: Done, Need help, then Open Ticket with its wrench, in their row, Done named for a screen reader",
      /^<div class="fm-fault-actions">/.test(drawButtons(ovActs, null, { name: "Pump", className: "fm-fault-actions" }))
-     && text(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Open Ticket|[icon] Close all|"
-     && /aria-label="Close all “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })), text(drawButtons(ovActs)));
+     && text(drawButtons(ovActs, null, { name: "Pump" })) === "|Done|Need help|[icon] Open Ticket|"
+     && /aria-label="Done “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })), text(drawButtons(ovActs)));
   ck("  ...a ticket: Mark resolved and Close, no icon; a closed record: Reopen",
      text(drawButtons(tkActs)) === "|Mark resolved|Close|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
-  ck("  ...its Close asks ITS question in place of the buttons — the Overview's for the device, the ticket's for the ticket",
-     text(drawButtons(ovActs, "device:x")) === "|Close all of them? No action needed.|Cancel|Close all|"
+  ck("  ...its Done asks ITS question in place of the buttons — the issue card's for the device, the ticket's Close for the ticket",
+     text(drawButtons(ovActs, "device:x")) === "|Done? VESTA checks it again before it closes.|Cancel|Done|"
      && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|Close ticket|",
      [text(drawButtons(ovActs, "device:x")), text(drawButtons(tkActs, "device:x"))]);
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",

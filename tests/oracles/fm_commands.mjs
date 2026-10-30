@@ -56,4 +56,34 @@ ck("removing every schedule keeps the completions (evidence of work done)",
    applyFmCommand({ ...EMPTY, schedules: [{ id: "s" }], completions: [{ id: "c" }] }, { type: "removeAllSchedules" }, k()).completions.length === 1);
 ck("the record passed in is never changed", raised.tickets[0].status === "open" && EMPTY.tickets.length === 0);
 
+console.log("\n  Done · Need help · Open Ticket on every issue card (owner, 2026-10-30):");
+{
+  const AGREED = JSON.parse((await import("node:fs")).readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
+  const two = applyFmCommand(applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "Pump weak", photoIds: [] } }, k("Owner")),
+    { type: "addTicket", ticket: { title: "Pump noisy", photoIds: [] }, asTicket: true }, k("Owner"));
+  const [a, b] = two.tickets;
+  const helped = applyFmCommand(two, { type: "helpTickets", ids: [a.id, b.id] }, k("Facility manager"));
+  const last = (t) => t.updates[t.updates.length - 1];
+  ck("Need help writes a \"help\" step on each record, by the profile, its status unchanged (the agreement's own kind)",
+     helped.tickets.every((t, i) => last(t).kind === "help" && last(t).by === "Facility manager" && t.status === two.tickets[i].status
+       && last(t).status === t.status)
+     && AGREED.ticketUpdate.kinds.includes("help") && AGREED.ticketUpdate.notStatusChanges.includes("help"), helped.tickets.map(last));
+  const shut = applyFmCommand(two, { type: "closeTickets", ids: [a.id] }, k("Owner"));
+  ck("  ...a closed record gets none", applyFmCommand(shut, { type: "helpTickets", ids: [a.id] }, k("Owner")).tickets[0].updates.length
+     === shut.tickets[0].updates.length);
+  const doneNew = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "LED Strip: Unavailable", entityId: "light.example", photoIds: [] },
+    then: "close" }, k("JM"));
+  const helpNew = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "LED Strip: Unavailable", entityId: "light.example", photoIds: [] },
+    then: "help" }, k("JM"));
+  ck("  ...Done on a card with no record: its fault raised and closed in ONE write, by the profile",
+     doneNew.tickets.length === 1 && doneNew.tickets[0].status === "resolved" && doneNew.tickets[0].updates.map((u) => u.status).join() === "open,resolved"
+     && last(doneNew.tickets[0]).by === "JM", doneNew.tickets[0]);
+  ck("  ...Need help on it: raised and asked for help in ONE write, still open",
+     helpNew.tickets[0].status === "open" && last(helpNew.tickets[0]).kind === "help", helpNew.tickets[0]);
+  const { raisedFor } = await import("@/components/cockpit/IssueCard");
+  const r = raisedFor({ title: "LED Strip", room: "Living Room", lines: [{ text: "" }, { text: "Unavailable" }] }, "light.example");
+  ck("  ...the fault it raises is titled by the device and what its line says, in its room, for its device",
+     r.title === "LED Strip: Unavailable" && r.entityId === "light.example" && r.room === "Living Room" && r.deviceLabel === "LED Strip", r);
+}
+
 done("✅ every Facility change is one command, who and when stamped there");
