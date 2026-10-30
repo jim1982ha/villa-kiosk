@@ -235,6 +235,8 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   const sourcesDrawn = (two.match(/cockpit-attention-icon/g) ?? []).length;
   ck("  ...each icon once in the open card: the lines' own, none repeated before its name",
      sourcesDrawn === 2 && icons >= 2, [sourcesDrawn, icons]);
+  ck("  ...and the card keeps its icon column, so the lines' icons stay inside it (owner, 2026-10-30)",
+     /class="fm-record-lead"/.test(two), two);
   ck("  ...a card with only the alert says no \"Also\"", !draw(h(AlertIssueCard, { card: issue,
      messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} })).includes("Also:"));
   // owner, 2026-10-30: "a unique configuration … Done / Need Help / Open Ticket consistently for all of them" — the alert's
