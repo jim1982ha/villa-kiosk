@@ -298,6 +298,9 @@ console.log("\n  one way a problem's entity becomes its card's device, for the o
     ck("  ...and the row's icons say both problems, the alert's first: the list's row and the card's head draw them",
        c?.lead?.sources.join() === [...c.lines[0].own.sources, ...c.lines[1].own.sources].join()
        && c.lead.sources.includes("night") && c.lines[1].icons?.sources.join() === "night", [c?.lead, c?.lines.map((l) => l.own)]);
+    const { headIcons } = await import("@/config/cockpitCard");
+    ck("  ...the open card draws each icon once: its name the first line's, the other line its own",
+       headIcons(c)?.sources.join() === c.lines[0].own.sources.join() && !headIcons(c).sources.includes("night"), headIcons(c));
   }
 }
 

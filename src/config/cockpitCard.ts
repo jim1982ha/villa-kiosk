@@ -100,6 +100,24 @@ function cardSources(items: readonly AttentionItem[]): LineSources | null {
   return out.sources.length ? out : null;
 }
 
+/** The icons an OPEN card draws before its name: its sources that none of its lines draws already (the list's row,
+ *  which draws no line, draws them all: `lead`).
+ *  ⚠️ THE SAME ICON TWICE (owner, 2026-10-30: "i see twice the same icons in the cards"): the onsen pump's card drew the
+ *  bell and the moon before its name, then the moon again before its "Also: …" line and the bell before #96 — each
+ *  icon is drawn once in a card. null when the lines say them all. Pure. */
+export function headIcons(card: Pick<CardView, "lead" | "lines">): LineSources | null {
+  const lead = card.lead;
+  if (!lead) return null;
+  const said = new Set(card.lines.flatMap((l) => l.icons?.sources ?? []));
+  const out: LineSources = { sources: [], severities: [] };
+  lead.sources.forEach((s, i) => {
+    if (said.has(s)) return;
+    out.sources.push(s);
+    out.severities.push(lead.severities[i] ?? lead.severities[0]);
+  });
+  return out.sources.length ? out : null;
+}
+
 /** A line's source icons and the status colour of each (owner, 2026-10-14: the source as an icon, in place of the
  *  warning sign; two stacked when a line holds a device's live state and its fault). */
 export interface LineSources { sources: IssueSource[]; severities: AttentionSeverity[] }

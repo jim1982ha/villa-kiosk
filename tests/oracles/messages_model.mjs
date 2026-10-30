@@ -230,6 +230,11 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
      at("Also: Pump ran shorter than expected") > -1 && at("Also: Pump ran shorter than expected") < at("#92-P2 (new)")
      && at("#92-P2 (new)") < at("The pool pump stopped.")
      && (two.match(/fm-record-gutter-icon/g) ?? []).length === 2, two);
+  // owner, 2026-10-30: "i see twice the same icons in the cards" — each icon drawn once in an open card
+  const icons = (two.match(/fm-record-gutter-icon|cockpit-source-icons/g) ?? []).length;
+  const sourcesDrawn = (two.match(/cockpit-attention-icon/g) ?? []).length;
+  ck("  ...each icon once in the open card: the lines' own, none repeated before its name",
+     sourcesDrawn === 2 && icons >= 2, [sourcesDrawn, icons]);
   ck("  ...a card with only the alert says no \"Also\"", !draw(h(AlertIssueCard, { card: issue,
      messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} })).includes("Also:"));
   const one = elements(parseTsx("components/cockpit/IssueCard.tsx"), "RecordButtons");

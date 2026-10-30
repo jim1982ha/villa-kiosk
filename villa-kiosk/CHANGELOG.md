@@ -1,3 +1,10 @@
+## 2.496.614
+
+What you will see:
+- An open card in Cockpit › Inbox › Issues draws each icon once: beside each of its lines, and before its name only
+  what no line shows already. The onsen pump's card showed the bell and the moon before its name and again before
+  its two lines. The row in the list still shows every icon.
+
 ## 2.496.613
 
 What you will see:

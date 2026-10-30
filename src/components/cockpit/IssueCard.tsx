@@ -10,7 +10,7 @@ import { CheckCircle2 } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import { useFmData } from "@/fm/FmDataContext";
 import WorkButtons, { useConfirmedClose, type ConfirmedClose } from "@/components/fm/WorkButtons";
-import { othersFirst, type CardLine, type CardView } from "@/config/cockpitCard";
+import { headIcons, othersFirst, type CardLine, type CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
 import FaultStageModal from "@/components/fm/FaultStageModal";
@@ -74,6 +74,7 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions, lineMe
   lineMessage?: (line: CardLine) => ReactNode;
 }) {
   const open = card.entityId;
+  const head = headIcons(card);
   return (
     <RecordCard
       title={card.title}
@@ -83,7 +84,7 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions, lineMe
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look === "watched"
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
-        : card.lead ? <SourceIcons {...card.lead} /> : undefined}
+        : head ? <SourceIcons {...head} /> : undefined}
       // when its problems are read again: a refresh icon and when, a pill at the right of its name (owner, 2026-10-22);
       // hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
       check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
