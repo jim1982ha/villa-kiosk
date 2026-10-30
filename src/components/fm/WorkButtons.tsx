@@ -7,6 +7,7 @@
 import { useState, type ReactNode } from "react";
 import { Pencil, Wrench } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
+import { DONE_STEP } from "@/fm/fmCommands";
 import type { WorkAction, WorkActionKind } from "@/fm/deviceWork";
 import InlineConfirm from "@/components/common/InlineConfirm";
 
@@ -18,11 +19,12 @@ export interface ConfirmedClose {
   problemFor: (cardKey: string) => string | null;
   ask: (cardKey: string) => void;
   cancel: () => void;
-  close: (cardKey: string, ids: readonly string[]) => Promise<void>;
+  /** `work`: resolved as work done (a completion), else closed with no action. */
+  close: (cardKey: string, ids: readonly string[], work?: boolean) => Promise<void>;
 }
 
 export function useConfirmedClose(): ConfirmedClose {
-  const { closeTickets } = useFmData();
+  const { closeTickets, advanceTickets } = useFmData();
   const [asking, setAsking] = useState<string | null>(null);
   const [problem, setProblem] = useState<{ key: string; text: string } | null>(null);
   return {
@@ -30,9 +32,9 @@ export function useConfirmedClose(): ConfirmedClose {
     problemFor: (key) => (problem?.key === key ? problem.text : null),
     ask: (key) => { setProblem(null); setAsking(key); },
     cancel: () => setAsking(null),
-    close: async (key, ids) => {
+    close: async (key, ids, work) => {
       setProblem(null);
-      const { done, note: why } = await closeTickets(ids);
+      const { done, note: why } = await (work ? advanceTickets(ids, "resolved", DONE_STEP) : closeTickets(ids));
       // On success the card's records leave its list; only a failure stays to say so.
       setAsking(null);
       if (!done && why) setProblem({ key, text: why });
@@ -67,8 +69,9 @@ export default function WorkButtons({ actions, cardKey, closer, onAction, name, 
   if (actions.length === 0) return null;
   const asked = closer.asking === cardKey ? actions.find((a) => a.step.kind === "close") : undefined;
   if (asked && asked.step.kind === "close") {
-    return <InlineConfirm question={asked.step.question} confirmLabel={asked.step.confirmLabel}
-      onConfirm={() => closer.close(cardKey, asked.ids)} onCancel={closer.cancel} />;
+    const { question, confirmLabel, work } = asked.step;
+    return <InlineConfirm question={question} confirmLabel={confirmLabel}
+      onConfirm={() => closer.close(cardKey, asked.ids, work)} onCancel={closer.cancel} />;
   }
   const buttons = actions.map((a) => (
     <button key={a.kind} type="button" className={CARD_BUTTON}

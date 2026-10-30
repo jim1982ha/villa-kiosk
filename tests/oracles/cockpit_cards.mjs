@@ -205,7 +205,8 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
   const gutter = (css.match(/\.fm-record-head:has\(> \.fm-record-lead\) \+ \.fm-record-body \{ padding-left: (\d+)px/) ?? [])[1];
   const hung = (css.match(/\.fm-record-gutter > \.fm-record-gutter-icon \{[^}]*position: absolute; left: -(\d+)px/) ?? [])[1];
   ck("  ...a line with its own icon starts its text where a line without one does: the icon hangs in the card's icon column",
-     lines.length === 2 && /siren/.test(lines[1]) && !/<svg/.test(lines[0])
+     // two sources on the card: each line draws its own (config/cockpitCard.cardIcons), both in the icon column
+     lines.length === 2 && /siren/.test(lines[1]) && /lucide-radio/.test(lines[0])
      && lines.every((l) => !/cockpit-source-icons/.test(l.replace(/<span class="fm-record-gutter-icon">[\s\S]*?<\/svg><\/span><\/span>/g, "")))
      && !!gutter && gutter === hung, { gutter, hung, lines });
 }

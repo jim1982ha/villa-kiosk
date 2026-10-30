@@ -50,7 +50,7 @@ const [lock] = groupAttention([item("alarm:lock.door", "alarm", "lock.door")]);
 // opens the ticket form already pointed at it (owner, 2026-10-29; 2026-10-30)
 ck("a card that is only what Home Assistant reports: Done · Need help · Open Ticket, for its device",
    said(cardActions(lock)).join(" | ") === "Done → lock.door | Need help → lock.door | Open Ticket → lock.door"
-   && cardActions(lock).map((a) => a.step.kind === "raiseThen" ? `raise+${a.step.then}` : a.step.kind).join() === "raise+close,raise+help,raise",
+   && cardActions(lock).map((a) => a.step.kind === "raiseThen" ? `raise+${a.step.then}` : a.step.kind).join() === "raise+done,raise+help,raise",
    said(cardActions(lock)));
 const [lone] = groupAttention([{ id: "alarm:x", kind: "alarm", title: "Water leak", detail: "" }]);
 ck("  ...a problem on no device has nothing to open a ticket for: no button", cardActions(lone).length === 0, said(cardActions(lone)));

@@ -1,7 +1,7 @@
 // src/config/cockpitCard.ts
 // ONE COCKPIT CARD, AS IT IS DRAWN (architecture review scan 1, 2026-10-19): its title and room, the icons before its
 // name, its "Next check" and the date and time behind it, its buttons, and each problem's line — words, icons, what
-// last happened on Telegram, its own Close. Pure; IssueCard draws exactly this, a check reads it by value.
+// last happened on Telegram. Pure; IssueCard draws exactly this, a check reads it by value.
 //
 // ⚠️ FIVE CALLS, ONE CARD: the page asked attention for a line's words (twice: once for its hover text), its icons,
 // its buttons and the card's, and faultTiming for its next check, and worked out a line's latest Telegram note itself
@@ -48,7 +48,7 @@ function cardRecords(group: AttentionGroup): WorkRecord[] {
 
 /** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");
  *  in a row that is the problem itself (no device), only a status the row does not show already ("In progress"; an
- *  open fault's line is empty — its title is the row's, its Close the line's). Every row shows its problems this way,
+ *  open fault's line is empty — its title is the row's). Every row shows its problems this way,
  *  one or several. */
 function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
   return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail ?? "";
@@ -57,21 +57,11 @@ function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
 /** What a fault's line must say of its status: nothing while it is open, its stage's word (fmEngine.STAGE_WORDS:
  *  "In progress") once someone took it.
  *  ⚠️ "OPEN FAULT:" BEFORE EVERY FAULT SAID NOTHING (owner, 2026-10-14: "this seems providing no value"): the row's
- *  icon says it is a fault and its Close that it is open — the words only pushed the text to a second line.
+ *  icon says it is a fault and its Done that it is open — the words only pushed the text to a second line.
  *  undefined for anything that is not a fault. */
 function faultStatus(item: AttentionItem): string | undefined {
   if (item.kind !== "fault") return undefined;
   return item.stage === "ticket" ? STAGE_WORDS.ticket.word : "";
-}
-
-/** The icons a problem's line shows inside its row: its own sources only where the row's icons do not say them already
- *  — the row's are its first line's (IssueCard draws them beside the device's name).
- *  ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon — a red "!"
- *  beside "House & Pool Relay" and again before "Open fault: …". A row mixing kinds (a lock "Unlocked" with a fault on
- *  its battery) still marks the line whose kind is not the row's. */
-function lineIcon(group: AttentionGroup, item: AttentionItem): LineSources | null {
-  const own = lineSources(item), row = lineSources(group.items[0] ?? item);
-  return item === group.items[0] || JSON.stringify(own) === JSON.stringify(row) ? null : own;
 }
 
 /** ⚠️ A CARD'S ICONS SAY EVERY KIND OF PROBLEM IT HOLDS (owner, 2026-10-30: the onsen pump's row showed only #96's
@@ -90,22 +80,24 @@ function cardSources(items: readonly AttentionItem[]): LineSources | null {
   return out.sources.length ? out : null;
 }
 
-/** The icons an OPEN card draws before its name: its sources that none of its lines draws already (the list's row,
- *  which draws no line, draws them all: `lead`).
- *  ⚠️ THE SAME ICON TWICE (owner, 2026-10-30: "i see twice the same icons in the cards"): the onsen pump's card drew the
- *  bell and the moon before its name, then the moon again before its "Also: …" line and the bell before #96 — each
- *  icon is drawn once in a card. null when the lines say them all. Pure. */
-export function headIcons(card: Pick<CardView, "lead" | "lines">): LineSources | null {
-  const lead = card.lead;
-  if (!lead) return null;
-  const said = new Set(card.lines.flatMap((l) => l.icons?.sources ?? []));
-  const out: LineSources = { sources: [], severities: [] };
-  lead.sources.forEach((s, i) => {
-    if (said.has(s)) return;
-    out.sources.push(s);
-    out.severities.push(lead.severities[i] ?? lead.severities[0]);
-  });
-  return out.sources.length ? out : null;
+/** Where an OPEN card draws its icons, from its lines in the order drawn (after othersFirst): one place decides it.
+ *  - Every line of one kind (or one line): the icons before the card's name (its `lead`), none on the lines.
+ *  - Lines of several kinds: each line its own icons, none before the name — each icon drawn once, beside what it
+ *    says.
+ *  `column`: the card keeps its icon column (the lines' text lines up, the icons stay inside the card) whenever any
+ *  icon is drawn. The list's row, which draws no line, draws `lead` whole.
+ *  ⚠️ ONE PLACE FOR THE ICONS (owner, 2026-10-30, review round 4: three icon fixes in one afternoon — "a card's icons
+ *  say every problem", "i see twice the same icons", "the icons appear outside the cards"): a line's icon was decided
+ *  before the lines were put in their order, then patched three times (the first line's dropped for the name, given
+ *  back to the alert drawn second, taken off the name, the emptied column padded). ⚠️ ONE ICON PER MEANING (owner,
+ *  2026-10-13: "the icon is redundant"): a line never repeats an icon the name shows. Pure. */
+export function cardIcons(card: Pick<CardView, "lead" | "lines">): {
+  head: LineSources | null; lines: (LineSources | null)[]; column: boolean;
+} {
+  const owns = card.lines.map((l) => l.own ?? null);
+  const kinds = new Set(owns.filter((o): o is LineSources => o !== null).map((o) => o.sources.join("+")));
+  if (kinds.size <= 1) return { head: card.lead, lines: owns.map(() => null), column: card.lead !== null };
+  return { head: null, lines: owns, column: true };
 }
 
 /** A line's source icons and the status colour of each (owner, 2026-10-14: the source as an icon, in place of the
@@ -169,9 +161,7 @@ export interface CardLine {
   key: string;
   /** Its words ("Unlocked", "In progress: Back door stiff"); whole on hover. */
   text: string;
-  /** Its source icons, only where the card's first line does not say them already; null: none. */
-  icons: LineSources | null;
-  /** Its own source icons, said or not (othersFirst gives them back to the alert it draws second). */
+  /** Its own source icons (where they are drawn: cardIcons); absent for a line that has none to say. */
   own?: LineSources;
   /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
    *  (ticket 19 of "One inbox"); [] when nothing was told. */
@@ -205,7 +195,7 @@ export interface CardView {
   /** "Next check: 02:00", and its moment ("20/10/2026 02:00") — null when it has none (live, by hand). `when`: the
    *  pill's words beside its refresh icon ("02:00"); `tip`: what hovering the pill says (the text, then the moment). */
   nextCheck: { text: string; at: string | null; when: string; tip: string } | null;
-  /** Open Ticket / Edit Ticket / Close / Close all — on its records; [] for a card only the villa's system reports. */
+  /** Done · Need help · Open Ticket (or Edit Ticket) — on its records, or its device when it holds none (deviceWork). */
   actions: WorkAction[];
   lines: CardLine[];
 }
@@ -231,14 +221,14 @@ export const ALSO = "Also: ";
 /** ⚠️ THE OTHER PROBLEM READ AS THE ALERT'S HISTORY (owner, 2026-10-30: the onsen pump's night-check line, drawn
  *  under #96's Status lines, "feels like it belongs to the history section"): on a card showing VESTA's message of an
  *  alert (`hasMessage`), every other problem comes first, as one "Also: …" line under the card's name, then the alert
- *  with its icon. The card keeps its height; the row of the list still leads with the alert (lines[0] of
+ *  (its icons: cardIcons). The card keeps its height; the row of the list still leads with the alert (lines[0] of
  *  cockpitCard). A card with no alert message, or nothing else, is drawn as it is. Pure. */
 export function othersFirst(card: CardView, hasMessage: (line: CardLine) => boolean): CardView {
   const alerts = card.lines.filter(hasMessage), others = card.lines.filter((l) => !hasMessage(l));
   if (alerts.length === 0 || others.length === 0) return card;
   return { ...card, lines: [
     ...others.map((l) => ({ ...l, text: ALSO + l.text })),
-    ...alerts.map((l) => (l.icons || !l.own ? l : { ...l, icons: l.own })),
+    ...alerts,
   ] };
 }
 
@@ -248,7 +238,6 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
   const line = (item: AttentionItem): CardLine => ({
     key: item.id,
     text: attentionLineIn(group, item),
-    icons: lineIcon(group, item),
     own: lineSources(item),
     story: item.story ?? item.fault?.story ?? [],
     openedAt: item.openedAt ?? item.fault?.openedAt ?? null,
@@ -294,7 +283,7 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
       // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
       // issues' next-check pill (its time, then "within 5 min"), who closed it the line under its fault
       lead: null, nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
-      lines: [{ key: `fault:${t.id}`, text: device ? title : "", icons: null, story: [], openedAt: t.openedAt ?? null,
+      lines: [{ key: `fault:${t.id}`, text: device ? title : "", story: [], openedAt: t.openedAt ?? null,
         closing: said.did,
         ...alertNumberIn(alertNumberOf(t)) }],
     }];

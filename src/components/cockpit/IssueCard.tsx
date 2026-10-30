@@ -12,7 +12,7 @@ import { useFmData } from "@/fm/FmDataContext";
 import type { FmSaveOutcome } from "@/fm/fmSave";
 import WorkButtons, { useConfirmedClose } from "@/components/fm/WorkButtons";
 import type { WorkAction } from "@/fm/deviceWork";
-import { headIcons, othersFirst, type CardLine, type CardView } from "@/config/cockpitCard";
+import { cardIcons, othersFirst, type CardLine, type CardView, type LineSources } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
 import FaultStageModal from "@/components/fm/FaultStageModal";
@@ -23,11 +23,12 @@ import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
  *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
- *  room, every problem a line INSIDE the card. A card holding a fault carries its actions (owner, 2026-10-14):
- *  "Open Ticket" (was "Mark in progress"; the Tickets tab's wrench and Title Case, owner 2026-10-14) makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear
- *  one alone), then "Edit ticket" opens it in the Tickets tab; "Close" closes them all ("no action needed"). A card
- *  that is only what Home Assistant reports has Open Ticket alone, opening the ticket form for its device (owner,
- *  2026-10-29); nothing to close: it goes when the device is back. */
+ *  room, every problem a line INSIDE the card. Every card carries the same buttons (owner, 2026-10-30): Done · Need
+ *  help · Open Ticket (fm/deviceWork.overviewActions). Done resolves every record of the card as work done, each read
+ *  again by the VESTA Agent; Need help asks the owner to act; "Open Ticket" (the Tickets tab's wrench and Title Case,
+ *  owner 2026-10-14) makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear one
+ *  alone), then "Edit Ticket" opens it in the Tickets tab. A card that is only what the villa's system reports raises
+ *  its fault with a Done or a Need help, and Open Ticket opens the ticket form for its device (owner, 2026-10-29). */
 export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicket, onRaiseTicket, focused }: {
   card: CardView;
   onOpenEntity: (id: string) => void;
@@ -56,7 +57,7 @@ export function AttentionCard({ card, onOpenEntity, actions, lineMessage, focuse
   lineMessage?: (line: CardLine) => ReactNode;
 }) {
   const open = card.entityId;
-  const head = headIcons(card);
+  const icons = cardIcons(card);
   return (
     <RecordCard
       title={card.title}
@@ -66,17 +67,16 @@ export function AttentionCard({ card, onOpenEntity, actions, lineMessage, focuse
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look === "watched"
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
-        : head ? <SourceIcons {...head} />
-        // ⚠️ THE ICON COLUMN STAYS (owner, 2026-10-30: "the icons appear outside the cards"): with every icon said by its
-        // line, the name had none, the card dropped its column and the lines' icons hung past its edge
-        : card.lead ? <span className="fm-record-lead-empty" aria-hidden="true" /> : undefined}
+        : icons.head ? <SourceIcons {...icons.head} />
+        // the icon column kept when the lines draw the icons (config/cockpitCard.cardIcons): they stay inside the card
+        : icons.column ? <span className="fm-record-lead-empty" aria-hidden="true" /> : undefined}
       // when its problems are read again: a refresh icon and when, a pill at the right of its name (owner, 2026-10-22);
       // hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
       check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
       onOpen={open ? () => onOpenEntity(open) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
-          {card.lines.map((line) => <CockpitAttentionSub key={line.key} line={line}
+          {card.lines.map((line, i) => <CockpitAttentionSub key={line.key} line={line} icons={icons.lines[i] ?? null}
             message={lineMessage?.(line)} />)}
         </ul>
       )}
@@ -87,12 +87,12 @@ export function AttentionCard({ card, onOpenEntity, actions, lineMessage, focuse
   );
 }
 
-function CockpitAttentionSub({ line, message }: { line: CardLine; message?: ReactNode }) {
+function CockpitAttentionSub({ line, icons, message }: { line: CardLine; icons: LineSources | null; message?: ReactNode }) {
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line fm-record-gutter">
         {/* in the card's icon column (RecordCard's gutter), not before the text: every line's text lines up */}
-        {line.icons && <span className="fm-record-gutter-icon"><SourceIcons {...line.icons} size={14} /></span>}
+        {icons && <span className="fm-record-gutter-icon"><SourceIcons {...icons} size={14} /></span>}
         <span className="cockpit-attention-sub-text">
           <Tip text={line.text}><span className="cockpit-attention-sub-title">{line.text}</span></Tip>
           {/* what happened about it on Telegram — the short story its Status tells: the alert sent, a reminder, an
@@ -175,8 +175,8 @@ export function raisedFor(card: Pick<CardView, "title" | "room" | "lines">, enti
 /** ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components, since the
  *  same button shall consistently appear for any type"): the issue's own card — its device, room and next check — with
  *  VESTA's message of the alert inside its line (as Telegram shows it: "To:", what happened, "What to do", its Status),
- *  and VESTA's buttons (Done · Need help: RecordButtons, the same row as its notice and its Notifications card). Its
- *  ticket is opened and closed in the Tickets tab. Before, VESTA's card stood above the issue's, each with its buttons.
+ *  and the one button row of every issue card (Done · Need help · Open Ticket: CardActions, owner 2026-10-30 — it drew
+ *  VESTA's own Done · Need help before). Before, VESTA's card stood above the issue's, each with its buttons.
  *  `messages`: VESTA's card of each line's alert (messagesModel.messageOfLine). */
 export function AlertIssueCard({ card, messages, onOpenEntity, focused, canManage, onEditTicket, onRaiseTicket }: {
   card: CardView;

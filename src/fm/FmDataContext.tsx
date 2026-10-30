@@ -81,7 +81,7 @@ interface FmDataContextValue {
   updateCost: (id: string, patch: Partial<FmCost>) => Promise<FmSaveOutcome>;
   /** `asTicket`: "Open a ticket" — it starts in progress (fmCommands); otherwise a fault (a guest's report). `then`:
    *  Done or Need help on a card with no record — the fault closed, or asked for help on, in the same write. */
-  addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">, opts?: { asTicket?: boolean; then?: "close" | "help" }) => Promise<FmSaveOutcome>;
+  addTicket: (t: Omit<FmTicket, "id" | "openedAt" | "status">, opts?: { asTicket?: boolean; then?: "done" | "help" }) => Promise<FmSaveOutcome>;
   /** Move a fault to its next stage AND record the proof behind that move.
    *
    *  One mutator for every transition rather than one per stage: they differ
@@ -355,7 +355,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const addCost = useCallback((cost: Omit<FmCost, "id">) => run({ type: "addCost", cost }), [run]);
   const updateCost = useCallback((id: string, patch: Partial<FmCost>) => run({ type: "updateCost", id, patch }), [run]);
   const addTicket = useCallback((ticket: Omit<FmTicket, "id" | "openedAt" | "status">,
-    opts?: { asTicket?: boolean; then?: "close" | "help" }) =>
+    opts?: { asTicket?: boolean; then?: "done" | "help" }) =>
     run({ type: "addTicket", ticket, asTicket: opts?.asTicket, then: opts?.then }), [run]);
   const updateTicket = useCallback((id: string, patch: Partial<FmTicket>) => run({ type: "updateTicket", id, patch }), [run]);
   // Several records, ONE write: a device's faults move or close together, or not at all.

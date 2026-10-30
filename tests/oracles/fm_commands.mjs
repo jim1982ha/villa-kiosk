@@ -72,12 +72,32 @@ console.log("\n  Done · Need help · Open Ticket on every issue card (owner, 20
   ck("  ...a closed record gets none", applyFmCommand(shut, { type: "helpTickets", ids: [a.id] }, k("Owner")).tickets[0].updates.length
      === shut.tickets[0].updates.length);
   const doneNew = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "LED Strip: Unavailable", entityId: "light.example", photoIds: [] },
-    then: "close" }, k("JM"));
+    then: "done" }, k("JM"));
   const helpNew = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "LED Strip: Unavailable", entityId: "light.example", photoIds: [] },
     then: "help" }, k("JM"));
-  ck("  ...Done on a card with no record: its fault raised and closed in ONE write, by the profile",
+  ck("  ...Done on a card with no record: its fault raised and resolved in ONE write, by the profile, as work done",
      doneNew.tickets.length === 1 && doneNew.tickets[0].status === "resolved" && doneNew.tickets[0].updates.map((u) => u.status).join() === "open,resolved"
-     && last(doneNew.tickets[0]).by === "JM", doneNew.tickets[0]);
+     && last(doneNew.tickets[0]).by === "JM" && last(doneNew.tickets[0]).kind === undefined
+     && doneNew.completions.length === 1 && doneNew.completions[0].ticketId === doneNew.tickets[0].id, doneNew);
+  // owner, 2026-10-30 (review round 4): a Done is WORK DONE wherever it is pressed — Telegram's filed a completion in
+  // Recent work, the Cockpit card's a "Closed without action" gone after 90 days
+  {
+    const { DONE_STEP } = await import("@/fm/fmCommands");
+    const { WORK_ACTIONS } = await import("@/fm/deviceWork");
+    const done = applyFmCommand(two, { type: "advanceTickets", ids: [a.id, b.id], to: "resolved", step: DONE_STEP }, k("Owner"));
+    ck("a card's Done resolves every record as work done: one completion each, by who pressed, never \"Closed without action\"",
+       done.tickets.every((t) => t.status === "resolved" && last(t).kind === undefined && last(t).note !== "Closed without action")
+       && done.completions.filter((c) => c.ticketId === a.id || c.ticketId === b.id).length === 2
+       && done.completions.every((c) => c.by === "Owner"), done);
+    ck("  ...the issue card's Done asks first and files work (work: true); the Tickets tab's Close stays a no-action close",
+       WORK_ACTIONS.done.step.kind === "close" && WORK_ACTIONS.done.step.work === true
+       && WORK_ACTIONS.closeTicket.step.kind === "close" && !WORK_ACTIONS.closeTicket.step.work
+       && WORK_ACTIONS.doneNew.step.kind === "raiseThen" && WORK_ACTIONS.doneNew.step.then === "done");
+    const wb = (await import("node:fs")).readFileSync(new URL("../../src/components/fm/WorkButtons.tsx", import.meta.url), "utf8");
+    ck("  ...the one confirm flow sends a work Done through the resolving command, a Close through the no-action one",
+       /work \? advanceTickets\(ids, "resolved", DONE_STEP\) : closeTickets\(ids\)/.test(wb)
+       && /closer\.close\(cardKey, asked\.ids, work\)/.test(wb));
+  }
   ck("  ...Need help on it: raised and asked for help in ONE write, still open",
      helpNew.tickets[0].status === "open" && last(helpNew.tickets[0]).kind === "help", helpNew.tickets[0]);
   const { raisedFor } = await import("@/components/cockpit/IssueCard");

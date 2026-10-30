@@ -26,9 +26,9 @@ export type FmCommand =
   | { type: "removeCost"; id: string }
   /** `asTicket`: a person's "Open a ticket" (owner, 2026-10-14) — the record starts as a TICKET in progress, taken on by
    *  whoever opened it; without it, a FAULT waiting on the Overview (a guest's report). `then`: Done or Need help
-   *  pressed on a card with no record yet (owner, 2026-10-30) — the fault raised and, in the same write, closed or
-   *  asked for help on. */
-  | { type: "addTicket"; ticket: Omit<FmTicket, "id" | "openedAt" | "status">; asTicket?: boolean; then?: "close" | "help" }
+   *  pressed on a card with no record yet (owner, 2026-10-30) — the fault raised and, in the same write, resolved as
+   *  work done or asked for help on. */
+  | { type: "addTicket"; ticket: Omit<FmTicket, "id" | "openedAt" | "status">; asTicket?: boolean; then?: "done" | "help" }
   | { type: "updateTicket"; id: string; patch: Partial<FmTicket> }
   | { type: "advanceTickets"; ids: readonly string[]; to: FmTicketStatus; step: TicketStep; cost?: TicketCost }
   | { type: "closeTickets"; ids: readonly string[] }
@@ -41,6 +41,9 @@ export type FmCommand =
 /** Who and when: the clock and ids (FmStamp), and the signed-in profile that did it ("Owner", "Guest"…), stamped on
  *  every step of a fault — the card's "by …" and the VESTA Agent's notes read it. */
 export type FmActor = FmStamp & { by?: string };
+
+/** A person's Done: resolved as work done, with nothing more said (the completion names who recorded it). */
+export const DONE_STEP: TicketStep = Object.freeze({ photoIds: [] }) as TicketStep;
 
 export function applyFmCommand(d: FmData, c: FmCommand, k: FmActor): FmData {
   const by = k.by;
@@ -70,7 +73,7 @@ export function applyFmCommand(d: FmData, c: FmCommand, k: FmActor): FmData {
         ...c.ticket, id, status, openedAt: k.now,
         updates: [{ at: k.now, status, photoIds: [], ...(by ? { by } : {}) }],
       }] };
-      return c.then === "close" ? withTicketsClosed(added, [id], k, by)
+      return c.then === "done" ? withTicketsAdvanced(added, [id], "resolved", DONE_STEP, undefined, k, by)
         : c.then === "help" ? withTicketsHelped(added, [id], k, by) : added;
     }
     case "updateTicket":
