@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.389 (30 October 2026)
+
+- villa-concierge voice.py: PIPER_VOICES, a Piper voice for each language of the page but Japanese (each checked in
+  wyoming_piper/voices.json), used when the villa's own voice has a Piper name (PIPER_NAME) and villa.voice.yaml
+  names none for the answer's language; the villa's `voices:` win.
+
 ## 0.6.388 (30 October 2026)
 
 - Architecture review round 2 (2026-10-30): alert_buttons keeps one press per incident at a time (`_pressing`) and

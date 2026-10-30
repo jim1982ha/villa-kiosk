@@ -124,6 +124,21 @@ def test_an_answer_in_a_language_with_no_voice_is_never_read_by_another_one(tmp_
     assert turn["text"].startswith(FRENCH) and "could not be spoken in French" in turn["text"]
 
 
+def test_a_piper_villa_with_no_voices_listed_says_each_language_in_piper_s_own(tmp_path, monkeypatch):
+    # owner, 2026-10-30: "make sure this is delivered with the baseline skills": no villa.voice.yaml, a Piper voice in
+    # the settings, and a French answer is still said in French (the skill's PIPER_VOICES)
+    v, kiosk = _agent(tmp_path, {**VOICE_SET, "tts_language": "en_US", "tts_voice": "en_US-lessac-medium"})
+    villa = _answered(v, kiosk, monkeypatch, answer=FRENCH)
+    assert [(b["language"], b["options"].get("voice")) for b in villa.spoken] == [("fr_FR", "fr_FR-siwis-medium")]
+
+
+def test_the_villa_s_own_voice_for_a_language_wins_over_piper_s(tmp_path, monkeypatch):
+    v, kiosk = _agent(tmp_path, {**VOICE_SET, "tts_language": "en_US", "tts_voice": "en_US-lessac-medium"},
+                      voice_yaml={"voices": {"fr": "fr_FR-tom-medium"}})
+    villa = _answered(v, kiosk, monkeypatch, answer=FRENCH)
+    assert [b["options"].get("voice") for b in villa.spoken] == ["fr_FR-tom-medium"]
+
+
 def test_an_answer_in_the_voice_settings_own_language_keeps_their_voice(tmp_path, monkeypatch):
     v, kiosk = _agent(tmp_path, {**VOICE_SET, "tts_language": "en_US", "tts_voice": "en_US-test-medium"},
                       voice_yaml={"voices": {"fr": "fr_FR-test-medium"}})

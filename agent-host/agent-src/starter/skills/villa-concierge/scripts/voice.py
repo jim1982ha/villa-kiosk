@@ -11,7 +11,7 @@ English despite the response being written in French"): the voice an answer is s
 it was asked in, and the villa's voice settings name ONE voice: the answer's language is told from its common short
 words (WORDS, and villa.voice.yaml `words:` for more), then
   {"language": "en_US", "voice": "en_US-lessac-medium"}   the settings' own voice, when it is their language
-  {"language": "fr_FR", "voice": "fr_FR-siwis-medium"}    villa.voice.yaml `voices: {fr: …}`, the voice named there
+  {"language": "fr_FR", "voice": "fr_FR-siwis-medium"}    villa.voice.yaml `voices: {fr: …}`, else Piper's (PIPER_VOICES)
   {"say": "This answer could not be spoken in French: …"} no voice for that language: never read in another one
 
 Telegram sends a voice message as Ogg/Opus; Whisper and the villa system's
@@ -50,8 +50,8 @@ Every choice is the villa's, in ../villa.voice.yaml (optional, kept by updates):
   stt: stt.faster_whisper      the speech-to-text, when the villa's system has several
   language: fr                 always this language, through the villa's system only: no "auto", no direct Whisper
   language: auto               the default: the language spoken, else the person's saved one
-  voices:                      a voice for each language an answer may be in, beside the voice settings' own
-    fr: fr_FR-siwis-medium     (the text-to-speech's own voice name; its language is the name's start)
+  voices:                      a voice for each language an answer may be in, beside the voice settings' own, over
+    fr: fr_FR-siwis-medium     PIPER_VOICES (the text-to-speech's own voice name; its language is the name's start)
   words:                       more common words telling a language (beside WORDS)
     id: [yang, dan, di, ini]
 """
@@ -232,6 +232,15 @@ WORDS = {
     "nl": "de het een en is zijn u uw ik niet van in op voor met dat deze die".split(),
     "id": "yang dan di ini itu dengan untuk tidak dari ke ada adalah saya anda akan sudah bisa".split(),
 }
+#: ⚠️ A VOICE FOR EVERY LANGUAGE OF THE PAGE, SHIPPED (owner, 2026-10-30: "make sure this is delivered with the baseline
+#: skills"): Piper's voice for each, used when the villa's own voice is a Piper one (PIPER_NAME: its name's shape) and
+#: villa.voice.yaml names none for that language. Each checked on 2026-10-30 in the Piper app's own list
+#: (wyoming_piper/voices.json); Japanese has none there, so a Japanese answer stays in words.
+PIPER_VOICES = {"fr": "fr_FR-siwis-medium", "de": "de_DE-thorsten-medium", "es": "es_ES-davefx-medium",
+                "it": "it_IT-paola-medium", "nl": "nl_NL-mls-medium", "id": "id_ID-news_tts-medium",
+                "zh": "zh_CN-huayan-medium", "ko": "ko_KR-kss-medium"}
+#: A Piper voice's name: language_REGION-name-quality ("en_US-lessac-medium").
+PIPER_NAME = r"^[a-z]{2,3}_[A-Z]{2}-[A-Za-z0-9_]+-(x_low|low|medium|high)$"
 #: What the person reads of a language (its English name), when no voice says it: the languages a person may be given
 #: on the VESTA Agent page, and those an answer is told in.
 NAMES = {"en": "English", "fr": "French", "id": "Indonesian", "de": "German", "es": "Spanish", "it": "Italian",
@@ -270,7 +279,9 @@ def speak(text: str, language: str | None, voice: str | None) -> dict:
     said = language_of(text, words) or own
     if said == own:
         return {"language": language, "voice": voice}
-    named = str((cfg.get("voices") or {}).get(said) or "").strip()
+    import re
+    shipped = PIPER_VOICES if re.match(PIPER_NAME, str(voice or "")) else {}
+    named = str({**shipped, **(cfg.get("voices") or {})}.get(said) or "").strip()
     if named:
         return {"language": named.split("-")[0], "voice": named}
     name = NAMES.get(said, said)
