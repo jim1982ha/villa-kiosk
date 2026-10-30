@@ -84,6 +84,22 @@ function lineIcon(group: AttentionGroup, item: AttentionItem): LineSources | nul
   return item === group.items[0] || JSON.stringify(own) === JSON.stringify(row) ? null : own;
 }
 
+/** ⚠️ A CARD'S ICONS SAY EVERY KIND OF PROBLEM IT HOLDS (owner, 2026-10-30: the onsen pump's row showed only #96's
+ *  alert while its card also held the night check's finding — "i expect to see the existing icon + the moon one"):
+ *  each source once, in its lines' order (the most serious line's first), in the colour of the first line saying it.
+ *  The list's row and the card's head both draw this. null for a card with no line. */
+function cardSources(items: readonly AttentionItem[]): LineSources | null {
+  const out: LineSources = { sources: [], severities: [] };
+  for (const s of items.map(lineSources)) {
+    s.sources.forEach((src, i) => {
+      if (out.sources.includes(src)) return;
+      out.sources.push(src);
+      out.severities.push(s.severities[i] ?? s.severities[0]);
+    });
+  }
+  return out.sources.length ? out : null;
+}
+
 /** A line's source icons and the status colour of each (owner, 2026-10-14: the source as an icon, in place of the
  *  warning sign; two stacked when a line holds a device's live state and its fault). */
 export interface LineSources { sources: IssueSource[]; severities: AttentionSeverity[] }
@@ -145,8 +161,10 @@ export interface CardLine {
   key: string;
   /** Its words ("Unlocked", "In progress: Back door stiff"); whole on hover. */
   text: string;
-  /** Its source icons, only where the card's own do not say them already; null: none. */
+  /** Its source icons, only where the card's first line does not say them already; null: none. */
   icons: LineSources | null;
+  /** Its own source icons, said or not (othersFirst gives them back to the alert it draws second). */
+  own?: LineSources;
   /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
    *  (ticket 19 of "One inbox"); [] when nothing was told. */
   story: { note: string; at: string }[];
@@ -176,7 +194,7 @@ export interface CardView {
   room?: string;
   /** What a tap on the card opens; undefined: the card is the problem itself (no device). */
   entityId?: string;
-  /** The icons before its name: where its first problem comes from. */
+  /** The icons before its name: where each of its problems comes from (cardSources). */
   lead: LineSources | null;
   /** "Next check: 02:00", and its moment ("20/10/2026 02:00") — null when it has none (live, by hand). `when`: the
    *  pill's words beside its refresh icon ("02:00"); `tip`: what hovering the pill says (the text, then the moment). */
@@ -201,6 +219,23 @@ export function rowTime(card: Pick<CardView, "lines">): string | null {
   return first.story.length ? first.story[first.story.length - 1].at : first.openedAt;
 }
 
+/** What a card holding an alert says before each of its other problems. */
+export const ALSO = "Also: ";
+
+/** ⚠️ THE OTHER PROBLEM READ AS THE ALERT'S HISTORY (owner, 2026-10-30: the onsen pump's night-check line, drawn
+ *  under #96's Status lines, "feels like it belongs to the history section"): on a card showing VESTA's message of an
+ *  alert (`hasMessage`), every other problem comes first, as one "Also: …" line under the card's name, then the alert
+ *  with its icon. The card keeps its height; the row of the list still leads with the alert (lines[0] of
+ *  cockpitCard). A card with no alert message, or nothing else, is drawn as it is. Pure. */
+export function othersFirst(card: CardView, hasMessage: (line: CardLine) => boolean): CardView {
+  const alerts = card.lines.filter(hasMessage), others = card.lines.filter((l) => !hasMessage(l));
+  if (alerts.length === 0 || others.length === 0) return card;
+  return { ...card, lines: [
+    ...others.map((l) => ({ ...l, text: ALSO + l.text })),
+    ...alerts.map((l) => (l.icons || !l.own ? l : { ...l, icons: l.own })),
+  ] };
+}
+
 /** The card of `group`, as drawn. `cadence`: the VESTA Agent's own timing (null: it did not say). */
 export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null, now: Date = new Date()): CardView {
   const at = nextCheckAt(group.items, cadence, now);
@@ -208,6 +243,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     key: item.id,
     text: attentionLineIn(group, item),
     icons: lineIcon(group, item),
+    own: lineSources(item),
     story: item.story ?? item.fault?.story ?? [],
     openedAt: item.openedAt ?? item.fault?.openedAt ?? null,
     ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
@@ -216,7 +252,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
   });
   return {
     key: group.key, title: group.title, room: group.room, entityId: group.entityId,
-    lead: group.items[0] ? lineSources(group.items[0]) : null,
+    lead: cardSources(group.items),
     nextCheck: nextCheckView(group, cadence, now, at),
     actions: cardActions(group),
     lines: group.items.map(line),

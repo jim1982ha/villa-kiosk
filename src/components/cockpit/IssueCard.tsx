@@ -10,7 +10,7 @@ import { CheckCircle2 } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import { useFmData } from "@/fm/FmDataContext";
 import WorkButtons, { useConfirmedClose, type ConfirmedClose } from "@/components/fm/WorkButtons";
-import type { CardLine, CardView } from "@/config/cockpitCard";
+import { othersFirst, type CardLine, type CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
 import FaultStageModal from "@/components/fm/FaultStageModal";
@@ -164,10 +164,10 @@ export function AlertIssueCard({ card, messages, onOpenEntity, focused }: {
   const shown = card.lines.map(messages).filter((a): a is Announcement => a !== null);
   // said once (owner, 2026-10-29 screenshot: the problem and "Cleared on …" twice): a line VESTA holds a message for is
   // named by its title ("#92-P2 (cleared)"), its words in the message; on a watched card its Status says how it closed
-  const said: CardView = { ...card, lines: card.lines.map((l) => {
+  const said: CardView = othersFirst({ ...card, lines: card.lines.map((l) => {
     const a = messages(l);
     return a ? { ...l, text: a.title, closing: card.look === "watched" ? null : l.closing } : l;
-  }) };
+  }) }, (l) => messages(l) !== null);
   return (
     <AttentionCard card={said} onOpenEntity={onOpenEntity} focused={focused}
       lineMessage={(line) => {
