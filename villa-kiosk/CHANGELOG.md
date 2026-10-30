@@ -1,3 +1,25 @@
+## 2.496.615
+
+What you will see:
+- Every card in Cockpit › Inbox › Issues shows the same three buttons: Done · Need help · Open Ticket. Alert cards used
+  to show Done · Need help, the others Open Ticket · Close.
+- Done closes everything on the card, and VESTA checks each problem again before it closes; each line's own small
+  Close is gone. Need help asks the Owner to act, on any card (with the VESTA Agent update of the same day).
+- A card with nothing recorded yet (a device the villa's system reports offline) has the three buttons too: Done and
+  Need help record the problem as you press.
+- In a chart's window, dragging the lower handle of the filter on the left never makes the axis go below its own
+  bottom (0 for a pump's power), and the filter never goes past the chart's lowest reading; a chart whose readings go
+  below 0 still reaches its most negative one. The axis stays still under your finger while you drag.
+- Pressing 1h, 24h, 1w, 1m or 1y no longer shows the previous range's line under the new heading while the new one
+  loads.
+
+## 2.496.614
+
+What you will see:
+- An open card in Cockpit › Inbox › Issues draws each icon once: beside each of its lines, and before its name only
+  what no line shows already. The onsen pump's card showed the bell and the moon before its name and again before
+  its two lines. The row in the list still shows every icon.
+
 ## 2.496.613
 
 What you will see:

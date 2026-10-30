@@ -294,10 +294,11 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
             onDone={() => setRaising(null)} />
         )}
         {/* an alert's open issue: VESTA's card of it first, as Telegram shows it, then the tablet's own buttons */}
-        {/* an alert's issue: ONE card, VESTA's message inside it and its buttons (owner, 2026-10-29) */}
+        {/* an alert's issue: ONE card, VESTA's message inside it and every card's buttons (owner, 2026-10-29, 2026-10-30) */}
         {item?.kind === "issue" && cardsOfIssue(item.card, kept).length > 0 && (
           <AlertIssueCard card={item.card} messages={(line) => messageOfLine(line, kept)} onOpenEntity={onOpenEntity}
-            focused={!!isFocus?.(item.card)} />
+            focused={!!isFocus?.(item.card)} canManage={canManage} onEditTicket={onEditTicket}
+            onRaiseTicket={(entity) => setRaising({ entity })} />
         )}
         {item?.kind === "issue" && cardsOfIssue(item.card, kept).length === 0 && (item.card.look === "watched"
           ? <AttentionCard card={item.card} onOpenEntity={onOpenEntity} />

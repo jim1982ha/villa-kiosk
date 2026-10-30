@@ -61,34 +61,40 @@ export function ticketCards(records: readonly FmTicket[], deviceOfRecord: (field
 
 // ── What a card's buttons do ─────────────────────────────────────────────────
 
-/** Every button a card of open work can carry. Two Closes, because they close different things:
- *  `closeDevice` — an Overview card's: every fault and ticket of the device; `closeTicket` — a Tickets card's: that
- *  ticket's records. Both close with nothing done and no cost (fmCommands' closeTickets). */
-export type WorkActionKind = "openTicket" | "raiseTicket" | "editTicket" | "markResolved" | "closeDevice" | "closeAll"
-  | "closeOne" | "closeTicket" | "reopen";
+/** Every button a card of open work can carry. An issue card's (the Inbox's): Done · Need help · Open Ticket (or Edit
+ *  Ticket), `doneNew` / `helpNew` on a card with no record yet (only what the villa's system reports: a fault for its
+ *  device is raised with the press). A Tickets card's: Mark resolved · Close (`closeTicket`, that ticket's records).
+ *  Done and Close close with nothing done and no cost (fmCommands' closeTickets). */
+export type WorkActionKind = "done" | "needHelp" | "doneNew" | "helpNew" | "openTicket" | "raiseTicket" | "editTicket"
+  | "markResolved" | "closeTicket" | "reopen";
 
 /** What a button does once pressed: record a stage change (FaultStageModal, to `to`), open the record's form, open
- *  the ticket form pointed at a device, or — after its question — close the records with no action. */
+ *  the ticket form pointed at a device, ask for help on the records (a "help" step: the VESTA Agent asks the owner to
+ *  act), raise a fault for the device and close it or ask for help on it in the same write (`then`), or — after its
+ *  question — close the records with no action. */
 export type WorkStep =
   | { kind: "stage"; to: FmTicketStatus }
   | { kind: "edit" }
   | { kind: "raise" }
+  | { kind: "help" }
+  | { kind: "raiseThen"; then: "close" | "help" }
   | { kind: "close"; question: string; confirmLabel: string };
 
 export interface WorkActionSpec { label: string; step: WorkStep }
 
 /** ONE wording per action. */
 export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
+  // ⚠️ DONE · NEED HELP · OPEN TICKET ON EVERY ISSUE CARD (owner, 2026-10-30: "a unique configuration … Done and Close
+  // shall do the same thing"): an alert's card had VESTA's Done · Need help, a fault's Open Ticket · Close
+  done: { label: "Done", step: { kind: "close", question: "Done? VESTA checks it again before it closes.", confirmLabel: "Done" } },
+  needHelp: { label: "Need help", step: { kind: "help" } },
+  doneNew: { label: "Done", step: { kind: "raiseThen", then: "close" } },
+  helpNew: { label: "Need help", step: { kind: "raiseThen", then: "help" } },
   openTicket: { label: "Open Ticket", step: { kind: "stage", to: "in_progress" } },
   // a card with no record yet (only what the villa's system reports): the same words, the ticket form for its device
   raiseTicket: { label: "Open Ticket", step: { kind: "raise" } },
   editTicket: { label: "Edit Ticket", step: { kind: "edit" } },
   markResolved: { label: "Mark resolved", step: { kind: "stage", to: "resolved" } },
-  closeDevice: { label: "Close", step: { kind: "close", question: "Close this? No action needed.", confirmLabel: "Close" } },
-  // a card holding several problems: every one at once, or one alone (owner, 2026-10-18: #41 could not be closed
-  // without #55 — architecture review "One problem, one card" #2)
-  closeAll: { label: "Close all", step: { kind: "close", question: "Close all of them? No action needed.", confirmLabel: "Close all" } },
-  closeOne: { label: "Close", step: { kind: "close", question: "Close this one? No action needed.", confirmLabel: "Close" } },
   closeTicket: { label: "Close", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "Close ticket" } },
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
 };
@@ -102,29 +108,24 @@ const action = (kind: WorkActionKind, ids: string[]): WorkAction => ({ kind, ids
 export interface WorkRecord { id: string; stage: FmStage }
 
 /**
- * The buttons of an Overview card, from the device's open records (its own fault lines and those folded onto a live
- * state's line). A card holding no record — only what the villa's system reports — has one: "Open Ticket" opens the
- * ticket form for its `device` (owner, 2026-10-29: it had none, so nothing could be done from it); with no device,
- * none. "Open Ticket" takes on its faults (one ticket for the device); once every one is a ticket, "Edit Ticket" opens the
- * first. "Close" closes them ALL, faults and tickets.
+ * The buttons of an issue card (the Inbox's), from the device's open records (its own fault lines and those folded onto
+ * a live state's line): Done · Need help · Open Ticket, the same three on every card. Done closes them ALL, faults and
+ * tickets, each read again by the VESTA Agent ("one Done closes everything on the card", owner 2026-10-30, in place of
+ * each line's own Close of 2026-10-18); Need help writes a "help" step on each; Open Ticket takes on its faults (one
+ * ticket for the device), "Edit Ticket" once every one is a ticket. A card holding no record — only what the villa's
+ * system reports — has the same three for its `device`: Done and Need help raise its fault with the press, Open Ticket
+ * opens the ticket form (owner, 2026-10-29). With no device and no record, none.
  */
-export function overviewActions(records: readonly WorkRecord[], problems = 1, device?: string): WorkAction[] {
+export function overviewActions(records: readonly WorkRecord[], device?: string): WorkAction[] {
   const open = records.filter((r) => r.stage !== "closed");
-  if (open.length === 0) return device ? [action("raiseTicket", [device])] : [];
+  if (open.length === 0) return device ? [action("doneNew", [device]), action("helpNew", [device]), action("raiseTicket", [device])] : [];
   const faults = open.filter((r) => r.stage === "fault").map((r) => r.id);
   const tickets = open.filter((r) => r.stage === "ticket").map((r) => r.id);
+  const ids = open.map((r) => r.id);
   return [
+    action("done", ids), action("needHelp", ids),
     faults.length ? action("openTicket", faults) : action("editTicket", [tickets[0]]),
-    action(problems > 1 ? "closeAll" : "closeDevice", open.map((r) => r.id)),
   ];
-}
-
-/** One problem's own Close on a card holding several (`problems` lines with records): its records — its fault and the
- *  copies folded onto it. None on a card with one problem (the card's Close is that one), none on a line with no
- *  record (what the villa's system reports goes when the device is back). */
-export function lineActions(records: readonly WorkRecord[], problems: number): WorkAction[] {
-  const open = records.filter((r) => r.stage !== "closed").map((r) => r.id);
-  return problems > 1 && open.length ? [action("closeOne", open)] : [];
 }
 
 /** The buttons of a ticket in progress (a Tickets card): "Mark resolved" and "Close" — both on every record of it. */
@@ -145,7 +146,7 @@ export const workRecord = (t: Pick<FmTicket, "id" | "status">): WorkRecord => ({
 
 /** What the Cockpit counts as open, in the unit it DRAWS: cards. `faults` — the devices with a fault nobody has taken
  *  on (each an Overview card with "Open Ticket"); `tickets` — the Tickets tab's cards; `total` — the devices with
- *  anything open (each an Overview card with a Close). ⚠️ ONE UNIT (architecture review, 2026-10-15): the pump's two
+ *  anything open (each an issue card with a Done). ⚠️ ONE UNIT (architecture review, 2026-10-15): the pump's two
  *  faults taken on together showed one ticket card under "2 in progress", and readiness said "2 open tickets". The
  *  figures that must stay per record (a repair's mean time, the closed list) are ticketStats'. */
 export interface OpenCounts { faults: number; tickets: number; total: number }

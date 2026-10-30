@@ -50,7 +50,10 @@ export default function NumericHistory({ series, named = false, name }: {
   const ids = series.map((s) => s.id);
   const { data, status } = useHistorySource(
     ids.length ? { trend: { kind: "trend", ids, hours: range.hours, period: range.period } } : null);
-  const history = data?.trend ?? {};
+  // ⚠️ NOTHING OF THE LAST RANGE UNDER THE NEW ONE (owner, 2026-10-30): while a range pressed loads, the last one's line
+  // was drawn under the new header (1y read as 24h of five-minute steps) and its detail was asked for with the new
+  // period over the old window; the chart waits, as it does at first (its skeleton)
+  const history = status === "loading" ? {} : data?.trend ?? {};
   const [filters, setFilters] = useState<FilterState>(NO_FILTERS);
   const scope = filterScope(series);
   // two series share one chart, each on its own scale; every other layout is a chart per series

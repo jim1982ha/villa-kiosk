@@ -9,14 +9,16 @@ import { useState, type ReactNode } from "react";
 import { CheckCircle2 } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import { useFmData } from "@/fm/FmDataContext";
-import WorkButtons, { useConfirmedClose, type ConfirmedClose } from "@/components/fm/WorkButtons";
-import { othersFirst, type CardLine, type CardView } from "@/config/cockpitCard";
+import type { FmSaveOutcome } from "@/fm/fmSave";
+import WorkButtons, { useConfirmedClose } from "@/components/fm/WorkButtons";
+import type { WorkAction } from "@/fm/deviceWork";
+import { headIcons, othersFirst, type CardLine, type CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
 import FaultStageModal from "@/components/fm/FaultStageModal";
 
 import type { Announcement } from "@/messages/announcements";
-import { AnnouncementContent, RecordButtons } from "@/components/messages/AnnouncementContent";
+import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
@@ -36,44 +38,25 @@ export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicke
   /** The device a window's warning opened the Cockpit for: its card marked. */
   focused?: boolean;
 }) {
-  // ONE close-question per card, its own Close and each line's: asking on one puts the others' buttons back
-  const closer = useConfirmedClose();
   return <AttentionCard card={card} onOpenEntity={onOpenEntity} focused={focused}
-    actions={useCardActions(card, canManage, onEditTicket, onRaiseTicket, closer)}
-    lineActions={canManage ? (line) => <LineClose card={card} line={line} closer={closer} /> : undefined} />;
-}
-
-/** One problem's own Close, on a card holding several (cockpitCard: the line's `actions`): its question in place of
- *  the button, why it did not land under its line. */
-function LineClose({ card, line, closer }: { card: CardView; line: CardLine; closer: ConfirmedClose }) {
-  if (line.actions.length === 0) return null;
-  const key = `${card.key}|${line.key}`;
-  const problem = closer.problemFor(key);
-  return (
-    <>
-      <WorkButtons actions={line.actions} cardKey={key} closer={closer} name={line.text || card.title}
-        className="cockpit-line-actions" onAction={() => {}} />
-      {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
-    </>
-  );
+    actions={<CardActions card={card} canManage={canManage} onEditTicket={onEditTicket} onRaiseTicket={onRaiseTicket} />} />;
 }
 
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
  *  source icons before the device's name, the room under it, its problems' lines, its buttons on the right of them.
  *  Tapping it opens the device; its buttons take their own presses. Draws `card` (config/cockpitCard) and nothing
  *  else: what it says is decided there, by value. Pure: a check draws it. */
-export function AttentionCard({ card, onOpenEntity, actions, lineActions, lineMessage, focused }: {
+export function AttentionCard({ card, onOpenEntity, actions, lineMessage, focused }: {
   card: CardView;
   onOpenEntity: (id: string) => void;
   actions?: ReactNode;
   /** Marked, as the card a device window's warning asked for (owner, 2026-10-24). */
   focused?: boolean;
-  /** A line's own buttons (its Close, on a card holding several problems). */
-  lineActions?: (line: CardLine) => ReactNode;
   /** VESTA's message of a line's alert, drawn in the line in place of its short story (AlertIssueCard). */
   lineMessage?: (line: CardLine) => ReactNode;
 }) {
   const open = card.entityId;
+  const head = headIcons(card);
   return (
     <RecordCard
       title={card.title}
@@ -83,14 +66,14 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions, lineMe
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look === "watched"
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
-        : card.lead ? <SourceIcons {...card.lead} /> : undefined}
+        : head ? <SourceIcons {...head} /> : undefined}
       // when its problems are read again: a refresh icon and when, a pill at the right of its name (owner, 2026-10-22);
       // hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
       check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
       onOpen={open ? () => onOpenEntity(open) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
-          {card.lines.map((line) => <CockpitAttentionSub key={line.key} line={line} actions={lineActions?.(line)}
+          {card.lines.map((line) => <CockpitAttentionSub key={line.key} line={line}
             message={lineMessage?.(line)} />)}
         </ul>
       )}
@@ -101,7 +84,7 @@ export function AttentionCard({ card, onOpenEntity, actions, lineActions, lineMe
   );
 }
 
-function CockpitAttentionSub({ line, actions, message }: { line: CardLine; actions?: ReactNode; message?: ReactNode }) {
+function CockpitAttentionSub({ line, message }: { line: CardLine; message?: ReactNode }) {
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line fm-record-gutter">
@@ -121,32 +104,69 @@ function CockpitAttentionSub({ line, actions, message }: { line: CardLine; actio
           {/* ...or, on a fault being confirmed, who closed it and when the Agent confirms it (owner, 2026-10-23) */}
           {line.closing && <span className="cockpit-attention-latest">{line.closing}</span>}
         </span>
-        {/* a press on it is its own: never the card's tap-to-open */}
-        {actions && <span className="cockpit-line-act" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>{actions}</span>}
       </div>
     </li>
   );
 }
 
-/** A card's buttons, for the profiles that manage Facility work — WHICH buttons, on which records and with which
- *  question is the card's (cockpitCard `actions`: fm/deviceWork, tested by value); WorkButtons draws them. */
-function useCardActions(card: CardView, canManage: boolean, onEditTicket: (ticketId: string) => void,
-  onRaiseTicket: (entityId: string) => void, closer: ConfirmedClose) {
-  const { data } = useFmData();
+/** ⚠️ ONE ROW OF BUTTONS ON EVERY ISSUE CARD (owner, 2026-10-30: "I expect to consistently see always Done / Need Help
+ *  / Open Ticket"): an alert's card drew VESTA's own buttons, a fault's Open Ticket · Close. The card's buttons, for the
+ *  profiles that manage Facility work — WHICH buttons, on which records and with which question is the card's
+ *  (cockpitCard `actions`: fm/deviceWork, tested by value); WorkButtons draws them. Done closes the records (VESTA reads
+ *  each again), Need help writes a "help" step on them, Open Ticket takes them on; on a card with no record, Done and
+ *  Need help raise its device's fault with the press. */
+function CardActions({ card, canManage, onEditTicket, onRaiseTicket }: {
+  card: CardView;
+  canManage: boolean;
+  onEditTicket: (ticketId: string) => void;
+  onRaiseTicket: (entityId: string) => void;
+}) {
+  // a profile that does not manage Facility work, or a card with nothing to do: no row, and no read of the records
+  return canManage && card.actions.length > 0
+    ? <CardActionRow card={card} onEditTicket={onEditTicket} onRaiseTicket={onRaiseTicket} /> : null;
+}
+
+function CardActionRow({ card, onEditTicket, onRaiseTicket }: {
+  card: CardView;
+  onEditTicket: (ticketId: string) => void;
+  onRaiseTicket: (entityId: string) => void;
+}) {
+  const { data, helpTickets, addTicket } = useFmData();
+  const closer = useConfirmedClose();
   const [staging, setStaging] = useState<{ tickets: FmTicket[]; to: FmTicketStatus } | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const acts = card.actions;
-  if (!canManage || acts.length === 0) return null;
   const records = (ids: readonly string[]) => ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t);
-  const problem = closer.problemFor(card.key);
+  const said = async (write: Promise<FmSaveOutcome>) => {
+    setFailed(null);
+    const { done, note } = await write;
+    if (!done && note) setFailed(note);
+  };
+  const act = (a: WorkAction) => {
+    const step = a.step;
+    if (step.kind === "stage") setStaging({ tickets: records(a.ids), to: step.to });
+    else if (step.kind === "help") void said(helpTickets(a.ids));
+    else if (step.kind === "raiseThen") void said(addTicket(raisedFor(card, a.ids[0]), { then: step.then }));
+    else if (step.kind === "raise") onRaiseTicket(a.ids[0]);
+    else onEditTicket(a.ids[0]);
+  };
+  const problem = closer.problemFor(card.key) ?? failed;
   return (
     <>
       <WorkButtons actions={acts} cardKey={card.key} closer={closer} name={card.title} className="fm-fault-actions"
-        onAction={(a) => (a.step.kind === "stage" ? setStaging({ tickets: records(a.ids), to: a.step.to })
-          : a.step.kind === "raise" ? onRaiseTicket(a.ids[0]) : onEditTicket(a.ids[0]))} />
+        onAction={act} />
       {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
       {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={() => setStaging(null)} />}
     </>
   );
+}
+
+/** The fault a card with no record raises for its device when Done or Need help is pressed: titled by the device and
+ *  what its line says ("LED Strip: Unavailable"), in its room. */
+export function raisedFor(card: Pick<CardView, "title" | "room" | "lines">, entityId: string): Omit<FmTicket, "id" | "openedAt" | "status"> {
+  const said = card.lines.map((l) => l.text).find((t) => t.trim());
+  return { title: said ? `${card.title}: ${said}` : card.title, entityId, deviceLabel: card.title,
+    ...(card.room ? { room: card.room } : {}), photoIds: [] };
 }
 
 /** ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components, since the
@@ -155,13 +175,15 @@ function useCardActions(card: CardView, canManage: boolean, onEditTicket: (ticke
  *  and VESTA's buttons (Done · Need help: RecordButtons, the same row as its notice and its Notifications card). Its
  *  ticket is opened and closed in the Tickets tab. Before, VESTA's card stood above the issue's, each with its buttons.
  *  `messages`: VESTA's card of each line's alert (messagesModel.messageOfLine). */
-export function AlertIssueCard({ card, messages, onOpenEntity, focused }: {
+export function AlertIssueCard({ card, messages, onOpenEntity, focused, canManage, onEditTicket, onRaiseTicket }: {
   card: CardView;
   messages: (line: CardLine) => Announcement | null;
   onOpenEntity: (id: string) => void;
   focused?: boolean;
+  canManage: boolean;
+  onEditTicket: (ticketId: string) => void;
+  onRaiseTicket: (entityId: string) => void;
 }) {
-  const shown = card.lines.map(messages).filter((a): a is Announcement => a !== null);
   // said once (owner, 2026-10-29 screenshot: the problem and "Cleared on …" twice): a line VESTA holds a message for is
   // named by its title ("#92-P2 (cleared)"), its words in the message; on a watched card its Status says how it closed
   const said: CardView = othersFirst({ ...card, lines: card.lines.map((l) => {
@@ -174,7 +196,8 @@ export function AlertIssueCard({ card, messages, onOpenEntity, focused }: {
         const a = messages(line);
         return a ? <div className="messages-card-body"><AnnouncementContent announcement={a} /></div> : undefined;
       }}
-      actions={shown.some((a) => a.buttons.length > 0)
-        ? <>{shown.map((a) => <RecordButtons key={a.key} record={a} />)}</> : undefined} />
+      // the same row as every issue card's (CardActions): its Done and Need help reach the alert desk through the
+      // alert's fault, as the Telegram buttons do (the VESTA Agent's closed_in_kiosk, its "help" step)
+      actions={<CardActions card={card} canManage={canManage} onEditTicket={onEditTicket} onRaiseTicket={onRaiseTicket} />} />
   );
 }

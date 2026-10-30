@@ -159,11 +159,15 @@ console.log("\n  the handles stand on the left axis, level with their values, in
       ["a limit past the values (200)", filtered, { lo: 55, hi: 200 }], ["one limit", filtered, { lo: 55, hi: Infinity }]]) {
       const { ticks, thumbs, axisY } = readChart(draw(h(LineChart, chart(pts, { filter: filt(base, range, "loading") }))));
       const lo = thumbs.find((t) => t.k === "lo"), hi = thumbs.find((t) => t.k === "hi");
-      const yOf = (t) => (t.v === t.max ? 12 : t.v === t.min ? 98 : axisY(t.v));
+      const yOf = (t) => (t.v >= t.max ? 12 : t.v <= t.min ? 98 : axisY(t.v));
       ck(`${fit}, ${name}: each limit's handle is at its value's y on the axis drawn beside it, strictly inside the axis; no limit at its end`,
          ticks.length >= 2 && thumbs.length === 2 && thumbs.every((t) => Math.abs(t.y - yOf(t)) < 1e-6)
            && lo.v === range.lo && lo.v > lo.min && lo.y < 98
-           && (Number.isFinite(range.hi) ? hi.v === range.hi && hi.v < hi.max && hi.y > 12 : hi.v === hi.max && hi.y === 12), { ticks, thumbs });
+           && (!Number.isFinite(range.hi) ? hi.v === hi.max && hi.y === 12
+             // a limit past the chart's values (one kept from another period): at the axis' top, the axis never widened
+             // to it (owner, 2026-10-30)
+             : range.hi > hi.max ? hi.v === range.hi && hi.y === 12
+             : hi.v === range.hi && hi.v < hi.max && hi.y > 12), { ticks, thumbs });
     }
   }
   P.setChartFit("zero");
@@ -183,8 +187,9 @@ console.log("\n  the axis: unfiltered, filtered and every finite limit; fitted t
   const filtered = [{ t: 0, v: 60 }, { t: 1, v: 61 }];
   for (const fit of ["zero"]) {
     const s = g(filtered, fit, { holds: [40, 90], limits: { lo: 30, hi: 200 } });
-    ck(`${fit}: the axis holds the values unfiltered (40, 90), filtered (60, 61) and both limits (30, 200), each limit inside it`,
-       s.lo < 30 && s.hi > 200 && s.lo <= 0, [s.lo, s.hi]);
+    const plain = g(filtered, fit, { holds: [40, 90] });
+    ck(`${fit}: the axis is the one the values give unfiltered (from 0 to 90), never widened to a limit past them (30, 200)`,
+       s.lo === plain.lo && s.hi === plain.hi && s.lo === 0, [s.lo, s.hi, plain.lo, plain.hi]);
   }
   const f = g(filtered, "fitted", { holds: [0, 900], limits: { lo: 273, hi: 514 } });
   const span = 514 - 273;
@@ -303,8 +308,8 @@ console.log("\n  closed up on screen: one line, the real dates, the count on the
        && (html.match(/chart-range-thumb/g) ?? []).length === 2 && text(inside(html, "chart-unit-line")).includes("0 of 7 days"), text(inside(html, "chart-range-none")));
   const labels = [...inside(html, "chart-yaxis").matchAll(/">([-\d.]+)(k?)</g)].map((m) => Number(m[1]) * (m[2] ? 1000 : 1));
   const loThumb = Number(/data-k="lo" style="top:([\d.]+)px"/.exec(html)?.[1]);
-  ck(`  ...fitted (${P.chartFit()}), the axis frames the values and the limit, not a sliver around the limit; its handle inside`,
-     P.chartFit() === "fitted" && new Set(labels).size === labels.length && Math.min(...labels) <= 1000 && Math.max(...labels) >= 2000 && loThumb > 12 && loThumb < 98, [labels, loThumb]);
+  ck(`  ...fitted (${P.chartFit()}), the axis frames the values as unfiltered, not a sliver around the limit, never widened to it (2k): its handle at the top`,
+     P.chartFit() === "fitted" && new Set(labels).size === labels.length && Math.min(...labels) <= 1000 && Math.max(...labels) < 2000 && loThumb === 12, [labels, loThumb]);
   ck("the count at each step: days, hours, weeks; five-minute steps as the time they make",
      keptWords(3, 7, DAY_MS) === "3 of 7 days" && keptWords(18, 24, HOUR_MS) === "18 of 24 hours" && keptWords(3, 52, 7 * DAY_MS) === "3 of 52 weeks"
        && keptWords(40, 288, 5 * M) === "3h 20min of 1d" && keptWords(0, 288, 5 * M) === "0min of 1d",
@@ -475,6 +480,63 @@ console.log("\n  every line chart shows the fit mark, a bar chart none");
   const lineTree = parseTsx("components/panels/LineChart.tsx");
   ck("  ...one place draws it for every line chart: the dates' row (TimeAxis), once", elements(lineTree, "FitMark").length === 1
      && elements(parseTsx("components/panels/ChartAxis.tsx"), "FitMark").length === 0);
+}
+
+console.log("\n  dragging the lower handle up from the floor (owner, 2026-10-30: \u201cthe baseline graph only shows values >0, when i start to filter from the lower boundary, the graph show negative values\u201d)");
+{
+  const w = { from: 0, to: 4 }, plot = { left: 0, right: 100, top: 12, bottom: 98 };
+  const axisOf = (values, fit, range) => chartGeometry(w, [{ pts: values.map((v, i) => ({ t: i, v })), gaps: [],
+    ...(range && R.activeRange(range) ? { holds: values, limits: R.activeRange(range) } : {}) }], plot, 0.08, fit).series[0];
+  // the slider's loop, as ChartRangeSlider runs it: the finger read on the axis pressed on, the chart re-fitted to the
+  // range after each move; `frozen` false reads it on the re-fitted axis (as before)
+  const drag = (values, fit, ys, frozen = true) => {
+    const extent = R.valueExtent(values), pressed = axisOf(values, fit, null);
+    let range = null;
+    const seen = [];
+    for (const y of ys) {
+      const on = frozen ? pressed : axisOf(values, fit, range);
+      range = R.moveHandle(range, "lo", R.valueAtY(on, plot, y), on, extent);
+      seen.push({ lo: range.lo, axisLo: axisOf(values, fit, range).lo });
+    }
+    return { seen, plainLo: pressed.lo };
+  };
+  const up = [97, 96, 95, 94, 93, 92, 90, 88, 85, 80, 75, 70];
+  const pump = [0, 0, 110, 1500, 1620, 0, 400];
+  for (const fit of ["zero", "fitted"]) {
+    for (const frozen of [true, false]) {
+      const { seen, plainLo } = drag(pump, fit, up, frozen);
+      // from 0 the floor stays; fitted, the axis zooms to the range (owner, 2026-10-26) but never below its floor unfiltered
+      const floorKept = (x) => (fit === "zero" ? x.axisLo === plainLo : x.axisLo >= plainLo);
+      ck(`${fit}${frozen ? "" : ", read on the re-fitted axis"}: a pump's power (never below 0) dragged up from the floor: every limit at or above its lowest reading, the axis never below its floor unfiltered${fit === "zero" ? " (it stays)" : ""}`,
+         seen.every((x) => (x.lo === -Infinity || x.lo >= 0) && floorKept(x)) && seen.some((x) => x.lo > 0),
+         { plainLo, seen: seen.map((x) => [x.lo, x.axisLo]) });
+    }
+  }
+  ck("  ...from 0, that floor is 0 itself", drag(pump, "zero", up).plainLo === 0);
+  // a grid export: the readings go below 0 for good reason
+  const grid = [-3000, -1200, 0, 800, 2000];
+  for (const fit of ["zero", "fitted"]) {
+    const { seen, plainLo } = drag(grid, fit, [97, 95, 92, 88]);
+    const low = R.moveHandle(null, "lo", -2900, axisOf(grid, fit, null), R.valueExtent(grid)).lo;
+    const past = R.moveHandle(null, "lo", -3500, { ...axisOf(grid, fit, null), lo: -4000 }, R.valueExtent(grid)).lo;
+    ck(`${fit}: a grid export (down to -3k): the lower handle reaches its most negative reading, never beyond, the axis keeps that negative floor`,
+       plainLo < 0 && seen.every((x) => (x.lo === -Infinity || x.lo >= -3000) && (fit === "zero" ? x.axisLo === plainLo : x.axisLo >= plainLo))
+         && low === -2900 && past === -Infinity,
+       { plainLo, low, past, seen: seen.map((x) => [x.lo, x.axisLo]) });
+  }
+  const slider = readFileSync(new URL("../../src/components/panels/ChartRangeSlider.tsx", import.meta.url), "utf8").replace(/\s+/g, " ");
+  ck("  ...the slider reads the finger on the axis it pressed on until the finger lifts, its limits among the chart's values",
+     /pressed\.current = \{ lo: axis\.lo, hi: axis\.hi, step: axis\.step \};/.test(slider)
+       && /moveHandle\(range, drag\.current, valueAt\(e\.clientY, pressed\.current\), pressed\.current, extent\)/.test(slider)
+       && /const end = \(\) => \{ drag\.current = null; pressed\.current = null; \};/.test(slider)
+       && readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8").includes("extent={valueExtent(slid.base.map((p) => p.v))}"));
+}
+
+console.log("\n  a range pressed: nothing of the last range under the new one (owner, 2026-10-30)");
+{
+  const flat = readFileSync(new URL("../../src/components/panels/NumericHistory.tsx", import.meta.url), "utf8").replace(/\s+/g, " ");
+  ck("while the new range loads, the last one's line is not drawn, nor its window asked for detail with the new period",
+     /const history = status === "loading" \? \{\} : data\?\.trend \?\? \{\};/.test(flat) && /const over = history\[filtering\[0\]\?\.id\]\?\.window;/.test(flat));
 }
 
 done("✅ a trend chart's range filter: the owner's rule, on the chart's own axis");

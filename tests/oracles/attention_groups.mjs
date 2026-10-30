@@ -240,28 +240,28 @@ ck("the villa model hands buildAttentionItems its device list (the fold and the 
      && /<CockpitAttentionRow key=\{item\.key\} card=\{item\.card\}/.test(cockpit)
      && !/cockpitCard\(/.test(cockpit) && /cockpitIssues\(view, /.test(src("components/cockpit/useVillaAttention.ts"))
      && !/(cardActions|itemActions|attentionLineIn|lineIcon|lineSources|nextCheck)\(/.test(cockpit)
-     && /actions=\{line\.actions\}/.test(cockpit) && /const acts = card\.actions;/.test(cockpit));
+     && /const acts = card\.actions;/.test(cockpit));
 }
 
-// owner, 2026-10-18 (architecture review "One problem, one card" #2): #41 could not be closed without #55 — the card's
-// Close closed every problem of the door. A card holding several problems closes each alone, or "Close all".
+// owner, 2026-10-30: "Done / Need Help / Open Ticket consistently for all of them", one Done closing everything on the
+// card (in place of each problem's own Close, 2026-10-18: "#41 could not be closed without #55")
 {
   const cardActions = (g) => card(g).actions;
-  const itemActions = (g, i) => card(g).lines[g.items.indexOf(i)].actions;
   const dev = { key: "lock.door2", label: "Door", room: "Hall" };
   const [two] = groupAttention([
     { id: "alarm:lock.door2", kind: "alarm", title: "Door", detail: "Unlocked", entityId: "lock.door2", source: "live", device: dev },
     { id: "fault:a", kind: "fault", title: "#41 · Door unlocked", detail: "Fault", entityId: "lock.door2", ticketId: "a", stage: "fault", source: "alert", device: dev },
     { id: "fault:b", kind: "fault", title: "#55 · Door unlocked", detail: "Fault", entityId: "lock.door2", ticketId: "b", stage: "fault", source: "alert", device: dev }]);
-  const close = cardActions(two).find((a) => a.step.kind === "close");
-  const lines = two.items.map((i) => itemActions(two, i).map((a) => `${a.label}:${a.ids.join("+")}`).join());
-  ck("  a card with two problems: \"Close all\" closes both; each problem's own Close closes it alone",
-     close?.label === "Close all" && close.ids.slice().sort().join() === "a,b" && lines.join("|") === "Close:a|Close:b", { close, lines });
+  const labels = (g) => cardActions(g).map((a) => a.label).join(" · ");
+  const done = cardActions(two).find((a) => a.kind === "done");
+  ck("  a card with two problems: Done · Need help · Open Ticket, its one Done closing both; no line carries a button",
+     labels(two) === "Done · Need help · Open Ticket" && done?.ids.slice().sort().join() === "a,b"
+     && card(two).lines.every((l) => !("actions" in l)), { labels: labels(two), done });
   const [one] = groupAttention([
     { id: "fault:c", kind: "fault", title: "#60 · Door unlocked", detail: "Fault", entityId: "lock.door3", ticketId: "c", stage: "fault", source: "alert",
       device: { key: "lock.door3", label: "Door 3", room: "Hall" } }]);
-  ck("  ...a card with one problem keeps its one Close, and no line carries another",
-     cardActions(one).find((a) => a.step.kind === "close")?.label === "Close" && one.items.every((i) => itemActions(one, i).length === 0));
+  ck("  ...a card with one problem: the same three buttons",
+     labels(one) === "Done · Need help · Open Ticket" && cardActions(one).find((a) => a.kind === "done")?.ids.join() === "c");
 }
 
 console.log("\n  one way a problem's entity becomes its card's device, for the open issues and the Watched cards (review N, card 6)");
@@ -298,6 +298,9 @@ console.log("\n  one way a problem's entity becomes its card's device, for the o
     ck("  ...and the row's icons say both problems, the alert's first: the list's row and the card's head draw them",
        c?.lead?.sources.join() === [...c.lines[0].own.sources, ...c.lines[1].own.sources].join()
        && c.lead.sources.includes("night") && c.lines[1].icons?.sources.join() === "night", [c?.lead, c?.lines.map((l) => l.own)]);
+    const { headIcons } = await import("@/config/cockpitCard");
+    ck("  ...the open card draws each icon once: its name the first line's, the other line its own",
+       headIcons(c)?.sources.join() === c.lines[0].own.sources.join() && !headIcons(c).sources.includes("night"), headIcons(c));
   }
 }
 

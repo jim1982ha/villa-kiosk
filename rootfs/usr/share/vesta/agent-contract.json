@@ -12,14 +12,15 @@
   },
   "_entityPattern": "An entity id as the VESTA Agent may name one (kiosk-rooms, the villa model): the Kiosk's proxy checks every id against it before it reaches a template. (Until 2.496.445 this sat in `message`, with the message channel the agent never used: /agent/v1/messages and /choices were removed with the Kiosk's agent window.)",
   "entityPattern": "^[a-z_]+\\.[a-z0-9_]+$",
-  "_ticketUpdate": "One step in a Facility fault's history (FmTicketUpdate in src/fm/fmTypes.ts; the VESTA Agent writes them through /agent/v1/fm-data). `kind` says what the step is, so neither side reads a note's first words: none = a status step (raised, picked up, resolved; `by` the profile that recorded it, `who` the name typed for who does the work); reopened = a resolved fault open again (`by` who reopened it); retitled = the VESTA Agent changed the title (`title` the new one, `was` the one before); reading = what the VESTA Agent reads now on a fault whose title a person changed (`title`): the person's title stays; noted = a line of what happened about the fault on Telegram (a reminder or an escalation sent, a button pressed), `note` its words and `at` when — it changes neither the status nor the title, and a Kiosk lists it in /agent/v1/info `step_kinds` before the VESTA Agent writes one; cleared = resolved with no work done (the Kiosk's \"Close — no action needed\", the agent's own clearing of a problem gone) — never a repair in any figure. A step the VESTA Agent writes carries `title` when it gives the fault one, and `was` when it changes it. A completion the agent writes for a person's Done carries `who`, the person (its `by` is the agent's, stamped by the Kiosk).",
+  "_ticketUpdate": "One step in a Facility fault's history (FmTicketUpdate in src/fm/fmTypes.ts; the VESTA Agent writes them through /agent/v1/fm-data). `kind` says what the step is, so neither side reads a note's first words: none = a status step (raised, picked up, resolved; `by` the profile that recorded it, `who` the name typed for who does the work); reopened = a resolved fault open again (`by` who reopened it); retitled = the VESTA Agent changed the title (`title` the new one, `was` the one before); reading = what the VESTA Agent reads now on a fault whose title a person changed (`title`): the person's title stays; noted = a line of what happened about the fault on Telegram (a reminder or an escalation sent, a button pressed), `note` its words and `at` when — it changes neither the status nor the title, and a Kiosk lists it in /agent/v1/info `step_kinds` before the VESTA Agent writes one; cleared = resolved with no work done (the Kiosk's \"Close — no action needed\", the agent's own clearing of a problem gone) — never a repair in any figure; help = a person pressed Need help on the fault's card (`by` who, `at` when): it changes neither the status nor the title, and the VESTA Agent asks the owner to act (an alert's escalation, or an alert opened already escalated for a fault with none). A step the VESTA Agent writes carries `title` when it gives the fault one, and `was` when it changes it. A completion the agent writes for a person's Done carries `who`, the person (its `by` is the agent's, stamped by the Kiosk).",
   "ticketUpdate": {
     "kinds": [
       "reopened",
       "retitled",
       "reading",
       "noted",
-      "cleared"
+      "cleared",
+      "help"
     ],
     "_kindsBeforeList": "The step kinds a Kiosk took before /agent/v1/info listed them (`step_kinds`, 2.496.356): what the VESTA Agent writes to a Kiosk whose info lists none. Another kind is written without its `kind`, or not at all when it is one of `notStatusChanges` (without its kind it would read as a change of status).",
     "kindsBeforeList": [
@@ -31,7 +32,8 @@
     "notStatusChanges": [
       "noted",
       "retitled",
-      "reading"
+      "reading",
+      "help"
     ],
     "_clearedBefore": "A close written before steps carried a kind is a close with no work when its note is one of `clearedNotes` or starts with one of `clearedNotePrefixes` (review 31).",
     "clearedNotes": [
