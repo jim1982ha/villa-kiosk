@@ -13,8 +13,8 @@ import { roleCan } from "@/auth/permissions";
 import { useConfirmDialog, type Question } from "@/hooks/useConfirmDialog";
 import { useAnnouncementPress } from "@/messages/AnnouncementsContext";
 import { useConversation } from "@/messages/ConversationContext";
-import { announcementPhotoUrl, offeredButtons, PRESS_SAID, type Announcement, type AnnouncementButton,
-  type Pressable, type PressOutcome } from "@/messages/announcements";
+import { announcementPhotoUrl, offeredButtons, pressedRow, type Announcement, type AnnouncementButton,
+  type Pressable } from "@/messages/announcements";
 import type { PressState } from "@/messages/presses";
 
 /** An announcement's photo, served by the add-on; hidden when the add-on refuses it (review Q round 2): a guest is
@@ -40,23 +40,23 @@ export function PageLink({ page }: { page: string }) {
 }
 
 /** A record's buttons, drawn — pure (a check draws it): the ones `buttons` lists (announcements.offeredButtons: what this
- *  profile is offered), each pressable until it was sent, and what became of the last press: VESTA's own short answer
- *  when it gave one (`answer`), else the add-on's (PRESS_SAID). */
+ *  profile is offered) until one is pressed, then the choice made with VESTA's own short answer (`answer`) or the
+ *  add-on's word (announcements.pressedRow). */
 export function ButtonRow({ buttons, onPress, presses, answer }: {
   buttons: readonly AnnouncementButton[]; onPress: (b: AnnouncementButton) => void; presses: PressState; answer?: string;
 }) {
-  // The latest answer to a press (a failed one leaves its button pressable again).
-  const outcome = Object.values(presses).reverse().find((s): s is PressOutcome => s !== "sending");
   if (buttons.length === 0) return null;
+  // the buttons still offered, or the choice made (announcements.pressedRow: every row of buttons alike)
+  const row = pressedRow(buttons, presses, answer);
   return (
     <span className="vesta-notice-actions">
-      {buttons.map((b) => (
+      {row.buttons.map((b) => (
         <button key={b.command} type="button" className={`${CARD_BUTTON} vesta-notice-action`}
-          disabled={presses[b.command] !== undefined && presses[b.command] !== "failed"} onClick={() => onPress(b)}>
+          disabled={presses[b.command] === "sending"} onClick={() => onPress(b)}>
           {b.label}
         </button>
       ))}
-      {(answer || outcome) && <span className="vesta-notice-said">{answer || (outcome && PRESS_SAID[outcome])}</span>}
+      {row.said && <span className="vesta-notice-said">{row.said}</span>}
     </span>
   );
 }

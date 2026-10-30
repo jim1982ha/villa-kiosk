@@ -258,9 +258,28 @@ ck("each button drawn with the announcement's own label (the Kiosk names no devi
      CARD_BUTTON.split(" ").every((c) => cls.split(" ").includes(c)) && !cls.split(" ").includes("primary"), cls);
 }
 ck("  ...with its ✕ while it stays", btnHtml.includes('aria-label="Dismiss"'), btnHtml);
-const sentHtml = draw(h(ButtonRow, { buttons: offered.buttons, onPress: () => {}, presses: { "/unlock": "sent" } }));
-ck("  ...a pressed button is not pressed twice, and says what happened",
-   /<button[^>]*disabled=""[^>]*>🔓 Unlock<\/button>/.test(sentHtml) && sentHtml.includes(PRESS_SAID.sent), sentHtml);
+// owner, 2026-10-30: "No, thanks" pressed left both buttons, the pressed one greyed, and its words again beside them —
+// "i expected the button to disappear, and to update to the selected choice"
+const row = (presses, answer) => draw(h(ButtonRow, { buttons: offered.buttons, onPress: () => {}, presses, answer }));
+const buttonsIn = (html) => (html.match(/<button/g) ?? []).length;
+{
+  const sent = row({ "/unlock": "sent" });
+  ck("  ...a press accepted: the buttons give way to the choice made, with the add-on's word",
+     buttonsIn(sent) === 0 && sent.includes(`✓ 🔓 Unlock · ${PRESS_SAID.sent}`), sent);
+  const same = row({ "/unlock": "sent" }, "🔓 Unlock");
+  ck("  ...VESTA's answer that only repeats the label is not said twice", buttonsIn(same) === 0
+     && (same.match(/🔓 Unlock/g) ?? []).length === 1 && !same.includes(PRESS_SAID.sent), same);
+  const more = row({ "/unlock": "sent" }, "The gate is opening.");
+  ck("  ...VESTA's answer that says more follows the choice", more.includes("✓ 🔓 Unlock · The gate is opening."), more);
+  const sending = row({ "/unlock": "sending" });
+  ck("  ...while it is sent: the buttons stay, that one disabled",
+     /<button[^>]*disabled=""[^>]*>🔓 Unlock<\/button>/.test(sending) && buttonsIn(sending) === offered.buttons.length, sending);
+  const failed = row({ "/unlock": "failed" });
+  ck("  ...not sent: every button back, pressable, and it says so",
+     buttonsIn(failed) === offered.buttons.length && !failed.includes('disabled=""') && failed.includes(PRESS_SAID.failed), failed);
+  const gone = row({ "/unlock": "withdrawn" });
+  ck("  ...no longer offered: no button, and it says so", buttonsIn(gone) === 0 && gone.includes(PRESS_SAID.withdrawn), gone);
+}
 const replies = { 200: "sent", 409: "withdrawn", 502: "failed", 401: "failed" };
 for (const [status, want] of Object.entries(replies)) {
   const got = await pressButton("run-1", "/unlock", async (url, init) => {

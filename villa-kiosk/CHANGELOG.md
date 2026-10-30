@@ -1,3 +1,11 @@
+## 2.496.612
+
+What you will see:
+- A button you press on any card (VESTA's conversation, an alert, the doorbell's notice, the Inbox) gives way to
+  your choice once it is sent: "✓ No, thanks", with VESTA's answer after it when it says more. Before, both buttons
+  stayed, the pressed one greyed, with its words repeated beside them. While it is being sent the buttons stay; if it
+  could not be sent they come back.
+
 ## 2.496.611
 
 What you will see:

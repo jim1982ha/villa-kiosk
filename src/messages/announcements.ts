@@ -301,6 +301,25 @@ export const PRESS_SAID: Record<PressOutcome, string> = {
   failed: "Not sent, try again",
 };
 
+/** A row of buttons after its presses: the buttons still offered, and what the row says.
+ *  ⚠️ THE CHOICE, NOT THE BUTTONS (owner, 2026-10-30: "No, thanks" pressed in the conversation left both buttons, the
+ *  pressed one greyed, and "No, thanks" said again beside them — "i expected the button to disappear, and to update to
+ *  the selected choice"): once a press is accepted, the row is the choice alone, "✓ No, thanks", with the answer when
+ *  it says more than the label ("✓ Unlock · Sent"); a button no longer offered says so; while one is being sent the
+ *  buttons stay, that one disabled; a failed press gives them back with "Not sent, try again". Every row of buttons
+ *  (the notice, its full screen, the Inbox's card, VESTA's conversation) is drawn from this. Pure. */
+export function pressedRow<B extends { command: string; label: string }>(buttons: readonly B[],
+  presses: Readonly<Record<string, PressOutcome | "sending">>, answer?: string): { buttons: readonly B[]; said: string | null } {
+  const chosen = [...buttons].reverse().find((b) => presses[b.command] === "sent" || presses[b.command] === "withdrawn");
+  if (chosen && presses[chosen.command] === "withdrawn") return { buttons: [], said: PRESS_SAID.withdrawn };
+  if (chosen) {
+    const more = answer && answer.trim() !== chosen.label.trim() ? answer : answer ? "" : PRESS_SAID.sent;
+    return { buttons: [], said: `✓ ${chosen.label}${more ? ` · ${more}` : ""}` };
+  }
+  const failed = buttons.some((b) => presses[b.command] === "failed");
+  return { buttons, said: answer || (failed ? PRESS_SAID.failed : null) };
+}
+
 /** Press a button an announcement offers: the add-on fires the villa's one press event with this key and command,
  *  only while it still offers the button (supervisor-proxy.py /announcement-press). `send` is backendFetch (a check
  *  passes its own). */
