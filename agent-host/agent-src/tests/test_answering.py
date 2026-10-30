@@ -39,7 +39,7 @@ def _answering(log, aloud_on=True):
     async def replied(cid, mid):
         log.done.append(f"jobs {mid}")
 
-    async def aloud(cid, mid, text):
+    async def aloud(cid, mid, text, timeline=None):
         log.done.append(f"aloud {mid}")
     later = []
     a = Answering(delivery=SimpleNamespace(reply=reply),

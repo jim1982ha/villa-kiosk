@@ -170,7 +170,7 @@ class Aloud:
             except OSError:
                 pass
 
-    async def answer(self, cid: int, mid: int | None, text: str) -> bool:
+    async def answer(self, cid: int, mid: int | None, text: str, timeline=None) -> bool:
         """The answer `mid` (its words already on the tablet: nobody waits on the voice to read them) said aloud, its
         sound named on the turn; else the turn says why it was not spoken. Whether it was spoken."""
         if not mid or not text:
@@ -180,6 +180,9 @@ class Aloud:
         if isinstance(said, Said):
             if await self.tablet.speak(cid, mid, said.audio, said.mime):
                 self._record(cid, True, None, len(said.audio), began)
+                if timeline is not None:
+                    timeline.mark("voice")              # its sound named on the answer: the tablet plays it now
+                    log.info("%s", timeline.line())
                 return True
             said = Silent(FAILED, "the sound not named on the answer (tablet.Tablet.speak logs why)")
         self._record(cid, False, said.why, None, began)

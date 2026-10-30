@@ -231,3 +231,49 @@ def test_one_clock_for_the_whole_spoken_answer(tmp_path, monkeypatch):
     v.aloud.speech.choose = slow
     villa = _answered(v, kiosk, monkeypatch)
     assert villa.spoken == [] and kiosk.conversation("owner")[-1]["text"].endswith(speech.NOT_SPOKEN)
+
+
+# ── How long a spoken question takes (owner, 2026-10-30: "measure the latency … until the beginning of its vocal
+# reply"): the status check runs while Whisper writes the words out; each step timed on one line ──────────────────────
+def test_the_status_check_runs_while_the_words_are_written_out(tmp_path, monkeypatch):
+    import threading
+    v, kiosk = _agent(tmp_path, VOICE_SET)
+    order, words_done = [], threading.Event()
+    real_transcribe = v.voice.transcribe
+
+    async def transcribe(*a, **k):
+        heard = await real_transcribe(*a, **k)
+        await asyncio.sleep(0.2)               # Whisper still writing: the check must already be under way
+        order.append("words")
+        words_done.set()
+        return heard
+
+    def before_answer():
+        order.append("check")
+        return ""
+    monkeypatch.setattr(v.voice, "transcribe", transcribe)
+    monkeypatch.setattr(v, "before_answer", before_answer)
+    _answered(v, kiosk, monkeypatch)
+    assert order == ["check", "words"], order
+
+
+def test_each_step_of_a_spoken_question_is_timed_on_one_line(tmp_path, monkeypatch, caplog):
+    import logging
+    v, kiosk = _agent(tmp_path, VOICE_SET)
+    with caplog.at_level(logging.INFO, logger="vesta"):
+        _answered(v, kiosk, monkeypatch)
+    (line,) = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Spoken question (owner)")]
+    parts = line.split(": ", 1)[1].split(" · ")
+    assert [p.rsplit(" ", 2)[0] for p in parts[:-1]] == ["reached VESTA", "words", "status check", "AI",
+                                                        "answer on the tablet", "voice"], line
+    assert parts[-1].endswith(" s in all"), line
+
+
+def test_the_timeline_adds_up_its_steps():
+    from vesta_agent.answering import Timeline
+    t = iter([100.0, 106.1, 108.5, 121.5])
+    tl = Timeline("owner", 0.4, clock=lambda: next(t))
+    for step in ("words", "status check", "AI"):
+        tl.mark(step)
+    assert tl.line() == ("Spoken question (owner): reached VESTA 0.4 s · words 6.1 s · status check 2.4 s · "
+                         "AI 13.0 s · 21.9 s in all")

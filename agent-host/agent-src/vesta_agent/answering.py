@@ -8,6 +8,7 @@ with its own tests (tests/test_answering.py).
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Callable
 
@@ -39,6 +40,37 @@ class Ask:
     spoken: str | None = None
     about: str | None = None
     aloud: bool = False
+    #: the villa's status check (app.Vesta.before_answer) already started (a spoken question: while Whisper writes it
+    #: out); None: run when the turn needs it
+    checked: object = None
+    #: a spoken question's steps, timed (Timeline); None: not timed
+    timeline: object = None
+
+
+class Timeline:
+    """⚠️ A SPOKEN QUESTION'S STEPS, ON ONE CLOCK (owner, 2026-10-30: "measure the latency … until the beginning of its
+    vocal reply … what steps are taking most of the time"): from the add-on keeping the recording to its answer's sound
+    named on the tablet, each step's seconds, logged as one line once the voice is ready (speech.Aloud). The AI's own
+    start and first reply are runner.run's line beside it."""
+
+    def __init__(self, profile: str, waited_s: float | None = None, clock: Callable[[], float] = time.monotonic):
+        self.profile, self.clock = profile, clock
+        self.began = self.last = clock()
+        self.waited = max(0.0, waited_s) if isinstance(waited_s, (int, float)) else None
+        self.steps: list[tuple[str, float]] = []
+
+    def mark(self, step: str) -> None:
+        """`step` just ended: its seconds are the time since the one before."""
+        now = self.clock()
+        self.steps.append((step, now - self.last))
+        self.last = now
+
+    def line(self) -> str:
+        """"Spoken question (owner): reached VESTA 0.3 s · words 6.1 s · … · 24.0 s in all"."""
+        parts = ([("reached VESTA", self.waited)] if self.waited is not None else []) + self.steps
+        total = (self.last - self.began) + (self.waited or 0.0)
+        return (f"Spoken question ({self.profile}): " + " · ".join(f"{n} {s:.1f} s" for n, s in parts) +
+                f" · {total:.1f} s in all")
 
 
 def question_words(text: str, *, image: bool, voice: bool, spoken: str | None, who: str | None, role: str | None,
@@ -76,15 +108,17 @@ class Answering:
         self.delivery, self.fault_offers, self.approvals, self.chat_jobs = delivery, fault_offers, approvals, chat_jobs
         self.later, self.aloud = later, aloud
 
-    async def deliver(self, cid: int, reply, photos, approvals, aloud: bool = False) -> int | None:
+    async def deliver(self, cid: int, reply, photos, approvals, aloud: bool = False, timeline=None) -> int | None:
         """The answer `reply` (turn_reply.Reply) sent and followed; its message id."""
         mid = await self.delivery.reply(cid, reply.text, keyboard=reply.keyboard, photos=photos)
         self.fault_offers.delivered(reply.offered, mid)
         self.approvals.answered(approvals, cid, mid, reply.text)
         await self.chat_jobs.replied(cid, mid)
+        if timeline is not None:
+            timeline.mark("answer on the tablet")
         if aloud:
-            self.later(self.aloud.answer(cid, mid, reply.text))
+            self.later(self.aloud.answer(cid, mid, reply.text, timeline))
         return mid
 
 
-__all__ = ["question_words", "Answering"]
+__all__ = ["question_words", "Answering", "Ask", "Timeline"]

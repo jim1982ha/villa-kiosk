@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.391 (30 October 2026)
+
+- A spoken question's status check (Vesta.before_answer) starts with the transcription and is awaited by the turn
+  (answering.Ask.checked); answering.Timeline times its steps (reached VESTA from the add-on's `at`, words, status
+  check, AI, answer on the tablet, voice) on one log line, written by speech.Aloud once the sound is named; runner.run
+  logs the AI's start, its first reply and the run whole.
+
 ## 0.6.390 (30 October 2026)
 
 - villa-concierge voice.py language_of: each language's accented letters count (LETTERS), and more common words

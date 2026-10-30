@@ -15,6 +15,7 @@ Every tool call is therefore decided by the code, never pre-approved.
 from __future__ import annotations
 
 import asyncio
+import time
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -349,10 +350,17 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
     clean_environ()
     opts, denied = build_options(settings, system_prompt, kit, terms, state, resume)
     c = Collector(resume)
+    # ⚠️ THE AI'S OWN START, TIMED (owner, 2026-10-30: about 5 s passed before a spoken question's first step): the AI
+    # program started and ready (`ready`), its first reply after the question (`first`), the run whole
+    began = time.monotonic()
+    ready = first = None
     try:
         async with ClaudeSDKClient(options=opts) as client:
+            ready = time.monotonic()
             await client.query(message(with_time(settings, prompt), image))
             async for msg in client.receive_response():
+                if first is None and type(msg).__name__ == "AssistantMessage":
+                    first = time.monotonic()
                 c.feed(msg)
     except asyncio.CancelledError:
         # ⚠️ A RUN CUT BY A STOP IS A RUN (owner, 2026-10-15: two /investigate cut by updates were missing from the Costs
@@ -370,6 +378,9 @@ async def run(settings, system_prompt: str, prompt: str, kit, terms, state, resu
         if c.problem == "unknown":
             log.exception("agent run failed")
     texts, session_id, stopped, cost, usage, turns, ms = c.texts, c.session_id, c.stopped, c.cost, c.usage, c.turns, c.ms
+    if ready is not None:
+        log.info("AI run (%s): ready in %.1f s, first reply %s, %.1f s in all", terms.who, ready - began,
+                 f"after {first - ready:.1f} s" if first is not None else "none", time.monotonic() - began)
     steps = kept_steps(c.steps, _secrets(settings))
     err, problem = c.err or (f"api {c.kind}" if c.kind else None), c.problem
     if problem:

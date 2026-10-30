@@ -119,6 +119,15 @@ def photo_max_bytes() -> int:
                  told="person")
 
 
+def _seconds_since(iso) -> float | None:
+    """Seconds from a moment the add-on wrote (ISO, with its zone) to now; None when it wrote none it can be read from."""
+    try:
+        at = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return (datetime.now(timezone.utc) - at).total_seconds() if at.tzinfo else None
+
+
 class Vesta:
     def __init__(self, settings, telegram: Telegram | None = None, reader=None, writer_factory=None,
                  kiosk: Kiosk | None = None, skills: Skills | None = None):
@@ -624,8 +633,10 @@ class Vesta:
                 lambda who, parts: press.from_tablet(chat, who, parts, toast, name=person.name)))
         # a spoken question (ticket 23 of "One inbox", hold to talk): read as a voice note, its audio the tablet's
         spoken = isinstance(ask.get("voice"), str) and bool(ask["voice"])
+        # its steps timed, from the moment the add-on kept the recording (`at`) to its answer's voice (answering.Timeline)
+        timeline = answering.Timeline(str(profile), _seconds_since(ask.get("at"))) if spoken else None
         await self._safe(self.handle_question(
-            tablet.question(chat, person, ask, self.tablet.spoken(chat, ask) if spoken else None)))
+            tablet.question(chat, person, ask, self.tablet.spoken(chat, ask) if spoken else None), timeline=timeline))
 
     async def handle_message(self, event_type: str, m: dict, about: str | None = None):
         """A Telegram message, as Home Assistant fired it (fields checked live on 2026-09-30). `about`: what the answer
@@ -633,7 +644,7 @@ class Vesta:
         event."""
         await self.handle_question(intake.from_telegram(event_type, m), about, event_type)
 
-    async def handle_question(self, q: intake.Question, about: str | None = None, event_type: str = ""):
+    async def handle_question(self, q: intake.Question, about: str | None = None, event_type: str = "", timeline=None):
         """A message from Telegram or a tablet (intake.Question): intake.py decides."""
         got = self.judge(q)
         from_id = q.user_id
@@ -664,13 +675,20 @@ class Vesta:
         # the person waits from now: "typing…" while the message is read (a photo fetched, a voice transcribed) and
         # answered, until the answer goes (delivery.Delivery.hold — the one "typing…" of every wait)
         held = self.delivery.hold(got.chat)
+        checking = None
         try:
             text, spoken = got.text, None
             if got.spoken:
+                # ⚠️ THE STATUS CHECK WHILE WHISPER WRITES IT OUT (owner, 2026-10-30: 2.4 s of every spoken question were
+                # the check, waiting for the words it does not need): started now, awaited by the turn (answering.Ask)
+                checking = asyncio.ensure_future(asyncio.to_thread(self.before_answer))
+                checking.add_done_callback(lambda t: t.cancelled() or t.exception())
                 heard = await self.voice.transcribe(got.chat, got.person,
                                                     got.audio or TelegramAudio(self.tg, got.voice_file or ""))
                 text = intake.without_mention(heard.text if heard else None, self.bot_username)
                 spoken = heard.language if heard else None
+                if timeline is not None:
+                    timeline.mark("words")
             image = None
             if got.photo_file is not None:
                 image = await self._photo(got.chat, got.photo_file, q.mime or "image/jpeg")
@@ -688,8 +706,11 @@ class Vesta:
             # a question spoken on the tablet (its audio the tablet's: intake.Question.audio) is answered aloud too
             await self.converse(got.chat, got.person, text, voice=got.spoken, image=image, held=held,
                                 invoked=got.invoked, spoken=spoken, about=about if got.invoked else None,
-                                aloud=got.audio is not None and self.tablet.owns(got.chat))
+                                aloud=got.audio is not None and self.tablet.owns(got.chat), checked=checking,
+                                timeline=timeline)
         finally:
+            if checking is not None and not checking.done():
+                checking.cancel()                   # no turn came of it (no words): its result is nobody's
             held()
 
     async def _photo(self, chat: int, file_id: str, mime: str) -> tuple[str, str] | None:
@@ -775,7 +796,9 @@ class Vesta:
                     command_by=person.name if person else None, about=ask.about)
             told_at = None
             if not is_continue:
-                checked = await asyncio.to_thread(self.before_answer)
+                checked = await (ask.checked if ask.checked is not None else asyncio.to_thread(self.before_answer))
+                if ask.timeline is not None:
+                    ask.timeline.mark("status check")       # what was left of it once the words came (it ran beside them)
                 # ⚠️ WHAT THIS CHAT HAS, AS FACTS, WITH EVERY MESSAGE (owner, 2026-10-23): the digest a job had sent at
                 # 14:40 was promised again at 14:50 as "on its way" — the AI read only its own transcript. What is being
                 # prepared here now (or that nothing is) and what reached this chat since the AI's last answer here
@@ -789,6 +812,8 @@ class Vesta:
             began = time.monotonic()
             # a request's own brain and limit, if its skill names them (turn.Turns.chat)
             res = await self.turns.chat(person, cid, prompt, resume=resume, asked=asked, image=image, request=request)
+            if ask.timeline is not None:
+                ask.timeline.mark("AI")
             if res.session_id:
                 self.state.set_session(cid, res.session_id)
                 if told_at is not None:
@@ -812,7 +837,7 @@ class Vesta:
             answered()                                       # "typing…" ends: the answer is going out
             # what follows the answer, in its order (answering.Answering): sent with the camera pictures the AI looked
             # at, its offers, its approvals, its jobs, its voice
-            await self.answering.deliver(cid, reply, res.photos, res.approvals, aloud=ask.aloud)
+            await self.answering.deliver(cid, reply, res.photos, res.approvals, aloud=ask.aloud, timeline=ask.timeline)
 
     def before_answer(self) -> str:
         """What each skill's `before_answer` check says now (skills.Skill.before_answer: its script's "text"), for the
