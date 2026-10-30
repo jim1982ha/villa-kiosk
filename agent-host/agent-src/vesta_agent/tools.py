@@ -442,7 +442,13 @@ class Toolbox:
                 photo = (b.get("data"), b.get("mimeType") or "image/jpeg")
                 if photo[0] and photo not in self.photos:
                     self.photos.append(photo)
-            text = scrub("".join(b.get("text", "") for b in blocks if b.get("type") == "text"), self._secrets())
+            text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+            if name in read_guard.RESULT_KEEP:              # only what the guard hands on (an integration's state)
+                try:
+                    text = json.dumps(read_guard.kept(name, json.loads(text)), ensure_ascii=False)
+                except (TypeError, ValueError):
+                    text = ""                              # not the answer the guard knows: nothing of it
+            text = scrub(text, self._secrets())
             text = without_hidden(text, self._hidden())       # every read tool, never the search alone
             text = with_asleep(text, self._asleep())
             if not res.get("isError") and name != "ha_get_history":   # a history's rows are moments already

@@ -19,6 +19,7 @@ READ_TOOLS = {
     "ha_get_logs", "ha_get_automation_traces", "ha_config_get_automation", "ha_config_get_script",
     "ha_config_list_helpers",
     "ha_list_floors_areas", "ha_get_camera_image", "ha_get_todo", "ha_get_overview", "ha_get_system_health",
+    "ha_get_integration",
 }
 WRITE_TOOLS = {"ha_call_service"}
 #: A tool that can also write, allowed for its READ actions only, refused for every other one: {tool: (the argument
@@ -36,6 +37,34 @@ READ_ACTIONS = {"ha_manage_blueprints": ("action", {"get"}), "ha_manage_energy_p
 ARG_VALUES: dict[str, dict[str, set]] = {"ha_get_logs": {"source": {"logbook", "system"}}}
 #: Arguments never sent (ha_get_logs `slug`: another app's log).
 ARG_FORBIDDEN: dict[str, set] = {"ha_get_logs": {"slug"}}
+#: The only arguments a tool may be sent, whoever asks.
+#: ⚠️ AN INTEGRATION'S STATE, NEVER ITS SETTINGS (owner, 2026-10-30: VESTA could not tell the ZBT-2 "is not plugged in",
+#: the integration's own reason): ha_get_integration lists the villa's integrations and one by its entry, nothing else —
+#: its options, schema, subentries and diagnostics can hold keys and passwords.
+ARG_ONLY: dict[str, set] = {"ha_get_integration": {"entry_id", "query", "exact_match", "limit", "offset"}}
+#: What of a tool's answer is handed on: for each list or record of it (`entry`, `entries`), only these fields. An
+#: integration's entry answers its options even when not asked for them.
+_INTEGRATION_KEPT = {"entry_id", "domain", "title", "state", "reason", "error_reason_translation_key", "disabled_by",
+                     "source"}
+RESULT_KEEP: dict[str, dict[str, set]] = {"ha_get_integration": {"entry": _INTEGRATION_KEPT,
+                                                                 "entries": _INTEGRATION_KEPT}}
+
+
+def kept(name: str, body):
+    """`body` (a tool's parsed answer) with only what RESULT_KEEP hands on for `name`; any other tool's as it is."""
+    keep = RESULT_KEEP.get(name)
+    if not keep or not isinstance(body, dict):
+        return body
+    out = {k: v for k, v in body.items() if k not in keep}
+    for k, fields in keep.items():
+        v = body.get(k)
+        if isinstance(v, dict):
+            out[k] = {f: v[f] for f in fields if f in v}
+        elif isinstance(v, list):
+            out[k] = [{f: e[f] for f in fields if f in e} for e in v if isinstance(e, dict)]
+    if isinstance(out.get("data"), dict):         # ha-mcp may wrap the answer in `data`
+        out["data"] = kept(name, out["data"])
+    return out
 #: The villa-wide logbook covers at most this many hours a call — a longer period names its entity_id, and a script's
 #: client reads a long period by slices of this size (McpClient.logbook).
 #: ⚠️ A WEEK OF THE WHOLE VILLA, PAGE AFTER PAGE (villa, 2026-10-15): an /investigate read 8 to 15 October's logbook of
@@ -77,7 +106,9 @@ def refused(name: str, args: dict | None, known: set | None = None) -> str | Non
         key, reads = READ_ACTIONS[name]
         if args.get(key) not in reads:
             return f"{name} refused: only its {', '.join(sorted(reads))} {key} is allowed."
-    bad = sorted({k for k in args if (known is not None and k not in known) or k in ARG_FORBIDDEN.get(name, set())})
+    only = ARG_ONLY.get(name)
+    bad = sorted({k for k in args if (known is not None and k not in known) or k in ARG_FORBIDDEN.get(name, set())
+                  or (only is not None and k not in only)})
     if bad:
         return f"Argument not allowed for {name}: {', '.join(bad)}."
     if why := logbook_too_wide(name, args):

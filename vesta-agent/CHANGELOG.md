@@ -1,3 +1,10 @@
+## 0.12.411
+
+What you will see:
+- VESTA can read an integration's state and its reason, for example "the ZBT-2 radio: setup_retry, The
+  device is not plugged in", never its settings, options or diagnostics. On this villa, switch it on in VESTA's page ›
+  Rules › AI tools: tick "ha_get_integration" (a new villa has it on).
+
 ## 0.12.410
 
 What you will see:

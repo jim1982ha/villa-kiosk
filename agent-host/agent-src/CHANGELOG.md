@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.397 (30 October 2026)
+
+- ha_get_integration readable: read_guard.ARG_ONLY (entry_id, query, exact_match, limit, offset) and RESULT_KEEP / kept
+  (an entry's id, domain, title, state, reason, its reason's key, disabled_by, source), for the AI's reads (tools.py)
+  and every script's client (McpClient.tool) alike; in READ_TOOLS and the starter policy's ha_read_tools.
+
 ## 0.6.396 (30 October 2026)
 
 - Problems.person_done: the one close of an alert by a person, with its place (message_format.DONE_IN / done_in:

@@ -28,6 +28,7 @@ import urllib.request
 
 from .past import History, Logbook, until
 from .limits import limit
+from .read_guard import kept as read_guard_kept
 from .read_guard import READ_ACTIONS, READ_TOOLS, WRITE_TOOLS, logbook_slice, refused  # noqa: F401 (READ_ACTIONS, READ_TOOLS: read here by name)
 
 
@@ -380,7 +381,7 @@ class McpClient(HABase):
             body = {"text": text}
         if res.get("isError"):
             raise HAError(f"{name} failed: {str(body)[:error_chars()]}")
-        body = _unwrap(body)
+        body = read_guard_kept(name, _unwrap(body))
         if isinstance(body, dict) and body.get("success") is False and not (partial and "errors" in body):
             raise HAError(f"{name} failed: {str(body.get('error') or body.get('message') or body)[:error_chars()]}")
         return body

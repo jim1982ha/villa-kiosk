@@ -123,3 +123,4 @@ ha_read_tools:
   - ha_get_todo
   - ha_get_overview
   - ha_get_system_health
+  - ha_get_integration
