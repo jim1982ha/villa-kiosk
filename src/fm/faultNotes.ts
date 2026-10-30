@@ -10,6 +10,7 @@
 import { isTicketResolved, stageOf, statusChanges, stepsInTimeOrder } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
 import { agentOwned } from "./issueSource";
+import { authorWords } from "@/auth/roles";
 
 /** A note written before steps had a kind (VESTA Agent before 0.12.151): its title change read "Now: <new title>".
  *  The one place the old words are still read — stored history is never rewritten. */
@@ -43,7 +44,10 @@ export function notedStory(t: Pick<FmTicket, "updates">): { note: string; at: st
 export function faultWhen(t: FmTicket, stamp: (at: string) => string): string {
   const steps = statusSteps(t);
   const last = steps[steps.length - 1];
-  const by = (u?: FmTicketUpdate) => (u?.who || u?.by ? ` by ${u.who || u.by}` : "");
+  const by = (u?: FmTicketUpdate) => {
+    const who = u?.who || authorWords(u);
+    return who ? ` by ${who}` : "";
+  };
   // who raised it: its first step, when that step is the raising (fmCommands.addTicket stamps it, as every other step)
   // — a person; the VESTA Agent's own faults already wear its mark beside this line (AgentMark)
   const raised = !agentOwned(t) && steps[0]?.status === "open" && !steps[0]?.kind ? by(steps[0]) : "";
@@ -61,6 +65,9 @@ export function faultWhen(t: FmTicket, stamp: (at: string) => string): string {
  *  title changes only the LAST (owner, 2026-10-11: "only show the latest one"), said as what it replaced — "Was: …"
  *  (owner, review 26) — since the title above already says what it is now; the agent's reading under a title a person
  *  wrote is "VESTA reads: …". */
+/** "renamed by Owner, " when the step says who (its profile's name today, roles.authorWords). */
+const renamedBy = (u: FmTicketUpdate) => (authorWords(u) ? `renamed by ${authorWords(u)}, ` : "");
+
 export function faultNoteLines(t: Pick<FmTicket, "note" | "updates">, stamp: (at: string) => string): string[] {
   const ups = stepsInTimeOrder(t);
   const titled = ups.map(titleOf);
@@ -72,7 +79,7 @@ export function faultNoteLines(t: Pick<FmTicket, "note" | "updates">, stamp: (at
   ups.forEach((u, i) => {
     if (titled[i] === undefined) {
       if (u.note) lines.push(`${u.note} (${stamp(u.at)})`);
-      if (i === lastTitle) lines.push(`Was: ${u.was} (${u.by ? `renamed by ${u.by}, ` : ""}${stamp(u.at)})`);
+      if (i === lastTitle) lines.push(`Was: ${u.was} (${renamedBy(u)}${stamp(u.at)})`);
       return;
     }
     if (i !== lastTitle) return;
@@ -83,7 +90,7 @@ export function faultNoteLines(t: Pick<FmTicket, "note" | "updates">, stamp: (at
     // an old "Now: …" step names only the new title: what it replaced is the title step before it, when there is one
     const before = u.kind === "retitled" ? u.was : renamed.slice(0, i).filter((x) => x !== undefined).pop();
     // who renamed it, when the step says (a person's rename in the editor, the VESTA Agent's own) — review 29
-    if (before) lines.push(`Was: ${before} (${u.by ? `renamed by ${u.by}, ` : ""}${stamp(u.at)})`);
+    if (before) lines.push(`Was: ${before} (${renamedBy(u)}${stamp(u.at)})`);
   });
   return lines.map((n) => n.trim()).filter(Boolean);
 }

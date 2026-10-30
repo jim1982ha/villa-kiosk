@@ -12,7 +12,7 @@
   },
   "_entityPattern": "An entity id as the VESTA Agent may name one (kiosk-rooms, the villa model): the Kiosk's proxy checks every id against it before it reaches a template. (Until 2.496.445 this sat in `message`, with the message channel the agent never used: /agent/v1/messages and /choices were removed with the Kiosk's agent window.)",
   "entityPattern": "^[a-z_]+\\.[a-z0-9_]+$",
-  "_ticketUpdate": "One step in a Facility fault's history (FmTicketUpdate in src/fm/fmTypes.ts; the VESTA Agent writes them through /agent/v1/fm-data). `kind` says what the step is, so neither side reads a note's first words: none = a status step (raised, picked up, resolved; `by` the profile that recorded it, `who` the name typed for who does the work); reopened = a resolved fault open again (`by` who reopened it); retitled = the VESTA Agent changed the title (`title` the new one, `was` the one before); reading = what the VESTA Agent reads now on a fault whose title a person changed (`title`): the person's title stays; noted = a line of what happened about the fault on Telegram (a reminder or an escalation sent, a button pressed), `note` its words and `at` when — it changes neither the status nor the title, and a Kiosk lists it in /agent/v1/info `step_kinds` before the VESTA Agent writes one; cleared = resolved with no work done (the Kiosk's \"Close — no action needed\", the agent's own clearing of a problem gone) — never a repair in any figure; help = a person pressed Need help on the fault's card (`by` who, `at` when): it changes neither the status nor the title, and the VESTA Agent asks the owner to act (an alert's escalation, or an alert opened already escalated for a fault with none). A step the VESTA Agent writes carries `title` when it gives the fault one, and `was` when it changes it. A completion the agent writes for a person's Done carries `who`, the person (its `by` is the agent's, stamped by the Kiosk).",
+  "_ticketUpdate": "One step in a Facility fault's history (FmTicketUpdate in src/fm/fmTypes.ts; the VESTA Agent writes them through /agent/v1/fm-data). `kind` says what the step is, so neither side reads a note's first words: none = a status step (raised, picked up, resolved; `by` the profile that recorded it, `who` the name typed for who does the work). A step a person's profile writes carries `role`, the profile's id (owner, ops, guest), beside `by`, its label: its words are `profiles.<role>` (2.496.623; older steps carry `by` only); reopened = a resolved fault open again (`by` who reopened it); retitled = the VESTA Agent changed the title (`title` the new one, `was` the one before); reading = what the VESTA Agent reads now on a fault whose title a person changed (`title`): the person's title stays; noted = a line of what happened about the fault on Telegram (a reminder or an escalation sent, a button pressed), `note` its words and `at` when — it changes neither the status nor the title, and a Kiosk lists it in /agent/v1/info `step_kinds` before the VESTA Agent writes one; cleared = resolved with no work done (the Kiosk's \"Close — no action needed\", the agent's own clearing of a problem gone) — never a repair in any figure; help = a person pressed Need help on the fault's card (`by` who, `at` when): it changes neither the status nor the title, and the VESTA Agent asks the owner to act (an alert's escalation, or an alert opened already escalated for a fault with none). A step the VESTA Agent writes carries `title` when it gives the fault one, and `was` when it changes it. A completion the agent writes for a person's Done carries `who`, the person (its `by` is the agent's, stamped by the Kiosk).",
   "ticketUpdate": {
     "kinds": [
       "reopened",
@@ -408,6 +408,7 @@
   "_heartbeat": "POST /agent/v1/heartbeat: the VESTA Agent says it is alive. `status`: a short text (at most 200 characters). `cadence` (optional): its own timing, which the Kiosk shows in the Overview's (i) instead of a copy of the defaults (architecture review, 2026-10-15) — `checkMinutes` how often it looks at its alerts and faults (1-1440), `nightlyAt` the villa time of its nightly check (HH:MM), anything else in it is dropped. Without it the Kiosk says no number. Shown only while the Agent is online: once its heartbeats stop (/agent-status `offline`) the Kiosk's proxy answers `cadence: null`, and the Kiosk says \"by the VESTA Agent\" and \"it checks regularly\" instead of a stale number. A `cadence` of another shape never refuses the beat: the beat counts (the Agent is online), the timing is dropped (stored null, so the Kiosk gives no number) and the answer carries `\"cadence\": \"refused: <why>\"`.",
   "_maintenance": "The heartbeat's answer carries `maintenance`: the villa's maintenance mode, switched by the owner in the Kiosk's Advanced Settings › System (owner, 2026-10-29: a switch on the tablet and a mark in its top bar while it is on, so nobody forgets it). While it is true the VESTA Agent sends only urgent (P1) alerts; P2, P3 and P4 are recorded and not sent. The Kiosk owns it, as it owns the devices asleep by design: the Agent keeps the last answer it read, and an answer without the field (an older Kiosk) leaves what it kept. It replaces the villa helper the Agent read before (one switch, one place).",
   "_unavailableByDesign": "The heartbeat's answer carries `unavailableByDesign`: the entity ids the villa's owner marked, in the Kiosk's Advanced Settings › Devices › Asleep between reports, as devices that sleep between reports (a battery door sensor goes \"unavailable\" minutes after each report until it next reports). Their \"unavailable\" is normal: the Kiosk shows their last report and raises nothing, and the VESTA Agent skips its offline checks for them. The Kiosk owns the list (it is always installed; the Agent may not be): sorted, each id once, matching `entityPattern`, an empty list when none is marked — read from the stored device configuration on every beat (owner, 2026-10-21; added within version 1: an agent that does not read it loses nothing).",
+  "_villaSettings": "The villa's settings in the heartbeat's answer (`unavailableByDesign`, `maintenance`, `villaEmptySensor`) are each ABSENT when the Kiosk cannot read its stored settings (architecture review, 2026-10-30: an unreadable file used to answer \"nothing sleeps, maintenance off\" and the Agent overwrote what it kept). An absent key means \"cannot tell\": the Agent keeps what it was last told, as for an older Kiosk. `villaEmptySensor` (added within version 1) is the ONE choice of which on/off sensor says the villa is empty (on = empty), the one the Kiosk's presence tile follows: the Agent's siren arming, empty-villa reports and occupancy read it instead of a sensor named in its own files; \"\" is no pick (the Agent cannot tell, as the tile says nothing).",
   "heartbeat": {
     "fields": {
       "status": "string, at most 200 characters",
@@ -416,7 +417,8 @@
     "answer": {
       "ok": "true",
       "offline_after_minutes": "integer: minutes of silence before the Kiosk shows the agent offline",
-      "unavailableByDesign": "list of entity ids, sorted, each once: the devices asleep by design; [] when none", "maintenance": "true while the villa's maintenance mode is on (Advanced Settings › System): the Agent sends only P1 alerts; false otherwise",
+      "unavailableByDesign": "list of entity ids, sorted, each once: the devices asleep by design; [] when none; absent when the Kiosk cannot read its settings (keep what was told)", "maintenance": "true while the villa's maintenance mode is on (Advanced Settings › System): the Agent sends only P1 alerts; false otherwise; absent when the Kiosk cannot read its settings (keep what was told)",
+      "villaEmptySensor": "string: the entity id of the villa's \"empty\" on/off sensor picked in Settings › Villa (on = empty, off = occupied, any other state = cannot tell); \"\" when none is picked (the Agent cannot tell whether the villa is empty); absent when the Kiosk cannot read its settings (keep what was told)",
       "cadence": "present only when the beat's cadence was dropped: \"refused: <why>\""
     },
     "sample": {
@@ -507,7 +509,8 @@
           "photoIds": [],
           "who": "Jean-Marie",
           "note": "On my way",
-          "by": "Owner"
+          "by": "Owner",
+          "role": "owner"
         }
       ]
     },
@@ -704,6 +707,10 @@
     "askKeptSeconds": 600,
     "typingSeconds": 180,
     "asksPerMinute": 6,
+    "_recordsChanged": "A person's step on a Facility record that the VESTA Agent acts on (architecture review round 6, 2026-10-30: Done, Need help, Open Ticket, Close or Reopen pressed on a card in the Kiosk; a status step to in_progress or resolved, or a step of kind help, cleared or reopened, written through the people's door /fm-data, never the Agent's own) adds to the same inbox an item {seq, at} plus these fields, and NO `profile`: it is no question and nobody is answered. The Agent reads the records again at once (its 5-minute read stays the safety net). ONE such item waits at most: a newer one replaces the one still kept, so presses close together are one read. An Agent that does not know it reads a question from no profile it answers, and drops it.",
+    "recordsChanged": {
+      "records": "changed"
+    },
     "limits": {"key": 200, "text": 16000, "question": 2000, "photos": 4, "photoBytes": 3000000},
     "voice": {"rate": 16000, "seconds": 30, "answerBytes": 4000000, "answerTypes": ["audio/mpeg", "audio/wav"]},
     "keys": {"ask": "ask:", "turn": "turn:", "press": "press:", "typing": "typing:"},
@@ -721,6 +728,46 @@
       {"why": "no key", "kept": false, "turn": {"profile": "ops", "text": "x"}},
       {"why": "a key longer than limits.key", "kept": false, "turn": {"key": "turn:99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", "profile": "ops", "text": "x"}}
     ]
+  },
+  "_profiles": "Each Kiosk profile's words and what it may read, for the VESTA Agent (architecture review round 8, 2026-10-30): DERIVED from the Kiosk's role table (rootfs/usr/share/vesta/roles.json) and its read rule (ha-commands.json `readDomains`), and held equal to them by tests/oracles/agent_profiles.mjs and tests/proxy-rules.py, so the Agent asks the agreement and never copies the rule. Keyed by profile (owner, ops, guest: conversation.profiles names the role the Agent answers each with). WORDS: `label` the profile's name on the tablet, Telegram and every report (\"Facility Manager\"); `short` where space is tight (an alert card's \"To: FM\"); `initials` the round badge; `description` the line under it on the sign-in card. A step a profile writes on a Facility fault (ticketUpdate) carries `role`, the profile's id, beside `by`, its label: read the words from `role` here (a step written before 2.496.623 carries `by` only, one of `label` or `formerLabels`; a step with neither is the VESTA Agent's or nobody's, `by` as written). READS: what a person signed in as that profile is shown on the tablet, so VESTA answering that person on the tablet tells them no more. An entity X may be read when ALL of these hold: (1) X's domain (the part of its id before the dot) is in `domains` (\"all\": every domain) - what the Kiosk's proxy relays to that profile at all (_read_allowed: `readDomains`, a camera only to a profile shown cameras; a light's scene choice, ha-commands.json `sceneSelect`, to every profile); (2) X's device type is not in `deniedTypes` - the type is the device's `type` in /agent/v1/villa-model, which is its domain unless the owner set another in Advanced Settings (src/auth/permissions.ts isTypeAllowed matches the type EXACTLY: \"binary_sensor\" hides every binary sensor, motion, presence, occupancy, door, window and leak alike, whatever its device_class; \"camera\" every camera, its pictures and its video too); (3) X's device category is in `categories` (\"all\": every category) - the category is the device's `category` in /agent/v1/villa-model, the map group the Kiosk shows it in (the Kiosk's own answer, owner's picks included: never re-derive it); a device the villa model gives no category is judged by (1) and (2) alone (permissions.isMappingAllowed; config/villaVisibility visibleTo). `people`: who is home and since when (the `seePeople` capability), in any form: a person, a tracker, an occupancy count or a summary of who arrived. NOT CARRIED: the tablet also lists, for a profile without `listUnmappedDevices`, only the devices placed on the 3D map; the Agent knows no map, and judges an off-map device by the rules above.",
+  "profiles": {
+    "owner": {
+      "label": "Owner",
+      "short": "Owner",
+      "initials": "O",
+      "description": "Everything at a glance: protection, energy, water, internet.",
+      "reads": {
+        "domains": "all",
+        "deniedTypes": [],
+        "categories": "all",
+        "people": true
+      }
+    },
+    "ops": {
+      "label": "Facility Manager",
+      "short": "FM",
+      "initials": "FM",
+      "description": "On-site view: device health, batteries, what needs attention.",
+      "formerLabels": ["Facility manager"],
+      "reads": {
+        "domains": ["light", "climate", "lock", "camera", "cover", "fan", "binary_sensor", "sensor", "media_player", "switch", "input_boolean", "assist_satellite", "sun", "scene", "weather"],
+        "deniedTypes": [],
+        "categories": "all",
+        "people": false
+      }
+    },
+    "guest": {
+      "label": "Guest",
+      "short": "Guest",
+      "initials": "G",
+      "description": "Enjoy the villa: comfort, lights, music and doors.",
+      "reads": {
+        "domains": ["light", "climate", "lock", "cover", "fan", "binary_sensor", "sensor", "media_player", "switch", "input_boolean", "assist_satellite", "sun", "scene", "weather"],
+        "deniedTypes": ["camera", "binary_sensor"],
+        "categories": ["comfort", "light", "network", "access_control"],
+        "people": false
+      }
+    }
   },
   "_stageMarks": "What starts an alert's bottom line, by its stage (review Q 3, 2026-10-28): the VESTA Agent writes it (vesta_shared/message_format.py STAGE_ICONS, and the villa's message template it generates) and the Kiosk reads an announcement's stage back from it (src/messages/announcements.ts stageOf): new, existing, and the two ends, watch (cleared, still watched) and closed. Read from here by both: a mark changed on one side alone made a cleared alarm read as new on the tablet.",
   "stageMarks": {

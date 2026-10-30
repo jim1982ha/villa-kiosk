@@ -1,3 +1,39 @@
+## 2.496.623
+
+What you will see:
+- The facility profile is called "Facility Manager" everywhere on the tablet: the sign-in card, "Signed in as", a
+  ticket's history ("in progress since 14:20 by Facility Manager") and the (i) beside Open a ticket. Tickets saved
+  before say it too.
+- "Done by" in the Today tab, and "Who's handling it" or "Who did the work" when you open a ticket or press Done on
+  it, now list the names already recorded: type a few letters to find one, or tap "Use ..." for a new name. One
+  person is no longer recorded three ways ("Wayan", "wayan").
+- A photo the tablet refuses now says the real reason, as given by the tablet's server, instead of "Only the owner
+  or facility manager can add photos." (guests may add photos). Device telemetry's refusal does the same.
+- VESTA is now told what each profile may see on the tablet. Once VESTA is updated to read it, a guest asking VESTA
+  on the tablet hears only about what the guest's own tablet shows: no people, no motion or door sensors, no
+  cameras. Until then nothing changes.
+
+## 2.496.622
+
+What you will see:
+- The sensor you pick in Settings › Villa as the villa's "empty" sensor is now told to VESTA too, on every check-in.
+  Once VESTA is updated to read it, the siren's arming, the "used while empty" report and VESTA's answers follow that
+  one choice, as the tile under the floors does. With no sensor picked, VESTA says it cannot tell.
+- If the tablet's settings file is ever damaged, VESTA keeps the sleeping devices and the Maintenance switch it was
+  last told, instead of reporting every sleeping sensor offline and treating Maintenance as off. Nothing changes on
+  screen.
+
+## 2.496.621
+
+What you will see:
+- Need help on a card now shows at once what it did: the card says "🆘 Need help asked" with the time and who pressed
+  it, and its Need help button goes away, so it is never asked twice. The same line, in the same place, in the Inbox
+  and in the Tickets tab. Once VESTA has sent the alert on, its own line in the card's story takes over and Need help
+  comes back.
+- A press on a card (Done, Need help, Open Ticket, Close, Reopen) reaches VESTA within seconds instead of up to 5min,
+  once VESTA is updated to listen for it. Until then nothing changes: VESTA still reads them every 5min.
+- Done or Need help on a device that has no room no longer files the ticket in a room called "Other".
+
 ## 2.496.620
 
 What you will see:

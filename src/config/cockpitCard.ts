@@ -15,8 +15,8 @@
 
 import type { AgentCadence } from "@/agent/agentApi";
 import { nextCheck, nextCheckAt, nextCheckWhen } from "@/fm/faultTiming";
-import { overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
-import { STAGE_WORDS } from "@/fm/fmEngine";
+import { helpAsked, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
+import { STAGE_WORDS, type HelpAsked } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, dayMonth, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
@@ -34,11 +34,12 @@ function cardActions(group: AttentionGroup): WorkAction[] {
   return overviewActions(cardRecords(group), group.entityId);
 }
 
-/** The records of one line — its fault, or the fault folded onto its live state, with their copies. */
+/** The records of one line — its fault, or the fault folded onto its live state, with their copies. A copy shares its
+ *  line's standing Need help: one press on the card asks about every record of it, the copies included. */
 function itemRecords(i: AttentionItem): WorkRecord[] {
   const f = i.kind === "fault" ? i : i.fault;
   return f ? [f.ticketId, ...(f.twins ?? [])].flatMap((id) => (id
-    ? [{ id, stage: f.stage ?? "fault" }] : [])) : [];
+    ? [{ id, stage: f.stage ?? "fault", ...(f.help ? { help: f.help } : {}) }] : [])) : [];
 }
 
 /** The records on a card — its faults and tickets, each with its stage. */
@@ -197,6 +198,8 @@ export interface CardView {
   nextCheck: { text: string; at: string | null; when: string; tip: string } | null;
   /** Done · Need help · Open Ticket (or Edit Ticket) — on its records, or its device when it holds none (deviceWork). */
   actions: WorkAction[];
+  /** The Need help pressed on it that nothing has answered yet (deviceWork.helpAsked): its buttons say so. */
+  asked?: HelpAsked | null;
   lines: CardLine[];
 }
 
@@ -249,6 +252,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     lead: cardSources(group.items),
     nextCheck: nextCheckView(group, cadence, now, at),
     actions: cardActions(group),
+    asked: helpAsked(cardRecords(group)),
     lines: group.items.map(line),
   };
 }

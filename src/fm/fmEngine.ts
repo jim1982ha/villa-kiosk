@@ -18,6 +18,7 @@ import { villaTime, wallClock } from "@/utils/villaClock";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import type { Tone } from "./tone";
 import { countOf } from "@/utils/countOf";
+import { authorStamp, authorWords, roleOfStamp, type Role } from "@/auth/roles";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 export type DueState = "never" | "overdue" | "due-soon" | "ok";
@@ -335,8 +336,49 @@ export function faultTitle(t: Pick<FmTicket, "title" | "alertNumber" | "alertPri
 
 /** Who did a piece of work: the person, when someone else recorded it (a VESTA Agent completion for a Done on
  *  Telegram), else who recorded it. One reading for every list and report. */
-export function workedBy(c: Pick<FmCompletion, "by" | "who">): string {
-  return c.who || c.by || "—";
+export function workedBy(c: Pick<FmCompletion, "by" | "who" | "role">): string {
+  return c.who || authorWords(c) || "—";
+}
+
+/** A name as it is compared: spaces trimmed and joined, case ignored ("wayan " and "Wayan" are one person). */
+const workerKey = (name: string) => name.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+
+/**
+ * The names already given for who does the work — "Done by" and "Who's handling it" offer them (WorkerPicker) —
+ * from every completion and every fault step: the typed `who`, and the typed name an older completion kept in `by`
+ * (fmTypes FmCompletion) when it is no profile's words and not the VESTA Agent's stamp. Case and spaces ignored, each
+ * person once, spelled as most records spell them (the latest of equals), sorted by name.
+ *
+ * ⚠️ EACH FORM HAD ITS OWN BLANK BOX (architecture review round 8, 2026-10-30): "Wayan", "wayan" and "Wayan / AC
+ * contractor" were one person, typed three ways, and Recent work counted three. The name already given is now picked,
+ * not typed again.
+ */
+export function knownWorkers(d: Pick<FmData, "completions" | "tickets">): string[] {
+  const named: { name: string; at: string }[] = [];
+  const add = (name: unknown, at: string) => {
+    if (typeof name === "string" && name.trim()) named.push({ name: name.trim().replace(/\s+/g, " "), at });
+  };
+  for (const c of d.completions) {
+    add(c.who, c.at);
+    if (!c.who && !roleOfStamp(c) && c.by !== AGENT_CONTRACT.ticket.agentStamp && c.by !== "—") add(c.by, c.at);
+  }
+  for (const t of d.tickets) for (const u of t.updates ?? []) add(u.who, u.at);
+  const byKey = new Map<string, Map<string, { n: number; at: string }>>();
+  for (const { name, at } of named) {
+    const spellings = byKey.get(workerKey(name)) ?? new Map<string, { n: number; at: string }>();
+    const s = spellings.get(name) ?? { n: 0, at: "" };
+    spellings.set(name, { n: s.n + 1, at: at > s.at ? at : s.at });
+    byKey.set(workerKey(name), spellings);
+  }
+  return [...byKey.values()]
+    .map((spellings) => [...spellings].sort(([, a], [, b]) => b.n - a.n || (b.at > a.at ? 1 : b.at < a.at ? -1 : 0))[0][0])
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+/** Whether `name` is one of `known`, case and spaces ignored: a picker offers "Use …" only for a name not there yet. */
+export function isKnownWorker(known: readonly string[], name: string): boolean {
+  const k = workerKey(name);
+  return known.some((n) => workerKey(n) === k);
 }
 
 /** A step that resolved a fault with no work done: the Kiosk's "Close" (nothing done), the VESTA Agent's own
@@ -592,7 +634,7 @@ export function withoutClose(t: FmTicket): FmTicket {
  *  status becomes resolved (the operator marks it done, the app records WHEN:
  *  the mean-time-to-resolution evidence rests on it). A status that moves takes the last close's fields away
  *  (withoutClose). */
-export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>, k: Pick<FmStamp, "now">, by?: string): FmData {
+export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>, k: Pick<FmStamp, "now">, by?: Role): FmData {
   return {
     ...d,
     tickets: d.tickets.map((t) => {
@@ -605,7 +647,7 @@ export function withTicketPatch(d: FmData, id: string, patch: Partial<FmTicket>,
       if (patch.title !== undefined && patch.title !== t.title) {
         next.updates = [...(t.updates ?? []), {
           at: k.now, status: next.status, kind: "retitled" as const, title: patch.title, was: t.title, photoIds: [],
-          ...(by ? { by } : {}),
+          ...(by ? authorStamp(by) : {}),
         }];
         // ⚠️ THEIR TITLE, AS IT IS, AT ONCE (architecture review, 2026-10-19): the Agent's duration pattern kept winning
         // over the new title (faultTitle) until the Agent read this step and cleared it — never with the Agent off.
@@ -637,7 +679,7 @@ export type TicketStep = { who?: string; note?: string; photoIds: string[] };
 export type TicketCost = Omit<FmCost, "id" | "at" | "photoIds">;
 
 export function withTicketAdvanced(
-  d: FmData, id: string, to: FmTicket["status"], step: TicketStep, cost: TicketCost | undefined, k: FmStamp, by?: string,
+  d: FmData, id: string, to: FmTicket["status"], step: TicketStep, cost: TicketCost | undefined, k: FmStamp, by?: Role,
 ): FmData {
   if (!d.tickets.some((t) => t.id === id)) return d;
   const at = k.now;
@@ -652,7 +694,7 @@ export function withTicketAdvanced(
       photoIds: [...t.photoIds, ...step.photoIds],
       costId: costId ?? t.costId,
       updates: [...(t.updates ?? []), {
-        at, status: to, ...step, ...(by ? { by } : {}),
+        at, status: to, ...step, ...(by ? authorStamp(by) : {}),
         ...(to === "open" && isTicketResolved(t) ? { kind: "reopened" as const } : {}),
       }],
     })),
@@ -663,7 +705,7 @@ export function withTicketAdvanced(
           // person). The typed name went into `by` (to 2.496.427), so the same field meant "did it" for a person and
           // "recorded it" for the Agent. workedBy reads both, old rows included.
           id: k.id("cp"), scheduleId: "", ticketId: id, at,
-          by: by ?? "—", ...(step.who ? { who: step.who } : {}), note: step.note, photoIds: step.photoIds, costId,
+          ...(by ? authorStamp(by) : { by: "—" }), ...(step.who ? { who: step.who } : {}), note: step.note, photoIds: step.photoIds, costId,
         }]
       : d.completions,
     costs: costId ? [...d.costs, { ...cost!, id: costId, at, photoIds: step.photoIds }] : d.costs,
@@ -675,7 +717,7 @@ export function withTicketAdvanced(
  *  resolving, is filed once, on the first. */
 export function withTicketsAdvanced(
   d: FmData, ids: readonly string[], to: FmTicket["status"], step: TicketStep, cost: TicketCost | undefined,
-  k: FmStamp, by?: string,
+  k: FmStamp, by?: Role,
 ): FmData {
   return ids.reduce((acc, id, i) => withTicketAdvanced(acc, id, to, step, i === 0 ? cost : undefined, k, by), d);
 }
@@ -691,9 +733,9 @@ export const CLOSED_WITHOUT_ACTION = "Closed without action";
  * as work would inflate every "work done" figure (see withTicketAdvanced).
  * A fault already resolved, or unknown, is left exactly as it is.
  */
-/** `by`: the profile that closed it ("Owner", "Facility manager") — the VESTA Agent's note on the alert's Telegram
+/** `by`: the profile that closed it (stamped with its id and its label: roles.authorStamp) — the VESTA Agent's note on the alert's Telegram
  *  messages says who and when (owner, 2026-10-10). */
-export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">, by?: string): FmData {
+export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">, by?: Role): FmData {
   const t = d.tickets.find((x) => x.id === id);
   if (!t || isTicketResolved(t)) return d;
   const at = k.now;
@@ -703,29 +745,46 @@ export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">,
       ...withoutClose(x),
       status: "resolved",
       resolvedAt: at,
-      updates: [...(x.updates ?? []), { at, status: "resolved", kind: "cleared" as const, note: CLOSED_WITHOUT_ACTION, photoIds: [], ...(by ? { by } : {}) }],
+      updates: [...(x.updates ?? []), { at, status: "resolved", kind: "cleared" as const, note: CLOSED_WITHOUT_ACTION, photoIds: [], ...(by ? authorStamp(by) : {}) }],
     })),
   };
 }
 
 
 /** One device's faults closed together, in ONE edit ("no action needed"). */
-export function withTicketsClosed(d: FmData, ids: readonly string[], k: Pick<FmStamp, "now">, by?: string): FmData {
+export function withTicketsClosed(d: FmData, ids: readonly string[], k: Pick<FmStamp, "now">, by?: Role): FmData {
   return ids.reduce((acc, id) => withTicketClosed(acc, id, k, by), d);
 }
 
 /** ⚠️ NEED HELP ON EVERY CARD (owner, 2026-10-30: Done · Need help · Open Ticket on every issue card): Need help pressed
  *  on a card writes a "help" step on each of its open records, `by` the profile — its status unchanged (the agreement's
  *  notStatusChanges); the VESTA Agent reads it and asks the owner to act. A closed record gets none. */
-export function withTicketsHelped(d: FmData, ids: readonly string[], k: Pick<FmStamp, "now">, by?: string): FmData {
+export function withTicketsHelped(d: FmData, ids: readonly string[], k: Pick<FmStamp, "now">, by?: Role): FmData {
   const asked = new Set(ids);
   return {
     ...d,
     tickets: d.tickets.map((t) => (!asked.has(t.id) || isTicketResolved(t) ? t : {
       ...t,
-      updates: [...(t.updates ?? []), { at: k.now, status: t.status, kind: "help" as const, photoIds: [], ...(by ? { by } : {}) }],
+      updates: [...(t.updates ?? []), { at: k.now, status: t.status, kind: "help" as const, photoIds: [], ...(by ? authorStamp(by) : {}) }],
     })),
   };
+}
+
+/** A Need help that stands: who pressed it (the profile) and when. */
+export interface HelpAsked { at: string; by?: string }
+
+/** ⚠️ A NEED HELP NOTHING HAS ANSWERED YET (architecture review round 6, 2026-10-30: pressed, the card stayed exactly as
+ *  it was, so it looked failed and was pressed again, asking twice): the record's latest "help" step while it is open
+ *  and the VESTA Agent has written no line of its story after it ("noted": the escalation it sent then says the rest).
+ *  AFTER IN THE LIST, never by `at`: the tablet stamps the press with its own clock, the Agent its line with the
+ *  server's, and a tablet a minute ahead would have kept the press unanswered for good. undefined otherwise. */
+export function standingHelp(t: Pick<FmTicket, "status" | "updates">): HelpAsked | undefined {
+  if (isTicketResolved(t)) return undefined;
+  const ups = t.updates ?? [];
+  const i = ups.map((u) => u.kind).lastIndexOf("help");
+  if (i < 0 || ups.slice(i + 1).some((u) => u.kind === "noted")) return undefined;
+  const by = authorWords(ups[i]);
+  return { at: ups[i].at, ...(by ? { by } : {}) };
 }
 
 // ── Rules that lived in the screens (round 13, 2.496.183) ─────────────────

@@ -427,6 +427,29 @@ async def main() -> None:
     ck("the beat's answer carries the villa's maintenance mode, as the agreement declares it: on only when stored true",
        "maintenance" in contract_answer and on is True and unset is False and odd is False, (unset, on, odd))
     cfg_file.unlink(missing_ok=True)
+    # ⚠️ ONE "IS THE VILLA EMPTY?" CHOICE (architecture review, 2026-10-30): the sensor picked in Settings › Villa
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    unpicked = (await r.json()).get("villaEmptySensor")
+    cfg_file.write_text(json.dumps({"presenceSensor": "binary_sensor.house_empty"}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    picked = (await r.json()).get("villaEmptySensor")
+    cfg_file.write_text(json.dumps({"presenceSensor": "{{ states('x') }}"}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    odd = (await r.json()).get("villaEmptySensor")
+    ck("the beat's answer carries the villa's \"empty\" sensor, as the agreement declares it: \"\" when none is picked",
+       "villaEmptySensor" in contract_answer and picked == "binary_sensor.house_empty" and unpicked == "" and odd == "",
+       (unpicked, picked, odd))
+    # ⚠️ A SETTINGS FILE THAT CANNOT BE READ TELLS THE AGENT NOTHING (architecture review, 2026-10-30): an empty list
+    # and "off" made the Agent forget every sleeping device and the maintenance mode it kept
+    for broken in ("{not json", json.dumps(["unavailableByDesign"])):
+        cfg_file.write_text(broken)
+        r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+        answer = await r.json()
+        ck(f"  ...a settings file that cannot be read ({broken[:12]}): the beat counts, its answer leaves the villa's "
+           "settings out (the Agent keeps what it was told)",
+           r.status == 200 and answer.get("ok") is True
+           and not {"unavailableByDesign", "maintenance", "villaEmptySensor"} & answer.keys(), answer)
+    cfg_file.unlink(missing_ok=True)
     presence = TMP / "data" / "agent-presence.json"
     presence.write_text(json.dumps({"last_seen": time.time() - 6 * 60, "status": None, "cadence": beat["cadence"]}))
     status, body = await jget("/agent-status", cookie("ops"))
@@ -549,14 +572,14 @@ async def main() -> None:
     ck("  ...a guest sees that photo while it is the current notification, as a ring's (owner, 2026-10-28)",
        gbody["messages"][0].get("photo") == one[0]["photo"] and r.status == 200, (r.status, gbody))
     # architecture review, 2026-10-30: current as long as the ring holds the screen (the villa's "Ring shown for")
-    held, read = proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read
+    held, read = proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read_status
     proxy.ANNOUNCEMENT_CURRENT_S = 0
-    proxy.DEVICE_CONFIG.read = lambda: {}
+    proxy.DEVICE_CONFIG.read_status = lambda: ({}, True)
     await asyncio.sleep(1.1)
     r_gone = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
-    proxy.DEVICE_CONFIG.read = lambda: {"ringShownForS": 120}
+    proxy.DEVICE_CONFIG.read_status = lambda: ({"ringShownForS": 120}, True)
     r_held = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
-    proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read = held, read
+    proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read_status = held, read
     ck("  ...current for as long as the villa's \"Ring shown for\" holds it on screen (403 past it, 200 within it)",
        r_gone.status == 403 and r_held.status == 200, (r_gone.status, r_held.status))
     proxy.ANNOUNCEMENT_PHOTO_GRACE_S = 0       # the sweep's grace for a copy not yet recorded: none here
@@ -615,6 +638,10 @@ async def main() -> None:
     await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "old-one", "title": "Old", "at": old})
     status, body = await jget("/vesta-messages", cookie("owner"))
     ck("  ...and with records kept for ever, it is kept", "old-one" in [m["key"] for m in body["messages"]], body)
+    cfg_file.write_text("{not json")
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    ck("  ...and while the settings file cannot be read, kept too: an unreadable file never deletes",
+       proxy._evidence_retention_days() == 0 and "old-one" in [m["key"] for m in body["messages"]], body)
     cfg_file.unlink(missing_ok=True)
 
     # ── a report and its page (ticket 20 of "One inbox", 2026-10-29) ─────────────────────────────────────────────
@@ -976,6 +1003,59 @@ async def main() -> None:
     told = next(t for t in body["turns"] if t["key"] == "press:1")
     ck("  ...a press's short answer comes back in the presser's conversation, naming the press", told.get("answers") == 1,
        told)
+
+    # ── A card's press wakes VESTA at once (architecture review round 6, 2026-10-30) ───────────────────────────────
+    print("\n  a person's step on a fault wakes VESTA at once:")
+    asks.unlink(missing_ok=True)
+    woke = proxy.AGENT_CONTRACT_TABLE["conversation"]["recordsChanged"]
+    fault = {"id": "t9", "title": "Pool pump: Unavailable", "status": "open", "openedAt": "2026-10-30T09:00:00Z",
+             "photoIds": [], "updates": [{"at": "2026-10-30T09:00:00Z", "status": "open", "by": "Owner", "photoIds": []}]}
+    (TMP / "data" / "fm-data.json").write_text(json.dumps({"schedules": [], "completions": [], "costs": [],
+                                                            "tickets": [fault], "savedDocuments": []}))
+
+    async def person_writes(step=None, **change):
+        _, doc = await jget("/fm-data", cookie("owner"))
+        t = next(x for x in doc["data"]["tickets"] if x["id"] == "t9")
+        t.update(change)
+        if step:
+            t["updates"] = [*t.get("updates", []), {"at": "2026-10-30T09:20:00Z", "photoIds": [], "by": "Owner", **step}]
+        r = await put("/fm-data", headers=cookie("owner"), json={"data": doc["data"], "rev": doc["rev"]})
+        return r.status
+
+    async def woken():
+        _, body = await jget("/agent/v1/inbox", bearer())
+        return [a for a in body["asks"] if "profile" not in a]
+
+    status = await person_writes({"status": "open", "kind": "help"})
+    got = await woken()
+    ck("Need help pressed on a card: the inbox holds the agreement's records-changed item, with no profile",
+       status == 200 and len(got) == 1 and {k: v for k, v in got[0].items() if k not in ("seq", "at")} == woke
+       and woke == {"records": "changed"}, (status, got))
+    first = got[0]["seq"] if got else None
+    status = await person_writes({"status": "in_progress"}, status="in_progress")
+    got = await woken()
+    ck("  ...a second press soon after: still ONE such item, the newer one (one read of the records for both)",
+       status == 200 and len(got) == 1 and got[0]["seq"] > first, (status, got))
+    last = got[0]["seq"] if got else None
+    status = await person_writes(title="Pool pump: not running")
+    status2 = await person_writes({"status": "in_progress", "kind": "noted", "note": "x"})
+    ck("  ...a title edit, or a step VESTA does not act on, wakes nothing",
+       (status, status2) == (200, 200) and [a["seq"] for a in await woken()] == [last], await woken())
+    _, doc = await jget("/agent/v1/fm-data", bearer())
+    t = next(x for x in doc["data"]["tickets"] if x["id"] == "t9")
+    t["status"], t["resolvedAt"], t["updates"] = "resolved", "2026-10-30T09:30:00Z", [*t["updates"], {"at": "2026-10-30T09:30:00Z", "status": "resolved",
+                                                             "kind": "cleared", "photoIds": []}]
+    r = await put("/agent/v1/fm-data", headers=bearer(), json={"data": doc["data"], "rev": doc["rev"]})
+    ck("  ...the Agent's own write never wakes it again", r.status == 200 and [a["seq"] for a in await woken()] == [last],
+       (r.status, await r.text(), await woken()))
+    ck("  ...each step the Agent acts on wakes it: Done, Close, Reopen, Open Ticket, Need help; a guest's report does not",
+       [proxy._fm_wakes_agent({"tickets": [fault]}, {"tickets": [{**fault, "updates": [*fault["updates"], u]}]}) for u in (
+           {"status": "resolved"}, {"status": "resolved", "kind": "cleared"}, {"status": "open", "kind": "reopened"},
+           {"status": "in_progress"}, {"status": "open", "kind": "help"}, {"status": "open", "kind": "noted"},
+           {"status": "open", "kind": "retitled"})] == [True, True, True, True, True, False, False]
+       and not proxy._fm_wakes_agent({"tickets": []}, {"tickets": [fault]})
+       and proxy._fm_wakes_agent({"tickets": []}, {"tickets": [{**fault, "updates": [*fault["updates"],
+                                                                                    {"status": "open", "kind": "help"}]}]}))
 
     agent(enabled="false", token=TOKEN)
     r = await post("/agent/v1/conversation-turn", headers=bearer(), json={"key": "t", "profile": "guest", "text": "x"})

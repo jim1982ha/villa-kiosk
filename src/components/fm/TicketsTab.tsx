@@ -16,15 +16,14 @@ import { useDeviceIdentity, useRecordRoom } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
 import { faultTitle, keptDays, STAGE_WORDS, stageOf, ticketStats, type FmRetention } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
-import { closedActions, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork, type WorkAction } from "@/fm/deviceWork";
-import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
+import { closedActions, helpAsked, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
+import type { FmTicket } from "@/fm/fmTypes";
 import RecordCard, { type RecordCardProps } from "./RecordCard";
-import FaultStageModal from "./FaultStageModal";
 import FaultForm from "./FaultForm";
 import type { DeviceOption } from "./DeviceSearchPicker";
 import AgentMark from "./AgentMark";
 import { faultNoteLines, faultWhen } from "@/fm/faultNotes";
-import WorkButtons, { useConfirmedClose } from "./WorkButtons";
+import WorkButtons, { useCardWork } from "./WorkButtons";
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { formatMoney } from "@/utils/money";
@@ -40,18 +39,14 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   editTicket?: string;
   onEditOpened?: () => void;
 }) {
-  const { data, retention, removeTicket, helpTickets } = useFmData();
+  const { data, retention, removeTicket } = useFmData();
   const roomOf = useRecordRoom();
-  /** Why the last Need help did not land, on its card. */
-  const [helpFailed, setHelpFailed] = useState<{ key: string; text: string } | null>(null);
   const terms = useFmTerms();
   const { deviceOfRecord } = useDeviceIdentity();
   const label = useEntityLabel();
   const [editingId, setEditingId] = useState<string | null>(null);
-  /** The ticket whose stage change is being recorded, and where it goes. */
-  const [staging, setStaging] = useState<{ tickets: FmTicket[]; to: FmTicketStatus } | null>(null);
-  /** The ticket whose one-step close ("nothing done") is being confirmed, and why the last one did not land. */
-  const closer = useConfirmedClose();
+  /** Every card's buttons carried out: Done's form, Need help, Close's question, Reopen's form (WorkButtons). */
+  const work = useCardWork();
 
   useEffect(() => {
     if (!editTicket) return;
@@ -68,18 +63,6 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const closed = useMemo(() => data.tickets.filter((t) => stageOf(t) === "closed")
     .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt)), [data.tickets]);
   const editing = editingId ? data.tickets.find((t) => t.id === editingId) : undefined;
-
-  /** A button that is not a Close (deviceWork): Done, Reopen — the stage change, recorded in its form; Need help — the
-   *  "help" step on its records, the same write as an issue card's (the VESTA Agent asks the owner to act). */
-  const onAction = (a: WorkAction, cardKey?: string) => {
-    if (a.step.kind === "help") {
-      setHelpFailed(null);
-      void helpTickets(a.ids).then(({ done, note }) => { if (!done && note && cardKey) setHelpFailed({ key: cardKey, text: note }); });
-      return;
-    }
-    if (a.step.kind !== "stage") return;
-    setStaging({ tickets: a.ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t), to: a.step.to });
-  };
 
   /** One record, as every Facility card is drawn (RecordCard): its title, when/where/who, its notes, photos and
    *  reports, the cost of the work that resolved it. Tapping it edits it. */
@@ -120,15 +103,14 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
    *  bottom (owner, 2026-10-14: the device's name above it said again what its chip says; the pill and the buttons sat
    *  outside the card). */
   const ticket = (g: DeviceWork) => {
-    const problem = closer.problemFor(g.key) ?? (helpFailed?.key === g.key ? helpFailed.text : null);
+    const records = g.records.map(workRecord);
     return (
       <div key={g.key} className="fm-record-card">
         <div className="fm-ticket-records">
           {g.records.map((t, i) => record(t, i === 0 ? stagePill(t) : undefined,
-            i === 0 ? <WorkButtons actions={ticketActions(g.records.map(workRecord))} cardKey={g.key} closer={closer}
-              onAction={(a) => onAction(a, g.key)} /> : undefined, false))}
+            i === 0 ? <WorkButtons actions={ticketActions(records)} cardKey={g.key} work={work}
+              asked={helpAsked(records)} /> : undefined, false))}
         </div>
-        {problem && <div className="fm-inline-error fm-row-confirm" role="alert">{problem}</div>}
       </div>
     );
   };
@@ -152,11 +134,10 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         {(t) => (
           // reopened, it is a fault again: back in Open issues (the VESTA Agent reads it, never guesses)
           record(t, stagePill(t),
-            <WorkButtons actions={closedActions(workRecord(t))} cardKey={`closed:${t.id}`} closer={closer} onAction={onAction} />)
+            <WorkButtons actions={closedActions(workRecord(t))} cardKey={`closed:${t.id}`} work={work} />)
         )}
       </FoldedList>
 
-      {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={() => setStaging(null)} />}
     </div>
   );
 }

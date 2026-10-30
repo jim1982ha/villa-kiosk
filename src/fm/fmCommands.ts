@@ -14,6 +14,7 @@ import {
   withTicketsHelped,
   type FmStamp, type TicketCost, type TicketStep,
 } from "./fmEngine";
+import { authorStamp, type Role } from "@/auth/roles";
 
 export type FmCommand =
   | { type: "addSchedule"; schedule: Omit<FmSchedule, "id" | "createdAt"> }
@@ -38,9 +39,10 @@ export type FmCommand =
   | { type: "saveDocument"; doc: Omit<FmSavedDocument, "id" | "generatedAt"> }
   | { type: "removeDocument"; id: string };
 
-/** Who and when: the clock and ids (FmStamp), and the signed-in profile that did it ("Owner", "Guest"…), stamped on
- *  every step of a fault — the card's "by …" and the VESTA Agent's notes read it. */
-export type FmActor = FmStamp & { by?: string };
+/** Who and when: the clock and ids (FmStamp), and the signed-in profile that did it, stamped on every step of a fault
+ *  and every completion with its id and its label (roles.authorStamp) — the card's "by …" and the VESTA Agent's notes
+ *  read it. */
+export type FmActor = FmStamp & { by?: Role };
 
 /** A person's Done: resolved as work done, with nothing more said (the completion names who recorded it). */
 export const DONE_STEP: TicketStep = Object.freeze({ photoIds: [] }) as TicketStep;
@@ -58,7 +60,9 @@ export function applyFmCommand(d: FmData, c: FmCommand, k: FmActor): FmData {
       // completions already logged stay: they are evidence of work done, not of the task still existing
       return { ...d, schedules: [] };
     case "logCompletion":
-      return withCompletion(d, c.completion, c.cost, k);
+      // stamped as a fault's completion is: `by` the profile that recorded it, `who` the name given for who did it
+      // (to 2.496.622 the Today tab's "Done by" was stored in `by`; fmEngine.workedBy still reads those)
+      return withCompletion(d, by ? { ...c.completion, ...authorStamp(by) } : c.completion, c.cost, k);
     case "addCost":
       return { ...d, costs: [...d.costs, { ...c.cost, id: k.id("co") }] };
     case "updateCost":
@@ -71,7 +75,7 @@ export function applyFmCommand(d: FmData, c: FmCommand, k: FmActor): FmData {
       const id = k.id("tk");
       const added: FmData = { ...d, tickets: [...d.tickets, {
         ...c.ticket, id, status, openedAt: k.now,
-        updates: [{ at: k.now, status, photoIds: [], ...(by ? { by } : {}) }],
+        updates: [{ at: k.now, status, photoIds: [], ...(by ? authorStamp(by) : {}) }],
       }] };
       return c.then === "done" ? withTicketsAdvanced(added, [id], "resolved", DONE_STEP, undefined, k, by)
         : c.then === "help" ? withTicketsHelped(added, [id], k, by) : added;

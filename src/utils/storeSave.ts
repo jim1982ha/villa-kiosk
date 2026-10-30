@@ -14,15 +14,23 @@ import type { StoreSaveResult } from "./keyedSync";
  *  is re-established (auth/sessionLost) and the change is worth sending again after it. */
 const REFUSED = new Set([400, 403, 413]);
 
+/** The add-on's own reason for refusing a request: the `error` of its NO (REFUSED: supervisor-proxy.py _forbidden and
+ *  every refusal), undefined when it gave none or the answer is no refusal (a 401 is a sign-in to renew, a 5xx a
+ *  failure). ⚠️ ONE READER (architecture review round 8, 2026-10-30): a refused photo
+ *  said "Only the owner or facility manager can add photos.", a reason guessed from the status and copied from a rule
+ *  the add-on no longer had (guests may add photos), while the add-on's answer said the real one. */
+export async function refusalOf(r: Pick<Response, "status" | "json">): Promise<string | undefined> {
+  if (!REFUSED.has(r.status)) return undefined;
+  const e = (await r.json().catch(() => ({}))) as { error?: unknown } | null;
+  return typeof e?.error === "string" && e.error.trim() ? e.error.trim() : undefined;
+}
+
 /** The add-on's answer to a write, as a save result (keyedSync pushWithRebase reads it): 409 another write landed
  *  first; 400/403/413 refused; any other failure a transport one (kept here, sent again on the next refresh). A request
  *  that THREW is the caller's transport failure. */
 export async function storeSaveResult(r: Pick<Response, "ok" | "status" | "json">): Promise<StoreSaveResult> {
   if (r.status === 409) return { ok: false, conflict: true };
-  if (REFUSED.has(r.status)) {
-    const e = (await r.json().catch(() => ({}))) as { error?: unknown };
-    return { ok: false, conflict: false, refused: true, message: typeof e.error === "string" ? e.error : undefined };
-  }
+  if (REFUSED.has(r.status)) return { ok: false, conflict: false, refused: true, message: await refusalOf(r) };
   if (!r.ok) return { ok: false, conflict: false };
   const d = (await r.json().catch(() => ({}))) as { rev?: unknown };
   return { ok: true, rev: typeof d.rev === "string" ? d.rev : "0" };

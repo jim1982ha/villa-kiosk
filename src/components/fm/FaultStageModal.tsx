@@ -31,6 +31,8 @@ import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
 import CostFields from "./CostFields";
+import WorkerPicker from "./WorkerPicker";
+import { useWorkFields } from "./useWorkFields";
 
 // A fault becomes a TICKET when someone takes it on (owner, 2026-10-14): the dialog speaks of the ticket.
 const STAGE_COPY: Record<FmTicketStatus, { title: string; cta: string; note: string }> = {
@@ -61,10 +63,7 @@ export default function FaultStageModal({
   // Escape + Back + focus trap + focus restore, from ONE hook — see
   // useModalA11y. It registers useBackToClose itself, so calling both would
   // push this surface onto the dismissal stack twice.
-  const [who, setWho] = useState("");
-  const [note, setNote] = useState("");
-  const [photoIds, setPhotoIds] = useState<string[]>([]);
-  const [amount, setAmount] = useState("");
+  const { who, setWho, note, setNote, photoIds, setPhotoIds, amount, setAmount, work } = useWorkFields();
   const [category, setCategory] = useState<"minor" | "major">("minor");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -80,7 +79,7 @@ export default function FaultStageModal({
     setFailed(null);
     const result = await advanceTickets(
       tickets.map((t) => t.id), to,
-      { who: who.trim() || undefined, note: note.trim() || undefined, photoIds },
+      work(),
       amountIdr > 0
         ? {
             amountIdr, category,
@@ -109,11 +108,11 @@ export default function FaultStageModal({
       <div className="modal-body fm-stack">
         {/* the fault as its card names it (fmEngine.faultTitle: "#5 · …", a duration worded now) — not the stored title */}
         {tickets.map((t) => <div key={t.id} className="fm-banner">{faultTitle(t)}</div>)}
-        <label className="fm-field">
+        {/* the names already given, picked (WorkerPicker) */}
+        <div className="fm-field">
           <span>Who{asksCost ? " did the work" : "'s handling it"} (optional)</span>
-          <input value={who} onChange={(e) => setWho(e.target.value)}
-            placeholder="e.g. Wayan / AC contractor" />
-        </label>
+          <WorkerPicker value={who} onChange={setWho} placeholder="Name or company" />
+        </div>
         <NotesField
           label={copy.note}
           value={note}

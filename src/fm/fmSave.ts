@@ -49,7 +49,8 @@ export function fmSaveOutcome(r: FmWriteResult): FmSaveOutcome {
  *  does not send (utils/syncedDocument heldAuthors; architecture review K, 2026-10-24: it was never said). */
 export function heldLine(labels: string[]): string | null {
   if (!labels.length) return null;
-  return `Work by the ${labels.map((l) => l.toLowerCase()).join(" and the ")} is waiting on this tablet: it is sent as soon as someone allowed to send it signs in here.`;
+  // a profile's name as it is written everywhere ("Facility Manager", capital M: owner, 2026-10-30), never lower-cased
+  return `Work by the ${labels.join(" and the ")} is waiting on this tablet: it is sent as soon as someone allowed to send it signs in here.`;
 }
 
 /** What this device says when a fault it changed had just been changed on another device, and a field both changed kept

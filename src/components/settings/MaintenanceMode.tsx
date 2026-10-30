@@ -7,6 +7,7 @@
 import { Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
+import { ROLE_LABELS } from "@/auth/roles";
 
 /** What maintenance mode does, in the owner's words: the (i) of the switch and of the top bar's mark. */
 export function MaintenanceModeExplained() {
@@ -15,8 +16,8 @@ export function MaintenanceModeExplained() {
       Turn it on while work is done in the villa, so VESTA does not chase anyone about the alarms the work sets off.
       While it is on:
       <ul>
-        <li>urgent (P1) alerts still reach the owner and the facility manager through VESTA, numbered and chased as
-          usual;</li>
+        <li>urgent (P1) alerts still reach the {ROLE_LABELS.owner} and the {ROLE_LABELS.ops} through VESTA, numbered and
+          chased as usual;</li>
         <li>any other new alert is not taken up by VESTA: no number, no reminder, no ticket. The villa's own message
           still appears in its chat and on the tablet;</li>
         <li>alerts already open carry on as before.</li>

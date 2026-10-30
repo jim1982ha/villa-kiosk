@@ -12,7 +12,7 @@
 // Pure — tests/oracles/live_issues.mjs drives it by value.
 
 import type { FmTicket, FmTicketStatus } from "./fmTypes";
-import { isTicketOpen, stageOf, type FmStage } from "./fmEngine";
+import { isTicketOpen, stageOf, standingHelp, type FmStage, type HelpAsked } from "./fmEngine";
 
 // ── One card per device ──────────────────────────────────────────────────────
 
@@ -114,15 +114,37 @@ export interface WorkAction extends WorkActionSpec { kind: WorkActionKind; ids: 
 
 const action = (kind: WorkActionKind, ids: string[]): WorkAction => ({ kind, ids, ...WORK_ACTIONS[kind] });
 
-/** A record as a card's buttons see it: which one, and where it stands. */
-export interface WorkRecord { id: string; stage: FmStage }
+/** A record as a card's buttons see it: which one, where it stands, and the Need help on it nothing has answered yet
+ *  (fmEngine.standingHelp). */
+export interface WorkRecord { id: string; stage: FmStage; help?: HelpAsked }
+
+/** ⚠️ NEED HELP IS ASKED ONCE (architecture review round 6, 2026-10-30: the card looked the same after the press, so it
+ *  was pressed again and the owner asked twice): a card's Need help acts on the records nobody has asked about yet, and
+ *  is not offered once every one of them has been. */
+function needHelp(records: readonly WorkRecord[]): WorkAction[] {
+  const ids = records.filter((r) => !r.help).map((r) => r.id);
+  return ids.length ? [action("needHelp", ids)] : [];
+}
+
+/** The Need help a card shows as asked: the latest standing one among its records, null with none. */
+export function helpAsked(records: readonly WorkRecord[]): HelpAsked | null {
+  return records.reduce<HelpAsked | null>((last, r) => (r.help && (!last || Date.parse(r.help.at) >= Date.parse(last.at))
+    ? r.help : last), null);
+}
+
+/** What a card says of its standing Need help, under its buttons on the Inbox and the Tickets tab alike: "🆘 Need help
+ *  asked 17:20 (Owner)" (`stamp`: the app's moment, dateText.momentText). Until the VESTA Agent's own line of the
+ *  escalation it sent arrives in the card's story, which then says it (standingHelp). */
+export function helpLine(h: HelpAsked, stamp: (at: string) => string): string {
+  return `🆘 ${NEED_HELP} asked ${stamp(h.at)}${h.by ? ` (${h.by})` : ""}`;
+}
 
 /**
  * The buttons of an issue card (the Inbox's), from the device's open records (its own fault lines and those folded onto
  * a live state's line): Done · Need help · Open Ticket, the same three on every card. Done closes them ALL, faults and
  * tickets, each read again by the VESTA Agent ("one Done closes everything on the card", owner 2026-10-30, in place of
- * each line's own Close of 2026-10-18); Need help writes a "help" step on each; Open Ticket takes on its faults (one
- * ticket for the device), "Edit Ticket" once every one is a ticket. A card holding no record — only what the villa's
+ * each line's own Close of 2026-10-18); Need help writes a "help" step on each not asked about yet (none left: no
+ * Need help); Open Ticket takes on its faults (one ticket for the device), "Edit Ticket" once every one is a ticket. A card holding no record — only what the villa's
  * system reports — has the same three for its `device`: Done and Need help raise its fault with the press, Open Ticket
  * opens the ticket form (owner, 2026-10-29). With no device and no record, none.
  */
@@ -133,7 +155,7 @@ export function overviewActions(records: readonly WorkRecord[], device?: string)
   const tickets = open.filter((r) => r.stage === "ticket").map((r) => r.id);
   const ids = open.map((r) => r.id);
   return [
-    action("done", ids), action("needHelp", ids),
+    action("done", ids), ...needHelp(open),
     faults.length ? action("openTicket", faults) : action("editTicket", [tickets[0]]),
   ];
 }
@@ -141,8 +163,9 @@ export function overviewActions(records: readonly WorkRecord[], device?: string)
 /** The buttons of a ticket in progress (a Tickets card): Done (its resolve form: work done), Need help (the same "help"
  *  step as an issue card's: the VESTA Agent asks the owner to act) and Close (nothing done) — each on every record of it. */
 export function ticketActions(records: readonly WorkRecord[]): WorkAction[] {
-  const ids = records.filter((r) => r.stage === "ticket").map((r) => r.id);
-  return ids.length ? [action("ticketDone", ids), action("needHelp", ids), action("closeTicket", ids)] : [];
+  const tickets = records.filter((r) => r.stage === "ticket");
+  const ids = tickets.map((r) => r.id);
+  return ids.length ? [action("ticketDone", ids), ...needHelp(tickets), action("closeTicket", ids)] : [];
 }
 
 /** A closed record's one button: "Reopen" — it is a fault again, back on the Overview. */
@@ -151,7 +174,10 @@ export function closedActions(record: WorkRecord): WorkAction[] {
 }
 
 /** A stored record as a card's buttons see it. */
-export const workRecord = (t: Pick<FmTicket, "id" | "status">): WorkRecord => ({ id: t.id, stage: stageOf(t) });
+export const workRecord = (t: Pick<FmTicket, "id" | "status" | "updates">): WorkRecord => {
+  const help = standingHelp(t);
+  return { id: t.id, stage: stageOf(t), ...(help ? { help } : {}) };
+};
 
 // ── The counts ───────────────────────────────────────────────────────────────
 

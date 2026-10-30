@@ -564,6 +564,24 @@ _guest_step = lambda by: [{"status": "open", "photoIds": [], "by": by}]
 ck("  ...a report's raising step signed with that name passes; signed with another word it is refused",
    proxy._fm_guest_steps_ok(_guest_step(ROLES_JSON["profiles"]["guest"]["label"]))
    and not proxy._fm_guest_steps_ok(_guest_step("Visitor")) and proxy._fm_guest_steps_ok(None))
+# since 2.496.623 a profile's step carries its id beside its words (roles.authorStamp): a guest's is the guest's only
+_guest_role = lambda role: [{"status": "open", "photoIds": [], "by": ROLES_JSON["profiles"]["guest"]["label"], "role": role}]
+ck("  ...signed with the guest's id it passes; with another profile's id it is refused",
+   proxy._fm_guest_steps_ok(_guest_role("guest")) and not proxy._fm_guest_steps_ok(_guest_role("owner"))
+   and not proxy._fm_guest_steps_ok(_guest_role("ops")))
+# the agreement's `profiles` tell the VESTA Agent what each profile may read (architecture review round 8,
+# 2026-10-30): its `domains` are THIS proxy's read rule, driven for every domain it names and a few it never relays
+# (the app half, deniedTypes/categories/people/words, is tests/oracles/agent_profiles.mjs)
+_CONTRACT_PROFILES = proxy.AGENT_CONTRACT_TABLE.get("profiles") or {}
+_probe_domains = sorted(set(proxy.READ_DOMAINS) | {"person", "device_tracker", "alarm_control_panel", "calendar", "update"})
+_domain_wrong = [f"{r}.{d}" for r in proxy.AUTH_ROLES for d in _probe_domains
+                 if proxy._read_allowed(r, f"{d}.any") != (
+                     (_CONTRACT_PROFILES.get(r) or {}).get("reads", {}).get("domains") == "all"
+                     or d in ((_CONTRACT_PROFILES.get(r) or {}).get("reads", {}).get("domains") or ()))]
+ck("the agreement's profiles name every sign-in profile", set(_CONTRACT_PROFILES) == set(proxy.AUTH_ROLES))
+ck("  ...and each one's readable domains are exactly what this proxy relays to it (_read_allowed)", not _domain_wrong)
+if _domain_wrong:
+    print(f"          disagree: {', '.join(_domain_wrong)}")
 # seeUpdates counts Home Assistant's update.* entities. The proxy lets a
 # profile read them only by `administer` (the update domain is not in
 # readDomains), so giving seeUpdates to a profile without it would show a

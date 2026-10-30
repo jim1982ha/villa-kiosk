@@ -11,16 +11,17 @@ import { ck, done } from "../consistency/check.mjs";
 
 /** Duplicated tokens allowed in src/ — lower it when copies go, never raise it.
  *  5,028 (1.60%) when this was written; 712 (0.23%) after 2.496.263 took out
- *  every TRUE copy; 698 (0.20%) measured at 2.496.427 (a date helper hoisted).
+ *  every TRUE copy; 698 (0.20%) measured at 2.496.427 (a date helper hoisted); 578 at 2.496.623 (the two work
+ *  forms' fields, one hook: components/fm/useWorkFields).
  *  What remains was reviewed and left on purpose — same
  *  shape, different reasons to change:
  *    • the two camera controllers' listener wiring and pointer-move opening
  *      (each binds its OWN handlers; canvasInput owns the set);
  *    • SceneManager's tap and long-press routing (same hit, different answers);
  *    • two Dashboard handlers that both start by asking panelMapping;
- *    • the Facility forms' useState lists, and placementPass's two box tests
+ *    • placementPass's two box tests
  *      (absorb vs refuse: different margins on purpose — see their comments). */
-const CEILING = Number(process.env.CLONE_CEILING ?? 680);
+const CEILING = Number(process.env.CLONE_CEILING ?? 578);
 const WINDOW = 50;
 
 const ROOT = new URL("../../", import.meta.url).pathname;

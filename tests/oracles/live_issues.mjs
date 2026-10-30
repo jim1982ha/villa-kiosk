@@ -55,10 +55,13 @@ ck("a card that is only what Home Assistant reports: Done · Need help · Open T
 const [lone] = groupAttention([{ id: "alarm:x", kind: "alarm", title: "Water leak", detail: "" }]);
 ck("  ...a problem on no device has nothing to open a ticket for: no button", cardActions(lone).length === 0, said(cardActions(lone)));
 const srcAt = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
-const IC = srcAt("components/cockpit/IssueCard.tsx"), MT = srcAt("components/cockpit/MessagesTab.tsx");
-ck("  ...pressed, Open Ticket opens Messages' ticket form pointed at the device (the one \"Open a ticket\" form); Done and Need help raise it in one write",
-   /else if \(step\.kind === "raise"\) onRaiseTicket\(a\.ids\[0\]\);/.test(IC)
-   && /step\.kind === "raiseThen"\) void said\(addTicket\(raisedFor\(card, a\.ids\[0\]\), \{ then: step\.then \}\)\)/.test(IC)
+const MT = srcAt("components/cockpit/MessagesTab.tsx");
+const JSX = await import("../consistency/jsx.mjs");
+// the issue card's buttons, as IssueCard hands them to the one carrier of every step (WorkButtons)
+const [icButtons] = JSX.elements(JSX.parseTsx("components/cockpit/IssueCard.tsx"), "WorkButtons");
+ck("  ...pressed, Open Ticket opens Messages' ticket form pointed at the device (the one \"Open a ticket\" form); Done and Need help raise it in one write, at the device's place",
+   /a\.step\.kind === "raise" \? onRaiseTicket\(a\.ids\[0\]\)/.test(JSX.propText(icButtons, "onOpen") || "")
+   && JSX.propText(icButtons, "raised") === "(entityId) => raisedFor(card, place(entityId, card.title))"
    && /onRaiseTicket=\{\(entity\) => setRaising\(\{ entity \}\)\}/.test(MT));
 // owner, 2026-10-30: the Tickets tab's "Mark resolved" is the Inbox's Done (work done, its form kept), with Need help
 ck("a ticket in progress (Tickets): Done (its resolve form), Need help, Close — each on every record of it, its own Close question",
@@ -84,7 +87,7 @@ ck("  ...counted as an open fault, listed on the Overview, absent from Tickets",
 
 console.log("\n  Mark in progress: one ticket per device, each fault its own record:");
 let d = fm([rec("a", "sensor.pump_energy"), rec("b", "sensor.pump_power"), rec("c", "lock.door")]);
-d = E.withTicketsAdvanced(d, ["a", "b"], "in_progress", { who: "Wayan", photoIds: [] }, undefined, k, "Owner");
+d = E.withTicketsAdvanced(d, ["a", "b"], "in_progress", { who: "Wayan", photoIds: [] }, undefined, k, "owner");
 const inProg = d.tickets.filter((t) => t.status === "in_progress");
 ck("both of the pump's faults are in progress, in one edit; the lock's is untouched",
    inProg.map((t) => t.id).sort().join() === "a,b" && d.tickets.find((t) => t.id === "c").status === "open");
@@ -305,10 +308,17 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
 
 // a ticket's card AS DRAWN (pill on the title line, buttons inside on the right): tests/oracles/cockpit_cards.mjs; its
 // buttons as drawn: "the buttons, drawn" below. WIRING the Tickets tab alone holds (it needs the Facility data to render):
-ck("a ticket is ONE card: the first record carries the pill and the ticket's buttons, the closed one its Reopen, no device name above",
-   /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /record\(t, i === 0 \? stagePill\(t\) : undefined,\s*i === 0 \? <WorkButtons actions=\{ticketActions\(g\.records\.map\(workRecord\)\)\}/.test(ticketsTab)
-   && /record\(t, stagePill\(t\),\s*<WorkButtons actions=\{closedActions\(workRecord\(t\)\)\}/.test(ticketsTab)
-   && !/const title = head\.entityId/.test(ticketsTab));
+{
+  const JSX = await import("../consistency/jsx.mjs");
+  const [open, shut] = JSX.elements(JSX.parseTsx("components/fm/TicketsTab.tsx"), "WorkButtons");
+  ck("a ticket is ONE card: the first record carries the pill and the ticket's buttons, the closed one its Reopen, no device name above",
+     /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /const records = g\.records\.map\(workRecord\);/.test(ticketsTab)
+     && /record\(t, i === 0 \? stagePill\(t\) : undefined,\s*i === 0 \? <WorkButtons/.test(ticketsTab)
+     && JSX.propText(open, "actions") === "ticketActions(records)" && JSX.propText(shut, "actions") === "closedActions(workRecord(t))"
+     // its standing Need help said on it, from the same records as its buttons (checked by value below)
+     && JSX.propText(open, "asked") === "helpAsked(records)"
+     && !/const title = head\.entityId/.test(ticketsTab));
+}
 {
   // ONE WORD AND ONE TONE PER STAGE (architecture review, 2026-10-19): the pill's word and colour and the recap's Status
   // column are fmEngine.STAGE_WORDS, BY VALUE — the pill said "In progress" in the Schedule's due-soon colour while the
@@ -422,16 +432,22 @@ ck("the Open issues title line (Messages): the (i) then Open a ticket, for the p
 // Here only the wiring a drawing cannot reach — the Overview hands cardActions to the shared buttons, and acts on
 // what each button names (its stage, its records), with no status or rule of its own
 ck("a card draws what cardActions says (no rule of its own)",
-   /const acts = card\.actions;/.test(ov) && /<WorkButtons actions=\{acts\} cardKey=\{card\.key\} closer=\{closer\}/.test(ov)
-   && /if \(step\.kind === "stage"\) setStaging\(\{ tickets: records\(a\.ids\), to: step\.to \}\);\s+else if \(step\.kind === "help"\) void said\(helpTickets\(a\.ids\)\);/.test(ov)
+   JSX.propText(icButtons, "actions") === "card.actions" && JSX.propText(icButtons, "asked") === "card.asked"
    && !/closeTickets|InlineConfirm|in_progress"|"resolved"/.test(ov + tt));
+// ⚠️ ONE CARRIER OF EVERY STEP (architecture review round 6, 2026-10-30): each tab wrote its own Need help, failure line
+// and stage form, and neither said what a Need help did. Both hand their buttons the one useCardWork; neither writes a
+// step, nor opens a stage form, itself
+ck("both tabs carry out their buttons' steps through the one useCardWork, never a step of their own",
+   [ov, tt].every((f) => /useCardWork\(\)/.test(f) && !/helpTickets|addTicket|advanceTickets|FaultStageModal|setStaging/.test(f))
+   && [icButtons, ...JSX.elements(JSX.parseTsx("components/fm/TicketsTab.tsx"), "WorkButtons")].every((b) => JSX.propText(b, "work") === "work"));
 
 console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
 {
   const { default: WorkButtons } = await import("@/components/fm/WorkButtons");
-  const closer = (asking) => ({ asking, problemFor: () => null, ask: () => {}, cancel: () => {}, close: async () => {} });
+  const work = (asking, problem = null) => ({ asking, problemFor: (key) => (key === "device:x" ? problem : null), ask: () => {},
+    cancel: () => {}, close: async () => {}, run: () => {}, staging: null, endStaging: () => {} });
   const drawButtons = (actions, asking = null, extra = {}) => draw(h(WorkButtons,
-    { actions, cardKey: "device:x", closer: closer(asking), onAction: () => {}, ...extra }));
+    { actions, cardKey: "device:x", work: work(asking, extra.problem ?? null), ...extra }));
   const ovActs = cardActions(pump), tkActs = W.ticketActions([{ id: "a", stage: "ticket" }]);
   ck("an issue card: Done, Need help, then Open Ticket with its wrench, in their row, Done named for a screen reader",
      /^<div class="fm-fault-actions">/.test(drawButtons(ovActs, null, { name: "Pump", className: "fm-fault-actions" }))
@@ -445,6 +461,59 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
      [text(drawButtons(ovActs, "device:x")), text(drawButtons(tkActs, "device:x"))]);
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
      text(drawButtons(tkActs, "device:y")) === "|Done|Need help|Close|" && drawButtons([]) === "");
+  const { momentText } = await import("@/utils/dateText");
+  const at = "2026-10-30T09:20:00.000Z";
+  ck("  ...a Need help that stands is said above the buttons, when and by whom; a step that did not land, under them",
+     text(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })) === `|🆘 Need help asked ${momentText(at)} (Owner)|Done|Need help|Close|`
+     && text(drawButtons(tkActs, null, { problem: "Not saved." })) === "|Done|Need help|Close|Not saved.|",
+     [text(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })), text(drawButtons(tkActs, null, { problem: "Not saved." }))]);
+}
+
+console.log("\n  a Need help pressed is said on its card, and asked once (architecture review round 6, 2026-10-30):");
+{
+  const { applyFmCommand } = await import("@/fm/fmCommands");
+  const { momentText } = await import("@/utils/dateText");
+  const at = "2026-10-30T09:20:00.000Z";
+  const press = (d, ids) => applyFmCommand(d, { type: "helpTickets", ids }, { now: at, id: (p) => `${p}-x`, by: "owner" });
+  const pump = [rec("a", "sensor.pump_power"), { ...rec("b", "sensor.pump_energy"), status: "in_progress" }];
+  const before = fm(pump), after = press(before, ["a", "b"]);
+  // the Inbox's card, built as Messages builds it, from the records
+  const inbox = (d) => cockpitCard(groupAttention(buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {},
+    fmData: d })).find((g) => g.items.some((i) => i.ticketId === "a")), null);
+  const ticket = (d) => d.tickets.filter((t) => t.id === "b").map(W.workRecord);
+  ck("pressed on the Inbox: its card says who asked and when, and offers no second Need help",
+     inbox(before).asked === null && JSON.stringify(inbox(after).asked) === JSON.stringify({ at, by: "Owner" })
+     && said(inbox(before).actions).some((x) => x.startsWith("Need help")) && !said(inbox(after).actions).some((x) => x.startsWith("Need help")),
+     [inbox(after).asked, said(inbox(after).actions)]);
+  ck("  ...the Tickets tab's card the same, from the same records",
+     JSON.stringify(W.helpAsked(ticket(after))) === JSON.stringify({ at, by: "Owner" })
+     && said(W.ticketActions(ticket(after))).join(" | ") === `Done → b (resolved) | Close → b ${TK_CLOSE}`
+     && said(W.ticketActions(ticket(before))).some((x) => x.startsWith("Need help")), said(W.ticketActions(ticket(after))));
+  ck("  ...in words: \"🆘 Need help asked <when> (Owner)\"",
+     W.helpLine(W.helpAsked(ticket(after)), momentText) === `🆘 Need help asked ${momentText(at)} (Owner)`, W.helpLine(W.helpAsked(ticket(after)), momentText));
+  // a record that joined the card since: Need help asks about it alone
+  const joined = { ...after, tickets: [...after.tickets, rec("c", "sensor.pump_power")] };
+  ck("  ...a record nobody asked about yet brings Need help back, for it alone",
+     said(inbox(joined).actions).includes("Need help → c"), said(inbox(joined).actions));
+  // the VESTA Agent's line of the escalation it sent, written after the press: its story says it from then on
+  const told = { ...after, tickets: after.tickets.map((t) => ({ ...t, updates: [...t.updates,
+    { at: "2026-10-30T09:19:00.000Z", status: t.status, kind: "noted", note: "Escalation sent (to: Owner)", photoIds: [] }] })) };
+  ck("  ...answered by VESTA (a line written after it, whatever its time), the card's own line goes and Need help is back",
+     inbox(told).asked === null && said(inbox(told).actions).some((x) => x.startsWith("Need help")) && W.helpAsked(ticket(told)) === null,
+     [inbox(told).asked, said(inbox(told).actions)]);
+  // what pressing does, through the one carrier (WorkButtons.stepWrite), with stand-in writers that record the call
+  const { stepWrite } = await import("@/components/fm/WorkButtons");
+  const calls = [];
+  const writers = { helpTickets: async (ids) => (calls.push(`help ${[...ids].join(",")}`), { done: true }),
+    addTicket: async (t, o) => (calls.push(`raise ${t.entityId} then ${o.then}`), { done: true }) };
+  const help = W.ticketActions(ticket(before)).find((a) => a.kind === "needHelp");
+  const [, helpNew] = W.overviewActions([], "light.example");
+  stepWrite(help, writers); stepWrite(helpNew, writers, (id) => ({ title: "x", entityId: id, photoIds: [] }));
+  ck("  ...pressed, Need help writes its step on the card's records; on a card with no record, raises it asking for help",
+     calls.join(" | ") === "help b | raise light.example then help"
+     && stepWrite(W.ticketActions(ticket(before))[0], writers) === null, calls);
+  const closed = { ...after, tickets: after.tickets.map((t) => ({ ...t, status: "resolved" })) };
+  ck("  ...and a closed record holds no Need help", closed.tickets.every((t) => E.standingHelp(t) === undefined));
 }
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
    /\.fm-record-body > \.fm-row-main \{ flex: 1 1 260px; min-width: 0; \}/.test(src("styles/07-facility.css"))
@@ -472,7 +541,4 @@ ck("the screens ask stageOf (or its count, openCounts), never the status themsel
    ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(|openCounts\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
 ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));
 
-ck("the Tickets tab's Need help writes the same \"help\" step as an issue card's (helpTickets: the VESTA Agent asks the owner)",
-   /if \(a\.step\.kind === "help"\) \{[\s\S]*?void helpTickets\(a\.ids\)/.test(src("components/fm/TicketsTab.tsx"))
-   && /onAction=\{\(a\) => onAction\(a, g\.key\)\}/.test(src("components/fm/TicketsTab.tsx")));
 done("✅ one list of live issues; faults become tickets; the same with or without the Agent");

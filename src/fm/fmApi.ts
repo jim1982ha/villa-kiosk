@@ -10,7 +10,7 @@ import {
   type FmCollection, type FmData, type FmSavedDocument, type FmTicket, type FmTicketUpdate, recapKind,
 } from "./fmTypes";
 import { backendFetch } from "@/auth/sessionLost";
-import { storeSaveResult } from "@/utils/storeSave";
+import { refusalOf, storeSaveResult } from "@/utils/storeSave";
 import type { FmRetention } from "./fmEngine";
 import {
   keyBy, diffKeyed, applyKeyedMerging, keyedDiffIsEmpty, mergeItem, mineWins, names,
@@ -321,12 +321,9 @@ export async function uploadEvidence(file: Blob): Promise<string> {
     body: jpeg,
   });
   if (!r.ok) {
-    const msg = r.status === 403
-      ? "Only the owner or facility manager can add photos."
-      : r.status === 413
-        ? "That photo is too large even after resizing."
-        : `Upload failed (HTTP ${r.status}).`;
-    throw new Error(msg);
+    // the add-on's own reason, never one guessed from the status (utils/storeSave refusalOf)
+    const why = await refusalOf(r);
+    throw new Error(why ? `The add-on refused this photo: ${why}` : `Upload failed (HTTP ${r.status}).`);
   }
   return id;
 }

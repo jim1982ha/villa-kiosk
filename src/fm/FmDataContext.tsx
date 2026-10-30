@@ -23,7 +23,8 @@ import {
 } from "./fmApi";
 import { landPush, SyncedDocument } from "@/utils/syncedDocument";
 import { useProfile } from "@/auth/ProfileContext";
-import { ROLE_LABELS, type Role } from "@/auth/roles";
+import { ROLE_LABELS, isRole, type Role } from "@/auth/roles";
+import { CAPABILITIES, hasCapability } from "@/auth/permissions";
 import { useStoreRefresh, STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { useSyncReporter } from "@/utils/syncTelemetry";
 import {
@@ -40,11 +41,12 @@ import { CHANGED_ON_ANOTHER_DEVICE, removedOnAnotherDevice, fmSaveOutcome, type 
 /** Whether profile `role` may send the work kept for `other`: it may do all that `other` does (owner, then facility
  *  manager, then guest). Signed out: nobody's. */
 export function carriesWorkOf(role: Role | null | undefined, other: string): boolean {
-  const rank: Record<string, number> = { guest: 0, ops: 1, owner: 2 };
-  return !!role && other in rank && rank[role] >= rank[other];
+  // ⚠️ FROM THE ROLE TABLE, NOT A RANK OF ITS OWN (architecture review round 8, 2026-10-30): a profile carries another's
+  // work when it holds every capability the other holds
+  return !!role && isRole(other) && CAPABILITIES.every((c) => !hasCapability(other, c) || hasCapability(role, c));
 }
 
-interface FmDataContextValue {
+export interface FmDataContextValue {
   data: FmData;
   /** False until the record has been READ — screens show a loading state rather
    *  than an empty maintenance record, which would read as "nothing is due".
@@ -343,7 +345,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   // returns done / note / queued, so no screen decides it for itself — the 2.496.252 defect was a form that skipped
   // that line (architecture review, 2026-10-19).
   const run = useCallback(async (cmd: FmCommand, elevation?: string): Promise<FmSaveOutcome> =>
-    fmSaveOutcome(await mutate((d) => applyFmCommand(d, cmd, { ...stamp(), by: role ? ROLE_LABELS[role] : undefined }), elevation)),
+    fmSaveOutcome(await mutate((d) => applyFmCommand(d, cmd, { ...stamp(), by: role ?? undefined }), elevation)),
   [mutate, role]);
 
   const addSchedule = useCallback((schedule: Omit<FmSchedule, "id" | "createdAt">) => run({ type: "addSchedule", schedule }), [run]);

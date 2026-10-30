@@ -5,21 +5,18 @@
 // villa by room / floor / category and Recent activity were removed before (owner, 2026-10-20).
 
 import { momentText } from "@/utils/dateText";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { CheckCircle2 } from "lucide-react";
 import Tip from "@/components/common/Tip";
-import { useFmData } from "@/fm/FmDataContext";
-import type { FmSaveOutcome } from "@/fm/fmSave";
-import WorkButtons, { useConfirmedClose } from "@/components/fm/WorkButtons";
-import type { WorkAction } from "@/fm/deviceWork";
+import WorkButtons, { useCardWork, type RaisedFault } from "@/components/fm/WorkButtons";
+import { useRecordPlace } from "@/components/fm/useRecordPlace";
+import type { RecordPlace } from "@/fm/recordPlace";
 import { cardIcons, othersFirst, type CardLine, type CardView, type LineSources } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
-import FaultStageModal from "@/components/fm/FaultStageModal";
 
 import type { Announcement } from "@/messages/announcements";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
-import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
  *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
@@ -134,42 +131,23 @@ function CardActionRow({ card, onEditTicket, onRaiseTicket }: {
   onEditTicket: (ticketId: string) => void;
   onRaiseTicket: (entityId: string) => void;
 }) {
-  const { data, helpTickets, addTicket } = useFmData();
-  const closer = useConfirmedClose();
-  const [staging, setStaging] = useState<{ tickets: FmTicket[]; to: FmTicketStatus } | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
-  const acts = card.actions;
-  const records = (ids: readonly string[]) => ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t);
-  const said = async (write: Promise<FmSaveOutcome>) => {
-    setFailed(null);
-    const { done, note } = await write;
-    if (!done && note) setFailed(note);
-  };
-  const act = (a: WorkAction) => {
-    const step = a.step;
-    if (step.kind === "stage") setStaging({ tickets: records(a.ids), to: step.to });
-    else if (step.kind === "help") void said(helpTickets(a.ids));
-    else if (step.kind === "raiseThen") void said(addTicket(raisedFor(card, a.ids[0]), { then: step.then }));
-    else if (step.kind === "raise") onRaiseTicket(a.ids[0]);
-    else onEditTicket(a.ids[0]);
-  };
-  const problem = closer.problemFor(card.key) ?? failed;
+  const work = useCardWork();
+  const place = useRecordPlace();
   return (
-    <>
-      <WorkButtons actions={acts} cardKey={card.key} closer={closer} name={card.title} className="fm-fault-actions"
-        onAction={act} />
-      {problem && <div className="fm-inline-error" role="alert">{problem}</div>}
-      {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={() => setStaging(null)} />}
-    </>
+    <WorkButtons actions={card.actions} cardKey={card.key} work={work} name={card.title} className="fm-fault-actions"
+      asked={card.asked} raised={(entityId) => raisedFor(card, place(entityId, card.title))}
+      onOpen={(a) => (a.step.kind === "raise" ? onRaiseTicket(a.ids[0]) : onEditTicket(a.ids[0]))} />
   );
 }
 
 /** The fault a card with no record raises for its device when Done or Need help is pressed: titled by the device and
- *  what its line says ("LED Strip: Unavailable"), in its room. */
-export function raisedFor(card: Pick<CardView, "title" | "room" | "lines">, entityId: string): Omit<FmTicket, "id" | "openedAt" | "status"> {
+ *  what its line says ("LED Strip: Unavailable"), at its `place` (fm/recordPlace: the device's room, from its entity).
+ *  ⚠️ NEVER THE CARD'S ROOM LINE (architecture review round 6, 2026-10-30): that is a label — "Other" for a device in
+ *  no room (devicePlace.roomLabel) — and the ticket stored "Other" as its room, a pill no other record of it showed. */
+export function raisedFor(card: Pick<CardView, "title" | "lines">, place: RecordPlace): RaisedFault {
   const said = card.lines.map((l) => l.text).find((t) => t.trim());
-  return { title: said ? `${card.title}: ${said}` : card.title, entityId, deviceLabel: card.title,
-    ...(card.room ? { room: card.room } : {}), photoIds: [] };
+  return { title: said ? `${card.title}: ${said}` : card.title, deviceLabel: card.title,
+    ...(place.entityId ? { entityId: place.entityId } : {}), ...(place.room ? { room: place.room } : {}), photoIds: [] };
 }
 
 /** ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components, since the

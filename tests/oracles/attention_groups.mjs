@@ -245,7 +245,7 @@ ck("the villa model hands buildAttentionItems its device list (the fold and the 
      && /<CockpitAttentionRow key=\{item\.key\} card=\{item\.card\}/.test(cockpit)
      && !/cockpitCard\(/.test(cockpit) && /cockpitIssues\(view, /.test(src("components/cockpit/useVillaAttention.ts"))
      && !/(cardActions|itemActions|attentionLineIn|lineIcon|lineSources|nextCheck)\(/.test(cockpit)
-     && /const acts = card\.actions;/.test(cockpit));
+     && /actions=\{card\.actions\}/.test(cockpit));
 }
 
 // owner, 2026-10-30: "Done / Need Help / Open Ticket consistently for all of them", one Done closing everything on the

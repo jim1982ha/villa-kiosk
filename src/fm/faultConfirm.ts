@@ -21,6 +21,7 @@ import { clockTime, momentText } from "@/utils/dateText";
 import { withinLook } from "./faultTiming";
 import { isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
 import type { FmData, FmTicket } from "./fmTypes";
+import { authorWords } from "@/auth/roles";
 
 /** How many of the Agent's looks (cadence.checkMinutes) a fault past its confirms-by moment is still shown for: its
  *  verdict lands at its next look, the second covers a look that ran long. */
@@ -61,7 +62,7 @@ export function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: num
   return {
     ticket: t,
     word: agents ? "Cleared" : close && isClearedStep(close) ? "Closed" : "Done",
-    who: agents ? "" : close?.who || close?.by || "",
+    who: agents ? "" : close?.who || authorWords(close),
     closedAt: Date.parse(close?.at ?? t.resolvedAt ?? ""),
     at,
     due: now >= at,
