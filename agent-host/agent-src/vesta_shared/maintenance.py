@@ -33,6 +33,19 @@ def on(pack_path: str | None = None) -> bool:
         return False
 
 
+def takes_up(severity: str | None, pack_path: str | None = None) -> bool:
+    """Whether a NEW problem of `severity` is taken up now (a number, a message, a fault): always for an urgent one
+    (P1), any other only while maintenance mode is off. THE ONE GATE, asked by every door that opens a problem: the
+    alert desk's intake and Problems.record (the night check and the 5-minute recheck). A problem already open carries
+    on as before; one not taken up is audited and opens nothing, so one still standing when the mode ends is found new
+    by the next check and taken up then, and one gone meanwhile is never sent afterwards (the Kiosk's promise,
+    MaintenanceMode.tsx).
+
+    ⚠️ EVERY DOOR, NOT ONE (architecture review round 7, card 1): only the desk asked; the recheck's device-offline
+    findings and the night check opened faults and sent the facility manager P2 lines during maintenance."""
+    return severity == "P1" or not on(pack_path)
+
+
 def told(answer: dict) -> bool | None:
     """The switch in the Kiosk's heartbeat answer; None when the answer has none (a Kiosk older than the switch): what
     was kept stays."""

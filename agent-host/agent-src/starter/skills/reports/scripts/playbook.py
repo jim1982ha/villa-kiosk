@@ -18,6 +18,7 @@ from vesta_shared.past import unread  # the one "could not be read whole: nothin
 from vesta_shared.retention import days_words  # how long the villa's system keeps detail, in words
 from vesta_shared.result import PRIORITY_ORDER, WHOLE_DEVICE  # the one list of priorities; a whole device's faults
 from vesta_shared.limits import limit  # every limit, set on the Limits tab
+from vesta_shared import occupancy  # the villa's "empty" sensor: the Kiosk's pick
 
 GROUP_NAMES_SHOWN = limit("reports.group_names_shown", 8, unit="names", group="text", lo=1, hi=100,
                           says="Device names listed in one grouped line of a report.",
@@ -99,7 +100,9 @@ def clue_offline(c, when):
 
 
 def clue_use_while_empty(c, when):
-    ent = when.get("mode_entity")
+    # the Kiosk's pick of the villa's "empty" sensor (owner-side, one for every reader); `mode_entity` only when a
+    # playbook names another (architecture review round 7, card 2: the starter named one villa's sensor)
+    ent = when.get("mode_entity") or occupancy.sensor()
     if not c.total_from() or not ent:
         return []
     days = int(when.get("days", 10))

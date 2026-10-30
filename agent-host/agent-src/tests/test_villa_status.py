@@ -105,3 +105,20 @@ def test_the_status_before_an_answer_reads_no_history(tmp_path, monkeypatch, cap
     concierge.main(["status", "--pack", pack, "--store", str(tmp_path / "s.sqlite"), "--fixture-dir", str(fx)])
     assert "Offline (1): Jacuzzi pump plug" in json.loads(capsys.readouterr().out)["text"]
     assert read == []
+
+
+def test_the_status_says_whether_the_villa_is_empty_from_the_kiosks_pick(tmp_path, monkeypatch):
+    """Architecture review round 7, card 2: the concierge answers "is the villa empty?" from the sensor the Kiosk picked
+    (vesta_shared.occupancy.sensor), the one the siren reads, given in the status before every answer."""
+    import concierge
+    from vesta_shared import occupancy
+    from vesta_shared.store import Store
+    monkeypatch.setenv("VESTA_PACK", str(tmp_path / "pack.json"))
+    store = Store(str(tmp_path / "s.sqlite"))
+    states = {"sensor.pool_pump_power": {"state": "0.0"}, "binary_sensor.example_empty": {"state": "on"}}
+    s = concierge.status(_pack(), states, store)
+    assert s["villa_empty"] == "unknown" and "Villa empty: cannot tell (no sensor picked in the VESTA Kiosk's " \
+        "Settings › Villa)" in s["text"]
+    occupancy.save(str(tmp_path / "pack.json"), "binary_sensor.example_empty")
+    s = concierge.status(_pack(), states, store)
+    assert s["villa_empty"] == "empty" and "Villa empty: yes (binary_sensor.example_empty)" in s["text"]

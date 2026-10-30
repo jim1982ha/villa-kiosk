@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.401 (30 October 2026)
+
+- Maintenance mode at every door (architecture review round 7, card 1): vesta_shared.maintenance.takes_up(severity),
+  the one gate. Problems.record (hence record_night and every recheck path) holds a finding with no open row below P1
+  while the mode is on: nothing raised, no task, no message, audited "suppressed_maintenance", returned as `held`;
+  the next check after the mode ends finds it new. The alert desk's intake asks the same gate, and only for an alert
+  with no open incident (an open one carries on, as the Kiosk's text promises).
+- The villa's "empty" sensor is the Kiosk's pick (card 2; agent-contract.json heartbeat.answer.villaEmptySensor and
+  _villaSettings synced from Kiosk 2.496.622): vesta_shared.occupancy.told / save / sensor (villa_empty_sensor.json
+  beside the pack, kept while the key is absent), state_of, now. Vesta.kiosk_answered keeps it; desk.occupancy, the
+  occupancy days, the reports' use_while_empty (mode_entity now optional) and the concierge's status ("Villa empty:"
+  line, `villa_empty`) read it. rules.yaml siren.villa_empty and reports.yaml's mode_entity are removed: no sensor id
+  ships. Never told or none picked: UNKNOWN, never empty.
+
 ## 0.6.400 (30 October 2026)
 
 - The Kiosk's wake (agreement conversation.recordsChanged, Kiosk 2.496.621): tablet.records_changed recognises the

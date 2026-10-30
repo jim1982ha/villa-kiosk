@@ -105,20 +105,41 @@ class History:
         return {ids[0]: self.rows}
 
 
-def test_each_day_is_kept_so_a_month_of_states_outlives_the_villas_ten_days(tmp_path):
+def _picked(tmp_path, monkeypatch, entity_id="binary_sensor.example_empty"):
+    """The Kiosk named `entity_id` as the villa's "empty" sensor in its heartbeat answer; kept beside the pack."""
+    pack = str(tmp_path / "pack.json")
+    monkeypatch.setenv("VESTA_PACK", pack)
+    O.save(pack, O.told({"villaEmptySensor": entity_id}))
+    return entity_id
+
+
+def test_each_day_is_kept_so_a_month_of_states_outlives_the_villas_ten_days(tmp_path, monkeypatch):
     z = ZoneInfo("UTC")
     skills = tmp_path / "skills"
-    (skills / "alert-desk").mkdir(parents=True)
-    (skills / "alert-desk" / "rules.yaml").write_text("siren:\n  villa_empty: binary_sensor.example_empty\n")
-    (skills / "maint").mkdir()
+    (skills / "maint").mkdir(parents=True)
+    _picked(tmp_path, monkeypatch)
     store = Store(str(tmp_path / "s.db"))
     cli = History([{"state": "off", "last_changed": datetime(2026, 10, 1, tzinfo=timezone.utc).isoformat()}])
     got = O.days(cli, store, str(skills / "maint"), date(2026, 10, 20), date(2026, 10, 22), z)
     assert got == {date(2026, 10, 20 + i): O.OCCUPIED for i in range(3)} and cli.read == 1
     cli.rows = []                                                         # the villa's history gone: the store says it
     assert O.days(cli, store, str(skills / "maint"), date(2026, 10, 20), date(2026, 10, 22), z) == got
-    # no helper set (no alert desk, or none named): None — every comparison as before
-    assert O.days(cli, store, str(tmp_path / "nowhere" / "maint"), date(2026, 10, 20), date(2026, 10, 22), z) is None
+    # no sensor picked in the Kiosk: None — every comparison as before
+    _picked(tmp_path, monkeypatch, "")
+    assert O.days(cli, store, str(skills / "maint"), date(2026, 10, 20), date(2026, 10, 22), z) is None
+
+
+def test_the_villas_empty_sensor_is_the_kiosks_pick_kept_while_it_does_not_say(tmp_path, monkeypatch):
+    """Architecture review round 7, card 2: the sensor is the Kiosk's pick (heartbeat answer `villaEmptySensor`), never
+    one named in the agent's files. An answer without the key keeps the pick; "" is no pick; never told, none."""
+    pack = str(tmp_path / "pack.json")
+    monkeypatch.setenv("VESTA_PACK", pack)
+    assert O.sensor() is None and O.told({"ok": True}) is None                     # never told; an older Kiosk
+    assert O.save(pack, O.told({"villaEmptySensor": "binary_sensor.example_empty"})) and \
+        O.sensor() == "binary_sensor.example_empty"
+    assert O.told({"maintenance": False}) is None and O.sensor() == "binary_sensor.example_empty"   # absent: kept
+    assert O.save(pack, "binary_sensor.example_empty") is False                    # unchanged: not written again
+    assert O.told({"villaEmptySensor": "not an id"}) == "" and O.save(pack, "") and O.sensor() is None
 
 
 def test_the_energy_reports_waste_line_says_only_a_rise_occupancy_cannot_explain():
@@ -132,7 +153,7 @@ def test_the_energy_reports_waste_line_says_only_a_rise_occupancy_cannot_explain
     assert p["detail"].startswith("80.0 kWh over the period against about 10.0 kWh usually when the villa is empty.")
 
 
-def test_the_night_check_itself_compares_like_with_like_and_without_the_helper_as_before(tmp_path):
+def test_the_night_check_itself_compares_like_with_like_and_without_the_helper_as_before(tmp_path, monkeypatch):
     # the real nightly.py over a fixture villa: a pump at 0.5 kWh/day while empty, 3.0 since guests arrived 8 days ago
     import json
     from test_maintenance_noise import AS_OF, _night, _open, _pump
@@ -141,7 +162,8 @@ def test_the_night_check_itself_compares_like_with_like_and_without_the_helper_a
     assert [json.loads(f["detail"])["kind"] for f in _open(tmp_path, "PM-ENERGY-CHANGE")] == ["JUMP"]   # no state: as before
     end = date.fromisoformat(AS_OF)
     at = lambda d: datetime(d.year, d.month, d.day, tzinfo=timezone.utc).isoformat()   # noqa: E731
-    (tmp_path / "fx" / "history_raw_occ.json").write_text(json.dumps({"entities": [{"entity_id": "binary_sensor.villa_empty",
+    eid = _picked(tmp_path, monkeypatch)
+    (tmp_path / "fx" / "history_raw_occ.json").write_text(json.dumps({"entities": [{"entity_id": eid,
         "states": [{"state": "on", "last_changed": at(end - timedelta(days=20))},
                    {"state": "off", "last_changed": at(end - timedelta(days=7))}]}]}))
     (tmp_path / "s.sqlite").unlink()
@@ -149,7 +171,7 @@ def test_the_night_check_itself_compares_like_with_like_and_without_the_helper_a
     assert _open(tmp_path, "PM-ENERGY-CHANGE") == []                     # guests in, against days with guests
 
 
-def test_the_energy_report_itself_reads_the_villas_state_and_without_it_as_before(tmp_path):
+def test_the_energy_report_itself_reads_the_villas_state_and_without_it_as_before(tmp_path, monkeypatch):
     # the real energy_period.py over a fixture villa: empty before the week, guests in during it
     import json
     from test_energy_setup import START, _period, _villa
@@ -157,7 +179,8 @@ def test_the_energy_report_itself_reads_the_villas_state_and_without_it_as_befor
     out = _period(tmp_path, fx)
     assert all(l["baseline_rise_said"] and l["baseline_occupancy"] is None for l in out["loads"])   # no state: as before
     at = lambda d: (START + timedelta(days=d)).isoformat()   # noqa: E731
-    (fx / "history_raw_occ.json").write_text(json.dumps({"entities": [{"entity_id": "binary_sensor.villa_empty",
+    eid = _picked(tmp_path, monkeypatch)
+    (fx / "history_raw_occ.json").write_text(json.dumps({"entities": [{"entity_id": eid,
         "states": [{"state": "on", "last_changed": at(-30)}, {"state": "off", "last_changed": "2026-09-28T00:00:00+00:00"}]}]}))
     (tmp_path / "week.json").unlink()
     out = _period(tmp_path, fx)

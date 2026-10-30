@@ -28,7 +28,7 @@ from . import agreement, result
 from .limits import limit
 from .messaging import headline, incident_tag, problem_title_chars
 from .store import Incident, Notes, Store, notes_of
-from . import alert_watch, kiosk_words
+from . import alert_watch, kiosk_words, maintenance
 from . import message_format as mf
 from .help_link import HelpLink
 
@@ -326,13 +326,20 @@ class Problems:
     def record(self, findings, day: str, *, state_rules, event_rules, worsened_step: float, at: str | None = None,
                settle_minutes: float | None = None) -> dict:
         """Findings seen now, recorded — new, still open, back again (AGAIN_DAYS) — each with its task: {new,
-        still_open, again, task_ids (the ids of the tasks opened or opened again)}. Closes nothing: a check that reads only
+        still_open, again, task_ids (the ids of the tasks opened or opened again), held (the findings maintenance mode
+        kept from being taken up: maintenance.takes_up — nothing recorded, audited)}. Closes nothing: a check that reads only
         part of the villa (recheck.py, every 5 minutes) cannot say what it did not see is over.
 
         Each finding is recorded as SEEN at `at` (now when not said), with `settle_minutes` — the skill's settle time
         after a person's close (None: it named none, and a close then holds): the fact wants_open reads."""
-        new, still_open, again = [], [], []
+        new, still_open, again, held = [], [], [], []
         for f in findings:
+            # ⚠️ MAINTENANCE MODE (vesta_shared.maintenance.takes_up): a problem not open yet, below P1, is not taken
+            # up — no finding, no fault, no message; audited below. Still there when the mode ends, the next check
+            # finds it new
+            if not self.store.open_finding(f.rule_id, f.entity_id) and not maintenance.takes_up(f.severity):
+                held.append({"rule_id": f.rule_id, "entity_id": f.entity_id, "severity": f.severity})
+                continue
             f.day = day
             f.detail["check"] = f.check
             prev_row = self.store.open_finding(f.rule_id, f.entity_id)
@@ -388,7 +395,10 @@ class Problems:
                 else:
                     old_tasks.append({"task_id": tid, "todo_summary": (self.store.task(tid) or {}).get("summary") or "",
                                       "check": d.get("check") or "", "severity": d["severity"], "entity_id": d["entity_id"]})
-        return {"new": new, "still_open": still_open, "again": again, "task_ids": ids,
+        if held:
+            self.store.audit("preventive-maintenance", "suppressed_maintenance",
+                             {"findings": held, "day": day})
+        return {"new": new, "still_open": still_open, "again": again, "task_ids": ids, "held": held,
                 "tasks": old_tasks, "reopen_actions": old_reopen}           # the last two: kept for a skill edited before 0.12.267
 
     def _came_back(self, f, day: str, may: bool) -> int | None:

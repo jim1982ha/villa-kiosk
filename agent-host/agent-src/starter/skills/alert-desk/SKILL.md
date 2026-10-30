@@ -106,8 +106,8 @@ answer (after a restart), the automation alerts anyway.
 
 `rules.yaml` section `siren`. The gate arms only when all three hold:
 1. At least `siren.min_signals` independent intrusion signals (different entities) inside `siren.window_min`.
-2. The villa is empty: its "Villa empty" helper reads on (`rules.yaml` `siren.villa_empty`, the same one its
-   presence automations read). Missing or unreadable: not empty, the siren is not offered.
+2. The villa is empty: the "empty" sensor picked in the VESTA Kiosk's Settings › Villa reads on (the one its presence
+   tile follows). None picked, missing or unreadable: not empty, the siren is not offered.
 3. The owner approves the siren request with the Approve button (it expires after policy.yaml's
    `approval_ttl_minutes`). It sounds for policy.yaml's `siren_auto_off_min`, then stops.
 

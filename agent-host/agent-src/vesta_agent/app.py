@@ -493,10 +493,10 @@ class Vesta:
 
     # ------------------------------------------------------------------ Home Assistant's events
     def kiosk_answered(self, answer: dict) -> None:
-        """The Kiosk's answer to a heartbeat: its list of devices unavailable by design (vesta_shared.asleep) and the
-        villa's maintenance mode (vesta_shared.maintenance), kept beside the knowledge pack for every check — a Kiosk
+        """The Kiosk's answer to a heartbeat: its list of devices unavailable by design (vesta_shared.asleep), the
+        villa's maintenance mode (vesta_shared.maintenance) and its "empty" sensor (vesta_shared.occupancy), kept beside the knowledge pack for every check — a Kiosk
         that does not say one leaves the kept one as it is."""
-        from vesta_shared import asleep, maintenance
+        from vesta_shared import asleep, maintenance, occupancy
         ids = asleep.told(answer)
         if ids is not None and asleep.save(self.s.pack_path, ids):
             log.info("The VESTA Kiosk's devices unavailable by design: %s", ", ".join(ids) or "none")
@@ -504,6 +504,12 @@ class Vesta:
         mm = maintenance.told(answer)
         if mm is not None and maintenance.save(self.s.pack_path, mm):
             log.info("The VESTA Kiosk's maintenance mode: %s", "on, only P1 alerts are taken up" if mm else "off")
+        # the villa's "empty" sensor, the Kiosk's pick (vesta_shared.occupancy.sensor): the siren, the reports and the
+        # like-with-like comparisons read it
+        empty = occupancy.told(answer)
+        if empty is not None and occupancy.save(self.s.pack_path, empty):
+            log.info("The VESTA Kiosk's villa empty sensor: %s", empty or "none picked, whether the villa is empty "
+                     "cannot be told")
 
     def devices_changed(self, settle: float | None = None) -> None:
         """The villa's devices changed (ha_events.REGISTRY_EVENTS): read them again once they have been still for

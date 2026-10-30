@@ -28,6 +28,7 @@ from vesta_shared.store import Store  # noqa: E402
 from vesta_shared.offline import devices_offline, watched_kinds  # noqa: E402  (the one reading of "offline now")
 from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
+from vesta_shared import occupancy  # noqa: E402  (the villa's "empty" sensor: the Kiosk's pick)
 
 
 
@@ -87,7 +88,13 @@ def status(pack: KnowledgePack, states: dict, store: Store | None) -> dict:
         lines.append("Watch: " + _names(watch))
     if colour == "green":
         lines.append("Nothing open, every device online.")
-    return {"colour": colour, "problems": problems, "offline": offline_names, "watch": watch,
+    # whether the villa is empty, from the one sensor (the Kiosk's pick): the siren and the reports read the same
+    empty_sensor = occupancy.sensor()
+    empty = occupancy.state_of((states.get(empty_sensor) or {}).get("state")) if empty_sensor else occupancy.UNKNOWN
+    lines.append("Villa empty: " + ({occupancy.EMPTY: "yes", occupancy.OCCUPIED: "no"}.get(empty, "cannot tell")
+                                    + (f" ({empty_sensor})" if empty_sensor
+                                       else " (no sensor picked in the VESTA Kiosk's Settings › Villa)")))
+    return {"colour": colour, "villa_empty": empty, "problems": problems, "offline": offline_names, "watch": watch,
             "open_alerts": [p["title"] for p in alerts], "open_problems": [p["title"] for p in tasks],
             "open_incidents": len(alerts), "open_tasks": len(tasks), "text": "\n".join(lines)}
 

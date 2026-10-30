@@ -133,6 +133,25 @@ def test_a_day_past_the_reach_is_never_counted_empty_or_occupied():
     assert clue["empty_days"] == 3 and c.problems == []
 
 
+
+def test_electricity_while_empty_reads_the_kiosks_pick_when_the_playbook_names_none(tmp_path, monkeypatch):
+    """Architecture review round 7, card 2: the starter playbook named one villa's sensor; it names none now and the
+    clue reads the Kiosk's pick (vesta_shared.occupancy.sensor, on = empty). None picked: no clue."""
+    from vesta_shared import occupancy
+    playbook = _load("reports", "playbook")
+    Z, d1 = timezone.utc, date(2026, 10, 5)
+    monkeypatch.setenv("VESTA_PACK", str(tmp_path / "pack.json"))
+    villa = TimelineVilla(**{"binary_sensor.example_empty": [(datetime(2026, 10, 1, tzinfo=Z), "on")]})
+    c = SimpleNamespace(start=d1, end=d1 + timedelta(days=1), Z=Z, e_dt=datetime(2026, 10, 7, tzinfo=Z), now=NOW,
+                        cli=villa, problems=[], total_from=lambda: {"grid_in": ["sensor.meter"]},
+                        daily_total=lambda s, e: {d1: 4.0, d1 + timedelta(days=1): 6.0})
+    when = {"kind": "use_while_empty", "empty": ["on"], "days": 2}
+    assert playbook.clue_use_while_empty(c, when) == []                                 # never told: none
+    occupancy.save(str(tmp_path / "pack.json"), "binary_sensor.example_empty")
+    (clue,) = playbook.clue_use_while_empty(c, when)
+    assert clue["empty_days"] == 2 and clue["kwh_per_empty_day"] == 5.0
+
+
 def test_a_rule_whose_runs_were_read_short_says_its_count_is_not_the_weeks(tmp_path):
     from test_reports import _Book, _ctx
 

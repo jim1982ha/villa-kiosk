@@ -72,9 +72,8 @@ siren:
   # the window, the villa empty, and one explicit human approval.
   window_min: 5
   min_signals: 2
-  # The villa's one "is it empty?" (owner, 2026-10-18): a binary sensor, on when empty — the same one its
-  # presence rules read. It replaced input_select.villa_mode, a mode no villa had: the siren could never arm.
-  villa_empty: binary_sensor.villa_empty
+  # The villa's one "is it empty?" is the VESTA Kiosk's pick (Settings › Villa: on = empty, the sensor its presence
+  # tile follows), handed to the agent at every heartbeat (vesta_shared.occupancy). No pick: never empty, no siren.
   # The human step is the owner's Approve button (the siren is an owner-only device in
   # policy.yaml); how long it sounds is policy.yaml's siren_auto_off_min.
 

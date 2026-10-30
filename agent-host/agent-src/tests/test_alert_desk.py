@@ -138,7 +138,7 @@ def test_the_cli_reads_an_event_file(tmp_path):
     p.write_text(json.dumps(event()))
     fx = tmp_path / "fx"                                             # the villa as a test sees it: one seam, no flags
     fx.mkdir()
-    (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.villa_empty": {"state": "off"}}}))
+    (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.example_empty": {"state": "off"}}}))
     env = {**os.environ, "PYTHONPATH": PYTHONPATH}
     r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"), "intake",
                         "--event", str(p), "--store", str(tmp_path / "s.sqlite"), "--fixture-dir", str(fx)],
@@ -736,17 +736,60 @@ def test_an_alert_back_again_waits_its_own_clear_minutes_never_the_last_runs(sto
     assert _tick(store, ha, 71)["cleared"] == [iid]                            # its own 10 minutes
 
 
-def test_the_siren_reads_the_villas_one_empty_helper(tmp_path):
+def test_the_siren_reads_the_kiosks_empty_sensor(tmp_path, monkeypatch):
     # owner, 2026-10-18: the desk read input_select.villa_mode, a mode no villa had — "unknown" for every intrusion,
-    # the siren could never be offered. The helper the presence rules read answers; missing is never empty
+    # the siren could never be offered. Architecture review round 7, card 2: the sensor is the Kiosk's pick (Settings ›
+    # Villa), told at each heartbeat — never one named in rules.yaml; none picked, or unreadable, is never empty
     from fixture_client import FixtureClient
+    from vesta_shared import occupancy
+    pack = str(tmp_path / "pack.json")
+    monkeypatch.setenv("VESTA_PACK", pack)
     fx = tmp_path / "fx"
     fx.mkdir()
+    occupancy.save(pack, occupancy.told({"villaEmptySensor": "binary_sensor.example_empty"}))
     for state, mode in (("on", "empty"), ("off", "occupied"), ("unavailable", "unknown")):
-        (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.villa_empty": {"state": state}}}))
+        (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.example_empty": {"state": state}}}))
         assert desk.occupancy(FixtureClient(str(fx))) == mode
-    (fx / "states.json").write_text(json.dumps({"states": {"input_select.villa_mode": {"state": "vacant"}}}))
+    (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.example_empty": {"state": "on"}}}))
+    occupancy.save(pack, occupancy.told({"villaEmptySensor": ""}))                       # none picked: cannot tell
     assert desk.occupancy(FixtureClient(str(fx))) == "unknown"
+
+
+def test_the_siren_path_end_to_end_from_the_kiosks_answer_to_the_gate(tmp_path):
+    """The Kiosk's heartbeat answer names the sensor (the engine's kiosk_answered keeps it beside the pack); the real
+    desk.py, run as the engine runs it (VESTA_PACK), reads it: two intrusion sensors with it "on" arm the siren gate.
+    The Kiosk then says none is picked: the villa cannot be told empty, the gate stays shut."""
+    import subprocess
+    import sys
+    from types import SimpleNamespace
+    from vesta_agent.app import Vesta as App
+    pack = str(tmp_path / "pack.json")
+    engine = SimpleNamespace(s=SimpleNamespace(pack_path=pack))
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.example_empty": {"state": "on"}}}))
+    pg = dict(blueprint="critical_presence_guard", rule="automation.critical_presence_guard_night")
+
+    def intake(store, entity, started, minute):
+        p = tmp_path / f"ev{started}.json"
+        p.write_text(json.dumps(event(entities=(entity,), started=started, **pg)))
+        r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"), "intake",
+                            "--event", str(p), "--store", str(tmp_path / store), "--fixture-dir", str(fx),
+                            "--now", (T0 + timedelta(minutes=minute)).isoformat()],
+                           capture_output=True, text=True, timeout=60,
+                           env={**os.environ, "PYTHONPATH": PYTHONPATH, "VESTA_PACK": pack})
+        assert r.returncode == 0, r.stderr
+        return json.loads(r.stdout)["siren_gate"]
+
+    App.kiosk_answered(engine, {"villaEmptySensor": "binary_sensor.example_empty"})
+    intake("a.sqlite", "binary_sensor.example_garden_motion", 1, 0)
+    gate = intake("a.sqlite", "binary_sensor.example_gate_motion", 2, 1)
+    assert gate["armed"] is True and gate["occupancy"] == "empty"
+    App.kiosk_answered(engine, {"maintenance": False})                       # the key absent: the pick is kept
+    App.kiosk_answered(engine, {"villaEmptySensor": ""})                     # none picked
+    intake("b.sqlite", "binary_sensor.example_garden_motion", 3, 0)
+    gate = intake("b.sqlite", "binary_sensor.example_gate_motion", 4, 1)
+    assert gate["armed"] is False and gate["occupancy"] == "unknown"
 
 
 # ------------------------------------------------------------- an alert whose automation is gone (owner, 2026-10-18)
@@ -1060,3 +1103,8 @@ def test_maintenance_mode_is_the_kiosks_switch_and_lets_only_p1_through(store, t
     maintenance.save(pack, False)
     assert desk.intake(store, event(rule="automation.critical_condition_back_door", entities=("lock.back",)), T0,
                        occupancy_reader=lambda: "occupied")["decision"] == "new"
+    # an alert already open carries on as before (the Kiosk's promise): its repeat is counted, never held
+    maintenance.save(pack, True)
+    again = desk.intake(store, event(rule="automation.critical_condition_back_door", entities=("lock.back",)),
+                        T0 + timedelta(minutes=1), occupancy_reader=lambda: "occupied")
+    assert again["decision"] in ("counted", "repeat") and again["incident_id"] is not None

@@ -133,10 +133,10 @@ alert-desk gate.
 
 ## Is the villa empty?
 
-The villa's "Villa empty" helper (`binary_sensor.villa_empty`, on = empty) is the one answer: its presence
-automations and the alert desk's siren read it. It is worked out from who is away and the indoor sensors, in the
-villa's system: nobody sets it by hand. If it does not exist, the villa is never read as empty and the siren
-is never offered: say so when asked.
+The villa's "empty" sensor picked in the VESTA Kiosk's Settings › Villa (on = empty, the one its presence tile
+follows) is the one answer: the alert desk's siren and the reports read it, and the villa status you are given says
+it on its "Villa empty:" line (yes, no, or cannot tell, with the sensor). If none is picked, the villa is never read
+as empty and the siren is never offered: say so when asked, and where to pick it.
 
 Each critical automation has a "When this rule runs" choice (2026-10-20): Always (the default), Only while the villa is
 empty, or Only while someone is in, read from the same "Villa empty" helper. An automation set to one of the last two raises

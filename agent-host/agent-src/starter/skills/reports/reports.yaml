@@ -84,7 +84,8 @@ not_measured_yet:
 # no figure shows yet, e.g. "the onsen pump's power slides for two hours before it runs dry").
 #   when kinds:  run_change {change_pct, min_days, days, min_hours}  a motor's hours of running per day change
 #                offline {families}                            a watched device not answering now
-#                use_while_empty {mode_entity, empty, days}    electricity used while the villa is empty
+#                use_while_empty {empty, days}                 electricity used while the villa is empty (the
+#                                                              Kiosk's "empty" sensor; mode_entity: another one)
 # A pump's running power that dropped and a falling battery are not clues: the night check finds them (its
 # PM-POWER-CHANGE, PM-BATTERY-* findings), and they reach the one list as open problems.
 playbook:
@@ -112,7 +113,7 @@ playbook:
   energy_and_occupancy:
     - name: electricity used while the villa is empty
       title: "Electricity used while the villa was empty: {kwh_per_empty_day} kWh a day"
-      when: {kind: use_while_empty, mode_entity: binary_sensor.villa_empty, empty: ["on"], days: 10}   # the villa's one "empty" (2026-10-18)
+      when: {kind: use_while_empty, empty: ["on"], days: 10}   # the Kiosk's "empty" sensor (vesta_shared.occupancy.sensor)
       look_at: "the main meter per hour on empty days, which circuits ran, lights and air conditioning left on"
       means: "something left on, or a load that should be off when nobody is there"
       check: "what was left on, and whether a scene or automation should switch it off when the villa is empty"

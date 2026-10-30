@@ -38,7 +38,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 from vesta_shared.store import Incident, Notes, Store, alerted_states, notes_of  # noqa: E402  (PYTHONPATH is set by the engine)
 from vesta_shared import alert_watch as W  # noqa: E402  (a closed alert's watch: one owner)
 from vesta_shared.params import VillaParams  # noqa: E402
-from vesta_shared.maintenance import on as maintenance_on  # noqa: E402  (the villa's maintenance mode: the Kiosk's)
+from vesta_shared import occupancy as occupancy_now  # noqa: E402  (the villa's "empty" sensor: the Kiosk's pick)
+from vesta_shared.maintenance import takes_up  # noqa: E402  (the villa's maintenance mode: the Kiosk's; the one gate)
 from vesta_shared.timeutil import day_time_label, moment_label, villa_time  # noqa: E402
 from vesta_shared.problems import AGAIN_DAYS, Problems, incident_runs, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
@@ -358,26 +359,24 @@ def normalise(ev: dict) -> dict:
             "phase": ev.get("phase") or "opened", "ha_incident": ev.get("incident_id")}
 
 
-#: What occupancy answers: the villa empty, someone in it, or it cannot be told.
-EMPTY, OCCUPIED, UNKNOWN = "empty", "occupied", "unknown"
+#: What occupancy answers: the villa empty, someone in it, or it cannot be told (vesta_shared.occupancy's words).
+EMPTY, OCCUPIED, UNKNOWN = occupancy_now.EMPTY, occupancy_now.OCCUPIED, occupancy_now.UNKNOWN
 
 
 def occupancy(client=None) -> str:
-    """The villa empty or not, from its one helper (rules.yaml siren.villa_empty: on = empty), read through the
-    script's Home Assistant client (vesta_shared.script: the live client, or a test's fixture folder).
+    """The villa empty or not, from its one sensor: the Kiosk's pick (vesta_shared.occupancy.sensor, on = empty), read
+    through the script's Home Assistant client (vesta_shared.script: the live client, or a test's fixture folder).
 
     ⚠️ A MODE NO VILLA HAD (owner, 2026-10-18): this read input_select.villa_mode, never created on the villa — every
-    intrusion read "unknown" and the siren could never arm. The helper the presence rules read answers it now; an
-    unreadable or missing one is UNKNOWN, never empty."""
-    ent = RULES["siren"].get("villa_empty")
+    intrusion read "unknown" and the siren could never arm. ⚠️ THE KIOSK'S PICK (architecture review round 7, card 2):
+    then a sensor named in rules.yaml, one villa's id shipped to all. No pick, or unreadable: UNKNOWN, never empty."""
     try:
         if client is None:
             from vesta_shared.ha_client import McpClient
             client = McpClient()
-        st = (client.states([ent]).get(ent) or {}).get("state") if ent else None
     except Exception:  # noqa: BLE001
         return UNKNOWN
-    return {"on": EMPTY, "off": OCCUPIED}.get(str(st or "").lower(), UNKNOWN)
+    return occupancy_now.now(client)
 
 
 def _find_by_ha_incident(store: Store, ha_incident: str | None, closed_within: timedelta | None = None,
@@ -468,12 +467,13 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     sev = priority(ev, route)
     key = alert_keys(ev)[0]
     out = {"send": [], "actions": [], "incident_id": None, "decision": None}
-    # ⚠️ THE KIOSK'S SWITCH (owner, 2026-10-29; vesta_shared.maintenance): no longer a villa helper no screen showed
-    if maintenance_on() and sev != "P1":
+    cur = open_alert(store, ev)
+    # ⚠️ THE KIOSK'S SWITCH (owner, 2026-10-29; vesta_shared.maintenance.takes_up, the gate every door asks): no longer
+    # a villa helper no screen showed. Only a NEW alert is held: one already open carries on as before (its promise)
+    if cur is None and not takes_up(sev):
         out["decision"] = "maintenance_mode"; store.audit("alert-desk", "suppressed_maintenance", ev); return out
     if route.get("intrusion") and not ev.get("occupancy"):
         ev["occupancy"] = occupancy_reader()
-    cur = open_alert(store, ev)
     if cur:
         last = datetime.fromisoformat(cur["last_seen_at"])
         store.touch_incident(cur["id"], now.isoformat())
