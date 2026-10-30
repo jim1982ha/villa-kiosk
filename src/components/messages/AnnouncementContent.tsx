@@ -7,6 +7,7 @@
 import { useState, type ReactNode } from "react";
 import { FileText } from "lucide-react";
 import { documentUrl } from "@/fm/fmApi";
+import { CARD_BUTTON } from "@/components/fm/WorkButtons";
 import { useProfileOrNull } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import { useConfirmDialog, type Question } from "@/hooks/useConfirmDialog";
@@ -50,7 +51,7 @@ export function ButtonRow({ buttons, onPress, presses, answer }: {
   return (
     <span className="vesta-notice-actions">
       {buttons.map((b) => (
-        <button key={b.command} type="button" className="btn primary vesta-notice-action"
+        <button key={b.command} type="button" className={`${CARD_BUTTON} vesta-notice-action`}
           disabled={presses[b.command] !== undefined && presses[b.command] !== "failed"} onClick={() => onPress(b)}>
           {b.label}
         </button>

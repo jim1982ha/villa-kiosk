@@ -988,10 +988,15 @@ async def rest_handler(request: web.Request) -> web.StreamResponse:
         for k, v in upstream.headers.items():
             if k.lower() not in HOP_BY_HOP:
                 resp.headers[k] = v
-        await resp.prepare(request)
-        async for chunk in upstream.content.iter_chunked(8192):
-            await resp.write(chunk)
-        await resp.write_eof()
+        # ⚠️ A PAGE THAT LEFT IS NO ERROR (2026-10-30: a reload during a long history read wrote a traceback per
+        # request into the add-on's log): one line, and the upstream read stops with the context
+        try:
+            await resp.prepare(request)
+            async for chunk in upstream.content.iter_chunked(8192):
+                await resp.write(chunk)
+            await resp.write_eof()
+        except ConnectionResetError:        # aiohttp's ClientConnectionResetError is one
+            print(f"[supervisor-proxy] {request.method} {tail.split('/')[0]}: the page left before its answer", flush=True)
         return resp
 
 
