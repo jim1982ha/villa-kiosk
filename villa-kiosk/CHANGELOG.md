@@ -1,3 +1,13 @@
+## 2.496.622
+
+What you will see:
+- The sensor you pick in Settings › Villa as the villa's "empty" sensor is now told to VESTA too, on every check-in.
+  Once VESTA is updated to read it, the siren's arming, the "used while empty" report and VESTA's answers follow that
+  one choice, as the tile under the floors does. With no sensor picked, VESTA says it cannot tell.
+- If the tablet's settings file is ever damaged, VESTA keeps the sleeping devices and the Maintenance switch it was
+  last told, instead of reporting every sleeping sensor offline and treating Maintenance as off. Nothing changes on
+  screen.
+
 ## 2.496.621
 
 What you will see:

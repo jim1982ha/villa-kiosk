@@ -427,6 +427,29 @@ async def main() -> None:
     ck("the beat's answer carries the villa's maintenance mode, as the agreement declares it: on only when stored true",
        "maintenance" in contract_answer and on is True and unset is False and odd is False, (unset, on, odd))
     cfg_file.unlink(missing_ok=True)
+    # ⚠️ ONE "IS THE VILLA EMPTY?" CHOICE (architecture review, 2026-10-30): the sensor picked in Settings › Villa
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    unpicked = (await r.json()).get("villaEmptySensor")
+    cfg_file.write_text(json.dumps({"presenceSensor": "binary_sensor.house_empty"}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    picked = (await r.json()).get("villaEmptySensor")
+    cfg_file.write_text(json.dumps({"presenceSensor": "{{ states('x') }}"}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    odd = (await r.json()).get("villaEmptySensor")
+    ck("the beat's answer carries the villa's \"empty\" sensor, as the agreement declares it: \"\" when none is picked",
+       "villaEmptySensor" in contract_answer and picked == "binary_sensor.house_empty" and unpicked == "" and odd == "",
+       (unpicked, picked, odd))
+    # ⚠️ A SETTINGS FILE THAT CANNOT BE READ TELLS THE AGENT NOTHING (architecture review, 2026-10-30): an empty list
+    # and "off" made the Agent forget every sleeping device and the maintenance mode it kept
+    for broken in ("{not json", json.dumps(["unavailableByDesign"])):
+        cfg_file.write_text(broken)
+        r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+        answer = await r.json()
+        ck(f"  ...a settings file that cannot be read ({broken[:12]}): the beat counts, its answer leaves the villa's "
+           "settings out (the Agent keeps what it was told)",
+           r.status == 200 and answer.get("ok") is True
+           and not {"unavailableByDesign", "maintenance", "villaEmptySensor"} & answer.keys(), answer)
+    cfg_file.unlink(missing_ok=True)
     presence = TMP / "data" / "agent-presence.json"
     presence.write_text(json.dumps({"last_seen": time.time() - 6 * 60, "status": None, "cadence": beat["cadence"]}))
     status, body = await jget("/agent-status", cookie("ops"))
@@ -549,14 +572,14 @@ async def main() -> None:
     ck("  ...a guest sees that photo while it is the current notification, as a ring's (owner, 2026-10-28)",
        gbody["messages"][0].get("photo") == one[0]["photo"] and r.status == 200, (r.status, gbody))
     # architecture review, 2026-10-30: current as long as the ring holds the screen (the villa's "Ring shown for")
-    held, read = proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read
+    held, read = proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read_status
     proxy.ANNOUNCEMENT_CURRENT_S = 0
-    proxy.DEVICE_CONFIG.read = lambda: {}
+    proxy.DEVICE_CONFIG.read_status = lambda: ({}, True)
     await asyncio.sleep(1.1)
     r_gone = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
-    proxy.DEVICE_CONFIG.read = lambda: {"ringShownForS": 120}
+    proxy.DEVICE_CONFIG.read_status = lambda: ({"ringShownForS": 120}, True)
     r_held = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
-    proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read = held, read
+    proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read_status = held, read
     ck("  ...current for as long as the villa's \"Ring shown for\" holds it on screen (403 past it, 200 within it)",
        r_gone.status == 403 and r_held.status == 200, (r_gone.status, r_held.status))
     proxy.ANNOUNCEMENT_PHOTO_GRACE_S = 0       # the sweep's grace for a copy not yet recorded: none here
@@ -615,6 +638,10 @@ async def main() -> None:
     await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "old-one", "title": "Old", "at": old})
     status, body = await jget("/vesta-messages", cookie("owner"))
     ck("  ...and with records kept for ever, it is kept", "old-one" in [m["key"] for m in body["messages"]], body)
+    cfg_file.write_text("{not json")
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    ck("  ...and while the settings file cannot be read, kept too: an unreadable file never deletes",
+       proxy._evidence_retention_days() == 0 and "old-one" in [m["key"] for m in body["messages"]], body)
     cfg_file.unlink(missing_ok=True)
 
     # ── a report and its page (ticket 20 of "One inbox", 2026-10-29) ─────────────────────────────────────────────
