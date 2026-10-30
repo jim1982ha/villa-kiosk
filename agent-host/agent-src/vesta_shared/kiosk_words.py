@@ -68,7 +68,7 @@ def helped(by: str, iso: str | None, zone: str) -> Words:
 
 
 def taken(by: str, iso: str | None, zone: str) -> Words:
-    """"Ticket opened in the Cockpit on 15/10/2026 00:40 (Facility manager)." in every language — someone took an
+    """"Ticket opened in the Cockpit on 15/10/2026 00:40 (Facility Manager)." in every language — someone took an
     alert's fault on in the VESTA Kiosk ("Open Ticket"): its Telegram chase stops (owner, 2026-10-15)."""
     at = when(iso, zone)
     return _every(lambda lang: SW.cockpit("taken", at, by, lang) + SW.stop(lang))

@@ -777,6 +777,15 @@ def test_every_chart_and_the_strip_have_a_legend_of_what_they_draw(tmp_path):
     assert "on or open" not in strip                                        # the relay stayed off: nothing drawn, no key
 
 
+def test_a_days_running_is_said_in_the_shared_duration_words():
+    # architecture review round 8: "ran 90min" where every other duration reads "1h 30min" (timeutil.lasting)
+    import re
+    import page as inv_page
+    chart = inv_page.hourchart({"unit": "day", "bins": [{"at": T(9, 0).isoformat(), "minutes": 90, "usual": 45}]}, Z)
+    tips = re.findall(r'aria-label="([^"]+)"', chart)
+    assert any(t.endswith("ran 1h 30min (usually 45min)") for t in tips), tips
+
+
 def test_a_tooltip_is_page_text_over_its_column_never_covered():
     # owner, 2026-10-12: the tip was chart text — it grew with the screen and the next bars covered it. Now page text
     # (13 px, page_head.html), laid over the chart after it, its place in % of the chart
@@ -787,7 +796,7 @@ def test_a_tooltip_is_page_text_over_its_column_never_covered():
     svg_end = chart.index("</svg>")
     tips = re.findall(r'<span class="pt" tabindex="0" aria-label="([^"]+)" style="left:([\d.]+)%;width:([\d.]+)%', chart)
     assert len(tips) == 4 and chart.index('class="pt"') > svg_end                # after the chart: nothing covers them
-    assert tips[0][0] == "02:00 · ran 0min (usually 0.3min)"
+    assert tips[0][0] == "02:00 · ran 0min (usually 18s)"
     assert all(0 <= float(left) and float(left) + float(w) <= 100.01 for _, left, w in tips)
     assert '<span class="tip l">' in chart and '<span class="tip r">' in chart   # at the edges, anchored inside
     head = open(__import__("vesta_shared.page", fromlist=["SHARED_TEMPLATES"]).SHARED_TEMPLATES + "/page_head.html", encoding="utf-8").read()

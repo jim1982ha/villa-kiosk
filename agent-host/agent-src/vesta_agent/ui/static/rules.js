@@ -351,7 +351,7 @@ export function toolsCard(f, t, reload) {
       }))));
   };
   // what a role changes: the (i) of its tab (owner, 2026-10-08: a paragraph above the table became a tooltip)
-  const ROLES_INFO = `When a person writes, the AI only gets the tools their role allows; in a group listed for the facility manager, never more than the facility manager's; in a private chat, the person's own role. A tool switched off in ${place("ha_tools")} or ${place("agent_tools")} is off for everyone. Guests: the agent answers only the people in ${where("people")} (owner or facility manager), so a guest gets no answer at all for now.`;
+  const ROLES_INFO = `When a person writes, the AI only gets the tools their role allows; in a group listed for the facility manager, never more than the facility manager's; in a private chat, the person's own role. A tool switched off in ${place("ha_tools")} or ${place("agent_tools")} is off for everyone. Guests (on the tablet): answers only, from what the guest's tablet shows: no action, no camera, nobody's presence; the Guest column is what a guest keeps.`;
   const roles = () => {
     const fm = f.tool_access.fm;             // group → allowed, as the form says it (policy_doc.to_form)
     return [
@@ -360,7 +360,10 @@ export function toolsCard(f, t, reload) {
           h("label", { class: "switch" }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: owner` })),
           h("label", { class: "switch" }, h("input", { type: "checkbox", checked: fm[g.key], "aria-label": `${g.label}: facility manager`,
             onchange: (e) => { fm[g.key] = e.target.checked; markDirty(); } })),
-          { cls: "muted", v: h("span", { title: "There is no guest role yet: the agent answers only the owner and the facility manager" }, "—") }]),
+          // what a guest's run keeps of this row: the agent's own answer (tool_access.allowed_for), never decided here
+          g.guest.length
+            ? h("label", { class: "switch", title: g.guest.join(", ") }, h("input", { type: "checkbox", checked: true, disabled: true, "aria-label": `${g.label}: guest` }))
+            : { cls: "muted", v: h("span", { title: "Not given to a guest" }, "—") }]),
         { cls: "roles", widths: [null, { width: "18%", cls: "owner" }, { width: "18%", cls: "fm" }, { width: "14%", cls: "guest" }] })];
     // (owner, 2026-10-20: the line about who approves an action is "Allowed actions"' own — not this table's)
   };

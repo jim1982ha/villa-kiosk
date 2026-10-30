@@ -19,7 +19,7 @@ from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from markupsafe import Markup, escape
 
 from vesta_shared.axis import is_flat, label as axis_label, nice_axis
-from vesta_shared.timeutil import clock, day_label
+from vesta_shared.timeutil import clock, day_label, lasting
 
 SHARED_TEMPLATES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 
@@ -351,8 +351,8 @@ def hourchart(per_hour: dict, zone, *, bar: str = READINGS, usual: str = USUAL) 
                        f'height="{max(y(0) - y(m), .5):.1f}" fill="{bar}"/>')
         if isinstance(u, (int, float)):
             usual_at.append((x0, x0 + slot, y(u)))
-        said = f"{lab(t)} · ran {number(m)}min" + (f" (usually {number(float(u))}min)" if isinstance(u, (int, float))
-                                                     else "")
+        # ⚠️ THE SHARED DURATION WORDS (architecture review round 8: "ran 90min" where everything else says "1h 30min")
+        said = f"{lab(t)} · ran {_ran(m)}" + (f" (usually {_ran(float(u))})" if isinstance(u, (int, float)) else "")
         out.append(_tip(x0 + slot / 2, y(max(m, u or 0)), x0, x0 + slot, PAD_T, H - PAD_B, said))
     if usual_at:
         # ⚠️ ONE LINE, OVER THE BARS (2026-10-12): a dash per hour, most at 0, read as a broken axis under the bars
@@ -445,3 +445,6 @@ def say(s, end: str = ".") -> Markup:
     return linked("" if not s else s[:1].upper() + s[1:] + ("" if s[-1] in ".?!" else end))
 
 
+def _ran(minutes: float) -> str:
+    """Minutes of running as every duration is said (timeutil.lasting: "1h 30min"); none at all, "0min"."""
+    return lasting(minutes * 60) if minutes > 0 else "0min"

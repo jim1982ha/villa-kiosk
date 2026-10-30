@@ -31,18 +31,20 @@ import os
 import re
 from typing import NamedTuple
 
-from . import agreement
+from . import agreement, profiles
 from .messaging import tg_len
 
 TO = "To: "
 #: The roles as every "To:" line, history line and page names them, in this order (owner, 2026-10-13: "To: Owner",
 #: "To: Facility Manager", "To: Owner & Facility Manager" — roles only, never a person's name).
-ROLE_WORDS = {"owner": "Owner", "fm": "Facility Manager"}
+#: ⚠️ THE KIOSK'S PROFILE WORDS (architecture review round 8: "Facility manager" on the tablet, "FM" on Telegram, "Facility
+#: Manager" here): each role's profile `label` in the agreement (agent-contract.json profiles), the tablet's own.
+ROLE_WORDS = {r: profiles.word(r, "label", d) for r, d in (("owner", "Owner"), ("fm", "Facility Manager"))}
 #: The same roles as an alert card says them — its "To:", every line of its "Status:" and its bottom line
 #: (vesta_agent/notice.py). ⚠️ "FM" ON AN ALERT CARD (owner, 2026-10-16): "Reminder sent … to Facility Manager" made
 #: every update line long; reports and the People page keep ROLE_WORDS. The villa's own alerts say them as the card
 #: does (jinja_words; architecture review, 2026-10-17: the same alert read "Facility Manager", then "FM").
-ROLE_SHORT = {"owner": "Owner", "fm": "FM"}
+ROLE_SHORT = {r: profiles.word(r, "short", d) for r, d in (("owner", "Owner"), ("fm", "FM"))}
 #: The roles a message can be for, in ROLE_WORDS order — what routing.Routing sends to and every "To:" names. ⚠️ ONE
 #: LIST (architecture review "One answer per question" #4, 2026-10-19): the pair was written out again in routing,
 #: in Outcome's merge of a shared chat's roles, in the siren's fallback and in the jobs' targets.

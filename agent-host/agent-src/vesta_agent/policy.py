@@ -29,6 +29,7 @@ from typing import Any
 import yaml
 
 from vesta_shared.limits import limit
+from vesta_shared.timeutil import lasting
 
 from .places import title
 
@@ -129,12 +130,12 @@ def silence_reset_hours() -> int:
 def reset_words() -> dict[str, str]:
     """The choices of "Delete conversation context at", as the page shows them: their times are settings now
     (owner, 2026-10-24: "04:00" and "8 hours" were written in the words)."""
-    return {"daily_04_00": f"Every day at {reset_at()}", "after_8h_silence": f"After {silence_reset_hours()} hours of silence",
+    return {"daily_04_00": f"Every day at {reset_at()}", "after_8h_silence": f"After {lasting(silence_reset_hours() * 3600)} of silence",
             "never": "Never (/new only)"}
 
 
 def value_words(path: str, value) -> str | None:
-    """A rule's stored value in the page's own words, where it has some (a choice's: "After 12 hours of silence"),
+    """A rule's stored value in the page's own words, where it has some (a choice's: "After 12h of silence"),
     else None — the ONE reading for the Limits tab's drop-down, its save line and Page changes (review L, 2026-10-25:
     those said "after_8h_silence", a code that names a number no longer its own)."""
     if path == "settings.conversation_reset":

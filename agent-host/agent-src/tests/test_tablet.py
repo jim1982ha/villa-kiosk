@@ -368,3 +368,16 @@ def test_a_tablet_conversation_is_never_shared_whoever_built_the_question():
     q = intake.from_telegram("telegram_command", {"chat_id": OWNER, "user_id": OWNER, "command": "/help", "args": []})
     assert intake.gate(q, type("P", (), {"destinations": [], "roles_in": lambda *a: [], "person": lambda *a: None,
                                          "member": lambda *a: None})(), "bot", lambda *a: False).action == "drop"
+
+
+def test_a_guest_is_not_given_the_villas_status(tmp_path, kiosk, monkeypatch):
+    # architecture review round 8: the status check before each answer names the offline devices, the open alerts and
+    # the locks, which the guest's tablet does not show
+    v = make_agent(tmp_path, policy(), skills=["villa-concierge"], reader=FakeHA(tools=[tool("ha_get_state")]),
+                   kiosk=kiosk)
+    ai = FakeAI("ok").install(monkeypatch)
+    kiosk.person_asks("guest", "Is it warm inside?")
+    kiosk.person_asks("owner", "Is it warm inside?")
+    collect(v)
+    by_role = {("guest" if "role guest" in r["prompt"] else "owner"): r["prompt"] for r in ai.runs}
+    assert "villa-concierge skill" in by_role["owner"] and "villa-concierge skill" not in by_role["guest"]

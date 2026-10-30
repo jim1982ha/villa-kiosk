@@ -27,7 +27,7 @@ from typing import Callable
 
 import aiohttp
 
-from vesta_shared import agreement
+from vesta_shared import agreement, profiles
 from vesta_shared.ha_client import error_short_chars
 from vesta_shared.messaging import problem_title_chars
 from vesta_shared.limits import limit
@@ -261,6 +261,9 @@ def fault_of(t: dict) -> dict:
     `ticketUpdate` (notStatusChanges, clearedNotes, clearedNotePrefixes) exactly as the Kiosk's own readers do;
     tests/test_contract_ticket.py replays every history the agreement lists."""
     ups = [u for u in t.get("updates") or [] if isinstance(u, dict)]
+    # ⚠️ WHO, IN THE PROFILES' WORDS NOW (architecture review round 8): a step carries its profile's id (`role`, the Kiosk
+    # since 2.496.623) beside the words it was shown in; an older one its words alone, maybe a name since changed
+    # ("Facility manager"). profiles.step_by reads both, so a renamed role renames old steps too.
 
     def last(key: str) -> str:
         return str(ups[-1].get(key) or "") if ups else ""
@@ -273,8 +276,8 @@ def fault_of(t: dict) -> dict:
     return {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
             "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
             # who: on a closed fault, the person of its last close; on an open one, of its last step (taken on, moved)
-            "by": (str(close.get("who") or close.get("by") or "") if close and t.get("status") == "resolved"
-                   else last("who") or last("by")),
+            "by": (str(close.get("who") or profiles.step_by(close)) if close and t.get("status") == "resolved"
+                   else last("who") or (profiles.step_by(ups[-1]) if ups else "")),
             "entity_id": str(t.get("entityId") or ""),
             "alert_number": t.get("alertNumber"), "alert_priority": t.get("alertPriority"), "origin": t.get("origin"),
             "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
@@ -286,12 +289,12 @@ def fault_of(t: dict) -> dict:
             "closed_mine": _mine(close) if close else None,
             "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
             **({"reopened_at": str(reopens[-1].get("at") or ""),
-                "reopened_by": str(reopens[-1].get("who") or reopens[-1].get("by") or "")} if reopens else {}),
+                "reopened_by": str(reopens[-1].get("who") or profiles.step_by(reopens[-1]))} if reopens else {}),
             **({"taken_at": str(took[-1].get("at") or ""),
-                "taken_by": str(took[-1].get("who") or took[-1].get("by") or "")} if took else {}),
+                "taken_by": str(took[-1].get("who") or profiles.step_by(took[-1]))} if took else {}),
             # a person's last Need help on its card (owner, 2026-10-30): the owner is asked to act
             **({"help_at": str(helps[-1].get("at") or ""),
-                "help_by": str(helps[-1].get("by") or helps[-1].get("who") or "")} if helps else {})}
+                "help_by": str(profiles.step_by(helps[-1]) or helps[-1].get("who") or "")} if helps else {})}
 
 
 #: One change the agent makes to an open fault: the ticket as it stands → the ticket changed, None when it has nothing
@@ -426,6 +429,23 @@ class Kiosk:
             raise KioskError(f"the Kiosk speaks agreement {data.get('contract')}, this agent {CONTRACT}")
         self.info = data
         return True
+
+    async def villa_devices(self) -> dict | None:
+        """Each device as the VESTA Kiosk models it, entity → {type, category} (GET /agent/v1/villa-model): what a
+        profile may read is judged on them (profiles.Reads: the Kiosk's own answer, never re-derived). None when the
+        Kiosk is off or does not answer."""
+        if not self.enabled:
+            return None
+        try:
+            status, data = await self._req("GET", "/agent/v1/villa-model")
+        except KioskError as e:
+            log.warning("The Kiosk's villa model could not be read: %s", e)
+            return None
+        if status != 200:
+            log.warning("The Kiosk's villa model could not be read: it answered %s", status)
+            return None
+        return {str(d["entity_id"]): {"type": d.get("type"), "category": d.get("category")}
+                for d in data.get("devices") or [] if isinstance(d, dict) and d.get("entity_id")}
 
     async def heartbeat(self, status: str | None = None, cadence: dict | None = None) -> dict:
         """`cadence`: this agent's own timing (agent-contract.json `heartbeat`: checkMinutes, nightlyAt) — the Kiosk's

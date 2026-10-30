@@ -7,7 +7,7 @@ let SEARCH = "", FILTER = "";       // the search as typed, and as matched
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const shown = (v) => (Array.isArray(v) ? v.join(", ") : v === null || v === undefined ? "—" : String(v));
-// a value as the row's drop-down words it ([value, words] choices: "After 12 hours of silence"), else as written
+// a value as the row's drop-down words it ([value, words] choices: "After 12h of silence"), else as written
 // (review L, 2026-10-25: the save line and "Changed from its usual" said "after_8h_silence")
 const said = (r, v) => ((r.choices || []).find((c) => Array.isArray(c) && same(c[0], v)) || [null, shown(v)])[1];
 

@@ -55,6 +55,7 @@ class FakeKiosk(Kiosk):
         self.voices: dict[str, bytes] = {}     # each spoken question's WAV still kept (person_speaks), read once
         self.heard: dict[str, str] = {}        # the words the agent heard, by the person's line (ask:<seq>)
         self.speeches: dict[str, tuple] = {}   # each answer's sound kept (/agent/v1/speech): name → (bytes, type)
+        self.villa: list[dict] = []            # the villa model's devices (/agent/v1/villa-model): entity_id, type, category
 
     # ------------------------------------------------------------------ the one thing replaced: the transport
     async def _req(self, method, path, body=None, content=None, **_):
@@ -117,6 +118,8 @@ class FakeKiosk(Kiosk):
             return 200, {}
         if path == "/agent/v1/info":
             return 200, dict(self.info)
+        if path == "/agent/v1/villa-model":
+            return 200, {"rooms": [], "devices": copy.deepcopy(self.villa)}
         if path == "/agent/v1/vesta-message":
             if not self.keeps_messages:
                 return 404, {"error": "not found"}

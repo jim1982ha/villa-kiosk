@@ -132,6 +132,11 @@ def saved_server_tools(data_dir: str) -> list[dict] | None:
     """The saved list back in the server's own shape, for unavailable()/readable() on the page; None before the
     agent first read it. The one place that knows both shapes (save_list writes the other)."""
     listed = read_list(data_dir)
+    return saved_server_tools_of(listed)
+
+
+def saved_server_tools_of(listed: dict | None) -> list[dict] | None:
+    """saved_server_tools of a list already read."""
     if not listed:
         return None
     return [{"name": t["name"], "annotations": {"readOnlyHint": bool(t.get("readable")), "title": t.get("title")}}
@@ -170,9 +175,17 @@ def _without_groups(tools: set[str], denied: set[str]) -> set[str]:
 #: The asker of a scheduled job or an alert hook: nobody asked, everything switched on.
 SYSTEM = "system"
 #: A guest at the tablet (agent-contract.json conversation.profiles, ticket 21 of "One inbox"): ANSWERS ONLY (owner,
-#: 2026-10-28: "VESTA must take no action for a guest") — never a tool that acts or asks for an approval (ACTS), never
-#: the cameras (a guest's tablet hides them: roles.json deniedTypes), and the facility manager's refusals besides.
+#: 2026-10-28: "VESTA must take no action for a guest") — never a tool that acts or asks for an approval (ACTS) — and
+#: ⚠️ ONLY WHAT THE GUEST'S TABLET SHOWS (architecture review round 8: the guest's VESTA read the people and the motion
+#: sensors the guest's screen hides): the tools of GUEST_TOOLS alone, the facility manager's refusals besides, every
+#: device they read held to the agreement's guest `reads` (profiles.Reads, at read_guard.refused and in each answer).
 GUEST = "guest"
+#: A guest's tools: those whose answer names each device it tells of, so each device the guest may not read is taken out
+#: of it (tools.without_hidden), and the skills' instructions. A tool that writes free text about the villa (a template, a
+#: device's or an automation's settings, the system's health, the agent's own record), a camera, or a skill's script
+#: (which reads what it likes) cannot be held to what the guest's tablet shows, and is not given.
+GUEST_TOOLS = frozenset({"ha_get_state", "ha_get_history", "ha_get_logs", "ha_search", "ha_get_overview",
+                         "ha_get_entity", "ha_list_floors_areas", "read_skill", "web_search"})
 #: The tools that act: an action on the villa (and its approval), a fault recorded, a report started.
 ACTS = frozenset({"ha_call_service", "create_ticket", "start_job"})
 
@@ -190,7 +203,7 @@ def allowed_for(policy: Policy, server_tools: list[dict], role: str | None, chat
     if role != "owner" or fm_group:
         tools = _without_groups(tools, fm_denied(policy))
     if role == GUEST:
-        tools = _without_groups(tools - ACTS, {"cameras"})
+        tools = tools & GUEST_TOOLS
     return tools
 
 
@@ -363,6 +376,8 @@ def catalog(policy: Policy, listed: dict | None, usage: dict[str, int], now: dat
         else:
             never.append(row)
     named = {t["name"] for t in tools}
+    server = saved_server_tools_of(listed) or []
+    guest = allowed_for(policy, server, GUEST) if server else set()
     return {
         "read_at": (listed or {}).get("read_at"), "server": (listed or {}).get("server") or "",
         "count": len(tools), "on": sum(1 for t in tools if t.get("readable") and t["name"] in policy.ha_read_tools),
@@ -376,5 +391,7 @@ def catalog(policy: Policy, listed: dict | None, usage: dict[str, int], now: dat
                  "used": usage.get(k, 0)} for k, v in OWN.items()],
         # `from`: the tab each row's switch comes from (owner, 2026-10-19: "11 rows here, 9 Agent tools there — are you
         # mixing them?"). The table is the villa system tools' groups plus the Agent tools a role may lose; it says which.
-        "roles": [{"key": k, "label": lab, "from": title("agent_tools" if k in OWN else "ha_tools")} for k, lab in ROLE_GROUPS],
+        "roles": [{"key": k, "label": lab, "from": title("agent_tools" if k in OWN else "ha_tools"),
+                   # the Guest column: what a guest's run keeps of the row, from allowed_for itself (never a copy)
+                   "guest": sorted(guest & ({k} if k in OWN else set(HA_GROUPS[k][1])))} for k, lab in ROLE_GROUPS],
     }

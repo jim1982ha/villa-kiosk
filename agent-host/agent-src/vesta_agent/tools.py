@@ -224,7 +224,7 @@ def with_held_since(text: str, history, now: datetime) -> str:
     return json.dumps(body, ensure_ascii=False) if hit else text
 
 
-def without_hidden(text: str, hidden: set[str]) -> str:
+def without_hidden(text: str, hidden: "set[str] | Callable[[str], bool]") -> str:
     """A read tool's answer without the entities hidden in the villa's system: every record naming one, and every bare
     id of one in a list, dropped wherever it sits; an answer that IS one hidden entity's record says it is hidden.
 
@@ -239,18 +239,23 @@ def without_hidden(text: str, hidden: set[str]) -> str:
         body = json.loads(text)
     except ValueError:
         return text
+    # `hidden`: the ids, or a test of one (a guest's: profiles.Reads.hides — every device the guest's tablet hides)
+    hide = hidden if callable(hidden) else hidden.__contains__
+
+    def named(v) -> bool:
+        return isinstance(v, str) and hide(v)
 
     def gone(v) -> bool:
-        return (isinstance(v, dict) and v.get("entity_id") in hidden) or (isinstance(v, str) and v in hidden)
+        return (isinstance(v, dict) and named(v.get("entity_id"))) or named(v)
 
     def drop(x):
         if isinstance(x, list):
             return [drop(v) for v in x if not gone(v)]
         if isinstance(x, dict):
-            return {k: drop(v) for k, v in x.items() if not (k in hidden and isinstance(v, dict))}
+            return {k: drop(v) for k, v in x.items() if not (named(k) and isinstance(v, dict)) and not gone(v)}
         return x
-    if isinstance(body, dict) and (body.get("entity_id") in hidden
-                                   or (isinstance(body.get("data"), dict) and body["data"].get("entity_id") in hidden)):
+    if isinstance(body, dict) and (named(body.get("entity_id"))
+                                   or (isinstance(body.get("data"), dict) and named(body["data"].get("entity_id")))):
         return json.dumps({"error": "This device is hidden in the villa's system: the agent leaves it out."})
     return json.dumps(drop(body), ensure_ascii=False)
 
@@ -300,8 +305,12 @@ class Toolbox:
                  carry_out: Callable[..., Awaitable[dict]] | None = None,
                  start_job: Callable[..., Awaitable[str]] | None = None,
                  allowed: set[str] | None = None, invoked: str | None = None, inv: str | None = None,
-                 searched: list | None = None):
+                 searched: list | None = None, villa_devices: Callable[[], Awaitable[dict | None]] | None = None):
         self.s = settings
+        # the VESTA Kiosk's villa model, entity → {type, category} (kiosk.Kiosk.villa_devices): what a guest may read is
+        # judged on it (profiles.Reads); None when there is no Kiosk
+        self.villa_devices = villa_devices
+        self._role: str | None = None             # who asks this run (tool_objects): a guest reads what the tablet shows
         # the skill the person's "/command" called for in this turn (intake.gate): the only command skill it may use
         self.invoked = invoked
         self.inv = inv                 # the investigation this run belongs to (fault_offers: one offer each)
@@ -381,6 +390,7 @@ class Toolbox:
         """The AI's tools for one occasion: `origin` says who is asking (routing.Origin; None: a scheduled
         job or an alert hook), `person` who they are. What each tool allows follows from it, in routing."""
         chat_id = origin.chat if origin else None
+        self._role = person.role if person else None
         tools = [self._proxy(n) for n in self._read_names]
         for key, build in (("read_skill", self._read_skill), ("run_skill_script", lambda: self._run_script(origin)),
                            ("send_message", lambda: self._send(origin)), ("save_file", self._save_file),
@@ -420,7 +430,10 @@ class Toolbox:
                 self.state.log("tool_denied", {"tool": name})
                 return _err(f"{name} is not allowed.")
             known = set(((t.get("inputSchema") or {}).get("properties") or {}).keys())
-            if why := read_guard.refused(name, args, known):
+            reads = await self._reads()
+            if reads is False:
+                return _err("The villa's devices cannot be checked for this person just now: answer without reading them.")
+            if why := read_guard.refused(name, args, known, reads):
                 self.state.log("tool_arg_refused", {"tool": name, "args": sorted(args)[:10], "why": why[:120]})
                 return _err(why)
             args = ai_read_defaults(name, args, known)        # the villa's limits where the AI gives none
@@ -450,6 +463,8 @@ class Toolbox:
                     text = ""                              # not the answer the guard knows: nothing of it
             text = scrub(text, self._secrets())
             text = without_hidden(text, self._hidden())       # every read tool, never the search alone
+            if reads is not None:
+                text = without_hidden(text, reads.hides)      # and what the asker's tablet hides (a guest's)
             text = with_asleep(text, self._asleep())
             if not res.get("isError") and name != "ha_get_history":   # a history's rows are moments already
                 from vesta_shared.ha_client import McpClient
@@ -552,6 +567,28 @@ class Toolbox:
         """Is an entity unavailable by design (the Kiosk's list, each listed one's whole device: the pack)?"""
         pack = self._pack()
         return pack.is_asleep if pack is not None else (lambda e: False)
+
+    async def _reads(self):
+        """What this run's asker may read (profiles.Reads), read once per run: None for everything, False when their
+        profile limits it and the Kiosk's villa model, which the limit is judged on, cannot be read."""
+        if "_reads_got" in self.__dict__:
+            return self.__dict__["_reads_got"]
+        from vesta_shared import occupancy
+        from vesta_shared.profiles import Reads
+        # only a guest's run is held to a profile (the facility manager's tools are tool_access.fm's, everywhere)
+        reads = Reads.for_role(self._role) if self._role == tool_access.GUEST else None
+        if reads is not None:
+            devices = await self.villa_devices() if self.villa_devices else None
+            if devices is None:
+                reads = False
+            else:
+                pack = self._pack()
+                # who is home, in any form: the villa's "empty" sensor and every presence or occupancy reading
+                people = {r["entity_id"] for r in (pack.rows() if pack else [])
+                          if r.get("device_class") in ("occupancy", "presence")} | {occupancy.sensor(self.s.pack_path) or ""}
+                reads = Reads.for_role(self._role, devices, people - {""})
+        self.__dict__["_reads_got"] = reads
+        return reads
 
     def _hidden(self) -> set[str]:
         """The entities hidden in the villa's system (the knowledge pack's)."""

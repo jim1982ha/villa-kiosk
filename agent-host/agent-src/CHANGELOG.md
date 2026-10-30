@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.404 (31 October 2026)
+
+- A guest reads what the guest's tablet shows (architecture review round 8, card 1): vesta_shared.profiles.Reads, the
+  agreement's profiles.<id>.reads (domains, deniedTypes on the villa model's `type`, categories, people), judged on the
+  Kiosk's /agent/v1/villa-model (Kiosk.villa_devices) plus the villa's empty sensor and presence/occupancy readings.
+  Enforced at read_guard.refused(…, reads) for a guest's run and in every answer (tools.without_hidden now takes a
+  test as well as a set; a dict value naming a hidden id goes too). No villa model: a guest reads nothing.
+  tool_access.GUEST is a whitelist (GUEST_TOOLS: tools whose answer names each device, read_skill, web_search). No
+  before_answer status for a guest. tool_access.catalog roles[].guest from allowed_for(…, GUEST); rules.js draws the
+  Guest column from it.
+- One name per role (card 2): message_format.ROLE_WORDS / ROLE_SHORT read the agreement's profile label / short;
+  kiosk.fault_of reads every step's who through profiles.step_by (`role` first, else `by` with formerLabels mapped).
+- Card 4: page.hourchart's "ran" through timeutil.lasting; policy.reset_words "After 8h of silence".
+
 ## 0.6.403 (31 October 2026)
 
 - Telegram input missed during a restart (architecture review round 9, card 1): missed_alerts.py widened into

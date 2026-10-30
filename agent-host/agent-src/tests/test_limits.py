@@ -527,7 +527,7 @@ def test_the_chat_reset_reads_on_the_limits_tab_as_on_the_rules_tab(ui):
         row = next(r for r in _rows(ui)["rows"] if r["name"] == "settings.conversation_reset")
     finally:
         os.environ.pop("VESTA_LIMITS", None)
-    assert row["choices"] == [["daily_04_00", "Every day at 02:00"], ["after_8h_silence", "After 12 hours of silence"],
+    assert row["choices"] == [["daily_04_00", "Every day at 02:00"], ["after_8h_silence", "After 12h of silence"],
                               ["never", "Never (/new only)"]]
     js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "limits.js").read_text()
     assert "(Array.isArray(c) ? c : [c, c])" in js
@@ -557,7 +557,7 @@ def test_a_choice_is_said_in_its_words_and_a_share_stays_within_0_and_1(ui):
     async def fn(c):
         return (await (await c.get("/api/history")).json())["changes"]
     whats = [r["what"] for r in call(ui, fn) if r["place"] == "Limits"]
-    assert any(w == "settings.conversation_reset: Every day at 04:00 → After 8 hours of silence" for w in whats), whats
+    assert any(w == "settings.conversation_reset: Every day at 04:00 → After 8h of silence" for w in whats), whats
     assert any(" → 0.5" in w and ": → 0.5" not in w for w in whats), whats            # a skill's save says its value before
     js = (Path(__file__).resolve().parents[1] / "vesta_agent" / "ui" / "static" / "limits.js").read_text()
     assert "toast(`Saved: ${r.name} = ${said(r, value)}`)" in js
@@ -567,4 +567,4 @@ def test_a_rules_save_says_the_choice_in_its_words_in_page_changes():
     # review L (2026-10-25): a Rules-tab save read "Delete conversation context at: daily_04_00 → after_8h_silence"
     from vesta_agent.history import policy_change
     line = policy_change("settings:\n  conversation_reset: daily_04_00\n", "settings:\n  conversation_reset: after_8h_silence\n")
-    assert line.endswith(": Every day at 04:00 → After 8 hours of silence"), line
+    assert line.endswith(": Every day at 04:00 → After 8h of silence"), line

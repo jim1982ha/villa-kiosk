@@ -98,10 +98,16 @@ def logbook_too_wide(name: str, args: dict) -> str | None:
             "Name the entity_id for a longer period, or read the hours around the moment that matters.")
 
 
-def refused(name: str, args: dict | None, known: set | None = None) -> str | None:
+def refused(name: str, args: dict | None, known: set | None = None, reads=None) -> str | None:
     """Why the arguments of this call are refused, whoever calls — or None. `known`: the arguments the tool declares
-    (the AI's calls: anything else is refused too)."""
+    (the AI's calls: anything else is refused too). `reads`: what the asker may read (profiles.Reads, a guest's from
+    the agreement), None for everything.
+
+    ⚠️ A GUEST LEARNS NO MORE FROM VESTA THAN FROM THE GUEST'S TABLET (architecture review round 8): a guest asking on
+    the tablet was answered from the people and motion sensors the guest's screen hides."""
     args = args or {}
+    if reads is not None and (why := reads.refused(name, args)):
+        return why
     if name in READ_ACTIONS:
         key, reads = READ_ACTIONS[name]
         if args.get(key) not in reads:

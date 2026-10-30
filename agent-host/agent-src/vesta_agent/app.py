@@ -290,7 +290,8 @@ class Vesta:
                        ticket=self.tickets.create if self.kiosk.enabled else None,
                        carry_out=self.outcome.carry_out, start_job=self.jobs.start, allowed=allowed,
                        invoked=request.name if request else None, inv=request.inv if request else None,
-                       searched=request.searched if request else None)
+                       searched=request.searched if request else None,
+                       villa_devices=self.kiosk.villa_devices if self.kiosk.enabled else None)
 
     def lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(int(chat_id), asyncio.Lock())
@@ -888,6 +889,10 @@ class Vesta:
             told_at = None
             if not is_continue:
                 checked = await (ask.checked if ask.checked is not None else asyncio.to_thread(self.before_answer))
+                if person is not None and person.role == tool_access.GUEST:
+                    # ⚠️ NOT THE VILLA'S STATUS FOR A GUEST (architecture review round 8): it names the offline devices,
+                    # the open alerts and the locks, which the guest's tablet does not show
+                    checked = None
                 if ask.timeline is not None:
                     ask.timeline.mark("status check")       # what was left of it once the words came (it ran beside them)
                 # ⚠️ WHAT THIS CHAT HAS, AS FACTS, WITH EVERY MESSAGE (owner, 2026-10-23): the digest a job had sent at
