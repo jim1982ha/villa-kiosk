@@ -1,3 +1,9 @@
+## 2.496.616
+
+What you will see:
+- On a card whose lines each show their own icon (the onsen pump's "Also" line and #96), the icons sit inside the
+  card again, in its icon column. They hung past the card's left edge.
+
 ## 2.496.615
 
 What you will see:

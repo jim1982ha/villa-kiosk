@@ -66,7 +66,10 @@ export function AttentionCard({ card, onOpenEntity, actions, lineMessage, focuse
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look === "watched"
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
-        : head ? <SourceIcons {...head} /> : undefined}
+        : head ? <SourceIcons {...head} />
+        // ⚠️ THE ICON COLUMN STAYS (owner, 2026-10-30: "the icons appear outside the cards"): with every icon said by its
+        // line, the name had none, the card dropped its column and the lines' icons hung past its edge
+        : card.lead ? <span className="fm-record-lead-empty" aria-hidden="true" /> : undefined}
       // when its problems are read again: a refresh icon and when, a pill at the right of its name (owner, 2026-10-22);
       // hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
       check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
