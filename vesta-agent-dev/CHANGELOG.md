@@ -1,3 +1,12 @@
+## 0.12.409
+
+What you will see:
+- Need help pressed on a card in the tablet's Cockpit reaches the Owner on Telegram, exactly like the Telegram button
+  (within the next 5min check).
+- On a card with no alert (a night-check finding, a ticket someone opened), Need help gives the Owner an alert with
+  Done and Need help: its Done on Telegram closes that finding or ticket, and Done in the Cockpit closes the alert.
+- Telegram says "Done in the Cockpit on … (JM)" where it said "Closed in the Cockpit".
+
 ## 0.12.408
 
 What you will see:
