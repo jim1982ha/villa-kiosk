@@ -1,3 +1,13 @@
+## 0.12.408
+
+What you will see:
+- VESTA's check every 5min still took 42.4s after the last update: each question it asked the villa's system opened
+  a new connection first (three exchanges for one answer), and each battery's and each level's figures were asked
+  for one device at a time. Now one connection serves the whole check, and those figures are asked for all devices
+  at once.
+- The Agent's log now says, after each skill's time, what it asked the villa's system for ("recheck.py took 6.1 s
+  (12 ha_get_history, 3 ha_get_state)"), so a slow check shows why.
+
 ## 0.12.407
 
 What you will see:

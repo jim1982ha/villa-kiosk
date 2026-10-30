@@ -13,7 +13,9 @@ read, kept ten minutes. Here, for every script:
 """
 from __future__ import annotations
 
+import atexit
 import os
+import sys
 from datetime import date, datetime, timezone
 from functools import cached_property
 from zoneinfo import ZoneInfo
@@ -57,6 +59,8 @@ class Context:
         # kept" there, and reads the long-term figures for before it
         if getattr(self.args, "pack", None) and self.pack:
             cli.detailed_days = self.pack.detailed_days
+        if isinstance(getattr(getattr(cli, "mcp", None), "calls", None), dict):
+            atexit.register(say_reads, cli.mcp.calls)
         return cli
 
     @cached_property
@@ -132,3 +136,16 @@ class Context:
             from datetime import timedelta
             return today - timedelta(days=1) if last_finished else today
         return villa_day(self.Z, None, last_finished=last_finished)
+
+
+#: The last line a script writes on stderr: what it asked the villa's system for (script_run puts it on its "took"
+#: line). ⚠️ A SLOW RUN SAID NOTHING OF WHY (owner, 2026-10-30: "recheck.py took 42.4 s", ~220 calls, which ones not
+#: known): each tool and how many times, so the next cut is measured, never guessed.
+READS = "reads: "
+
+
+def say_reads(calls: dict[str, int]) -> None:
+    if calls:
+        print(READS + ", ".join(f"{n} {name}" for name, n in sorted(calls.items(), key=lambda kv: -kv[1])),
+              file=sys.stderr)
+

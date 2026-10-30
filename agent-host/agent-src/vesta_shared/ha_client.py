@@ -169,6 +169,11 @@ class McpSession:
         self.timeout = timeout          # None: the villa's limit, read at each call
         self.sid: str | None = None
         self._id = 0
+        # ⚠️ ONE SESSION, NOT ONE PER CALL (owner, 2026-10-30: the recheck's 42.4 s were ~220 calls, each logged as
+        # initialize, initialized, call): ha-mcp answers without a session id, so `ensure` saw none and opened a new
+        # session before every call — three requests for one read. Opened once; a refusal opens it again, once.
+        self.ready = False
+        self.calls: dict[str, int] = {}             # tool name -> calls made, for the run's "reads" line
 
     def _http(self, payload: bytes, headers: dict) -> tuple[int, dict, bytes]:
         """One POST with the standard library (no third-party HTTP package in the scripts' path).
@@ -192,8 +197,8 @@ class McpSession:
             status, rh, content = self._http(json.dumps(body).encode(), headers)
         except Exception as e:  # never echo the URL: it holds the secret
             raise HAError(f"ha-mcp unreachable ({type(e).__name__})") from None
-        if status in (400, 404) and self.sid and method != "initialize" and _retry:
-            self.sid = None            # the session expired: one new session, one retry, never a loop
+        if status in (400, 404) and (self.sid or self.ready) and method != "initialize" and _retry:
+            self.sid, self.ready = None, False   # the session expired: one new session, one retry, never a loop
             self.initialize()
             return self._post(method, params, notify, _retry=False)
         if status >= 300:
@@ -216,10 +221,11 @@ class McpSession:
                                         "clientInfo": {"name": "vesta-agent", "version": "0.3"}})
         self._post("notifications/initialized", notify=True)
         self.server_info = (res or {}).get("serverInfo") or {}      # name and version, for the VESTA Agent page
+        self.ready = True
         return res or {}
 
     def ensure(self) -> None:
-        if not self.sid:
+        if not self.sid and not self.ready:
             self.initialize()
 
     def list_tools(self) -> list[dict]:
@@ -228,6 +234,7 @@ class McpSession:
 
     def call_raw(self, name: str, args: dict) -> dict:
         self.ensure()
+        self.calls[name] = self.calls.get(name, 0) + 1
         return self._post("tools/call", {"name": name, "arguments": args}) or {}
 
 
@@ -334,6 +341,14 @@ def paged(fetch, step: int, max_pages: int) -> tuple[list, bool]:
             return rows, False                     # "more" with nothing new: the server repeats itself
         offset = nxt if isinstance(nxt, int) and nxt > offset else offset + (len(batch) or step)
     return rows, False
+
+
+def _by_start(rows: list[dict]) -> list[dict]:
+    """Statistics rows oldest first, each `start` in milliseconds (ha-mcp may answer it as an ISO time)."""
+    for r in rows:
+        if not isinstance(r.get("start"), (int, float)):
+            r["start"] = int(datetime.fromisoformat(str(r["start"])).timestamp() * 1000)
+    return sorted(rows, key=lambda r: r["start"])
 
 
 class McpClient(HABase):
@@ -444,7 +459,26 @@ class McpClient(HABase):
         pages = limit("statistics.max_pages", 200, unit="pages", group="read", lo=1, hi=2000,
                       says="Pages of statistics read for one device, each statistics.page_rows figures long.",
                       reached="The reading stops there, without saying so.", told="")
-        for eid in entity_ids:
+        ids = list(dict.fromkeys(entity_ids))
+        done: dict[str, list[dict]] = {}
+        # ⚠️ ONE READ FOR EVERY DEVICE (owner, 2026-10-30: the recheck read each battery's and each level's figures
+        # alone): the devices are asked together (history_batch_entities at a time); one whose figures hold more than
+        # a page is read again alone, page by page, as before
+        size = history_batch_entities()
+        for i in range(0, len(ids) if len(ids) > 1 else 0, size):
+            group = ids[i:i + size]
+            body = self.tool("ha_get_history", {
+                "entity_ids": group, "source": "statistics", "period": period, "statistic_types": list(types),
+                "start_time": start.astimezone(timezone.utc).isoformat(), "end_time": end.astimezone(timezone.utc).isoformat(),
+                "limit": page, "offset": 0})
+            for ent in body.get("entities") or []:
+                if isinstance(ent, dict) and ent.get("entity_id") in group and not ent.get("has_more"):
+                    done[ent["entity_id"]] = ent.get("statistics") or []
+        for eid in ids:
+            if eid in done:                                   # whole in the group's read; any other: alone
+                out[eid] = _by_start(done[eid])
+                continue
+
             def fetch(offset, eid=eid):
                 body = self.tool("ha_get_history", {
                     "entity_ids": eid, "source": "statistics", "period": period, "statistic_types": list(types),
@@ -453,10 +487,7 @@ class McpClient(HABase):
                 ent = next(iter(body.get("entities") or []), {})
                 return ent.get("statistics") or [], ent.get("has_more"), ent.get("next_offset")
             rows, _ = paged(fetch, page, max_pages=pages)     # a year of hours is 9 pages of 1,000
-            for r in rows:
-                if not isinstance(r.get("start"), (int, float)):
-                    r["start"] = int(datetime.fromisoformat(str(r["start"])).timestamp() * 1000)
-            out[eid] = sorted(rows, key=lambda r: r["start"])
+            out[eid] = _by_start(rows)
         return out
 
     def history(self, entity_ids, start, end):

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 
 from vesta_shared.ha_client import error_chars
 from vesta_shared.limits import limit
+from vesta_shared.script import READS
 
 from .skills import run_command as _fill_and_run, run_script as _run, script_timeout_s
 
@@ -130,5 +131,7 @@ def _answer(settings, state, skill, script, args, code, out, err, seconds, by) -
     elif ans.ok:
         # ⚠️ WHERE AN ANSWER'S TIME GOES (owner, 2026-10-11: "i had to wait for almost 20 min"): each script's own
         # duration in the log, beside the run's total — the records hold it too, but the log is what can be read
-        log.info("Skill %s: %s %s took %.1f s", skill.name, script, (args[0] if args else ""), ans.seconds)
+        reads = next((ln[len(READS):] for ln in reversed(ans.stderr.splitlines()) if ln.startswith(READS)), "")
+        log.info("Skill %s: %s %s took %.1f s%s", skill.name, script, (args[0] if args else ""), ans.seconds,
+                 f" ({reads})" if reads else "")
     return ans

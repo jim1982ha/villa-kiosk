@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.394 (30 October 2026)
+
+- McpSession opens its session once (`ready`), not before every call when ha-mcp answers with no session id; it counts
+  its calls by tool. McpClient.statistics reads several entities in one ha_get_history (history.batch_entities), one
+  with has_more alone as before. A script's villa client says its calls at exit (script.say_reads, `reads: …`), put on
+  the engine's "took" line (script_run).
+
 ## 0.6.393 (30 October 2026)
 
 - McpClient._history reads a slice's quiet entities in one ha_get_history (history.batch_entities; a busy one goes on
