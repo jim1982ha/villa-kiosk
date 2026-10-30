@@ -103,7 +103,7 @@ MARK_ICONS = {"help": "🆘", "unchecked": "☑️"}
 #: ⚠️ WHAT, WHEN, THEN WHO (owner, 2026-10-19: "✅ Done on 19/10/2026 02:10 (JM)"): every line saying a person's act —
 #: a press, an approval, a close or reopen in the Cockpit — reads "<what> on <when> (<who>)" (acted).
 def acted(what: str, when: str, who: str = "") -> str:
-    """A person's act as every line says it: "Done on 19/10/2026 02:10 (JM)", "Closed in the Cockpit on … (Fabien)" —
+    """A person's act as every line says it: "Done on 19/10/2026 02:10 (JM)", "Done in the Cockpit on … (Fabien)" —
     no full stop, a sentence may go on; no brackets when nobody is named.
 
     ⚠️ THE ONE WRITER (architecture review, 2026-10-19): PRESSED, an approval's "Approved / Refused / Expired on …"
@@ -120,6 +120,20 @@ def acted(what: str, when: str, who: str = "") -> str:
 # help in the Cockpit"
 COCKPIT = {"closed": "Done in the Cockpit", "help": "Need help in the Cockpit", "taken": "Ticket opened in the Cockpit",
            "reopened": "Reopened in the Cockpit", "look_again": "Please look again."}
+
+#: Where a person's Done on an alert was given: Telegram's button, the tablet's notice (its copy of the alert), the
+#: Cockpit's card. ⚠️ ONE DONE, ONE WORDING (architecture review, 2026-10-30 evening: the reports said "Done", "Done
+#: (Closed in the Cockpit)" or "Done (Done in the Cockpit)" for the same press, and a Telegram Done was later called a
+#: close in the Cockpit): the place said once, here — done_in writes the line.
+ON_TELEGRAM, ON_TABLET, IN_COCKPIT = "telegram", "tablet", "cockpit"
+DONE_IN = {ON_TELEGRAM: "Done on Telegram", ON_TABLET: "Done on the tablet", IN_COCKPIT: COCKPIT["closed"]}
+
+
+def done_in(place: str, who: str | None = None) -> str:
+    """A person's Done as the reports and the fault's close name it: "Done on Telegram (JM)", "Done in the Cockpit (JM)"
+    — no full stop; "Done" alone for a place not known."""
+    what = DONE_IN.get(place, "Done")
+    return f"{what} ({who})" if who else what
 
 
 def closing(tail: str = "") -> str:

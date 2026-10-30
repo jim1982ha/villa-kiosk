@@ -84,7 +84,7 @@ def test_a_close_the_desk_cannot_check_says_so_with_what_the_device_reads(tmp_pa
     out = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=11),
                     client=Villa(**{"lock.door": ("unlocked", T0)}))
     (fm,) = [s for s in out["send"] if s["to"] == "fm"]
-    assert fm["status"] == "Closed in the Cockpit. Note: VESTA cannot check this one; door reads unlocked. Watch 4h."
+    assert fm["status"] == "Done in the Cockpit. Note: VESTA cannot check this one; door reads unlocked. Watch 4h."
     assert fm["stage"] == "closed" and store.incident(iid)["closed_at"]
 
 
@@ -205,7 +205,7 @@ def test_a_fault_the_agent_cleared_and_a_person_renamed_is_never_a_persons_close
                      at="2099-01-01T00:00:00.000Z")                        # after it (the rename step says "resolved")
     run(v.tickets.repair())
     assert st.task(tid)["status"] == "open" and st.incident(iid)["closed_at"] is None
-    assert not [n for n in settled if n.startswith("Closed in the Cockpit")], settled
+    assert not [n for n in settled if n.startswith(("Closed in the Cockpit", "Done in the Cockpit"))], settled
 
 
 def test_a_reopening_told_before_the_mark_existed_is_never_told_again(tmp_path):

@@ -206,6 +206,14 @@ class FakeKiosk(Kiosk):
             step.update(kind=CLEARED, note="Closed without action", photoIds=[])
         self._step(tid, step, status="resolved", resolvedAt=at)
 
+    def person_does(self, tid: str, who: str = "JM", at: str = PERSON_AT) -> None:
+        """Done on an issue card, recorded as WORK DONE (review round 4, 2026-10-30 evening): the fault resolved by the
+        person, with a completion naming them (Recent work) — the shape a Telegram Done's resolve_ticket(who) writes."""
+        self._step(tid, {"at": at, "status": "resolved", "by": who, "who": who}, status="resolved", resolvedAt=at)
+        data = self.doc["data"]
+        data["completions"] = list(data.get("completions") or []) + [{
+            "id": f"cp-{tid}", "scheduleId": "", "ticketId": tid, "at": at, "by": who, "who": who, "photoIds": []}]
+
     def person_reopens(self, tid: str, by: str = "Owner", at: str = "2099-01-01T00:00:00.000Z") -> None:
         self.ticket(tid).pop("resolvedAt", None)
         self._step(tid, {"at": at, "status": "open", "by": by, "kind": REOPENED}, status="open")

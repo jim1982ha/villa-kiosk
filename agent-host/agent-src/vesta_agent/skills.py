@@ -33,7 +33,7 @@ and skill.yaml (what the engine needs):
       critical_event: "desk.py intake --event {event}"
       voice_message: "voice.py prepare --audio {audio} --language {language}"   # prints {"stt": {...}}
       answer_aloud: "voice.py speak --text {text} --language {language} --voice {voice}"  # {"language", "voice"}
-    on_reply: "desk.py reply --incident {incident} --option {option} --from {role} --name {name}"
+    on_reply: "desk.py reply --incident {incident} --option {option} --from {role} --name {name} --place {place}"
     buttons:                         the buttons under every message about an open alert, answered by on_reply
       - {option: done, label: Done}              option: what on_reply is given; label: the words on the button
       - {option: need_help, label: Need help, mark: help}   mark: the icon its footer shows (message_format)

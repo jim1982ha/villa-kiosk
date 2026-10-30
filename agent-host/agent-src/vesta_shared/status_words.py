@@ -252,7 +252,7 @@ def acted(what: str, when: str, whom: str = "", lang: str = "en") -> str:
 
 def cockpit(act: str, when: str, whom: str = "", lang: str = "en") -> str:
     """What a person did in the Cockpit (message_format.COCKPIT: "closed", "taken", "reopened"), as a line says it in
-    `lang`: "Closed in the Cockpit on 11/10/2026 07:05 (JM)", "Clôturé dans le Cockpit le 11/10/2026 07:05 (JM)"."""
+    `lang`: "Done in the Cockpit on 11/10/2026 07:05 (JM)", "Terminé dans le Cockpit le 11/10/2026 07:05 (JM)"."""
     w = _w(lang)
     return acted(w["cockpit"][act] if w else mf.COCKPIT[act], when, whom, lang)
 

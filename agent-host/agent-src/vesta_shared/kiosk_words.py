@@ -54,7 +54,7 @@ def read(value) -> Words:
 
 
 def closed(by: str, iso: str | None, zone: str, end: bool = False) -> Words:
-    """"Closed in the Cockpit on 11/10/2026 07:05 (Fabien)" in every language — no full stop unless `end` (a sentence
+    """"Done in the Cockpit on 11/10/2026 07:05 (Fabien)" in every language — no full stop unless `end` (a sentence
     may go on after it)."""
     at = when(iso, zone)
     return _every(lambda lang: SW.cockpit("closed", at, by, lang) + (SW.stop(lang) if end else ""))

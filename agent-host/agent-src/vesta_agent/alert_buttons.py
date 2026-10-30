@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Awaitable, Callable
 
-from vesta_shared.message_format import PRESSED
+from vesta_shared.message_format import ON_TABLET, ON_TELEGRAM, PRESSED
 from vesta_shared.limits import limit
 from vesta_shared.status_words import pressed
 
@@ -91,7 +91,8 @@ class AlertButtons:
             return await toast("Already answered.")
         self._pressing.add(key)
         try:
-            await self._answer(iid, buttons[opt], skill, chat, person, toast, name or person.name)
+            await self._answer(iid, buttons[opt], skill, chat, person, toast, name or person.name,
+                               ON_TABLET if anywhere else ON_TELEGRAM)
         finally:
             self._pressing.discard(key)
         # ⚠️ THE COPY PRESSED MAY NOT BE THE ONE ON RECORD (architecture review scan 1, 2026-10-19: #55 twice in the
@@ -100,7 +101,8 @@ class AlertButtons:
         if pressed is not None:
             await self.thread.stray(int(iid), int(chat), int(pressed))
 
-    async def _answer(self, iid: str, button: dict, skill, chat: int, person, toast, name: str) -> None:
+    async def _answer(self, iid: str, button: dict, skill, chat: int, person, toast, name: str,
+                      place: str | None = None) -> None:
         label = button["label"]
         await toast(f"{label}: noted.")
         self.state.log("ladder", {"incident": iid, "by": person.name, "reply": label})
@@ -126,4 +128,6 @@ class AlertButtons:
                 "alerts.reply_hook_timeout_s", 120, unit="seconds", group="run", lo=10, hi=1800,
                 says="How long a skill may take to handle a button pressed under an alert.",
                 reached="That handling stops and counts as failed; the press itself is recorded.", told="person"), {"incident": iid, "option": button["option"], "text": label,
-                                                             "role": person.role, "name": name}, Origin(chat))
+                                                             "role": person.role, "name": name,
+                                                             # where it was pressed: its Done says so ("Done on the tablet")
+                                                             "place": place or ON_TELEGRAM}, Origin(chat))

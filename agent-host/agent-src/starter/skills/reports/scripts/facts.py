@@ -430,8 +430,13 @@ def _alert_rows(c: Ctx) -> list[dict]:
             # a state with no words is named, not shown raw to the reader
             c.problems.append(f"reports.yaml: incident_words has no words for the state {state!r}")
         outcome = words.get(state, state)
-        if i.get("reply"):
-            outcome += f" ({i['reply']})" if i["reply"].lower() not in outcome.lower() else ""
+        reply = str(i.get("reply") or "")
+        # ⚠️ A REPLY THAT SAYS THE OUTCOME IS THE OUTCOME (architecture review, 2026-10-30 evening: "Done (Closed in the
+        # Cockpit)", "Done (Done in the Cockpit)"): a person's Done names its place itself ("Done on Telegram (JM)")
+        if reply and reply.lower().startswith(outcome.lower()):
+            outcome = reply
+        elif reply and reply.lower() not in outcome.lower():
+            outcome += f" ({reply})"
         rows.append({"when": i["opened_at"], "what": problem_name(p.get("message") or p.get("label") or i["rule_id"])["headline"],
                      "lasted": lasted or ("open" if not i.get("closed_at") else ""), "outcome": outcome,
                      "severity": i.get("severity"), "source": "agent"})

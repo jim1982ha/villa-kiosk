@@ -479,7 +479,8 @@ def reopened_untold(store, zone: str, settings: dict, edits: list | None = None)
 def still_there_untold(store, zone: str, settings: dict, edits: list | None = None) -> list[dict]:
     """The messages for the night check's faults opened again because their problem was read still there after a
     person closed them (Problems.STILL_THERE) that nobody has been told of yet, each told once: to settings.yaml
-    `still_there_after_close.tell`, under its `title`, its `words` ({when} the close, {what} the fault). Without them
+    `still_there_after_close.tell`, under its `title`, its `words` ({done} where the close was given, {when} the close,
+    {what} the fault). Without them
     nothing is sent and the tasks stay untold — named on stderr, never guessed. `edits`: as reopened_untold's."""
     words = settings.get("still_there_after_close") or {}
     to, title, body = (str(words.get(k) or "") for k in ("tell", "title", "words"))
@@ -497,7 +498,9 @@ def still_there_untold(store, zone: str, settings: dict, edits: list | None = No
     for t in rows:
         if int(t["id"]) not in said:
             what = Problems(store).current_title(t)
-            out.append(result.message(to, body.replace("{when}", kiosk_words.when(t.get("done_at"), zone))
+            # {done}: where the person's close was given ("Done in the Cockpit", "Done on Telegram": Problems.done_where)
+            out.append(result.message(to, body.replace("{done}", Problems.done_where(t))
+                                      .replace("{when}", kiosk_words.when(t.get("done_at"), zone))
                                       .replace("{what}", what.rstrip(".")), title=title))
         store.reopening_told(t["id"])
     return out

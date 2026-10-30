@@ -40,11 +40,12 @@ from vesta_shared import alert_watch as W  # noqa: E402  (a closed alert's watch
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared.maintenance import on as maintenance_on  # noqa: E402  (the villa's maintenance mode: the Kiosk's)
 from vesta_shared.timeutil import day_time_label, moment_label, villa_time  # noqa: E402
-from vesta_shared.problems import AGAIN_DAYS, Problems, help_key, incident_runs, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import AGAIN_DAYS, Problems, incident_runs, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result as R  # noqa: E402  (what the engine is asked to do: its shape)
 from vesta_shared import script  # noqa: E402  (client, store, settings, zone: one set-up)
 from vesta_shared import skill_settings  # noqa: E402  (rules.yaml, the villa's on top)
 from vesta_shared.messaging import incident_tag  # noqa: E402
+from vesta_shared import message_format as mf  # noqa: E402  (where a Done was given: ON_TELEGRAM, ON_TABLET)
 from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted, closing  # noqa: E402  ("<what> on <time> (<who>)", "Cleared on <time>.": one wording each)
 from vesta_shared import status_words as SW  # noqa: E402  (the same frames in every language a chat reads)
 from vesta_shared import kiosk_words  # noqa: E402
@@ -1101,11 +1102,12 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
 
 
 def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, params: VillaParams | None = None,
-          name: str | None = None) -> dict:
+          name: str | None = None, place: str = mf.ON_TELEGRAM) -> dict:
     """A person's answer to incident `iid`: the `option` of the button pressed (BUTTONS). `name`: the person, as the People list
     names them — every line about the answer says it the way the button's own footer does ("Done pressed by Fabien on
     …"): owner, 2026-10-11, the same press read "Done pressed by Fabien" on one message and "Done answered by the
-    facility manager" on the next."""
+    facility manager" on the next. `place`: where it was pressed (message_format ON_TELEGRAM, or ON_TABLET: the tablet's
+    notice), as its Done names it."""
     inc = store.incident(iid)
     out = {"send": [], "actions": []}
     if not inc:
@@ -1129,9 +1131,9 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         out["send"].append(here(say("already_closed"), "closed")); return out
     if option == "done":
         # the one close of an alert (alert_watch.close): a person's, read again after the desk's wait, with its watch
-        out["actions"] += Problems(store).close_incident(iid, Incident.DONE, now.isoformat(),
-                                                         f"{label} on Telegram ({who}).", who=who, reply=label,
-                                                         person=f"{label} ({who})", terms=terms(params))
+        # the one close by a person (Problems.person_done): "Done on Telegram (JM)" / "Done on the tablet (JM)"
+        out["actions"] += Problems(store).person_done(iid, place, who=who, at=now.isoformat(),
+                                                      person=f"{label} ({who})", terms=terms(params))
         # ⚠️ A PROMISE THE CODE KEEPS (architecture review 23): "will check it stays quiet" was written since 0.9.0 and
         # nothing ever checked — a Done on a door still unlocked closed it for good. The tick reads it again (quiet_after_done)
         # read again whatever the rule: still bad, it reopens; not knowable, the people asked are told (still_there)
@@ -1176,14 +1178,14 @@ def help_alerts(store: Store, now: datetime, out: dict) -> list[int]:
     """⚠️ NEED HELP ON A FAULT WITH NO ALERT (owner, 2026-10-30: every Cockpit card offers Done · Need help · Open Ticket):
     a night-check finding or a person's ticket gets an alert of its own, already escalated to the chase's escalates_to,
     standing for that fault (Notes.HELP_OF) — its Done on Telegram closes the fault, the fault's Done in the Cockpit
-    closes it (Problems.close_incident, closed_in_kiosk). One open per fault (problems.help_key). Its ids."""
+    closes it (Problems.close_incident, closed_in_kiosk). One open per fault (vesta_shared.help_link). Its ids."""
     made = []
-    for subject, h in Problems(store).help_asked().items():
-        if store.find_open_incident(help_key(subject)):
-            continue
+    link = Problems(store).help
+    for subject, h in link.waiting().items():
         title = str(h.get("title") or "")
-        iid = store.new_incident(help_key(subject), str(h.get("rule_id") or "kiosk_help"), str(h.get("entity_id") or ""),
-                                 "P2", {Notes.MESSAGE: title, Notes.HELP_OF: subject}, now.isoformat())
+        key, notes = link.opened(subject, title)
+        iid = store.new_incident(key, str(h.get("rule_id") or "kiosk_help"), str(h.get("entity_id") or ""), "P2", notes,
+                                 now.isoformat())
         carry_to(store, iid, "P2")
         store.update_incident(iid, state=Incident.ESCALATED, asked_at=now.isoformat(), escalated_at=now.isoformat(),
                               assignee=CHASE["escalates_to"])
@@ -1311,6 +1313,8 @@ def main(argv=None):
     ap.add_argument("cmd", choices=["intake", "tick", "reply", "status"])
     script.arguments(ap)                           # --store --zone --fixture-dir --now: one set-up for every script
     ap.add_argument("--event"); ap.add_argument("--incident", type=int); ap.add_argument("--option"); ap.add_argument("--from", dest="sender", default="fm"); ap.add_argument("--name")
+    # where the button was pressed (the engine's `place`: telegram, tablet); a skill.yaml from before it says none
+    ap.add_argument("--place", choices=[mf.ON_TELEGRAM, mf.ON_TABLET], default=mf.ON_TELEGRAM)
     a = ap.parse_args(argv)
     ctx = script.Context(a, skill=SKILL, settings_file="rules.yaml")
     store = ctx.store
@@ -1324,7 +1328,7 @@ def main(argv=None):
     elif a.cmd == "tick":
         res = tick(store, now, params, ctx.live_client, zone=ctx.zone)
     elif a.cmd == "reply":
-        res = reply(store, a.incident, a.option or "", a.sender, now, params, name=a.name)
+        res = reply(store, a.incident, a.option or "", a.sender, now, params, name=a.name, place=a.place)
     else:
         res = {"open": store.incidents(), "beats": {n: store.last_beat(n) for n in (HA_BEAT, "agent_tick", "maintenance_nightly")}}
     print(json.dumps(res, indent=1, default=str))

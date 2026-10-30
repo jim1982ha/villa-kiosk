@@ -20,14 +20,14 @@ from vesta_shared.problems import Problems
 from .kiosk import MINE, KioskError, closing, confirming, noted, retitled, tagged, todo
 from .kiosk import fault_title_chars
 from vesta_shared.messaging import headline, incident_tag
-from vesta_shared.message_format import STEPS
+from vesta_shared.message_format import IN_COCKPIT, STEPS
 from .scheduler import next_slot
 
 log = logging.getLogger("vesta.outcome")
 
 
 def kiosk_close_note(ticket: dict, zone: str) -> kiosk_words.Words:
-    """The note a fault closed in the VESTA Kiosk leaves on its alert's messages: "Closed in the Cockpit on
+    """The note a fault closed in the VESTA Kiosk leaves on its alert's messages: "Done in the Cockpit on
     10/10/2026 17:13 (Wayan)." — who (the name typed, else the profile) and when the Kiosk recorded
     (vesta_shared.kiosk_words, plus the full stop a settle note ends with), in every chat's language (its `langs`)."""
     return kiosk_words.closed(ticket.get("by") or "", ticket.get("resolved_at"), zone, end=True)
@@ -250,7 +250,8 @@ class Tickets:
             if card and card["status"] == "resolved" and not (card.get("cleared") and card.get("closed_mine")) \
                     and not _before(card.get("resolved_at"), t.get("reopened_at")):
                 iid = problems.closed_in_kiosk(t["id"], kiosk_words.closed(card.get("by") or "", card.get("resolved_at"),
-                                                                           self.timezone), at=card.get("resolved_at"))
+                                                                           self.timezone), at=card.get("resolved_at"),
+                                               who=card.get("by") or None)
                 if iid:
                     # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close,
                     # each chat's copy in its language (architecture review O)
@@ -289,8 +290,9 @@ class Tickets:
     async def _helps(self, problems: Problems, held: dict[str, dict]) -> None:
         """A person's Need help on a card in the Kiosk (owner, 2026-10-30: every card offers Done · Need help · Open
         Ticket) reaches the owner: an alert's through its desk, any other fault's through an alert the desk opens already
-        escalated (Problems.help_in_kiosk). A person's ticket whose standing alert closed (a Done on Telegram) is resolved
-        here; one a person closed in the Kiosk closes its standing alert."""
+        escalated (vesta_shared.help_link). A person's ticket whose standing alert closed (a Done on Telegram) is resolved
+        here; one a person closed in the Kiosk closes its standing alert, as their Done in the Cockpit."""
+        link = problems.help
         tasks = {t.get("todo_uid"): t for t in problems.open_tasks() if t.get("todo_uid")}
         for uid, card in held.items():
             if not card.get("help_at") or card["status"] == "resolved":
@@ -299,20 +301,20 @@ class Tickets:
             if task is None and uid.startswith(MINE):
                 continue                                 # the agent's fault of no open task: nothing stands for it
             said = kiosk_words.helped(card.get("help_by") or "", card["help_at"], self.timezone)
-            subject = f"task:{int(task['id'])}" if task else f"kiosk:{uid}"
-            iid = problems.help_in_kiosk(subject, said, card["help_at"], task=task, title=card.get("title") or "",
-                                         entity_id=card.get("entity_id") or "")
+            subject = link.of_task(task["id"]) if task else link.of_ticket(uid)
+            iid = link.asked(subject, said, card["help_at"], task=task, title=card.get("title") or "",
+                             entity_id=card.get("entity_id") or "")
             log.info("Need help pressed in the Kiosk on %s: %s", uid,
                      f"incident #{iid} escalated" if iid else "the owner is asked by the alert desk")
-        for uid, r in problems.help_resolves().items():
+        for uid, r in link.resolves().items():
             if (held.get(uid) or {}).get("status") not in (None, "resolved"):
                 await self.kiosk.resolve_ticket(uid, note=r.get("note") or None, who=r.get("who") or None)
         for uid, card in held.items():
             if card["status"] != "resolved" or uid.startswith(MINE):
                 continue
-            if iid := problems.help_standing(f"kiosk:{uid}"):
+            if iid := link.standing(link.of_ticket(uid)):
                 said = kiosk_words.closed(card.get("by") or "", card.get("resolved_at"), self.timezone)
-                problems.closed_help(iid, said, at=card.get("resolved_at"))
+                problems.person_done(iid, IN_COCKPIT, who=card.get("by") or None, at=card.get("resolved_at"), said=said)
                 note = kiosk_close_note(card, self.timezone)
                 await self.settle_alert(iid, note, note_in=note.langs or None)
 

@@ -355,7 +355,7 @@ def test_a_night_fault_closed_while_the_device_is_still_offline_opens_again_once
     settings = yaml.safe_load(open(os.path.join(SKILL, "settings.yaml")))["still_there_after_close"]
     (msg,) = out["send"]                                                                # the facility manager, told
     assert (msg["to"], msg["title"]) == (settings["tell"], settings["title"])
-    assert msg["text"].startswith("Closed in the Cockpit on ") and "TH has been offline for" in msg["text"], msg
+    assert msg["text"].startswith("Done in the Cockpit on ") and "TH has been offline for" in msg["text"], msg
     again = _run_engine(tmp_path, states, closed + timedelta(minutes=16))
     assert again["send"] == [] and st.task(tid)["status"] == "open" and len(st.tasks(None)) == 1   # told once, one task
 

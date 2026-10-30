@@ -29,6 +29,8 @@ from .limits import limit
 from .messaging import headline, incident_tag, problem_title_chars
 from .store import Incident, Notes, Store, notes_of
 from . import alert_watch, kiosk_words
+from . import message_format as mf
+from .help_link import HelpLink
 
 DONE = "done"                          # a person answered Done (a button, or "#N done")
 CLEARED = "cleared"                    # its source is gone: the night check no longer sees it, HA cleared it
@@ -37,18 +39,6 @@ CLOSED_IN_KIOSK = "closed_in_kiosk"    # a person closed the fault in the VESTA 
 TASK_SEVERITIES = ("P2", "P3")
 STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
 
-# ⚠️ NEED HELP ON EVERY CARD (owner, 2026-10-30: "Done / Need Help / Open Ticket consistently for all of them"): a Need
-# help pressed in the Kiosk on a fault with no alert (a night-check finding, a person's ticket) reaches the owner as an
-# alert the desk opens already escalated, standing for that fault (Notes.HELP_OF: "task:<id>" or "kiosk:<ticket id>").
-#: The store's mail for it: the Need helps waiting for the desk ({subject: …}), the last one read of each subject (its
-#: moment: one press told once), and the person tickets whose alert closed, for the engine to resolve ({ticket: …}).
-HELP_ASKED, HELP_TOLD, HELP_RESOLVE = "kiosk-help-asked", "kiosk-help-told", "kiosk-help-resolve"
-#: The key of the alert standing for a subject's Need help (`help_key`): one open at a time per subject.
-HELP_KEY = "kiosk_help|{subject}"
-
-
-def help_key(subject: str) -> str:
-    return HELP_KEY.format(subject=subject)
 
 _ORDER = result.PRIORITY_ORDER
 
@@ -228,9 +218,34 @@ class Problems:
                           **fields)
         moved = self.settle(f"incident:{int(iid)}", note=note, who=who)
         # an alert standing for a fault's Need help: its close closes that fault too (a Done on Telegram, the desk's)
-        if of := notes_of(self.store.incident(iid)).get(Notes.HELP_OF):
-            moved = [*moved, *self._help_closed(str(of), note, who)]
+        moved = [*moved, *self.help.closed(iid, note, who)]
         return result.moved(moved)
+
+    @property
+    def help(self) -> HelpLink:
+        """The alerts standing for a fault's Need help (vesta_shared.help_link)."""
+        return HelpLink(self)
+
+    def person_done(self, iid: int, place: str, *, who: str | None = None, at: str | None = None, said=None,
+                    person: str | None = None, terms: dict | None = None) -> list[dict]:
+        """A person's Done on alert `iid`, wherever it was given (`place`: message_format ON_TELEGRAM, ON_TABLET — the
+        tablet's notice — or IN_COCKPIT, the card; `at`: when, now when not said): the one close of an alert by a
+        person, read again by the desk (alert_watch.close: `person`, `said` the line it says again — Words for the
+        Cockpit's), its reply and its fault's close note the place's words (message_format.done_in: "Done on Telegram
+        (JM)"). From Telegram or the tablet its task closes as a Done (close_incident); in the Cockpit the task closed
+        already (closed_in_kiosk). Returns a script's `actions` (result.moved).
+
+        ⚠️ ONE DONE, ONE ENTRY (architecture review, 2026-10-30 evening: three closes of an alert each wrote their own
+        words — the reports read "Done", "Done (Closed in the Cockpit)" and "Done (Done in the Cockpit)" for one press)."""
+        words = mf.done_in(place, who)
+        when = _moment(at)
+        now_iso = when.isoformat() if when else self.store.now()
+        if place == mf.IN_COCKPIT:
+            alert_watch.close(self.store, iid, Incident.DONE, now_iso, person=kiosk_words.stored(said or words),
+                              reply=words)
+            return []
+        return self.close_incident(iid, Incident.DONE, now_iso, f"{words}.", who=who, reply=words,
+                                   person=person or words, terms=terms)
 
     def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
         """The night check no longer sees a finding: it closes, its task is cleared (its Kiosk fault follows: the
@@ -399,18 +414,19 @@ class Problems:
         self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail, day, seen)
         return last["id"]
 
-    def closed_in_kiosk(self, task_id: int, said: str = "Closed in the Cockpit", at: str | None = None) -> int | None:
+    def closed_in_kiosk(self, task_id: int, said=None, at: str | None = None, who: str | None = None) -> int | None:
         """A person closed the task's fault in the VESTA Kiosk: the task closes, and so does the incident
         it came from (the alert desk stops chasing it). Returns that incident's id, for its messages. `said`: who and
         when, as kiosk_words.closed writes it — the desk's check after it says it again (review 29: "Closed in the
         Kiosk, but …" had lost the person). `at`: when the Kiosk recorded the close (its resolvedAt) — the incident
         closes then, so the desk's watch counts from the person's close, not from when the agent read it (up to a
-        Kiosk read later; owner 2026-10-23: the card says "VESTA confirms by …" counted from the close)."""
+        Kiosk read later; owner 2026-10-23: the card says "VESTA confirms by …" counted from the close). `who`: the
+        person (the alert's reply, message_format.done_in)."""
         task = self.store.task(task_id)
         self.close(task_id, CLOSED_IN_KIOSK)
         kind, sid = self._source(task)
         # a Done in the Kiosk on a fault whose Need help the owner was asked about: the alert standing for it closes too
-        if kind != "incident" and (standing := self.help_standing(f"task:{int(task_id)}")):
+        if kind != "incident" and (standing := self.help.standing(HelpLink.of_task(task_id))):
             kind, sid = "incident", standing
         if kind == "incident" and sid:
             inc = self.store.incident(sid)
@@ -418,12 +434,9 @@ class Problems:
                 # ⚠️ A DONE IS A DONE, WHEREVER IT IS GIVEN (architecture review 24): closed in the Kiosk, a door fault
                 # skipped the check a Done button gets — the door still unlocked, it stayed closed for good. The alert
                 # desk reads it again once (quiet_after_done), when its rule names its states
-                # the one close of an alert (alert_watch.close): a person's, read again, its watch from the desk's terms
-                when = _moment(at)
-                # `said` kept in every language it knows (kiosk_words.stored): the desk's check after it says it in each
-                # chat's (architecture review O)
-                alert_watch.close(self.store, sid, Incident.DONE, when.isoformat() if when else self.store.now(),
-                                  person=kiosk_words.stored(said), reply="Closed in the Cockpit")
+                # `said` kept in every language it knows (kiosk_words.stored, in person_done): the desk's check after
+                # it says it in each chat's (architecture review O); its watch from the person's close
+                self.person_done(sid, mf.IN_COCKPIT, who=who, at=at, said=said)
                 return sid
         return None
 
@@ -451,74 +464,6 @@ class Problems:
                 self.store.reopening_told(task_id)
                 return sid
         return None
-
-    def help_in_kiosk(self, subject: str, said, at: str, *, task: dict | None = None, title: str = "",
-                      entity_id: str = "") -> int | None:
-        """A person pressed Need help on a fault's card in the VESTA Kiosk (`at`: when the Kiosk recorded it; `said`:
-        kiosk_words.helped): the owner is asked to act. `subject`: "task:<id>" (a fault of the agent's, `task`) or
-        "kiosk:<ticket id>" (a person's ticket, `title` and `entity_id` its own). Told once per press (HELP_TOLD).
-        An alert's fault: mail to the alert desk (Notes.KIOSK_HELP), which escalates it as a Telegram Need help does —
-        returns that incident's id. Any other: the alert standing for it, when one is open, gets the mail; else the desk
-        opens one already escalated (HELP_ASKED) — returns None."""
-        told = self.store.cache_get(HELP_TOLD) or {}
-        if not at or (told.get(subject) or "") >= at:
-            return None
-        self.store.cache_put(HELP_TOLD, {**told, subject: at})
-        kind, sid = self._source(task)
-        standing = self.store.find_open_incident(help_key(subject))
-        iid = sid if kind == "incident" and sid else (int(standing["id"]) if standing else None)
-        inc = self.store.incident(iid) if iid else None
-        if inc and not inc.get("closed_at"):
-            self.store.note(iid, {Notes.KIOSK_HELP: kiosk_words.stored(said)})
-            return iid
-        if kind == "incident":
-            return None                                   # its alert is over: nothing to escalate
-        asked = self.store.cache_get(HELP_ASKED) or {}
-        self.store.cache_put(HELP_ASKED, {**asked, subject: {
-            "said": kiosk_words.stored(said), "at": at, "title": title or self.current_title(task or {}),
-            "entity_id": entity_id or (task or {}).get("entity_id") or "", "rule_id": (task or {}).get("rule_id") or ""}})
-        return None
-
-    def help_asked(self) -> dict[str, dict]:
-        """The Need helps waiting for the desk ({subject: {said, at, title, entity_id, rule_id}}), taken: read once."""
-        asked = self.store.cache_get(HELP_ASKED) or {}
-        if asked:
-            self.store.cache_put(HELP_ASKED, {})
-        return asked
-
-    def help_standing(self, subject: str) -> int | None:
-        """The open alert standing for `subject`'s Need help, if any."""
-        row = self.store.find_open_incident(help_key(subject))
-        return int(row["id"]) if row else None
-
-    def _help_closed(self, subject: str, note: str, who: str | None) -> list[int]:
-        """The alert standing for `subject` closed: its fault closes with it — a task as a person's Done, a person's
-        ticket resolved by the engine (HELP_RESOLVE). The tasks moved."""
-        kind, _, ref = subject.partition(":")
-        if kind == "task" and ref.isdigit():
-            task = self.store.task(int(ref))
-            if task and task.get("status") == "open":
-                self.close(int(ref), DONE, note, who)
-                return [int(ref)]
-        elif kind == "kiosk" and ref:
-            waiting = self.store.cache_get(HELP_RESOLVE) or {}
-            self.store.cache_put(HELP_RESOLVE, {**waiting, ref: {"note": note, "who": who}})
-            return [0]                                    # the engine's repair resolves it (its faults changed)
-        return []
-
-    def closed_help(self, iid: int, said, at: str | None = None) -> None:
-        """A person closed in the Kiosk the ticket alert `iid` stands for: the alert closes as their Done, read again
-        as any Done (alert_watch.close)."""
-        when = _moment(at)
-        alert_watch.close(self.store, iid, Incident.DONE, when.isoformat() if when else self.store.now(),
-                          person=kiosk_words.stored(said), reply="Done in the Cockpit")
-
-    def help_resolves(self) -> dict[str, dict]:
-        """The person tickets whose Need help alert closed ({ticket id: {note, who}}), taken: the engine resolves them."""
-        waiting = self.store.cache_get(HELP_RESOLVE) or {}
-        if waiting:
-            self.store.cache_put(HELP_RESOLVE, {})
-        return waiting
 
     def taken_in_kiosk(self, task_id: int, said: str) -> int | None:
         """A person took the task's fault on in the VESTA Kiosk ("Open Ticket"): the alert it came from is no longer
@@ -600,6 +545,15 @@ class Problems:
                 return False                     # not chased (its priority lowered while open): no task, no fault
             return not self.closed_by_person(source, inc.get("reopened_at") or "")
         return False
+
+    @staticmethod
+    def done_where(task: dict) -> str:
+        """Where the person's close of `task` was given, as a line says it (message_format.DONE_IN): its close note's
+        place ("Done on Telegram" — a Done on the alert standing for it), else the Cockpit's (a close in the Kiosk keeps
+        no note). ⚠️ A TELEGRAM DONE WAS "CLOSED IN THE COCKPIT" (architecture review, 2026-10-30 evening): the facility
+        manager read "Closed in the Cockpit on …, but still there" of a fault done on Telegram."""
+        note = str(task.get("close_note") or "")
+        return next((w for w in mf.DONE_IN.values() if note.startswith(w)), mf.DONE_IN[mf.IN_COCKPIT])
 
     def still_there_after_close(self, source: str) -> bool:
         """A person closed the latest task about finding `source`, and the finding was read still bad (its `seen_at`)
@@ -701,7 +655,7 @@ class Problems:
         kind, sid = self._source(task)
         title = self.current_title(task)
         # the alert standing for its Need help (owner, 2026-10-30): its number and its Telegram story on the card
-        standing = self.help_standing(f"task:{int(task['id'])}") if kind != "incident" and task.get("id") else None
+        standing = self.help.standing(HelpLink.of_task(task["id"])) if kind != "incident" and task.get("id") else None
         # a duration in its words, worded by the Kiosk when it shows the card (architecture review, 2026-10-15): the
         # title with "{since}" where the night's words were, and the moment they count from (the rule's since_of)
         row = self.store.finding(sid) if kind == "finding" else None

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.396 (30 October 2026)
+
+- Problems.person_done: the one close of an alert by a person, with its place (message_format.DONE_IN / done_in:
+  on Telegram, on the tablet, in the Cockpit); closed_help removed; AlertButtons.press passes the place to the
+  skill's on_reply (--place); facts' outcome column reads it; preventive-maintenance's still-there words fill {done}
+  from Problems.done_where.
+- vesta_shared.help_link.HelpLink (Problems.help): Need help's link between an alert and the finding it stands for,
+  its notes private; desk.help_alerts uses it.
+
 ## 0.6.395 (30 October 2026)
 
 - The agreement's ticketUpdate kind "help" (a person asked for help on a fault): tickets._helps reads it
