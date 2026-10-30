@@ -295,6 +295,9 @@ console.log("\n  one way a problem's entity becomes its card's device, for the o
     ck("an alert VESTA follows leads its device's row, before a finding of the same kind, whatever came first",
        c?.lines[0]?.alertNumber === 96 && c.lines.length === 2 && rowTime(c) === "2026-10-02T11:00:00Z",
        c?.lines.map((l) => [l.alertNumber, l.text, l.openedAt]));
+    ck("  ...and the row's icons say both problems, the alert's first: the list's row and the card's head draw them",
+       c?.lead?.sources.join() === [...c.lines[0].own.sources, ...c.lines[1].own.sources].join()
+       && c.lead.sources.includes("night") && c.lines[1].icons?.sources.join() === "night", [c?.lead, c?.lines.map((l) => l.own)]);
   }
 }
 

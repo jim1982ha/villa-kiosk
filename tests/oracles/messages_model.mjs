@@ -219,6 +219,19 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
        messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} })).includes("CLOSES SOON"));
   ck("  ...a line whose alert VESTA holds no card for keeps its story", messageOfLine(issue.lines[0], []) === null
      && draw(h(AlertIssueCard, { card: issue, messages: () => null, onOpenEntity() {} })).includes("SHORT STORY"));
+  // owner, 2026-10-30: the onsen pump's night-check line, drawn under #96's Status, "feels like it belongs to the
+  // history section": another problem of the device comes first, as "Also: …", then the alert with its icon
+  const both = { ...issue, lead: { sources: ["alert", "night"], severities: ["warn", "warn"] }, lines: [
+    { ...issue.lines[0], icons: null, own: { sources: ["alert"], severities: ["warn"] } },
+    { key: "l2", text: "Pump ran shorter than expected", story: [], icons: { sources: ["night"], severities: ["warn"] } }] };
+  const two = draw(h(AlertIssueCard, { card: both, messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} }));
+  const at = (t) => two.indexOf(t);
+  ck("  ...a device's other problem comes first, \"Also: …\", then the alert's message, never under its Status",
+     at("Also: Pump ran shorter than expected") > -1 && at("Also: Pump ran shorter than expected") < at("#92-P2 (new)")
+     && at("#92-P2 (new)") < at("The pool pump stopped.")
+     && (two.match(/fm-record-gutter-icon/g) ?? []).length === 2, two);
+  ck("  ...a card with only the alert says no \"Also\"", !draw(h(AlertIssueCard, { card: issue,
+     messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} })).includes("Also:"));
   const one = elements(parseTsx("components/cockpit/IssueCard.tsx"), "RecordButtons");
   ck("  ...its buttons VESTA's own row (RecordButtons), the same as its notice and its Notifications card: no other",
      one.length === 1 && propText(one[0], "record") === "a" && !/WorkButtons|onRaiseTicket/.test(
@@ -432,4 +445,17 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
        elements(parseTsx("components/cockpit/MessagesTab.tsx"), "FoldedRows").find((e) => propText(e, "title") === '"Closed"')));
 }
 
+// owner, 2026-10-30: two doorbell rings, both answered (so under Issues › Closed), and Notifications said "Nothing
+// announced yet"
+{
+  const { NOTHING_YET, NOTHING_WAITING } = await import("@/messages/messagesModel");
+  const answered = ann(9, { asked: true, buttons: [] });
+  const none = messagesView({ open: [], watched: [], announcements: [], filter: "notifications", selected: null });
+  const done_ = messagesView({ open: [], watched: [], announcements: [answered], filter: "notifications", selected: null });
+  ck("Notifications empty with a finished ring under Closed says where it went; with nothing at all, nothing yet",
+     done_.notifications.length === 0 && done_.notificationsEmpty === NOTHING_WAITING && none.notificationsEmpty === NOTHING_YET
+     && NOTHING_WAITING.includes("Issues › Closed"), [done_.notificationsEmpty, none.notificationsEmpty]);
+  ck("  ...the tab says the view's words", readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8")
+     .includes("{view.notificationsEmpty}") && !readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8").includes("Nothing announced yet."));
+}
 done("✅ the Messages model: what the tab lists, its counts and the item open on the right");

@@ -1,3 +1,31 @@
+## 2.496.613
+
+What you will see:
+- VESTA's conversation follows each step: a spoken question's words as they come in and VESTA's typing dots stay in
+  view at the bottom, and VESTA's answer comes into view from its first words (a long answer is read from its start).
+  Before, the dots of a spoken question could sit below the window.
+- While an answer is being read aloud, its speaker icon is a Stop button: press it to stop the voice. It turns back to
+  the speaker once the answer is said or stopped.
+- Notifications with nothing waiting while finished items are under Issues › Closed (an answered doorbell ring) says
+  "Nothing waiting. Answered rings and finished items are under Issues › Closed." instead of "Nothing announced yet."
+
+## 2.496.612
+
+What you will see:
+- A button you press on any card (VESTA's conversation, an alert, the doorbell's notice, the Inbox) gives way to
+  your choice once it is sent: "✓ No, thanks", with VESTA's answer after it when it says more. Before, both buttons
+  stayed, the pressed one greyed, with its words repeated beside them. While it is being sent the buttons stay; if it
+  could not be sent they come back.
+
+## 2.496.611
+
+What you will see:
+- A device's row in Cockpit › Inbox › Issues, and its card's title, now show an icon for every kind of problem the
+  card holds: the onsen pump shows the alert's icon and the night check's moon, no longer the alert's alone.
+- On a card that shows VESTA's message of an alert, the device's other problems come first, each as one "Also: …"
+  line under the card's name, then the alert with its icon and its Status. Before, the onsen pump's night-check line
+  sat under #96's Status lines and read as part of its history. The card is no taller.
+
 ## 2.496.610
 
 What you will see:

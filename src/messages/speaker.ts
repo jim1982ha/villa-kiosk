@@ -11,7 +11,7 @@ import { arrivedSpeech, playsAloud } from "./conversationModel";
 /** What the speaker needs from the page: injected, never stored browser functions (kiosk-code: "Node green, browser
  *  dead"). `play`: messages/voice.playSpeech; `sound`: the answer's sound by its name (conversation.fetchSpeech). */
 export interface SpeakerDeps {
-  play: (sound: () => Promise<ArrayBuffer | null>, atTheTouch: boolean) => Promise<boolean>;
+  play: (sound: () => Promise<ArrayBuffer | null>, atTheTouch: boolean, ended: () => void) => Promise<boolean>;
   stop: () => void;
   sound: (name: string) => Promise<ArrayBuffer | null>;
   tell: (line: string | null) => void;
@@ -22,7 +22,44 @@ export class Speaker {
   private spokenAt: number | null = null;
   private held: readonly Turn[] = [];
   private deps: SpeakerDeps;
+  // ⚠️ AN ANSWER BEING SAID CAN BE STOPPED (owner, 2026-10-30: "make sure the user can stop the voice streaming /
+  // replay, by showing a stop button instead of the Play button"): the sound being said now (its name), each play its
+  // own run so the end of one stopped by the next never clears the next
+  private saying: string | null = null;
+  private run = 0;
+  private listeners = new Set<(name: string | null) => void>();
   constructor(deps: SpeakerDeps) { this.deps = deps; }
+
+  /** The answer's sound being said now (its name), null when none: its line shows Stop in place of Listen. */
+  get playing(): string | null { return this.saying; }
+
+  /** Told each time `playing` changes; the returned function stops telling. */
+  watch(listener: (name: string | null) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  /** Stop pressed: the answer stops being said. */
+  stop(): void {
+    this.run += 1;
+    this.deps.stop();
+    this.said(null);
+  }
+
+  private said(name: string | null): void {
+    if (this.saying === name) return;
+    this.saying = name;
+    this.listeners.forEach((l) => l(name));
+  }
+
+  private async say(name: string, atTheTouch: boolean): Promise<boolean> {
+    const run = ++this.run;
+    const played = await this.deps.play(() => this.deps.sound(name), atTheTouch, () => {
+      if (this.run === run) this.said(null);
+    });
+    if (played && this.run === run) this.said(name);
+    return played;
+  }
 
   /** This page sent a spoken question: its answer is said aloud here. */
   asked(): void { this.spokenAt = this.deps.now(); }
@@ -34,7 +71,7 @@ export class Speaker {
     this.held = turns;
     if (!name || !playsAloud(this.spokenAt, this.deps.now())) return false;
     this.spokenAt = null;
-    const played = await this.deps.play(() => this.deps.sound(name), false);
+    const played = await this.say(name, false);
     if (!played) this.deps.tell(LISTEN_SAID);
     return played;
   }
@@ -42,7 +79,7 @@ export class Speaker {
   /** Listen pressed: the answer's sound from the press itself (an iPad starts a page's sound only there); one that
    *  cannot be played says so, never nothing. */
   async listen(name: string): Promise<boolean> {
-    const played = await this.deps.play(() => this.deps.sound(name), true);
+    const played = await this.say(name, true);
     this.deps.tell(played ? null : LISTEN_FAILED);
     return played;
   }
@@ -51,6 +88,6 @@ export class Speaker {
   close(): void {
     this.spokenAt = null;
     this.held = [];
-    this.deps.stop();
+    this.stop();
   }
 }
