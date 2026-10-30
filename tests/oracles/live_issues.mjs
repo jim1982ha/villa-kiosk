@@ -60,9 +60,11 @@ ck("  ...pressed, Open Ticket opens Messages' ticket form pointed at the device 
    /else if \(step\.kind === "raise"\) onRaiseTicket\(a\.ids\[0\]\);/.test(IC)
    && /step\.kind === "raiseThen"\) void said\(addTicket\(raisedFor\(card, a\.ids\[0\]\), \{ then: step\.then \}\)\)/.test(IC)
    && /onRaiseTicket=\{\(entity\) => setRaising\(\{ entity \}\)\}/.test(MT));
-ck("a ticket in progress (Tickets): Mark resolved and Close, both on every record of it — its own Close question",
+// owner, 2026-10-30: the Tickets tab's "Mark resolved" is the Inbox's Done (work done, its form kept), with Need help
+ck("a ticket in progress (Tickets): Done (its resolve form), Need help, Close — each on every record of it, its own Close question",
    said(W.ticketActions([{ id: "a", stage: "ticket" }, { id: "b", stage: "ticket" }])).join(" | ")
-   === `Mark resolved → a,b (resolved) | Close → a,b ${TK_CLOSE}`);
+   === `Done → a,b (resolved) | Need help → a,b | Close → a,b ${TK_CLOSE}`
+   && W.WORK_ACTIONS.ticketDone.label === W.WORK_ACTIONS.done.label && W.ticketActions([{ id: "a", stage: "ticket" }])[1].step.kind === "help");
 ck("  ...a closed record: Reopen, on it alone — and nothing else on a record that is not where the card expects it",
    said(W.closedActions({ id: "r", stage: "closed" })).join() === "Reopen → r (open)"
    && W.closedActions({ id: "r", stage: "fault" }).length === 0 && W.ticketActions([{ id: "f", stage: "fault" }]).length === 0
@@ -126,7 +128,7 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
      tickets.map((t) => [t.key, t.records.map((r) => r.id)]));
   ck("  ...the Tickets card's buttons are its records', the Overview card's the whole device's",
      said(W.ticketActions(tickets.find((t) => t.key === "device:sensor.pump_power").records.map(W.workRecord))).join(" | ")
-       === `Mark resolved → p2 (resolved) | Close → p2 ${TK_CLOSE}`
+       === `Done → p2 (resolved) | Need help → p2 | Close → p2 ${TK_CLOSE}`
      && said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))).join(" | ")
        === `Done → p1,p2 ${OV_DONE} | Need help → p1,p2 | Open Ticket → p1 (in_progress)`);
   ck("  ...Tickets lists the device whose ticket was opened last first, never an open fault or a closed record",
@@ -435,14 +437,14 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
      /^<div class="fm-fault-actions">/.test(drawButtons(ovActs, null, { name: "Pump", className: "fm-fault-actions" }))
      && text(drawButtons(ovActs, null, { name: "Pump" })) === "|Done|Need help|[icon] Open Ticket|"
      && /aria-label="Done “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })), text(drawButtons(ovActs)));
-  ck("  ...a ticket: Mark resolved and Close, no icon; a closed record: Reopen",
-     text(drawButtons(tkActs)) === "|Mark resolved|Close|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
+  ck("  ...a ticket: Done, Need help and Close, no icon; a closed record: Reopen",
+     text(drawButtons(tkActs)) === "|Done|Need help|Close|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
   ck("  ...its Done asks ITS question in place of the buttons — the issue card's for the device, the ticket's Close for the ticket",
      text(drawButtons(ovActs, "device:x")) === "|Done? VESTA checks it again before it closes.|Cancel|Done|"
      && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|Close ticket|",
      [text(drawButtons(ovActs, "device:x")), text(drawButtons(tkActs, "device:x"))]);
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
-     text(drawButtons(tkActs, "device:y")) === "|Mark resolved|Close|" && drawButtons([]) === "");
+     text(drawButtons(tkActs, "device:y")) === "|Done|Need help|Close|" && drawButtons([]) === "");
 }
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
    /\.fm-record-body > \.fm-row-main \{ flex: 1 1 260px; min-width: 0; \}/.test(src("styles/07-facility.css"))
@@ -470,4 +472,7 @@ ck("the screens ask stageOf (or its count, openCounts), never the status themsel
    ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(|openCounts\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
 ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));
 
+ck("the Tickets tab's Need help writes the same \"help\" step as an issue card's (helpTickets: the VESTA Agent asks the owner)",
+   /if \(a\.step\.kind === "help"\) \{[\s\S]*?void helpTickets\(a\.ids\)/.test(src("components/fm/TicketsTab.tsx"))
+   && /onAction=\{\(a\) => onAction\(a, g\.key\)\}/.test(src("components/fm/TicketsTab.tsx")));
 done("✅ one list of live issues; faults become tickets; the same with or without the Agent");

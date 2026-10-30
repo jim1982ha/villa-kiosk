@@ -159,6 +159,22 @@ export function deviceRoomOrRecord(
   return firstRoom(rooms[deviceId], entityId ? rooms[entityId] : undefined, recordRoom);
 }
 
+/**
+ * The room a STORED record shows (a ticket in the Tickets tab, a cost written for it): its device's room NOW, by the
+ * same rule as an Inbox card (deviceRoomOrRecord: the device, else its entity, else the room it was stored with), the
+ * stored room only when it names no device or its device is gone (`device` null).
+ * ⚠️ THE ROOM FOLLOWS THE DEVICE (owner, 2026-10-30, the 16 Oct question settled: "I agree with your recommendation"):
+ * the Tickets tab showed the room saved when the ticket was opened ("never re-resolved") while the Inbox showed the
+ * device's current one — a device moved to another room read two rooms. A room change is nearly always a correction.
+ */
+export function recordRoomNow(
+  rooms: Readonly<Record<string, string | undefined>>,
+  device: { key: string; entityId: string } | null,
+  stored: string | undefined,
+): string {
+  return device ? deviceRoomOrRecord(rooms, device.key, device.entityId, stored) : cleanRoom(stored);
+}
+
 // ── The floor ───────────────────────────────────────────────────────────────
 
 /**

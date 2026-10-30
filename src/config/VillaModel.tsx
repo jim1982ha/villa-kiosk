@@ -18,7 +18,8 @@ import { useStateSince } from "@/hooks/useStateSince";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCriticalDevices } from "@/ha/criticalDevices";
-import { villaDevices, deviceFolding, deviceOf, deviceReadings, lookFacts, recordDeviceOf, type VillaDevices } from "./deviceGroups";
+import { villaDevices, deviceFolding, deviceOf, deviceReadings, lookFacts, recordDeviceOf, recordEntity, type VillaDevices } from "./deviceGroups";
+import { recordRoomNow } from "./devicePlace";
 import { marksOf, type DeviceMarks } from "@/utils/deviceActivity";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
@@ -187,6 +188,18 @@ export function useDeviceIdentity() {
     readingsOf: (id: string) => deviceReadings(id, folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds,
       hiddenInHaEntityIds),
   }), [folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds, hiddenInHaEntityIds]);
+}
+
+/** The room a stored record shows now (devicePlace.recordRoomNow): its device's current room, the stored one only for
+ *  a record on no device, or on a device the villa's system no longer has. Every screen showing a ticket's room asks this. */
+export function useRecordRoom(): (r: { entityId?: string; room?: string }) => string {
+  const { entities } = useHA();
+  const { resolvedRooms } = useConfig();
+  const { deviceOfRecord } = useDeviceIdentity();
+  return useMemo(() => (r: { entityId?: string; room?: string }) => {
+    const id = recordEntity(r.entityId, (x) => x in entities);
+    return recordRoomNow(resolvedRooms, id && id in entities ? { key: deviceOfRecord(id), entityId: id } : null, r.room);
+  }, [entities, resolvedRooms, deviceOfRecord]);
 }
 
 /** The villa model, or null outside its provider (a window drawn on its own: a check). */
