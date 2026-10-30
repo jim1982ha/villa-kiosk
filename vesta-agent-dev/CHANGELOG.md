@@ -1,3 +1,11 @@
+## 0.12.403
+
+What you will see:
+- A spoken answer in French, German, Spanish, Italian, Dutch, Indonesian, Chinese or Korean is said in its own Piper
+  voice with nothing to set up: the villa-concierge skill now comes with one voice for each. A villa.voice.yaml
+  `voices:` line still chooses another voice for a language. Japanese has no Piper voice, so a Japanese answer stays
+  in words and says so.
+
 ## 0.12.402
 
 What you will see:
