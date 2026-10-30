@@ -132,6 +132,17 @@ export interface AttentionGroup {
  *  someone has to deal with, then late maintenance. */
 const ATTENTION_RANK: Record<AttentionKind, number> = { alarm: 0, unavailable: 1, fault: 2, schedule: 3 };
 
+/** Most serious first within a row: its kind (ATTENTION_RANK), then an alert VESTA follows (someone is being asked)
+ *  before a finding with no alert, then the redder line.
+ *  ⚠️ THE ALERT HID BEHIND THE NIGHT CHECK (owner, 2026-10-30: "it's here but not visible in the card on the left"): the
+ *  onsen pump's row led with the night check's "ran shorter than expected" (a moon, 10:08) and its #96 alert, escalated
+ *  to the Owner, was only seen once the card was opened: two faults, one rank, kept in arrival order. */
+function mostSerious(a: AttentionItem, b: AttentionItem): number {
+  const alerted = (i: AttentionItem) => (i.alertNumber ?? i.fault?.alertNumber) !== undefined ? 0 : 1;
+  return ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind] || alerted(a) - alerted(b)
+    || SEVERITY_RANK[attentionSeverity(a)] - SEVERITY_RANK[attentionSeverity(b)];
+}
+
 /**
  * Fold problems into one row per device. Pure, and it only GROUPS: every item
  * given comes back exactly once — as a line, or as the `fault` of the live line
@@ -148,7 +159,7 @@ export function groupAttention(items: readonly AttentionItem[]): AttentionGroup[
   const byKey = groupByDevice(items, (i) => deviceWorkKey(i.device?.key, i.id));
   const groups: AttentionGroup[] = [];
   for (const { key, items: list } of byKey) {
-    const sorted = mergeFaults(foldTwins([...list].sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind])));
+    const sorted = mergeFaults(foldTwins([...list].sort(mostSerious)));
     const worst = sorted[0];
     // ⚠️ ONE SHAPE FOR EVERY ROW (owner, 2026-10-10: "all these lines feel inconsistently shown"): a device's row is
     // titled by the DEVICE, whatever its problems. With ONE problem it read as the problem — an open fault on the

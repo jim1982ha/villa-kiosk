@@ -282,4 +282,20 @@ console.log("\n  one way a problem's entity becomes its card's device, for the o
        && !/\blabelOf\(|deviceRoomOrRecord\(|roomLabel\(/.test(cc.slice(cc.indexOf("export function confirmingCards"))));
 }
 
+// owner, 2026-10-30: "it's here but not visible in the card on the left" — the onsen pump's row led with the night
+// check's finding and its alert, escalated to the Owner, showed only once the card was opened
+{
+  const { rowTime } = await import("@/config/cockpitCard");
+  const night = ticket("va-20", "Back door ran shorter than expected", "lock.back", { source: "vesta_agent", origin: "night" });
+  const alert = ticket("va-21", "Back door left open", "lock.back",
+    { source: "vesta_agent", alertNumber: 96, openedAt: "2026-10-02T11:00:00Z" });
+  for (const order of [[night, alert], [alert, night]]) {
+    const row = groupAttention(build(order)).find((g) => g.entityId === "lock.back");
+    const c = row && card(row);
+    ck("an alert VESTA follows leads its device's row, before a finding of the same kind, whatever came first",
+       c?.lines[0]?.alertNumber === 96 && c.lines.length === 2 && rowTime(c) === "2026-10-02T11:00:00Z",
+       c?.lines.map((l) => [l.alertNumber, l.text, l.openedAt]));
+  }
+}
+
 done("✅ one card per device in the Live issues");

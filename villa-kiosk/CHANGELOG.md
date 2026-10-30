@@ -1,3 +1,11 @@
+## 2.496.610
+
+What you will see:
+- In Cockpit › Inbox › Issues, a device with an alert VESTA follows and another problem now leads its row with the
+  alert: its icon, "#96-P2 · Onsen pump off for 30s…" and the time of its latest step. Before, the onsen pump's row
+  showed only the night check's "ran shorter than expected" (10:08), and its alert, escalated to the Owner, was seen
+  only once the card was opened.
+
 ## 2.496.609
 
 What you will see:
