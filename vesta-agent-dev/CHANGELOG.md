@@ -1,3 +1,11 @@
+## 0.12.405
+
+What you will see:
+- A question spoken to VESTA is answered about 2s sooner: the check of the villa's status that comes before every answer
+  now runs while Whisper writes out your words, not after.
+- The VESTA Agent's log has one line per spoken question with each step's time, from your recording reaching VESTA to
+  its voice being ready, and one line per AI run with how long the AI took to start and to reply.
+
 ## 0.12.404
 
 What you will see:
