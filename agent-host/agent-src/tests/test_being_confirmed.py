@@ -228,7 +228,10 @@ def test_a_night_check_fault_is_watched_until_the_night_checks_next_run(tmp_path
 
 
 def test_the_night_checks_next_run_is_read_from_its_schedule():
-    from vesta_agent.scheduler import next_slot
+    from vesta_shared.when import Spec
+
+    def next_slot(spec, after):
+        return Spec.parse(spec).next_after(after)
     at = datetime(2026, 10, 25, 15, 50)
     assert next_slot("02:00", at) == datetime(2026, 10, 26, 2, 0)                 # daily: the next night
     assert next_slot("02:00", datetime(2026, 10, 25, 1, 0)) == datetime(2026, 10, 25, 2, 0)

@@ -16,12 +16,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from vesta_shared import kiosk_words, result
 from vesta_shared.problems import Problems
+from vesta_shared.when import Spec
 
 from .kiosk import MINE, KioskError, closing, confirming, noted, retitled, tagged, todo
 from .kiosk import fault_title_chars
 from vesta_shared.messaging import headline, incident_tag
 from vesta_shared.message_format import IN_COCKPIT, STEPS
-from .scheduler import next_slot
 
 log = logging.getLogger("vesta.outcome")
 
@@ -108,7 +108,7 @@ class Tickets:
             zone = ZoneInfo(self.timezone)
         except (ZoneInfoNotFoundError, ValueError):
             zone = ZoneInfo("UTC")
-        return next_slot(spec, after.astimezone(zone))
+        return Spec.parse(spec).next_after(after.astimezone(zone))
 
     def _pattern(self, want: dict, card: dict | None = None) -> dict | None:
         """{"titlePattern", "since"} for a fault the agent titles (a Kiosk that does not read them never gets them: its

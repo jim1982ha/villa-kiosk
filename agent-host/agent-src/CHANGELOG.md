@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.402 (31 October 2026)
+
+- One reader of a schedule's wording (architecture review round 9, card 3): vesta_shared.when.Spec.parse(text) with
+  due(now, window) (the latest slot, looked for back across midnight), last_at, next_after, words, per_month, valid.
+  Replaces scheduler.slot_for / next_slot / describe, skills.WHEN, limits_tab's own check and intake.resume_for's
+  split of chat.reset_at. A day of the month the month lacks falls on its last day (it never ran: `now.day == 31`);
+  weekdays by datetime.weekday, never strftime's language. Tests: test_schedule_words, test_scheduler_runner_stop
+  (a 23:45 slot run at 00:05 through Scheduler.tick).
+
 ## 0.6.401 (30 October 2026)
 
 - Maintenance mode at every door (architecture review round 7, card 1): vesta_shared.maintenance.takes_up(severity),

@@ -523,9 +523,9 @@ class LimitsTab:
         if path[-1] == "brain" and value not in PROFILES:
             raise Refused([f"The brain is one of: {', '.join(PROFILES)}."])
         if path[0] == "schedule" and path[-1] == "when":
-            from ..skills import WHEN
-            if not (isinstance(value, str) and WHEN.match(value.strip())):
-                raise Refused(["A time is HH:MM (every day), Mon HH:MM (each week) or D HH:MM (each month)."])
+            from vesta_shared.when import SHAPES, Spec
+            if not (isinstance(value, str) and Spec.valid(value)):
+                raise Refused([f"A time is {SHAPES}."])
             value = value.strip()
         elif isinstance(shipped, str) and path[-1] != "brain":
             raise Refused([f"{'.'.join(map(str, path))} is not set on this tab."])

@@ -14,7 +14,7 @@ import yaml
 
 from helpers import PYTHONPATH, ROOT, copy_skill, settings
 from vesta_agent import runner
-from vesta_agent.scheduler import Scheduler, slot_for
+from vesta_agent.scheduler import Scheduler
 from vesta_agent.skills import Skills
 from vesta_agent.state import State
 
@@ -23,14 +23,44 @@ def at(h, m, day=1, weekday_fix=None):
     return datetime(2026, 10, day, h, m, tzinfo=timezone.utc)      # 1 Oct 2026 is a Thursday
 
 
-def test_slot_for():
-    assert slot_for("07:00", at(7, 10)) == at(7, 0)
-    assert slot_for("07:00", at(6, 59)) is None
-    assert slot_for("07:00", at(7, 31)) is None                   # outside the 30-min window
-    assert slot_for("1 08:00", at(8, 5, day=1)) == at(8, 0, day=1)
-    assert slot_for("1 08:00", at(8, 5, day=2)) is None
-    assert slot_for("Mon 08:00", at(8, 5, day=5)) == at(8, 0, day=5)   # 5 Oct 2026 is a Monday
-    assert slot_for("Mon 08:00", at(8, 5, day=6)) is None
+def test_a_slot_is_due_inside_its_window():
+    from vesta_shared.when import Spec
+
+    def due(spec, now):
+        return Spec.parse(spec).due(now, timedelta(minutes=30))
+    assert due("07:00", at(7, 10)) == at(7, 0)
+    assert due("07:00", at(6, 59)) is None
+    assert due("07:00", at(7, 31)) is None                        # outside the 30-min window
+    assert due("1 08:00", at(8, 5, day=1)) == at(8, 0, day=1)
+    assert due("1 08:00", at(8, 5, day=2)) is None
+    assert due("Mon 08:00", at(8, 5, day=5)) == at(8, 0, day=5)   # 5 Oct 2026 is a Monday
+    assert due("Mon 08:00", at(8, 5, day=6)) is None
+
+
+def test_a_job_just_before_midnight_still_runs_after_it(tmp_path, monkeypatch):
+    """A 23:45 job the agent was stopped for runs at 00:05 the next day: its 30-minute window still holds it
+    (architecture review, round 9: the slot was looked for on the new day's date and the job was lost)."""
+    s = settings(str(tmp_path))
+    limits = tmp_path / "limits.yaml"
+    limits.write_text("pack.rebuild_at: '23:45'\n")
+    monkeypatch.setenv("VESTA_LIMITS", str(limits))
+    packs = []
+
+    async def nothing(*a):
+        return None
+
+    async def rebuild():
+        packs.append(1)
+    sch = Scheduler(s, Skills(s.skills_dir), State(s.state_path), nothing, nothing, rebuild)
+
+    async def go():
+        await sch.tick(at(0, 5, day=2))
+        await sch.idle()
+        assert packs == [1]
+        await sch.tick(at(0, 10, day=2))                               # the same slot: once
+        await sch.idle()
+        assert packs == [1]
+    asyncio.run(go())
 
 
 def test_the_schedule_comes_from_the_skills_and_runs_once_per_slot(tmp_path):

@@ -19,13 +19,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 from zoneinfo import ZoneInfo
 
 from vesta_shared.message_format import ROLE_WORDS
+from vesta_shared.when import Spec
 
 from .places import tab
+
 from .policy import NOT_REGISTERED, reset_at, silence_reset_hours, tablet_profile
 
 OWN_COMMANDS = {"/ask", "/new", "/whoami"}
@@ -213,8 +215,5 @@ def resume_for(session_id: str | None, last_iso: str | None, rule: str, zone: st
     if rule == "after_8h_silence":
         return session_id if now - last < timedelta(hours=silence_reset_hours()) else None
     local = now.astimezone(ZoneInfo(zone))
-    hh, mm = map(int, reset_at().split(":"))
-    cut = datetime.combine(local.date(), time(hh, mm), tzinfo=local.tzinfo)
-    if local < cut:
-        cut -= timedelta(days=1)
+    cut = Spec.parse(reset_at()).last_at(local)       # today's reset, or yesterday's before it (vesta_shared.when)
     return session_id if last >= cut.astimezone(timezone.utc) else None

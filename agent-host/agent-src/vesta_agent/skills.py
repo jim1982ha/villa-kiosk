@@ -77,6 +77,7 @@ from dataclasses import dataclass, field
 import yaml
 
 from vesta_shared.limits import limit
+from vesta_shared.when import SHAPES, Spec
 from vesta_shared.message_format import ROLES
 
 log = logging.getLogger("vesta.skills")
@@ -134,7 +135,6 @@ def take_run_file(out_root: str, value: str) -> str:
     shutil.copyfile(src, os.path.join(out_root, name))
     return name
 DATE_LIKE = re.compile(r"^[0-9T:+.\-]{4,40}$")
-WHEN = re.compile(r"^(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun|[1-9]|[12][0-9]|3[01]) )?([01][0-9]|2[0-3]):([0-5][0-9])$")
 FLAG_KINDS = {"text", "date", "outfile", "infile", "switch"}
 INJECTS = {"pack", "store", "zone"}
 SEEDED = ".seeded"
@@ -305,13 +305,12 @@ def when_it_runs(sk: Skill) -> list[dict]:
 
     ⚠️ THE SKILL'S OWN READING (architecture review 5, 2026-10-13): the page wrote these rows itself and never learned
     `before_answer` — villa-concierge's status check runs before every answer and its page did not say so."""
-    from .scheduler import describe
 
     def row(when, job=None, script=None, ai=False, **more):
         return {"when": when, "job": job, "script": script.split()[0] if script else None,
                 "kind": "ai" if ai else "code" if script else None, **more}
     # `schedule`: the entry's place in skill.yaml — its time is a setting the page links to (the Limits tab's row)
-    acts = [row(describe(j["when"])[0], j.get("name"), j.get("run"), ai=bool(j.get("prompt")) and not j.get("run"),
+    acts = [row(Spec.parse(j["when"]).words(), j.get("name"), j.get("run"), ai=bool(j.get("prompt")) and not j.get("run"),
                 schedule=i) for i, j in enumerate(sk.schedule)]
     if sk.every_5_min:
         # its rhythm is a setting (scheduler.every, jobs.every_minutes): the row says it as it is now, and links to it
@@ -434,8 +433,8 @@ def parse_skill(name: str, path: str) -> Skill:
     for i, job in enumerate(raw.get("schedule") or []):
         job = job or {}
         when = str(job.get("when") or "")
-        if not WHEN.match(when):
-            raise SkillError(f"schedule[{i}]: when {when!r} is not HH:MM, 'Mon HH:MM' or 'D HH:MM'")
+        if not Spec.valid(when):
+            raise SkillError(f"schedule[{i}]: when {when!r} is not {SHAPES}")
         if bool(job.get("prompt")) == bool(job.get("run")):
             raise SkillError(f"schedule[{i}]: give either prompt (model job) or run (code job)")
         if job.get("run"):

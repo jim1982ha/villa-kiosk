@@ -224,13 +224,13 @@ class UI:
         (owner, 2026-10-20; else they do not run). `skill_ai`: that pair as the jobs run with it, None when not set;
         `skill_default`: what "Add them" gives the skill (its skill.yaml jobs_default)."""
         from ..skills import ai_jobs, job_owners, job_starters
-        from ..scheduler import describe
+        from vesta_shared.when import Spec
         pol = page_policy(self.s.policy_path)
         every = self.skills.all()
         owners, starters = job_owners(every), job_starters(every)
         listed = {t["name"]: t for t in (tool_access.read_list(self.s.data_dir) or {}).get("tools") or []}
         return [{"name": j["name"], "skill": sk.name, "when": j["when"], "to": j.get("to"),
-                 "when_words": describe(j["when"])[0], "runs_per_month": describe(j["when"])[1],
+                 "when_words": Spec.parse(j["when"]).words(), "runs_per_month": Spec.parse(j["when"]).per_month(),
                  "on_request": j.get("on_request", False), "description": j.get("description") or "",
                  "skill_ai": pol.skill_setting(sk.name, owners, starters),
                  "skill_default": starters.get(sk.name) or {"brain": "auto", "limit_usd": 1.0},

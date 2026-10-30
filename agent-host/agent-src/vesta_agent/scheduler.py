@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from vesta_shared.limits import limit
+from vesta_shared.when import Spec
 
 from .in_progress import AGAIN, SCHEDULED, InProgress, Item
 
@@ -59,56 +60,6 @@ def pack_at() -> str:
     return limit("pack.rebuild_at", "01:30", unit="villa time", group="read",
                  says="When the villa's device list is rebuilt each night, before the night's checks read it.",
                  reached="Set after a skill's nightly check, that check reads the previous night's list.", told="")
-
-
-def slot_for(spec: str, now: datetime) -> datetime | None:
-    """The slot `spec` names for `now`'s day, when `now` is inside its window; else None.
-
-    "07:00" daily · "Mon 08:00" on Mondays · "1 08:00" on the 1st of the month."""
-    parts = spec.split()
-    h, m = map(int, parts[-1].split(":"))
-    slot = now.replace(hour=h, minute=m, second=0, microsecond=0)
-    if now < slot or now - slot > window():
-        return None
-    if len(parts) == 2:
-        cond = parts[0]
-        if cond.isdigit() and now.day != int(cond):
-            return None
-        if not cond.isdigit() and now.strftime("%a") != cond:
-            return None
-    return slot
-
-
-def next_slot(spec: str, after: datetime) -> datetime | None:
-    """The first slot `spec` names after `after` (a villa-time moment): "07:00" daily, "Mon 08:00", "1 08:00" — the
-    grammar slot_for reads. A fault the night check closed is watched until its next run (Problems.confirms_by)."""
-    parts = spec.split()
-    h, m = map(int, parts[-1].split(":"))
-    for d in range(32):
-        slot = (after + timedelta(days=d)).replace(hour=h, minute=m, second=0, microsecond=0)
-        if slot <= after:
-            continue
-        cond = parts[0] if len(parts) == 2 else None
-        if cond and (slot.day != int(cond) if cond.isdigit() else slot.strftime("%a") != cond):
-            continue
-        return slot
-    return None
-
-
-DAYS = {"Mon": "Monday", "Tue": "Tuesday", "Wed": "Wednesday", "Thu": "Thursday", "Fri": "Friday",
-        "Sat": "Saturday", "Sun": "Sunday"}
-
-
-def describe(spec: str) -> tuple[str, float]:
-    """A schedule in words, and how many times it runs in a month — for the VESTA Agent page, which used to
-    re-parse this grammar itself (architecture review, 2026-10-01: one owner of "07:00 / Mon 08:00 / 1 08:00")."""
-    parts = spec.split()
-    if len(parts) == 1:
-        return f"every day at {parts[0]}", 30.0
-    if parts[0].isdigit():
-        return f"on day {parts[0]} of each month at {parts[1]}", 1.0
-    return f"every {DAYS.get(parts[0], parts[0])} at {parts[1]}", 4.35
-
 
 
 # what a person reads for the engine's own jobs (owner, 2026-10-20: "knowledge pack" named nothing on the page)
@@ -251,7 +202,7 @@ class Scheduler:
             for sk in skills.values():
                 if sk.every_5_min and self._start(f"{sk.name}:every_5_min", lambda sk=sk: self._frequent(sk)):
                     started.append(f"{sk.name}:every_5_min")
-        slot = slot_for(pack_at(), now)
+        slot = Spec.parse(pack_at()).due(now, window())
         if slot and self._claim("engine:pack", slot):
             async def pack(slot=slot):
                 # ⚠️ ITS END RECORDED LIKE EVERY SCHEDULED JOB'S (owner, 2026-10-20: Scheduled jobs run said "done" for
@@ -262,7 +213,9 @@ class Scheduler:
                 started.append("engine:pack")
         for sk in skills.values():
             for i, job in enumerate(sk.schedule):
-                slot = slot_for(job["when"], now)
+                # ⚠️ THE LATEST SLOT, ON WHATEVER DAY IT FELL (architecture review, round 9): looked for on now's own
+                # date, a 23:45 job missed by a restart across midnight was lost though its window still held it
+                slot = Spec.parse(job["when"]).due(now, window())
                 # ⚠️ ONE KEY FOR CLAIMING THE SLOT AND FOR "STILL RUNNING" (architecture review, 2026-10-07): the slot
                 # was claimed per entry (skill:i:when) and started per time (skill:when) — two jobs of a skill at the
                 # same time, and the second, claimed, was refused as "still running": lost for the day
