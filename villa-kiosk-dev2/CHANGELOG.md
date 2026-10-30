@@ -1,3 +1,14 @@
+## 2.496.619
+
+What you will see:
+- Settings › Messages: "VESTA's language on this tablet". Pick French, German or any language VESTA writes your chats
+  in, and this tablet shows VESTA's messages, alert cards, Notifications and reports in it, as a chat in that language
+  reads them on Telegram. Each tablet keeps its own choice; English is the default.
+- A message VESTA wrote in one language only, the villa's own announcements, VESTA's conversation and the tablet's own
+  buttons and menus stay as they are.
+- Nothing else changes on screen: each device's critical and hidden marks are now worked out once, so the map, the
+  lists and the Cockpit always read the same answer.
+
 ## 2.496.618
 
 What you will see:
