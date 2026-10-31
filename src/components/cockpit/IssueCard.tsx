@@ -10,18 +10,10 @@ import { CheckCircle2 } from "lucide-react";
 import WorkButtons, { useCardWork, type RaisedFault } from "@/components/fm/WorkButtons";
 import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
-import { cardIcons, othersFirst, type CardLine, type CardView, type LineSources } from "@/config/cockpitCard";
+import { cardIcons, type CardLine, type CardView, type LineSources } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard from "@/components/fm/RecordCard";
-
-import type { Announcement } from "@/messages/announcements";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
-
-/** An issue's room, as a pill: the opened card's, beside its name, and its line's in the Inbox list, on a line of its own
- *  (owner, 2026-11-01: "the area pill … reusing existing code"). The Spend tab's device pill's look. */
-export function RoomPill({ room }: { room: string }) {
-  return <span className="fm-entity-chip fm-chip-static">{room}</span>;
-}
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
  *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
@@ -49,22 +41,21 @@ export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicke
  *  source icons before the device's name, the room under it, its problems' lines, its buttons on the right of them.
  *  Tapping it opens the device; its buttons take their own presses. Draws `card` (config/cockpitCard) and nothing
  *  else: what it says is decided there, by value. Pure: a check draws it. */
-export function AttentionCard({ card, onOpenEntity, actions, lineMessage, focused }: {
+export function AttentionCard({ card, onOpenEntity, actions, focused }: {
+  /** The issue as told (messagesModel issueAsTold): a line holding VESTA's message of its alert draws it. */
   card: CardView;
   onOpenEntity: (id: string) => void;
   actions?: ReactNode;
   /** Marked, as the card a device window's warning asked for (owner, 2026-10-24). */
   focused?: boolean;
-  /** VESTA's message of a line's alert, drawn in the line in place of its short story (AlertIssueCard). */
-  lineMessage?: (line: CardLine) => ReactNode;
 }) {
   const open = card.entityId;
   const icons = cardIcons(card);
   return (
     <RecordCard
       title={card.title}
-      // its room as a pill right after its name, on one line (owner, 2026-10-22) — the Spend tab's device pill
-      titlePills={card.room ? <RoomPill room={card.room} /> : undefined}
+      // its room as a pill right after its name, on one line (owner, 2026-10-22): the card's room pill (RoomPill)
+      room={card.room}
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look === "watched"
@@ -79,8 +70,7 @@ export function AttentionCard({ card, onOpenEntity, actions, lineMessage, focuse
       onOpen={open ? () => onOpenEntity(open) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
-          {card.lines.map((line, i) => <CockpitAttentionSub key={line.key} line={line} icons={icons.lines[i] ?? null}
-            message={lineMessage?.(line)} />)}
+          {card.lines.map((line, i) => <CockpitAttentionSub key={line.key} line={line} icons={icons.lines[i] ?? null} />)}
         </ul>
       )}
       actions={actions ?? undefined}
@@ -90,7 +80,7 @@ export function AttentionCard({ card, onOpenEntity, actions, lineMessage, focuse
   );
 }
 
-function CockpitAttentionSub({ line, icons, message }: { line: CardLine; icons: LineSources | null; message?: ReactNode }) {
+function CockpitAttentionSub({ line, icons }: { line: CardLine; icons: LineSources | null }) {
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line fm-record-gutter">
@@ -101,8 +91,10 @@ function CockpitAttentionSub({ line, icons, message }: { line: CardLine; icons: 
           <span className="cockpit-attention-sub-title">{line.text}</span>
           {/* what happened about it on Telegram — the short story its Status tells: the alert sent, a reminder, an
               escalation, a button pressed (owner, 2026-10-14; every line since ticket 19 of "One inbox") */}
-          {/* VESTA's message of its alert says it all (its "To:", "What to do", its Status: the same story) */}
-          {message ?? (line.story.length > 0 && (
+          {/* ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components"):
+              VESTA's message of its alert, joined once (messagesModel issueAsTold), says it all here, as Telegram shows
+              it (its "To:", "What to do", its Status: the same story), and the card keeps every card's buttons */}
+          {line.told ? <div className="messages-card-body"><AnnouncementContent announcement={line.told} /></div> : (line.story.length > 0 && (
             <ul className="cockpit-attention-story">
               {line.story.map((s) => <li key={`${s.at} ${s.note}`} className="cockpit-attention-latest">{s.note} · {momentText(s.at)}</li>)}
             </ul>
@@ -155,38 +147,4 @@ export function raisedFor(card: Pick<CardView, "title" | "lines">, place: Record
   const said = card.lines.map((l) => l.text).find((t) => t.trim());
   return { title: said ? `${card.title}: ${said}` : card.title, deviceLabel: card.title,
     ...(place.entityId ? { entityId: place.entityId } : {}), ...(place.room ? { room: place.room } : {}), photoIds: [] };
-}
-
-/** ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components, since the
- *  same button shall consistently appear for any type"): the issue's own card — its device, room and next check — with
- *  VESTA's message of the alert inside its line (as Telegram shows it: "To:", what happened, "What to do", its Status),
- *  and the one button row of every issue card (Done · Need help · Open Ticket: CardActions, owner 2026-10-30 — it drew
- *  VESTA's own Done · Need help before). Before, VESTA's card stood above the issue's, each with its buttons.
- *  `messages`: VESTA's card of each line's alert (messagesModel.messageOfLine). */
-export function AlertIssueCard({ card, messages, onOpenEntity, focused, canManage, onEditTicket, onRaiseTicket }: {
-  card: CardView;
-  messages: (line: CardLine) => Announcement | null;
-  onOpenEntity: (id: string) => void;
-  focused?: boolean;
-  canManage: boolean;
-  onEditTicket: (ticketId: string) => void;
-  onRaiseTicket: (entityId: string) => void;
-}) {
-  // said once (owner, 2026-10-29 screenshot: the problem and "Cleared on …" twice): a line VESTA holds a message for is
-  // named by its title ("#92-P2 (cleared)"), its words in the message; on a watched card its Status says how it closed
-  const said: CardView = othersFirst({ ...card, lines: card.lines.map((l) => {
-    const a = messages(l);
-    // ...after its device's own state the alert does not say ("Missing, #100-P1 (new)": CardLine.state)
-    return a ? { ...l, text: l.state ? `${l.state}, ${a.title}` : a.title, closing: card.look === "watched" ? null : l.closing } : l;
-  }) }, (l) => messages(l) !== null);
-  return (
-    <AttentionCard card={said} onOpenEntity={onOpenEntity} focused={focused}
-      lineMessage={(line) => {
-        const a = messages(line);
-        return a ? <div className="messages-card-body"><AnnouncementContent announcement={a} /></div> : undefined;
-      }}
-      // the same row as every issue card's (CardActions): its Done and Need help reach the alert desk through the
-      // alert's fault, as the Telegram buttons do (the VESTA Agent's closed_in_kiosk, its "help" step)
-      actions={<CardActions card={card} canManage={canManage} onEditTicket={onEditTicket} onRaiseTicket={onRaiseTicket} />} />
-  );
 }

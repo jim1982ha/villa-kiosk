@@ -181,7 +181,8 @@ console.log("\n  the Tickets tab counts tickets, not every fault (owner, 2026-11
 {
   // driven through the one way in for every change (fmCommands applyFmCommand), as the store runs it
   const { applyFmCommand } = await import("@/fm/fmCommands");
-  const { wasTicket } = await import("@/fm/fmEngine");
+  const { recordLife, closedTickets } = await import("@/fm/fmEngine");
+  const wasTicket = (t) => recordLife(t).ticket;
   const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
   let n = 0;
   const k = (min) => ({ now: new Date(Date.UTC(2026, 9, 31, 0, min)).toISOString(), id: (p) => p + (++n), by: "owner" });
@@ -200,16 +201,53 @@ console.log("\n  the Tickets tab counts tickets, not every fault (owner, 2026-11
      by, { a1: false, a2: true, mine: true });
   eq("  ...closed, still a ticket: the step that took it on is kept", d.tickets.filter((t) => t.status === "resolved" && wasTicket(t)).length, 2);
   const tab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
-  eq("  ...the tab's Closed list is the closed tickets' (wasTicket), never every record",
-     /const closed = useMemo\(\(\) => data\.tickets\.filter\(\(t\) => stageOf\(t\) === "closed" && wasTicket\(t\)\)/.test(tab), true);
+  eq("  ...the tab's Closed list is the closed tickets', never every record (the Agent's own clear, the open ticket out)",
+     closedTickets(d.tickets).map((t) => (t.title === "Tap drips" ? "mine" : t.id)).sort(), ["a2", "mine"]);
+  eq("  ...and the tab lists that", /const closed = useMemo\(\(\) => closedTickets\(data\.tickets\), \[data\.tickets\]\);/.test(tab), true);
   // owner, 2026-11-01: "nothing shall be counted as a closed ticket if a ticket hasn't been opened first"
-  const { ticketTimeMs } = await import("@/fm/fmEngine");
+  const ticketTimeMs = (t) => recordLife(t).ticketMs;
   const reopenedThenCleared = applyFmCommand(applyFmCommand(d, { type: "advanceTickets", ids: ["a2"], to: "open",
     step: { photoIds: [] } }, k(4)), { type: "closeTickets", ids: ["a2"] }, k(5)).tickets.find((t) => t.id === "a2");
   eq("  ...a ticket reopened (a fault again) and then closed is a closed FAULT, not a closed ticket",
      [reopenedThenCleared.status, wasTicket(reopenedThenCleared)], ["resolved", false]);
   eq("  ...a closed ticket's time runs from its Open Ticket to its close (1min here), not from when the fault was raised",
      ticketTimeMs(d.tickets.find((t) => t.id === "a2")), 60_000);
+}
+
+console.log("\n  a record's life, read once (architecture review round 13: \"is this a ticket?\" was worked out in nine places):");
+{
+  const { recordLife, recordsByStage, monthBounds } = await import("@/fm/fmEngine");
+  // raised by VESTA, taken on (Open Ticket), done with work, reopened by VESTA, then cleared with no action
+  const life = { id: "l1", title: "Pump", status: "resolved", openedAt: "2026-09-01T00:00:00Z", resolvedAt: "2026-10-03T00:00:00Z",
+    photoIds: [], updates: [
+      { at: "2026-09-01T00:00:00Z", status: "open", by: "VESTA Agent", photoIds: [] },
+      { at: "2026-09-02T00:00:00Z", status: "in_progress", photoIds: [] },
+      { at: "2026-09-02T06:00:00Z", status: "resolved", photoIds: [] },
+      { at: "2026-09-02T07:00:00Z", status: "resolved", kind: "noted", note: "Reminder sent", photoIds: [] },
+      { at: "2026-10-01T00:00:00Z", status: "open", kind: "reopened", photoIds: [] },
+      { at: "2026-10-03T00:00:00Z", status: "resolved", kind: "cleared", note: "Closed without action", photoIds: [] }] };
+  const pick = (l) => ({ stage: l.stage, ticket: l.ticket, ticketFrom: l.ticketFrom ?? null, how: l.how ?? null,
+    faultSince: l.faultSince, reopened: l.reopened, ticketMs: l.ticketMs, openMs: l.openMs, resolvedAt: l.resolvedAt ?? null });
+  const H = 3_600_000;
+  eq("now: reopened and cleared, a closed FAULT (not a ticket), closed with no action, a fault again since its reopening",
+     pick(recordLife(life)), { stage: "closed", ticket: false, ticketFrom: null, how: "no-action", faultSince: "2026-10-01T00:00:00Z",
+       reopened: 1, ticketMs: null, openMs: 30 * H + 48 * H, resolvedAt: "2026-10-03T00:00:00Z" });
+  eq("  ...at September's end: a closed TICKET, from its Open Ticket to its close (6h), closed with work done",
+     pick(recordLife(life, monthBounds("2026-09").end)), { stage: "closed", ticket: true, ticketFrom: "2026-09-02T00:00:00Z", how: "work",
+       faultSince: "2026-09-01T00:00:00Z", reopened: 0, ticketMs: 6 * H, openMs: 30 * H, resolvedAt: "2026-09-02T06:00:00Z" });
+  eq("  ...taken on, not done yet: a ticket in progress, from its Open Ticket",
+     pick(recordLife(life, Date.parse("2026-09-02T01:00:00Z"))), { stage: "ticket", ticket: true, ticketFrom: "2026-09-02T00:00:00Z",
+       how: null, faultSince: "2026-09-01T00:00:00Z", reopened: 0, ticketMs: null, openMs: null, resolvedAt: null });
+  eq("  ...before anyone took it on: a fault", pick(recordLife(life, Date.parse("2026-09-01T12:00:00Z"))).stage, "fault");
+  eq("  ...before its first step: open, with no close date of a later month (it read \"Open\" beside one)",
+     pick(recordLife({ ...life, openedAt: "2026-08-31T00:00:00Z" }, Date.parse("2026-08-31T12:00:00Z"))).resolvedAt, null);
+  eq("  ...every close it had, the one it was reopened from included", recordLife(life).resolutions, ["2026-09-02T06:00:00Z", "2026-10-03T00:00:00Z"]);
+  eq("the tablet's log counts the faults and the tickets in progress apart (it called every record not closed an open ticket)",
+     recordsByStage([{ status: "open" }, { status: "in_progress" }, { status: "resolved" }, { status: "weird" }]),
+     { fault: 2, ticket: 1, closed: 1 });
+  const ctx = readFileSync(new URL("../../src/fm/FmDataContext.tsx", import.meta.url), "utf8");
+  eq("  ...on both its lines, pulled and pushed", [(ctx.match(/\.\.\.syncStages\(/g) ?? []).length, /openTickets/.test(ctx),
+     /return \{ records: records\.length, openFaults: n\.fault, ticketsInProgress: n\.ticket \};/.test(ctx)], [2, false, true]);
 }
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the owner's numbers hold"}`);

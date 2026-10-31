@@ -7,7 +7,7 @@
 // before; moved, a field only this device changed takes its value, one only the other changed keeps theirs, the steps
 // are append-only, and a field both changed keeps the other device's value (it got there first), the device saying
 // "This fault was just changed on another device." The record stays one the VESTA Agent reads as a fault: its status is
-// its last status step's (fmEngine ticketAt). The device-setup store does not merge.
+// its last status step's (fmEngine recordLife). The device-setup store does not merge.
 //
 // Driven by value: the real merge, the real Facility diff / apply / fold, the real commands (fmCommands) through the
 // real sync machine against a fake store; then the real FmDataProvider under React (tests/consistency/fakedom.mjs).
@@ -18,7 +18,7 @@ import { mountRoot } from "../consistency/fakedom.mjs";
 const { mergeItem } = await import("@/utils/keyedSync");
 const F = await import("@/fm/fmApi");
 const { applyFmCommand } = await import("@/fm/fmCommands");
-const { ticketAt, statusChanges, CLOSED_WITHOUT_ACTION } = await import("@/fm/fmEngine");
+const { recordLife, statusChanges, CLOSED_WITHOUT_ACTION } = await import("@/fm/fmEngine");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { CHANGED_ON_ANOTHER_DEVICE } = await import("@/fm/fmSave");
 const { SyncedDocument } = await import("@/utils/syncedDocument");
@@ -80,7 +80,7 @@ function villa() {
 const t1 = (d) => d.tickets.find((t) => t.id === "t1");
 const steps = (d) => (t1(d).updates ?? []).map((u) => u.note ?? u.kind ?? u.status);
 /** One fault, as the VESTA Agent and every report read it: its status is its last status step's. */
-const valid = (d) => ticketAt(t1(d), Date.parse("2030-01-01")).status === t1(d).status
+const valid = (d) => recordLife(t1(d), Date.parse("2030-01-01")).status === t1(d).status
   && (t1(d).status === "resolved") === Boolean(t1(d).resolvedAt);
 
 console.log("\n  the phone closes the fault; the tablet, its copy older, taps Started:");

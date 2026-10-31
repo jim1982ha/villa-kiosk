@@ -150,7 +150,7 @@ console.log("\n  a document's dates are locale-free; the month's bounds computed
   const t = { id: "m", title: "m", status: "open", openedAt: "2026-09-01T12:00:00.000Z", photoIds: [], updates: [
     { at: "2026-09-15T12:00:00.000Z", status: "resolved", photoIds: [] }, { at: "2026-10-15T12:00:00.000Z", status: "open", kind: "reopened", photoIds: [] }] };
   ck("  ...and the recap's month end is the bound itself: resolved at September's end, open at October's",
-     E.ticketAt(t, E.monthBounds("2026-09").end).status === "resolved" && E.ticketAt(t, E.monthBounds("2026-10").end).status === "open");
+     E.recordLife(t, E.monthBounds("2026-09").end).status === "resolved" && E.recordLife(t, E.monthBounds("2026-10").end).status === "open");
   const docs = src("fm/fmDocuments.ts").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
   ck("every date cell of a document is docDate: no locale date, no hand-parsed month, in fm/fmDocuments",
      /docDate\(/.test(docs) && !/shortDate\(|stampText\(|fullDate\(|dayTime\(|toLocale|split\("-"\)\.map\(Number\)|toISOString\(\)/.test(docs)

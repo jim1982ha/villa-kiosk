@@ -18,13 +18,13 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
-import { rowTime, type CardView } from "@/config/cockpitCard";
+import { leadLine, rowTime, type CardView } from "@/config/cockpitCard";
 
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { useSuperadminDelete } from "@/hooks/useSuperadminDelete";
 import type { LongPressHandlers } from "@/hooks/useLongPress";
-import { announcementWords, cardsOfIssue, messageOfLine, messagesView, followingFilter, openingFilter, type MessageItem,
+import { announcementWords, messagesView, followingFilter, openingFilter, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -33,9 +33,9 @@ import { SourceIcons } from "@/components/fm/sourceIcons";
 import InfoTip from "@/components/common/InfoTip";
 import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent, PageLink, RecordButtons } from "@/components/messages/AnnouncementContent";
-import RecordCard from "@/components/fm/RecordCard";
+import RecordCard, { RoomPill } from "@/components/fm/RecordCard";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
-import { AlertIssueCard, AttentionCard, CockpitAttentionRow, RoomPill } from "./IssueCard";
+import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 
 /** One line of the list — pure (a check draws it): its icon, its title, the line under it, its time. */
@@ -124,12 +124,13 @@ function FoldedRows({ rows, unit, selected, onSelect, empty, tip, ...section }: 
   );
 }
 
-/** What a line says about its item: an issue its device, room and first problem; a notification its title and first
- *  words, and when it came. */
+/** What a line says about its item: an issue its device, room and lead problem (its alert's, in the words its opened
+ *  card says it: the issue as told, messagesModel issueAsTold); a notification its title and first words, and when it
+ *  came. */
 function rowOf(item: MessageItem) {
   if (item.kind === "issue") {
     const { card } = item;
-    const first = card.lines[0];
+    const first = leadLine(card);
     const when = rowTime(card);
     return {
       icon: card.look === "watched"
@@ -305,14 +306,9 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
             onDone={() => setRaising(null)} />
         )}
-        {/* an alert's open issue: VESTA's card of it first, as Telegram shows it, then the tablet's own buttons */}
-        {/* an alert's issue: ONE card, VESTA's message inside it and every card's buttons (owner, 2026-10-29, 2026-10-30) */}
-        {item?.kind === "issue" && cardsOfIssue(item.card, kept).length > 0 && (
-          <AlertIssueCard card={item.card} messages={(line) => messageOfLine(line, kept)} onOpenEntity={onOpenEntity}
-            focused={!!isFocus?.(item.card)} canManage={canManage} onEditTicket={onEditTicket}
-            onRaiseTicket={(entity) => setRaising({ entity })} />
-        )}
-        {item?.kind === "issue" && cardsOfIssue(item.card, kept).length === 0 && (item.card.look === "watched"
+        {/* an issue: ONE card, as told (VESTA's message inside its alert's line), every card's buttons (owner, 2026-10-29,
+            2026-10-30); a watched one, none */}
+        {item?.kind === "issue" && (item.card.look === "watched"
           ? <AttentionCard card={item.card} onOpenEntity={onOpenEntity} />
           : <CockpitAttentionRow key={item.key} card={item.card} onOpenEntity={onOpenEntity} canManage={canManage}
               onEditTicket={onEditTicket} onRaiseTicket={(entity) => setRaising({ entity })}

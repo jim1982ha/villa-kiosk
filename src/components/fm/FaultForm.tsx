@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
 import type { FmTicket } from "@/fm/fmTypes";
-import { wasTicket } from "@/fm/fmEngine";
+import { recordLife } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
@@ -53,8 +53,8 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
   }, [editing?.id, presetEntity]);
 
   // A person OPENS A TICKET (owner, 2026-10-14): what they open starts in progress, in the Tickets tab.
-  // ...and a record is called a ticket only while it is one, or closed as one (wasTicket, owner 2026-11-01)
-  const heading = !editing ? "Open a ticket" : wasTicket(editing) ? "Edit ticket" : "Edit fault";
+  // ...and a record is called a ticket only while it is one, or closed as one (its life: recordLife, owner 2026-11-01)
+  const heading = !editing ? "Open a ticket" : recordLife(editing).ticket ? "Edit ticket" : "Edit fault";
   return (
     <FmForm>
       <h3>{heading}</h3>

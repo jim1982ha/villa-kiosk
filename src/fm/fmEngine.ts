@@ -297,28 +297,14 @@ export function stageOf(t: { status?: FmTicket["status"] }): FmStage {
   return t.status === "in_progress" ? "ticket" : "fault";
 }
 
-/** ⚠️ A TICKET IS A FAULT SOMEONE TOOK ON (owner, 2026-11-01: "189 tickets closed? … there was NEVER 189 opened
- *  tickets … are you mixing faults with tickets?"; "never a ticket unless the user has explicitly clicked on open a
- *  ticket … nothing shall be counted as a closed ticket if a ticket hasn't been opened first"): the Tickets tab listed
- *  and counted every closed RECORD, the faults the VESTA Agent raised and cleared by itself among them. A record is a
- *  ticket while it is in progress (Open Ticket, or a person's "Open Ticket" form: fmCommands, the only two writers),
- *  and a CLOSED TICKET when it was in progress as it closed: a ticket reopened is a fault again (Reopen), and closed
- *  then, a closed fault. A record with no steps kept (older than them) is not one: nothing says anyone took it on. */
-export function wasTicket(t: Pick<FmTicket, "status" | "updates">): boolean {
-  if (stageOf(t) !== "closed") return stageOf(t) === "ticket";
-  const steps = statusChanges(t);
-  const last = steps.map((u) => isTicketResolved(u)).lastIndexOf(true);
-  return last > 0 && steps[last - 1].status === "in_progress";
-}
-
-/** A closed ticket's time, in ms: from the Open Ticket that took it on to the close (owner, 2026-11-01) — never the
- *  days it waited as a fault before anyone took it on. Null when it cannot be told (not a closed ticket). */
-export function ticketTimeMs(t: FmTicket): number | null {
-  if (!wasTicket(t) || stageOf(t) !== "closed") return null;
-  const steps = statusChanges(t);
-  const last = steps.map((u) => isTicketResolved(u)).lastIndexOf(true);
-  const ms = Date.parse(steps[last].at) - Date.parse(steps[last - 1].at);
-  return Number.isFinite(ms) && ms >= 0 ? ms : null;
+/** How many records stand at each stage now (stageOf): the faults nobody has taken on, the tickets in progress, the
+ *  closed ones. Per RECORD: the screens count open work per device card (deviceWork.openCounts); this is the tablet's
+ *  log, which counts what the store holds. ⚠️ Its "open tickets" counted every record not closed, the faults among them
+ *  (architecture review round 13). */
+export function recordsByStage(records: readonly { status?: FmTicket["status"] }[]): Record<FmStage, number> {
+  const n: Record<FmStage, number> = { fault: 0, ticket: 0, closed: 0 };
+  for (const t of records) n[stageOf(t)]++;
+  return n;
 }
 
 /** Each stage's ONE word and tone, as every screen and report says it: the Tickets tab's pill (its colour: fm/tone
@@ -443,45 +429,109 @@ export function stepsInTimeOrder(t: Pick<FmTicket, "updates">): FmTicketUpdate[]
     .sort((a, b) => (a.at - b.at) || (a.i - b.i)).map(({ u }) => u);
 }
 
-/** The time a fault was really open, in ms: from its opening (or a reopening) to each resolution, never the time it
- *  sat resolved in between (review 31: fixed in 2 h, reopened a month later, fixed in 2 h read 722 h). Without
- *  steps: opened → resolved. Null when it cannot be told. */
-export function openTimeMs(t: FmTicket): number | null {
-  const steps = statusChanges(t);
-  if (!steps.some((u) => isTicketResolved(u))) {
-    const ms = t.resolvedAt ? Date.parse(t.resolvedAt) - Date.parse(t.openedAt) : NaN;
-    return Number.isFinite(ms) && ms >= 0 ? ms : null;
-  }
-  let since: number | null = Date.parse(t.openedAt), total = 0;
-  for (const u of steps) {
+/**
+ * ⚠️ A RECORD'S LIFE, READ ONCE (architecture review round 13, 2026-11-01): "is this a ticket?", "since when?", "closed
+ * how?" were each answered by a small rule re-reading the record's steps from the start (stageOf, wasTicket,
+ * ticketTimeMs, openTimeMs, ticketAt, resolvedInMonth, ticketUpTo), and each screen combined them its own way: the
+ * third round of "189 closed tickets" (owner, 2026-11-01). Every count, list, recap and readiness line reads this.
+ *
+ * The owner's rule (2026-10-14, 2026-11-01): a problem is a FAULT until a person presses Open Ticket; then it is a
+ * TICKET (in progress); a CLOSED TICKET is one closed while it was in progress (a ticket reopened is a fault again,
+ * and closed then, a closed fault); a ticket's time runs from its Open Ticket to its close, never the days it waited
+ * as a fault. A record with no steps kept (older than them) was never a ticket: nothing says anyone took it on.
+ *
+ * `upTo` (ms): the record as it stood then: a past month's report tells that month, never the record as it is today
+ * (review 31: reopened in October, a fault vanished from September's recap). Its steps up to then, its status the
+ * last of them (none by then: open); a record with no steps at all keeps its stored status. Pure.
+ */
+export interface RecordLife {
+  /** Where it stood (now, or at `upTo`): a fault, a ticket, closed. */
+  stage: FmStage;
+  status: FmTicket["status"];
+  /** When it was resolved, if it stood resolved. */
+  resolvedAt?: string;
+  /** Its status changes (statusChanges), up to `upTo`, in time order. */
+  steps: FmTicketUpdate[];
+  /** A FAULT since: its opening, or the step that last reopened it. */
+  faultSince: string;
+  /** How many times it was reopened after a close. */
+  reopened: number;
+  /** Taken on, a TICKET from: the Open Ticket of the ticket it is (in progress) or was (closed as one); absent when it
+   *  is not, or was not, a ticket, or that step's time is not kept. */
+  ticketFrom?: string;
+  /** In progress, or closed while in progress: a ticket, a closed ticket (the Tickets tab's and the recap's). */
+  ticket: boolean;
+  /** The step that last closed it (never a title or a Telegram line written after it: lastResolution). */
+  closing?: FmTicketUpdate;
+  /** Closed, how: with work done, or with no action (isClearedStep); absent while it is not closed. */
+  how?: "work" | "no-action";
+  /** Every moment it was resolved (from its steps, a close it was later reopened from included; with none, its
+   *  resolvedAt). */
+  resolutions: string[];
+  /** The time it was really open, in ms: from its opening (or a reopening) to each close, never the time it sat closed
+   *  in between (review 31: fixed in 2 h, reopened a month later, fixed in 2 h read 722 h). Without steps: opened →
+   *  resolved. Null when it cannot be told. */
+  openMs: number | null;
+  /** A closed ticket's time, in ms: from the Open Ticket that took it on to its close. Null when it is not a closed
+   *  ticket, or it cannot be told. */
+  ticketMs: number | null;
+}
+
+export function recordLife(t: FmTicket, upTo?: number): RecordLife {
+  const all = statusChanges(t);
+  const steps = upTo === undefined ? all : all.filter((u) => Date.parse(u.at) <= upTo);
+  // its status then: stored (no history at all, or now), else the last step's; nothing by then, open
+  const last = steps[steps.length - 1];
+  const asStored = upTo === undefined || all.length === 0;
+  const status: FmTicket["status"] = asStored ? t.status : last ? last.status : "open";
+  const resolvedAt = asStored ? t.resolvedAt : last && isTicketResolved(last) ? last.at : undefined;
+  const stage = stageOf({ status });
+
+  // the walk: each close and reopening, and the time open between them
+  let since: number | null = Date.parse(t.openedAt), openTotal = 0, reopened = 0, faultSince = t.openedAt;
+  let closedLast = -1, wasClosed = false;
+  const resolutions: string[] = [];
+  steps.forEach((u, i) => {
+    const resolved = isTicketResolved(u);
+    if (resolved) { closedLast = i; resolutions.push(u.at); }
+    else if (wasClosed) { reopened++; faultSince = u.at; }
+    wasClosed = resolved;
     const at = Date.parse(u.at);
-    if (!Number.isFinite(at)) continue;
-    if (isTicketResolved(u)) {
-      if (since !== null && Number.isFinite(since) && at >= since) total += at - since;
+    if (!Number.isFinite(at)) return;
+    if (resolved) {
+      if (since !== null && Number.isFinite(since) && at >= since) openTotal += at - since;
       since = null;
     } else if (since === null) since = at;                       // open again
+  });
+  const closing = closedLast >= 0 ? steps[closedLast] : undefined;
+  const openMs = closing ? openTotal : (() => {
+    const ms = resolvedAt ? Date.parse(resolvedAt) - Date.parse(t.openedAt) : NaN;
+    return Number.isFinite(ms) && ms >= 0 ? ms : null;
+  })();
+
+  // a ticket: in progress now, or the step before its last close took it on
+  const takenOn = closedLast > 0 && steps[closedLast - 1].status === "in_progress" ? steps[closedLast - 1] : undefined;
+  const ticket = stage === "closed" ? !!takenOn : stage === "ticket";
+  let ticketFrom: string | undefined;
+  if (stage === "closed" && takenOn) ticketFrom = takenOn.at;
+  else if (stage === "ticket") {
+    // the step that began the run of in-progress steps it stands in
+    let k = steps.length - 1;
+    while (k > 0 && steps[k - 1].status === "in_progress") k--;
+    if (k >= 0 && steps[k]?.status === "in_progress") ticketFrom = steps[k].at;
   }
-  return total;
-}
-
-/** A fault as it stood at `iso`: its status, and when it was resolved if it was by then — a past month's report tells
- *  that month, never the fault as it is today (review 31: reopened in October, it vanished from September's recap). */
-export function ticketAt(t: FmTicket, at: string | number): { status: FmTicket["status"]; resolvedAt?: string } {
-  const until = typeof at === "number" ? at : Date.parse(at);
-  const all = statusChanges(t);
-  if (!all.length) return { status: t.status, resolvedAt: t.resolvedAt };     // no history: as it is
-  const steps = all.filter((u) => Date.parse(u.at) <= until);
-  const last = steps[steps.length - 1];
-  if (!last) return { status: "open" };
-  return { status: last.status, resolvedAt: isTicketResolved(last) ? last.at : undefined };
-}
-
-/** Did the fault resolve in `month` ("2026-09")? From its steps — a resolution the fault was later reopened from
- *  counts — else its resolvedAt. */
-export function resolvedInMonth(t: FmTicket, month: string): boolean {
-  const steps = statusChanges(t).filter((u) => isTicketResolved(u));
-  const ats = steps.length ? steps.map((u) => u.at) : (t.resolvedAt ? [t.resolvedAt] : []);
-  return ats.some((a) => monthKey(a) === month);
+  const ticketMs = (() => {
+    if (stage !== "closed" || !takenOn || !closing) return null;
+    const ms = Date.parse(closing.at) - Date.parse(takenOn.at);
+    return Number.isFinite(ms) && ms >= 0 ? ms : null;
+  })();
+  return {
+    stage, status, ...(resolvedAt !== undefined ? { resolvedAt } : {}), steps, faultSince, reopened,
+    ...(ticketFrom !== undefined ? { ticketFrom } : {}), ticket,
+    ...(closing ? { closing } : {}), ...(stage === "closed" ? { how: closing && isClearedStep(closing) ? "no-action" as const : "work" as const } : {}),
+    resolutions: resolutions.length ? resolutions : resolvedAt ? [resolvedAt] : [],
+    openMs, ticketMs,
+  };
 }
 
 /** A period the figures are about: [start, end) in ms. */
@@ -505,59 +555,60 @@ export function keptDays(r: FmRetention): number | null {
   return bounded.length ? Math.min(...bounded) : null;
 }
 
-/** A fault as it stood at `end`: its status changes up to then, its status and resolution then (ticketAt). */
-function ticketUpTo(t: FmTicket, end: number): FmTicket {
-  const at = ticketAt(t, end);
-  return { ...t, ...at, resolvedAt: at.resolvedAt, updates: t.updates?.filter((u) => Date.parse(u.at) <= end) };
-}
-
 /**
- * The resolution figures. `window`: only the faults whose last close (as they stood at its end) falls inside it —
- * the recap's month (monthBounds), the Tickets tab's kept record (keptDays). Without one: every record given.
+ * The resolution figures, over each record's life (recordLife). `window`: only the records whose last close (as they
+ * stood at its end) falls inside it: the recap's month (monthBounds), the Tickets tab's kept record (keptDays).
+ * Without one: every record given.
  *
  * ⚠️ "RESOLVED (ALL TIME)" WAS THE KEPT RECORD (architecture review, 2026-10-19): the server drops a no-action close
  * after 90 days and a repair after the evidence window (_fm_expire), so September's recap regenerated in January read
  * "Closed without action: 0". A figure names its period now, and the period is one the record still holds.
  */
-export function ticketStats(tickets: readonly FmTicket[], window?: TicketWindow,
-  timeOf: (t: FmTicket) => number | null = openTimeMs): TicketStats {
+function closeStats(lives: readonly RecordLife[], window: TicketWindow | undefined, timeOf: (l: RecordLife) => number | null): TicketStats {
   let resolved = 0, cleared = 0, totalMs = 0, timed = 0;
-  for (const whole of tickets) {
-    const t = window ? ticketUpTo(whole, window.end) : whole;
+  for (const l of lives) {
     // ⚠️ AN UNKNOWN STATUS COUNTS AS OPEN (stageOf). A bare `else` once counted ANY row whose status was missing,
     // empty or corrupt as RESOLVED — a fault silently removed from the facility report by bad data, the one
     // direction this must never fail in. The open ones are deviceWork.openCounts', per device.
-    if (stageOf(t) !== "closed") continue;
-    // ⚠️ A CLOSE WITH NO WORK IS NOT A REPAIR (review 31): ten 10-minute Wi-Fi blips cleared by the agent made a
-    // 48 h fridge repair read "4.5 h", one duplicate closed after 92 days "2208 h"
-    const lastResolve = lastResolution(t);
+    if (l.stage !== "closed") continue;
     if (window) {
-      const closedAt = Date.parse(lastResolve?.at ?? t.resolvedAt ?? "");
+      const closedAt = Date.parse(l.closing?.at ?? l.resolvedAt ?? "");
       if (!(closedAt >= window.start && closedAt < window.end)) continue;
     }
-    if (lastResolve && isClearedStep(lastResolve)) { cleared++; continue; }
+    // ⚠️ A CLOSE WITH NO WORK IS NOT A REPAIR (review 31): ten 10-minute Wi-Fi blips cleared by the agent made a
+    // 48 h fridge repair read "4.5 h", one duplicate closed after 92 days "2208 h"
+    if (l.how === "no-action") { cleared++; continue; }
     resolved++;
-    const ms = timeOf(t);
+    const ms = timeOf(l);
     if (ms !== null) { totalMs += ms; timed++; }
   }
   return {
     resolved, closedWithoutAction: cleared,
     meanResolutionHours: timed ? totalMs / timed / HOUR_MS : null,
-    // ⚠️ HOW MANY TICKETS THE MEAN ACTUALLY COVERS. `resolved` and `timed` are
-    // independent counters: a ticket resolved with no resolvedAt, or with a
-    // resolvedAt before its openedAt, counts as resolved and is skipped by the
-    // mean. Without this the report could print "Resolved: 20" beside "Mean
-    // time to resolution: 1.4 hours" where the mean covered three, with no
-    // signal that the two numbers describe different sets.
+    // ⚠️ HOW MANY RECORDS THE MEAN ACTUALLY COVERS. `resolved` and `timed` are independent counters: a record resolved
+    // with no resolvedAt, or with a resolvedAt before its openedAt, counts as resolved and is skipped by the mean.
+    // Without this the report could print "Resolved: 20" beside "Mean time to resolution: 1.4 hours" where the mean
+    // covered three, with no signal that the two numbers describe different sets.
     meanCoversTickets: timed,
   };
 }
 
-/** The TICKETS' figures (owner, 2026-11-01): ticketStats over the closed tickets alone (wasTicket), each timed from its
- *  Open Ticket (ticketTimeMs) — the Tickets tab's and the recap's ticket line. ticketStats over every record is the
- *  FAULTS' figures (the recap's fault line). */
+/** The Tickets tab's Closed list: the records closed as TICKETS (recordLife), never every closed record (owner,
+ *  2026-11-01: "189 closed tickets" counted the faults VESTA cleared with nobody taking them on); latest closed first. */
+export function closedTickets(records: readonly FmTicket[]): FmTicket[] {
+  return records.filter((t) => { const life = recordLife(t); return life.stage === "closed" && life.ticket; })
+    .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt));
+}
+
+/** The FAULTS' figures: every closed record, each timed from its opening (recordLife openMs): the recap's fault line. */
+export function ticketStats(tickets: readonly FmTicket[], window?: TicketWindow): TicketStats {
+  return closeStats(tickets.map((t) => recordLife(t, window?.end)), window, (l) => l.openMs);
+}
+
+/** The TICKETS' figures (owner, 2026-11-01): the closed tickets alone (recordLife ticket), each timed from its Open
+ *  Ticket (ticketMs): the Tickets tab's and the recap's ticket line. */
 export function closedTicketStats(records: readonly FmTicket[], window?: TicketWindow): TicketStats {
-  return ticketStats(records.filter((t) => wasTicket(window ? ticketUpTo(t, window.end) : t)), window, ticketTimeMs);
+  return closeStats(records.map((t) => recordLife(t, window?.end)).filter((l) => l.ticket), window, (l) => l.ticketMs);
 }
 
 /** Completions falling inside a calendar month — the maintenance section of

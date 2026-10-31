@@ -374,8 +374,8 @@ const late = { ...rec("m", "x.y"), status: "in_progress", openedAt: "2026-09-30T
   { at: "2026-09-30T16:10:00Z", status: "in_progress", by: "Facility manager", note: "On my way", photoIds: [] },
   { at: "2026-09-30T15:50:00Z", status: "in_progress", kind: "noted", note: "Reminder sent to Facility Manager", photoIds: [] }] };
 ck("a fault still OPEN at month end is open in that month's report, whatever line Telegram added after",
-   E.ticketAt(late, "2026-09-30T15:55:00Z").status === "open" && E.ticketAt(late, "2026-09-30T16:30:00Z").status === "in_progress",
-   [E.ticketAt(late, "2026-09-30T15:55:00Z"), E.ticketAt(late, "2026-09-30T16:30:00Z")]);
+   E.recordLife(late, Date.parse("2026-09-30T15:55:00Z")).status === "open" && E.recordLife(late, Date.parse("2026-09-30T16:30:00Z")).status === "in_progress",
+   [E.recordLife(late, Date.parse("2026-09-30T15:55:00Z")).status, E.recordLife(late, Date.parse("2026-09-30T16:30:00Z")).status]);
 const N2 = await import("@/fm/faultNotes");
 ck("  ...and the card's notes read in time order (the reminder before the take-on)",
    N2.faultNoteLines(late, (a) => a.slice(11, 16)).join("|") === "Reminder sent to Facility Manager (15:50)|On my way (16:10)",
@@ -384,8 +384,8 @@ const resolvedLate = { ...late, status: "resolved", resolvedAt: "2026-09-30T17:4
   { at: "2026-09-30T17:40:00Z", status: "resolved", photoIds: [] },
   { at: "2026-09-30T17:45:00Z", status: "resolved", kind: "retitled", title: "t", was: "s", photoIds: [] }] };
 ck("  ...the time open counts status changes only: 2 h, never a title or a Telegram line",
-   E.openTimeMs(resolvedLate) === 2 * 3600 * 1000 && E.statusChanges(resolvedLate).every((u) => !["noted", "retitled", "reading"].includes(u.kind)),
-   E.openTimeMs(resolvedLate));
+   E.recordLife(resolvedLate).openMs === 2 * 3600 * 1000 && E.statusChanges(resolvedLate).every((u) => !["noted", "retitled", "reading"].includes(u.kind)),
+   E.recordLife(resolvedLate).openMs);
 
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
@@ -629,11 +629,11 @@ console.log("\n  one line per problem (owner, 2026-10-17: \"#49 · One mains pha
      g.entityId === "sensor.phase_b_voltage" && !/,sensor/.test(g.title), g.entityId, g.title);
 }
 
-ck("the screens ask stageOf (or its count, openCounts, or wasTicket: was it a ticket), never the status themselves",
-   ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(|openCounts\(|wasTicket\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
+ck("the screens ask stageOf (or its count, openCounts, or the record's life: recordLife, closedTickets), never the status themselves",
+   ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(|openCounts\(|recordLife\(|closedTickets\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
 // owner, 2026-11-01: a record is called a ticket only while it is one, or closed as one; a reopened ex-ticket is a fault
-ck("the form's heading says Edit ticket for a ticket (wasTicket) and Edit fault for anything else",
-   /const heading = !editing \? "Open a ticket" : wasTicket\(editing\) \? "Edit ticket" : "Edit fault";/.test(src("components/fm/FaultForm.tsx")));
-ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));
+ck("the form's heading says Edit ticket for a ticket or a closed ticket (its life: recordLife) and Edit fault for anything else",
+   /const heading = !editing \? "Open a ticket" : recordLife\(editing\)\.ticket \? "Edit ticket" : "Edit fault";/.test(src("components/fm/FaultForm.tsx")));
+ck("the fault form is one, shared by raising and editing", /<FaultForm editing=\{t\} /.test(tt) && !/<input value=\{title\}/.test(ov + tt));
 
 done("✅ one list of live issues; faults become tickets; the same with or without the Agent");

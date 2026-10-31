@@ -8,7 +8,7 @@
 // overdue work actually is.
 
 import InfoTip from "@/components/common/InfoTip";
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
@@ -21,6 +21,7 @@ import FormActions from "./FormActions";
 import Tip from "@/components/common/Tip";
 import RecordCard from "./RecordCard";
 import FmForm from "./FmForm";
+import { useListEditor } from "./ListEditor";
 
 /** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
  *  whole number of days rounds DOWN (twice a week -> 3, not 4) so a genuinely
@@ -38,11 +39,12 @@ const PRESETS: { label: string; days: number }[] = [
 export default function ScheduleEditor() {
   const { data, addSchedule, updateSchedule, removeSchedule } = useFmData();
   const { config } = useConfig();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   /** Why the last save was refused — the draft is kept (2.496.252). */
   const [formError, setFormError] = useState<string | null>(null);
+  // the task open as its form (ListEditor): erased on another tablet, its form closes and Add a task is back
+  const editor = useListEditor(data.schedules.map((s) => s.id), () => { setFormError(null); setDraft(EMPTY); });
+  const editingId = editor.editing;
 
   const rooms = [...new Set(
     config.teleportPoints.map((p) => p.name).filter(Boolean),
@@ -54,15 +56,14 @@ export default function ScheduleEditor() {
   const write = scheduleWrite(draft, editingId);
   const valid = write.ok;
 
-  const startAdd = () => { setDraft(EMPTY); setEditingId(null); setAdding(true); };
-  const startEdit = (s: FmSchedule) => { setDraft(toDraft(s)); setAdding(false); setEditingId(s.id); };
-  const cancel = () => { setFormError(null); setAdding(false); setEditingId(null); setDraft(EMPTY); };
+  const startAdd = () => { setDraft(EMPTY); editor.add(); };
+  const startEdit = (s: FmSchedule) => { setDraft(toDraft(s)); editor.edit(s.id); };
 
   const save = async () => {
     if (!write.ok) { setFormError(write.problem); return; }
     const { done, note: why } = write.kind === "edit" ? await updateSchedule(write.id, write.patch) : await addSchedule(write.fields);
     // Close only when saved or queued; a refused save keeps the draft (2.496.252).
-    if (done) cancel(); else setFormError(why);
+    if (done) editor.close(); else setFormError(why);
   };
 
   const form = (
@@ -109,7 +110,7 @@ export default function ScheduleEditor() {
       {!write.ok && draft.everyDays.trim() !== "" && days === null && (
         <div className="fm-inline-error" role="alert">{write.problem}</div>
       )}
-      <FormActions error={formError} onCancel={cancel} onSave={save} disabled={!valid}
+      <FormActions error={formError} onCancel={editor.close} onSave={save} disabled={!valid}
         saveLabel={editingId ? "Save changes" : "Add task"} />
     </FmForm>
   );
@@ -118,7 +119,7 @@ export default function ScheduleEditor() {
     <div className="fm-stack">
       {/* the description and "Add a task" on one line (owner, 2026-10-14) */}
       <div className="fm-desc-row">
-        {!adding && !editingId && (
+        {editor.addButton && (
           <button className="btn ghost" onClick={startAdd}><Plus size={16} /> Add a task</button>
         )}
         <InfoTip label="About the tasks">
@@ -128,7 +129,7 @@ export default function ScheduleEditor() {
       </div>
 
       {/* a new task's form here; an edit's in its task's place, below (FmForm) */}
-      {adding && form}
+      {editor.adding && form}
 
       <div className="fm-list">
         {data.schedules.length === 0 && (
@@ -138,14 +139,13 @@ export default function ScheduleEditor() {
           // Target date this task implies — from its last completion, or (if
           // never done) from when it was created. See fmEngine.scheduleStatus.
           const due = scheduleStatus(s, data.completions);
-          if (s.id === editingId) return <Fragment key={s.id}>{form}</Fragment>;
-          return (
+          return editor.inPlace(s.id, (
             // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22: "wherever there is a card, the same style")
             <RecordCard key={s.id} title={s.title}
               when={`Every ${s.everyDays} days · due by ${due.dueAt ? shortDate(due.dueAt) : "—"}`}
+              room={s.room || undefined}
               pills={<>
                 {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
-                {s.room && <span className="fm-clause">{s.room}</span>}
                 {!s.enabled && <span className="fm-clause">Paused</span>}
                 <AgentMark record={s} />
               </>}
@@ -162,7 +162,7 @@ export default function ScheduleEditor() {
                   </button>
                 </Tip>
               </>} />
-          );
+          ), () => form);
         })}
       </div>
     </div>

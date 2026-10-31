@@ -11,7 +11,8 @@
 //
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
 // faults of one device: TicketsTab draws the frame). `lead`: what stands before the title (an open issue's source
-// icons); `titlePills`: pills right after the title, on its line (an open issue's room, a spend's device); `check`: a
+// icons); `titlePills`: pills right after the title, on its line (a spend's device); `room`: its room, the room pill
+// after them (RoomPill, every card showing a room); `check`: a
 // pill at the right of that line, its kind's icon and when (an open issue's next check: a refresh icon; a card on the
 // Watch list, when VESTA closes it: a clock); `tone`: the card's own tint.
 //
@@ -34,8 +35,10 @@ export interface RecordCardProps {
   /** Its status pill: `tone` is the badge's colour class (ok, due-soon, overdue, never…). */
   status?: { text: string; tone: string };
   lead?: ReactNode;
-  /** Pills right after the title, on its line (an open issue's room, a spend's device). */
+  /** Pills right after the title, on its line (a spend's device). */
   titlePills?: ReactNode;
+  /** Its room, as THE room pill (RoomPill), on the title's line after its pills: every card that shows a room. */
+  room?: string;
   /** The pill at the right of the title's line: its kind's icon, `when` beside it, `tip` on hover (CheckPill). */
   check?: { kind: CheckPillKind; when: string; tip: string };
   /** The pills before `when` (room, device chip, "by VESTA Agent"…). */
@@ -73,7 +76,15 @@ export function CheckPill({ kind, when, tip }: { kind: CheckPillKind; when: stri
   );
 }
 
-export default function RecordCard({ title, status, lead, titlePills, check, pills, when, notes, body, photoIds,
+/** ⚠️ A ROOM IS ONE PILL ON EVERY COCKPIT CARD (architecture review round 13, 2026-11-01: the Inbox drew the room as a
+ *  framed pill, Tickets, Schedule and Today as plain grey text among the other tags): its card's `room`, and the Inbox
+ *  line's (MessagesTab MessageRow). The Spend tab's device pill's look (owner, 2026-11-01: "the area pill … reusing
+ *  existing code"). */
+export function RoomPill({ room }: { room: string }) {
+  return <span className="fm-entity-chip fm-chip-static">{room}</span>;
+}
+
+export default function RecordCard({ title, status, lead, titlePills, room, check, pills, when, notes, body, photoIds,
   documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const inside = (
     <>
@@ -82,6 +93,7 @@ export default function RecordCard({ title, status, lead, titlePills, check, pil
         <div className="fm-row-title">
           <strong>{title}</strong>
           {titlePills}
+          {room && <RoomPill room={room} />}
         </div>
         {status && <span className={`fm-badge ${status.tone}`}>{status.text}</span>}
         {check && <CheckPill kind={check.kind} when={check.when} tip={check.tip} />}

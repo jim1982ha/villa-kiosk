@@ -5,7 +5,7 @@
 // Messages screen reads; the later tickets add the reports and VESTA's conversation to it. Pure:
 // tests/oracles/messages_model.mjs.
 
-import type { CardView } from "@/config/cockpitCard";
+import { othersFirst, type CardView } from "@/config/cockpitCard";
 import { alertStage, incidentKey, versionOf, type Announcement } from "./announcements";
 import { byTime, stillKept } from "./feed";
 
@@ -97,10 +97,31 @@ export function cardsOfIssue(card: CardView, kept: readonly Announcement[]): Ann
 }
 
 /** VESTA's card of one line's alert (its thread `incident:<n>`), or null: the line's message inside the issue's one card
- *  (cockpit/IssueCard AlertIssueCard). Pure. */
+ *  (issueAsTold). Pure. */
 export function messageOfLine(line: CardView["lines"][number], kept: readonly Announcement[]): Announcement | null {
   return line.alertNumber === undefined ? null
     : kept.find((a) => a.feed === "vesta" && a.key === incidentKey(line.alertNumber!)) ?? null;
+}
+
+/**
+ * ⚠️ AN ISSUE AS TOLD: JOINED TO VESTA'S MESSAGES ONCE (architecture review round 13, 2026-11-01): the card was put
+ * together before VESTA's messages were joined to it, then each screen reworded it on its own, or did not. The Inbox's
+ * line said "Missing, in progress: #100-P1 · …", its opened card "Missing, #100-P1 (existing)", the Watch line
+ * "#92-P2 · …" or "#92-P2 (cleared)"; four fixes in a row were this one cause ("said once", "Missing beside its alert",
+ * "icons say every problem", "an alert leads its row").
+ *
+ * Each line VESTA holds a message for is named as Telegram names the alert: the message's title ("#100-P1 (existing)"),
+ * after its device's own state the alert does not say ("Missing, …": CardLine.state); the message is the line's
+ * (`told`: its words in place of its short story) and, on the Watch list, its Status says how it closed (no closing
+ * line of the card's own: said once, owner 2026-10-29). The card's other problems come first as "Also: …" (othersFirst,
+ * owner 2026-10-30). The Inbox's row (leadLine), the opened card and the Watch card all read THIS card. Pure.
+ */
+export function issueAsTold(card: CardView, kept: readonly Announcement[]): CardView {
+  const lines = card.lines.map((l) => {
+    const a = messageOfLine(l, kept);
+    return a ? { ...l, text: l.state ? `${l.state}, ${a.title}` : a.title, closing: card.look === "watched" ? null : l.closing, told: a } : l;
+  });
+  return othersFirst({ ...card, lines }, (l) => l.told !== undefined);
 }
 
 // the list's one order (feed.byTime): two feeds' numbers do not compare
@@ -237,7 +258,8 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   /** The issue a device window's warning opened the Cockpit for. */
   focus?: (card: CardView) => boolean;
 }): MessagesView {
-  const issueItem = (card: CardView): MessageItem => ({ kind: "issue", key: card.key, card });
+  // every issue as told, once: its row and its opened card read the same lines (issueAsTold)
+  const issueItem = (card: CardView): MessageItem => ({ kind: "issue", key: card.key, card: issueAsTold(card, announcements) });
   const showIssues = filter === "issues";
   const showNotes = filter === "notifications";
   const showReports = filter === "reports";
