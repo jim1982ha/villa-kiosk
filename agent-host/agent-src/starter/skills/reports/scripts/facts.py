@@ -38,6 +38,7 @@ SKILL = os.path.dirname(HERE)
 from vesta_shared import script  # noqa: E402  (client, pack, store, zone, now: one set-up)
 from vesta_shared.messaging import no_code as _no_code  # noqa: E402
 from vesta_shared.timeutil import lasting  # noqa: E402  (how long something lasted, the Kiosk's words)
+from vesta_shared import automation_words as AW  # noqa: E402  (an automation in words: one writer)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one "running")
 from vesta_shared.daily import energy_daily_features  # noqa: E402  (a meter's day: one reading for every skill)
 from vesta_shared.energy_setup import used as energy_used  # noqa: E402  (the villa's total: the Kiosk's rule)
@@ -272,9 +273,8 @@ class Ctx:
 
     def alert_words(self, rinfo: dict) -> str:
         """A VESTA rule in words: its alias without the blueprint's prefix, in reports.yaml's alert_words."""
-        alias, bp = rinfo.get("alias") or "", str(rinfo.get("blueprint") or "").removesuffix(".yaml")
-        subject = alias.split("---", 1)[1] if "---" in alias else alias
-        subject = subject.replace("_", " ").replace("-", " ").strip().capitalize()
+        bp = str(rinfo.get("blueprint") or "").removesuffix(".yaml")
+        subject = AW.name(rinfo.get("alias"))                 # its own name: one writer (vesta_shared.automation_words)
         words = (self.cfg.get("alert_words") or {}).get(bp) or "{subject}"
         return words.format(subject=subject)
 

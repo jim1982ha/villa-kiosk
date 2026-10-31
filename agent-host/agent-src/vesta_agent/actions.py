@@ -24,6 +24,7 @@ from typing import Any, Callable
 
 from vesta_shared.message_format import ROLE_WORDS
 from vesta_shared.ha_client import error_chars, error_short_chars
+from vesta_shared import automation_words as AW  # an automation in words: one writer
 
 from . import button_data
 from .approvals import WHILE_EMPTY, note as approval_note
@@ -158,7 +159,9 @@ def done_words(decision: Decision, names: Callable[[str], str], result: dict, se
 
 def _words(decision: Decision, names: Callable[[str], str]) -> tuple[str, str, str]:
     """(verb, target, parameters) of an action, in plain words: one reading for the request and its result."""
-    who = [names(e) for e in decision.entity_ids]
+    # an automation by its own name in apostrophes (vesta_shared.automation_words, architecture review round 11,
+    # card 3: "Turn on the automation Critical --- Pool leak")
+    who = [AW.quoted(names(e), e) if decision.domain == "automation" else names(e) for e in decision.entity_ids]
     if len(who) > 1:
         target = f"{len(who)} devices: " + "; ".join(who)
     else:

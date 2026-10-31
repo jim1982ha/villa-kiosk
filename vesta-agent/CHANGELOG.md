@@ -1,3 +1,16 @@
+## 0.12.425
+
+What you will see:
+- An automation is always named by its own name, in apostrophes, without its blueprint's prefix: "Retune 'Pool
+  leak': it fires too often" in the weekly report's suggestions (it gave the automation's technical name), "Turn on
+  the automation 'Pool leak'" in a request, "The automation 'Pool leak' watches 1 device hidden…" in a fault. A
+  suggestion you already answered keeps your answer under its new name.
+- The night check's faults say hours as durations, as the rest of the card does: "ran shorter than expected on
+  Monday: 2h 18min against 4h scheduled" (it said "2.3h against 4.0h"), "1h 30min without any data", "scheduled 4h
+  … and did not run". The steps of a question read "last 1h 30min" the same way.
+- An alert closed because its automation is gone now says the automation "was renamed or deleted in the villa's
+  system" (it spoke of an "entity ID"), in every language.
+
 ## 0.12.424
 
 What you will see:

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.411 (31 October 2026)
+
+- New vesta_shared.automation_words (name / quoted / words / alias_in): the one writer of an automation's name, read
+  by the alert desk's retune proposal (named from the villa's states; Store.retitle_proposal carries a proposal made
+  under the id, its answer kept), actions._words, preventive-maintenance rules.hidden_in_rule_rules and nightly's
+  "still named in", reports facts.alert_words (architecture review round 11, card 3).
+- preventive-maintenance rules.py: PM-RUNHOURS, PM-EXPECTED-SILENT and PM-RUN-SAG hours through timeutil.lasting;
+  status._period's "last Nh" too; a scan test refuses "{x:.1f}h" in a skill script (a rate "h/day" excepted) (card 4).
+- alert-desk words.yaml rule_gone, 10 languages: "renamed or deleted in the villa's system", never "entity ID".
+
 ## 0.6.410 (31 October 2026)
 
 - tests: test_missing_devices runs every case of the agreement's leftAt.cases (Kiosk 2.496.634, copied in 0.12.423)

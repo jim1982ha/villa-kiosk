@@ -109,7 +109,23 @@ def test_the_retune_proposal_is_one_per_rule(tmp_path):
     for k in range(25):
         store.new_incident(f"k{k}", "automation.noisy", f"sensor.x{k}", "P3", {}, at=(T0 + timedelta(hours=k)).isoformat())
         desk.tick(store, T0 + timedelta(hours=k, minutes=1))
-    assert len([p for p in store.proposals() if "automation.noisy" in p["title"]]) == 1
+    assert [p["title"] for p in store.proposals()] == ["Retune 'Noisy': it fires too often"]       # unread: from its id
+
+
+def test_the_retune_proposal_names_the_automation_as_every_message_does(tmp_path):
+    # architecture review round 11, card 3: "Retune automation.pool_leak_watch" — the one message that never looked the
+    # automation's name up. Counted as the desk counts (store.incident_counts), named from the villa's states
+    rid = "automation.example_leak_watch"
+    store = Store(str(tmp_path / "s.sqlite"))
+    old = store.add_proposal("retune", f"Retune {rid}: it fires too often", "", "")      # said by the id before
+    store.decide_proposal(old, "ignored")
+    villa = TimelineVilla(names={rid: "Critical --- Pool leak"}, **{rid: "on"})
+    for k in range(25):
+        store.new_incident(f"k{k}", rid, f"sensor.x{k}", "P3", {}, at=(T0 + timedelta(hours=k)).isoformat())
+    desk.tick(store, T0 + timedelta(hours=25), client=villa)
+    (p,) = store.proposals(status=None)
+    assert p["id"] == old and p["status"] == "ignored"                                  # the same one: never made again
+    assert p["title"] == "Retune 'Pool leak': it fires too often"
 
 
 def test_the_kiosk_fault_keeps_again_in_its_name(tmp_path):

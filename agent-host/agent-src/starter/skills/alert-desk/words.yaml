@@ -135,16 +135,16 @@ watch_over:
   ko: "{time}에 종료: {watch} 안에 다시 발생하지 않음."
 
 rule_gone:
-  en: "the automation that sent it no longer exists (its entity ID changed, or it was deleted). Its next alert comes with a new number"
-  fr: "l'automatisation qui l'a envoyée n'existe plus (son ID d'entité a changé, ou elle a été supprimée). Sa prochaine alerte aura un nouveau numéro"
-  id: "otomatisasi yang mengirimnya sudah tidak ada (ID entitasnya berubah, atau dihapus). Peringatan berikutnya datang dengan nomor baru"
-  de: "die Automatisierung, die ihn gesendet hat, existiert nicht mehr (ihre Entitäts-ID hat sich geändert, oder sie wurde gelöscht). Ihr nächster Alarm kommt mit einer neuen Nummer"
-  es: "la automatización que la envió ya no existe (cambió su ID de entidad, o se eliminó). Su próxima alerta llegará con un número nuevo"
-  it: "l'automazione che lo ha inviato non esiste più (il suo ID entità è cambiato, oppure è stata eliminata). Il suo prossimo avviso avrà un nuovo numero"
-  nl: "de automatisering die het stuurde bestaat niet meer (de entiteit-ID is gewijzigd, of ze is verwijderd). De volgende melding krijgt een nieuw nummer"
-  zh: "发送它的自动化已不存在（其实体 ID 已更改或已被删除）。它的下一条警报将使用新编号"
-  ja: "送信元のオートメーションはもう存在しません（エンティティ ID が変わったか、削除されました）。次のアラートは新しい番号で届きます"
-  ko: "이 알림을 보낸 자동화가 더 이상 없습니다 (엔티티 ID가 바뀌었거나 삭제됨). 다음 알림은 새 번호로 옵니다"
+  en: "the automation that sent it no longer exists (it was renamed or deleted in the villa's system). Its next alert comes with a new number"
+  fr: "l'automatisation qui l'a envoyée n'existe plus (elle a été renommée ou supprimée dans le système de la villa). Sa prochaine alerte aura un nouveau numéro"
+  id: "otomatisasi yang mengirimnya sudah tidak ada (diganti namanya atau dihapus di sistem vila). Peringatan berikutnya datang dengan nomor baru"
+  de: "die Automatisierung, die ihn gesendet hat, existiert nicht mehr (sie wurde im System der Villa umbenannt oder gelöscht). Ihr nächster Alarm kommt mit einer neuen Nummer"
+  es: "la automatización que la envió ya no existe (se renombró o se eliminó en el sistema de la villa). Su próxima alerta llegará con un número nuevo"
+  it: "l'automazione che lo ha inviato non esiste più (è stata rinominata o eliminata nel sistema della villa). Il suo prossimo avviso avrà un nuovo numero"
+  nl: "de automatisering die het stuurde bestaat niet meer (ze is hernoemd of verwijderd in het systeem van de villa). De volgende melding krijgt een nieuw nummer"
+  zh: "发送它的自动化已不存在（已在别墅系统中被重命名或删除）。它的下一条警报将使用新编号"
+  ja: "送信元のオートメーションはもう存在しません（ヴィラのシステムで名前が変更されたか、削除されました）。次のアラートは新しい番号で届きます"
+  ko: "이 알림을 보낸 자동화가 더 이상 없습니다 (빌라 시스템에서 이름이 바뀌었거나 삭제됨). 다음 알림은 새 번호로 옵니다"
 
 stopped_watching:
   en: "back to normal when the alert stopped watching it"

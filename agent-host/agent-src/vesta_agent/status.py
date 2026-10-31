@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from vesta_shared.agent_records import run_cost   # what a run cost: one reading, shared with the skills
 from vesta_shared import agent_records
 from vesta_shared.limits import limit
+from vesta_shared.timeutil import lasting
 from .api_errors import cause, what_to_do, why_job_sentence
 from .in_progress import CUT, ENDED, FAILED, run_ends
 
@@ -387,9 +388,12 @@ def _period(a: dict) -> str | None:
     start, rel = a.get("start_time"), None
     if isinstance(start, str) and start[:-1].isdigit() and start[-1:] in ("h", "d"):
         n = int(start[:-1])
-        rel = f"last {n}h" if start[-1] == "h" else f"last {n} day" + ("s" if n != 1 else "")
+        rel = f"last {lasting(n * 3600)}" if start[-1] == "h" else f"last {n} day" + ("s" if n != 1 else "")
     if a.get("hours_back") is not None:
-        rel = f"last {a['hours_back']}h"
+        try:
+            rel = f"last {lasting(float(a['hours_back']) * 3600)}"       # the shared duration words: "last 1h 30min"
+        except (TypeError, ValueError):
+            rel = f"last {a['hours_back']}h"
     if rel:
         out.append(rel)
     elif start:

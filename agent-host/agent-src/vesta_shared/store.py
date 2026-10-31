@@ -538,6 +538,13 @@ class Store:
         self.db.commit()
         return c.lastrowid
 
+    def retitle_proposal(self, old: str, new: str) -> None:
+        """A proposal made under `old` is the one `new` names (its words changed): renamed, its answer kept — unless one
+        is already made under `new`."""
+        if old != new and not self.db.execute("SELECT 1 FROM proposals WHERE title=?", (new,)).fetchone():
+            self.db.execute("UPDATE proposals SET title=? WHERE title=?", (new, old))
+            self.db.commit()
+
     def proposals(self, status: str | None = "open") -> list[dict]:
         q, args = "SELECT * FROM proposals", []
         if status:

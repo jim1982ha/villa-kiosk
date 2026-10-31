@@ -50,6 +50,7 @@ from vesta_shared import message_format as mf  # noqa: E402  (where a Done was g
 from vesta_shared.message_format import PRESSED, ROLE_SHORT, acted, closing  # noqa: E402  ("<what> on <time> (<who>)", "Cleared on <time>.": one wording each)
 from vesta_shared import status_words as SW  # noqa: E402  (the same frames in every language a chat reads)
 from vesta_shared import kiosk_words  # noqa: E402
+from vesta_shared import automation_words as AW  # noqa: E402  (an automation in words: one writer)
 from vesta_shared.timeutil import lasting  # noqa: E402
 from vesta_shared.device_state import has_value, out_since  # noqa: E402  ("is it back": one answer)
 from vesta_shared.asleep import read_states, unheard  # noqa: E402  (unavailable by design: its last real state)
@@ -994,7 +995,7 @@ def rule_gone(store: Store, now: datetime, client, clear_minutes: float, out: di
             continue
         _close(store, store.incident(inc["id"]), now, out,
                ended(say("rule_gone")),
-               note="Closed: the automation that sent it no longer exists (its entity ID changed, or it was deleted).")
+               note="Closed: the automation that sent it no longer exists (it was renamed or deleted in the villa's system).")
         store.audit("alert-desk", "rule_gone", {"incident": inc["id"], "rule": inc["rule_id"]})
         closed.append(inc["id"])
     return closed
@@ -1323,13 +1324,23 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
     limit = params.behaviour("alert_fatigue_per_month")
     since = (now - timedelta(days=FATIGUE_WINDOW_DAYS)).isoformat()
     # every rule's runs counted in ONE pass (architecture review 25: a pass per rule over all history, every 5 minutes)
-    for r, n in store.incident_counts(since).items():
-        if n >= limit:
-            # one proposal per rule: its count lives in the detail (architecture review 24: the count in the title made a
-            # new open proposal at every new count — "fired 21 times", "fired 22 times"…)
-            store.add_proposal("retune", f"Retune {r}: it fires too often",
-                               f"The automation {r} fired {n} times in {FATIGUE_WINDOW_DAYS} days. Either the threshold is too tight or the device needs attention. "
-                               "The VESTA Agent proposes a new threshold in the weekly report and applies nothing.", "Fewer useless messages")
+    tired = {r: n for r, n in store.incident_counts(since).items() if n >= limit}
+    # ⚠️ THE AUTOMATION'S OWN NAME, NEVER ITS ID (architecture review round 11, card 3: "Retune
+    # automation.pool_leak_watch"): read from the villa's states, said by the one writer (vesta_shared.automation_words)
+    try:
+        states = client.states(sorted(tired)) if client is not None and tired else {}
+    except Exception:  # noqa: BLE001 — unread: named from its id, the next tick reads again
+        states = {}
+    for r, n in tired.items():
+        named = AW.quoted(AW.alias_in(states, r), r)
+        title = f"Retune {named}: it fires too often"
+        # a proposal is kept by its title (Store.add_proposal): one made, answered or ignored under the id is the same one
+        store.retitle_proposal(f"Retune {r}: it fires too often", title)
+        # one proposal per rule: its count lives in the detail (architecture review 24: the count in the title made a
+        # new open proposal at every new count — "fired 21 times", "fired 22 times"…)
+        store.add_proposal("retune", title,
+                           f"The automation {named} fired {n} times in {FATIGUE_WINDOW_DAYS} days. Either the threshold is too tight or the device needs attention. "
+                           "The VESTA Agent proposes a new threshold in the weekly report and applies nothing.", "Fewer useless messages")
     store.beat("agent_tick", now.isoformat())
     return out
 

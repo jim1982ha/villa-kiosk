@@ -26,6 +26,7 @@ from vesta_shared.stats import med, pct_change, step_index
 from vesta_shared import occupancy  # like with like: a day's use against days in the same state
 from vesta_shared import battery  # a battery's charge, its projection and its rule ids: one owner
 from vesta_shared.device_state import is_offline
+from vesta_shared import automation_words as AW  # an automation in words: one writer
 from vesta_shared.timeutil import day_label, lasting, weekday_name
 from vesta_shared.limits import limit  # every limit, set on the Limits tab
 
@@ -167,8 +168,9 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
                 if change is not None and abs(change) >= dev_pct:
                     what = "ran shorter" if change < 0 else "ran longer"
                     summary = (f"{asset['name']} {what} than expected on {day_label(d, weekday=True)}: "
-                               f"{f['run_hours']:.1f}h against {exp:.1f}h scheduled"
-                               + (f", and {f['gap_hours']}h without any data" if f.get("gap_hours") else "") + ".")
+                               f"{lasting(f['run_hours'] * 3600)} against {lasting(exp * 3600)} scheduled"
+                               + (f", and {lasting(f['gap_hours'] * 3600)} without any data" if f.get("gap_hours") else "")
+                               + ".")
                     check = ("Check the timer or switch, the power supply of the pump, and whether someone stopped it by hand."
                              if change < 0 else "Check the timer: it may have lost its programme and be running continuously.")
                     out.append(Finding("PM-RUNHOURS", entity_id, slug, "power", P3, summary,
@@ -224,7 +226,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
         r = sagging[0]
         out.append(Finding("PM-RUN-SAG", entity_id, slug, "power", INFO,
                            f"{asset['name']} lost {r['sag_pct']:.0f}% of its draw during one run today "
-                           f"({r['first_quarter_w']:.0f} W to {r['last_quarter_w']:.0f} W over {r['minutes']}min): a sign of air or a filling basket.",
+                           f"({r['first_quarter_w']:.0f} W to {r['last_quarter_w']:.0f} W over {lasting(r['minutes'] * 60)}): a sign of air or a filling basket.",
                            {"run": r}, "Watch the next days; if it repeats, check the water level and the skimmer basket."))
 
     # 5. expected today but silent (intermittent assets, report only)
@@ -233,7 +235,7 @@ def power_rules(asset: dict, entity_id: str, series: dict[date, dict], today: da
         exp = expected_hours_by_weekday.get(weekday_name(d), 0)
         if exp and series.get(d, {}).get("run_hours", 0) < EXPECTED_RAN_HOURS:
             out.append(Finding("PM-EXPECTED-SILENT", entity_id, slug, "power", INFO,
-                               f"{asset['name']} was scheduled {exp:.1f}h on {day_label(d, weekday=True)} and did not run.",
+                               f"{asset['name']} was scheduled {lasting(exp * 3600)} on {day_label(d, weekday=True)} and did not run.",
                                {"day": d.isoformat(), "expected_hours": exp}, "Report only: usage driven assets are not chased."))
     return out
 
@@ -426,13 +428,15 @@ def hidden_in_rule_rules(rules: list[dict], hidden, name_of) -> list[Finding]:
         named = sorted(ids_named(r.get("config") or {}, hidden))
         if not named:
             continue
-        rule = str((r.get("config") or {}).get("alias") or name_of(r["entity_id"]))
+        alias = (r.get("config") or {}).get("alias") or name_of(r["entity_id"])
+        rule = AW.name(alias, r["entity_id"])
         n = len(named)
         names = ", ".join(name_of(e) for e in named)
-        # "automation" or "script", never "rule" in what a person reads (owner, 2026-10-22)
+        # "automation" or "script", never "rule" in what a person reads (owner, 2026-10-22); its own name in apostrophes
+        # (vesta_shared.automation_words)
         kind = "script" if str(r.get("kind") or "") == "script" else "automation"
         out.append(Finding(HIDDEN_IN_RULE, r["entity_id"], r["entity_id"], "configuration", P3,
-                           f"The {kind} {rule} watches {n} device{'s' if n > 1 else ''} hidden in the villa's system: {names}.",
+                           f"The {AW.words(alias, r['entity_id'], kind)} watches {n} device{'s' if n > 1 else ''} hidden in the villa's system: {names}.",
                            {"name": rule, "kind": r.get("kind"), "hidden": named, "count": n},
                            f"Point the {kind} at the device you see instead (a hidden device is left out of every check), "
                            f"or take the hidden one out of the {kind}."))

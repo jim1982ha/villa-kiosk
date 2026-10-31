@@ -40,6 +40,7 @@ from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts,
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.offline import device_answers, devices_offline, reported_since, watched_kinds  # noqa: E402  (offline now; when it last REALLY reported)
 from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
+from vesta_shared import automation_words as AW  # noqa: E402  (an automation in words: one writer)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 from vesta_shared.problems import Problems, alert_name, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
@@ -412,8 +413,7 @@ def missing_findings(store, pack, cli, now: datetime, zone: str, near=None, name
     if ask:
         try:
             for r in cli.rules_mentioning(ask):
-                kind = "script" if str(r.get("kind") or "") == "script" else "automation"
-                label = f"{kind} '{(r.get('config') or {}).get('alias') or _plain_name(r['entity_id'])}'"
+                label = AW.words((r.get("config") or {}).get("alias"), r["entity_id"], r.get("kind"))
                 for e in R.ids_named(r.get("config") or {}, ask):
                     named.setdefault(e, []).append(label)
         except Exception as e:  # noqa: BLE001 — the villa's search failed: the fault is said without them
