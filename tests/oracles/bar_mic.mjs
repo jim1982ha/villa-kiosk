@@ -7,7 +7,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { elements, guardsOf, parseTsx, propText, tagOf } from "../consistency/jsx.mjs";
 import ts from "typescript";
-const { micFits, barMicShown, measureBarRoom, BAR_PARTS } = await import("@/components/hud/barRoom");
+const { micFits, barMicShown, menuAskShown, measureBarRoom, BAR_PARTS } = await import("@/components/hud/barRoom");
 
 // A top bar as the browser lays it out: its grid's three tracks, the app icon's side, the right-hand side, the gear
 // and the gap its pill puts between buttons, the microphone when drawn, and the category row: its shown buttons (32px,
@@ -95,9 +95,30 @@ const classes = hud.getText();
 ck("the measurement's pieces are the bar's own classes", Object.values(BAR_PARTS).every((c) => classes.includes(c)),
    Object.values(BAR_PARTS).filter((c) => !classes.includes(c)));
 
+console.log("\n  the menu's \"Ask VESTA\" row (owner, 2026-10-31: not in the menu when the top bar shows it):");
+ck("the bar's microphone shown: no menu row", menuAskShown(true, true) === false);
+ck("  ...no microphone while VESTA runs (no room, the maintenance mark beside the gear): the menu row",
+   menuAskShown(true, false) === true);
+ck("  ...VESTA not running: neither", menuAskShown(false, false) === false && barMicShown(false, roomy) === false
+   && menuAskShown(false, barMicShown(false, roomy)) === false);
+ck("  ...room or not, one of the two and never both, driven through the bar's own decision",
+   [roomy, measureBarRoom(bar({ tracks: "60.5px 222px 60.5px", right: 42 }))].every((r) =>
+     barMicShown(true, r) !== menuAskShown(true, barMicShown(true, r))));
+const rows = elements(hud, "TalkButton").filter((b) => propText(b, "place") === '"menu"');
+ck("one menu row, drawn only by that decision", rows.length === 1 && guardsOf(rows[0]).join() === "menuAsk",
+   rows.map(guardsOf));
+let menuDecided = null;
+const visitMenu = (n) => { if (ts.isVariableDeclaration(n) && n.name.getText() === "menuAsk") menuDecided = n.initializer.getText(); ts.forEachChild(n, visitMenu); };
+visitMenu(hud);
+ck("  ...which reads the bar's decision, never a room check of its own", menuDecided === "menuAskShown(thread.shown, barMic)",
+   menuDecided);
+const css = readFileSync(new URL("../../src/styles/02-hud.css", import.meta.url), "utf8");
+ck("  ...the open menu floats (it cannot change the room the decision reads, so nothing flickers while it is open)",
+   /\.hud-menu \{\s*position: absolute;/.test(css));
+
 console.log("\n  one orb:");
 const over = elements(parseTsx("components/messages/TalkButton.tsx"), "ListeningOverScreen");
 ck("the big orb is drawn by the button held, never by every button of its place (the top bar draws \"bar\" twice)",
    over.length === 1 && guardsOf(over[0]).includes("pressed"), over.map(guardsOf));
 
-done("✅ \"Ask VESTA\" beside the phone's gear only with room for it, measured on the bar, by value");
+done("✅ \"Ask VESTA\" beside the phone's gear only with room for it, measured on the bar, by value; the menu's row only without it");

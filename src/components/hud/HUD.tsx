@@ -51,7 +51,7 @@ import VirtualJoystick from "./VirtualJoystick";
 import ViewControls from "./ViewControls";
 import { useLongPress, HOLD_MS_HUD } from "@/hooks/useLongPress";
 import { useHomeAnchor } from "./useHomeAnchor";
-import { barMicShown, useBarRoom } from "./barRoom";
+import { barMicShown, menuAskShown, useBarRoom } from "./barRoom";
 import RadialRoomMenu from "./RadialRoomMenu";
 import { openRoomDial, roomDialItems, roomsOnFloor, type RadialItem, type RoomDial } from "./roomDial";
 import LegendModal from "./LegendModal";
@@ -321,6 +321,8 @@ export default function HUD({
   // own measurement (barRoom), never a device rule.
   const barRef = useRef<HTMLDivElement | null>(null);
   const barMic = barMicShown(thread.shown, useBarRoom(barRef));
+  // ...and the menu's row only where that button is not (owner, 2026-10-31): one decision for both
+  const menuAsk = menuAskShown(thread.shown, barMic);
   const [legendOpen, setLegendOpen] = useState(false);
 
   // The view toggle + default-view anchor (and their tap-vs-hold gesture) live
@@ -668,7 +670,7 @@ export default function HUD({
               content happened to end rather than at the edge. */}
           <div className="hud-group hud-overflow" ref={menuRef}>
             {/* "Ask VESTA" left of the gear (owner, 2026-10-31), the top bar's own talk button (tap: the conversation;
-                held: VESTA listens), only while VESTA runs and the bar has room; the menu's row stays either way */}
+                held: VESTA listens), only while VESTA runs and the bar has room; the menu's row shows only without it */}
             {barMic && (
               <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta} className="icon-btn hud-bar-mic"
                 idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} />
@@ -716,7 +718,8 @@ export default function HUD({
                 </button>
                 {/* VESTA's thread straight away (spec story 31; ticket 21 of "One inbox"), every profile, while VESTA runs */}
                 {/* ...and held, VESTA listens (ticket 23; owner 2026-10-29: the phone's one way to it): the top bar's own button */}
-                {thread.shown && (
+                {/* ...and only where the top bar has no microphone beside the gear (owner, 2026-10-31) */}
+                {menuAsk && (
                   <TalkButton place="menu" className="hud-menu-item"
                     onOpen={() => { setMenuOpen(false); onAskVesta(); }} onTap={() => { setMenuOpen(false); onAskVesta(); }}
                     idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"}>

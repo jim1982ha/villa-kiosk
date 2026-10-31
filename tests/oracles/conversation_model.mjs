@@ -284,16 +284,19 @@ ck("  ...and no longer pinned in the Cockpit's Messages",
    !/VestaThread|VestaWindow|useConversation/.test(
      readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8")));
 const askRow = elements(hud, "TalkButton").find((b) => propText(b, "place") === '"menu"');
-ck("the phone's \"Ask VESTA\" row only while VESTA runs, the top bar's talk button itself (held: VESTA listens)",
-   !!askRow && guardsOf(askRow).includes("thread.shown") && (propText(askRow, "onTap") || "").includes("onAskVesta")
-   && (propText(askRow, "onOpen") || "").includes("onAskVesta"));
-// the robot's one decision, read through the compiler's tree (whatever its layout), and every robot drawn by it
+// a declared name's initializer, read through the compiler's tree (whatever its layout)
 const declared = (tree, name) => {
   let found = null;
   const visit = (n) => { if (ts.isVariableDeclaration(n) && n.name.getText() === name) found = n.initializer.getText().replace(/\s+/g, " "); ts.forEachChild(n, visit); };
   visit(tree);
   return found;
 };
+// owner, 2026-10-31: the row only where the top bar has no microphone of its own (tests/oracles/bar_mic.mjs drives it)
+ck("the phone's \"Ask VESTA\" row only while VESTA runs, the top bar's talk button itself (held: VESTA listens)",
+   !!askRow && guardsOf(askRow).join() === "menuAsk" && (declared(hud, "menuAsk") || "").startsWith("menuAskShown(thread.shown,")
+   && (propText(askRow, "onTap") || "").includes("onAskVesta")
+   && (propText(askRow, "onOpen") || "").includes("onAskVesta"), [askRow && guardsOf(askRow), declared(hud, "menuAsk")]);
+// the robot's one decision, read through the compiler's tree (whatever its layout), and every robot drawn by it
 const robotIcons = elements(hud, "Bot").map((b) => b.parent?.parent?.getText?.() ?? "");
 // one reading of "VESTA runs" for the robot and the VESTA button (architecture review 2026-10-29 #5)
 ck("the robot only while VESTA runs, by the VESTA button's own reading (robot = doors.agent && thread.shown)",
