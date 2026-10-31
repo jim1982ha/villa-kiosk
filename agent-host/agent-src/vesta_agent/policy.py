@@ -485,7 +485,11 @@ class Policy:
         return named[0] if len(set(named)) == 1 else (p.name if p else None)
 
     def chat_label(self, chat_id: int) -> str:
-        """Which chat this is, in words, never who is in it: "owner and fm group", "private chat"."""
+        """Which chat this is, in words, never who is in it: "owner and fm group", "private chat". "" for a tablet's
+        conversation (owner, 2026-10-31: Every run read "Reply to Owner at the tablet  private chat"): no Telegram chat,
+        and its person already says "at the tablet" (tablet_person)."""
+        if tablet_profile(chat_id) is not None:
+            return ""
         roles = " and ".join(sorted(self.roles_in(chat_id)))
         kind = "group" if int(chat_id) < 0 else "private chat"
         return f"{roles} {kind}" if roles else kind

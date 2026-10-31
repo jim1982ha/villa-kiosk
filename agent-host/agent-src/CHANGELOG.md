@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.408 (31 October 2026)
+
+- policy.chat_label is "" for a tablet's conversation (tablet_profile): no Telegram chat, its person already "at the
+  tablet"; status.costs gives such a run's chat as None (owner, 31 October: Every run read "Reply to Owner at the
+  tablet  private chat"). Telegram runs keep their words. No other page, log or report shows a run's chat words.
+
 ## 0.6.407 (31 October 2026)
 
 - Knowledge layout (owner, 31 October, a phone): places.ORDER.knowledge is asleep, translations, kinds, links; new

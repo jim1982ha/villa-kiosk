@@ -203,7 +203,7 @@ def costs(state, days: int = 30, now: datetime | None = None, zone=None, chat_la
         else:
             name, cid = agent_records.person_of(who)
             kind, job, person = "chat", CHAT_REPLIES, name or None
-            chat = chat_label(cid) if chat_label and cid.lstrip("-").isdigit() else None
+            chat = (chat_label(cid) or None) if chat_label and cid.lstrip("-").isdigit() else None
         tok = d.get("tokens") or {}
         cost = run_cost(d)
         runs.append({"at": c["at"], "kind": kind, "job": job, "person": person, "chat": chat, "asked": d.get("asked"),

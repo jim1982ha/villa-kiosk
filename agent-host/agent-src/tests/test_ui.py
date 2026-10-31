@@ -301,6 +301,31 @@ def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
     assert "c.per_run" in page_js() and "c.busiest" in page_js() and "c.period / c.runs_count" not in page_js()
 
 
+def test_a_reply_at_the_tablet_names_no_chat_and_a_telegram_one_keeps_its_chat(ui):
+    # owner, 2026-10-31: Every run read "Reply to Owner at the tablet  private chat" — a tablet's conversation is no
+    # Telegram chat, and its person already says "at the tablet". Its chat's words are none, by construction
+    # (policy.chat_label), wherever a run's chat is said; a Telegram reply keeps "owner group"
+    import json
+    from datetime import datetime, timedelta, timezone
+    from vesta_agent.policy import Policy, tablet_chat, tablet_person
+    from vesta_agent.state import State
+    tab = tablet_chat("owner")
+    assert tab is not None and tablet_person(tab).name == "Owner at the tablet"
+    st = State(ui.state_path)
+    now = datetime.now(timezone.utc)
+    for who in (f"Owner at the tablet@{tab}", "Villa group@-100"):
+        st.db.execute("insert into calls(at, kind, detail) values (?, 'run', ?)",
+                      ((now - timedelta(hours=1)).isoformat(), json.dumps({"who": who, "cost_usd": 0.01, "asked": "hi"})))
+    st.db.commit()
+
+    async def fn(c):
+        return await (await c.get("/api/costs?days=7")).json()
+    runs = {r["person"]: r["chat"] for r in call(ui, fn)["runs"]}
+    assert runs == {"Owner at the tablet": None, "Villa group": "fm and owner group"}, runs
+    pol = Policy.load(ui.policy_path)
+    assert pol.chat_label(tab) == "" and pol.chat_label(-100) == "fm and owner group"
+
+
 def test_a_run_records_its_brain_model_tokens_and_what_was_asked(ui, monkeypatch):
     # the Costs tab's source: before 0.6.9 a run kept only who and the cost
     from claude_agent_sdk import ResultMessage

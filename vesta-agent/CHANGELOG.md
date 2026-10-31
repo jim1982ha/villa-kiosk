@@ -1,3 +1,8 @@
+## 0.12.422
+
+What you will see:
+- A reply at the tablet no longer says 'private chat' on the Costs page.
+
 ## 0.12.421
 
 What you will see:
