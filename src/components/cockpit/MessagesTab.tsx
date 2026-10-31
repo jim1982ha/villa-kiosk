@@ -239,7 +239,10 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
             {view.filters.map((f) => (
               <button key={f.id} type="button" className={`messages-filter${filter === f.id ? " on" : ""}`}
                 aria-pressed={filter === f.id} onClick={() => pickFilter(f.id)}>
-                {f.label}{f.count ? <span className="messages-filter-count">{f.count}</span> : null}
+                {/* both words drawn, the line's width shows one (08-shared.css .messages-filter-short) */}
+                {f.short ? <><span className="messages-filter-long">{f.label}</span><span className="messages-filter-short">{f.short}</span></>
+                  : f.label}
+                {f.count ? <span className="messages-filter-count">{f.count}</span> : null}
               </button>
             ))}
           </div>

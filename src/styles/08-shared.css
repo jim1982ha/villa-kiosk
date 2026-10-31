@@ -140,7 +140,15 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-list { flex: 0 0 420px; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--hairline); }
 /* the filters and, at the right of the same line, the Issues' "Open Ticket" (owner, 2026-10-31): two groups that wrap
    whole, so a line too narrow for both puts the button under the filters and never squeezes or cuts them */
-.messages-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 12px 10px 0; flex: none; }
+.messages-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 12px 10px 0; flex: none;
+  container-type: inline-size; }
+/* a filter's full word where the four buttons still fit one line, its short word below that width (owner, 2026-11-01:
+   "Notifications if it fits"); the short one is the default, so a browser without container queries keeps one line */
+.messages-filter-long { display: none; }
+@container (min-width: 368px) {
+  .messages-filter-long { display: inline; }
+  .messages-filter-short { display: none; }
+}
 .messages-filters { display: flex; flex-wrap: nowrap; gap: 6px; flex: 0 0 auto; max-width: 100%; }
 .messages-toolbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .messages-filter {

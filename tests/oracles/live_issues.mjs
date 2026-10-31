@@ -452,8 +452,10 @@ ck("the Tickets tab draws ticketCards — the tickets in progress, by device —
   // WebKit; the filter's button says "Notifs", its section keeps "Notifications"
   const { FILTERS } = await import("@/messages/messagesModel");
   const notesSection = JSX.elements(tab, "MessagesSection").find((s) => JSX.propText(s, "onToggle") === '() => fold("notes")');
-  ck("  ...the filters say Issues · Notifs · Reports, the buttons drawn from that one list; the section is still \"Notifications\"",
-     FILTERS.map((f) => f.label).join(" · ") === "Issues · Notifs · Reports" && /\{f\.label\}/.test(msg)
+  // owner, 2026-11-01: "Notifications if it fits": both words drawn, the toolbar's width shows one
+  ck("  ...the filters say Issues · Notifications · Reports, \"Notifs\" where the line is too narrow; drawn from that one list; the section is \"Notifications\"",
+     FILTERS.map((f) => f.label).join(" · ") === "Issues · Notifications · Reports" && FILTERS[1].short === "Notifs"
+     && /<span className="messages-filter-long">\{f\.label\}<\/span><span className="messages-filter-short">\{f\.short\}<\/span>/.test(msg)
      && !!notesSection && JSX.propText(notesSection, "title") === '"Notifications"', FILTERS);
   // ...and on one line with Open Ticket on every phone (owner, 2026-10-31). Measured in headless WebKit (the wider
   // engine) with the real Cockpit: the labels' own widths Issues 9 54.1, Notifs 36.5, Reports 47.6, the wrench and Open
@@ -488,6 +490,13 @@ ck("the Tickets tab draws ticketCards — the tickets in progress, by device —
     const fits = [360, 375, 390, 412, 430].filter((w) => needed <= w - 36);
     ck("  ...the filters and Open Ticket fit one line on every phone, 360 to 430 px (the filters' and the button's padding)",
        fPad > 0 && bPad > 0 && fits.length === 5, { fPad, bPad, needed: Math.round(needed * 10) / 10, fits });
+    // "Notifications" in place of "Notifs": its width from Notifs' measure, 13 letters for 6 (an estimate, the same font)
+    const longNeeded = needed + 36.5 * (13 / 6 - 1);
+    const shows = px(/@container \(min-width: (\d+)px\)/);
+    ck("  ...\"Notifications\" shows only on a line wide enough for the four with it, and from a 412 px phone up; \"Notifs\" below, and by default",
+       shows >= longNeeded && shows <= 412 - 36 && /container-type: inline-size;/.test(shared)
+       && /\.messages-filter-long \{ display: none; \}\s*@container \(min-width: \d+px\) \{\s*\.messages-filter-long \{ display: inline; \}\s*\.messages-filter-short \{ display: none; \}/.test(shared),
+       { shows, longNeeded: Math.round(longNeeded) });
   }
   ck("  ...the two groups wrap whole: the filters never shrink, the button keeps the right",
      /\.messages-toolbar \{[^}]*flex-wrap: wrap;/.test(shared) && /\.messages-filters \{[^}]*flex: 0 0 auto;/.test(shared)

@@ -17,8 +17,8 @@ const ann = (seq, extra = {}) => ({ seq, at: `2026-10-28T1${seq % 10}:00:00+08:0
 const J = JSON.stringify;
 
 console.log("  the filters, on one line:");
-ck("Issues · Notifs · Reports, in that order, no All (owner, 2026-10-30, 2026-10-31: \"Notifs\"; 2026-10-28: \"Issues\" holds open, watched and closed; ticket 20: Reports)",
-   J(FILTERS.map((f) => f.label)) === J(["Issues", "Notifs", "Reports"]));
+ck("Issues · Notifications · Reports, in that order, no All (owner, 2026-10-30; 2026-11-01: \"Notifications if it fits\", else \"Notifs\"; 2026-10-28: \"Issues\" holds open, watched and closed; ticket 20: Reports)",
+   J(FILTERS.map((f) => f.label)) === J(["Issues", "Notifications", "Reports"]) && J(FILTERS.map((f) => f.short ?? null)) === J([null, "Notifs", null]));
 const base = { open: [card("a"), card("b")], watched: [card("w", { look: "watched" })], announcements: [ann(1), ann(2), ann(3)] };
 const issues = messagesView({ ...base, filter: "issues", selected: null });
 ck("  ...Issues counts the open issues only (the watched never counted); the others no count",
