@@ -129,16 +129,20 @@ console.log("\n  one line per item, drawn:");
 const { MessageRow } = await import("@/components/cockpit/MessagesTab");
 const issueLine = draw(h(MessageRow, { item: { kind: "issue", key: "a", card: card("a", { room: "Kitchen",
   lines: [{ key: "l", text: "Too warm", icons: null, story: [], closing: null, actions: [] }] }) }, selected: true, onSelect() {} }));
-// owner, 2026-11-01: the room the opened card's pill (IssueCard RoomPill), on its own line; then its first problem
-const { RoomPill } = await import("@/components/cockpit/IssueCard");
+// owner, 2026-11-01: the room the opened card's pill (RecordCard RoomPill), on its own line; then its first problem
+const { RoomPill } = await import("@/components/fm/RecordCard");
 const pill = draw(h(RoomPill, { room: "Kitchen" }));
 ck("an open issue: its device; its room, the opened card's own pill, on the line under; then its first problem; chosen, marked",
    /class="messages-row on"/.test(issueLine) && issueLine.includes("<b>Device a</b>")
    && issueLine.includes(`<span class="messages-row-room">${pill}</span>`) && pill.includes("fm-entity-chip")
    && issueLine.includes('<span class="messages-row-sub">Too warm</span>')
    && issueLine.indexOf("messages-row-room") < issueLine.indexOf("messages-row-sub"), issueLine);
-const cardSrc = readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8");
-ck("  ...the opened card draws its room with the same pill", /titlePills=\{card\.room \? <RoomPill room=\{card\.room\} \/>/.test(cardSrc));
+{
+  const { AttentionCard } = await import("@/components/cockpit/IssueCard");
+  const opened = draw(h(AttentionCard, { card: card("a", { room: "Kitchen", lines: [{ key: "l", text: "Too warm", story: [], closing: null }] }),
+    onOpenEntity() {} }));
+  ck("  ...the opened card draws its room with the same pill", opened.includes(pill), opened);
+}
 const noteLine = draw(h(MessageRow, { item: { kind: "notification", key: "n1", announcement: ann(1, { title: "🔔 Visitor",
   text: "Someone is at the door.\nGate A", at: "2026-10-28T10:00:00+08:00" }) }, selected: false, onSelect() {} }));
 ck("  ...a notification: its title, its first words, when it came; not chosen, not marked",
@@ -269,36 +273,39 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
      /fm-record-actions[\s\S]*Unlock/.test(draw(h(NoteDetail, { announcement: ring }))));
 }
 // ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components, since the
-// same button shall consistently appear for any type"): the issue's head, VESTA's message in its line, VESTA's buttons
+// same button shall consistently appear for any type"): the issue's head, VESTA's message in its line, every card's
+// buttons. ⚠️ AND IT IS TOLD ONCE (architecture review round 13): the issue is joined to VESTA's messages in the model
+// (issueAsTold), and the row, the opened card and the Watch card read the same lines.
 {
-  const { AlertIssueCard } = await import("@/components/cockpit/IssueCard");
-  const { messageOfLine } = await import("@/messages/messagesModel");
-  const { elements, guardsOf, parseTsx, propText } = await import("../consistency/jsx.mjs");
+  const { AttentionCard, CockpitAttentionRow } = await import("@/components/cockpit/IssueCard");
+  const { issueAsTold, messageOfLine } = await import("@/messages/messagesModel");
+  const { elements, guardsOf, parseTsx } = await import("../consistency/jsx.mjs");
   const alert = parseVestaMessage({ seq: 30, key: "incident:92", title: "#92-P2 (new)", to: "To: Facility manager",
     body: "The pool pump stopped.", status: ["⚠️ New alert"],
     buttons: [{ label: "Done", kind: "i", id: "92:done" }, { label: "Need help", kind: "i", id: "92:need_help" }] });
   const issue = card("p", { lines: [{ key: "l1", text: "Pump stopped", story: [{ at: "2026-10-29T10:00:00+08:00",
     note: "SHORT STORY" }], alertNumber: 92 }] });
-  const drawn = draw(h(AlertIssueCard, { card: issue, messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} }));
+  const told = (c, kept = [alert]) => issueAsTold(c, kept);
+  const drawn = draw(h(AttentionCard, { card: told(issue), onOpenEntity() {} }));
   ck("an alert's issue is ONE card: the issue's head, VESTA's message inside its line, in place of its short story",
      (drawn.match(/class="fm-record-card/g) ?? []).length === 1 && /fm-record-head[\s\S]*Device p/.test(drawn)
      && drawn.includes("The pool pump stopped.") && !drawn.includes("SHORT STORY"), drawn);
-  const watched = draw(h(AlertIssueCard, { card: { ...issue, look: "watched", lines: [{ ...issue.lines[0],
-    text: "#92-P2 · LINE WORDS", closing: "CLOSING WORDS" }] }, messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} }));
+  const watched = draw(h(AttentionCard, { card: told({ ...issue, look: "watched", lines: [{ ...issue.lines[0],
+    text: "#92-P2 · LINE WORDS", closing: "CLOSING WORDS" }] }), onOpenEntity() {} }));
   ck("  ...each thing said once: the line named by VESTA's title, its words and how it closed in VESTA's message "
      + "(owner, 2026-10-29 screenshot)", watched.includes("#92-P2 (new)") && !watched.includes("LINE WORDS")
      && !watched.includes("CLOSING WORDS"), watched);
   ck("  ...an open issue's \"closes at about …\" kept (VESTA's message does not say it)",
-     draw(h(AlertIssueCard, { card: { ...issue, lines: [{ ...issue.lines[0], closing: "CLOSES SOON" }] },
-       messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} })).includes("CLOSES SOON"));
+     draw(h(AttentionCard, { card: told({ ...issue, lines: [{ ...issue.lines[0], closing: "CLOSES SOON" }] }),
+       onOpenEntity() {} })).includes("CLOSES SOON"));
   ck("  ...a line whose alert VESTA holds no card for keeps its story", messageOfLine(issue.lines[0], []) === null
-     && draw(h(AlertIssueCard, { card: issue, messages: () => null, onOpenEntity() {} })).includes("SHORT STORY"));
+     && draw(h(AttentionCard, { card: told(issue, []), onOpenEntity() {} })).includes("SHORT STORY"));
   // owner, 2026-10-30: the onsen pump's night-check line, drawn under #96's Status, "feels like it belongs to the
   // history section": another problem of the device comes first, as "Also: …", then the alert with its icon
   const both = { ...issue, lead: { sources: ["alert", "night"], severities: ["warn", "warn"] }, lines: [
     { ...issue.lines[0], own: { sources: ["alert"], severities: ["warn"] } },
     { key: "l2", text: "Pump ran shorter than expected", story: [], own: { sources: ["night"], severities: ["warn"] } }] };
-  const two = draw(h(AlertIssueCard, { card: both, messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} }));
+  const two = draw(h(AttentionCard, { card: told(both), onOpenEntity() {} }));
   const at = (t) => two.indexOf(t);
   ck("  ...a device's other problem comes first, \"Also: …\", then the alert's message, never under its Status",
      at("Also: Pump ran shorter than expected") > -1 && at("Also: Pump ran shorter than expected") < at("#92-P2 (new)")
@@ -311,21 +318,46 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
      sourcesDrawn === 2 && icons >= 2, [sourcesDrawn, icons]);
   ck("  ...and the card keeps its icon column, so the lines' icons stay inside it (owner, 2026-10-30)",
      /class="fm-record-lead"/.test(two), two);
-  ck("  ...a card with only the alert says no \"Also\"", !draw(h(AlertIssueCard, { card: issue,
-     messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {} })).includes("Also:"));
+  ck("  ...a card with only the alert says no \"Also\"", !draw(h(AttentionCard, { card: told(issue), onOpenEntity() {} })).includes("Also:"));
   // owner, 2026-10-30: "a unique configuration … Done / Need Help / Open Ticket consistently for all of them" — the alert's
   // card drew VESTA's own Done · Need help, a fault's Open Ticket · Close
   const ic = parseTsx("components/cockpit/IssueCard.tsx");
-  const rows = elements(ic, "CardActions");
   ck("  ...its buttons the row of every issue card (CardActions, the card's Done · Need help · Open Ticket), never VESTA's own",
-     rows.length === 2 && elements(ic, "RecordButtons").length === 0
-     && readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8")
-       .split("export function AlertIssueCard")[1].includes("<CardActions card={card}"), rows.map((r) => r.getText()));
+     elements(ic, "CardActions").length === 1 && elements(ic, "RecordButtons").length === 0);
   const tab = parseTsx("components/cockpit/MessagesTab.tsx");
-  ck("  ...the Inbox draws it in place of the two stacked cards (no VESTA card above an issue's own)",
-     elements(tab, "AlertIssueCard").length === 1 && elements(tab, "NoteDetail").every((e) => !/cardsOfIssue/.test(e.getText()))
-     && guardsOf(elements(tab, "AlertIssueCard")[0]).includes("cardsOfIssue(item.card, kept).length > 0")
-     && guardsOf(elements(tab, "CockpitAttentionRow")[0]).includes("cardsOfIssue(item.card, kept).length === 0"));
+  ck("  ...the Inbox draws an open issue, alert or not, as THE issue card with its buttons; a watched one without",
+     elements(tab, "CockpitAttentionRow").length === 1 && elements(tab, "AttentionCard").length === 1
+     && guardsOf(elements(tab, "CockpitAttentionRow")[0]).join() === 'item?.kind === "issue"'
+     && elements(tab, "NoteDetail").every((e) => !/cardsOfIssue|messageOfLine/.test(e.getText())));
+
+  console.log("\n  the row, the opened card and the Watch card say an alert alike (architecture review round 13):");
+  // the review's case: the lock missing from the villa's system, its alert taken on, another problem of the device
+  const lock = card("lock", { lines: [
+    { key: "fault:t1", text: "Missing, in progress: #100-P1 · Outdoor entrance lock is missing", state: "Missing",
+      story: [{ at: "2026-11-01T08:00:00+08:00", note: "Ticket opened in the Cockpit" }], alertNumber: 100, closing: null },
+    { key: "night:x", text: "Battery low", story: [], closing: null }] });
+  const msg100 = parseVestaMessage({ seq: 40, key: "incident:100", title: "#100-P1 (existing)", to: "To: Owner",
+    body: "The outdoor entrance lock is missing.", status: ["⚠️ New alert"], buttons: [] });
+  const msg92 = parseVestaMessage({ seq: 41, key: "incident:92", title: "#92-P2 (cleared)", to: "To: Owner",
+    body: "The pool pump runs again.", status: ["✅ Cleared"], buttons: [] });
+  const pumpWatch = card("watched:p", { look: "watched", lines: [{ key: "fault:p", text: "#92-P2 · Pool pump stopped",
+    story: [], alertNumber: 92, closing: "Done on 01/11/2026 09:00 (JM)" }] });
+  const v = messagesView({ open: [lock], watched: [pumpWatch], announcements: [msg100, msg92], filter: "issues", selected: null });
+  const words = (html, cls) => (html.match(new RegExp(`class="${cls}">([^<]*)<`)) ?? [])[1];
+  const lines = (html) => [...html.matchAll(/class="cockpit-attention-sub-title">([^<]*)</g)].map((m) => m[1]);
+  for (const [what, item, Card] of [["an open issue", v.issues[0], CockpitAttentionRow], ["a watched one", v.watched[0], AttentionCard]]) {
+    const row = draw(h(MessageRow, { item, selected: false, onSelect() {} }));
+    const opened = draw(h(Card, { card: item.card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
+    const named = words(row, "messages-row-sub"), alertLine = lines(opened).find((l) => l.includes("#"));
+    ck(`${what}: its row and its opened card name the alert as Telegram does, in the same words`,
+       !!named && named === alertLine && /#(100-P1|92-P2) \(/.test(named), { row: named, card: lines(opened) });
+  }
+  const opened = draw(h(CockpitAttentionRow, { card: v.issues[0].card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
+  ck("  ...the open one: its device's own state first (\"Missing, #100-P1 (existing)\"), the other problem first as \"Also\", VESTA's words in it",
+     JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low", "Missing, #100-P1 (existing)"])
+     && opened.includes("The outdoor entrance lock is missing."), lines(opened));
+  const rowTimeShown = words(draw(h(MessageRow, { item: v.issues[0], selected: false, onSelect() {} })), "messages-row-time");
+  ck("  ...and its row's time is its alert's last step, not the other problem's", !!rowTimeShown && rowTimeShown.length > 0, rowTimeShown);
 }
 ck("its words, then its page opened in the document viewer (the add-on's sandboxed page)",
    opened.includes("Two things") && opened.includes('href="/fm-document/page-en-0001"') && opened.includes("Open the page"), opened);

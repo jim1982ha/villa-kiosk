@@ -5,7 +5,7 @@
 // it (one problem, one line), and the alert's card named the line by VESTA's title alone, so the word went.
 //
 // Driven by value through the production path: the villa's devices (villaDevices, over a states fixture), the items
-// (buildAttentionItems), the cards (groupAttention → cockpitCard), the Inbox's alert card drawn (AlertIssueCard), and
+// (buildAttentionItems), the cards (groupAttention → cockpitCard), the Inbox's alert card drawn (issueAsTold → CockpitAttentionRow), and
 // the counts (attentionFor's health). Placeholder ids.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
@@ -16,8 +16,8 @@ const { buildAttentionItems, attentionFor } = await import("@/config/attention")
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { NOT_IN_HA } = await import("@/utils/stateColors");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
-const { AlertIssueCard } = await import("@/components/cockpit/IssueCard");
-const { messageOfLine } = await import("@/messages/messagesModel");
+const { CockpitAttentionRow } = await import("@/components/cockpit/IssueCard");
+const { issueAsTold } = await import("@/messages/messagesModel");
 const { parseVestaMessage } = await import("@/messages/announcements");
 
 const ent = (id, state) => ({ entity_id: id, state, attributes: { friendly_name: id } });
@@ -55,13 +55,13 @@ console.log("  a device the villa's system no longer has:");
   const card = cardOf(cards, LOCK);
   ck("  ...its alert rides on that line (one problem, one line), which still says it", card?.lines.length === 1
      && card.lines[0].text.startsWith(`${NOT_IN_HA}, `), words(card));
-  const drawn = draw(h(AlertIssueCard, { card, messages: (l) => messageOfLine(l, [alert]), onOpenEntity() {},
+  const drawn = draw(h(CockpitAttentionRow, { card: issueAsTold(card, [alert]), onOpenEntity() {},
     canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
   ck(`  ...and the Inbox's alert card says "${NOT_IN_HA}" before VESTA's title, VESTA's message under it`,
      drawn.includes(`${NOT_IN_HA}, #7-P1 (new)`) && drawn.includes("The door was unlocked while the villa was vacant."), drawn);
   const strip = cockpit(live, [{ ...alertTicket, id: "t-2", entityId: STRIP, alertNumber: 8, title: "Strip offline" }]).cards;
   const alert8 = { ...alert, key: "incident:8", title: "#8-P2 (new)" };
-  const stripDrawn = draw(h(AlertIssueCard, { card: cardOf(strip, STRIP), messages: (l) => messageOfLine(l, [alert8]),
+  const stripDrawn = draw(h(CockpitAttentionRow, { card: issueAsTold(cardOf(strip, STRIP), [alert8]),
     onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
   ck("  ...an unavailable device's alert card unchanged: its alert says it is offline, no second word",
      stripDrawn.includes("#8-P2 (new)") && !stripDrawn.includes("Unavailable, #8"), stripDrawn);

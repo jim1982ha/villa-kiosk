@@ -9,17 +9,18 @@
 
 import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity, useRecordRoom } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
-import { closedTicketStats, faultTitle, keptDays, STAGE_WORDS, stageOf, wasTicket, type FmRetention } from "@/fm/fmEngine";
+import { closedTickets, closedTicketStats, faultTitle, keptDays, STAGE_WORDS, stageOf, type FmRetention } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
 import { closedActions, helpAsked, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
 import RecordCard, { type RecordCardProps } from "./RecordCard";
 import FaultForm from "./FaultForm";
+import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
 import AgentMark from "./AgentMark";
 import { faultNoteLines, faultWhen } from "@/fm/faultNotes";
@@ -44,16 +45,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const terms = useFmTerms();
   const { deviceOfRecord } = useDeviceIdentity();
   const label = useEntityLabel();
-  const [editingId, setEditingId] = useState<string | null>(null);
   /** Every card's buttons carried out: Done's form, Need help, Close's question, Reopen's form (WorkButtons). */
   const work = useCardWork();
-
-  useEffect(() => {
-    if (!editTicket) return;
-    setEditingId(editTicket);
-    onEditOpened?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editTicket]);
 
   // in progress: the cards below, one per device (openCounts) — the other figures are per record (a repair's time)
   const inProgress = openCounts(data.tickets, deviceOfRecord).tickets;
@@ -61,20 +54,31 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   // ⚠️ THE CLOSED ONES ARE A SECTION OF THEIR OWN, FOLDED AND PAGED (owner, 2026-10-14): the VESTA Agent clears several
   // a day. Latest closed first; the server drops them after their retention window (supervisor-proxy _fm_expire).
   // ...THE TICKETS', NOT EVERY RECORD'S (owner, 2026-11-01): a fault the VESTA Agent cleared with nobody taking it on was
-  // never a ticket, nor a ticket reopened and closed as a fault (wasTicket) — its figures above are the tickets' too
-  // (closedTicketStats)
-  const closed = useMemo(() => data.tickets.filter((t) => stageOf(t) === "closed" && wasTicket(t))
-    .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt)), [data.tickets]);
-  const editing = editingId ? data.tickets.find((t) => t.id === editingId) : undefined;
+  // never a ticket, nor a ticket reopened and closed as a fault (fmEngine.closedTickets) — its figures above are the
+  // tickets' too (closedTicketStats)
+  const closed = useMemo(() => closedTickets(data.tickets), [data.tickets]);
+  // the record open as its form, among the records this tab lists (ListEditor): reopened by VESTA, erased on another
+  // tablet, it leaves the list and its form closes
+  const listed = useMemo(() => [...tickets.flatMap((g) => g.records), ...closed].map((t) => t.id), [tickets, closed]);
+  const editor = useListEditor(listed);
+  useEffect(() => {
+    if (!editTicket) return;
+    editor.edit(editTicket);
+    onEditOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTicket]);
 
   /** One record, as every Facility card is drawn (RecordCard): its title, when/where/who, its notes, photos and
    *  reports, the cost of the work that resolved it. Tapping it edits it. */
   const record = (t: FmTicket, status?: RecordCardProps["status"], actions?: ReactNode, framed = true) => {
     // ⚠️ AN EDIT TAKES ITS CARD'S PLACE (owner, 2026-11-01: tapping a ticket opened a second card, its form, at the
-    // top of the tab, out of view); the form brings itself into view (FmForm)
-    if (editing?.id === t.id) {
-      return <FaultForm key={editing.id} editing={editing} deviceOptions={deviceOptions} onDone={() => setEditingId(null)} />;
-    }
+    // top of the tab, out of view); the form brings itself into view (FmForm), and closes when its record leaves the
+    // list (ListEditor)
+    return editor.inPlace(t.id, card(t, status, actions, framed),
+      () => <FaultForm editing={t} deviceOptions={deviceOptions} onDone={editor.close} />);
+  };
+
+  const card = (t: FmTicket, status?: RecordCardProps["status"], actions?: ReactNode, framed = true) => {
     const work = data.completions.find((c) => c.ticketId === t.id && c.costId);
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
     return (
@@ -82,10 +86,10 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         when={faultWhen(t, momentText)} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
         documentIds={t.documentIds} amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
         erase={{ title: "Erase this ticket", detail: t.title, run: (token) => removeTicket(t.id, token) }}
-        onOpen={() => setEditingId(t.id)}
+        onOpen={() => editor.edit(t.id)}
+        // its device's room now, the stored one only with no device (owner, 2026-10-30: devicePlace.recordRoomNow)
+        room={roomOf(t) || undefined}
         pills={<>
-          {/* its device's room now, the stored one only with no device (owner, 2026-10-30: devicePlace.recordRoomNow) */}
-          {roomOf(t) && <span className="fm-clause">{roomOf(t)}</span>}
           {/* a guest reports a symptom from inside the villa, not a diagnosis */}
           {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
           <AgentMark record={t} />

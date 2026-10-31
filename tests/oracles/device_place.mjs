@@ -50,8 +50,8 @@ ck("the device lists read the one answer (useRoomFloors), and nothing else decid
      P.recordRoomNow({}, { key: "lock.x", entityId: "lock.x" }, "Hall") === "Hall"
      && P.recordRoomNow({}, { key: "lock.x", entityId: "lock.x" }, "Hall") === P.deviceRoomOrRecord({}, "lock.x", "lock.x", "Hall"));
   const at = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
-  ck("  ...every screen showing a ticket's room asks the one hook: the Tickets tab, and a cost written for a ticket's work",
-     /\{roomOf\(t\) && <span className="fm-clause">\{roomOf\(t\)\}<\/span>\}/.test(at("components/fm/TicketsTab.tsx"))
+  ck("  ...every screen showing a ticket's room asks the one hook: the Tickets tab and the Spend tab (their card's room pill), and a cost written for a ticket's work",
+     /room=\{roomOf\(t\) \|\| undefined\}/.test(at("components/fm/TicketsTab.tsx")) && /room=\{roomOf\(c\) \|\| undefined\}/.test(at("components/fm/SpendTab.tsx"))
      && !/cleanRoom\(t\.room\)/.test(at("components/fm/TicketsTab.tsx"))
      && /room: roomOf\(ticket\) \|\| undefined/.test(at("components/fm/FaultStageModal.tsx"))
      && /recordRoomNow\(resolvedRooms/.test(at("config/VillaModel.tsx")));

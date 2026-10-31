@@ -131,7 +131,7 @@ const keyFm = (d: FmData, k: FmCollection) =>
 /** A fault changed on two devices merges field by field (keyedSync mergeItem): its status goes with when it was
  *  resolved and the cost filed with it; its steps are append-only, by their whole content (a step has no id), and a
  *  status step of this device's is left out when the status kept the other device's (the record must read as one fault:
- *  fmEngine.ticketAt takes the status from the last status step). The VESTA Agent writes the same faults. */
+ *  fmEngine.recordLife takes the status from the last status step). The VESTA Agent writes the same faults. */
 const NOT_A_STATUS_STEP: ReadonlySet<string> = new Set(NOT_STATUS_CHANGE_KINDS);
 const TICKET_FIELDS: FieldMerge = {
   groups: [["status", "resolvedAt", "costId"]],

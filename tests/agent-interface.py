@@ -616,6 +616,27 @@ async def main() -> None:
        r.status == 200 and len(cut["key"]) == lim["key"] and len(cut["title"]) == lim["title"]
        and len(cut["roles"]) == lim["roles"] and len(cut["status"]) == lim["status"]
        and len(cut["buttons"]) == lim["buttons"], {k: len(v) for k, v in cut.items() if hasattr(v, "__len__")})
+    # what a message is kept as, by example (architecture review round 13): the agreement's examples, replayed through the
+    # record the add-on makes and through its door; the Agent replays the same ones through its test copy of the add-on
+    print("\n  what a message is kept as (the agreement's vestaMessage.examples):")
+    examples = proxy.AGENT_CONTRACT_TABLE["vestaMessage"]["examples"]
+    bare = lambda rec: rec and {k: v for k, v in rec.items() if k not in ("seq", "at")}
+    for ex in examples:
+        made = bare(proxy._vesta_message_record(ex["sent"], 1, "2026-11-01T00:00:00Z"))
+        r = await post("/agent/v1/vesta-message", headers=bearer(), json=ex["sent"])
+        status, body = await jget("/vesta-messages", cookie("owner"))
+        served = next((bare(m) for m in body["messages"] if ex["sent"].get("key") and m["key"] == ex["sent"]["key"]), None)
+        ck(f"  ...{ex['why']}: {'kept as the agreement says' if ex['kept'] else 'refused (400)'}",
+           made == ex["kept"] and r.status == (200 if ex["kept"] else 400)
+           and (served == ex["kept"] if ex["kept"] else served is None), (r.status, made, served))
+    ck("  ...the examples cover a report's page and language, other languages, buttons kept and dropped, a cut text, a refusal",
+       all(any(f(ex) for ex in examples) for f in (
+           lambda ex: (ex["kept"] or {}).get("page"), lambda ex: (ex["kept"] or {}).get("language"),
+           lambda ex: ex["kept"] and "page" in ex["sent"] and "page" not in ex["kept"],
+           lambda ex: (ex["kept"] or {}).get("languages"),
+           lambda ex: ex["kept"] and len(ex["sent"].get("buttons", [])) > len(ex["kept"].get("buttons", [])) > 0,
+           lambda ex: ex["kept"] and len(ex["sent"].get("title", "")) > len(ex["kept"].get("title", "")),
+           lambda ex: ex["kept"] is None)), [ex["why"] for ex in examples])
     r = await client.delete("/agent/v1/vesta-message", headers=bearer())
     r2 = await client.delete("/agent/v1/vesta-message?key=incident:90", headers=bearer())
     status, body = await jget("/vesta-messages", cookie("owner"))

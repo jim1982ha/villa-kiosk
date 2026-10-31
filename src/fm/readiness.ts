@@ -12,7 +12,7 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import { isOffline, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
-import { isTicketOpen, stageOf } from "./fmEngine";
+import { stageOf } from "./fmEngine";
 import { openCounts } from "./deviceWork";
 import { faultSource, ISSUE_SOURCES, type IssueSource } from "./issueSource";
 import { lockFacts, lightFacts, climateFacts } from "@/config/villaSummary";
@@ -283,7 +283,7 @@ export function buildReadiness(
   const shown = new Set(alarms.flatMap((i) => (i.kind === "fault" && i.ticketId ? [i.ticketId] : [])));
   const records = fm.tickets.filter((t) => shown.has(t.id));
   const open = openCounts(records, devices.deviceOfRecord);
-  const faults = records.filter((t) => isTicketOpen(t) && stageOf(t) === "fault");
+  const faults = records.filter((t) => stageOf(t) === "fault");
   const where = [open.faults ? "the faults in Inbox › Open issues" : "", open.tickets ? "the tickets in Tickets" : ""].filter(Boolean);
   const found = new Set(faults.map(faultSource));
   checks.push({

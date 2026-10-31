@@ -1,3 +1,29 @@
+## 2.496.643
+
+What you will see:
+- Everything listed under 2.496.642, which was not published: a check of the tablet's own build stopped it on its way to
+  the store. Nothing else changes.
+
+## 2.496.642
+
+What you will see:
+- In every Cockpit list (Tickets, Spend, Schedule, Today), when the card you are editing goes away, its form closes and
+  the list's own button is back. Editing a spend entry and then changing the Month no longer leaves you with no form and
+  no "Record spend"; a task erased or paused on another tablet while its form or its Log is open no longer leaves you
+  with no "Add a task"; a ticket closed or reopened by VESTA while you edit it closes its form. A new entry's form then
+  opens empty.
+- The room is the same framed pill on every Cockpit card: Tickets, Schedule and Today show it as the Inbox does, right
+  after the card's name, no longer as grey text among the other tags. A spend entry for a device shows its room too.
+- An Inbox line names an alert exactly as its opened card does, as Telegram names it: "Missing, #100-P1 (existing)" on
+  both, where the line said "Missing, in progress: #100-P1 · …". A line on the Watch list reads the same as the card it
+  opens ("#92-P2 (cleared)" on both while VESTA still keeps its message).
+- The monthly recap's fault table: a fault still open at the month's end shows "—" under Resolved. It could show the
+  date it was closed in a later month. Every count and mean time in the recap and the Tickets tab is unchanged.
+- In Advanced Settings › System › Device telemetry, a facility sync row counts the open faults and the tickets in
+  progress apart. It counted every open fault as an open ticket.
+- Nothing else changes on screen: what the tablet keeps of each VESTA message is now checked against examples the
+  tablet and VESTA share.
+
 ## 2.496.641
 
 What you will see:

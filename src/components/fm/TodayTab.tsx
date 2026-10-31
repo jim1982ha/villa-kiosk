@@ -30,6 +30,7 @@ import WorkerPicker from "./WorkerPicker";
 import { useWorkFields } from "./useWorkFields";
 import Tip from "@/components/common/Tip";
 import FmForm from "./FmForm";
+import { useListEditor } from "./ListEditor";
 
 /** The engine's sentence (fmEngine.dueLine — the recap's too) with the date in the reader's locale. Same wording
  *  either side of "never": a target date is shown regardless — see fmEngine.scheduleStatus for why "never" now
@@ -43,7 +44,8 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
   const { deviceOfRecord } = useDeviceIdentity();
   const terms = useFmTerms();
   const board = scheduleBoard(data);
-  const [openId, setOpenId] = useState<string | null>(null);
+  // the task whose Log is open (ListEditor): paused or erased on another tablet, its form closes
+  const log = useListEditor(board.map((s) => s.schedule.id));
   // Bulk delete is destructive across every task at once — require an
   // explicit second tap before it fires, same pattern as the "Turn all
   // on/off" confirm elsewhere (SummaryGroupPanel) and the Facility
@@ -126,13 +128,13 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
             status={{ text: DUE_WORDS[s.state].word, tone: pillClass(DUE_WORDS[s.state].tone) }}
             when={`${dueText(s)} · every ${s.schedule.everyDays} days`
               + (s.last ? ` · last ${momentText(s.last.at)} by ${workedBy(s.last)}` : "")}
+            room={s.schedule.room || undefined}
             pills={<>
               {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
-              {s.schedule.room && <span className="fm-clause">{s.schedule.room}</span>}
               <AgentMark record={s.schedule} />
             </>}
             actions={<>
-              <button className="btn ghost" onClick={() => setOpenId(openId === s.schedule.id ? null : s.schedule.id)}>
+              <button className="btn ghost" onClick={() => (log.editing === s.schedule.id ? log.close() : log.edit(s.schedule.id))}>
                 <Check size={16} /> Log
               </button>
               <Tip text="Remove this task. Completions already logged against it are kept.">
@@ -144,14 +146,14 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
             </>} />
           {/* ⚠️ ITS LOG UNDER ITS CARD (owner, 2026-11-01: a form opened away from what it was asked on): it was drawn
               under Recent work, below every task */}
-          {openId === s.schedule.id && (
+          {log.editing === s.schedule.id && (
             <LogCompletion
-              scheduleId={openId}
-              onCancel={() => setOpenId(null)}
+              scheduleId={s.schedule.id}
+              onCancel={log.close}
               onSave={async (payload, cost) => {
                 // Close only when saved or queued; a refused save keeps the form (2.496.252).
                 const { done, note: why } = await logCompletion(payload, cost);
-                if (done) setOpenId(null);
+                if (done) log.close();
                 return done ? null : why;
               }}
               onOpenEntity={onOpenEntity}

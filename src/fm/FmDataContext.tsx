@@ -13,7 +13,7 @@ import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
 } from "react";
-import { isTicketOpen, type FmStamp } from "./fmEngine";
+import { recordsByStage, type FmStamp } from "./fmEngine";
 import { applyFmCommand, type FmCommand } from "./fmCommands";
 
 /** The real clock and id maker the record changes are stamped with (fmEngine). */
@@ -40,6 +40,15 @@ import { CHANGED_ON_ANOTHER_DEVICE, removedOnAnotherDevice, fmSaveOutcome, type 
 
 /** Whether profile `role` may send the work kept for `other`: it may do all that `other` does (owner, then facility
  *  manager, then guest). Signed out: nobody's. */
+
+/** The tablet log's line of what the store holds: every record, the faults nobody has taken on, the tickets in
+ *  progress (recordsByStage). ⚠️ Its open tickets were every record not closed, the faults among them
+ *  (architecture review round 13). */
+function syncStages(records: readonly FmTicket[]) {
+  const n = recordsByStage(records);
+  return { records: records.length, openFaults: n.fault, ticketsInProgress: n.ticket };
+}
+
 export function carriesWorkOf(role: Role | null | undefined, other: string): boolean {
   // ⚠️ FROM THE ROLE TABLE, NOT A RANK OF ITS OWN (architecture review round 8, 2026-10-30): a profile carries another's
   // work when it holds every capability the other holds
@@ -222,8 +231,8 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       op: "pull",
       rev: fresh.rev,
       changed: r.action === "apply",
-      tickets: fresh.doc.tickets.length,
-      openTickets: fresh.doc.tickets.filter(isTicketOpen).length,
+      // the faults and the tickets in progress, each by its name (recordsByStage): its open tickets counted the faults too
+      ...syncStages(fresh.doc.tickets),
       costs: fresh.doc.costs.length,
       completions: fresh.doc.completions.length,
     });
@@ -295,8 +304,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
         setUnreachable(false);
         reportSync({
           op: "push", ok: true, elevated: Boolean(elevation),
-          tickets: o.next.tickets.length,
-          openTickets: o.next.tickets.filter(isTicketOpen).length,
+          ...syncStages(o.next.tickets),
           costs: o.next.costs.length,
         });
         return removedElsewhere.length > 0 ? removedOnAnotherDevice(removedElsewhere.map((r) => r.kind))

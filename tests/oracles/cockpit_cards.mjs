@@ -281,10 +281,10 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   // a card is only ever drawn opened: every issue card the Inbox draws sits in its opened pane, none in its list
   const tab = parseTsx("components/cockpit/MessagesTab.tsx");
   const inPane = (el) => { for (let n = el.parent; n; n = n.parent) if (n.openingElement && propText(n, "className") === '"messages-detail"') return true; return false; };
-  const cards = ["AttentionCard", "AlertIssueCard", "CockpitAttentionRow", "NoteDetail", "ReportDetail"].flatMap((t) => elements(tab, t))
+  const cards = ["AttentionCard", "CockpitAttentionRow", "NoteDetail", "ReportDetail"].flatMap((t) => elements(tab, t))
     .filter((el) => { for (let n = el.parent; n; n = n.parent) if (n.name?.getText?.() === "ReportDetail") return false; return true; });  // a report is a note: drawn by its own card
   ck("  ...and a card is only drawn opened: every card the Inbox draws is in its opened pane (\"← Inbox\")",
-     cards.length >= 5 && cards.every(inPane), cards.filter((c) => !inPane(c)).map((c) => c.getText().slice(0, 60)));
+     cards.length >= 4 && cards.every(inPane), cards.filter((c) => !inPane(c)).map((c) => c.getText().slice(0, 60)));
   ck("every button lights under the mouse, and the card does not light while the mouse is on any of its buttons",
      /@media \(hover: hover\) \{\s*\.btn:hover:not\(:disabled\) \{/.test(base)
      && /\.fm-record-card:has\(> \.fm-openable\):hover:not\(:has\(\.fm-record-actions:hover\)\):not\(:has\(button:hover\)\)/.test(fac));
@@ -320,5 +320,27 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
     .filter(([, t]) => /borderRadius: 999/.test(t)).map(([f]) => f);
   ck("  ...and a pill is the Kiosk's pill (.fm-entity-chip, common/RemovablePill), never one drawn in inline styles",
      inlinePills.length === 0, inlinePills);
+}
+// architecture review round 13 (2026-11-01): the Inbox drew the room as a framed pill, Tickets, Schedule and Today as plain
+// grey text among the tags. ONE pill, the card's own `room` input (RecordCard RoomPill), on every list that shows a room.
+{
+  const { RoomPill } = await import("@/components/fm/RecordCard");
+  const pill = draw(h(RoomPill, { room: "Kitchen" }));
+  const card = draw(h(RecordCard, { title: "Pump", room: "Kitchen", titlePills: h("span", { className: "fm-entity-chip" }, "DEVICE"),
+    pills: h("span", { className: "fm-clause" }, "Cl. 3") }));
+  ck("a card's room is the room pill, on its title's line after its other pills; the tags keep the clause only",
+     inside(card, "fm-row-title").includes(pill) && inside(card, "fm-row-title").indexOf("DEVICE") < inside(card, "fm-row-title").indexOf(pill)
+     && !inside(card, "fm-record-body").includes("Kitchen") && pill.includes("fm-entity-chip"), card);
+  const issue = draw(h(AttentionCard, { card: { key: "k", title: "Pump", room: "Kitchen", lead: null, nextCheck: null, actions: [],
+    lines: [{ key: "l", text: "Stopped", story: [], closing: null, openedAt: null }] }, onOpenEntity() {} }));
+  ck("  ...the Inbox's opened card draws the same pill", inside(issue, "fm-row-title").includes(pill), issue);
+  const roomed = { "fm/TicketsTab.tsx": "roomOf(t) || undefined", "fm/ScheduleEditor.tsx": "s.room || undefined",
+    "fm/TodayTab.tsx": "s.schedule.room || undefined", "fm/SpendTab.tsx": "roomOf(c) || undefined", "cockpit/IssueCard.tsx": "card.room" };
+  const given = Object.fromEntries(Object.keys(roomed).map((f) => [f, elements(parseTsx(`components/${f}`), "RecordCard")
+    .map((e) => propText(e, "room")).filter((x) => x !== undefined && x !== null)]));
+  ck("  ...Tickets, Schedule, Today, Spend and the Inbox's card each give their card its room, none as a tag of its own",
+     Object.entries(roomed).every(([f, r]) => JSON.stringify(given[f]) === JSON.stringify([r]))
+     && Object.keys(roomed).every((f) => !/className="fm-clause">\{[^}]*room/.test(readFileSync(new URL(`../../src/components/${f}`, import.meta.url), "utf8"))),
+     given);
 }
 done("✅ every Cockpit list is one card, checked as it is drawn");

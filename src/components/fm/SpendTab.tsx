@@ -8,7 +8,7 @@
 
 import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import { DocumentButtons } from "@/components/common/SaveButton";
 import { Plus, Sparkles } from "lucide-react";
@@ -34,9 +34,11 @@ import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
 import { useRecordPlace } from "./useRecordPlace";
+import { useRecordRoom } from "@/config/VillaModel";
 import FormActions from "./FormActions";
 import { TONE_OF, toneClass } from "@/fm/tone";
 import FmForm from "./FmForm";
+import { useListEditor } from "./ListEditor";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions, inputs }: {
@@ -52,13 +54,10 @@ export default function SpendTab(
   // how long spend is kept (owner, 2026-10-20: the record's retention, said beside the list it shortens)
   const kept = recordsKeptNote(retention, "Spend");
   const place = useRecordPlace();
+  const roomOf = useRecordRoom();
   const { role } = useProfile();
   const terms = useFmTerms();
   const money = (n: number) => formatMoney(n, terms.currency);
-  const [adding, setAdding] = useState(false);
-  /** Id of the entry being corrected, or null when recording a new one — one
-   *  form for both, same reasoning as the fault form. */
-  const [editingId, setEditingId] = useState<string | null>(null);
   /** Why the last save was refused — the form keeps what was typed (2.496.252). */
   const [formError, setFormError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
@@ -76,16 +75,23 @@ export default function SpendTab(
   const statement = useMonthlyDocument("spend", inputs);
   const month = statement.month;
 
+  const b = budgetStatus(data.costs, month, terms);
+  const amountIdr = parseAmount(amount);
+
+  /** The form's fields emptied: whenever the form closes (saved, cancelled, or its entry gone from the month). */
   const resetForm = () => {
     setFormError(null);
-    setAdding(false); setEditingId(null);
     setLabel(""); clearDevice();
     setAmount(""); setNote(""); setPhotoIds([]); setCategory("minor");
   };
+  // ⚠️ THE ENTRY OPEN AS ITS FORM IS ONE OF THE MONTH'S (architecture review round 13: editing an entry, then changing
+  // the Month, left no form and no Record spend): another month, its form closes and Record spend is back (ListEditor).
+  // One form for a new entry and a correction, same reasoning as the fault form.
+  const editor = useListEditor(b.entries.map((c) => c.id), resetForm);
+  const editingId = editor.editing;
 
   const openEditor = (c: FmCost) => {
-    setEditingId(c.id);
-    setAdding(true);
+    editor.edit(c.id);
     setLabel(c.label);
     setAmount(String(c.amountIdr));
     setNote(c.note ?? "");
@@ -93,9 +99,6 @@ export default function SpendTab(
     setPhotoIds(c.photoIds);
     selectDevice(c.entityId ?? "", c.deviceLabel ?? "");
   };
-
-  const b = budgetStatus(data.costs, month, terms);
-  const amountIdr = parseAmount(amount);
 
   const form = (
     <FmForm>
@@ -131,7 +134,7 @@ export default function SpendTab(
       </div>
 
       <FormActions
-        error={formError} onCancel={resetForm} disabled={!label.trim() || amountIdr <= 0}
+        error={formError} onCancel={editor.close} disabled={!label.trim() || amountIdr <= 0}
         saveLabel={editingId ? "Save changes" : "Save"}
         onSave={async () => {
             const fields = {
@@ -146,7 +149,7 @@ export default function SpendTab(
               ? await updateCost(editingId, fields)
               : await addCost({ ...fields, at: new Date().toISOString() });
             // Empty the form only when saved or queued (2.496.252).
-            if (done) resetForm(); else setFormError(why);
+            if (done) editor.close(); else setFormError(why);
           }}
       />
     </FmForm>
@@ -187,8 +190,8 @@ export default function SpendTab(
           <div className="fm-cap-total"><span className="muted">{COST_CATEGORY_NAMES.minor}{b.cap > 0 ? ` · cap ${money(b.cap)}` : ""}</span><strong>{money(b.minorSpend)}</strong></div>
           <div className="fm-cap-total"><span className="muted">{COST_CATEGORY_NAMES.major}</span><strong>{money(b.majorSpend)}</strong></div>
           <div className="fm-cap-total"><span className="muted">Total</span><strong>{money(b.totalSpend)}</strong></div>
-          {!adding && (
-            <button className="btn ghost fm-cap-record" onClick={() => setAdding(true)}><Plus size={16} /> Record spend</button>
+          {editor.addButton && (
+            <button className="btn ghost fm-cap-record" onClick={editor.add}><Plus size={16} /> Record spend</button>
           )}
         </div>
         {b.cap > 0 && (
@@ -202,14 +205,13 @@ export default function SpendTab(
 
 
       {/* a new entry's form here; an edit's in its entry's place, below (FmForm) */}
-      {adding && !editingId && form}
+      {editor.adding && form}
 
       <div className="fm-list">
         {b.entries.length === 0 && (
           <p className="muted body-text">No spend recorded for {month}.</p>
         )}
-        {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => c.id === editingId
-          ? <Fragment key={c.id}>{form}</Fragment> : (
+        {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => editor.inPlace(c.id, (
           // THE Cockpit card (RecordCard, architecture review 2026-10-15): the amount on the right, its receipt —
           // the whole point of attaching one is that somebody can later check it
           <RecordCard key={c.id} title={c.label} when={momentText(c.at)} notes={[c.note]} photoIds={c.photoIds}
@@ -227,11 +229,13 @@ export default function SpendTab(
             ) : c.deviceLabel ? (
               <span className="fm-entity-chip fm-chip-static">{c.deviceLabel}</span>
             ) : undefined}
+            // its room, the pill of every Cockpit card (RoomPill): its device's room now, else the one it was saved with
+            room={roomOf(c) || undefined}
             pills={<>
               <span className="fm-clause">{COST_CATEGORY_NAMES[c.category]}</span>
               <AgentMark record={c} />
             </>} />
-        ))}
+        ), () => form))}
       </div>
 
 

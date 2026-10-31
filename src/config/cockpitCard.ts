@@ -23,6 +23,7 @@ import { sinceText } from "./presence";
 import { confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
 import { alertNumberOf, faultTitle } from "@/fm/fmEngine";
 import type { HassEntity } from "@/types/ha.types";
+import type { Announcement } from "@/messages/announcements";
 import { labelOf } from "./EntityMap";
 import { recordEntity, type VillaDevices } from "./deviceGroups";
 import { attentionSeverity, cardDevice, cardHead, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
@@ -174,7 +175,7 @@ export interface CardLine {
   /** Its own source icons (where they are drawn: cardIcons); absent for a line that has none to say. */
   own?: LineSources;
   /** The word of its device's own state it says before the fault it holds ("Missing"): what a line named by VESTA's
-   *  title still says first (cockpit/IssueCard AlertIssueCard). Absent when its words hold none (stateBesideFault).
+   *  title still says first (messagesModel issueAsTold). Absent when its words hold none (stateBesideFault).
    *  ⚠️ THE DEVICE'S OWN STATE WENT WITH THE ALERT'S TITLE (owner, 2026-10-31): a lock the villa's system had dropped
    *  at night held its unlocked-door alert on its "Missing" line, and the Inbox named the line by the alert alone. */
   state?: string;
@@ -188,6 +189,9 @@ export interface CardLine {
   /** When the VESTA Agent closes it if it stays as it is now — "Locked since 14:38 · closes at about 14:49 if it stays
    *  locked" (closingText); null when it is not waiting to close. */
   closing: string | null;
+  /** VESTA's message of its alert, joined to it once (messagesModel issueAsTold): its words drawn in the line, the
+   *  line named by the message's title. Absent on a line VESTA holds no message for, and before the join. */
+  told?: Announcement;
 }
 
 /** `{ alertNumber }` when there is one, else nothing (an optional field stays absent). */
@@ -230,9 +234,16 @@ function nextCheckView(group: AttentionGroup, cadence: AgentCadence | null, now:
  *  an issue's row in Messages shows when its first problem was last told of (its story's last step), else when it was
  *  opened: a new alert has no step yet, and its row showed no time at all. Null for a live state with neither. Pure. */
 export function rowTime(card: Pick<CardView, "lines">): string | null {
-  const first = card.lines[0];
+  const first = leadLine(card);
   if (!first) return null;
   return first.story.length ? first.story[first.story.length - 1].at : first.openedAt;
+}
+
+/** The line a card's row in the Inbox names: its alert's (the first line VESTA holds a message for: issueAsTold puts
+ *  the other problems first in the opened card), else its first. ⚠️ AN ALERT LEADS ITS ROW (owner, 2026-10-30), in
+ *  the words its opened card says it. Undefined for a card with no line. Pure. */
+export function leadLine(card: Pick<CardView, "lines">): CardLine | undefined {
+  return card.lines.find((l) => l.told) ?? card.lines[0];
 }
 
 /** What a card holding an alert says before each of its other problems. */

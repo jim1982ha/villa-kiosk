@@ -14,7 +14,7 @@
 // document unchanged, needs no viewer, and stays readable if it is ever
 // archived as plain text years later for a dispute.
 
-import { budgetStatus, capNotes, closedTicketStats, completionsInMonth, dueLine, DUE_WORDS, fmAttention, monthBounds, monthKey, monthLabel, resolvedInMonth, scheduleBoard, STAGE_WORDS, stageOf, ticketAt, ticketStats, workedBy } from "./fmEngine";
+import { budgetStatus, capNotes, closedTicketStats, completionsInMonth, dueLine, DUE_WORDS, fmAttention, monthBounds, monthKey, monthLabel, recordLife, scheduleBoard, STAGE_WORDS, ticketStats, workedBy } from "./fmEngine";
 import { COST_CATEGORY_NAMES, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
 import { AVAILABILITY_CHECK_LABEL, CHECK_WORDS, VERDICT_WORDS, type ReadinessResult } from "./readiness";
@@ -211,9 +211,12 @@ export function buildMonthlyRecap(input: RecapInput): string {
   // ── 3. Faults ──────────────────────────────────────────────────────────────
   // ⚠️ THE MONTH AS IT WAS (review 31): chosen and shown from the fault's steps — reopened in October, a fault fixed in
   // September left September's recap while its cost stayed in §2
+  // each fault's life read once (recordLife): listed when it opened or closed this month, told as it stood at its end
+  // ⚠️ AS IT STOOD, ITS CLOSE DATE TOO (architecture review round 13): a fault opened on the month's last day whose
+  // first step came after it read "Open" beside the next month's resolution date
   const monthEnd = monthBounds(month).end;
-  const inMonth = fm.tickets.filter((t) => monthKey(t.openedAt) === month || resolvedInMonth(t, month))
-    .map((t) => ({ ...t, ...ticketAt(t, monthEnd) }));
+  const inMonth = fm.tickets.filter((t) => monthKey(t.openedAt) === month || recordLife(t).resolutions.some((a) => monthKey(a) === month))
+    .map((t) => ({ t, then: recordLife(t, monthEnd) }));
   // the resolution figures are THE MONTH'S, as its table is (architecture review, 2026-10-19: "Resolved (all time)" was
   // the record the server still keeps — September's recap made in January read "Closed without action: 0")
   const stats = ticketStats(fm.tickets, monthBounds(month));
@@ -243,10 +246,10 @@ export function buildMonthlyRecap(input: RecapInput): string {
   if (inMonth.length) {
     L.push(`| Opened | Fault | Status | Resolved | Evidence |`);
     L.push(`|---|---|---|---|---|`);
-    for (const t of inMonth.sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))) {
+    for (const { t, then } of inMonth.sort((x, y) => Date.parse(x.t.openedAt) - Date.parse(y.t.openedAt))) {
       L.push(`| ${docDate(t.openedAt)} | ${cell(t.title)} `
         // its stage's one word, the Tickets tab's pill's (STAGE_WORDS) — it printed the stored status ("in progress")
-        + `| ${STAGE_WORDS[stageOf(t)].word} | ${t.resolvedAt ? docDate(t.resolvedAt) : "—"} `
+        + `| ${STAGE_WORDS[then.stage].word} | ${then.resolvedAt ? docDate(then.resolvedAt) : "—"} `
         + `| ${t.photoIds.length} photo(s) |`);
     }
     L.push("");
