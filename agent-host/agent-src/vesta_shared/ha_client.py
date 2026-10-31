@@ -284,7 +284,7 @@ def history_max_calls() -> int:
 
 def history_batch_entities() -> int:
     return limit("history.batch_entities", 25, unit="devices", group="read", lo=1, hi=100,
-                 says="Devices whose history a skill asks for together, in one read of the villa's system.",
+                 says="How many devices' histories a skill asks for together, in one read of the villa's system.",
                  reached="The next devices are asked for in another read.", told="")
 
 
@@ -455,10 +455,11 @@ class McpClient(HABase):
     def statistics(self, entity_ids, start, end, period="hour", types=("mean", "min", "max")):
         out = {}
         page = limit("statistics.page_rows", 1000, unit="rows", group="read", lo=100, hi=1000,
-                     says="Hourly or daily figures a skill asks for in one page of a device's statistics.",
+                     says="How many hourly or daily figures a skill asks for in one page of a device's statistics.",
                      reached="The skill reads the next page.", told="")
         pages = limit("statistics.max_pages", 200, unit="pages", group="read", lo=1, hi=2000,
-                      says="Pages of statistics read for one device, each statistics.page_rows figures long.",
+                      says="How many pages of a device's statistics a skill reads for one period (how many figures "
+                           "make a page is the next row).",
                       reached="The reading stops there, without saying so.", told="")
         ids = list(dict.fromkeys(entity_ids))
         done: dict[str, list[dict]] = {}

@@ -315,7 +315,7 @@ def _italic(key: str, text: str) -> dict:
 def dump(obj: Any) -> str:
     return json.dumps(obj, default=str)[:limit(
         "errors.telegram_answer_chars", 500, unit="characters", group="keep", lo=100, hi=20000,
-        says="How much of an answer of Telegram's is kept when it refuses something (the log).",
+        says="How much of Telegram's answer is kept in the log when Telegram refuses something.",
         reached="The rest is cut.", told="")]
 
 

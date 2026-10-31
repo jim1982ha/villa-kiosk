@@ -35,10 +35,12 @@ CONTINUOUS_FULL_HOURS = limit("night.continuous_full_hours", 1, unit="hours", gr
                               says="A pump whose usual run lasts at least this many full hours is read as running continuously.",
                               reached="Below it, the pump is read as cycling on and off.", told="")
 DRIFT_MIN_DAYS = limit("night.drift_min_days", 3, unit="days", group="detect", lo=1, hi=30,
-                       says="Days of changed running power needed to call it a gradual drift rather than a new level.",
+                       says="How many days a pump's running power must stay changed to be called a gradual drift "
+                            "rather than a new level.",
                        reached="With fewer days, the change is called new, starting on its first day.", told="person")
 SCHEDULE_MIN_HOURS = limit("night.schedule_min_hours", 1, unit="hours", group="detect", lo=0, hi=24,
-                           says="Shortest planned running time a day must have for the night check to compare it with what ran.",
+                           says="The shortest planned running time a day must have for the night check to compare it "
+                                "with what ran.",
                            reached="Days planned for less are not checked against their schedule.", told="")
 EXPECTED_RAN_HOURS = limit("night.expected_ran_hours", 0.1, unit="hours", group="detect", lo=0, hi=24,
                            says="A pump that was planned to run but ran less than this is reported as not having run.",

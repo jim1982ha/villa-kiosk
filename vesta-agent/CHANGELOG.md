@@ -1,3 +1,15 @@
+## 0.12.427
+
+What you will see:
+- Every row of the Limits tab now says in full what it controls, in a whole sentence: what it changes and when it
+  applies. Rows that showed only a name ("routes.0.cooldown min", "limit usd", "schedule.0.timeout") or a half
+  sentence ("…and longer than it by at least this") now read, for example, "How long after a tripped-sensor alert
+  (a water leak, for one) a repeat on the same device is counted, not sent again." Each row reads on its own.
+- The "How long records are kept" rows say what is kept: "How long report pages, alert copies and files VESTA saved
+  are kept on the villa's disk before the nightly clean-up deletes them; skills put in the trash are deleted then too."
+- A scheduled job's time row names the report it makes ("When the Facility Manager's daily digest runs").
+- Nothing else changes: every value stays as it was.
+
 ## 0.12.426
 
 What you will see:

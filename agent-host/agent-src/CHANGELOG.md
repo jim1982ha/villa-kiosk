@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.413 (31 October 2026)
+
+- Limits tab labels (owner, 2026-10-31: "describes fully and user friendly what each parameter does"): 68 code limits'
+  `says=` rewritten (no key, no "facts"/"neighbours"/"noisy"; Whisper explained); every number of the starter skills'
+  settings files has its own trailing comment, a whole sentence (routes' cooldowns name their route; the investigate /
+  roi-energy / preventive-maintenance chains each name their partner; the playbook's run_change `when` is a block map
+  so each of its four numbers carries its comment; YAML data unchanged); policy.KEEP_SAYS and NUMBERS_SAYS give the
+  keep rows and the two numbers their sentence; a schedule row names its job by its description (reports'
+  descriptions say "Facility Manager"). tests/test_limits.py: every row's label is a sentence (capital, full stop, no
+  "_", no "…" start, no "Home Assistant", no long dash).
+
 ## 0.6.412 (31 October 2026)
 
 - preventive-maintenance: the told P2 message's Status lines come from status_words (watched / not_back, new, with

@@ -50,7 +50,7 @@ import vesta_shared.daily as F  # noqa: E402  (a day of a meter: shared, not ano
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
 MEASURED_DAYS = limit("filtration.measured_days", 7, unit="days", group="read", lo=1, hi=60,
-                      says="Days of a pump's power and water flow read to measure how it really runs.",
+                      says="How many days of a pump's power and water flow are read to measure how it really runs.",
                       reached="Older days are not used for the filtration advice.", told="")
 
 

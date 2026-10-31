@@ -4,8 +4,8 @@ description: Records the owner's answer to a proposal of the monthly report (acc
 
 # ⚠️ ONLY BY ITS COMMAND (owner, 2026-10-13): "accept 3" typed in a chat could mean anything; "/proposal ignore 3" cannot.
 command: proposal
-brain: economy
-limit_usd: 0.2
+brain: economy  # The brain that records the owner's answer to a proposal of the monthly report.
+limit_usd: 0.2  # The most recording one answer to a proposal may cost.
 # what the agent shows a person who sends /proposal alone
 usage: "the monthly report lists Proposal 3; the owner answers /proposal accept 3 (do it), /proposal later 3 (ask again next report) or /proposal ignore 3 (never again)"
 

@@ -59,10 +59,12 @@ from vesta_shared.problems import Problems, alert_line  # noqa: E402  (what is s
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
 DIGEST_OPEN_LINES = limit("reports.digest_open_lines", 8, unit="lines", group="text", lo=1, hi=200,
-                          says="Lines of open problems the facility manager's morning message lists (open alerts are always all listed).",
+                          says="How many open problems the Facility Manager's morning message lists (open alerts are "
+                               "always all listed).",
                           reached="Further open problems are not listed and no 'and N more' is said.", told="")
 SUBJECT_CHARS = limit("reports.subject_chars", 60, unit="characters", group="text", lo=20, hi=400,
-                      says="Longest name of what a problem is about, when the villa's device list does not name it.",
+                      says="The longest name of what a problem is about, when the villa's device list does not name "
+                           "it.",
                       reached="A longer name is cut.", told="")
 from vesta_shared.page import bars, line, linked, number, pairs, say, templates  # noqa: E402  (the charts, the numbers, the sentences: shared)
 

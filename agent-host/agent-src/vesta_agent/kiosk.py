@@ -67,7 +67,7 @@ def fault_title_chars() -> int:
 
 def fault_note_chars() -> int:
     return limit("kiosk.fault_note_chars", 2000, unit="characters", group="text", lo=200, hi=20000,
-                 says="The longest note a fault keeps in the VESTA Kiosk (what the facility manager reads).",
+                 says="The longest note a fault keeps in the VESTA Kiosk (what the Facility Manager reads).",
                  reached="The rest of the note is cut, with no mark.", told="")
 
 

@@ -50,15 +50,16 @@ SINCE = "Reached this chat outside this conversation since your last answer here
 
 def shown() -> int:
     return limit("ai.chat_facts_shown", 5, unit="items", group="ai", lo=1, hi=50,
-                 says="What reached a chat outside its conversation (a report, an alert, a button pressed) that the AI "
-                      "is told with a person's message: the latest ones since its last answer there.",
+                 says="How many of those things, the latest first, the AI is told with a person's next message in "
+                      "that chat.",
                  reached="The earlier ones are counted in an \"… N earlier\" line.", told="")
 
 
 def kept() -> int:
     """At most this many items are kept per chat until the AI answers there (the latest)."""
     return limit("ai.chat_facts_kept", 20, unit="items", group="keep", lo=5, hi=500,
-                 says="What reached a chat outside its conversation, kept until the AI next answers there.",
+                 says="How many of the things that reached a chat since the AI last answered there (a report, an "
+                      "alert, a button pressed) are kept for its next answer.",
                  reached="The oldest are dropped; the AI is told how many it does not see.", told="")
 
 

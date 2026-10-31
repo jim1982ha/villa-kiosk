@@ -51,7 +51,7 @@ def beat_seconds() -> int:
     """How often the beat is written while the socket is up (the alert desk's "villa silent" reads its age)."""
     return limit("villa.beat_seconds", 60, unit="seconds", group="read", lo=10, hi=300,
                  says="How often the agent records that its connection to the villa's system is up; the alert desk "
-                      "calls the villa silent when that record is older than its villa_silent_minutes.",
+                      'calls the villa silent when that record is older than its own "no contact" time.',
                  reached="Longer: a cut is noticed up to this much later.", told="")
 
 

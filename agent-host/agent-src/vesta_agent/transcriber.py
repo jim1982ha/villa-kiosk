@@ -97,8 +97,8 @@ def timeout_s() -> int:
 
 def connect_s() -> float:
     return limit("voice.whisper_connect_s", 3, unit="seconds", group="run", lo=1, hi=30,
-                 says="How long the Agent waits to reach Whisper directly with a voice message (never more than the "
-                      "voice message has left).",
+                 says="How long the Agent waits to reach the speech-to-text service (Whisper) directly with a voice "
+                      "message (never more than the voice message has left).",
                  reached="The voice message goes to the next way of writing it out.", told="")
 
 

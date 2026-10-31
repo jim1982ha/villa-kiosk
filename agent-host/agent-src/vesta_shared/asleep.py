@@ -32,7 +32,8 @@ from .past import History
 from .timeutil import lasting
 
 LAST_REAL_DAYS = limit("asleep.last_real_days", 7, unit="days", group="read", lo=1, hi=60,
-                       says="Days of history read back for the last real state of a device unavailable by design.",
+                       says="How far back the history is read to find the last real state of a device that sleeps by "
+                            "design (unavailable between its reports).",
                        reached="Older than this, it is said to have sent no report for that long.", told="person")
 
 

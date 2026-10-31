@@ -55,47 +55,53 @@ from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the VE
 CONTROL_DOMAINS = ("switch", "light", "fan", "input_boolean", "valve", "siren", "humidifier")
 OFF_STATES, ON_STATES = {"off", "closed"}, {"on", "open"}
 MAX_LINES = limit("investigate.max_lines", 120, unit="lines", group="ai", lo=10, hi=2000,  # enough for a night
-                  says="Lines of one device's periods, and of the other changes around an incident, handed to the AI.",
+                  says="How many lines of one device's periods, and of the other changes around an incident, are "
+                       "handed to the AI.",
                   reached="The rest is counted in an \"… N more\" line.", told="ai")
 FIND_MATCHES = limit("investigate.find_matches", 20, unit="devices", group="read", lo=1, hi=200,
-                     says="Devices an investigation may find for the words the person used.",
+                     says="How many devices an investigation may find for the words the person used.",
                      reached="A further matching device is never offered.", told="")
 SAME_DEVICE_SEARCH = limit("investigate.same_device_search", 40, unit="devices", group="read", lo=1, hi=500,
-                           says="Devices searched by serial number when looking for the other parts of the same box.",
+                           says="How many devices are searched by serial number when looking for the other parts of "
+                                "the same box.",
                            reached="Further parts of the same box are not found.", told="")
 SAME_ROOM_SEARCH = limit("investigate.same_room_search", 60, unit="devices", group="read", lo=1, hi=500,
-                         says="Devices of the same room read when looking for what could share a supply.",
+                         says="How many devices of the same room are read when looking for what could share a power "
+                              "supply.",
                          reached="The room's further devices are not looked at.", told="")
 NEIGHBOURS_SHOWN = limit("investigate.neighbours_shown", 12, unit="devices", group="ai", lo=1, hi=200,
-                         says="Neighbours named per line (same box, same room) when an investigation finds a device.",
+                         says="How many related devices (in the same box or the same room) are named per line when "
+                              "an investigation finds a device.",
                          reached="The further neighbours are not named.", told="")
 TIMELINE_DEVICES = limit("investigate.timeline_devices", 12, unit="devices", group="read", lo=1, hi=100,
-                         says="Devices read in one timeline of an investigation.",
+                         says="How many devices one timeline of an investigation reads.",
                          reached="The further devices named are not read.", told="")
 LEVEL_CHANGES_SHOWN = limit("investigate.level_changes_shown", 20, unit="lines", group="ai", lo=1, hi=500,
-                            says="Level changes of one device listed in its timeline.",
+                            says="How many level changes of one device its timeline lists.",
                             reached="The further level changes are not listed.", told="")
 AROUND_LISTED = limit("investigate.around_listed", 40, unit="devices", group="ai", lo=1, hi=1000,
-                      says="Devices that stopped answering, answered again, and notifications sent, listed around an "
-                           "incident (each list).",
+                      says="How many devices that stopped answering, devices that answered again and notifications "
+                           "sent are listed around an incident (each list).",
                       reached="The further ones are not listed.", told="")
 NOISY_NAMED = limit("investigate.noisy_named", 8, unit="devices", group="ai", lo=1, hi=200,
-                    says="Constantly changing devices named as left out of the context around an incident.",
+                    says="How many constantly changing devices are named as left out of what is read around an "
+                         "incident.",
                     reached="The further ones are left out without being named.", told="")
 TRACES_READ = limit("investigate.traces_read", 10, unit="runs", group="read", lo=1, hi=100,
-                    says="Recent runs of an automation read to see what it actually did.",
+                    says="How many recent runs of an automation are read to see what it actually did.",
                     reached="Older runs are not read (the villa's system keeps only its last few anyway).", told="")
 RECORD_LINE_CHARS = limit("investigate.record_line_chars", 120, unit="characters", group="text", lo=20, hi=2000,
-                          says="Length of each VESTA alert or night-check finding quoted in an investigation.",
+                          says="How long each VESTA alert or night-check finding quoted in an investigation may be.",
                           reached="The line is cut.", told="")
 WRONG_IDS_NAMED = limit("investigate.wrong_ids_named", 3, unit="names", group="text", lo=1, hi=50,
-                        says="Wrongly written device names quoted back when the AI asks for a timeline.",
+                        says="How many wrongly written device names are quoted back when the AI asks for a timeline.",
                         reached="The further wrong names are not quoted.", told="")
 ERROR_CHARS = limit("investigate.error_chars", 300, unit="characters", group="text", lo=50, hi=5000,
-                    says="Length of the error an investigation step hands back when it fails.",
+                    says="How long the error an investigation step hands back when it fails may be.",
                     reached="The error text is cut.", told="")
 BASELINE_DAYS = limit("investigate.baseline_days", 3, unit="days", group="read", lo=0, hi=30,
-                      says="Days before the period read as a device's normal, when the AI names no other number.",
+                      says="How many days before the period are read as a device's normal, when the AI asks for no "
+                           "other number.",
                       reached="Older days are not part of the normal.", told="ai")
 # ⚠️ THE THRESHOLDS ARE THE SKILL'S, NOT THE SCRIPT'S (architecture review 32; the 0.12.80 rule): settings.yaml, with a
 # villa's own villa.settings.yaml on top. A missing one is named, never guessed (`th`).

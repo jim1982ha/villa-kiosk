@@ -9,44 +9,44 @@
 
 defaults:
   severity: P3
-  cooldown_min: 60
+  cooldown_min: 60  # How long after an alert a repeat on the same device is counted, not sent again, for an alert whose kind below sets no time of its own.
   ladder: true          # Done / Need help with the chase (reask_minutes, then escalate_minutes)
 
 routes:
   - blueprint: critical_binary_trip
     severity: P1
-    cooldown_min: 30
+    cooldown_min: 30  # How long after a tripped-sensor alert (a water leak, for one) a repeat on the same device is counted, not sent again.
     check: "Go to the device named. If it is water, close the supply valve of that room and photograph the floor."
   - blueprint: critical_presence_guard
     severity: P1
-    cooldown_min: 15
+    cooldown_min: 15  # How long after an alert of activity while the villa is empty a repeat on the same device is counted, not sent again.
     intrusion: true
     check: "Activity while the villa is marked empty. Look at the camera before anything else."
   - blueprint: critical_condition
     severity: P2
-    cooldown_min: 120
+    cooldown_min: 120  # How long after an alert of a device in a wrong state a repeat on the same device is counted, not sent again.
     check: "Check the device named and put it right."
   - blueprint: critical_watchdog
     severity: P2
-    cooldown_min: 240
+    cooldown_min: 240  # How long after an alert of a device that stopped answering a repeat on the same device is counted, not sent again.
     check: "Power and network of the device named, until it is back."
   - blueprint: critical_schedule
     severity: P2
-    cooldown_min: 720
+    cooldown_min: 720  # How long after an alert of equipment that did not run as scheduled a repeat on the same device is counted, not sent again.
     check: "The equipment named did not run as scheduled: check its timer, breaker and supply."
   - blueprint: critical_system
     severity: P2
-    cooldown_min: 720
+    cooldown_min: 720  # How long after an alert of a guarded automation found off or missing a repeat on the same device is counted, not sent again.
     check: "A guarded automation is off or missing after a restart. Switch it back on in the villa's system."
   - prefix: critical_internet
     severity: P1
-    cooldown_min: 30
+    cooldown_min: 30  # How long after the villa-silent alert (no contact with the villa's system) a repeat is counted, not sent again.
     check: "Raised by the agent itself (villa silent). Check the power, the router and the internet link."
   - prefix: critical_
     severity: P2
   - prefix: maintenance_
     severity: P3
-    cooldown_min: 1440
+    cooldown_min: 1440  # How long after a maintenance alert of the villa's automations a repeat on the same device is counted, not sent again.
   - prefix: roi_
     severity: P4
     ladder: false
@@ -55,7 +55,7 @@ routes:
     ladder: false
   - prefix: PM-
     severity: P3        # findings from the preventive-maintenance batch
-    cooldown_min: 1440
+    cooldown_min: 1440  # How long after a finding of the night check a repeat on the same device is counted, not sent again.
 
 # A VESTA rule whose kind (blueprint) has no route above, and which names no priority itself: by its name — its
 # entity id without "automation." — starting with `critical_`, else the rest (owner, 2026-10-19: "if the alert name
@@ -70,8 +70,8 @@ unrouted:
 siren:
   # The siren never fires on a single signal. Two independent signals inside
   # the window, the villa empty, and one explicit human approval.
-  window_min: 5
-  min_signals: 2
+  window_min: 5  # How close together two independent signals must come for the siren to be proposed (the villa empty, and the owner approving).
+  min_signals: 2  # How many independent signals inside the siren's window are needed; the siren never fires on a single one.
   # The villa's one "is it empty?" is the VESTA Kiosk's pick (Settings › Villa: on = empty, the sensor its presence
   # tile follows), handed to the agent at every heartbeat (vesta_shared.occupancy). No pick: never empty, no siren.
   # The human step is the owner's Approve button (the siren is an owner-only device in
@@ -105,9 +105,9 @@ chase:
 # The alert desk's timings (vesta_shared.params.behaviour): a villa helper input_number.vesta_<name> overrides
 # one; a villa's own villa.rules.yaml may change them too (kept by updates). Moved here from the shared library.
 behaviour:
-  reask_minutes: 15            # the facility manager is asked again after this long without an answer
-  escalate_minutes: 45         # then the owner is told
-  villa_silent_minutes: 30     # no contact with the villa's system this long: the villa is silent (P1)
-  alert_fatigue_per_month: 20  # an automation firing more often than this in alerts.fatigue_window_days (Limits), unanswered, is named
-  reopen_hours: 4              # an alert back within this long after its incident closed reopens it ("Back again")
-  clear_minutes: 10            # what an alert claims no longer holding this long ends it (the tick reads it again)
+  reask_minutes: 15            # How long the Facility Manager has to answer an alert before being asked again.
+  escalate_minutes: 45         # How long after the Facility Manager was first asked, still with no answer, the owner is told.
+  villa_silent_minutes: 30     # How long without contact with the villa's system before the villa is called silent (a P1 alert).
+  alert_fatigue_per_month: 20  # An automation alerting more often than this, unanswered, is named as one to retune.
+  reopen_hours: 4              # An alert that comes back within this long after its incident closed reopens it ("Back again") instead of starting a new one.
+  clear_minutes: 10            # How long what an alert reported must stay gone before the alert is ended (read again every few minutes).

@@ -74,7 +74,8 @@ class History:
         for r in self.db.execute("select id, at, place, what, target, undone_by, before is not null as had_before, "
                                  "after is not null as had_after from changes order by id desc limit ?", (most or limit(
                                      "page.changes_listed", 200, unit="changes", group="keep", lo=20, hi=5000,
-                                     says="Changes made on the VESTA Agent page that Overview › Page changes lists.",
+                                     says="How many changes made on the VESTA Agent page Overview › Page changes "
+                                          "lists.",
                                      reached="Older changes are not listed.", told=""),)):
             d = dict(r)
             d["target"] = json.loads(d["target"])

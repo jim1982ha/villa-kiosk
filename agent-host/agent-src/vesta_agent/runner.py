@@ -227,7 +227,7 @@ def make_guard(allowed: set[str], state, who: str, searched: list | None = None)
             if name == WEB_SEARCH and searched is not None:
                 searched.append(str(((input_data or {}).get("tool_input") or {}).get("query") or "")[:limit(
                     "ai.web_search_chars", 160, unit="characters", group="keep", lo=40, hi=2000,
-                    says="How much of each web search's words is kept as a page's source.",
+                    says="How much of the text of each web search is kept as a source on a page the AI writes.",
                     reached="The rest of the words is cut.", told="")])
             return {}
         if name not in denied:

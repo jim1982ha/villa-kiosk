@@ -163,6 +163,18 @@ KEEP = {
     "files_days": (90, 7, 3650),            # its out folder: alert copies, report pages, saved files
     "daily_figures_months": (24, 2, 120),   # the skills' daily figures per device (the baselines read 30 days)
 }
+#: What each of KEEP keeps, in the words the Limits tab shows on its row (owner, 2026-10-31: every row says in full
+#: what it controls; "How long the agent keeps: files days." did not). housekeeping.py deletes by these, nightly.
+KEEP_SAYS = {
+    "runs_days": "How long each AI run is kept for the Costs tab and its list of every run.",
+    "records_days": "How long the agent's other records are kept: refusals, voice messages, decided approvals, "
+                    "Continue offers and the history of changes made on this page.",
+    "conversations_days": "How long the AI's conversation transcripts are kept (a conversation resumes for a day at "
+                          "most).",
+    "files_days": "How long report pages, alert copies and files VESTA saved are kept on the villa's disk before the "
+                  "nightly clean-up deletes them; skills put in the trash are deleted then too.",
+    "daily_figures_months": "How long the skills keep each device's daily figures, from which its normal is learned.",
+}
 #: A value the file leaves out. The starter policy.example.yaml writes the same ones.
 #: What a person policy.yaml does not know reads, wherever they write or press (one wording: a button press in
 #: actions.py said "registered with VESTA", the others "the VESTA Agent" — review 6).
@@ -173,6 +185,11 @@ NOT_REGISTERED = "You are not registered with the VESTA Agent."
 NUMBERS = {
     "approval_ttl_minutes": (15, 1, 1440),  # how long an Approve or Refuse button works
     "siren_auto_off_min": (3, 1, 60),       # when a siren the agent switched on stops
+}
+#: What each of NUMBERS does, as the Limits tab's row says it (the Rules tab's short title is WORDS, beside its input)
+NUMBERS_SAYS = {
+    "approval_ttl_minutes": "How long the Approve and Refuse buttons of a request keep working after it is sent.",
+    "siren_auto_off_min": "How long a siren the agent switched on sounds before the agent switches it off.",
 }
 
 DEFAULTS = {"act_enabled": False, **{k: d for k, (d, _lo, _hi) in NUMBERS.items()}}

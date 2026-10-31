@@ -53,20 +53,24 @@ import rules as R  # noqa: E402
 
 # The night check's reading windows written in code, set on the Limits tab (vesta_shared.limits)
 WINDOW_MARGIN_DAYS = limit("night.window_margin_days", 2, unit="days", group="read", lo=0, hi=14,
-                           says="Extra days read before the normal and confirm days for each pump's hourly power.",
+                           says="How many extra days of each pump's hourly power are read before the days that set "
+                                "its normal and the days that confirm a finding.",
                            reached="Days before this window are not read for the night check's power figures.", told="")
 RAW_POWER_DAYS = limit("night.raw_power_days", 1, unit="days", group="read", lo=1, hi=7,
-                       says="Days of second-by-second power read to find each run of a pump and how much it weakened.",
+                       says="How many days of second-by-second power are read to find each run of a pump and how "
+                            "much it weakened.",
                        reached="Runs before this window are not judged for weakening.", told="")
 BATTERY_READ_DAYS = limit("night.battery_read_days", 14, unit="days", group="read", lo=2, hi=90,
-                          says="Days of daily battery levels the night check reads to see a battery falling.",
+                          says="How many days of daily battery levels the night check reads to see a battery "
+                               "falling.",
                           reached="A battery's trend is judged on these days only, whatever its trend setting says.",
                           told="")
 LEVEL_READ_DAYS = limit("night.level_read_days", 2, unit="days", group="read", lo=1, hi=30,
-                        says="Days of hourly temperature and humidity the night check reads against each room's maximum.",
+                        says="How many days of hourly temperature and humidity the night check reads against each "
+                             "room's maximum.",
                         reached="Older highs are not looked at.", told="")
 MIN_RUN_MINUTES = limit("night.min_run_minutes", 30, unit="minutes", group="detect", lo=1, hi=600,
-                        says="Shortest pump run the night check judges for losing power during the run.",
+                        says="The shortest pump run the night check judges for losing power during the run.",
                         reached="Shorter runs are never judged for weakening; nobody is told.", told="")
 
 STATE_RULES = {"PM-POWER-CHANGE", "PM-ENERGY-CHANGE", "PM-UNAVAILABLE",

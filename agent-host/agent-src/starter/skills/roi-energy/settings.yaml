@@ -3,13 +3,13 @@
 # change any of them (kept by updates). Moved out of the code (architecture review 7, 2026-10-07).
 behaviour:
   on_threshold_fraction: 0.2    # fraction of running power that counts as "on", the villa's one definition, held equal in every skill: change it with the helper vesta_on_threshold_fraction
-  blocks_per_day: 2             # filtration blocks a day (a pool's own <slug>_blocks_per_day helper first)
+  blocks_per_day: 2             # Into how many blocks a day the pool's filtration is split (a pool's own blocks-a-day helper in the villa's system comes first).
 guide:
-  min_period_days: 5            # a period with fewer days of data is not compared: the data is said to be incomplete
+  min_period_days: 5            # A period with fewer days of data than this is not compared: the report says its data is incomplete.
 proposals:
-  unmetered_min_pct: 50         # this much of the electricity on no meter: propose metering the largest circuits
-  coverage_target_pct: 80       # what that metering would bring the report's coverage to
-  schedule_min_delta_hours: 0.5 # a filtration change smaller than this is not proposed
-  waste_min_vs_baseline_pct: 60 # a load this much above its usual level is worth a look…
-  waste_min_kwh: 5              # …when it used at least this much over the period…
-  waste_min_baseline_kwh: 2     # …and its usual level is at least this much
+  unmetered_min_pct: 50         # When this much of the electricity goes through no meter, the report proposes metering the largest circuits.
+  coverage_target_pct: 80       # How much of the electricity the report says that proposed metering would cover.
+  schedule_min_delta_hours: 0.5 # A change of the pool's filtration time smaller than this is not proposed.
+  waste_min_vs_baseline_pct: 60 # A load using this much more than its usual level is proposed as worth a look, when it is also large enough by the two energy minimums.
+  waste_min_kwh: 5              # A load is proposed as worth a look only when it used at least this much energy over the period.
+  waste_min_baseline_kwh: 2     # A load is proposed as worth a look only when its usual level is at least this much, so a tiny load is never named.

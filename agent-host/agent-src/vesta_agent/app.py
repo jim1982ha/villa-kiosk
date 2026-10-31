@@ -940,7 +940,7 @@ class Vesta:
                 continue
             ans = script_run.run_command(self.s, self.state, sk, sk.before_answer, timeout=limit(
                 "chat.status_check_timeout_s", 60, unit="seconds", group="run", lo=5, hi=600,
-                says="How long a skill's check before each chat answer (the villa's status) may take.",
+                says="How long the skill check that reads the villa's status before each chat answer may take.",
                 reached="The AI is told the check could not run just now, and says so if asked.", told="ai"))
             text = (ans.result() or {}).get("text") if ans.ok else None
             if text:

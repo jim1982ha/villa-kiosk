@@ -24,7 +24,7 @@ from vesta_shared import limits
 from vesta_shared.daily import VILLA_WIDE
 
 from ..places import where
-from ..policy import DEFAULT_BEHAVIOUR, KEEP, NUMBERS, PROFILES, WORDS, Policy, reset_words, value_words
+from ..policy import DEFAULT_BEHAVIOUR, KEEP, KEEP_SAYS, NUMBERS, NUMBERS_SAYS, PROFILES, Policy, reset_words, value_words
 from .changes import Refused, _read
 from .policy_doc import _yaml
 
@@ -33,9 +33,9 @@ SKILL_GROUP, POLICY_GROUP = "skills", "rules"
 
 
 #: What a villa-wide setting (vesta_shared.daily.VILLA_WIDE) is, on its one row
-WIDE_WORDS = {"on_threshold_fraction": "Running, for the whole villa: the share of a device's typical peak above which "
-                                       "it counts as running. One value for every skill that reads it, so a device runs "
-                                       "or not the same way in every message and report."}
+WIDE_WORDS = {"on_threshold_fraction": "The share of a device's usual peak power above which it counts as running, for "
+                                       "the whole villa: one value for every skill, so a device runs or not the same "
+                                       "way in every message and report."}
 
 #: A setting's unit, read from its own name (owner, 2026-10-23: "always show the units in the value column"): ONE rule
 #: for every skill's and every rule's number, so a new setting shows its unit without anyone listing it. The counts a
@@ -354,12 +354,18 @@ class LimitsTab:
         for i, job in enumerate(jobs if isinstance(jobs, list) else []):
             if not isinstance(job, dict) or not isinstance(job.get("when"), str):
                 continue
-            what = job.get("name") or str(job.get("run") or "").split(" ")[0] or f"job {i + 1}"
+            # the job said as what it makes (owner, 2026-10-31: "When the fm-daily job runs" named it by its key): its
+            # own description, else its script's, up to its first aside; its name only when it has neither
+            script = str(job.get("run") or "").split(" ")[0]
+            scripts = doc.get("scripts") if isinstance(doc.get("scripts"), dict) else {}
+            told = job.get("description") or (scripts.get(script) or {}).get("description") or ""
+            what = re.split(r" \(|, ", str(told).strip(), maxsplit=1)[0] or \
+                f"the {job.get('name') or script or f'job {i + 1}'} job"
             rows.append({"alias": job.get("name"),
                          "id": {"src": "skill", "skill": skill, "file": "skill.yaml", "path": ["schedule", i, "when"]},
                          "group": SKILL_GROUP, "section": skill, "name": f"skill.yaml › schedule.{i}.when",
-                         "label": f"When the {what} job runs, villa time: HH:MM every day, Mon HH:MM each week, "
-                                  "D HH:MM each month.",
+                         "label": f"When {what} runs, in villa time: HH:MM every day, Mon HH:MM each week, D HH:MM "
+                                  "each month.",
                          "value": job["when"], "default": job["when"], "kind": "time", "choices": None, "unit": "villa time",
                          "lo": None, "hi": None, "reached": "", "told": "",
                          "also": (f"Also in Skills › {skill} › Files › skill.yaml. Saving it here makes this skill your "
@@ -406,9 +412,8 @@ class LimitsTab:
         value = f"{days:.1f} days" if days is not None else "not measured yet"
         return [{"id": {"src": "measured", "key": "detailed_history_days"}, "group": "keep", "section": "villa",
                  "name": "detailed history kept (measured)",
-                 "label": "How long the villa's system keeps every change and its logbook, measured each night on the "
-                          "villa (the oldest change it still holds). Older periods are read from its long-term "
-                          "figures, said as such.",
+                 "label": "How long the villa's system keeps every change and its logbook, measured each night (the "
+                          "oldest change it still holds); older periods are read from its long-term figures.",
                  "value": value, "default": value, "kind": "measured", "choices": None, "unit": "", "lo": None,
                  "hi": None, "reached": "Before it, only long-term figures of measured values remain (one an hour); "
                                         "doors, locks and switches have none.", "told": TOLD["person"],
@@ -441,11 +446,11 @@ class LimitsTab:
              "chat's language."),
             (["settings", "reply_limit_usd"], st.get("reply_limit_usd", DEFAULT_BEHAVIOUR["reply_limit_usd"]),
              DEFAULT_BEHAVIOUR["reply_limit_usd"], "number", None, 0.05, None, ai,
-             "The most one chat answer may cost (US$), and one translation of an alert card's text. Reached: the "
-             "answer stops and offers Continue; the card stays in English."),
+             "The most one chat answer, or one translation of an alert card's text, may cost. When it is reached, "
+             "the answer stops and offers Continue, and the card stays in English."),
             (["settings", "conversation_reset"], st.get("conversation_reset", DEFAULT_BEHAVIOUR["conversation_reset"]),
              DEFAULT_BEHAVIOUR["conversation_reset"], "choice", [[k, w] for k, w in reset_words().items()], None, None, ai,
-             "When a chat's earlier messages are forgotten by the AI."),
+             "When the AI forgets a chat's earlier messages and starts afresh."),
         ]
         # one brain and one limit per run for all the AI jobs of a skill (owner, 2026-10-20)
         for skill, (pair, start) in self._skill_pairs(raw).items():
@@ -453,15 +458,15 @@ class LimitsTab:
                 rows.append((["settings", "skill_ai", skill, "brain"], pair["brain"], start["brain"], "choice",
                              list(PROFILES), None, None, ai, f"The brain every AI job of the {skill} skill runs with."))
                 rows.append((["settings", "skill_ai", skill, "limit_usd"], pair["limit_usd"], start["limit_usd"], "number",
-                             None, 0.05, None, ai, f"The most one run of any AI job of the {skill} skill may cost (US$)."))
+                             None, 0.05, None, ai, f"The most one run of any AI job of the {skill} skill may cost."))
         keep = st.get("keep") if isinstance(st.get("keep"), dict) else {}
         for k, (default, lo, hi) in KEEP.items():
             rows.append((["settings", "keep", k], keep.get(k, default), default, "number", None, lo, hi,
-                         "Also in Rules (file), under settings › keep.", f"How long the agent keeps: {k.replace('_', ' ')}."))
+                         "Also in Rules (file), under settings › keep.", KEEP_SAYS[k]))
         # the agent's two numbers, bounded by the table its check reads (policy.NUMBERS), each with the Rules card it is on
         for k, (default, lo, hi) in NUMBERS.items():
             rows.append(([k], raw.get(k, default), default, "number", None, lo, hi,
-                         f"Also in {where({'siren_auto_off_min': 'protected'}.get(k, 'actions'))}.", WORDS[k]))
+                         f"Also in {where({'siren_auto_off_min': 'protected'}.get(k, 'actions'))}.", NUMBERS_SAYS[k]))
         return [{"id": {"src": "policy", "path": p}, "group": POLICY_GROUP, "section": "policy.yaml",
                  "name": ".".join(p), "label": label, "value": v, "default": d, "kind": kind, "choices": ch,
                  "unit": unit_of(p[-1]) if kind == "number" else "", "lo": lo, "hi": hi, "reached": "", "told": "",

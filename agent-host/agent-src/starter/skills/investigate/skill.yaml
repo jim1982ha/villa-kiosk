@@ -7,8 +7,8 @@ description: 'Investigates what happened and why: an incident, a fault, damage, 
 command: investigate
 # Its own brain and limit per answer (the Rules page's "Brain for chat answers" and "Limit per reply" stay for every
 # other chat answer): an investigation reasons over many steps, the everyday Economy brain skipped some.
-brain: auto
-limit_usd: 3
+brain: auto  # The brain an investigation thinks with: it reasons over many steps, so it has its own instead of the chat answers' brain.
+limit_usd: 3  # The most one investigation answer may cost: it has its own instead of the chat answers' limit per reply.
 # what the agent shows a person who sends /investigate alone
 usage: "/investigate why did the water heater stop last night?"
 # ⚠️ OFFERED FROM A CHAT (owner, 2026-10-19): a reply that tells the person to write /investigate carries this button;

@@ -42,8 +42,8 @@ PAGE = 200
 
 def catch_up_hours() -> float:
     return limit("alerts.catch_up_hours", 6, unit="hours", group="read", lo=1, hi=48,
-                 says="How far back the agent looks, when it starts, for the villa's alerts handed to it while it was not "
-                      "listening (an update, a restart), and for what people sent it on Telegram meanwhile.",
+                 says="How far back the agent looks, when it starts, for alerts the villa handed it and Telegram "
+                      "messages sent to it while it was stopped (an update, a restart).",
                  reached="An alert handed over before that is not taken in; the villa's own message was sent anyway.",
                  told="")
 

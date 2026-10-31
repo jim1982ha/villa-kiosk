@@ -24,7 +24,8 @@ log = logging.getLogger("vesta.request")
 def kept() -> int:
     """The searches a request keeps (a script is told the first ai.web_searches_kept: tools.run_skill_script)."""
     return limit("ai.request_searches_kept", 40, unit="searches", group="keep", lo=1, hi=500,
-                 says="Web searches one investigation keeps across its turns (a Continue, its page).",
+                 says="How many web searches one investigation keeps from one step to the next (after Continue, and "
+                      "for its page).",
                  reached="Older searches of that investigation are forgotten.", told="")
 
 

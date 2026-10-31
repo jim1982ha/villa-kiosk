@@ -44,8 +44,8 @@ FEATURE = ("villa", "occupied")
 def min_days() -> int:
     """How many earlier days in the same state a normal needs before it is judged on them alone."""
     return limit("occupancy.min_days", 5, unit="days", group="detect", lo=2, hi=30,
-                 says="Days in the same state (occupied, or empty) a usual level needs before a day is compared with "
-                      "them alone.",
+                 says="How many days of the same kind (occupied, or empty) are needed before a day is compared only "
+                      "with days of its own kind.",
                  reached="With fewer, a day is compared with every earlier day, and only a use occupancy cannot "
                          "explain is said (less while occupied, more while empty).", told="")
 

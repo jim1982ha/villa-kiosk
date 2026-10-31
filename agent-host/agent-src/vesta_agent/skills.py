@@ -114,7 +114,7 @@ def out_files(out_root: str, runs: int | None = None) -> list[tuple[str, float]]
         recent = sorted((d for d in os.listdir(runs_dir) if os.path.isdir(os.path.join(runs_dir, d))),
                         key=lambda d: os.path.getmtime(os.path.join(runs_dir, d)), reverse=True)[:runs or limit(
                             "skills.test_runs_offered", 10, unit="runs", group="keep", lo=1, hi=200,
-                            says="Report runs whose files an Offline Test on the Skills tab may read.",
+                            says="How many report runs an Offline Test on the Skills tab may read the files of.",
                             reached="Older runs' files are not offered.", told="")]
     except OSError:
         recent = []

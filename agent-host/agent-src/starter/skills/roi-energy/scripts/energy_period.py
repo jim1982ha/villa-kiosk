@@ -41,19 +41,19 @@ import vesta_shared.energy_setup as E  # noqa: E402  (the Energy settings' rule,
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
 BASELINE_DAYS = limit("energy.baseline_days", 30, unit="days", group="read", lo=7, hi=365,
-                      says="Days before a period read to give each device its usual daily energy.",
+                      says="How many days before a period are read to give each device its usual daily energy.",
                       reached="Older days do not count in the usual figure.", told="")
 MOVERS = limit("energy.movers", 5, unit="devices", group="ai", lo=1, hi=100,
-               says="Devices listed as having changed most since the previous period.",
+               says="How many devices are listed as having changed most since the previous period.",
                reached="Smaller changes are not listed as changes (every device stays in the full list).", told="")
 MOVER_MIN_KWH = limit("energy.mover_min_kwh", 1, unit="kWh", group="detect", lo=0, hi=1000,
                       says="Smallest change in a device's energy since the previous period that counts as a change.",
                       reached="Smaller changes are not listed as changes.", told="")
 HEADLINE_LOADS = limit("energy.headline_loads", 3, unit="devices", group="text", lo=1, hi=20,
-                       says="Largest consumers named in the energy headline.", reached="The others are not named there.",
+                       says="How many of the largest consumers the energy headline names.", reached="The others are not named there.",
                        told="")
 LOADS_PRINTED = limit("energy.loads_printed", 8, unit="devices", group="ai", lo=1, hi=500,
-                      says="Consumers the energy figures hand the AI, largest first.",
+                      says="How many consumers the energy figures hand the AI, largest first.",
                       reached="The AI never sees the smaller ones, and is not told they exist.", told="")
 
 

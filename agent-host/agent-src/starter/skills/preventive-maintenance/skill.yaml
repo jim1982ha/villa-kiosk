@@ -14,5 +14,5 @@ rechecks: all
 schedule:
   - when: "02:00"             # code only: zero tokens; the reports skill's fm-daily digest carries the words
     run: "nightly.py --out nightly.json"
-    timeout: 1800
+    timeout: 1800  # How long the night check may run before it is stopped.
     kiosk: nightly_check      # the Kiosk's (i) says this job's time (the heartbeat's cadence)

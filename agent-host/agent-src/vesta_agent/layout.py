@@ -126,7 +126,8 @@ def parts(body: str = "", status: str = "", head=None, lead: str = "", mark: str
 def middle_floor() -> int:
     """What the middle (the alert, the action) always keeps, however long the head's history and the status are."""
     return limit("telegram.alert_middle_chars", 300, unit="characters", group="text", lo=50, hi=2000,
-                 says="What an alert's message always keeps of the alert itself, however long its history.",
+                 says="How much of the alert itself an alert's Telegram message always keeps, however long its story "
+                      "grows.",
                  reached="The oldest history lines go first (\"… N earlier notices\"), then the alert is shortened "
                          "with \"…\".", told="person")
 

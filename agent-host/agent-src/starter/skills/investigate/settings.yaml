@@ -2,46 +2,42 @@
 # villa.settings.yaml may change any of them (kept by updates). Moved out of the script (architecture review 32).
 # How the AI reads the records for an investigation (SKILL.md names them; the AI is given their values).
 guide:
-  lookback_days: 7            # with no date in the question, the investigation starts from this many days back
-  lead_hours: 2               # the reading starts at least this long before the first sign of trouble
-  web_searches_max: 5         # web searches at most for one investigation
+  lookback_days: 7            # When a question names no date, how many days back the investigation starts.
+  lead_hours: 2               # How long before the first sign of trouble the investigation starts reading.
+  web_searches_max: 5         # The most web searches one investigation may make.
 behaviour:
   # "Running" is the villa's one definition (the night check's, the energy figures', the weekly page's): an hour whose peak
   # passes this share of the device's typical peak ran. Keep it equal to the other skills' (a test holds them equal):
   # to change it for the whole villa, set the villa helper input_number.vesta_on_threshold_fraction instead.
   on_threshold_fraction: 0.2
-  flat_spread: 0.5            # a device whose readings spread less than this share of its highest is read as levels, not runs
-  longer_ratio: 2             # a run longer than this many times its longest normal one is flagged…
-  longer_extra_s: 300         # …and longer than it by at least this
-  level_high_ratio: 1.5       # a run drawing this many times its usual level is flagged
-  level_low_ratio: 0.6        # …and one drawing less than this share of it
-  offline_min_s: 60           # a device silent, without a value or reading exactly 0 (supply off) this long is flagged
-  zero_rest_share: 0.05       # a device whose rest reads exactly 0 this share of the time on the days before rests at
-                              # 0: its 0 is rest, not "no power" (a pump idling between 0 and 1.2 W)
-  rest_high_share: 0.02       # a rest reading above its usual rest by this share of the gap up to its running level,
-                              # for level_change_gap_s, is flagged (a pump drawing 37 W between runs instead of 1 W)
-  starts_ratio: 3             # a device that started this many times more often than in the same hours before…
-  starts_min: 6               # …and at least this many times, is flagged as starting far more often than usual
+  flat_spread: 0.5            # A device whose readings vary less than this share of its highest reading is read as steady levels (a temperature), not as runs.
+  longer_ratio: 2             # A run is flagged as too long when it lasts this many times its longest normal run, and also beyond it by the extra time for a long run.
+  longer_extra_s: 300         # The extra time a run must last beyond its longest normal run, besides being that many times longer, to be flagged as too long.
+  level_high_ratio: 1.5       # A run drawing this many times its usual level is flagged as drawing too much.
+  level_low_ratio: 0.6        # A run drawing less than this many times its usual level (0.6 is 60%) is flagged as drawing too little.
+  offline_min_s: 60           # A device silent, without a value, or reading exactly 0 (its supply off) for this long is flagged.
+  zero_rest_share: 0.05       # A device that read exactly 0 for this share of the time on the days before rests at 0: its 0 means resting, not "no power" (a pump idling between 0 and 1.2 W).
+  rest_high_share: 0.02       # A device at rest is flagged when it reads above its usual rest by this share of the gap up to its running level, for as long as a change of level must last (a pump drawing 37 W between runs instead of 1 W).
+  starts_ratio: 3             # A device is flagged as starting far more often than usual when it starts this many times more often than in the same hours before, and at least the fewest starts set for it.
+  starts_min: 6               # The fewest starts a device must make, besides starting that many times more often, to be flagged as starting far more often than usual.
                               # (the same two say "far more often" for a state: a door opened, a switch turned on)
-  level_band_margin: 0.25     # a level beyond its usual highest / lowest of the same hours by this share of their
-                              # spread is flagged (a room 6 °C warmer than on the days before)
-  rise_ratio: 3               # a counter (energy) rising this many times faster, or slower, than in the same hours
-                              # before is flagged
-  cycle_short_s: 180          # periods shorter than this, in a row, are stop-start cycling…
-  cycle_min_runs: 3           # …when at least this many of them are runs…
-  cycle_min_periods: 6        # …among at least this many periods
-  ordinary_max_s: 3600        # an unflagged run or rest shorter than this is ordinary…
-  ordinary_hide_over: 40      # …and not listed when a device has more periods than this
-  level_change_ratio: 0.33    # a reading this share away from its level is a change of level…
-  level_change_gap_s: 120     # …once it has lasted this long (and a run's level is judged only over this long)
-  burst_run_short_ratio: 0.67 # a burst's runs under this share of the usual run are "shorter" (over 1/it "longer")
-  days_context: 14           # days of its daily average said with every reading of a measuring device…
-  days_context_min: 4         # …when at least this many come before its days before…
-  days_change_ratio: 3        # …flagged when the days since are this many times above (or below) them
-  noise_per_hour: 30          # an entity changing more often than this an hour is background, not an event
-  state_lane_max: 8           # an entity with more different states than this reports a value (a time, a text), not a state
-  coincide_s: 600             # the page puts an event next to an unusual moment when it happened within this of it
-  restart_settle_minutes: 10  # a device answering again within this of a Home Assistant restart was the restart's, not its own
+  level_band_margin: 0.25     # A level beyond its usual highest or lowest of the same hours by this share of their spread is flagged (a room 6 °C warmer than on the days before).
+  rise_ratio: 3               # A counter (energy) rising this many times faster or slower than in the same hours before is flagged.
+  cycle_short_s: 180          # Periods shorter than this, one after another, count as stop-start cycling when enough of them are runs among enough periods.
+  cycle_min_runs: 3           # How many runs a row of short periods must hold to count as stop-start cycling.
+  cycle_min_periods: 6        # How many short periods in a row are needed to count as stop-start cycling.
+  ordinary_max_s: 3600        # A run or rest that is not flagged and lasts less than this is ordinary: a busy device's ordinary periods are not listed.
+  ordinary_hide_over: 40      # When a device has more periods than this, its ordinary runs and rests (short and not flagged) are not listed.
+  level_change_ratio: 0.33    # A reading this share away from the device's level is a change of level, once it has lasted as long as a change of level must.
+  level_change_gap_s: 120     # How long a different reading must last to count as a change of level (a run's level is also judged only over this long).
+  burst_run_short_ratio: 0.67 # In a burst of runs, a run shorter than this share of the usual run is called "shorter", and one as much longer is called "longer".
+  days_context: 14           # How many days of a measuring device's daily average an investigation shows with its readings.
+  days_context_min: 4         # How many of those days must come before the device's normal days for its daily averages to be shown and compared.
+  days_change_ratio: 3        # A measuring device's recent days are flagged when their daily average is this many times above, or below, the days before them.
+  noise_per_hour: 30          # A device changing more often than this is background noise, not an event.
+  state_lane_max: 8           # A device with more different states than this reports a value (a time, a text), not a state.
+  coincide_s: 600             # How close in time an event must be to an unusual moment for the investigation page to show them side by side.
+  restart_settle_minutes: 10  # A device answering again within this long of a restart of the villa's system came back because of the restart, not on its own.
 
 # What the investigation says when the villa's system re-ran every rule itself — a reload of the rules, a start: ONE
 # line for all of them (the moments and how many rule runs follow it), never "Automation “X” ran … check whether it

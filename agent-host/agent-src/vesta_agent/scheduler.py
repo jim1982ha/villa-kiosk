@@ -169,7 +169,8 @@ class Scheduler:
         """A skill's frequent check (skill.yaml `every_5_min`), run once."""
         return self.run_code(sk, sk.every_5_min, limit(
             "jobs.five_minute_timeout_s", 300, unit="seconds", group="run", lo=30, hi=3600,
-            says="How long a skill's frequent check (jobs.every_minutes) may run.",
+            says="How long one of the skills' frequent checks (the alert reminders, the open faults, the offline "
+                 "devices) may run.",
             reached="It is stopped and counts as failed.", told="person"))
 
     def frequent_now(self, which) -> list[str]:

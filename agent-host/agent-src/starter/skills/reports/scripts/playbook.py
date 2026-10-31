@@ -21,7 +21,7 @@ from vesta_shared.limits import limit  # every limit, set on the Limits tab
 from vesta_shared import occupancy  # the villa's "empty" sensor: the Kiosk's pick
 
 GROUP_NAMES_SHOWN = limit("reports.group_names_shown", 8, unit="names", group="text", lo=1, hi=100,
-                          says="Device names listed in one grouped line of a report.",
+                          says="How many device names one grouped line of a report lists.",
                           reached="The others are counted: 'and N more'.", told="person")
 
 if TYPE_CHECKING:

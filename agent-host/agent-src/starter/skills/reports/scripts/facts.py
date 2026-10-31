@@ -47,13 +47,13 @@ from vesta_shared import battery  # noqa: E402  (the night check's battery findi
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
 
 HEADLINE_TITLES = limit("reports.headline_titles", 5, unit="titles", group="text", lo=1, hi=50,
-                        says="Things to do named in a report's headline (their total is always given).",
+                        says="How many things to do a report's headline names (their total is always given).",
                         reached="The others are counted, not named.", told="person")
 HERO_TITLES = limit("reports.hero_titles", 3, unit="titles", group="text", lo=1, hi=50,
-                    says="Open tasks named at the top of a report (their total is always given).",
+                    says="How many open tasks are named at the top of a report (their total is always given).",
                     reached="The others are counted, not named.", told="person")
 ERROR_CHARS = limit("reports.error_chars", 300, unit="characters", group="text", lo=80, hi=5000,
-                    says="Longest error text kept when one section of a report fails.", reached="The rest is cut.", told="")
+                    says="The longest error text kept when one section of a report fails.", reached="The rest is cut.", told="")
 from vesta_shared.skill_settings import retired  # noqa: E402  (a villa setting the skill no longer reads: said)
 from vesta_shared.timeutil import day_label, day_time_label, local_day, month_label, villa_date, villa_time  # noqa: E402  (the one day format)
 from vesta_shared import agent_records  # noqa: E402  (the agent's records: one reader)

@@ -65,7 +65,8 @@ log = logging.getLogger("vesta.tools")
 def part_chars() -> int:
     """One part of a long tool answer: about 15,000 tokens, under the SDK's 25,000-token cut of a tool answer."""
     return limit("ai.tool_answer_chars", 60000, unit="characters", group="ai", lo=5000, hi=90000,
-                 says="How much of one tool's answer the AI receives at once (the AI's own tools cut near 100,000).",
+                 says="How much of the answer of one of its tools the AI receives at once (the AI's own tools stop "
+                      "near 100,000 characters).",
                  reached="The rest is served as part 2, 3…, only if the AI asks for it.", told="ai")
 
 
@@ -104,12 +105,13 @@ def ai_read_defaults(name: str, args: dict, known: set) -> dict:
         if unset("start_time"):
             if stats:
                 days = limit("ai.statistics_default_days", 30, unit="days", group="ai", lo=1, hi=3650,
-                             says="How far back a statistics read of the AI goes when it names no start.",
+                             says="How far back the AI reads a device's long-term figures when it does not say from "
+                                  "when.",
                              reached="Older figures are not read.", told="ai")
                 a["start_time"] = f"{days * 24}h"
             else:
                 hours = limit("ai.history_default_hours", 24, unit="hours", group="ai", lo=1, hi=240,
-                              says="How far back a history read of the AI goes when it names no start.",
+                              says="How far back the AI reads a device's history when it does not say from when.",
                               reached="Older readings are not read.", told="ai")
                 a["start_time"] = f"{hours}h"
     elif name == "ha_get_logs" and (a.get("source") or "logbook") == "logbook" and unset("limit"):
@@ -120,7 +122,7 @@ def ai_read_defaults(name: str, args: dict, known: set) -> dict:
                            told="ai")
     elif name == "ha_search" and unset("limit"):
         a["limit"] = limit("ai.search_results", 10, unit="results", group="ai", lo=1, hi=200,
-                           says="Devices the AI's search returns when it does not ask for a number.",
+                           says="How many devices one search of the AI returns when it does not ask for a number.",
                            reached="Further matches are not listed; the AI is told more exist.", told="ai")
     return a
 
@@ -203,8 +205,8 @@ def with_held_since(text: str, history, now: datetime) -> str:
                 find(v, k)
     find(body)
     most = limit("ai.state_since_entities", 20, unit="entities", group="ai", lo=1, hi=100,
-                 says="How many devices of one state read the AI is told since when each really is in its state "
-                      "(read from the history, past a restart of the villa's system).",
+                 says="For how many devices of one reading the AI is told since when each has really been in its "
+                      "state (read from the history, so a restart of the villa's system does not reset it).",
                  reached="A larger read gives the AI the villa's system's own last-changed times only.", told="")
     if not records or len(records) > most:
         return text
@@ -419,7 +421,7 @@ class Toolbox:
             "type": "integer", "minimum": 1, "description": "Part of a long answer to read (1 by default)."}
         desc = (t.get("description") or name)[:limit(
             "ai.tool_description_chars", 4000, unit="characters", group="ai", lo=500, hi=20000,
-            says="How much of the villa's reading tool's own explanation of each tool the AI is given.",
+            says="How much of the villa's system's own explanation of each of its reading tools the AI is given.",
             reached="The end of the explanation (where its paging advice often is) is not given.", told="")]
 
         @tool(name, desc, schema)
@@ -792,7 +794,7 @@ class Toolbox:
             # the investigation page refuses to be made without the pages behind what the AI read on the web
             run_s = replace(self.s, web_searches=json.dumps(self.searched[:limit(
                 "ai.web_searches_kept", 20, unit="searches", group="ai", lo=1, hi=200,
-                says="Web searches of one answer handed to a skill's page as its sources.",
+                says="How many web searches of one answer are handed to a skill's page as its sources.",
                 reached="Later searches are not listed among the page's sources.", told="")])
                             if self.searched else "",
                             web_search_on="1" if self.include_web else "", asker=(origin.role if origin else None) or "")

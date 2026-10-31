@@ -85,7 +85,7 @@ def test_the_tab_lists_the_code_the_skills_and_the_rules(ui):
     assert kept["value"] == "not measured yet" and "purge_keep_days" in kept["also"]
     pm = next(r for r in data["rows"] if r["id"].get("skill") == "preventive-maintenance"
               and r["id"]["path"] == ["behaviour", "baseline_days"])
-    assert pm["value"] == 30 and "window for the rolling median" in pm["label"]
+    assert pm["value"] == 30 and "to learn each piece of equipment's normal" in pm["label"]
     assert "Skills › preventive-maintenance › Files › settings.yaml" in pm["also"]
     assert "input_number.vesta_baseline_days" in pm["also"]               # a helper wins: said where it applies
     reply = next(r for r in data["rows"] if r["id"] == {"src": "policy", "path": ["settings", "reply_limit_usd"]})
@@ -568,3 +568,19 @@ def test_a_rules_save_says_the_choice_in_its_words_in_page_changes():
     from vesta_agent.history import policy_change
     line = policy_change("settings:\n  conversation_reset: daily_04_00\n", "settings:\n  conversation_reset: after_8h_silence\n")
     assert line.endswith(": Every day at 04:00 → After 8h of silence"), line
+
+
+def test_every_limits_row_says_in_a_whole_sentence_what_it_controls(ui):
+    # owner, 2026-10-31: "re-phrase gracefully all the limits labels ... so that it describes fully and user friendly
+    # what each parameter does" — a skill's setting with no comment showed its key ("routes.0.cooldown min"), a chain
+    # of comments read "…and longer than it by at least this", a keep row "How long the agent keeps: files days."
+    for n in os.listdir(os.path.join(SRC, "starter", "skills")):
+        if os.path.isdir(os.path.join(SRC, "starter", "skills", n)) and not os.path.isdir(os.path.join(ui.skills_dir, n)):
+            copy_skill(n, ui.skills_dir)
+    bad = []
+    for r in _rows(ui)["rows"]:
+        said = (r["label"] or "").strip()
+        if (not said or not said[0].isupper() or said.startswith(("…", "...")) or "_" in said
+                or not said.endswith((".", "?")) or "Home Assistant" in said or " — " in said):
+            bad.append(f"{r['name']}: {said!r}")
+    assert bad == []

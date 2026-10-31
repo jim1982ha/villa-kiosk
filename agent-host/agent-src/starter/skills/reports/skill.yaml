@@ -36,7 +36,7 @@ schedule:
     name: fm-daily
     to: fm
     on_request: true
-    description: the facility manager's daily digest (what is new since yesterday, what is still open)
+    description: the Facility Manager's daily digest (what is new since yesterday, what is still open)
     button: Daily digest
     without_ai:
       - "compose.py fm-daily --finish {to} --no-ai {why}"
@@ -50,7 +50,7 @@ schedule:
     name: fm-weekly
     to: fm
     on_request: true
-    description: the facility manager's weekly report (last week, or the week a person names)
+    description: the Facility Manager's weekly report (last week, or the week a person names)
     on_limit: "compose.py fm-weekly --facts facts.json --notes notes{suffix}.json --out fm_weekly{suffix}.html --finish {to} --since {started} --limit {limit}"
     button: Weekly report
     without_ai:

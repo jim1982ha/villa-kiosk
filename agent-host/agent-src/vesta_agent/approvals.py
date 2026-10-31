@@ -303,7 +303,7 @@ class Approvals:
         waiting = [a for a in self.state.approvals_in("pending") if datetime.fromisoformat(a["expires_at"]) > now]
         decided = self.state.approvals_decided_since((now - decided_for()).isoformat())[:limit(
             "ai.decided_requests_shown", 5, unit="requests", group="ai", lo=1, hi=100,
-            says="Decided approval requests the AI is told about before it answers.",
+            says="How many recently decided approval requests the AI is told about before it answers.",
             reached="Older decided requests are not in front of it; nobody is told.", told="")]
         lines = [f"- waiting: {a['action'].get('plain', '?')} (asked {self._at(a['created_at'])})" for a in waiting] \
             or ["- nothing is waiting for approval"]

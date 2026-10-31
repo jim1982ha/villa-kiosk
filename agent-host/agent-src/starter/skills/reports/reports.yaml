@@ -19,16 +19,16 @@ thresholds:
     red: [P1]
     amber: [P2, P3]
   battery:                     # a battery's red "replace" / amber "watch" is the night check's finding, never judged here
-    show: 8                    # the lowest N batteries are drawn
+    show: 8                    # How many of the lowest batteries the report draws.
   # an equipment card is "Watch" when the one list names its device (the night check's findings, the clues)
-  circuits_show: 8             # rows of the circuit table, largest first
-  alert_follow_window_min: 15  # a logbook run this close to an incident of the same automation is that incident (shown once)
-  circuit_change_max_pct: 300  # a change bigger than this (from almost nothing) shows as ">+300%", not "+10900%"
+  circuits_show: 8             # How many circuits the report's circuit table shows, largest first.
+  alert_follow_window_min: 15  # An automation's run in the logbook this close to an alert of the same automation is taken as that alert, and shown once.
+  circuit_change_max_pct: 300  # A circuit's change bigger than this (from almost nothing) is shown as "more than" this value instead of a huge percentage.
   todo:                        # the one list of what needs doing
-    group_from: 3              # this many items of one kind become one line ("4 monitoring devices offline")
-    same_time_minutes: 10      # a group whose items all started within this many minutes: one cause, says todo_groups.same_time
-  card_days: 14                # days drawn in an equipment card
-  trend_weeks: 10              # weeks drawn in the monthly electricity trend
+    group_from: 3              # How many items of one kind on the list of what needs doing become one line ("4 monitoring devices offline").
+    same_time_minutes: 10      # A group of those items that all started within this long of each other is said to share one cause.
+  card_days: 14                # How many days an equipment card of the report draws.
+  trend_weeks: 10              # How many weeks the monthly electricity trend draws.
   horizon:                    # preventive maintenance: when, from the finding's severity
     P1: Now
     P2: Now
@@ -52,7 +52,7 @@ retired_kinds:
 
 # "What would help": a gap is shown when its condition holds for this villa.
 gaps:
-  - when: {unmetered_pct_above: 50}
+  - when: {unmetered_pct_above: 50}  # The report suggests more meters ("Most of the electricity is not metered") when more than this share of the villa's electricity goes through no meter.
     gap: Most of the electricity is not metered
     unlocks: The report can say where the electricity goes, and how much of it is avoidable.
   - when: {family_missing: water}
@@ -93,7 +93,12 @@ playbook:
   pumps:
     - name: running time changed
       title: "{subject}: {hours_before}h a day before {change_date}, {hours_after}h since"
-      when: {kind: run_change, change_pct: 30, min_days: 3, days: 30, min_hours: 2}
+      when:
+        kind: run_change
+        change_pct: 30   # How much a pump's hours of running per day must change to be reported as "running time changed".
+        min_days: 3      # How many days a pump must have run the same way on each side of the change for it to count as "running time changed".
+        days: 30         # How many days of a pump's running time are read to find a "running time changed".
+        min_hours: 2     # A "running time changed" is reported only when the pump ran at least this many hours a day before or after the change.
       look_at: "the pump's hours of running per day, its timer or schedule helper, the logbook for who changed it"
       means: "a timer changed, a float switch, or a pump stopping early (dry run, overheating)"
       check: "the timer and its schedule, the supply and the breaker, signs of overheating"
@@ -104,7 +109,7 @@ playbook:
     - name: a safety device offline
       title: "{subject} offline since {since}"
       group_title: "{n} safety devices offline"
-      when: {kind: offline, families: [security]}
+      when: {kind: offline, families: [security]}  # Which kinds of device count as safety devices for the report's line "a safety device offline".
       look_at: "its history over the last days, its battery, its last change"
       means: "a lock or a sensor no automation can see: often a battery or a radio drop"
       check: "its battery, then a reset; if it stays offline, it needs re-pairing"
@@ -114,7 +119,7 @@ playbook:
   energy_and_occupancy:
     - name: electricity used while the villa is empty
       title: "Electricity used while the villa was empty: {kwh_per_empty_day} kWh a day"
-      when: {kind: use_while_empty, days: 10}   # the Kiosk's "empty" sensor, on = empty (vesta_shared.occupancy)
+      when: {kind: use_while_empty, days: 10}   # How many recent days are read to see how much electricity the villa used while it was empty (the Kiosk's "empty" sensor).
       look_at: "the main meter per hour on empty days, which circuits ran, lights and air conditioning left on"
       means: "something left on, or a load that should be off when nobody is there"
       check: "what was left on, and whether a scene or automation should switch it off when the villa is empty"
@@ -125,7 +130,7 @@ playbook:
     - name: a device of the monitoring offline
       title: "{subject} offline since {since}"
       group_title: "{n} monitoring devices offline"
-      when: {kind: offline, families: [power, energy, battery, level, network, runtime]}
+      when: {kind: offline, families: [power, energy, battery, level, network, runtime]}  # Which kinds of device count as monitoring devices for the report's line "a device of the monitoring offline".
       look_at: "when it stopped answering, its battery or power, the Wi-Fi of its area"
       means: "a reading the report and the automations no longer have"
       check: "its power or battery, its network"

@@ -31,19 +31,21 @@ from vesta_shared.timeutil import clock, lasting  # the one clock, the one durat
 from vesta_shared.limits import limit                     # every limit, set on the VESTA Agent page's Limits tab
 
 TARGETS_NAMED = limit("investigate.targets_named", 6, unit="devices", group="text", lo=1, hi=100,
-                      says="Devices named for what an automation can act on, in an investigation's page.",
+                      says="How many of the devices an automation can act on are named on an investigation's page.",
                       reached="The rest is counted in an \"and N more\".", told="person")
 NAMES_IN_A_ROW = limit("investigate.names_in_a_row", 8, unit="devices", group="text", lo=1, hi=100,
-                       says="Devices named in one row of an investigation's log (stopped or answered again together).",
+                       says="How many devices one row of an investigation's log names (devices that stopped or "
+                            "answered again together).",
                        reached="The rest is counted in an \"and N more\".", told="person")
 AUTOMATION_RUNS_SHOWN = limit("investigate.automation_runs_shown", 3, unit="runs", group="text", lo=1, hi=100,
-                              says="Runs of one automation shown in an investigation's log.",
+                              says="How many runs of one automation an investigation's log shows.",
                               reached="Its further runs are not shown in the log.", told="")
 LOG_REPEATS = limit("investigate.log_repeats", 3, unit="periods", group="text", lo=1, hi=100,
-                    says="Unusual periods of the same kind on one device listed one by one in an investigation's log.",
+                    says="How many unusual periods of the same kind on one device an investigation's log lists one "
+                         "by one.",
                     reached="More are said in one row: how many, from when to when, and the longest.", told="person")
 LOG_ROWS = limit("investigate.log_rows", 80, unit="rows", group="text", lo=10, hi=2000,
-                 says="Rows of an investigation page's log.",
+                 says="How many rows an investigation page's log shows.",
                  reached="The further rows are not on the page.", told="")
 
 
@@ -286,7 +288,7 @@ def _lanes(data: dict, went: list[dict], acted: list, unproven: list) -> list[di
 
 
 KEY_MAX = limit("investigate.key_line_chars", 200, unit="characters", group="text", lo=60, hi=600,
-                says="Length of the recorded facts that open an investigation's chat message.",
+                says="How long the summary of the records that opens an investigation's chat message may be.",
                 reached="The longest unusual periods that fit are named, the rest counted in \"+N more\".", told="person")
 
 

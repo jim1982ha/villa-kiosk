@@ -130,7 +130,7 @@ VERDICTS = ("consistent", "not supported", "cannot tell")
 #: 0.12.181 — 120 kept for a "To:" naming several people cut the summary ~90 characters short; review 3, 2026-10-13).
 DETAILS = " Details in the attached page."
 TITLE_MAX = limit("investigate.title_chars", 90, unit="characters", group="text", lo=30, hi=200,
-                  says="Length of an investigation's title (the summary gets what the message has left).",
+                  says="How long an investigation's title may be (its summary gets the rest of the message).",
                   reached="The AI is asked to shorten it.", told="ai")
 TO_ROOM = len(TO_LONGEST)
 #: the message starts with the recorded facts (investigation_facts.key_line), then the AI's summary
@@ -139,10 +139,12 @@ SUMMARY_MAX = TELEGRAM_CAPTION - TITLE_MAX - TO_ROOM - KEY_MAX - len(DETAILS) - 
 #: 4, 2026-10-13 — the instructions said 3 to 5 sentences, the refusal 4 to 6)
 SUMMARY_SENTENCES = "3 to 5 sentences"
 FACTS_LISTED = limit("investigate.facts_listed", 20, unit="facts", group="ai", lo=1, hi=500,
-                     says="Facts established and ruled out by the records, handed to the AI to check its account.",
+                     says="How many of the points the records prove or rule out are handed to the AI to check its "
+                          "account.",
                      reached="The further facts are not handed to the AI (the page shows them all).", told="")
 WRONG_NAMED = limit("investigate.wrong_named", 3, unit="items", group="text", lo=1, hi=50,
-                    says="Faulty sources or verdicts quoted back to the AI when it writes an investigation's page.",
+                    says="How many faulty sources or verdicts are quoted back to the AI when it writes an "
+                         "investigation's page.",
                     reached="The further faulty ones are not quoted.", told="")
 
 

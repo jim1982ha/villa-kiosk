@@ -2,45 +2,47 @@
 # physical meaning. A villa helper input_number.vesta_<name> overrides one; a villa's own villa.settings.yaml may
 # change them too (kept by updates). Moved here from the shared library (architecture review 7, 2026-10-07).
 behaviour:
-  baseline_days: 30                     # window for the rolling median
-  confirm_days: 2                       # consecutive days before a finding is raised
-  drift_pct: 8                          # relative change of running power that counts
-  energy_drop_pct: 60                   # daily kWh collapse versus baseline
-  energy_rise_pct: 60                   # daily kWh jump versus baseline
-  schedule_dev_pct: 25                  # run hours versus expected schedule
-  sag_pct: 5                            # within-run power sag over one run
-  min_days_for_baseline: 7
-  battery_warn_pct: 20
-  battery_crit_pct: 10
-  battery_clear_margin_points: 5        # an open battery fault closes only above its level plus this (owner, 2026-10-20: a battery hovering at 20/21 % opened and closed all day)
-  battery_level_window_hours: 24        # a battery is judged on its HIGHEST reading over these hours, its rested level (owner, 2026-10-21: a coin cell dips under load, a motion sensor read 1 % between two readings near 50 %); the villa's low-battery rule reads the same
-  silence_hours: 24                     # a sensor that has not reported for this long
-  unavailable_minutes: 10              # offline this long: its fault opens (the night check, and recheck.py every few minutes)
-  back_online_minutes: 10               # a device found offline, back this long: its fault closes (recheck.py)
+  baseline_days: 30                     # How many days the night check reads to learn each piece of equipment's normal (the middle value of those days).
+  confirm_days: 2                       # How many days in a row a change must be seen before the night check raises a finding.
+  drift_pct: 8                          # How much a piece of equipment's running power must change from its normal to count as a drift.
+  energy_drop_pct: 60                   # How far a day's energy use must fall below its normal to be reported as a collapse.
+  energy_rise_pct: 60                   # How far a day's energy use must rise above its normal to be reported as a jump.
+  schedule_dev_pct: 25                  # How far a day's running hours may differ from the planned schedule before it is reported.
+  sag_pct: 5                            # How much a piece of equipment's power may weaken during one run before it is reported.
+  min_days_for_baseline: 7  # The fewest days of readings needed before a piece of equipment's normal is trusted and compared with.
+  battery_warn_pct: 20  # A battery at or below this level is reported as low: replace within the week.
+  battery_crit_pct: 10  # A battery at or below this level is reported as critical: replace now.
+  # (owner, 2026-10-20: a battery hovering at 20/21 % opened and closed all day; owner, 2026-10-21: a coin cell dips
+  # under load, a motion sensor read 1 % between two readings near 50 %)
+  battery_clear_margin_points: 5        # An open battery fault closes only once the battery is this many points above its alert level, so a battery hovering at the limit does not open and close all day.
+  battery_level_window_hours: 24        # A battery is judged on its highest reading over these hours, its level at rest, because a battery dips under load; the villa's low-battery automation reads the same.
+  silence_hours: 24                     # A sensor that has not reported for this long is reported as silent.
+  unavailable_minutes: 10              # How long a device must stay offline before its fault opens (checked each night and every few minutes).
+  back_online_minutes: 10               # How long a device found offline must be back before its fault closes.
   on_threshold_fraction: 0.2            # fraction of running power that counts as "on", the villa's one definition, held equal in every skill: change it with the helper vesta_on_threshold_fraction
-  on_threshold_floor_w: 1.0             # an asset with no data to judge from: "on" above this
-  energy_gap_hours: 3                   # a meter's day with more hours missing is not judged
-  silence_history_hours: 72             # how far back a quiet sensor's reporting is looked at
-  silence_reporting_share: 0.5          # it reported in at least this share of the hours: then silence is news
-  silence_min_history_hours: 48         # less history than this: too little to call it silent
-  integration_down_devices: 3           # this many devices of one integration offline: the integration is down
-  integration_down_window_minutes: 30   # ... gone within this many minutes of each other (three unrelated drops days apart are three devices)
-  restart_settle_minutes: 10            # drops this close to a Home Assistant restart (its own "started" entry) are the restart's
-  battery_trend_days: 14                # a battery's trend over these days
-  battery_trend_min_points: 7           # with at least these readings
-  battery_trend_drop_per_day: 0.5       # falling faster than this (points a day) is a trend
-  battery_trend_warn_days: 14           # told when it would be empty within these days
-  battery_low_fraction_of_nominal: 0.8  # a voltage battery below this share of its nominal is low
-  worsened_step_pct: 15                 # an open finding worse by this many points is told again
+  on_threshold_floor_w: 1.0             # For equipment with no history to judge from, the power above which it counts as on.
+  energy_gap_hours: 3                   # A meter's day missing more hours of data than this is not judged.
+  silence_history_hours: 72             # How far back a quiet sensor's reporting is read to tell whether its silence is unusual.
+  silence_reporting_share: 0.5          # A quiet sensor's silence is reported only if it reported in at least this share of the hours read before.
+  silence_min_history_hours: 48         # A sensor with less history than this is too new to be called silent.
+  integration_down_devices: 3           # How many devices of one integration (the link to one brand or system of devices) must go offline together for that integration to be reported as down.
+  integration_down_window_minutes: 30   # How close together those devices must go offline to count as one integration down (three unrelated drops days apart are three devices).
+  restart_settle_minutes: 10            # Devices dropping this close to a restart of the villa's system dropped because of the restart, and are not reported.
+  battery_trend_days: 14                # How many days of a battery's levels are read to see whether it is falling steadily.
+  battery_trend_min_points: 7           # The fewest daily readings a battery needs in those days before its trend is judged.
+  battery_trend_drop_per_day: 0.5       # A battery falling faster than this each day is falling steadily.
+  battery_trend_warn_days: 14           # A battery falling steadily is reported when it would be empty within this many days.
+  battery_low_fraction_of_nominal: 0.8  # A battery reported in volts is low below this share of its nominal voltage.
+  worsened_step_pct: 15                 # An open finding that gets worse by this many points is reported again.
   # (architecture review 4, 2026-10-13: these were typed in rules.py / nightly.py, out of a villa's reach)
-  reconnect_days: 3                     # the logbook read for reconnect loops, and the window the check counts in
-  reconnect_events: 10                  # this many drops in that window: a reconnect loop
-  reconnect_min_drop_seconds: 10        # a drop back within this is the villa's system reloading its virtual devices, not a reconnect
-  ran_min_hours: 0.1                    # a day an asset ran at least this long counts as a day it ran
-  intermittent_share: 0.5               # an asset that ran on fewer than this share of its days is intermittent…
-  intermittent_min_days: 3              # …or on fewer days than this
-  full_day_hours: 20                    # a day with this many hours of data is judged against its schedule
-  energy_baseline_min_kwh: 0.05         # a normal daily use below this is too small to judge a change against
+  reconnect_days: 3                     # How many days of the logbook are read to find devices that keep dropping and reconnecting.
+  reconnect_events: 10                  # How many drops within those days make a device's connection a reconnect loop.
+  reconnect_min_drop_seconds: 10        # A drop that comes back within this is the villa's system reloading its virtual devices, not a reconnect.
+  ran_min_hours: 0.1                    # A day on which a piece of equipment ran at least this long counts as a day it ran.
+  intermittent_share: 0.5               # Equipment that ran on fewer than this share of its days is treated as running now and then, not every day.
+  intermittent_min_days: 3              # Equipment that ran on fewer days than this is also treated as running now and then.
+  full_day_hours: 20                    # A day needs at least this many hours of data to be judged against its schedule.
+  energy_baseline_min_kwh: 0.05         # A normal daily use below this is too small to judge a change against.
 
 # A fault of the night check's that a person reopened in the Cockpit ("Reopen fault"): who is told and under which
 # title, by recheck.py within 5 minutes. `tell` is a role (fm, owner); the message's body is the one wording of a
