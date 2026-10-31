@@ -1,3 +1,11 @@
+## 2.496.628
+
+What you will see:
+- The "Ask VESTA" microphone left of the gear on a phone's top bar now really shows: 2.496.627 never drew it, at any
+  width. It shows whenever the bar has room for it beside the map categories, for example on a 390px wide phone with
+  six categories; the categories then sit a few pixels left of the middle. On a narrower phone, with more categories,
+  or with the maintenance mark showing, it is left out and "Ask VESTA" in the gear's menu still works.
+
 ## 2.496.627
 
 What you will see:
