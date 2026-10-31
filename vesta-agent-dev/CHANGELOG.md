@@ -1,3 +1,11 @@
+## 0.12.431
+
+What you will see:
+- Nothing changes on Telegram or the tablet. VESTA's own checks now hold its test copy of the tablet to what the real
+  tablet keeps of each message (its page, its language, its buttons, its texts cut at their limits), from the same
+  examples the tablet is tested with. A message that passes VESTA's checks is now one the tablet shows exactly as
+  checked.
+
 ## 0.12.430
 
 What you will see:
