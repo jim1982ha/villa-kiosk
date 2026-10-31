@@ -1,3 +1,20 @@
+## 0.12.420
+
+What you will see:
+- A device that disappears from the villa's system altogether (its hub stops sharing it, it is deleted) is now a
+  fault: "Entrance Lock is missing from the villa's system since 31/10/2026 00:19." What to do: "Re-pair it, or press
+  Done if it was removed on purpose." When automations still name it, the fault says which ones ("Still named in
+  automation 'Critical watchdog': remove it there.").
+- A critical device that goes missing is found within 5 minutes and the facility manager gets a P2 message at once;
+  any other device is found by the night check, as a P3 fault.
+- A device that only could not be read is never called missing.
+- Its other faults (offline, battery) now say "Followed by: … is missing from the villa's system …" instead of closing
+  as if the device no longer mattered.
+- Done on the missing fault: VESTA forgets the device and never raises it again. When the device comes back, its
+  fault closes: "Cleared: back in the villa's system."
+- Devices removed before this update are not raised: only the ones that go missing from now on.
+- On a phone, typing in a device list's search box no longer closes it.
+
 ## 0.12.419
 
 What you will see:
