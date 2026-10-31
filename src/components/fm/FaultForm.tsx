@@ -19,6 +19,7 @@ import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import { useDeviceChoice } from "./useDeviceChoice";
 import { useRecordPlace } from "./useRecordPlace";
 import FormActions from "./FormActions";
+import FmForm from "./FmForm";
 
 export default function FaultForm({ editing, presetEntity, deviceOptions, onDone }: {
   /** The record being edited; absent when raising a new fault. */
@@ -54,7 +55,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
   // A person OPENS A TICKET (owner, 2026-10-14): what they open starts in progress, in the Tickets tab.
   const heading = !editing ? "Open a ticket" : stageOf(editing) === "fault" ? "Edit fault" : "Edit ticket";
   return (
-    <div className="fm-form">
+    <FmForm>
       <h3>{heading}</h3>
       <div className="fm-field">
         <span>Device (search, or type one not listed)</span>
@@ -97,6 +98,6 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
           if (done) onDone(); else setFormError(why);
         }}
       />
-    </div>
+    </FmForm>
   );
 }

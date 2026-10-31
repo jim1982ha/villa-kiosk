@@ -216,6 +216,8 @@ export interface CardView {
   /** The Need help pressed on it that nothing has answered yet (deviceWork.helpAsked): its buttons say so. */
   asked?: HelpAsked | null;
   lines: CardLine[];
+  /** A ticket is open on it (one of its records taken on): its line in the Inbox is framed (owner, 2026-11-01). */
+  ticket?: true;
 }
 
 function nextCheckView(group: AttentionGroup, cadence: AgentCadence | null, now: Date, at: Date | null): CardView["nextCheck"] {
@@ -270,6 +272,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     actions: cardActions(group),
     asked: helpAsked(cardRecords(group)),
     lines: group.items.map(line),
+    ...(cardRecords(group).some((r) => r.stage === "ticket") ? { ticket: true as const } : {}),
   };
 }
 

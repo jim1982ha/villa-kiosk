@@ -130,12 +130,36 @@ const { MessageRow } = await import("@/components/cockpit/MessagesTab");
 const issueLine = draw(h(MessageRow, { item: { kind: "issue", key: "a", card: card("a", { room: "Kitchen",
   lines: [{ key: "l", text: "Too warm", icons: null, story: [], closing: null, actions: [] }] }) }, selected: true, onSelect() {} }));
 ck("an open issue: its device, then its room and its first problem on the line under; chosen, marked",
-   /class="messages-row on"/.test(issueLine) && issueLine.includes("<b>Device a</b>") && issueLine.includes("<span>Kitchen · Too warm</span>"), issueLine);
+   /class="messages-row on"/.test(issueLine) && issueLine.includes("<b>Device a</b>") && issueLine.includes('<span class="messages-row-sub">Kitchen · Too warm</span>'), issueLine);
 const noteLine = draw(h(MessageRow, { item: { kind: "notification", key: "n1", announcement: ann(1, { title: "🔔 Visitor",
   text: "Someone is at the door.\nGate A", at: "2026-10-28T10:00:00+08:00" }) }, selected: false, onSelect() {} }));
 ck("  ...a notification: its title, its first words, when it came; not chosen, not marked",
-   /class="messages-row"/.test(noteLine) && noteLine.includes("<b>🔔 Visitor</b>") && noteLine.includes("<span>Someone is at the door.</span>")
+   /class="messages-row"/.test(noteLine) && noteLine.includes("<b>🔔 Visitor</b>") && noteLine.includes('<span class="messages-row-sub">Someone is at the door.</span>')
    && !noteLine.includes("Gate A") && /messages-row-time">28\/10\/2026 \d\d:00</.test(noteLine), noteLine);
+
+// owner, 2026-11-01: "highlight the issue card … when a ticket had been opened for this issue"
+const ticketLine = (ticket) => draw(h(MessageRow, { item: { kind: "issue", key: "t", card: card("t", { ...(ticket ? { ticket: true } : {}),
+  lines: [{ key: "l", text: "In progress", icons: null, story: [], closing: null, actions: [] }] }) }, selected: false, onSelect() {} }));
+ck("an issue with a ticket open: its line is framed; without one, not",
+   /class="messages-row ticket"/.test(ticketLine(true)) && /class="messages-row"/.test(ticketLine(false)), ticketLine(true));
+{
+  const { cockpitCard } = await import("@/config/cockpitCard");
+  const group = (stage) => ({ key: "device:d", title: "D", items: [{ id: "fault:f1", kind: "fault", ticketId: "f1", stage, detail: "x" }] });
+  ck("  ...the card says it from its records: a ticket taken on, yes; a fault nobody took on, no",
+     cockpitCard(group("ticket"), null).ticket === true && cockpitCard(group("fault"), null).ticket === undefined);
+}
+{
+  // owner, 2026-11-01: "show their number between () in the tab Ticket label"
+  const { default: ModalTabs } = await import("@/components/common/ModalTabs");
+  const { Wrench, Inbox } = await import("lucide-react");
+  const strip = (n) => draw(h(ModalTabs, { tabs: [{ id: "messages", label: "Inbox", icon: Inbox }, { id: "tickets", label: "Tickets", icon: Wrench }],
+    active: "messages", onSelect() {}, label: "x", counts: { tickets: n } }));
+  ck("the Tickets tab says how many are in progress: \"Tickets (3)\"; none, its name alone",
+     strip(3).includes("<span>Tickets (3)</span>") && strip(0).includes("<span>Tickets</span>") && strip(3).includes("<span>Inbox</span>"), strip(3));
+  const modalSrc = readFileSync(new URL("../../src/components/cockpit/CockpitModal.tsx", import.meta.url), "utf8");
+  ck("  ...counted as the tab's own \"in progress\" figure is (openCounts), on the window's strip",
+     /openCounts\(data\.tickets, deviceOfRecord\)\.tickets/.test(modalSrc) && /counts=\{\{ tickets: ticketsOpen \}\}/.test(modalSrc));
+}
 
 console.log("\n  the window and the tab read the model:");
 const { parseTsx, elements, guardsOf, propText } = await import("../consistency/jsx.mjs");
@@ -301,7 +325,7 @@ ck("  ...no page link for a profile the add-on serves no page to, nor for a repo
    !draw(h(ReportDetail, { announcement: weekly, canOpenPage: false })).includes("Open the page")
    && !draw(h(ReportDetail, { announcement: digest, canOpenPage: true })).includes("Open the page"));
 const reportLine = draw(h(MessageRow, { item: onReports.reports[0], selected: false, onSelect() {} }));
-ck("  ...its line: its title and first words", reportLine.includes("<b>Rapport</b>") && reportLine.includes("<span>Trois choses</span>"), reportLine);
+ck("  ...its line: its title and first words", reportLine.includes("<b>Rapport</b>") && reportLine.includes('<span class="messages-row-sub">Trois choses</span>'), reportLine);
 const sections = elements(parseTsx("components/cockpit/MessagesTab.tsx"), "MessagesSection").map((e) => propText(e, "title"));
 ck("the tab draws a Reports section, its lines from the model's reports",
    sections.includes('"Reports"') && /reportsPaged = usePaged\(view\.reports\)/.test(tab), sections);

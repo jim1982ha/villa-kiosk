@@ -14,7 +14,7 @@ import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity, useRecordRoom } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
-import { faultTitle, keptDays, STAGE_WORDS, stageOf, ticketStats, type FmRetention } from "@/fm/fmEngine";
+import { faultTitle, keptDays, STAGE_WORDS, stageOf, ticketStats, wasTicket, type FmRetention } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
 import { closedActions, helpAsked, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
@@ -60,13 +60,21 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const tickets = useMemo(() => ticketCards(data.tickets, deviceOfRecord), [data.tickets, deviceOfRecord]);
   // ⚠️ THE CLOSED ONES ARE A SECTION OF THEIR OWN, FOLDED AND PAGED (owner, 2026-10-14): the VESTA Agent clears several
   // a day. Latest closed first; the server drops them after their retention window (supervisor-proxy _fm_expire).
-  const closed = useMemo(() => data.tickets.filter((t) => stageOf(t) === "closed")
-    .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt)), [data.tickets]);
+  // ...THE TICKETS', NOT EVERY RECORD'S (owner, 2026-11-01): a fault the VESTA Agent cleared with nobody taking it on was
+  // never a ticket (wasTicket) — its figures above are the tickets' too
+  const taken = useMemo(() => data.tickets.filter(wasTicket), [data.tickets]);
+  const closed = useMemo(() => taken.filter((t) => stageOf(t) === "closed")
+    .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt)), [taken]);
   const editing = editingId ? data.tickets.find((t) => t.id === editingId) : undefined;
 
   /** One record, as every Facility card is drawn (RecordCard): its title, when/where/who, its notes, photos and
    *  reports, the cost of the work that resolved it. Tapping it edits it. */
   const record = (t: FmTicket, status?: RecordCardProps["status"], actions?: ReactNode, framed = true) => {
+    // ⚠️ AN EDIT TAKES ITS CARD'S PLACE (owner, 2026-11-01: tapping a ticket opened a second card, its form, at the
+    // top of the tab, out of view); the form brings itself into view (FmForm)
+    if (editing?.id === t.id) {
+      return <FaultForm key={editing.id} editing={editing} deviceOptions={deviceOptions} onDone={() => setEditingId(null)} />;
+    }
     const work = data.completions.find((c) => c.ticketId === t.id && c.costId);
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
     return (
@@ -117,11 +125,9 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
   return (
     <div className="fm-stack">
-      <TicketFigures tickets={data.tickets} inProgress={inProgress} retention={retention} />
+      <TicketFigures tickets={taken} inProgress={inProgress} retention={retention} />
 
-      {editing && <FaultForm key={editing.id} editing={editing} deviceOptions={deviceOptions} onDone={() => setEditingId(null)} />}
-
-      {tickets.length === 0 && !editing && (
+      {tickets.length === 0 && (
         // THE Cockpit card, as every other (owner, 2026-10-22)
         <RecordCard lead={<Wrench size={16} className="muted" aria-hidden="true" />} title={<span className="with-tip">
           No ticket in progress

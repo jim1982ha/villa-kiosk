@@ -15,6 +15,7 @@ import { useFmTerms } from "@/fm/useFmTerms";
 import { validWarnPercent, WARN_DEFAULT_PERCENT } from "@/fm/fmTypes";
 import { formatMoney } from "@/utils/money";
 import FormActions from "./FormActions";
+import FmForm from "./FmForm";
 
 export default function ContractTermsEditor() {
   const { config, update } = useConfig();
@@ -53,7 +54,7 @@ export default function ContractTermsEditor() {
     );
   }
   return (
-    <div className="fm-form">
+    <FmForm>
       {/* its explanation is its (i), never a paragraph (owner, 2026-10-22) */}
       <h3 className="with-tip">Spend settings
         <InfoTip label="About the spend settings">
@@ -80,6 +81,6 @@ export default function ContractTermsEditor() {
         extra={cap.trim() !== "" && (
           <button type="button" className="btn ghost" onClick={() => setCap("")}><Trash2 size={16} aria-hidden /> Remove cap</button>
         )} />
-    </div>
+    </FmForm>
   );
 }

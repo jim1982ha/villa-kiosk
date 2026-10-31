@@ -47,18 +47,25 @@ export function MessageRow({ item, selected, onSelect, hold }: {
   hold?: LongPressHandlers;
 }) {
   const row = rowOf(item);
+  const ticket = item.kind === "issue" && !!item.card.ticket;
   const { consumeClick, ...holding } = hold ?? { consumeClick: () => false };
   return (
-    <button type="button" className={`messages-row${selected ? " on" : ""}${hold ? " fm-erasable" : ""}`}
+    // ⚠️ AN ISSUE WITH A TICKET OPEN IS FRAMED (owner, 2026-11-01: "highlight the issue card … when a ticket had been
+    // opened for this issue"), its line the same otherwise
+    <button type="button" className={`messages-row${selected ? " on" : ""}${ticket ? " ticket" : ""}${hold ? " fm-erasable" : ""}`}
       aria-current={selected || undefined}
       // a completed hold is followed by a click: opening the message under the code's prompt would be wrong
       onClick={() => { if (!consumeClick()) onSelect(item.key); }} {...holding}>
       <span className="messages-row-icon">{row.icon}</span>
+      {/* ⚠️ ITS LINE UNDER THE TITLE AND THE TIME, OVER THE ROW'S WHOLE WIDTH, WHOLE (owner, 2026-11-01: it was cut at
+          the time's column) */}
       <span className="messages-row-text">
-        <b>{row.title}</b>
-        {row.sub && <span>{row.sub}</span>}
+        <span className="messages-row-head">
+          <b>{row.title}</b>
+          {row.time && <span className="messages-row-time">{row.time}</span>}
+        </span>
+        {row.sub && <span className="messages-row-sub">{row.sub}</span>}
       </span>
-      {row.time && <span className="messages-row-time">{row.time}</span>}
       {hold && <span className="fm-erasable-dot" aria-hidden="true" />}
     </button>
   );

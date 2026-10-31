@@ -18,6 +18,7 @@
 // load, and run-all.sh discards stderr, so it would have read as a rule
 // violation rather than a file that never ran.
 import { register } from "node:module";
+import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 
 const {
@@ -166,6 +167,34 @@ console.log("\n  a figure names its period (architecture review, 2026-10-19: \"R
      [recordsKeptNote({ clearedDays: 90, repairedDays: 365, recordsDays: 365 }, "Spend"),
       recordsKeptNote({ clearedDays: 90, repairedDays: 0, recordsDays: 0 }, "Work"), recordsKeptNote(null, "Work")],
      ["Spend older than 365 days is no longer kept (Advanced Settings › System).", null, null]);
+}
+
+console.log("\n  the Tickets tab counts tickets, not every fault (owner, 2026-11-01: \"189 closed … are you mixing faults with tickets?\"):");
+{
+  // driven through the one way in for every change (fmCommands applyFmCommand), as the store runs it
+  const { applyFmCommand } = await import("@/fm/fmCommands");
+  const { wasTicket } = await import("@/fm/fmEngine");
+  const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
+  let n = 0;
+  const k = (min) => ({ now: new Date(Date.UTC(2026, 9, 31, 0, min)).toISOString(), id: (p) => p + (++n), by: "owner" });
+  const agentFault = { id: "a1", title: "Offline", status: "open", openedAt: "2026-10-31T00:00:00Z", photoIds: [],
+    updates: [{ at: "2026-10-31T00:00:00Z", status: "open", by: "VESTA Agent", photoIds: [] }] };
+  let d = { ...EMPTY_FM_DATA, tickets: [agentFault, { ...agentFault, id: "a2" }] };
+  d = applyFmCommand(d, { type: "addTicket", ticket: { title: "Tap drips", photoIds: [] }, asTicket: true }, k(1));
+  d = applyFmCommand(d, { type: "advanceTickets", ids: ["a2"], to: "in_progress", step: { photoIds: [] } }, k(2));
+  // the Agent clears a1 by itself; the owner resolves both tickets, and closes another fault with no action
+  d = { ...d, tickets: d.tickets.map((t) => (t.id === "a1" ? { ...t, status: "resolved", resolvedAt: "2026-10-31T00:05:00Z",
+    updates: [...t.updates, { at: "2026-10-31T00:05:00Z", status: "resolved", kind: "cleared", by: "VESTA Agent", photoIds: [] }] } : t)) };
+  const mine = d.tickets.find((t) => t.title === "Tap drips").id;
+  d = applyFmCommand(d, { type: "advanceTickets", ids: [mine, "a2"], to: "resolved", step: { photoIds: [] } }, k(3));
+  const by = Object.fromEntries(d.tickets.map((t) => [t.title === "Tap drips" ? "mine" : t.id, wasTicket(t)]));
+  eq("a fault the VESTA Agent cleared by itself was never a ticket; one taken on (Open Ticket) or opened as one was",
+     by, { a1: false, a2: true, mine: true });
+  eq("  ...closed, still a ticket: the step that took it on is kept", d.tickets.filter((t) => t.status === "resolved" && wasTicket(t)).length, 2);
+  const tab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
+  eq("  ...the tab's Closed list and its figures are the tickets' (wasTicket), never every record",
+     [/const taken = useMemo\(\(\) => data\.tickets\.filter\(wasTicket\)/.test(tab), /const closed = useMemo\(\(\) => taken\.filter\(/.test(tab),
+      /<TicketFigures tickets=\{taken\} /.test(tab)], [true, true, true]);
 }
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the owner's numbers hold"}`);

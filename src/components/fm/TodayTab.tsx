@@ -8,7 +8,7 @@
 
 import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
 import { useDeviceIdentity } from "@/config/VillaModel";
@@ -29,6 +29,7 @@ import FormActions from "./FormActions";
 import WorkerPicker from "./WorkerPicker";
 import { useWorkFields } from "./useWorkFields";
 import Tip from "@/components/common/Tip";
+import FmForm from "./FmForm";
 
 /** The engine's sentence (fmEngine.dueLine — the recap's too) with the date in the reader's locale. Same wording
  *  either side of "never": a target date is shown regardless — see fmEngine.scheduleStatus for why "never" now
@@ -117,10 +118,11 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
 
       <div className="fm-list">
         {board.map((s) => (
-          // THE Cockpit card (RecordCard): its state pill on the title line, Log and the bin inside, on the right of
+          <Fragment key={s.schedule.id}>
+          {/* THE Cockpit card (RecordCard): its state pill on the title line, Log and the bin inside, on the right of
           // its text (architecture review, 2026-10-15 — the layout the owner set for tickets); its tint says how late
-          // its state's ONE word and tone (fmEngine.DUE_WORDS — the recap's and the Overview's too)
-          <RecordCard key={s.schedule.id} tone={toneClass(DUE_WORDS[s.state].tone)} title={s.schedule.title}
+          its state's ONE word and tone (fmEngine.DUE_WORDS — the recap's and the Overview's too) */}
+          <RecordCard tone={toneClass(DUE_WORDS[s.state].tone)} title={s.schedule.title}
             status={{ text: DUE_WORDS[s.state].word, tone: pillClass(DUE_WORDS[s.state].tone) }}
             when={`${dueText(s)} · every ${s.schedule.everyDays} days`
               + (s.last ? ` · last ${momentText(s.last.at)} by ${workedBy(s.last)}` : "")}
@@ -140,6 +142,22 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
                 </button>
               </Tip>
             </>} />
+          {/* ⚠️ ITS LOG UNDER ITS CARD (owner, 2026-11-01: a form opened away from what it was asked on): it was drawn
+              under Recent work, below every task */}
+          {openId === s.schedule.id && (
+            <LogCompletion
+              scheduleId={openId}
+              onCancel={() => setOpenId(null)}
+              onSave={async (payload, cost) => {
+                // Close only when saved or queued; a refused save keeps the form (2.496.252).
+                const { done, note: why } = await logCompletion(payload, cost);
+                if (done) setOpenId(null);
+                return done ? null : why;
+              }}
+              onOpenEntity={onOpenEntity}
+            />
+          )}
+          </Fragment>
         ))}
       </div>
 
@@ -147,19 +165,6 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           were previously logged and then never shown anywhere. */}
       <RecentWorkList />
 
-      {openId && (
-        <LogCompletion
-          scheduleId={openId}
-          onCancel={() => setOpenId(null)}
-          onSave={async (payload, cost) => {
-            // Close only when saved or queued; a refused save keeps the form (2.496.252).
-            const { done, note: why } = await logCompletion(payload, cost);
-            if (done) setOpenId(null);
-            return done ? null : why;
-          }}
-          onOpenEntity={onOpenEntity}
-        />
-      )}
     </div>
   );
 }
@@ -190,7 +195,7 @@ function LogCompletion({
   const amountIdr = parseAmount(amount);
 
   return (
-    <div className="fm-form">
+    <FmForm>
       <h3>Log: {schedule?.title}</h3>
 
       {/* the names already given, picked (WorkerPicker); `by` is the signed-in profile, stamped by the store */}
@@ -230,6 +235,6 @@ function LogCompletion({
             if (refused) setSaveError(refused);
           }}
       />
-    </div>
+    </FmForm>
   );
 }

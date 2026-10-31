@@ -297,6 +297,15 @@ export function stageOf(t: { status?: FmTicket["status"] }): FmStage {
   return t.status === "in_progress" ? "ticket" : "fault";
 }
 
+/** ⚠️ A TICKET IS A FAULT SOMEONE TOOK ON (owner, 2026-11-01: "189 tickets closed? … there was NEVER 189 opened
+ *  tickets … are you mixing faults with tickets?"): the Tickets tab listed and counted every closed RECORD, the faults
+ *  the VESTA Agent raised and cleared by itself among them. A record was a ticket once it was in progress: now, or a
+ *  step of its history that moved it there (Open Ticket, a person's "Open a ticket": fmCommands). A record with no
+ *  steps kept (older than them) is not counted as one: nothing says anyone took it on. Pure. */
+export function wasTicket(t: Pick<FmTicket, "status" | "updates">): boolean {
+  return stageOf(t) === "ticket" || (t.updates ?? []).some((u) => u.status === "in_progress");
+}
+
 /** Each stage's ONE word and tone, as every screen and report says it: the Tickets tab's pill (its colour: fm/tone
  *  pillClass), the recap's Status column, the Overview's line (config/attention faultStatus — which says NOTHING for an
  *  open fault, owner 2026-10-14: "OPEN FAULT:" before every fault said nothing; the open word is for a table).
