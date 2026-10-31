@@ -5,6 +5,7 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import { domainOf } from "./entityDomain";
+import { dayTime } from "./dateText";
 
 /** HA reports "unavailable" when it has lost contact with the device
  *  (offline, integration reload, …) and "unknown" when it's never reported a
@@ -71,15 +72,36 @@ export function contactOf(state: string | undefined | null): "lost" | "no-value"
  *  everywhere: Needs attention, the device's window, Advanced Settings). */
 export const NOT_IN_HA = "Missing";
 
-/** What to do about a Missing device, said after "No device has the id …": its 3D object (`inModel`) can be renamed,
- *  removed or pointed elsewhere; anything else — a fault raised on a device since deleted, opened from its Cockpit card
- *  — only went away in the villa's system. ⚠️ NOT ALWAYS A 3D OBJECT (owner, 2026-10-25: "i don't have any devices
- *  named light.gym_light in the GLB file"): the window said "Rename or remove its object in the 3D model" for a deleted
- *  light whose only trace was a cleared fault. */
-export function missingAdvice(inModel: boolean): string {
+/** What the villa's system's history says of a Missing device: when it was last in it (epoch ms), null when it has no
+ *  record of it (never there, or gone longer than it keeps), "unknown" when the history could not be read. */
+export type MissingSeen = number | null | "unknown";
+
+/** What a Missing device's window says: what the villa's system knows of it, and what to do. Its 3D object (`inModel`)
+ *  can be renamed, removed or pointed elsewhere (Edit); anything else (a fault raised on a device since deleted,
+ *  opened from its Cockpit card) only went away in the villa's system. ⚠️ NOT ALWAYS A 3D OBJECT (owner, 2026-10-25:
+ *  "i don't have any devices named light.gym_light in the GLB file"): the window said "Rename or remove its object in
+ *  the 3D model" for a deleted light whose only trace was a cleared fault.
+ *  ⚠️ NOT ALWAYS THE MODEL'S FAULT (owner, 2026-10-31: "the door lock entity should exist, no?"): a lock that had
+ *  worked for weeks was dropped by the villa's system at night, when its hub stopped sharing it, and the window
+ *  pointed at the 3D model. A device the history has seen (`seen`) went away THERE: it says when, and what to check. */
+export function missingAdvice(inModel: boolean, seen: MissingSeen): string {
+  if (typeof seen === "number") {
+    return `The villa's system no longer has this device. It was last seen ${dayTime(seen)}; `
+      + (inModel
+        ? "its device may have been removed from the villa's system: check that it is still connected there. "
+          + "If it comes back with another name, point this object at it with Edit."
+        : "it was renamed or removed in the villa's system.");
+  }
+  if (seen === null) {
+    return inModel
+      ? "The villa's system has no record of this device. Rename or remove its object in the 3D model, "
+        + "or point it at another device with Edit."
+      : "The villa's system has no record of this device: it was renamed or removed there.";
+  }
   return inModel
-    ? "Rename or remove its object in the 3D model, or point it at another entity with Edit."
-    : "It was renamed or removed in the villa's system.";
+    ? "The villa's system does not have this device. If it was removed there, check that it is still connected; "
+      + "otherwise rename or remove its object in the 3D model, or point it at another device with Edit."
+    : "The villa's system does not have this device: it was renamed or removed there.";
 }
 
 /** Home Assistant does not have `id` — answered only once HA's list is loaded (an empty list is "not yet", never

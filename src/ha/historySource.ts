@@ -84,7 +84,10 @@ export type HistoryRequest =
   | { kind: "statistics"; ids: readonly string[]; period: StatisticsPeriod;
       fields: readonly StatisticField[]; hours?: number; since?: number }
   /** When each id's CURRENT state began, as far back as the villa keeps (stateSince). */
-  | { kind: "since"; ids: readonly string[]; hours?: undefined };
+  | { kind: "since"; ids: readonly string[]; hours?: undefined }
+  /** When each id was last in the villa's system, as far back as the villa keeps (lastRecorded): a device the villa's
+   *  system no longer has at all. */
+  | { kind: "lastSeen"; ids: readonly string[]; hours?: undefined };
 
 export interface StateWindow {
   data: StateHistoryPoint[];
@@ -110,6 +113,7 @@ export type HistoryAnswer<R extends HistoryRequest> =
   : R extends { kind: "stateWindow" } ? StateWindow
   : R extends { kind: "statistics" } ? Record<string, Partial<Record<StatisticField, HistorySeries>>>
   : R extends { kind: "since" } ? Record<string, StateSince | null>
+  : R extends { kind: "lastSeen" } ? Record<string, number | null>
   : never;
 
 /** Several requests answered together, over ONE `now`. */
@@ -332,6 +336,29 @@ async function since(port: HistoryPort, id: string, now: number): Promise<StateS
   return stateSince(await port.stateRows(id, from, now, from), from);
 }
 
+// ── When a device the villa's system no longer has was last in it ─────────
+/**
+ * The last moment `rows` show the entity in the villa's system: its last row WITH a state (unavailable included: it
+ * was there, out of contact). null when nothing is kept: never in it, or gone longer than the villa keeps.
+ *
+ * ⚠️ THE REMOVAL ROW IS NOT A SIGHTING (owner, 2026-10-31: a door lock the villa's system dropped at night, when its
+ * hub stopped sharing it, read "Rename or remove its object in the 3D model"). Removing an entity records one last row
+ * with no state, at the moment it went: the state before it is the last time it was seen.
+ */
+export function lastRecorded(rows: readonly StateRow[]): number | null {
+  let seen: number | null = null;
+  for (const r of rows) {
+    const t = new Date(r.last_changed).getTime();
+    if (r.state != null && r.state !== "" && Number.isFinite(t) && (seen === null || t > seen)) seen = t;
+  }
+  return seen;
+}
+
+async function lastSeen(port: HistoryPort, id: string, now: number): Promise<number | null> {
+  const from = readBackFrom(await keptFrom(port, now), now);
+  return lastRecorded(await port.stateRows(id, from, now, from));
+}
+
 // ── How far back the villa's system keeps every change ────────────────────
 /** A device every villa's system has, changing twice a day: its oldest change kept is where the detail begins. */
 export const KEPT_PROBE = "sun.sun";
@@ -457,6 +484,8 @@ export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R,
       return await statistics(port, r.ids, r.period, r.fields, window) as HistoryAnswer<R>;
     case "since":
       return await each(r.ids, (id) => since(port, id, now)) as HistoryAnswer<R>;
+    case "lastSeen":
+      return await each(r.ids, (id) => lastSeen(port, id, now)) as HistoryAnswer<R>;
   }
 }
 
