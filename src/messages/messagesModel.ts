@@ -189,18 +189,16 @@ export function unreadOf(kept: readonly Announcement[], read: readonly string[],
     && !seen.has(readId(a))).length;
 }
 
-/** What this tablet has shown once Messages showed `shown`: added to what it had, kept only while the add-on still
- *  keeps it, so the list never outgrows the add-on's. */
-export function markShown(read: readonly string[], shown: readonly Announcement[], kept: readonly Announcement[]): string[] {
-  const still = new Set(kept.map(readId));
-  return [...new Set([...read, ...shown.map(readId)])].filter((id) => still.has(id));
-}
-
 /** What this tablet has read once the Cockpit OPENED: everything kept at that moment (owner, 2026-10-31: "Shall opening
  *  the Cockpit clear the dot?" "Yes"); only what comes after (a new one, VESTA's card at a new step) lights it again.
+ *  Kept only while the add-on still keeps it, so the list never outgrows the add-on's; in the order it was read, so
+ *  opening again with nothing new gives the same list (AnnouncementsContext then draws nothing again).
  *  ⚠️ IT WAS WHAT THE PAGE ON SCREEN SHOWED (readOnScreen): one on Notifications' page 2, under the other filter, or a
  *  reminder's step kept the mark lit for ever. */
-export const readAtOpening = (read: readonly string[], kept: readonly Announcement[]): string[] => markShown(read, kept, kept);
+export function readAtOpening(read: readonly string[], kept: readonly Announcement[]): string[] {
+  const still = new Set(kept.map(readId));
+  return [...new Set([...read, ...still])].filter((id) => still.has(id));
+}
 
 /** The filter Messages opens on: a device window's warning on Issues, its issue open; the wrench's "Open a ticket" on
  *  Issues; else Notifications while something is unread (the robot opens on what was not seen) — Reports when the

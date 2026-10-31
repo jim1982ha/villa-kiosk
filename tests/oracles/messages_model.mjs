@@ -6,7 +6,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { h, draw } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
-const { messagesView, mergeAnnouncements, FILTERS, unreadOf, markShown, readAtOpening, openingFilter, followingFilter, shownTogether,
+const { messagesView, mergeAnnouncements, FILTERS, unreadOf, readAtOpening, openingFilter, followingFilter, shownTogether,
   afterRead, cardsOfIssue } = await import("@/messages/messagesModel");
 const { parseVestaMessage, inLanguage } = await import("@/messages/announcements");
 const { noticeStep, NO_NOTICE } = await import("@/messages/noticeModel");
@@ -103,21 +103,19 @@ ck("  ...an older copy arriving late never replaces the newer",
 
 console.log("\n  unread, per tablet (ticket 18 of \"One inbox\"):");
 const kept3 = [ann(1), ann(2), ann(3)];
-const seen = markShown([], kept3, kept3);
-ck("an announcement not yet shown on this tablet is unread; once shown in Messages it is read",
+const seen = readAtOpening([], kept3);
+ck("an announcement not yet read on this tablet is unread; once the Cockpit opened it is read",
    unreadOf(kept3, []) === 3 && unreadOf(kept3, seen) === 0, seen);
 const kept4 = [...kept3, ann(4)];
 ck("  ...a new one makes one unread, the ones already shown stay read", unreadOf(kept4, seen) === 1);
-ck("  ...only what was shown is read (a page of ten shows ten, not the eleventh)",
-   unreadOf(kept4, markShown(seen, [ann(4)], kept4)) === 0 && unreadOf(kept4, markShown([], [ann(4)], kept4)) === 3);
 const rung = ann(5, { key: "run-1" });
 const rewritten = ann(7, { key: "run-1", at: "2026-10-28T19:00:00+08:00" });
 ck("  ...a rewrite of one already read is news again (it came with a new number): unread",
-   unreadOf([rewritten], markShown([], [rung], [rung])) === 1);
+   unreadOf([rewritten], readAtOpening([], [rung])) === 1);
 const restarted = ann(1, { at: "2026-10-29T08:00:00+08:00" });
 ck("  ...the add-on's store started again: its first new one, with an old number, is unread",
-   unreadOf([restarted], markShown([], [ann(1)], [ann(1)])) === 1);
-const pruned = markShown(seen, [ann(4)], [ann(3), ann(4)]);
+   unreadOf([restarted], readAtOpening([], [ann(1)])) === 1);
+const pruned = readAtOpening(seen, [ann(3), ann(4)]);
 ck("  ...the list keeps only what the add-on still keeps (it never grows past it)", pruned.length === 2, pruned);
 
 ck("something unread: Messages opens on Notifications, its newest open on the right; nothing unread, on Issues (the default)",
@@ -163,11 +161,9 @@ console.log("\n  opening the Cockpit clears the unread mark (owner, 2026-10-31):
     body: "Door", status: ["⚠️ ⚙️ Reminder sent"], stage: "existing" });
   const keptNow = [...notes12, ...reports2, step];
   const before = unreadOf(keptNow, []), beforeReports = unreadOf(keptNow.filter((a) => !!a.report), []);
-  const page1 = messagesView({ open: [], watched: [], announcements: keptNow, filter: "notifications", selected: null })
-    .notifications.slice(0, 10).map((i) => i.announcement);
-  const read = readAtOpening(markShown([], page1, keptNow), keptNow);
+  const read = readAtOpening([], keptNow);
   ck("unread on page 2, under Reports and at a reminder step: the Cockpit opened, the mark is out",
-     before === 15 && beforeReports === 2 && unreadOf(keptNow, markShown([], page1, keptNow)) === 5
+     before === 15 && beforeReports === 2
      && unreadOf(keptNow, read) === 0 && unreadOf(keptNow.filter((a) => !!a.report), read) === 0, { before, read });
   ck("  ...the Inbox opens on Notifications all the same: its filter is picked from what was unread before the opening",
      openingFilter(before, {}, beforeReports) === "notifications"
@@ -180,11 +176,27 @@ console.log("\n  opening the Cockpit clears the unread mark (owner, 2026-10-31):
      unreadOf(later, read) === 1 && unreadOf(nextStep, read) === 1);
   ck("  ...and the open Inbox follows it to Notifications unless a filter was chosen",
      followingFilter("issues", 1) === "notifications" && followingFilter("issues", 0) === "issues");
-  const cockpit = readFileSync(new URL("../../src/components/cockpit/CockpitModal.tsx", import.meta.url), "utf8");
-  const ctxNow = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");
-  ck("  ...the Cockpit window marks it once, at its opening, whichever tab it opens on; the page's mark is readAtOpening",
-     /const \{ opened \} = useAnnouncements\(\);\s*useEffect\(\(\) => \{ opened\(\); \}, \[\]\);/.test(cockpit)
-     && /const next = readAtOpening\(r, kept\);/.test(ctxNow));
+  ck("  ...opening again with nothing new gives the same list, in the order it was read (so nothing draws again)",
+     J(readAtOpening(read, keptNow)) === J(read) && J(readAtOpening(["gone@1", ...read], keptNow)) === J(read)
+     && J(readAtOpening([...read].reverse(), keptNow)) === J([...read].reverse()));
+  // the wiring, read through the compiler's tree (whatever its layout): the window's one opening, the page's one mark
+  const ts = (await import("typescript")).default;
+  const { parseTsx: tree } = await import("../consistency/jsx.mjs");
+  const calls = (t, name) => { const out = []; const v = (n) => { if (ts.isCallExpression(n) && n.expression.getText() === name) out.push(n); ts.forEachChild(n, v); }; v(t); return out; };
+  const cockpit = tree("components/cockpit/CockpitModal.tsx");
+  const fromHook = calls(cockpit, "useAnnouncements").map((c) => c.parent).filter(ts.isVariableDeclaration)
+    .map((d) => d.name.getText().replace(/\s+/g, " "));
+  const onOpen = calls(cockpit, "useEffect").filter((c) => calls(c.arguments[0], "opened").length > 0);
+  ck("  ...the Cockpit window marks it once, at its opening, whichever tab it opens on",
+     fromHook.join() === "{ opened }" && onOpen.length === 1 && onOpen[0].arguments[1]?.getText() === "[]"
+     && calls(cockpit, "opened").length === 1, { fromHook, effects: onOpen.map((c) => c.getText()) });
+  const ctxTree = tree("messages/AnnouncementsContext.tsx");
+  const marks = calls(ctxTree, "readAtOpening");
+  let holder = marks[0];
+  while (holder && !(ts.isVariableDeclaration(holder) && holder.name.getText() === "opened")) holder = holder.parent;
+  ck("  ...the page's mark is readAtOpening, of what it had read and what is kept, only when the window opens",
+     marks.length === 1 && marks[0].arguments.map((a) => a.getText()).join() === "r,kept" && !!holder
+     && calls(holder, "setRead").length === 1, marks.map((m) => m.getText()));
 }
 
 console.log("\n  the unread mark, drawn where the model says (ticket 18):");
@@ -391,7 +403,7 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
        .notifications.length === 1, both);
   ck("  ...and is no unread: the mark never stays lit for a folded card", unreadOf([closed90], []) === 0
      && unreadOf([later], []) === 1);
-  const seenStep = markShown([], [card90], [card90]);
+  const seenStep = readAtOpening([], [card90]);
   const quietAgain = { ...card90, seq: 40, at: "2026-10-28T23:00:00+08:00", title: "#90-P2 (existing)" };
   ck("a quiet rewrite of a card read already stays read; a new step (its bottom line) is unread (spec review, 2026-10-29)",
      unreadOf([quietAgain], seenStep) === 0 && unreadOf([{ ...quietAgain, status: "⚠️ ⚙️ Reminder sent" }], seenStep) === 1);
@@ -404,7 +416,7 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
   ck("  ...and its card is read once the Cockpit opens, as everything kept",
      withOpen.issues.length === 1 && unreadOf(shown, readAtOpening([], shown)) === 0);
   ck("what this tablet read of one feed is not read of the other (two feeds number apart)",
-     unreadOf([ann(1), { ...card90, seq: 1, at: ann(1).at }], markShown([], [ann(1)], [ann(1)])) === 1);
+     unreadOf([ann(1), { ...card90, seq: 1, at: ann(1).at }], readAtOpening([], [ann(1)])) === 1);
 }
 
 const ctx = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");

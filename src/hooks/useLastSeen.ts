@@ -1,5 +1,5 @@
 // src/hooks/useLastSeen.ts
-// "When was it last in the villa's system?" for a device the villa's system no longer has (a Missing device's
+// "When did it leave the villa's system?" for a device the villa's system no longer has (a Missing device's
 // window): one read of its recorded history, through the history source the charts use (historySource.lastRecorded).
 // Asked only while such a window is open, so it adds one read per window, never one per device.
 
