@@ -9,40 +9,58 @@ import { elements, guardsOf, parseTsx, propText, tagOf } from "../consistency/js
 import ts from "typescript";
 const { micFits, barMicShown, measureBarRoom, BAR_PARTS } = await import("@/components/hud/barRoom");
 
-// A top bar as the browser lays it out: its grid's three tracks, the right-hand side's width, the gear and the gap
-// its pill puts between buttons, the microphone when drawn, and the category row's content against its box.
-const bar = ({ tracks, right, gear = 32, gap = 4, mic = null, cats = [250, 250] }) => {
-  const box = (w) => ({ getBoundingClientRect: () => ({ width: w }) });
-  const parts = { [BAR_PARTS.right]: box(right), [BAR_PARTS.gearGroup]: { gap }, [BAR_PARTS.gear]: box(gear),
-    [BAR_PARTS.mic]: mic === null ? null : box(mic), [BAR_PARTS.categories]: { scrollWidth: cats[0], clientWidth: cats[1] } };
-  return { tracks, querySelector: (sel) => parts[sel.slice(1)] ?? null };
+// A top bar as the browser lays it out: its grid's three tracks, the app icon's side, the right-hand side, the gear
+// and the gap its pill puts between buttons, the microphone when drawn, and the category row: its shown buttons (32px,
+// 4px apart, 4px padding, 1px border, as on a phone), the (?) and its separator hidden, its box. Its scrollWidth reaches
+// 6px past its last button, as the buttons' 44px touch areas make it in a browser.
+const ROW = { columnGap: "4px", paddingLeft: "4px", paddingRight: "4px", borderLeftWidth: "1px", borderRightWidth: "1px" };
+const bar = ({ tracks, brand = 50, right, gear = 32, gap = 4, mic = null, cats = 6, box = null }) => {
+  const rect = (w) => ({ getBoundingClientRect: () => ({ width: w }) });
+  const natural = cats * 32 + (cats - 1) * 4 + 10;
+  const row = { ...rect(box ?? natural), style: ROW, scrollWidth: (box ?? natural) + 6, clientWidth: (box ?? natural) - 2,
+    children: [...Array.from({ length: cats }, () => rect(32)), rect(0), rect(0)] };
+  const parts = { [BAR_PARTS.brand]: rect(brand), [BAR_PARTS.right]: rect(right), [BAR_PARTS.gearGroup]: { style: { columnGap: `${gap}px` } },
+    [BAR_PARTS.gear]: rect(gear), [BAR_PARTS.mic]: mic === null ? null : rect(mic), [BAR_PARTS.categories]: row };
+  return { style: { gridTemplateColumns: tracks }, querySelector: (sel) => parts[sel.slice(1)] ?? null };
 };
-globalThis.getComputedStyle = (el) => (el.tracks !== undefined ? { gridTemplateColumns: el.tracks } : { columnGap: `${el.gap}px` });
+globalThis.getComputedStyle = (el) => el.style;
 const fits = (b) => micFits(measureBarRoom(bar(b)));
 
-console.log("  room, read from the bar:");
-// a phone with room: the gear's pill (42px) in a 110px share
-ck("enough width on the right: the microphone is drawn", fits({ tracks: "110px 182px 110px", right: 42 }) === true);
-ck("  ...and stays drawn once it is (the right-hand side measured without it)",
-   fits({ tracks: "110px 182px 110px", right: 78, mic: 32 }) === true);
-ck("too narrow: absent (the gear's pill and one more button exceed the share)",
-   fits({ tracks: "60px 188px 60px", right: 42 }) === false);
-// drawn on a bar too narrow for it, the grid widens its own track to hold it: the smaller share still says no
-ck("  ...and a button that did not fit does not keep itself (its own track widened, the other did not)",
-   fits({ tracks: "40px 190px 78px", right: 78, mic: 32 }) === false);
+console.log("  room, read from the bar (sizes the shipped stylesheet gives, measured in WebKit and Chromium):");
+// owner, 2026-10-31: a portrait phone, six categories, room beside the gear, and no microphone (2.496.627). 390px:
+// 370px inside the padding, the row 222px, 6px gaps, 68px each side; the gear's pill 42px.
+const PHONE = { tracks: "68px 222px 68px", right: 42 };
+ck("a 390px phone with six categories: the microphone is drawn (2.496.627 drew it at no width)", fits(PHONE) === true);
+ck("  ...and stays drawn once it is: the grid gives the right side 78px, the row keeps its 222px",
+   fits({ tracks: "58px 222px 78px", right: 78, mic: 32 }) === true);
+ck("  ...a row the touch areas reach past is not a row that scrolls", measureBarRoom(bar(PHONE)).squeezed === false);
+ck("375px, six categories: absent (the icon, the gear, the microphone and the row need 4px more than the bar has)",
+   fits({ tracks: "60.5px 222px 60.5px", right: 42 }) === false);
+// drawn on a bar too narrow for it, the grid squeezes the row to hold it: that says no, so it does not keep itself
+ck("  ...and a microphone drawn there does not keep itself (it squeezed the row)",
+   fits({ tracks: "43px 214px 78px", right: 78, mic: 32, box: 214 }) === false);
+ck("430px, seven categories: drawn; 390px, seven: absent",
+   fits({ tracks: "70px 258px 70px", right: 42, cats: 7 }) === true && fits({ tracks: "50px 258px 50px", right: 42, cats: 7 }) === false);
 ck("a category row that already scrolls: absent, whatever the side tracks",
-   fits({ tracks: "200px 150px 200px", right: 42, cats: [320, 150] }) === false);
+   fits({ tracks: "200px 150px 200px", right: 42, box: 150 }) === false);
 ck("  ...exactly enough fits; a pixel short does not",
-   fits({ tracks: "78px 200px 78px", right: 42 }) === true && fits({ tracks: "77px 200px 77px", right: 42 }) === false);
-ck("the maintenance mark beside the gear takes its share too",
-   fits({ tracks: "110px 182px 110px", right: 42 + 6 + 40 }) === false);
+   fits({ tracks: "64px 222px 64px", right: 42 }) === true && fits({ tracks: "63.5px 222px 63.5px", right: 42 }) === false);
+ck("the maintenance mark beside the gear takes its room too (390px, six categories)",
+   fits({ tracks: "58px 222px 78px", right: 78 }) === false);
 ck("where the gear is not drawn (a roomy screen: its own talk button sits by the robot): absent",
    fits({ tracks: "300px 400px 300px", right: 120, gear: 0 }) === false);
 ck("a bar with no grid read: absent", micFits(measureBarRoom(bar({ tracks: "none", right: 42 }))) === false
    && micFits(null) === false);
 
+// the 50px app icon is the whole of a phone's brand: its emptied text took 8px of gap (58px), the room's margin at 390px
+const { readFileSync } = await import("node:fs");
+const layout = readFileSync(new URL("../../src/styles/05-layout.css", import.meta.url), "utf8");
+const phoneOnly = layout.slice(layout.indexOf("@media (max-width: 640px) {")).split("\n}")[0];
+ck("  ...the brand's empty text takes no room on a phone (width only: a short wide window keeps its name)",
+   /\.hud-brand-text \{ display: none; \}/.test(phoneOnly) && layout.includes("@media (max-width: 640px) {"));
+
 console.log("\n  who sees it:");
-const roomy = measureBarRoom(bar({ tracks: "110px 182px 110px", right: 42 }));
+const roomy = measureBarRoom(bar(PHONE));
 ck("while VESTA runs and with room: drawn", barMicShown(true, roomy) === true);
 ck("  ...a profile VESTA does not run for (the reading every way to ask VESTA uses): absent, room or not",
    barMicShown(false, roomy) === false);

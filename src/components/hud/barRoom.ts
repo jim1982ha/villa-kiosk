@@ -5,25 +5,33 @@
 //
 // ⚠️ ROOM IS READ FROM THE BAR, NEVER FROM THE DEVICE. How wide the right-hand side is depends on the screen, the
 // profile's category count and whether the maintenance mark is up, so no breakpoint can say it: the bar's own grid
-// says it. Its side tracks are equal shares (`1fr`) around a centred category row; one more button fits when it
-// keeps the right-hand side inside its share, so the category row keeps its whole width and stays centred.
+// says it. One more button fits when the two side tracks together hold the app icon, the right-hand side and it: the
+// grid then widens the right track to the button and narrows the left one, so the category row keeps its whole width
+// and moves a few pixels left of centre, never under anything.
 //
-// ⚠️ THE READING MUST NOT CHANGE WHEN THE BUTTON APPEARS, or it would flicker. What the right-hand side holds is
-// measured WITHOUT the microphone, and the share is the SMALLER side track: a button that did not fit would widen its
-// own track past the other one (the grid grows a track to its content), so the smaller one is the fair share whether
-// the button is drawn or not. A category row that already scrolls means the bar has no width to spare at all.
+// ⚠️ NOT "INSIDE ITS EQUAL SHARE" (2.496.627, owner 2026-10-31: not shown on a portrait phone with visibly room
+// beside the gear). That rule kept the row exactly centred, so the right track only had its half of the spare width:
+// on a 390px phone with six categories, 26px free where the button needs 36. And the row's own 44px touch areas (the
+// buttons' ::after, wider than the 32px buttons) reach past its last button, so `scrollWidth > clientWidth` read every
+// row as already scrolling: the button was never drawn at any width. The row is squeezed only when its buttons, laid
+// end to end, are wider than its box.
+//
+// ⚠️ THE READING MUST NOT CHANGE WHEN THE BUTTON APPEARS, or it would flicker. The right-hand side is measured WITHOUT
+// the microphone, and the two side tracks' SUM is the same with it or without it while the row keeps its width; a
+// button that did not fit squeezes the row instead, which says no.
 
 import { useEffect, useState, type RefObject } from "react";
 
 export interface BarRoom {
-  /** The bar's two side tracks, as its grid laid them out (px). */
-  left: number;
-  right: number;
+  /** The bar's two side tracks together, as its grid laid them out (px). */
+  sides: number;
+  /** The app icon's side (px). */
+  brand: number;
   /** What the right-hand side holds, the microphone left out (px). */
   held: number;
   /** One more button and the gap before it: the gear's own size, 0 where the gear is not drawn (px). */
   mic: number;
-  /** The category row scrolls: it is already narrower than its buttons. */
+  /** The category row is narrower than its buttons laid end to end: it scrolls. */
   squeezed: boolean;
 }
 
@@ -32,7 +40,7 @@ const SLACK = 0.5;
 
 /** Whether one more button fits on the right of the top bar without squeezing or moving anything. Pure. */
 export function micFits(room: BarRoom | null): boolean {
-  return !!room && !room.squeezed && room.mic > 0 && room.held + room.mic <= Math.min(room.left, room.right) + SLACK;
+  return !!room && !room.squeezed && room.mic > 0 && room.brand + room.held + room.mic <= room.sides + SLACK;
 }
 
 /** The top bar's "Ask VESTA" beside the gear: while VESTA runs (the reading every other way to ask VESTA uses), and
@@ -43,6 +51,7 @@ export function barMicShown(vestaRuns: boolean, room: BarRoom | null): boolean {
 
 /** The classes the measurement finds its pieces by (HUD.tsx draws them). */
 export const BAR_PARTS = {
+  brand: "hud-brand",
   right: "hud-right",
   gearGroup: "hud-overflow",
   gear: "hud-gear",
@@ -52,6 +61,15 @@ export const BAR_PARTS = {
 
 const px = (v: string) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 const width = (el: Element | null) => (el ? el.getBoundingClientRect().width : 0);
+
+/** A row's buttons laid end to end, with its gaps, padding and border: its width when nothing scrolls (px). What the
+ *  row hides (display: none) has no box and takes no gap. */
+function naturalWidth(row: HTMLElement): number {
+  const st = getComputedStyle(row);
+  const shown = Array.from(row.children).map(width).filter((w) => w > 0);
+  return shown.reduce((a, w) => a + w, 0) + px(st.columnGap) * Math.max(0, shown.length - 1)
+    + px(st.paddingLeft) + px(st.paddingRight) + px(st.borderLeftWidth) + px(st.borderRightWidth);
+}
 
 /** The bar's room, read from its laid-out boxes; null when its grid gives no three tracks. */
 export function measureBarRoom(bar: HTMLElement): BarRoom | null {
@@ -65,11 +83,11 @@ export function measureBarRoom(bar: HTMLElement): BarRoom | null {
   const mic = find(BAR_PARTS.mic);
   const cats = find(BAR_PARTS.categories);
   return {
-    left: tracks[0],
-    right: tracks[2],
+    sides: tracks[0] + tracks[2],
+    brand: width(find(BAR_PARTS.brand)),
     held: width(find(BAR_PARTS.right)) - (mic ? width(mic) + gap : 0),
     mic: gear > 0 ? gear + gap : 0,
-    squeezed: !!cats && cats.scrollWidth > cats.clientWidth + 1,
+    squeezed: !!cats && naturalWidth(cats) > width(cats) + 1,
   };
 }
 

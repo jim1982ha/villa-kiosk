@@ -320,6 +320,13 @@
      starts shipping again by itself the day the target set widens. Checked in
      the built CSS, not assumed. */
 
+/* A narrow screen's brand text is empty (the name went at 860px, the clock at 1180px, the dot just above): the empty
+   span still took the brand's 8px gap, width the phone's "Ask VESTA" beside the gear needs (barRoom). Width only: a
+   short but wide window keeps its villa name. */
+@media (max-width: 640px) {
+  .hud-brand-text { display: none; }
+}
+
 /* ── Short but NOT narrow: a phone in landscape ───────────────────────────
    The compact query above fires on `(max-width: 640px), (max-height: 560px)`,
    and it does two unrelated kinds of thing. Shrinking the pill height and the
