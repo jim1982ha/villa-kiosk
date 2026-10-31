@@ -1,3 +1,17 @@
+## 0.12.426
+
+What you will see:
+- The night check's message tells its fault's story as an alert card does, with the date, in the chat's language:
+  "Cleared on 20/10/2026 12:30: watched until 02:00.", "Closed on 21/10/2026 02:00: it did not come back.",
+  "Back at 21/10/2026 02:00 (to: FM)", "Reopened in the Cockpit on 20/10/2026 13:00 (Owner)". A French chat reads
+  "Statut: … Résolu le 20/10/2026 12:30: surveillé jusqu'à 02:00." The tablet keeps the English. Messages already
+  sent keep their words until their next update.
+- How often an alert came back is said one way everywhere, and in the chat's language: "Back at 16/10/2026 18:03, 2nd
+  time in 7 days (to: FM)" (it read "Back at …, Back again: 2 times in 7 days"), and a fault's name "Pool leak (3rd
+  time in 7 days)" in the Cockpit, the morning message and the reports (it read "(again: 3 times in 7 days)").
+- A night-check fault closed while still there opens again after the alert desk's own wait ("clear" time in its
+  settings), the one setting for both, no longer a copy of it.
+
 ## 0.12.425
 
 What you will see:
