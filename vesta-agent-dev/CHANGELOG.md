@@ -1,3 +1,14 @@
+## 0.12.432
+
+What you will see:
+- No more "AP … has been offline for over 8d" for a device that was gone for a few minutes. On 1 Nov at 00:29 the
+  five access points dropped out for about 6 minutes; VESTA read them as offline for more than 8 days and raised a
+  fault for each at once. The cause: each one's Restart button, which reads "unknown" until someone presses it, gave
+  no reading in the days VESTA reads back, and counted as "offline since the start of the read". Now, when some of a
+  device's parts gave a real reading, only those say when it went offline; a part that never reports (a button, an
+  event) says nothing about it. A short drop is then under the night check's minimum and raises nothing, for every
+  kind of device. A device truly dead for weeks, none of whose parts report, still reads "offline for over …".
+
 ## 0.12.431
 
 What you will see:
