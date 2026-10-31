@@ -1,3 +1,10 @@
+## 2.496.633
+
+What you will see:
+- On a phone, when the microphone "Ask VESTA" shows in the top bar beside the gear, the gear's menu no longer lists
+  "Ask VESTA" as well. Where the top bar has no room for the microphone (a narrow phone, or the maintenance mark
+  beside the gear), the menu keeps its "Ask VESTA" row, so there is always exactly one way to ask VESTA from there.
+
 ## 2.496.632
 
 What you will see:
