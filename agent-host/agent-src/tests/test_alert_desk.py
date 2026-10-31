@@ -406,12 +406,14 @@ def test_an_alert_back_within_four_hours_is_the_same_incident_back_again(store):
     assert _tick(store, villa, 35)["cleared"] == [iid]
     again = _ap(store, 75)
     assert again["decision"] == "reopened" and again["incident_id"] == iid and store.incident(iid)["closed_at"] is None
-    assert [s for s in again["send"] if s["to"] == "fm" and s["status"] == "Back again: 2 times in 7 days"
-            and s["keyboard"]]
+    # architecture review round 11, card 2: the count in its one phrase (status_words.again), in each chat's language
+    # too, never "Back again: 2 times in 7 days" after the engine's own "Back at …"
+    (back,) = [s for s in again["send"] if s["to"] == "fm" and s["keyboard"]]
+    assert back["status"] == "2nd time in 7 days" and back["status_in"]["fr"] == "2e fois en 7 jours", back
     # its fault in the Kiosk open again — the same one, titled with how often (architecture review 24: a new one each time)
     (task,) = store.tasks(None)
     assert moved(again) and task["status"] == "open"
-    assert Problems(store).card(task)["title"].endswith("(again: 2 times in 7 days)")
+    assert Problems(store).card(task)["title"].endswith("(2nd time in 7 days)")
     assert len(store.incidents(open_only=False)) == 1
     # Home Assistant's later events for this new run find it
     assert json.loads(store.incident(iid)["payload"])["ha_incident"].endswith(str(1790000000 + 75 * 60))

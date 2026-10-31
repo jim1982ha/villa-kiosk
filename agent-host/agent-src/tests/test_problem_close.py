@@ -13,6 +13,11 @@ from vesta_shared.store import Incident, Store
 NOW = "2026-10-07T12:00:00+00:00"
 
 
+def _nth(n: int) -> str:
+    from vesta_shared.status_words import _ordinal_en
+    return _ordinal_en(n)
+
+
 def _incident_with_task(tmp_path):
     store = Store(str(tmp_path / "s.sqlite"))
     iid = store.new_incident("k", "rule.example", "lock.example_door", "P2", {"message": "unlocked"}, at=NOW)
@@ -123,11 +128,11 @@ def test_a_device_offline_every_night_is_the_same_problem_again_not_a_new_one(tm
         # architecture review 23: the Kiosk fault says it too — its title is the task's
         # architecture review 24: its own task and Kiosk fault open again, titled with how often — never a new one
         (back,) = night["task_ids"]
-        assert pb.card(store.task(back))["title"] == f"Plug offline (again: {n + 1} times in 7 days)"
+        assert pb.card(store.task(back))["title"] == f"Plug offline ({_nth(n + 1)} time in 7 days)"
         assert store.task(back)["status"] == "open" and len(store.tasks(None)) == 1
         # ...and so does what every reader shows: listed as of the day it came back, never "still open since the 7th"
         (row,) = pb.since(day)["new"]
-        assert row["title"] == f"Plug offline (again: {n + 1} times in 7 days)" and row["since"] == day
+        assert row["title"] == f"Plug offline ({_nth(n + 1)} time in 7 days)" and row["since"] == day
     # a week and more later: a new problem again
     pb.close_finding(store.finding(fid), "2026-10-09", "Cleared: back online.")
     later = pb.record_night([_F("PM-UNAVAILABLE", "switch.plug", "P2")], "2026-10-20", **rules)
@@ -271,6 +276,6 @@ def test_a_night_check_edited_before_0_12_267_still_runs_and_still_moves_its_fau
     assert [(a["action"], a["note"]) for a in gone] == [("ticket.resolve", "Cleared: the nightly check no longer sees it.")]
     assert k.resolved == ["t1"]
     back = old_nightly([_F("PM-UNAVAILABLE", "switch.plug", "P2", summary="Plug offline")], "2026-10-09")
-    assert [a["action"] for a in back] == ["ticket.reopen"] and back[0]["title"].endswith("(again: 2 times in 7 days)")
+    assert [a["action"] for a in back] == ["ticket.reopen"] and back[0]["title"].endswith("(2nd time in 7 days)")
     assert [t for t, _ in k.reopened] == ["t1"] and len(k.tickets) == 1           # its one fault, open again
     assert [a["action"] for a in old_recheck([_F("PM-UNAVAILABLE", "sensor.other", "P3")], "2026-10-09")] == ["ticket"]

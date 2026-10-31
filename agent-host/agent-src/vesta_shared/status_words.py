@@ -48,6 +48,7 @@ WORDS: dict[str, dict] = {
                   "closed": "Note de clôture envoyée"},
         "lines": {"new": "Alerte envoyée le {at}{times}{to}", "back": "De retour le {at}{times}{to}"},
         "times": ", {n}e fois en {days} jours", "acted": "{what} le {when}", "cleared": "Résolu",
+        "night": {"watched": "surveillé jusqu’à {until}", "closed": "Clôturé", "not_back": "il n’est pas revenu"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nouvelle alerte", "still_open": "Toujours en cours",
         "earlier": ("… {n} notification précédente", "… {n} notifications précédentes"),
         "units": ("s", "min", "h", "j"),
@@ -63,6 +64,7 @@ WORDS: dict[str, dict] = {
                   "closed": "Catatan penutupan terkirim"},
         "lines": {"new": "Peringatan terkirim {at}{times}{to}", "back": "Muncul lagi {at}{times}{to}"},
         "times": ", ke-{n} kali dalam {days} hari", "acted": "{what} pada {when}", "cleared": "Selesai",
+        "night": {"watched": "dipantau sampai {until}", "closed": "Ditutup", "not_back": "tidak muncul lagi"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Peringatan baru", "still_open": "Masih terbuka",
         "earlier": ("… {n} pemberitahuan sebelumnya", "… {n} pemberitahuan sebelumnya"),
         "units": ("dtk", "mnt", "jam", "hr"),
@@ -78,6 +80,7 @@ WORDS: dict[str, dict] = {
                   "closed": "Abschlussnachricht gesendet"},
         "lines": {"new": "Alarm gesendet am {at}{times}{to}", "back": "Wieder da am {at}{times}{to}"},
         "times": ", {n}. Mal in {days} Tagen", "acted": "{what} am {when}", "cleared": "Behoben",
+        "night": {"watched": "beobachtet bis {until}", "closed": "Geschlossen", "not_back": "nicht wiedergekommen"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Neuer Alarm", "still_open": "Weiterhin offen",
         "earlier": ("… {n} frühere Meldung", "… {n} frühere Meldungen"),
         "units": ("s", "Min.", "Std.", "Tg."),
@@ -93,6 +96,7 @@ WORDS: dict[str, dict] = {
                   "closed": "Nota de cierre enviada"},
         "lines": {"new": "Alerta enviada el {at}{times}{to}", "back": "De vuelta el {at}{times}{to}"},
         "times": ", {n}.ª vez en {days} días", "acted": "{what} el {when}", "cleared": "Resuelto",
+        "night": {"watched": "vigilado hasta {until}", "closed": "Cerrado", "not_back": "no volvió"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nueva alerta", "still_open": "Sigue abierta",
         "earlier": ("… {n} aviso anterior", "… {n} avisos anteriores"),
         "units": ("s", "min", "h", "d"),
@@ -108,6 +112,7 @@ WORDS: dict[str, dict] = {
                   "closed": "Nota di chiusura inviata"},
         "lines": {"new": "Avviso inviato il {at}{times}{to}", "back": "Di nuovo il {at}{times}{to}"},
         "times": ", {n}ª volta in {days} giorni", "acted": "{what} il {when}", "cleared": "Risolto",
+        "night": {"watched": "sorvegliato fino a {until}", "closed": "Chiuso", "not_back": "non è tornato"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nuovo avviso", "still_open": "Ancora aperto",
         "earlier": ("… {n} notifica precedente", "… {n} notifiche precedenti"),
         "units": ("s", "min", "h", "g"),
@@ -123,6 +128,7 @@ WORDS: dict[str, dict] = {
                   "closed": "Afsluitbericht verzonden"},
         "lines": {"new": "Melding verzonden op {at}{times}{to}", "back": "Terug op {at}{times}{to}"},
         "times": ", {n}e keer in {days} dagen", "acted": "{what} op {when}", "cleared": "Opgelost",
+        "night": {"watched": "bewaakt tot {until}", "closed": "Gesloten", "not_back": "niet teruggekomen"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nieuwe melding", "still_open": "Nog open",
         "earlier": ("… {n} eerdere melding", "… {n} eerdere meldingen"),
         "units": ("s", "min", "u", "d"),
@@ -137,6 +143,7 @@ WORDS: dict[str, dict] = {
                   "closed": "已发送关闭通知"},
         "lines": {"new": "{at} 已发送警报{times}{to}", "back": "{at} 再次出现{times}{to}"},
         "times": "，{days} 天内第 {n} 次", "acted": "{when} {what}", "cleared": "已解除",
+        "night": {"watched": "观察至{until}", "closed": "已关闭", "not_back": "未再出现"},
         "colon": "：", "stop": "。", "sep": "，", "new_alert": "新警报", "still_open": "仍未解决",
         "earlier": ("… 之前 {n} 条通知", "… 之前 {n} 条通知"),
         "units": ("秒", "分钟", "小时", "天"), "tight": True,
@@ -151,6 +158,7 @@ WORDS: dict[str, dict] = {
                   "reopened": "再オープン依頼送信", "closed": "終了通知送信"},
         "lines": {"new": "{at} アラート送信{times}{to}", "back": "{at} 再発{times}{to}"},
         "times": "、{days}日間で{n}回目", "acted": "{when} {what}", "cleared": "解除",
+        "night": {"watched": "{until}まで監視", "closed": "終了", "not_back": "再発なし"},
         "colon": "：", "stop": "。", "sep": "、", "new_alert": "新しいアラート", "still_open": "未解決",
         "earlier": ("… 以前の通知 {n} 件", "… 以前の通知 {n} 件"),
         "units": ("秒", "分", "時間", "日"), "tight": True,
@@ -165,6 +173,7 @@ WORDS: dict[str, dict] = {
                   "closed": "종료 알림 전송"},
         "lines": {"new": "{at} 알림 전송{times}{to}", "back": "{at} 재발{times}{to}"},
         "times": ", {days}일 동안 {n}번째", "acted": "{when} {what}", "cleared": "해제됨",
+        "night": {"watched": "{until}까지 감시", "closed": "종료", "not_back": "다시 발생하지 않음"},
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "새 알림", "still_open": "아직 열림",
         "earlier": ("… 이전 알림 {n}건", "… 이전 알림 {n}건"),
         "units": ("초", "분", "시간", "일"), "tight": True,
@@ -228,6 +237,16 @@ def times(n, days: int, lang: str = "en") -> str:
         return ""
     w = _w(lang)
     return w["times"].format(n=n, days=days) if w else f", {_ordinal_en(n)} time in {days} days"
+
+
+def again(n, days: int, lang: str = "en") -> str:
+    """How many times in how many days, THE phrase: "2nd time in 7 days", "2e fois en 7 jours" — `times` without the
+    separator before it; "" for the first time.
+
+    ⚠️ ONE PHRASE FOR ONE NUMBER (architecture review round 11, card 2): the same count read "Back again: 2 times in 7
+    days" (the alert desk's own words), "2nd time in 7 days" (a card's Status), "(again: 2 times in 7 days)" (a
+    problem's name, English in a French chat). Every one of them is this phrase now."""
+    return times(n, days, lang).lstrip(", ，、")
 
 
 def step(stage: str | None, at: str, times_text: str, whom: str, lang: str = "en") -> str:
@@ -295,6 +314,22 @@ def closing(tail: str = "", lang: str = "en") -> str:
     if not w:
         return mf.closing(tail)
     return acted(w["cleared"], "{time}", "", lang) + (f"{w['colon']}{tail}" if tail else "") + w["stop"]
+
+
+def watched(time: str, until: str, lang: str = "en") -> str:
+    """A night check's fault that cleared, watched until the next night check: "Cleared on 11/10/2026 06:00: watched
+    until 02:00.", "Résolu le …: surveillé jusqu'à 02:00." (closing, message_format.NIGHT)."""
+    w = _w(lang)
+    tail = (w["night"] if w else mf.NIGHT)["watched"].format(until=until)
+    return closing(tail, lang).replace("{time}", time)
+
+
+def not_back(time: str, lang: str = "en") -> str:
+    """A night check's watched fault that night did not find again: "Closed on 12/10/2026 02:00: it did not come back."
+    (acted, message_format.NIGHT)."""
+    w = _w(lang)
+    night = w["night"] if w else mf.NIGHT
+    return acted(night["closed"], time, "", lang) + colon(lang) + night["not_back"] + stop(lang)
 
 
 def stage_words(word: str, time: str = "", lang: str = "en") -> str:

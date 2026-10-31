@@ -97,8 +97,10 @@ def _runs_of(inc: dict) -> list[str]:
 
 
 def again_title(summary: str, again: int | None) -> str:
-    """`summary` with how often it came back ("(again: 3 times in 7 days)"); problem_name() is what every page shows."""
-    return f"{summary} (again: {again + 1} times in {again_days()} days)" if again else summary
+    """`summary` with how often it came back ("Pool leak (3rd time in 7 days)": status_words.again, the one phrase of
+    the count); problem_name() is what every page shows."""
+    from .status_words import again as count
+    return f"{summary} ({count(again + 1, again_days())})" if again else summary
 
 
 def problem_name(text: str, again: int | None = None) -> dict:

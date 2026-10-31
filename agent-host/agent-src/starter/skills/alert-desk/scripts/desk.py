@@ -647,7 +647,9 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
     if came_back_now:
         # one counter, the Kiosk fault's and the digest's (architecture review 25: "N times since the 1st" and "again:
         # M times in 7 days" drifted apart)
-        status = say("back_again", runs=runs, days=AGAIN_DAYS)
+        # its card's line reads "Back at <time>, 2nd time in 7 days (to: FM)", as its history does — the count in the one
+        # phrase of it (status_words.again), never "Back at …, Back again: 2 times in 7 days" (round 11, card 2)
+        status = Said(SW.again(runs, AGAIN_DAYS), {lang: SW.again(runs, AGAIN_DAYS, lang) for lang in SW.LANGS if lang != "en"})
         out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="back", **about(inc, status))]
         if ev.get("snapshot"):
             out["actions"].append(R.snapshot(ev["snapshot"], inc["id"]))

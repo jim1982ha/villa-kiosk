@@ -240,13 +240,13 @@ def test_a_reopening_of_a_fault_told_on_a_message_updates_that_message_and_sends
     edits: list = []
     assert recheck.reopened_untold(st, "UTC", words, edits) == [] and st.untold_reopenings() == []   # nothing new, told
     (e,) = edits
-    assert e["key"] == m["key"] and e["text"].endswith("Status:\n✅ Back to normal at 06:00, watched until 02:00\n"
-                                                       "⚠️ Reopened in the Cockpit at 07:05 by Owner")
+    assert e["key"] == m["key"] and e["text"].endswith("Status:\nCleared on 01/01/2099 06:00: watched until 02:00.\n"
+                                                       "Reopened in the Cockpit on 01/01/2099 07:05 (Owner)")
     text = titled(m["title"], "FM", e["text"])
     u = text.encode("utf-16-le")
     struck = [u[2 * x["offset"]:2 * (x["offset"] + x["length"])].decode("utf-16-le") for x in telegram_entities(text)
               if x["type"] == "strikethrough"]
-    assert struck == ["✅ Back to normal at 06:00, watched until 02:00"]                # the line it replaced
+    assert struck == ["Cleared on 01/01/2099 06:00: watched until 02:00."]                # the line it replaced
     # a fault never told on a message (a P3): its separate message is the only word of it, and goes
     k2 = FakeKiosk()
     v2, st2, tid2 = _closed_night_fault(tmp_path / "b", k2)

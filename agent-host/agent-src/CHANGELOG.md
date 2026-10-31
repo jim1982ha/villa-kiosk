@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.412 (31 October 2026)
+
+- preventive-maintenance: the told P2 message's Status lines come from status_words (watched / not_back, new, with
+  message_format.NIGHT; step "back" / "still"; cockpit "reopened"), dated (moment_label), in every language: result.edit
+  `text_in`, picked per chat by Outcome.rewrite (Notices.lang), the tablet's copy kept in English (Poster.rewrite
+  `kept`). settings.yaml loses told_cleared line/closed_line/back_line, still_there_after_close line/minutes and
+  reopened_in_kiosk line; still_there_minutes reads the alert desk's clear_minutes (rules.yaml, the villa's on top)
+  (architecture review round 11, card 1).
+- status_words.again: the one phrase of a count ("2nd time in 7 days"), read by problems.again_title (was "(again: N
+  times in D days)") and the desk's back status (its words.yaml back_again removed: the card read "Back at …, Back
+  again: …") (card 2). still_count ("Still there: 6 times since 10:00") is a count since a moment and stays.
+
 ## 0.6.411 (31 October 2026)
 
 - New vesta_shared.automation_words (name / quoted / words / alias_in): the one writer of an automation's name, read

@@ -35,7 +35,8 @@ from vesta_shared import script  # noqa: E402  (client, pack, store, settings, z
 from vesta_shared import occupancy  # noqa: E402  (the villa's state per day: like with like)
 from vesta_shared.timeutil import clock, day_label, day_time_label, moment_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
-from vesta_shared.message_format import STATUS, document, split_title, status_line  # noqa: E402  (the one shape of a message)
+from vesta_shared.message_format import document, split_title, status_line  # noqa: E402  (the one shape of a message)
+from vesta_shared import status_words as SW  # noqa: E402  (each step as the alert card says it, in each chat's language)
 from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart  # noqa: E402
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.offline import device_answers, devices_offline, reported_since, watched_kinds  # noqa: E402  (offline now; when it last REALLY reported)
@@ -506,14 +507,20 @@ def missing_hands(open_rows, missing) -> dict[tuple[str, str], str]:
     return out
 
 
-def still_there_minutes(settings: dict) -> float | None:
-    """settings.yaml `still_there_after_close.minutes`: how long after a person's close a reading still bad opens the
-    fault again (Problems.wants_open). None — named on stderr, never guessed — when the settings give none: a person's
-    close then holds."""
-    v = (settings.get("still_there_after_close") or {}).get("minutes")
-    if isinstance(v, (int, float)) and not isinstance(v, bool):
+#: the alert desk, beside this skill: its clear_minutes is how long a close is held (one rule with it)
+DESK = os.path.join(os.path.dirname(os.path.dirname(HERE)), "alert-desk")
+
+
+def still_there_minutes(settings: dict | None = None) -> float | None:
+    """How long after a person's close a reading still bad opens the fault again (Problems.wants_open): the alert desk's
+    `clear_minutes` (its rules.yaml, the villa's own on top). ⚠️ DEFINED ONCE (architecture review round 11, card 1):
+    settings.yaml's `still_there_after_close.minutes` was a copy of it. None — named on stderr, never guessed — when the
+    desk gives none: a person's close then holds. (`settings`: this skill's, no longer read for it.)"""
+    from vesta_shared import skill_settings
+    v = skill_settings.behaviour(skill_settings.load(DESK, "rules.yaml")).get("clear_minutes")
+    if v is not None:
         return float(v)
-    print("preventive-maintenance settings.yaml: still_there_after_close needs `minutes`: a fault closed while its "
+    print("preventive-maintenance: the alert desk's rules.yaml gives no clear_minutes: a fault closed while its "
           "problem is still there stays closed", file=sys.stderr)
     return None
 
@@ -820,27 +827,36 @@ def told_now(res: dict, title: str | None = None, store=None, at: datetime | Non
         store.cache_put(key, {"title": title, "sections": sections, "story": [], "to": "fm"})
         for i in ids:
             store.cache_put(f"{TOLD}of:{i}", key)
-    return [result.message("fm", _told_body(title, sections, [], {}), title=title, key=key)]
+    return [result.message("fm", _told_body(title, sections, []), title=title, key=key)]
 
 
 #: How an item of a told P2 moved on, each a line of the message's Status section, the earlier ones of an item struck
 #: (message_format.status_superseded; owner, 2026-10-27: "I don't want a separate message … the previous messages shall
-#: be updated consistently (completed in status section, and the previous line to be struck)"). "watch": cleared, watched until the next night check (told_cleared `line`, {time} {until}); "closed":
-#: that night passed without it (`closed_line`); "back": that night found it again (`back_line`); "handed": an alert
-#: follows its device now (the close note itself); "still": read still there after a person's close
-#: (still_there_after_close `line`); "reopened": a person reopened it in the Cockpit (reopened_in_kiosk `line`, {who}).
-#: The words are settings.yaml's; a state whose words are not given is drawn as the one before it.
+#: be updated consistently (completed in status section, and the previous line to be struck)"). "watch": cleared, watched
+#: until the next night check ({time} {until}); "closed": that night passed without it; "back": that night found it
+#: again; "handed": an alert follows its device now (the close note itself); "still": read still there after a person's
+#: close; "reopened": a person reopened it in the Cockpit ({who}).
+#: ⚠️ THE ALERT CARD'S WORDS, IN THE CHAT'S LANGUAGE (architecture review round 11, card 1): settings.yaml held this
+#: skill's own sentences ("⚠️ Reopened in the Cockpit at 07:05 by Owner"), English in a French chat, beside the alert
+#: card's "Reopened in the Cockpit on 11/10/2026 07:05 (Owner)". Every step is written by the shared writers now
+#: (vesta_shared.status_words), with its date, in each language; the message's rewrite carries them all (`text_in`).
 TOLD_STATES = ("watch", "closed", "back", "handed", "still", "reopened")
 #: Where nothing more is to come for the item: the message's title says all back to normal once every item is there.
 TOLD_SETTLED = ("watch", "closed", "handed")
 
 
-def _told_lines(settings: dict) -> dict[str, str]:
-    """The words of each state (TOLD_STATES) as settings.yaml gives them; a state without words is left out."""
-    tc, st, ro = (settings.get(k) or {} for k in ("told_cleared", "still_there_after_close", "reopened_in_kiosk"))
-    words = {"watch": tc.get("line"), "closed": tc.get("closed_line"), "back": tc.get("back_line"), "handed": "{note}",
-             "still": st.get("line"), "reopened": ro.get("line")}
-    return {k: v for k, v in words.items() if isinstance(v, str) and v}
+def _told_line(st: dict, lang: str, to: str = "fm") -> str:
+    """One step of an item (TOLD_STATES) as the alert card says it, in `lang`."""
+    kind, at = st.get("kind"), st.get("time") or ""
+    if kind == "watch":
+        return SW.watched(at, st.get("until") or "the night check", lang)
+    if kind == "closed":
+        return SW.not_back(at, lang)
+    if kind in ("back", "still"):
+        return SW.step(kind, at, "", SW.who([to], lang), lang)
+    if kind == "reopened":
+        return SW.cockpit("reopened", at, st.get("who") or "", lang)
+    return st.get("note") or ""
 
 
 def _subject(text: str) -> str:
@@ -848,17 +864,22 @@ def _subject(text: str) -> str:
     return text.partition("\n")[0].removeprefix("- ").strip()
 
 
-def _told_body(title: str, sections, story: list[dict], lines: dict[str, str]) -> str:
-    """The P2 message's text: its items as told, then its Status section, a line per step of the story (_told_lines'
-    words), each naming its item when the message tells more than one (message_format.status_line)."""
+def _told_body(title: str, sections, story: list[dict], lang: str = "en", to: str = "fm") -> str:
+    """The P2 message's text: its items as told, then its Status section in `lang`, a line per step of the story
+    (_told_line), each naming its item when the message tells more than one (message_format.status_line)."""
     said = {str(i): t for _, items in sections for i, t in items}
     many = len(said) > 1
-    status = [status_line(_subject(said[str(st["id"])]) if many else None,
-                          lines[st["kind"]].format(time=st.get("time") or "", until=st.get("until") or "the night check",
-                                                   note=st.get("note") or "", who=st.get("who") or "a person"))
-              for st in story if st.get("kind") in lines and str(st.get("id")) in said]
+    status = [status_line(_subject(said[str(st["id"])]) if many else None, _told_line(st, lang, to))
+              for st in story if st.get("kind") in TOLD_STATES and str(st.get("id")) in said]
     return split_title(document(title, "", [(label, [t for _, t in items]) for label, items in sections if items]
-                                + [(STATUS, status)]))[1]
+                                + [(SW.label(lang), status)]))[1]
+
+
+def _told_texts(rec: dict) -> tuple[str, dict]:
+    """The kept message's text in English and in every other language status_words writes ({code: text})."""
+    to = rec.get("to") or "fm"
+    return (_told_body(rec["title"], rec["sections"], rec["story"], "en", to),
+            {lang: _told_body(rec["title"], rec["sections"], rec["story"], lang, to) for lang in SW.LANGS if lang != "en"})
 
 
 def _latest(rec: dict) -> dict[str, dict]:
@@ -908,7 +929,7 @@ def _told_edits(store, keys: dict[str, list[str]], settings: dict, backup: Calla
     """The rewrites of the kept messages `keys` (key → the ids that moved now): the title says all back to normal
     (told_cleared `all_title`) once every item is settled (TOLD_SETTLED); `backup` (what, id → a line), when given, is
     the ONE reply a message the engine cannot rewrite gets."""
-    words, lines = settings.get("told_cleared") or {}, _told_lines(settings)
+    words = settings.get("told_cleared") or {}
     out = []
     for key, now_ids in keys.items():
         rec = store.cache_get(key)
@@ -917,8 +938,9 @@ def _told_edits(store, keys: dict[str, list[str]], settings: dict, backup: Calla
         title = words["all_title"].format(title=rec["title"]) if done and words.get("all_title") else rec["title"]
         said = {str(i): t for _, items in rec["sections"] for i, t in items}
         reply = [backup(said[i].partition("\n")[0].removeprefix("- "), i) for i in now_ids if backup and i in said]
-        out.append(result.edit(key, _told_body(rec["title"], rec["sections"], rec["story"], lines), title=title,
-                               fallback="\n".join(reply) or None, to=rec.get("to") or "fm", fallback_title=rec["title"]))
+        text, text_in = _told_texts(rec)
+        out.append(result.edit(key, text, title=title, fallback="\n".join(reply) or None, to=rec.get("to") or "fm",
+                               fallback_title=rec["title"], text_in=text_in))
     return out
 
 
@@ -951,21 +973,15 @@ def night_clock() -> str | None:
 def told_cleared(store, closed_ids, at: datetime, zone: str, settings: dict,
                  handed: dict[int, str] | None = None) -> list[dict]:
     """The P2 messages to rewrite now that these findings cleared (owner, 2026-10-20: "when a P2 clears, Telegram must
-    say so — as an UPDATE of the existing message, never a new message"): each cleared item marked with settings.yaml
-    `told_cleared.line` — back at {time}, watched until {until} (the next night check: Problems.confirms_by, the
-    Cockpit's Watched), never a bare "back to normal" while it is still watched (architecture review N, 2026-10-27) —;
+    say so — as an UPDATE of the existing message, never a new message"): each cleared item marked cleared at {time},
+    watched until {until} (status_words.watched; the next night check: Problems.confirms_by, the Cockpit's Watched),
+    never a bare "back to normal" while it is still watched (architecture review N, 2026-10-27) —;
     each one an alert now follows (`handed`: finding id → its close note, nightly.handed_to_alerts) with that note. The
-    title `all_title` once every item of the message is settled. Nothing when `tell` is off, or when the words are not
-    given (named on stderr, never guessed)."""
+    title `all_title` once every item of the message is settled. Nothing when `tell` is off."""
     words = settings.get("told_cleared") or {}
     if not words.get("tell"):
         return []
-    line = words.get("line")
-    if not isinstance(line, str) or "{time}" not in line:
-        print("preventive-maintenance settings.yaml: told_cleared needs `line` with {time}: a P2 that clears is not "
-              "said on its message", file=sys.stderr)
-        return []
-    when, until = clock(at, zone or "UTC", days=False), night_clock()
+    when, until = moment_label(at, zone or "UTC"), night_clock()
     changes = {int(f): {"kind": "watch", "time": when, "until": until} for f in closed_ids or ()}
     changes.update({int(f): {"kind": "handed", "note": n} for f, n in (handed or {}).items()})
     backup = words.get("fallback")
@@ -981,13 +997,13 @@ def told_cleared(store, closed_ids, at: datetime, zone: str, settings: dict,
 
 
 def told_watch_over(store, at: datetime, zone: str, settings: dict) -> list[dict]:
-    """At the night check, after its findings are recorded: each told item still watched is over — closed (`closed_line`,
-    {time}: now) when its finding stayed closed, back (`back_line`) when the night found it again. The messages rewritten,
+    """At the night check, after its findings are recorded: each told item still watched is over — closed ({time}: now)
+    when its finding stayed closed, back when the night found it again. The messages rewritten,
     no reply: nothing new to act on, as an alert whose watch ends."""
     keys = store.cache_get(WATCHING) or []
     if not keys:
         return []
-    when, changes = clock(at, zone or "UTC", days=False), {}
+    when, changes = moment_label(at, zone or "UTC"), {}
     for key in keys:
         rec = _told_rec(store, key)
         for i, st in (_latest(rec) if rec else {}).items():
@@ -1000,9 +1016,9 @@ def told_watch_over(store, at: datetime, zone: str, settings: dict) -> list[dict
 def told_again(store, tasks: list[dict], kind: str, zone: str, settings: dict) -> tuple[list[dict], set[int]]:
     """These tasks' steps (a finding's, by recheck.py: still there after a person's close, `kind` "still"; reopened by a
     person in the Cockpit, "reopened") added to the message that told them: its rewrites, and the ids of the tasks
-    said there — no separate message for those (owner, 2026-10-27: "I don't want a separate message"). Its words:
-    `still_there_after_close.line` / `reopened_in_kiosk.line`; without them nothing is marked."""
-    if kind not in _told_lines(settings):
+    said there — no separate message for those (owner, 2026-10-27: "I don't want a separate message"), each step
+    as the alert card says it (_told_line)."""
+    if kind not in TOLD_STATES:
         return [], set()
     changes, task_of = {}, {}
     for t in tasks:
@@ -1010,9 +1026,9 @@ def told_again(store, tasks: list[dict], kind: str, zone: str, settings: dict) -
         if src.startswith("finding:"):
             fid = int(src.split(":", 1)[1])
             task_of[str(fid)] = int(t["id"])
-            changes[fid] = {"kind": kind, "time": clock(datetime.fromisoformat(
-                str(t.get("reopened_at") or t.get("done_at") or datetime.now(timezone.utc).isoformat())), zone or "UTC",
-                days=False), "who": t.get("reopened_by")}
+            changes[fid] = {"kind": kind, "time": moment_label(datetime.fromisoformat(
+                str(t.get("reopened_at") or t.get("done_at") or datetime.now(timezone.utc).isoformat())), zone or "UTC"),
+                "who": t.get("reopened_by")}
     if not changes:
         return [], set()
     keys = _told_mark(store, changes)

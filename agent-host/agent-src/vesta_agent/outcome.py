@@ -111,10 +111,14 @@ class Outcome:
         key, n = str(e.get("key") or ""), 0
         if not key:
             return 0
-        fallback = str(e.get("fallback") or "")
+        fallback, text = str(e.get("fallback") or ""), str(e.get("text") or "")
+        text_in = e.get("text_in") if isinstance(e.get("text_in"), dict) else None
         for chat, rec in self.state.kept_messages(key).items():
             title = e.get("title") or rec.get("title") or ""
-            if await self.poster.rewrite(chat, rec["mid"], title, rec.get("to") or "", str(e.get("text") or ""), key=key):
+            # each chat's copy in the language it reads (the skill's `text_in`), the tablet's as written
+            lang = self.notices.lang(chat) if self.notices and hasattr(self.notices, "lang") else "en"
+            if await self.poster.rewrite(chat, rec["mid"], title, rec.get("to") or "", pick(text, text_in, lang), key=key,
+                                         kept=text):
                 n += 1
                 continue
             if not fallback:

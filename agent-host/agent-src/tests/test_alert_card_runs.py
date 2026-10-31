@@ -118,7 +118,7 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     assert set(agent.thread.shown(1)) == {GROUP, FM_CHAT}
     back = card(agent, GROUP)
     assert back.startswith("#1-P2 (existing)\nTo: FM\n")
-    assert re.fullmatch(rf"Back at {T}, Back again: 2 times in 7 days \(to: FM\)",
+    assert re.fullmatch(rf"Back at {T}, 2nd time in 7 days \(to: FM\)",
                         status(back).removeprefix("⚠️ ⚙️ ")), status(back)
     before = card(agent, GROUP)
     tick(agent, 20)                                     # the reminder: to the FM alone

@@ -18,18 +18,6 @@ still_count:
   ja: "継続中：{since} 以降 {count} 回"
   ko: "계속됨: {since} 이후 {count}회"
 
-back_again:
-  en: "Back again: {runs} times in {days} days"
-  fr: "De retour: {runs} fois en {days} jours"
-  id: "Muncul lagi: {runs} kali dalam {days} hari"
-  de: "Wieder da: {runs} Mal in {days} Tagen"
-  es: "De nuevo: {runs} veces en {days} días"
-  it: "Di nuovo: {runs} volte in {days} giorni"
-  nl: "Weer terug: {runs} keer in {days} dagen"
-  zh: "再次出现：{days} 天内 {runs} 次"
-  ja: "再発：{days}日間で{runs}回"
-  ko: "재발: {days}일 동안 {runs}회"
-
 no_answer:
   en: "No answer after {after}"
   fr: "Pas de réponse après {after}"

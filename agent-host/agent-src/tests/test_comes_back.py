@@ -81,7 +81,7 @@ def test_an_alert_back_again_reopens_its_own_fault_titled_with_how_often(tmp_pat
     assert len(store.tasks(None)) == 1                                             # never a new task for it
     assert last["actions"] == [{"action": "faults_changed"}]                       # what it says: the task's (card)
     (task,) = store.tasks(None)                                                    # the first one, open again each time
-    assert task["reopened_at"] and task["summary"].endswith("(again: 4 times in 7 days)"), task   # Done since
+    assert task["reopened_at"] and task["summary"].endswith("(4th time in 7 days)"), task   # Done since
     # its Telegram messages are "back", their history line says so
     assert {s["stage"] for s in last["send"]} == {"back"}
 
@@ -95,7 +95,7 @@ def test_every_run_of_an_alert_is_counted_by_the_digest_the_reports_and_the_retu
     assert [o["opened_at"][:13] for o in runs] == [(T0 + timedelta(hours=k)).isoformat()[:13] for k in range(3)]
     assert store.count_incidents("automation.ap", T0.isoformat()) == 3
     (row,) = [p for p in Problems(store).open_problems() if p["incident"] == iid]
-    assert row["title"].endswith("(again: 3 times in 7 days)")
+    assert row["title"].endswith("(3rd time in 7 days)")
     assert row["since"] == (T0 + timedelta(hours=2)).isoformat()[:10]
     # its latest run is when it opened: reopened two days on, it is news that day, never "still open since the 1st"
     store.update_incident(iid, closed_at=(T0 + timedelta(days=1)).isoformat())
@@ -145,7 +145,7 @@ def test_the_kiosk_fault_keeps_again_in_its_name(tmp_path):
     pb.close_finding(store.finding(first["new"][0]["id"]), "2026-10-08", "back")
     night = pb.record_night([F()], "2026-10-09", **rules)
     (back,) = night["task_ids"]
-    assert pb.current_title(store.task(back)) == "Relay offline (again: 2 times in 7 days)"
+    assert pb.current_title(store.task(back)) == "Relay offline (2nd time in 7 days)"
 
 
 def test_a_reopened_task_whose_old_resolution_is_seen_reopens_its_fault_and_a_lost_resolve_is_redone(tmp_path):
@@ -158,7 +158,7 @@ def test_a_reopened_task_whose_old_resolution_is_seen_reopens_its_fault_and_a_lo
     k.held("t-old", "t-lost")
     k.person_closes("t-old", by="Facility manager", at="2026-10-01T08:00:00.000Z")
     pb.close(tid, "done")
-    pb.reopen_task("incident", iid, "automation.ap", "sensor.ap", "AP down (again: 2 times in 7 days)")
+    pb.reopen_task("incident", iid, "automation.ap", "sensor.ap", "AP down (2nd time in 7 days)")
     # a closed task whose fault's resolve never reached the Kiosk
     gid = st.new_incident("g", "automation.gate", "lock.gate", "P2", {"message": "Gate open"})
     lost, _ = pb.open_task("incident", gid, "automation.gate", "lock.gate", "Gate open")
@@ -216,7 +216,7 @@ def test_a_returning_fault_the_kiosk_never_had_is_made_with_its_check_note(tmp_p
     fid, _ = st.raise_finding("PM-ENERGY-CHANGE", "sensor.onsen_energy", "energy", "2026-10-09", "P3", "Onsen pump low", {})
     tid, _ = pb.open_task("finding", fid, "PM-ENERGY-CHANGE", "sensor.onsen_energy", "Onsen pump low",
                           "Look at the pump's strainer.")
-    assert run(v.tickets.reopen({"task_id": tid, "title": "Onsen pump low (again: 2 times in 7 days)", "note": "Back again."}))
+    assert run(v.tickets.reopen({"task_id": tid, "title": "Onsen pump low (2nd time in 7 days)", "note": "Back again."}))
     assert k.notes[-1] == "What to do: Look at the pump's strainer."
 
 

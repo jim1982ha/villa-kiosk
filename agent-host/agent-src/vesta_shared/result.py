@@ -128,15 +128,18 @@ def _key(key: str) -> str:
 
 
 def edit(key: str, text: str, title: str | None = None, *, fallback: str | None = None, to: str | None = None,
-         fallback_title: str | None = None) -> dict:
+         fallback_title: str | None = None, text_in: dict | None = None) -> dict:
     """Rewrite the message sent earlier with `key` (message(key=…)), in every chat it went to, in its layout: its new
     `text` and, when given, its new `title`. Carried under a result's "edits".
 
     ⚠️ AND A BACKUP WHEN IT CANNOT BE (owner, 2026-10-20: "isn't it a risk of never receiving the information?"): with
     `fallback`, a chat whose copy cannot be rewritten (Telegram refuses, it was deleted, it was two pages) gets ONE new
     message saying `fallback`, as a reply to the copy it could not rewrite; when no copy was kept at all, it goes to
-    `to` (a role) under `fallback_title`. Without `fallback`, it is left as it is — the engine logs it."""
+    `to` (a role) under `fallback_title`. Without `fallback`, it is left as it is — the engine logs it. `text_in`: the text in other languages ({code: text}, the skill's own words): each chat's copy
+    is rewritten in the one it reads (status_words.pick), the tablet's as written (architecture review round 11, card 1:
+    the night check's Status came in English in a French chat)."""
     e = {"key": _key(key), "text": text}
+    e.update(_in("text_in", text_in))
     if title:
         e["title"] = title
     if fallback:

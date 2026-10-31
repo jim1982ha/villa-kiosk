@@ -17,7 +17,7 @@ from vesta_shared.problems import Problems, problem_name
 from vesta_shared.store import Store
 
 ALERT = "🚨 [VESTA-PUMP] Pool pump stopped\nsensor reads off\n10 min, held 12 min"
-NAME = "Pool pump stopped (again: 3 times in 7 days)"
+NAME = "Pool pump stopped (3rd time in 7 days)"
 
 
 def _villa(tmp_path):
@@ -51,6 +51,6 @@ def test_a_three_line_alert_back_again_has_the_same_name_in_the_cockpit_the_morn
 
 def test_a_long_name_is_cut_before_how_often_it_came_back_never_through_it():
     named = problem_name("🚨 " + "Pool pump " * 40 + "\nsecond line", 2)
-    assert named["headline"].endswith(" (again: 3 times in 7 days)") and len(named["headline"]) == problem_title_chars()
+    assert named["headline"].endswith(" (3rd time in 7 days)") and len(named["headline"]) == problem_title_chars()
     assert problem_name(named["headline"])["headline"] == named["headline"]              # named again: unchanged
     assert problem_name("Battery low") == {"headline": "Battery low", "detail": ""}

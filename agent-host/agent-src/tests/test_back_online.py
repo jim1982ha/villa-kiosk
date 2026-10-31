@@ -123,7 +123,7 @@ def test_a_p2_back_again_is_told_at_once_with_how_often():
     # the night check's message in the one shape (review 30): its title as data, "Back again:", what to do
     (m,) = said
     assert m["title"] == "Example, night check on 10/10/2026." and \
-        m["text"] == "Back again:\n- Plug offline (again: 3 times in 7 days)\nWhat to do: Look at the plug."
+        m["text"] == "Back again:\n- Plug offline (3rd time in 7 days)\nWhat to do: Look at the plug."
 
 
 def test_the_night_runs_output_carries_those_messages(monkeypatch, capsys):
@@ -136,7 +136,7 @@ def test_the_night_runs_output_carries_those_messages(monkeypatch, capsys):
                                                       "again": [back], "tasks_resolved": []})
     nightly.main(["--pack", "p.json"])
     out = json.loads(capsys.readouterr().out)
-    assert [m["text"] for m in out["send"]] == ["Back again:\n- Plug offline (again: 2 times in 7 days)\nWhat to do: Look."]
+    assert [m["text"] for m in out["send"]] == ["Back again:\n- Plug offline (2nd time in 7 days)\nWhat to do: Look."]
 
 
 def test_a_sensor_that_reports_every_five_minutes_is_back_when_it_was_not_offline_in_the_last_minutes(tmp_path):
@@ -278,7 +278,7 @@ def test_a_device_offline_again_within_the_week_says_so(tmp_path):
     assert _run_engine(tmp_path, _off_since(later), later + timedelta(minutes=11))["actions"] == MOVED
     st = Store(str(tmp_path / "s.sqlite"))
     (task,) = st.tasks(None)                                                     # its own task, open again
-    assert task["status"] == "open" and "(again: 2 times in 7 days)" in Problems(st).card(task)["title"], task
+    assert task["status"] == "open" and "(2nd time in 7 days)" in Problems(st).card(task)["title"], task
 
 
 def test_a_device_an_offline_alert_already_follows_gets_no_second_fault(tmp_path):
@@ -393,7 +393,12 @@ def test_a_close_after_the_device_came_back_stays_closed(tmp_path):
 def test_without_its_settle_time_a_persons_close_holds_and_the_missing_setting_is_named(tmp_path, monkeypatch):
     sys.path.insert(0, os.path.join(SKILL, "scripts"))
     import nightly
-    assert nightly.still_there_minutes({"still_there_after_close": {"minutes": 10}}) == 10.0
+    # the alert desk's clear_minutes, its villa's own on top (architecture review round 11, card 1: defined once)
+    (tmp_path / "rules.yaml").write_text("behaviour:\n  clear_minutes: 10\n")
+    (tmp_path / "villa.rules.yaml").write_text("behaviour:\n  clear_minutes: 25\n")
+    monkeypatch.setattr(nightly, "DESK", str(tmp_path))
+    assert nightly.still_there_minutes({"still_there_after_close": {"minutes": 10}}) == 25.0   # its own copy: unread
+    monkeypatch.setattr(nightly, "DESK", str(tmp_path / "none"))
     assert nightly.still_there_minutes({}) is None                                      # never a default of the code
 
 

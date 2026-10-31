@@ -115,4 +115,9 @@ def test_a_close_in_the_cockpit_holds_as_long_for_a_night_fault_as_for_an_alert(
             return yaml.safe_load(f)
     desk = read("alert-desk", "rules.yaml")
     night = read("preventive-maintenance", "settings.yaml")
-    assert night["still_there_after_close"]["minutes"] == desk["behaviour"]["clear_minutes"]
+    # ⚠️ DEFINED ONCE (architecture review round 11, card 1): the night check reads the desk's own setting, no copy
+    assert "minutes" not in night["still_there_after_close"]
+    import sys
+    sys.path.insert(0, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts"))
+    import nightly
+    assert nightly.still_there_minutes(night) == float(desk["behaviour"]["clear_minutes"])

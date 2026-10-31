@@ -123,6 +123,12 @@ def acted(what: str, when: str, who: str = "") -> str:
 COCKPIT = {"closed": "Done in the Cockpit", "help": "Need help in the Cockpit", "taken": "Ticket opened in the Cockpit",
            "reopened": "Reopened in the Cockpit", "look_again": "Please look again."}
 
+#: How a night check's fault that cleared moves on, as its message's Status says it (status_words writes each other
+#: language, key for key): watched until the next night check, then closed when that night did not find it again.
+#: ⚠️ THE ALERT CARD'S SHAPE (architecture review round 11, card 1): the night check wrote "✅ Back to normal at 06:00,
+#: watched until 02:00" in English only, beside the alert card's "Cleared on 11/10/2026 06:00." in the chat's language.
+NIGHT = {"watched": "watched until {until}", "closed": "Closed", "not_back": "it did not come back"}
+
 #: Where a person's Done on an alert was given: Telegram's button, the tablet's notice (its copy of the alert), the
 #: Cockpit's card. ⚠️ ONE DONE, ONE WORDING (architecture review, 2026-10-30 evening: the reports said "Done", "Done
 #: (Closed in the Cockpit)" or "Done (Done in the Cockpit)" for the same press, and a Telegram Done was later called a
