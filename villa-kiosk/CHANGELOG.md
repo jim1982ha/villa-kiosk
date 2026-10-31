@@ -1,3 +1,15 @@
+## 2.496.637
+
+What you will see:
+- Every box that searches for a device finds it the same way: by the name the screens show, by the name the villa's
+  system gives it, by its room, and by its id. Typing "pool" now finds the pool's devices in "Add a device…"
+  (Asleep devices, Grouped devices, Bindings) and in the Grouped devices filter, as it already did in Settings ›
+  Devices.
+- The device box of the ticket form and of Spend now looks and behaves like the other device boxes: it opens with the
+  list as soon as you tap it, shows up to 60 devices instead of 8, and typing narrows it. It still keeps what you type
+  when no device matches ("it will be saved as free text"), still flags an offline device, and its × still clears it
+  (the × shows while the list is closed).
+
 ## 2.496.636
 
 What you will see:

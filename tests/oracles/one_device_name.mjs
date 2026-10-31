@@ -9,7 +9,8 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { ck, done, tsFiles } from "../consistency/check.mjs";
-const { labelOf, matchesName } = await import("@/config/EntityMap");
+const { labelOf } = await import("@/config/EntityMap");
+const { entitySearch } = await import("@/config/deviceRecord");
 const { presenceWhy } = await import("@/config/presence");
 const { updatesWaiting } = await import("@/config/updatesWaiting");
 const { energyStatName, energySetup } = await import("@/config/energyModel");
@@ -58,7 +59,7 @@ ck("labelOf, the one rule all of them read: VESTA's label, else the villa's syst
    labelOf("light.example_unnamed", entityMap, ents) === "Platform lamp" && labelOf("person.a", entityMap, ents) === "Guest host");
 
 console.log("\n  the pickers find a device by either name (owner, 2026-10-28):");
-const found = (q) => Object.keys(ents).filter((id) => matchesName(q, id, entityMap, ents)).sort().join();
+const found = (q) => entitySearch(q, { entityMap, entities: ents, resolvedRooms: {} }).join();
 ck("by VESTA's name", found("guest HOST") === "person.a", found("guest HOST"));
 ck("  ...by the villa's system's name", found("platform person") === "person.a", found("platform person"));
 ck("  ...by its id", found("example_meter") === "sensor.example_meter_energy", found("example_meter"));
@@ -75,7 +76,7 @@ for (const f of tsFiles(SRC)) {
 }
 // Each one feeds the shared rule (displayLabelFor) with the stored label, or names the villa's system itself.
 const ALLOWED = {
-  "config/EntityMap.ts": "the rule itself: labelOf, matchesName",
+  "config/EntityMap.ts": "the rule itself: labelOf, searchNames",
   "types/ha.types.ts": "the attribute's type",
   "agent/agentView.ts": "displayLabelFor with the stored label: the Agent's copy of every screen's name",
   "components/panels/openDevice.ts": "displayLabelFor with the window's mapping label",
@@ -100,7 +101,8 @@ for (const f of ["components/settings/UnavailableByDesign.tsx", "components/sett
   const sf = ts.createSourceFile("p.tsx", readFileSync(`${SRC}components/settings/EntityPicker.tsx`, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const visit = (n) => { if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) calls.add(n.expression.text); ts.forEachChild(n, visit); };
   visit(sf);
-  ck("  ...the entity picker searches with matchesName and names each row with labelOf", calls.has("matchesName") && calls.has("labelOf"), [...calls]);
+  ck("  ...the entity picker searches with entitySearch (every device search's texts) and names each row with labelOf",
+     calls.has("entitySearch") && calls.has("labelOf"), [...calls]);
 }
 
 done("✅ a device has one name, VESTA's, on every screen; the pickers find it by either name");

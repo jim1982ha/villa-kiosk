@@ -20,7 +20,8 @@ import type { DeviceGroup } from "@/config/AppConfig";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RemovablePill from "@/components/common/RemovablePill";
 import { countOf } from "@/utils/countOf";
-import { matchesQuery } from "@/config/deviceRecord";
+import { groupMatches } from "@/config/deviceRecord";
+import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 
 export default function GroupedDevices({ heading }: { heading?: ReactNode } = {}) {
   const { config, update } = useConfig();
@@ -33,13 +34,11 @@ export default function GroupedDevices({ heading }: { heading?: ReactNode } = {}
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [search, setSearch] = useState("");
 
-  // ⚠️ MATCH THE ENTITY ID *AND* THE LABEL, both roles. An owner looking for a
-  // group knows it by the name on screen; the id is what the row prints.
-  const matches = useMemo(() => config.deviceGroups.filter((g) => matchesQuery(search,
-    g.primaryEntityId, entityLabel(g.primaryEntityId),
-    ...g.memberEntityIds, ...g.memberEntityIds.map(entityLabel),
-  )),
-  [config.deviceGroups, search, entityLabel]);
+  // ⚠️ EVERY DEVICE OF THE GROUP, BY WHAT ANY DEVICE IS FOUND BY (deviceRecord.deviceSearchTexts: the name on screen,
+  // the villa's system's name, the room, the id), its lead and its members alike: it matched only ids and names
+  const searchSource = useDeviceSearch();
+  const matches = useMemo(() => config.deviceGroups.filter((g) => groupMatches(g, search, searchSource)),
+    [config.deviceGroups, search, searchSource]);
   const shown = useTruncated(matches);
 
   const suggestions = useMemo(

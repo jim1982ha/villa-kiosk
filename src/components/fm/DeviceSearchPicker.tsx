@@ -17,21 +17,27 @@
 // doesn't exist yet); this accepts ANY text, because "Spare pool pump" is a
 // legitimate device description here, not an entity_id.
 //
+// ⚠️ THE SHARED PICKER'S LIST, IN ITS FREE-TEXT MODE (architecture review 2026-10-31 round 12 #2): this file built
+// its own box, eight results and a list that opened only once something was typed, before common/SearchPicker
+// existed; its search was its own too. It is now that picker's rows (deviceSearchRows: every device search's texts,
+// the names starting with what is typed first) and its `text` mode, which keeps what was typed as the value.
+//
 // Fully controlled, no internal value state — mirrors the plain controlled
 // <input>s already used for `title`/`label` elsewhere in these forms, so a
 // quick-pick chip and this box can drive the exact same parent state without
 // a resync problem.
 
-import { useMemo, useRef, useState } from "react";
-import { useOutsideClose } from "@/hooks/useOutsideClose";
-import { Search, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { X } from "lucide-react";
 import type { EntityMapping } from "@/types/scene.types";
 import { labelOf } from "@/config/EntityMap";
 import type { VillaDevices } from "@/config/deviceGroups";
 import { lostContact } from "@/utils/stateColors";
 import { deviceRoom } from "@/config/devicePlace";
 import type { HassEntity } from "@/types/ha.types";
-import { matchesQuery } from "@/config/deviceRecord";
+import { deviceSearchTexts, matchesQuery, type SearchSource } from "@/config/deviceRecord";
+import { useDeviceSearch } from "@/hooks/useDeviceSearch";
+import SearchPicker, { type SearchRow } from "@/components/common/SearchPicker";
 
 export interface DeviceOption {
   entityId: string;
@@ -70,10 +76,30 @@ export function buildDeviceOptions(
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-const MAX_RESULTS = 8;
+/** The devices a typed search finds, by what every device search finds a device by (deviceSearchTexts); those whose
+ *  name starts with it first, then the rest, each in the options' order. Everything for an empty search. Pure. */
+export function deviceSearchRows(options: readonly DeviceOption[], query: string, src: SearchSource): DeviceOption[] {
+  const q = query.trim().toLowerCase();
+  const found = options.filter((o) => matchesQuery(q, ...deviceSearchTexts(o.entityId, src)));
+  return [...found.filter((o) => o.label.toLowerCase().startsWith(q)), ...found.filter((o) => !o.label.toLowerCase().startsWith(q))];
+}
 
 function roomHint(room: string | undefined): string {
   return room?.trim() || "no room set";
+}
+
+/** A device as the shared picker's row: its name with the offline flag, then its id and room. */
+function rowOf(o: DeviceOption): SearchRow {
+  return {
+    key: o.entityId,
+    label: <span className="fm-picker-label">
+      {o.label}
+      {o.offline && <span className="fm-picker-flag offline">offline</span>}
+    </span>,
+    // The entity_id is shown, not just the friendly label: a row reading "Hallway" tells an operator nothing they can
+    // act on, while "sensor.hallway_temperature" names it exactly. The room comes second, the weaker hint of the two.
+    sub: <span className="fm-picker-meta"><code>{o.entityId}</code><span>{roomHint(o.room)}</span></span>,
+  };
 }
 
 export default function DeviceSearchPicker({
@@ -95,42 +121,25 @@ export default function DeviceSearchPicker({
    *  clear affordance and a small "linked" hint instead of a bare textbox. */
   matchedEntityId?: string;
 }) {
+  const src = useDeviceSearch();
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useOutsideClose([containerRef], open, () => setOpen(false));
-
-  const results = useMemo(() => {
-    const q = value.trim().toLowerCase();
-    if (!q) return [];
-    const starts: DeviceOption[] = [];
-    const contains: DeviceOption[] = [];
-    for (const o of options) {
-      // one text, as before: a search may run across the label and the room ("kitchen tap")
-      if (!matchesQuery(q, `${o.label} ${o.room ?? ""} ${o.entityId}`)) continue;
-      (o.label.toLowerCase().startsWith(q) ? starts : contains).push(o);
-    }
-    return [...starts, ...contains].slice(0, MAX_RESULTS);
-  }, [value, options]);
-
+  const byId = useMemo(() => new Map(options.map((o) => [o.entityId, o])), [options]);
   return (
-    <div ref={containerRef} className="picker">
-      <div className="config-search">
-        <Search size={16} />
-        <input
-          value={value}
-          placeholder={placeholder ?? "Search devices, or type a description…"}
-          onFocus={() => setOpen(true)}
-          onChange={(e) => { onChangeText(e.target.value); setOpen(true); }}
-        />
-        {value && (
+    <>
+      <SearchPicker
+        text={{ value, onChange: onChangeText }}
+        rows={(query) => deviceSearchRows(options, query, src).map(rowOf)}
+        onPick={(id) => { const o = byId.get(id); if (o) onSelect(o); }}
+        onOpenChange={setOpen}
+        placeholder={placeholder ?? "Search devices, or type a description…"}
+        none={(q) => `No device matches "${q}", it will be saved as free text.`}
+        trailing={value && (
           <button type="button" className="icon-btn" style={{ width: 28, height: 28 }}
-            onClick={() => { onClear(); setOpen(false); }} aria-label="Clear device">
+            onClick={onClear} aria-label="Clear device">
             <X size={16} />
           </button>
         )}
-      </div>
-
+      />
       {matchedEntityId && !open && (
         <div className="muted body-text field-hint">
           Linked to <strong>{matchedEntityId}</strong>
@@ -141,44 +150,6 @@ export default function DeviceSearchPicker({
           No matching device, this will be saved as free text.
         </div>
       )}
-
-      {open && value.trim() && (
-        <div className="picker-dropdown">
-          {results.length === 0 && (
-            <div className="muted body-text" style={{ padding: 12, fontSize: "var(--text-sm)" }}>
-              No device matches "{value.trim()}", it will be saved as free text.
-            </div>
-          )}
-          {results.map((o) => (
-            <button
-              key={o.entityId}
-              type="button"
-              className="row picker-option"
-              // Fires before the input's onBlur, so the click registers
-              // instead of the dropdown closing out from under it first.
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onSelect(o); setOpen(false); }}
-            >
-              {/* The entity_id is shown, not just the friendly label. A label
-                  alone is frequently not enough to know what you are picking —
-                  a row reading "Hallway" tells an operator nothing they can
-                  act on, while "sensor.hallway_temperature" names it exactly. The
-                  room comes second because it is the weaker hint of the two
-                  and is often not set at all. */}
-              <span style={{ flex: 1, textAlign: "left", minWidth: 0 }}>
-                <span className="fm-picker-label">
-                  {o.label}
-                  {o.offline && <span className="fm-picker-flag offline">offline</span>}
-                </span>
-                <span className="fm-picker-meta muted">
-                  <code>{o.entityId}</code>
-                  <span>{roomHint(o.room)}</span>
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    </>
   );
 }

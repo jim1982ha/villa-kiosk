@@ -4,15 +4,17 @@
 //
 // ⚠️ ONE OWNER OF A DEVICE'S NAME (owner, 2026-10-28): it showed the villa's system's raw name, deliberately (so a
 // device renamed in VESTA stayed findable by the name the villa's system knows), and was the one screen calling a
-// device something else. It SHOWS the name every screen shows (labelOf), and its search matches BOTH names and the id
-// (EntityMap.matchesName), so renaming a device never makes it unfindable.
+// device something else. It SHOWS the name every screen shows (labelOf), and its search finds BOTH names, the room and
+// the id (deviceRecord.deviceSearchTexts, every device search's), so renaming a device never makes it unfindable.
 
 import { useState } from "react";
 import { X } from "lucide-react";
 import SearchPicker, { type SearchRow } from "@/components/common/SearchPicker";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
-import { labelOf, matchesName } from "@/config/EntityMap";
+import { labelOf } from "@/config/EntityMap";
+import { entitySearch } from "@/config/deviceRecord";
+import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 import { ENTITY_ID_RE } from "@/utils/sh3dParser";
 import { domainOf } from "@/utils/entityDomain";
 import { deviceRowText } from "@/utils/entityValue";
@@ -48,16 +50,13 @@ export default function EntityPicker({
   const { entities } = useHA();
   const { entityMap } = useConfig().config;
   const nameOf = (id: string) => labelOf(id, entityMap, entities);
+  const search = useDeviceSearch();
   // the list's open state is the shell's (SearchPicker); the selection's words show while it is closed
   const [open, setOpen] = useState(false);
 
-  const rows = (query: string): SearchRow[] => Object.values(entities)
-    .filter((e) => !domains || domains.includes(domainOf(e.entity_id)))
-    .filter((e) => matchesName(query, e.entity_id, entityMap, entities))
-    .sort((a, b) => a.entity_id.localeCompare(b.entity_id))
-    .slice(0, 60)
+  const rows = (query: string): SearchRow[] => entitySearch(query, search, domains)
     // Worded as every other row (deviceRowText): "Normal", "21.4 °C" — not "off", "21.4"
-    .map((e) => ({ key: e.entity_id, label: nameOf(e.entity_id), sub: e.entity_id, side: deviceRowText(e, domainOf(e.entity_id)) }));
+    .map((id) => ({ key: id, label: nameOf(id), sub: id, side: deviceRowText(entities[id], domainOf(id)) }));
 
   const selected = value ? entities[value] : undefined;
   // What to show once a pick has been made — the entity's name as every screen shows it, or (allowCustom) the raw
