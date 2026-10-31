@@ -1,3 +1,15 @@
+## 2.496.635
+
+What you will see:
+- Every device window now shows the same "Missing" block for a device the villa's system no longer has: since when
+  it is missing (the time VESTA gives on Telegram) and what to check. Before, only the windows of lights, locks,
+  switches and a few others had it; a missing sensor said only "UNAVAILABLE", and a missing camera "Camera
+  unavailable".
+- A device that has only lost contact shows "UNAVAILABLE" at the same place, the top of its window, in every
+  window, sensors included.
+- In "Also on this device" and in a grouped device's window, a reading the villa's system no longer has says
+  "MISSING" instead of "UNAVAILABLE".
+
 ## 2.496.634
 
 What you will see:
