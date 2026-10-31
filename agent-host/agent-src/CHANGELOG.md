@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.417 (1 November 2026)
+
+- `vesta_shared.offline`: held_since/offline_since name the entities that gave no real reading in the read (`blind`);
+  devices_offline takes a device's offline moment (and "over") from its entities that did report, when it has any
+  (villa, 2026-11-01: UniFi access points flapped 6 min, read "offline for over 8d" through their never-pressed Restart
+  buttons). tests/test_offline.py replays it, both halves proven red.
+
 ## 0.6.416 (1 November 2026)
 
 - Architecture review round 13, card 7 (Agent half): `tests/kiosk_fake.py` keeps a pushed message as the add-on's

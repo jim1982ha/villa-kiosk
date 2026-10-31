@@ -261,3 +261,37 @@ def test_when_a_sensor_really_last_reported_is_read_past_a_restart_and_never_for
     assert real == {"sensor.stamped": last, "sensor.repeats": NOW - timedelta(hours=1), "sensor.old_ha": last}, real
     assert asked == [["sensor.old_ha", "sensor.stamped"]]                         # one read, only those it can change
     assert reported_since(None, states, NOW)["sensor.stamped"] == restart       # no history: the stamps, as before
+
+
+def test_an_entity_that_never_reports_does_not_say_when_its_device_went():
+    # villa, 2026-11-01: five access points flapped for 6 minutes at 00:29 and read "AP … has been offline for over
+    # 8d", raised at once: each one's Restart button reads "unknown" until pressed, gave no real reading in the 7 days
+    # read, and counted as offline since the read's start. The device's state sensor said "connected" until 00:29.
+    went = NOW - timedelta(minutes=3)
+    fams = {"network": [_row("sensor.ap9_state", "AP State", "ap9", "network", "ap9", "unifi"),
+                        _row("button.ap9_restart", "AP Restart", "ap9", "network", "ap9", "unifi")]}
+    pack = KnowledgePack(villa="V", time_zone="UTC", generated_at="", ha_version=None, families=fams, assets={},
+                         areas=[], people=[], channels={}, unknown_area=[], unclassified=[], retention={},
+                         devices={"ap9": {"name": "AP Pool"}}, critical=[])
+    states = {"sensor.ap9_state": {"state": "unavailable", "last_changed": went.isoformat()},
+              "button.ap9_restart": {"state": "unavailable", "last_changed": went.isoformat()}}
+
+    def history(ids, start, end):
+        h = lambda *pts: [{"state": s, "last_changed": t.isoformat()} for t, s in pts]   # noqa: E731
+        return {"sensor.ap9_state": h((start, "connected"), (went, "unavailable")),
+                "button.ap9_restart": h((start, "unknown"), (NOW - timedelta(days=2), "unavailable"),
+                                        (NOW - timedelta(days=2) + timedelta(seconds=20), "unknown"),
+                                        (went, "unavailable"))}
+    [ap] = devices_offline(pack, states, NOW, ["network"], history=history)
+    assert ap.since == went and ap.over is False and round(ap.hours * 60) == 3, (ap.since, ap.over, ap.hours)
+    # ...so the night's minimum keeps a 3-minute drop out, as for any device
+    assert devices_offline(pack, states, NOW, ["network"], min_minutes=10, history=history) == []
+
+    # a device none of whose entities reported in the whole read (a sensor dead for weeks) is still offline since the
+    # read began, "over"
+    def dead(ids, start, end):
+        h = lambda *pts: [{"state": s, "last_changed": t.isoformat()} for t, s in pts]   # noqa: E731
+        return {"sensor.ap9_state": h((start, "unavailable"), (went, "unavailable")),
+                "button.ap9_restart": h((start, "unknown"), (went, "unavailable"))}
+    [gone] = devices_offline(pack, states, NOW, ["network"], history=dead)
+    assert gone.over is True and gone.hours > 24 * 7, (gone.since, gone.over)

@@ -72,22 +72,24 @@ def history_days() -> int:
                  reached="One offline for longer reads \"offline for over\" this long.", told="")
 
 
-def offline_since(history, since: dict[str, datetime], now: datetime, over: set | None = None) -> dict[str, datetime]:
+def offline_since(history, since: dict[str, datetime], now: datetime, over: set | None = None,
+                  blind: set | None = None) -> dict[str, datetime]:
     """When each entity of `since` ({entity: its last_changed}) REALLY went offline: held_since with every one offline.
 
     ⚠️ A RESTART IS NOT A NEW OUTAGE (villa, 2026-10-25: "matter integration (3 devices) has been offline for 11h
     48min" — a sensor offline since 17 Oct and an LED strip since 21 Oct read "10h" in the daily report): a restart of
     the villa's system gives every entity a new last_changed, and every "offline for" counted from it."""
-    return held_since(history, {e: ("unavailable", t) for e, t in since.items()}, now, over)
+    return held_since(history, {e: ("unavailable", t) for e, t in since.items()}, now, over, blind)
 
 
 def held_since(history, held: dict[str, tuple[str, datetime]], now: datetime,
-               over: set | None = None) -> dict[str, datetime]:
+               over: set | None = None, blind: set | None = None) -> dict[str, datetime]:
     """Since when each entity of `held` ({entity: (its state now, its last_changed)}) REALLY is in that state: its
     history read back from its last_changed to its last real reading of another state (a gap with no reading, a
     restart's, does not end it); the start of the window read when it gave none in it — and then it is added to
-    `over`: in that state longer than was read. `history`: the client's history(entity_ids, start, end). Whatever the
-    read does (no client, an error), each keeps its last_changed.
+    `over`: in that state longer than was read. `blind`: the entities that gave no real reading at all in the read (only
+    "unknown" or "unavailable"), whose answer is the read's own edge, not a moment. `history`: the client's
+    history(entity_ids, start, end). Whatever the read does (no client, an error), each keeps its last_changed.
 
     ⚠️ THE START OF THE READ IS NOT WHEN IT WENT (villa, 2026-10-26: "Timmerflotte_2623 has been offline for 7d 22h",
     offline since 17 Oct, 8d 22h: the read began seven days before its restart clock and found no reading), so the
@@ -115,6 +117,8 @@ def held_since(history, held: dict[str, tuple[str, datetime]], now: datetime,
             out[eid] = min([last, *went[:1]])
         elif pts:
             out[eid] = min(last, pts[0][0])
+            if blind is not None:
+                blind.add(eid)
             if over is not None and out[eid] <= start + timedelta(minutes=1):   # the read's own first row
                 over.add(eid)
     return out
@@ -239,13 +243,20 @@ def devices_offline(pack, states: dict, now: datetime, families, *, min_minutes:
     groups = {k: g for k, g in groups.items() if k not in answering}
     if history is not None and went:
         longer: set[str] = set()
-        real = offline_since(history, went, now, longer)
+        blind: set[str] = set()
+        real = offline_since(history, went, now, longer, blind)
         for g in groups.values():
-            known = [real[e] for e in g.entity_ids if e in real]
+            # ⚠️ AN ENTITY THAT NEVER REPORTS SAYS NOTHING OF WHEN ITS DEVICE WENT (villa, 2026-11-01: five access points
+            # flapped for 6 minutes at 00:29 and read "has been offline for over 8d", raised at once: their Restart
+            # buttons read "unknown" until pressed, gave no reading in the 7 days read, and so counted as offline since
+            # the read's start). When some of a device's entities gave a real reading, only those say when it went;
+            # a device none of whose entities reported (a sensor dead for weeks) is still offline since the read began.
+            seeing = [e for e in g.entity_ids if e in real and e not in blind]
+            known = [real[e] for e in (seeing or g.entity_ids) if e in real]
             if known:
                 g.since = min(known)
                 g.hours = _hours(g.since, now)
-                g.over = any(real[e] == g.since for e in g.entity_ids if e in longer)
+                g.over = any(real[e] == g.since for e in (seeing or g.entity_ids) if e in longer)
     # a device an open alert already follows is that alert's: left out before the integration is counted, so the
     # others of its integration stay what they are
     if alerted:
