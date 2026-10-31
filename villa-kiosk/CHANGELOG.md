@@ -1,3 +1,14 @@
+## 2.496.625
+
+What you will see:
+- A device's window that says MISSING no longer blames the 3D model when the villa's system simply dropped the
+  device. If the villa's system had it before, the window now says when it was last seen and to check that it is
+  still connected there (for example a lock whose hub stopped sharing it); if it comes back with another name,
+  point the object at it with Edit. Only a device the villa's system has no record of still says to rename or
+  remove its object in the 3D model.
+- The device's long id no longer sits in the middle of that sentence: it is shown small underneath, for whoever
+  fixes it.
+
 ## 2.496.624
 
 What you will see:

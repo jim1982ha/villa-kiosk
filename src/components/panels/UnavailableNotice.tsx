@@ -14,6 +14,7 @@ import { missingAdvice, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
 import { useVillaModel } from "@/config/VillaModel";
 import { lostPillTone } from "@/config/reading";
 import { usePanelActions } from "./PanelActionsContext";
+import { useLastSeen } from "@/hooks/useLastSeen";
 
 interface Props {
   /** Noun for the device kind, e.g. "light", "fan", "switch" — now used for
@@ -28,15 +29,25 @@ export default function UnavailableNotice({ device = "device", entityId }: Props
   const { mappedEntityIds } = useVillaModel();
   // a critical device that lost contact: red, as the Cockpit paints it (the header's look decides — reading.lostPillTone)
   const tone = lostPillTone("unavailable", usePanelActions().badge?.critical ?? false);
+  const missing = !!entityId && missingFromHa(entities, entityId);
+  // whether the villa's system had it before: read only for a Missing device, one read per window (useLastSeen)
+  const seen = useLastSeen(missing ? entityId! : null);
   // ⚠️ NOT THE SAME AS LOST CONTACT (owner, 2026-10-14): a 3D object named after an entity Home Assistant no longer
   // has showed "UNAVAILABLE" and "Not enough history yet" — as if it might come back. It will not until the model
   // or a re-mapping changes, so it says that, in the words every surface uses (NOT_IN_HA).
-  if (entityId && missingFromHa(entities, entityId)) {
+  // ⚠️ THE ID IS FOR WHOEVER FIXES IT (owner, 2026-10-31): the sentence speaks of "this device"; the id the villa's
+  // system knows it by sits under it, small, said for what it is: what a technician searches for there or in Edit.
+  if (missing) {
     return (
       <div className="center" style={{ margin: "8px 0 20px" }}>
         <span className="status-pill unavailable"><AlertTriangle size={16} />{NOT_IN_HA.toUpperCase()}</span>
-        <p className="muted body-text" style={{ marginTop: 10 }}>
-          No device has the id <code>{entityId}</code>. {missingAdvice(mappedEntityIds.has(entityId))}
+        {seen !== "loading" && (
+          <p className="muted body-text" style={{ marginTop: 10 }}>
+            {missingAdvice(mappedEntityIds.has(entityId!), seen)}
+          </p>
+        )}
+        <p className="muted" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
+          Its id in the villa's system: <code>{entityId}</code>
         </p>
       </div>
     );
