@@ -1,3 +1,9 @@
+## 2.496.643
+
+What you will see:
+- Everything listed under 2.496.642, which was not published: a check of the tablet's own build stopped it on its way to
+  the store. Nothing else changes.
+
 ## 2.496.642
 
 What you will see:

@@ -224,14 +224,14 @@ console.log("\n  a record's life, read once (architecture review round 13: \"is 
       { at: "2026-09-02T00:00:00Z", status: "in_progress", photoIds: [] },
       { at: "2026-09-02T06:00:00Z", status: "resolved", photoIds: [] },
       { at: "2026-09-02T07:00:00Z", status: "resolved", kind: "noted", note: "Reminder sent", photoIds: [] },
-      { at: "2026-10-01T00:00:00Z", status: "open", kind: "reopened", photoIds: [] },
+      { at: "2026-10-02T00:00:00Z", status: "open", kind: "reopened", photoIds: [] },
       { at: "2026-10-03T00:00:00Z", status: "resolved", kind: "cleared", note: "Closed without action", photoIds: [] }] };
   const pick = (l) => ({ stage: l.stage, ticket: l.ticket, ticketFrom: l.ticketFrom ?? null, how: l.how ?? null,
     faultSince: l.faultSince, reopened: l.reopened, ticketMs: l.ticketMs, openMs: l.openMs, resolvedAt: l.resolvedAt ?? null });
   const H = 3_600_000;
   eq("now: reopened and cleared, a closed FAULT (not a ticket), closed with no action, a fault again since its reopening",
-     pick(recordLife(life)), { stage: "closed", ticket: false, ticketFrom: null, how: "no-action", faultSince: "2026-10-01T00:00:00Z",
-       reopened: 1, ticketMs: null, openMs: 30 * H + 48 * H, resolvedAt: "2026-10-03T00:00:00Z" });
+     pick(recordLife(life)), { stage: "closed", ticket: false, ticketFrom: null, how: "no-action", faultSince: "2026-10-02T00:00:00Z",
+       reopened: 1, ticketMs: null, openMs: 30 * H + 24 * H, resolvedAt: "2026-10-03T00:00:00Z" });
   eq("  ...at September's end: a closed TICKET, from its Open Ticket to its close (6h), closed with work done",
      pick(recordLife(life, monthBounds("2026-09").end)), { stage: "closed", ticket: true, ticketFrom: "2026-09-02T00:00:00Z", how: "work",
        faultSince: "2026-09-01T00:00:00Z", reopened: 0, ticketMs: 6 * H, openMs: 30 * H, resolvedAt: "2026-09-02T06:00:00Z" });
