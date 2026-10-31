@@ -129,12 +129,20 @@ console.log("\n  one line per item, drawn:");
 const { MessageRow } = await import("@/components/cockpit/MessagesTab");
 const issueLine = draw(h(MessageRow, { item: { kind: "issue", key: "a", card: card("a", { room: "Kitchen",
   lines: [{ key: "l", text: "Too warm", icons: null, story: [], closing: null, actions: [] }] }) }, selected: true, onSelect() {} }));
-ck("an open issue: its device, then its room and its first problem on the line under; chosen, marked",
-   /class="messages-row on"/.test(issueLine) && issueLine.includes("<b>Device a</b>") && issueLine.includes('<span class="messages-row-sub">Kitchen · Too warm</span>'), issueLine);
+// owner, 2026-11-01: the room the opened card's pill (IssueCard RoomPill), on its own line; then its first problem
+const { RoomPill } = await import("@/components/cockpit/IssueCard");
+const pill = draw(h(RoomPill, { room: "Kitchen" }));
+ck("an open issue: its device; its room, the opened card's own pill, on the line under; then its first problem; chosen, marked",
+   /class="messages-row on"/.test(issueLine) && issueLine.includes("<b>Device a</b>")
+   && issueLine.includes(`<span class="messages-row-room">${pill}</span>`) && pill.includes("fm-entity-chip")
+   && issueLine.includes('<span class="messages-row-sub">Too warm</span>')
+   && issueLine.indexOf("messages-row-room") < issueLine.indexOf("messages-row-sub"), issueLine);
+const cardSrc = readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8");
+ck("  ...the opened card draws its room with the same pill", /titlePills=\{card\.room \? <RoomPill room=\{card\.room\} \/>/.test(cardSrc));
 const noteLine = draw(h(MessageRow, { item: { kind: "notification", key: "n1", announcement: ann(1, { title: "🔔 Visitor",
   text: "Someone is at the door.\nGate A", at: "2026-10-28T10:00:00+08:00" }) }, selected: false, onSelect() {} }));
 ck("  ...a notification: its title, its first words, when it came; not chosen, not marked",
-   /class="messages-row"/.test(noteLine) && noteLine.includes("<b>🔔 Visitor</b>") && noteLine.includes('<span class="messages-row-sub">Someone is at the door.</span>')
+   /class="messages-row"/.test(noteLine) && noteLine.includes("<b>🔔 Visitor</b>") && !noteLine.includes("messages-row-room") && noteLine.includes('<span class="messages-row-sub">Someone is at the door.</span>')
    && !noteLine.includes("Gate A") && /messages-row-time">28\/10\/2026 \d\d:00</.test(noteLine), noteLine);
 
 // owner, 2026-11-01: "highlight the issue card … when a ticket had been opened for this issue"

@@ -35,7 +35,7 @@ import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent, PageLink, RecordButtons } from "@/components/messages/AnnouncementContent";
 import RecordCard from "@/components/fm/RecordCard";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
-import { AlertIssueCard, AttentionCard, CockpitAttentionRow } from "./IssueCard";
+import { AlertIssueCard, AttentionCard, CockpitAttentionRow, RoomPill } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 
 /** One line of the list — pure (a check draws it): its icon, its title, the line under it, its time. */
@@ -57,13 +57,14 @@ export function MessageRow({ item, selected, onSelect, hold }: {
       // a completed hold is followed by a click: opening the message under the code's prompt would be wrong
       onClick={() => { if (!consumeClick()) onSelect(item.key); }} {...holding}>
       <span className="messages-row-icon">{row.icon}</span>
-      {/* ⚠️ ITS LINE UNDER THE TITLE AND THE TIME, OVER THE ROW'S WHOLE WIDTH, WHOLE (owner, 2026-11-01: it was cut at
-          the time's column) */}
+      {/* ⚠️ THREE LINES (owner, 2026-11-01): its name and its time; an issue's room, the opened card's pill (RoomPill);
+          its first words on ONE line over the row's whole width, cut with "…" (it was cut at the time's column) */}
       <span className="messages-row-text">
         <span className="messages-row-head">
           <b>{row.title}</b>
           {row.time && <span className="messages-row-time">{row.time}</span>}
         </span>
+        {row.room && <span className="messages-row-room"><RoomPill room={row.room} /></span>}
         {row.sub && <span className="messages-row-sub">{row.sub}</span>}
       </span>
       {hold && <span className="fm-erasable-dot" aria-hidden="true" />}
@@ -135,7 +136,8 @@ function rowOf(item: MessageItem) {
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
         : card.lead ? <SourceIcons {...card.lead} /> : null,
       title: card.title,
-      sub: [card.room, first?.text].filter(Boolean).join(" · "),
+      room: card.room,
+      sub: first?.text ?? "",
       time: when ? momentText(when) : "",
     };
   }
@@ -144,6 +146,7 @@ function rowOf(item: MessageItem) {
   return {
     icon: item.kind === "report" ? <FileText size={18} aria-hidden="true" /> : <Bell size={18} aria-hidden="true" />,
     title: w.title,
+    room: undefined,
     sub: w.line,
     time: w.at ? momentText(w.at) : "",
   };

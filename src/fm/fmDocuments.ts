@@ -14,7 +14,7 @@
 // document unchanged, needs no viewer, and stays readable if it is ever
 // archived as plain text years later for a dispute.
 
-import { budgetStatus, capNotes, completionsInMonth, dueLine, DUE_WORDS, fmAttention, monthBounds, monthKey, monthLabel, resolvedInMonth, scheduleBoard, STAGE_WORDS, stageOf, ticketAt, ticketStats, workedBy } from "./fmEngine";
+import { budgetStatus, capNotes, closedTicketStats, completionsInMonth, dueLine, DUE_WORDS, fmAttention, monthBounds, monthKey, monthLabel, resolvedInMonth, scheduleBoard, STAGE_WORDS, stageOf, ticketAt, ticketStats, workedBy } from "./fmEngine";
 import { COST_CATEGORY_NAMES, NO_FM_TERMS, type FmData, type FmTerms } from "./fmTypes";
 import type { BudgetStatus } from "./fmEngine";
 import { AVAILABILITY_CHECK_LABEL, CHECK_WORDS, VERDICT_WORDS, type ReadinessResult } from "./readiness";
@@ -222,17 +222,23 @@ export function buildMonthlyRecap(input: RecapInput): string {
   // 2026-10-19): a pump with two faults read "Open: 2" here and "1 detected fault" in §5 of the same recap.
   const open = openCounts(fm.tickets, input.deviceOfRecord);
   L.push(`## 3. Faults and response`);
-  L.push(`- Open faults: **${open.faults}** · Tickets in progress: **${open.tickets}** (one per device, as the Overview `
-    + `and Tickets count them) · Resolved this month: **${stats.resolved}**`);
+  // ⚠️ FAULTS AND TICKETS, EACH NAMED (owner, 2026-11-01: "never a ticket unless the user has explicitly clicked on open
+  // a ticket"): "Resolved this month" and its mean counted every closed fault, beside "Tickets in progress", and read
+  // as ticket figures. The faults' line counts every record; the tickets' line only the closed tickets (closedTicketStats)
+  const taken = closedTicketStats(fm.tickets, monthBounds(month));
+  L.push(`- Open faults: **${open.faults}** · Tickets in progress: **${open.tickets}** (one per device, as Inbox › Open `
+    + `issues and Tickets count them)`);
+  L.push(`- Faults closed this month: **${stats.resolved}** with work done, **${stats.closedWithoutAction}** with no action`);
   if (stats.meanResolutionHours !== null) {
-    // Named when it covers fewer tickets than "Resolved" reports, so the two
+    // Named when it covers fewer faults than the closed count says, so the two
     // figures cannot be read as describing the same set when they do not.
     const covers = stats.meanCoversTickets === stats.resolved
       ? "" : ` (from ${stats.meanCoversTickets} of ${stats.resolved}, the rest `
-        + `carry no usable resolution time)`;
-    L.push(`- Mean time to resolution this month: **${fmtDuration(stats.meanResolutionHours * 3_600_000)}**${covers}`);
+        + `carry no usable time)`;
+    L.push(`- Mean time from a fault raised to its fix this month: **${fmtDuration(stats.meanResolutionHours * 3_600_000)}**${covers}`);
   }
-  if (stats.closedWithoutAction) L.push(`- Closed without action this month (not counted as repairs): **${stats.closedWithoutAction}**`);
+  L.push(`- Tickets closed this month (opened with Open Ticket): **${taken.resolved + taken.closedWithoutAction}**`
+    + (taken.meanResolutionHours !== null ? ` · mean time from Open Ticket to done: **${fmtDuration(taken.meanResolutionHours * 3_600_000)}**` : ""));
   L.push("");
   if (inMonth.length) {
     L.push(`| Opened | Fault | Status | Resolved | Evidence |`);
@@ -260,7 +266,7 @@ export function buildMonthlyRecap(input: RecapInput): string {
       + `(${pct.toFixed(1)}%)`);
     // ⚠️ "SEE THE FAULTS SECTION ABOVE" POINTED AT NOTHING (architecture review, 2026-10-19): a device not answering is
     // not a fault record; it is a row of Messages' Open issues, and the readiness check names it below.
-    if (off > 0) L.push(`- ${off} device(s) currently offline, listed under "Open issues" in the Cockpit's Messages, `
+    if (off > 0) L.push(`- ${off} device(s) currently offline, listed under "Open issues" in the Cockpit's Inbox, `
       + `and under "${AVAILABILITY_CHECK_LABEL}" below.`);
     L.push("");
   }

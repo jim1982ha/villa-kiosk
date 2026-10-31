@@ -204,7 +204,7 @@ console.log("\n  the Recap counts what the profile is shown (architecture review
   const check = (res, id) => res.checks.find((c) => c.id === id);
   ck("a profile shown no camera: the camera is not among its devices not reporting, nor its fault among its faults",
      check(owner, "devices-online").entityIds.includes("camera.pool") && !check(noCams, "devices-online").entityIds.includes("camera.pool")
-     && check(owner, "tickets").label === "2 detected faults (0 open tickets)" && check(noCams, "tickets").label === "1 detected fault (0 open tickets)"
+     && check(owner, "tickets").label === "2 open faults" && check(noCams, "tickets").label === "1 open fault"
      && !check(noCams, "cameras"), [check(noCams, "devices-online").entityIds, check(noCams, "tickets").label]);
   ck("  ...its device count is its own: the recap's availability section says the profile's figures",
      owner.availability.total === villa.size && noCams.availability.total === villa.size - 2
@@ -213,7 +213,7 @@ console.log("\n  the Recap counts what the profile is shown (architecture review
   const s4 = recap.split("## 4.")[1]?.split("##")[0] ?? "";
   ck("  ...and the recap's §4 is the readiness' devices, pointing where they are listed (no \"faults section\")",
      s4.includes(`**${villa.size - 4} of ${villa.size - 2}** devices reporting`)
-     && s4.includes('2 device(s) currently offline, listed under "Open issues" in the Cockpit\'s Messages, and under "All devices reporting" below.')
+     && s4.includes('2 device(s) currently offline, listed under "Open issues" in the Cockpit\'s Inbox, and under "All devices reporting" below.')
      && !/faults section/.test(recap), s4);
 }
 

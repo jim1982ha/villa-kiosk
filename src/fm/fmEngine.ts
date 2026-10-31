@@ -298,12 +298,27 @@ export function stageOf(t: { status?: FmTicket["status"] }): FmStage {
 }
 
 /** ⚠️ A TICKET IS A FAULT SOMEONE TOOK ON (owner, 2026-11-01: "189 tickets closed? … there was NEVER 189 opened
- *  tickets … are you mixing faults with tickets?"): the Tickets tab listed and counted every closed RECORD, the faults
- *  the VESTA Agent raised and cleared by itself among them. A record was a ticket once it was in progress: now, or a
- *  step of its history that moved it there (Open Ticket, a person's "Open a ticket": fmCommands). A record with no
- *  steps kept (older than them) is not counted as one: nothing says anyone took it on. Pure. */
+ *  tickets … are you mixing faults with tickets?"; "never a ticket unless the user has explicitly clicked on open a
+ *  ticket … nothing shall be counted as a closed ticket if a ticket hasn't been opened first"): the Tickets tab listed
+ *  and counted every closed RECORD, the faults the VESTA Agent raised and cleared by itself among them. A record is a
+ *  ticket while it is in progress (Open Ticket, or a person's "Open Ticket" form: fmCommands, the only two writers),
+ *  and a CLOSED TICKET when it was in progress as it closed: a ticket reopened is a fault again (Reopen), and closed
+ *  then, a closed fault. A record with no steps kept (older than them) is not one: nothing says anyone took it on. */
 export function wasTicket(t: Pick<FmTicket, "status" | "updates">): boolean {
-  return stageOf(t) === "ticket" || (t.updates ?? []).some((u) => u.status === "in_progress");
+  if (stageOf(t) !== "closed") return stageOf(t) === "ticket";
+  const steps = statusChanges(t);
+  const last = steps.map((u) => isTicketResolved(u)).lastIndexOf(true);
+  return last > 0 && steps[last - 1].status === "in_progress";
+}
+
+/** A closed ticket's time, in ms: from the Open Ticket that took it on to the close (owner, 2026-11-01) — never the
+ *  days it waited as a fault before anyone took it on. Null when it cannot be told (not a closed ticket). */
+export function ticketTimeMs(t: FmTicket): number | null {
+  if (!wasTicket(t) || stageOf(t) !== "closed") return null;
+  const steps = statusChanges(t);
+  const last = steps.map((u) => isTicketResolved(u)).lastIndexOf(true);
+  const ms = Date.parse(steps[last].at) - Date.parse(steps[last - 1].at);
+  return Number.isFinite(ms) && ms >= 0 ? ms : null;
 }
 
 /** Each stage's ONE word and tone, as every screen and report says it: the Tickets tab's pill (its colour: fm/tone
@@ -504,7 +519,8 @@ function ticketUpTo(t: FmTicket, end: number): FmTicket {
  * after 90 days and a repair after the evidence window (_fm_expire), so September's recap regenerated in January read
  * "Closed without action: 0". A figure names its period now, and the period is one the record still holds.
  */
-export function ticketStats(tickets: readonly FmTicket[], window?: TicketWindow): TicketStats {
+export function ticketStats(tickets: readonly FmTicket[], window?: TicketWindow,
+  timeOf: (t: FmTicket) => number | null = openTimeMs): TicketStats {
   let resolved = 0, cleared = 0, totalMs = 0, timed = 0;
   for (const whole of tickets) {
     const t = window ? ticketUpTo(whole, window.end) : whole;
@@ -521,7 +537,7 @@ export function ticketStats(tickets: readonly FmTicket[], window?: TicketWindow)
     }
     if (lastResolve && isClearedStep(lastResolve)) { cleared++; continue; }
     resolved++;
-    const ms = openTimeMs(t);
+    const ms = timeOf(t);
     if (ms !== null) { totalMs += ms; timed++; }
   }
   return {
@@ -535,6 +551,13 @@ export function ticketStats(tickets: readonly FmTicket[], window?: TicketWindow)
     // signal that the two numbers describe different sets.
     meanCoversTickets: timed,
   };
+}
+
+/** The TICKETS' figures (owner, 2026-11-01): ticketStats over the closed tickets alone (wasTicket), each timed from its
+ *  Open Ticket (ticketTimeMs) — the Tickets tab's and the recap's ticket line. ticketStats over every record is the
+ *  FAULTS' figures (the recap's fault line). */
+export function closedTicketStats(records: readonly FmTicket[], window?: TicketWindow): TicketStats {
+  return ticketStats(records.filter((t) => wasTicket(window ? ticketUpTo(t, window.end) : t)), window, ticketTimeMs);
 }
 
 /** Completions falling inside a calendar month — the maintenance section of

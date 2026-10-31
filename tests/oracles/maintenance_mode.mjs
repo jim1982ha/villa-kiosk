@@ -45,7 +45,7 @@ const { MaintenanceModeExplained } = await import("@/components/settings/Mainten
 const said = draw(h(MaintenanceModeExplained, null));
 ck("the explanation says what VESTA does meanwhile: P1 still chased, any other new alert not taken up, open ones carry on, "
    + "nothing sent afterwards, where to turn it off",
-   /urgent \(P1\) alerts still reach/.test(said) && /not taken up by VESTA: no number, no reminder, no ticket/.test(said)
+   /urgent \(P1\) alerts still reach/.test(said) && /not taken up by VESTA: no number, no reminder, no fault/.test(said)
    && /already open carry on/.test(said) && /not sent afterwards/.test(said) && /Advanced Settings › System/.test(said), said);
 const tips = elements(modal, "TipTitle").filter((e) => propText(e, "title") === '"Maintenance mode"');
 ck("  ...the switch's (i) and the top bar mark's (i) show that same one (no second wording)",

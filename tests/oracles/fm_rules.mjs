@@ -125,9 +125,12 @@ ck("the one-step close is one command, and both screens call it — through the 
     blip("b3", "2026-08-11T12:00:00.000Z")] };
   const s3 = (m) => R.buildMonthlyRecap({ fm: months, month: m, villaName: "V", readiness: null, deviceOfRecord: byRecord }).split("## 3.")[1].split("## ")[0];
   ck("the recap's resolution figures are its month's: September one repair and one close with no action, August none and two",
-     s3("2026-09").includes("Resolved this month: **1**") && s3("2026-09").includes("Closed without action this month (not counted as repairs): **1**")
-     && s3("2026-08").includes("Resolved this month: **0**") && s3("2026-08").includes("Closed without action this month (not counted as repairs): **2**")
-     && s3("2026-09").includes("Mean time to resolution this month: **") && !/all time/.test(s3("2026-09")), [s3("2026-09"), s3("2026-08")]);
+     s3("2026-09").includes("Faults closed this month: **1** with work done, **1** with no action")
+     && s3("2026-08").includes("Faults closed this month: **0** with work done, **2** with no action")
+     && s3("2026-09").includes("Mean time from a fault raised to its fix this month: **") && !/all time/.test(s3("2026-09")), [s3("2026-09"), s3("2026-08")]);
+  // owner, 2026-11-01: faults and tickets each named; nobody pressed Open Ticket on any of these: no ticket closed
+  ck("  ...its tickets' line counts only tickets: none of these faults was taken on, so 0 tickets closed",
+     s3("2026-09").includes("Tickets closed this month (opened with Open Ticket): **0**") && !/Resolved this month/.test(s3("2026-09")), s3("2026-09"));
 }
 
 console.log("\n  a document's dates are locale-free; the month's bounds computed once (owner's decision, 2026-10-19):");

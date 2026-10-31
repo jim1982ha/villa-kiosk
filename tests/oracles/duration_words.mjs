@@ -51,7 +51,7 @@ const fixed = { id: "t1", title: "Pump", status: "resolved", openedAt: "2026-09-
   photoIds: [], updates: [] };
 const recap = buildMonthlyRecap({ fm: { ...EMPTY_FM_DATA, tickets: [fixed] }, month: "2026-09", villaName: "V", readiness: null,
   deviceOfRecord: (id) => id, now });
-ck("the monthly report's mean resolution: 1h 30min", recap.includes("Mean time to resolution this month: **1h 30min**"),
+ck("the monthly report's mean resolution: 1h 30min", recap.includes("Mean time from a fault raised to its fix this month: **1h 30min**"),
   recap.split("\n").find((l) => /resolution/.test(l)));
 const tickets = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
 ck("the Tickets tab's mean resolution in the same words",

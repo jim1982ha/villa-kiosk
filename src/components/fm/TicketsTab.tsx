@@ -14,7 +14,7 @@ import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useDeviceIdentity, useRecordRoom } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
-import { faultTitle, keptDays, STAGE_WORDS, stageOf, ticketStats, wasTicket, type FmRetention } from "@/fm/fmEngine";
+import { closedTicketStats, faultTitle, keptDays, STAGE_WORDS, stageOf, wasTicket, type FmRetention } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
 import { closedActions, helpAsked, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
@@ -61,10 +61,10 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   // ⚠️ THE CLOSED ONES ARE A SECTION OF THEIR OWN, FOLDED AND PAGED (owner, 2026-10-14): the VESTA Agent clears several
   // a day. Latest closed first; the server drops them after their retention window (supervisor-proxy _fm_expire).
   // ...THE TICKETS', NOT EVERY RECORD'S (owner, 2026-11-01): a fault the VESTA Agent cleared with nobody taking it on was
-  // never a ticket (wasTicket) — its figures above are the tickets' too
-  const taken = useMemo(() => data.tickets.filter(wasTicket), [data.tickets]);
-  const closed = useMemo(() => taken.filter((t) => stageOf(t) === "closed")
-    .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt)), [taken]);
+  // never a ticket, nor a ticket reopened and closed as a fault (wasTicket) — its figures above are the tickets' too
+  // (closedTicketStats)
+  const closed = useMemo(() => data.tickets.filter((t) => stageOf(t) === "closed" && wasTicket(t))
+    .sort((a, b) => Date.parse(b.resolvedAt ?? b.openedAt) - Date.parse(a.resolvedAt ?? a.openedAt)), [data.tickets]);
   const editing = editingId ? data.tickets.find((t) => t.id === editingId) : undefined;
 
   /** One record, as every Facility card is drawn (RecordCard): its title, when/where/who, its notes, photos and
@@ -81,7 +81,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
       <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={status} actions={actions}
         when={faultWhen(t, momentText)} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
         documentIds={t.documentIds} amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
-        erase={{ title: "Erase this record", detail: t.title, run: (token) => removeTicket(t.id, token) }}
+        erase={{ title: "Erase this ticket", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => setEditingId(t.id)}
         pills={<>
           {/* its device's room now, the stored one only with no device (owner, 2026-10-30: devicePlace.recordRoomNow) */}
@@ -125,18 +125,18 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
   return (
     <div className="fm-stack">
-      <TicketFigures tickets={taken} inProgress={inProgress} retention={retention} />
+      <TicketFigures tickets={data.tickets} inProgress={inProgress} retention={retention} />
 
       {tickets.length === 0 && (
         // THE Cockpit card, as every other (owner, 2026-10-22)
         <RecordCard lead={<Wrench size={16} className="muted" aria-hidden="true" />} title={<span className="with-tip">
           No ticket in progress
-          <InfoTip label="About tickets">A fault in Messages becomes a ticket when you press Open Ticket on its card.</InfoTip>
+          <InfoTip label="About tickets">A fault in Inbox › Open issues becomes a ticket only when you press Open Ticket on its card.</InfoTip>
         </span>} />
       )}
       {tickets.length > 0 && <div className="fm-list">{tickets.map(ticket)}</div>}
 
-      <FoldedList title="Closed" rows={closed} unit="closed record">
+      <FoldedList title="Closed" rows={closed} unit="closed ticket">
         {(t) => (
           // reopened, it is a fault again: back in Open issues (the VESTA Agent reads it, never guesses)
           record(t, stagePill(t),
@@ -165,7 +165,8 @@ export function TicketFigures({ tickets, inProgress, retention, now = Date.now()
   now?: number;
 }) {
   const days = retention ? keptDays(retention) : null;
-  const stats = ticketStats(tickets, days === null ? undefined : { start: now - days * DAY_MS, end: now + 1 });
+  // the closed TICKETS' figures, each timed from its Open Ticket (owner, 2026-11-01), never every closed fault's
+  const stats = closedTicketStats(tickets, days === null ? undefined : { start: now - days * DAY_MS, end: now + 1 });
   return (
     <div className="fm-stack">
       <div className="fm-summary">

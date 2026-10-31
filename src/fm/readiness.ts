@@ -284,14 +284,17 @@ export function buildReadiness(
   const records = fm.tickets.filter((t) => shown.has(t.id));
   const open = openCounts(records, devices.deviceOfRecord);
   const faults = records.filter((t) => isTicketOpen(t) && stageOf(t) === "fault");
-  const where = [open.faults ? "the faults in \"Messages\"" : "", open.tickets ? "the open tickets in \"Tickets\"" : ""].filter(Boolean);
+  const where = [open.faults ? "the faults in Inbox › Open issues" : "", open.tickets ? "the tickets in Tickets" : ""].filter(Boolean);
   const found = new Set(faults.map(faultSource));
   checks.push({
     id: "tickets",
     // a fault and the ticket it became are both unresolved (owner, 2026-10-14: faults become tickets)
     label: open.total === 0
       ? "No open faults or tickets"
-      : `${countOf(open.faults, "detected fault")} (${countOf(open.tickets, "open ticket")})`,
+      // ⚠️ TWO KINDS, NEVER ONE INSIDE THE OTHER (owner, 2026-11-01): "0 detected faults (1 open ticket)" read a ticket
+      // as a part of the faults
+      : [open.faults ? countOf(open.faults, "open fault") : "", open.tickets ? `${countOf(open.tickets, "ticket")} in progress` : ""]
+        .filter(Boolean).join(" · "),
     state: open.total === 0 ? "pass" : "warn",   // a fault is a warning, however many (owner, 2026-10-18)
     detail: open.total === 0 ? "Nothing to deal with." : `Check ${where.join(", or ")}.`,
     sources: ISSUE_SOURCES.filter((s) => found.has(s)),

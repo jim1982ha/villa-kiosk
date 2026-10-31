@@ -169,10 +169,12 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-row.ticket { box-shadow: inset 0 0 0 2px var(--accent); }
 .messages-row-icon { flex: none; width: 24px; display: flex; justify-content: center; padding-top: 2px; color: var(--text-secondary); }
 .messages-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-/* its title and its time on the first line; only the title is cut, the line under it is whole (owner, 2026-11-01) */
+/* its title and its time on the first line; an issue's room pill on the second; its first words on ONE line over the
+   row's whole width, cut with "…" (owner, 2026-11-01) */
 .messages-row-head { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .messages-row-head b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.messages-row-sub { font-size: var(--text-xs); color: var(--text-secondary); overflow-wrap: anywhere; }
+.messages-row-room { display: flex; }
+.messages-row-sub { font-size: var(--text-xs); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* a line's title at the size of every other menu's rows (owner, 2026-10-28: the HUD menu's Settings / Logout) */
 .messages-row-head b { font-size: var(--text-base); }
 .messages-row-time { flex: none; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
@@ -234,7 +236,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* ⚠️ A CARD'S WORDS ARE WHOLE; ONLY THE INBOX'S LIST ROW IS CUT (owner, 2026-10-31: an opened card cut "In progress:
    … against a normal 0.07 kWh/da…" while VESTA's message under the next line showed in full). The cut ("use truncation
    for the description text", 2026-10-18) belonged to the Overview's list of cards; since that list became one line
-   per device (.messages-row-head, the one place a title is cut), an issue's card is only ever drawn opened, so a
+   per device (.messages-row-head b and .messages-row-sub, the one place a message is cut), an issue's card is only ever drawn opened, so a
    line of it wraps over as many lines as its words need, like every other text of the card. */
 .cockpit-attention-sub-title { display: block; }
 .cockpit-attention-latest { display: block; margin-top: 2px; font-size: var(--text-2xs); color: var(--text-dim); }
