@@ -54,10 +54,14 @@ const conf = confirmingFaults(data, CADENCE, NOW);
 ck("a resolved fault with confirmsBy is being confirmed, the soonest verdict first; an open one, one without the field and one past its grace are not",
    JSON.stringify(conf.map((c) => c.ticket.id)) === JSON.stringify(["w3", "w1", "w2"]), conf.map((c) => c.ticket.id));
 const line = (id, list = conf) => confirmLine(list.find((c) => c.ticket.id === id));
-ck("  ...its line: \"Done on 23/10/2026 14:56 (JM) · VESTA confirms by 15:06\" (the villa's clock)",
-   line("w1") === `Done${on(-2)} (JM) · VESTA confirms by ${clockTime(NOW + 8 * 60_000)}` && clockTime(NOW + 8 * 60_000).includes("06"),
+// ⚠️ OPEN › CLEARED (ON THE WATCH LIST) › CLOSED (owner, 2026-10-31): it said "VESTA confirms by 15:06", read as a next
+// check, and a Cockpit Close said "Closed on …" on a card that was not closed
+const closesAt = (min) => `VESTA closes this at ${clockTime(NOW + min * 60_000)} if all is still well; if the problem is back before then, it reopens as the same problem.`;
+ck("  ...its line: \"Done on 23/10/2026 14:56 (JM) · VESTA closes this at 15:06 if all is still well; …\" (the villa's clock)",
+   line("w1") === `Done${on(-2)} (JM) · ${closesAt(8)}` && clockTime(NOW + 8 * 60_000).includes("06"),
    line("w1"));
-ck("  ...a close in the Cockpit says Closed and the profile", line("w2") === `Closed${on(-1)} (Owner) · VESTA confirms by ${clockTime(NOW + 9 * 60_000)}`,
+ck("  ...a Close in the Cockpit says Cleared (never Closed: it is not closed yet) and the profile",
+   line("w2") === `Cleared${on(-1)} (Owner) · ${closesAt(9)}`,
    line("w2"));
 {
   // ⚠️ EVERY CLOSE ALIKE (owner, 2026-10-25): an alert the VESTA Agent cleared itself is watched too, said "Cleared"
@@ -66,15 +70,16 @@ ck("  ...a close in the Cockpit says Closed and the profile", line("w2") === `Cl
     { at: at(-1), status: "resolved", kind: "cleared", note: "Cleared: back to normal.", photoIds: [], by: AGENT_STAMP }] };
   const c = confirmingFaults({ ...EMPTY_FM_DATA, tickets: [cleared] }, CADENCE, NOW);
   ck("  ...an alert the VESTA Agent cleared itself says Cleared, no name", c.length === 1
-     && confirmLine(c[0]) === `Cleared${on(-1)} · VESTA confirms by ${clockTime(NOW + 60 * 60_000)}`, c.map(confirmLine));
+     && confirmLine(c[0]) === `Cleared${on(-1)} · ${closesAt(60)}`, c.map(confirmLine));
 }
-ck("  ...its moment past: at the Agent's next check, never a time gone by", line("w3") === `Done${on(-2)} (JM) · VESTA confirms it at its next look`,
+ck("  ...its moment past: at the Agent's next look, never a time gone by",
+   line("w3") === `Done${on(-2)} (JM) · VESTA closes this at its next look if all is still well.`,
    line("w3"));
 {
-  // its pill, as the open issues' next-check pill says it (owner, 2026-10-23): the time, then "within 5min" once past
+  // its pill says what happens then (owner, 2026-10-31): "Closes 15:06", then "Closes within 5min" once past
   const parts = (id) => confirmParts(confirmingFaults(data, CADENCE, NOW).find((c) => c.ticket.id === id));
-  ck("  ...its pill: the time it confirms by, then the Agent's next look once past ('within 5min')",
-     parts("w1").when === clockTime(NOW + 8 * 60_000) && parts("w3").when === `within ${CADENCE.checkMinutes}min`,
+  ck("  ...its pill: \"Closes\" and the time, then the Agent's next look once past ('Closes within 5min')",
+     parts("w1").when === `Closes ${clockTime(NOW + 8 * 60_000)}` && parts("w3").when === `Closes within ${CADENCE.checkMinutes}min`,
      [parts("w1").when, parts("w3").when]);
 }
 ck("  ...shown at most two of the Agent's looks past its moment; with the Agent offline (no cadence), not past it",
@@ -111,11 +116,21 @@ ck("  ...drawn by the open issues' own card: marked frame, a check, its device a
    /^<div class="fm-record-card fault-watched">/.test(drawn) && /class="[^"]*fault-watched-icon/.test(drawn)
    && /<strong>door<\/strong><span class="fm-entity-chip fm-chip-static">Hall<\/span>/.test(drawn)
    && /#65 · Door unlocked/.test(drawn) && drawn.includes(`<span class="cockpit-attention-latest">Done${on(-2)} (JM)</span>`), drawn.slice(0, 900));
-ck("  ...its pill is the open issues' next-check pill (CheckPill), saying when VESTA confirms",
-   /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="VESTA confirms by [^"]+">/.test(drawn), drawn.slice(-600));
+const pillOf = (html) => /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="([^"]*)">(<svg[^>]*class="([^"]*)"[\s\S]*?<\/svg>)([^<]*)<\/span>/.exec(html);
+{
+  const pill = pillOf(drawn);
+  ck("  ...its pill is the open issues' pill (CheckPill): \"Closes\" and its time, what VESTA does then on touch",
+     !!pill && pill[4] === `Closes ${clockTime(NOW + 8 * 60_000)}` && pill[1] === closesAt(8), pill?.slice(1));
+  // ⚠️ A CLOCK, NEVER THE REFRESH ICON OF A NEXT CHECK (owner, 2026-10-31), nor the check the card leads with
+  ck("  ...with a clock, not the open cards' refresh icon nor the card's lead check",
+     !!pill && /\blucide-clock\b/.test(pill[3]) && !/refresh|circle-check|check-circle/.test(pill[3]), pill?.[3]);
+}
 ck("  ...no Close and no Open Ticket: it is closed", !/fm-record-actions/.test(drawn));
 const activeCard = draw(h(AttentionCard, { card: cockpitCard(att.attentionGroups[0], CADENCE, new Date(NOW)), onOpenEntity: () => {} }));
 ck("an active fault keeps its look: no marker", /^<div class="fm-record-card">/.test(activeCard) && !/fault-watched/.test(activeCard));
+ck("  ...and its next-check pill keeps the refresh icon: VESTA looks again then",
+   /\blucide-refresh-cw\b/.test(pillOf(activeCard)?.[3] ?? "") && !/\blucide-clock\b/.test(pillOf(activeCard)?.[3] ?? "")
+   && !/^Closes/.test(pillOf(activeCard)?.[4] ?? "Closes"), pillOf(activeCard)?.slice(1));
 {
   // Messages' own markup (the component needs the app's contexts to render): which cards are open issues and which
   // watched is the Messages model's, by value (messages_model.mjs); the tab draws them in that order

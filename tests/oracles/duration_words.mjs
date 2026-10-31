@@ -39,11 +39,11 @@ for (const checkMinutes of [1, 15, 90]) {
   const cadence = { checkMinutes, nightlyAt: "04:30" }, words = fmtDuration(checkMinutes * 60_000);
   const note = faultTiming(true, cadence).note;
   ck(`the Agent's look every ${checkMinutes} minutes: "${words}" in the (i), the confirming row and a card's pill`,
-    note.includes(`it checks every ${words},`) && confirmingRow(cadence).goes.includes(`then within ${words}.`)
+    note.includes(`it checks every ${words},`) && confirmingRow(cadence).goes.includes(`, within ${words} once that time is past,`)
     && nextCheckWhen([{ source: "alert", check: "minutes" }], cadence, new Date(now)) === `within ${words}`,
     { note, goes: confirmingRow(cadence).goes, pill: nextCheckWhen([{ source: "alert", check: "minutes" }], cadence, new Date(now)) });
   const pill = confirmParts({ at: new Date(now).toISOString(), word: "Done", who: null, due: true, lookMinutes: checkMinutes });
-  ck("  ...and on a fault being confirmed", pill.when === `within ${words}`, pill);
+  ck("  ...and on a cleared fault's \"Closes\" pill", pill.when === `Closes within ${words}`, pill);
 }
 ck("the list's refresh in the same words", faultTiming(false).note.includes(
   `every ${fmtDuration(STORE_ACTIVE_MS)} while it is open (every ${fmtDuration(STORE_HEARTBEAT_MS)} otherwise)`), faultTiming(false).note);

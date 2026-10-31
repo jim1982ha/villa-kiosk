@@ -28,8 +28,8 @@ import { fmtDuration } from "@/components/panels/chartUtils";
 import { ROLE_LABELS } from "@/auth/roles";
 
 /** "within 5min": the Agent's next look, in the one duration's words (fmtDuration; architecture review K, 2026-10-24:
- *  written by hand at each place) — the open issues' pill, this table's rows and a watched fault's pill once its moment
- *  passed (fm/faultConfirm.confirmParts: it was written there a second time, architecture review, 2026-10-26). */
+ *  written by hand at each place) — the open issues' pill, this table's rows and a watched fault's "Closes" pill once its
+ *  moment passed (fm/faultConfirm.confirmParts: it was written there a second time, architecture review, 2026-10-26). */
 export const withinLook = (c: Pick<AgentCadence, "checkMinutes">): string => `within ${fmtDuration(c.checkMinutes * 60_000)}`;
 
 export interface SourceRow {
@@ -97,17 +97,24 @@ function nightGoes(c: AgentCadence | null): string {
 /** The table's two groups (owner, 2026-10-15): what the Kiosk and its people produce, then what the VESTA Agent does. */
 export interface SourceGroup { title: string; rows: readonly SourceRow[] }
 
-/** ⚠️ THE CHECK ON A FAULT BEING CONFIRMED IS EXPLAINED TOO (owner, 2026-10-23: "include the new icon (validated ones)"):
- *  the last row of the VESTA Agent's group — a closed fault the Agent reads again (fm/faultConfirm), no source of its
- *  own; its pill's words in the Agent's own numbers when its heartbeat said them. */
+/** What the pill at the right of a card's name says happens at its time (RecordCard CheckPill draws each kind's icon):
+ *  "next", VESTA looks again then (an open card's refresh icon); "closes", VESTA closes it then if all is still well (a
+ *  card on the Watch list, its clock: owner, 2026-10-31, the refresh icon read as "next check" on a card about to close).
+ *  The card's data says which (config/cockpitCard), never the caller. */
+export type CheckPillKind = "next" | "closes";
+
+/** ⚠️ THE CHECK ON A CLEARED PROBLEM VESTA STILL WATCHES IS EXPLAINED TOO (owner, 2026-10-23: "include the new icon
+ *  (validated ones)"): the last row of the VESTA Agent's group — a cleared fault on the Watch list (fm/faultConfirm), no
+ *  source of its own; its pill's words in the Agent's own numbers when its heartbeat said them. Its words follow the
+ *  owner's life of a problem, Open › Cleared (on the Watch list) › Closed (2026-10-31): it said "Being confirmed". */
 export interface ConfirmingRow { words: string; what: string; opens: string; goes: string }
 export function confirmingRow(c: AgentCadence | null): ConfirmingRow {
   const look = c ? withinLook(c) : "at its next look";
   return {
-    words: "Being confirmed",
-    what: "A fault someone marked Done on Telegram or closed here, that the VESTA Agent checks again. Last in the list, not counted",
-    opens: "When someone presses Done or Close on an alert's fault",
-    goes: `When the VESTA Agent confirms it is right: its pill shows the time, then ${look}. Still wrong: an open fault again`,
+    words: "On watch",
+    what: "A problem cleared (Done on Telegram, Close here, or VESTA's own clearing) that the VESTA Agent still watches. In the Watch section, not counted",
+    opens: "When a problem is cleared",
+    goes: `VESTA closes it at the time on its clock pill ("Closes"), ${look} once that time is past, if all is still well. Back before then: open again, as the same problem`,
   };
 }
 
