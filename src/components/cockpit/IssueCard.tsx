@@ -134,7 +134,7 @@ function CardActionRow({ card, onEditTicket, onRaiseTicket }: {
   const work = useCardWork();
   const place = useRecordPlace();
   return (
-    <WorkButtons actions={card.actions} cardKey={card.key} work={work} name={card.title} className="fm-fault-actions"
+    <WorkButtons actions={card.actions} cardKey={card.key} work={work} name={card.title}
       asked={card.asked} raised={(entityId) => raisedFor(card, place(entityId, card.title))}
       onOpen={(a) => (a.step.kind === "raise" ? onRaiseTicket(a.ids[0]) : onEditTicket(a.ids[0]))} />
   );

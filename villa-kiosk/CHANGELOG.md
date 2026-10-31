@@ -1,3 +1,9 @@
+## 2.496.624
+
+What you will see:
+- On a phone, a card's buttons now sit on one line: Done, Need help and Open Ticket in the Inbox, Done, Need help and
+  Close in the Tickets tab. On a phone narrower still they move to the next line together.
+
 ## 2.496.623
 
 What you will see:
