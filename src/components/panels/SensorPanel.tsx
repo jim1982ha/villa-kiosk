@@ -36,6 +36,8 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
     // presence window draws a sensor's the same way), in BasePanel's history slot.
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={icon} onClose={onClose}
       history={<ReadingHistory entityId={mapping.entityId} mappingType={mapping.type} />}>
+      {/* its reading, unless contact is lost: then the frame's notice (BasePanel), as in every device window */}
+      {r.contact !== "lost" && (
       <div className="center" style={{ padding: "12px 0 6px", margin: isBinary ? undefined : "6px 0 12px" }}>
         {r.pill ? (
           <ReadingPill r={r} icon={BinaryIcon} size={22} style={{ fontSize: "var(--text-xl)", padding: "14px 24px" }} />
@@ -49,6 +51,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
           </>
         )}
       </div>
+      )}
     </BasePanel>
   );
 }

@@ -28,7 +28,8 @@ import { HistoryRangeShare } from "./historyRange";
 import ModalFooter from "@/components/common/ModalFooter";
 import BackButton from "@/components/common/BackButton";
 import { useHA } from "@/ha/HAStateStore";
-import { missingFromHa } from "@/utils/stateColors";
+import { isOffline, missingFromHa } from "@/utils/stateColors";
+import UnavailableNotice from "./UnavailableNotice";
 import { deviceRoom } from "@/config/devicePlace";
 
 interface Props {
@@ -64,17 +65,26 @@ interface Props {
   /** Opt OUT of "Also on this device" (PanelActions.readings) — only for a
    *  panel that already shows every reading of the device (DeviceGroupPanel). */
   deviceReadings?: false;
+  /** The device has lost contact: the notice, above the window's own content. Default: its entity's own
+   *  (stateColors.isOffline); a window of several readings says so only when every one is lost (DeviceGroupPanel). */
+  lost?: boolean;
   onClose: () => void;
   children: ReactNode;
 }
 
-export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, onClose, children }: Props) {
+export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, lost, onClose, children }: Props) {
   const { may, badge, onSetBadgeColor, linked, linkedSensor, motion, back } = usePanelActions();
   // the device window's pieces (warning, Edit, wrench, readings) are DeviceWindowPieces', drawn by the camera's too
   const warning = useDeviceWarning();
   const { resolvedRooms } = useConfig();
   const { entities } = useHA();
   const room = entityId ? deviceRoom(resolvedRooms, entityId) : "";
+  // ⚠️ ONE NOTICE, DRAWN BY THE ONE FRAME (architecture review 2026-10-31 round 12 #1): three windows placed it by
+  // hand, so a missing sensor said only "UNAVAILABLE" and a missing camera "Camera unavailable", without the "missing
+  // since" and the advice the lock's window gave. Missing: the notice instead of the window's own content (it has
+  // nothing to show or command). Lost contact: the notice, at the same place, above what the window still shows.
+  const missing = !!entityId && missingFromHa(entities, entityId);
+  const offline = !!entityId && !missing && (lost ?? isOffline(entities[entityId]));
   const [colorOpen, setColorOpen] = useState(false);
   // Escape + focus trap + focus restore, from one place (see useModalA11y).
   // This replaced a local Escape-only listener: behind every one of these
@@ -200,7 +210,8 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             </div>
           </div>
         )}
-        {children}
+        {(missing || offline) && <UnavailableNotice entityId={entityId} />}
+        {!missing && children}
         {/* The "last N hours" history section — rendered HERE, in the shared
             chrome, for the same reason the linked-entity switch above is:
             so every panel about a device gets it identically and a NEW panel
@@ -216,7 +227,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             through the same slot (the `history` prop), so it sits at the
             same place. */}
         {/* Not for an entity Home Assistant does not have: it has no history to wait for (its notice says why). */}
-        {history !== false && entityId && !missingFromHa(entities, entityId)
+        {history !== false && entityId && !missing
           && (history ?? <LastDayTimeline entityId={entityId} />)}
         {/* A linked SENSOR has nothing to switch: its band, under the device's own, at its width and over its range
             (owner, 2026-10-21) — LinkedSensorRow */}

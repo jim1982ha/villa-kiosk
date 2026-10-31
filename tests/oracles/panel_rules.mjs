@@ -50,9 +50,8 @@ ck("FanPanel's levels come from fanLevels (no SPEED_LABELS of its own)", /fanLev
 ck("the light's sliders and the cover's follow the device (useLiveDraft, one set of range handlers)",
    (light.match(/useLiveDraft</g) ?? []).length === 2 && (light.match(/\.rangeProps\}/g) ?? []).length === 2
    && /useLiveDraft</.test(cover) && /position\.rangeProps\}/.test(cover) && !/useState/.test(light));
-// The control panels show it through ControlFrame (live_draft.mjs pins that).
-for (const f of ["GenericPanel.tsx", "ControlFrame.tsx"])
-  ck(`${f} shows the shared UnavailableNotice`, /<UnavailableNotice\b/.test(src(f)));
+// The notice is the device window's frame's (BasePanel), drawn for every window PanelRouter opens:
+// tests/oracles/glb_ground_truth.mjs reads that from the compiler's tree.
 
 // owner, 2026-10-21: a camera that turns and has a siren shows them on its video — found on the camera's DEVICE
 {

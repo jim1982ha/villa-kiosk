@@ -6,14 +6,13 @@ import BasePanel from "./BasePanel";
 import LastDayTimeline from "./LastDayTimeline";
 import type { PanelProps } from "@/types/panel.types";
 import { isOffline } from "@/utils/stateColors";
-import UnavailableNotice from "./UnavailableNotice";
 
 export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Info size={22} />} onClose={onClose}
       history={<LastDayTimeline entityId={mapping.entityId} palette />}>
-      {/* the lost-contact notice only for LOST contact (stateColors.isOffline); "unknown" is a state, shown as one */}
-      {isOffline(entity) ? <UnavailableNotice entityId={mapping.entityId} /> : (
+      {/* its state, unless contact is LOST (the frame's notice says so: BasePanel); "unknown" is a state, shown as one */}
+      {!isOffline(entity) && (
         <div className="center" style={{ margin: "8px 0 16px" }}>
           <span className="value-large">{entity?.state ?? "unknown"}</span>
         </div>

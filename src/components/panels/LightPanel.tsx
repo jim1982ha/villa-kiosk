@@ -52,7 +52,7 @@ export default function LightPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Lightbulb size={22} />} onClose={onClose}>
-      <ControlFrame entity={entity} mapping={mapping} device="light" power
+      <ControlFrame entity={entity} mapping={mapping} power
         beside={(choices.any || !!scene) && (
           <LightChoices
             choices={choices}

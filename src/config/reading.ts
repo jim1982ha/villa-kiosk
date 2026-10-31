@@ -29,7 +29,7 @@ import { binaryLook } from "./binaryLook";
 import { stateLabelFor } from "./BinarySensorClasses";
 import { deviceRowText, formatSensorParts, prettyState } from "@/utils/entityValue";
 import { domainOf } from "@/utils/entityDomain";
-import { contactOf, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, paintState, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS } from "@/utils/stateColors";
+import { contactOf, isNoHistory, isUnavailable, NO_RECORD, NO_RECORD_WORDS, NOT_KEPT, NOT_KEPT_COLOR, NOT_KEPT_WORDS, NOT_IN_HA, paintState, statusKeyFor, STATUS_COLOR, STATUS_PILL_CLASS } from "@/utils/stateColors";
 
 /** The stretch older than the villa's system keeps, as a history bar reads it (historySource.keptFrom). */
 export { NOT_KEPT, NOT_KEPT_WORDS, NO_RECORD, NO_RECORD_WORDS };
@@ -89,6 +89,9 @@ export function readingOf(
   const unavailable = isUnavailable(entity);
   const contact = contactOf(entity?.state);
   const lost = contact === "lost";
+  // ⚠️ MISSING IS NOT "UNAVAILABLE" (architecture review 2026-10-31 round 12 #1): an entity the villa's system does not
+  // have at all is lost contact too (no controls, no claim), but said in the word every surface uses for it
+  const lostWord = entity === undefined ? NOT_IN_HA.toUpperCase() : "UNAVAILABLE";
   const noValue = contact === "no-value";
   const deviceClass = entity?.attributes.device_class as string | undefined;
   if (kind === "binary") {
@@ -99,7 +102,7 @@ export function readingOf(
     const words = look.word(state);
     return {
       kind, unavailable, contact, level,
-      value: lost ? "UNAVAILABLE" : noValue ? "UNKNOWN" : alarm ? words.toUpperCase() : words,
+      value: lost ? lostWord : noValue ? "UNKNOWN" : alarm ? words.toUpperCase() : words,
       unit: "",
       // "off" is the pill vocabulary's quiet tone (03-panels .status-pill.off): nothing to say, nothing wrong
       pill: lost ? "unavailable" : noValue ? "off" : alarm ? "danger" : look.tone(state),
@@ -113,7 +116,7 @@ export function readingOf(
   const parts = entity ? formatSensorParts(entity) : { value: "", unit: "" };
   return {
     kind, unavailable, contact, level,
-    value: lost ? "UNAVAILABLE" : noValue ? "UNKNOWN" : parts.value || (entity?.state ?? "—"),
+    value: lost ? lostWord : noValue ? "UNKNOWN" : parts.value || (entity?.state ?? "—"),
     unit: unavailable ? "" : parts.unit,
     pill: lost ? "unavailable" : noValue ? "off" : null,
     alarm: lost || level === "danger",
