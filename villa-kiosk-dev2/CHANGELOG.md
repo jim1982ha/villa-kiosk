@@ -1,3 +1,10 @@
+## 2.496.641
+
+What you will see:
+- The Inbox filter says "Notifications" wherever the four buttons still fit one line with it: a phone 412 px wide or
+  more, and the iPad. On a narrower phone (an iPhone of 390 px, say) it says "Notifs", so Open Ticket stays on the same
+  line.
+
 ## 2.496.640
 
 What you will see:
