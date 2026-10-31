@@ -1,3 +1,10 @@
+## 2.496.632
+
+What you will see:
+- In the Cockpit's Inbox on a phone, "Open Ticket" now sits on the same line as Issues, Notifs and Reports, at the
+  right, on every phone from the narrowest (360 px) to the widest: the filter buttons and Open Ticket are a little
+  narrower. Where a line is even narrower, the button still moves whole to the line under the filters.
+
 ## 2.496.631
 
 What you will see:
