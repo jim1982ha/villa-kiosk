@@ -12,7 +12,7 @@ Reads (one pass, never a loop during the day):
 
 Writes: the feature store and the findings table in the agent store. It
 never writes to Home Assistant. The result JSON lists what the agent should
-now do: create tasks (Kiosk tickets), send a P2 at once, ask the owner about
+now do: create tasks (Kiosk faults), send a P2 at once, ask the owner about
 new devices. The agent does those through the action catalogue.
 
 --as-of replays a past night: the batch only sees data up to that day. The

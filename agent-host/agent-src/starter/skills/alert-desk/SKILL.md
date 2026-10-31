@@ -57,7 +57,7 @@ The decision is one of:
   priority reaches (as the first alert), with the villa system's latest words and claim.
 - `new`: the roles its priority reaches (rules.yaml `people_roles`) get the message, the asked role's
   (`chase.asks`) with the ladder buttons;
-  a P1 or P2 also becomes a Facility ticket in the VESTA Kiosk; a camera snapshot travels with
+  a P1 or P2 also becomes a fault in the Kiosk's Open issues; a camera snapshot travels with
   the message when the event names one.
 - P3 goes to the store with state `digest`; the reports skill picks it up for its daily digest (at that job's time in its skill.yaml). P4 is logged only.
 
@@ -91,7 +91,7 @@ message then says who pressed what, and when. Typing the word works too.
 
 | Button | Effect |
 |---|---|
-| Done | incident closed, its Kiosk ticket resolved; the device is read once `clear_minutes` later. Still bad (its automation names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
+| Done | incident closed, its Kiosk fault closed; the device is read once `clear_minutes` later. Still bad (its automation names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
 | Need help | escalated to the owner with the detail |
 
 ## When a critical automation runs

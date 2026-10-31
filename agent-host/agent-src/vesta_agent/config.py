@@ -200,7 +200,7 @@ class Settings:
         if self.telegram_enabled and not self.telegram_bot_token:
             out.append(("Telegram is enabled but VESTA_TELEGRAM_BOT_TOKEN is empty: nothing can be sent", False))
         if not (self.kiosk_url and self.kiosk_token):
-            out.append(("VESTA_KIOSK_URL or VESTA_KIOSK_TOKEN is empty: no heartbeat and no Facility tickets", False))
+            out.append(("VESTA_KIOSK_URL or VESTA_KIOSK_TOKEN is empty: no heartbeat and no faults in the Kiosk", False))
         return out
 
     def secrets(self) -> list[str]:
@@ -258,6 +258,11 @@ INSTRUCTION_REWRITES = (
     ("A job for the facility manager is a ticket (create_ticket) in the villa's Facility records: it acts on nothing.",
      "A job for the facility manager is a ticket (create_ticket) in the villa's Facility records: it acts on nothing. "
      "In a chat it is only offered, with a button under your answer: never say a fault was created."),
+    # rule 4 (owner, 2026-11-01): what VESTA raises is a FAULT in the Kiosk's Open issues; it becomes a ticket only when
+    # a person presses Open Ticket. Runs after the pair above, so the oldest wording is brought here in two steps.
+    ("A job for the facility manager is a ticket (create_ticket) in the villa's Facility records: it acts on nothing.",
+     "A job for the facility manager is a fault (create_ticket) in the Kiosk's Open issues; only a person makes it "
+     "a ticket, with Open Ticket in the Kiosk. It acts on nothing."),
     # rules 5 and 6 (0.12.201): the people never read "Home Assistant" (owner, 2026-10-15)
     ("5. A missing villa parameter: say which Home Assistant helper to create.",
      "5. A missing villa parameter: say which villa setting is missing."),

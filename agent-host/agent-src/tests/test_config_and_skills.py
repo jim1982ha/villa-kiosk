@@ -102,7 +102,9 @@ def test_an_instruction_sentence_a_release_rewrote_reaches_the_villa_file_only_w
     from vesta_agent.config import INSTRUCTION_REWRITES, seed_config
     s = settings(str(tmp_path))
     starter = open(os.path.join(STARTER_DIR, "config", "instructions.md"), encoding="utf-8").read()
-    for old, now in INSTRUCTION_REWRITES:
+    for i, (old, now) in enumerate(INSTRUCTION_REWRITES):
+        if any(o in now for o, _ in INSTRUCTION_REWRITES[i + 1:]):
+            continue                                                       # a step on the way: a later pair goes on
         assert now in starter                                              # the starter says it the new way
     # an install from before: every rewritten sentence as it was, once each — and a second start changes nothing
     # (the new rule 4 BEGINS with the old one: replaced blindly, it grew a sentence at every start)
@@ -124,6 +126,25 @@ def test_an_instruction_sentence_a_release_rewrote_reaches_the_villa_file_only_w
     seed_config(s)
     assert open(s.instructions_path).read() == "6. One question at most per message. Very short. My language.\n"
 
+
+
+def test_an_installed_rule_4_calling_what_vesta_raises_a_ticket_now_calls_it_a_fault(tmp_path):
+    # owner, 2026-11-01: a reported issue is a FAULT; only a person's Open Ticket in the Kiosk makes it a ticket. The
+    # villa's instructions.md was copied once: both earlier wordings of rule 4 must reach the new one, once.
+    from vesta_agent.config import seed_config
+    s = settings(str(tmp_path))
+    ticket = "   A job for the facility manager is a ticket (create_ticket) in the villa's Facility records: it acts on nothing."
+    offered = " In a chat it is only offered, with a button under your answer: never say a fault was created."
+    fault = ("   A job for the facility manager is a fault (create_ticket) in the Kiosk's Open issues; only a person makes it "
+             "a ticket, with Open Ticket in the Kiosk. It acts on nothing.")
+    for before in (ticket + "\n", ticket + offered + "\n"):              # before 0.12.160, then up to this release
+        with open(s.instructions_path, "w", encoding="utf-8") as f:
+            f.write("My own rule.\n" + before)
+        assert seed_config(s) == ["instructions.md (reworded)"]
+        assert open(s.instructions_path).read() == "My own rule.\n" + fault + offered + "\n"
+        assert seed_config(s) == []                                        # once
+    starter = open(os.path.join(STARTER_DIR, "config", "instructions.md"), encoding="utf-8").read()
+    assert fault + offered in starter
 
 def test_every_starter_skill_version_is_recorded_as_shipped():
     # without it, the NEXT release would take this version for an edited one and never update it.

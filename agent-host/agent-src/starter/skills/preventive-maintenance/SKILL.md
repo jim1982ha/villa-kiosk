@@ -12,8 +12,8 @@ closure, and never raise the same thing twice.
 
 ## What you never do
 
-- Never write to the villa's system. A job for the FM is a Facility ticket in the
-  VESTA Kiosk, which the engine writes. No service call on a device.
+- Never write to the villa's system. A job for the FM is a fault in the
+  Kiosk's Open issues, which the engine writes. No service call on a device.
 - Never look for new faults during the day. One batched read at the night check's
   time (skill.yaml `schedule`) finds them. The rest of the time the alert-desk skill handles events. One
   exception: which devices are offline is read every few minutes (`jobs.every_minutes`) (`recheck.py`, the batch's own reading of it): a
@@ -79,7 +79,7 @@ closure, and never raise the same thing twice.
      report section "what would help".
 3. The night costs no token. The morning digest carries the words.
 
-## The checks, in plain words (ids are what the ticket carries)
+## The checks, in plain words (ids are what the fault carries)
 
 | Check | Family | What it catches | Threshold source |
 |---|---|---|---|
@@ -120,7 +120,7 @@ night confirms.
 
 ## The task loop
 
-A P2 or P3 finding becomes one Facility ticket `summary. Check: ...`. The
+A P2 or P3 finding becomes one fault in the Kiosk's Open issues `summary. Check: ...`. The
 chase (its re-ask and escalation, with their timings and roles in the alert-desk's rules.yaml) belongs to the
 alert-desk skill; this skill only opens and closes. Replies:
 - Done: close the task; if the finding is still there the next night, reopen with "still measured after your intervention".

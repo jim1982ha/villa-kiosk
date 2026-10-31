@@ -62,7 +62,7 @@ class Tickets:
         page to keep with it (an investigation's report, owner 2026-10-11) — a Kiosk that cannot hold it gets the fault
         all the same, its note saying so."""
         if not self.kiosk.enabled:
-            self.state.log("ticket_skipped", {"reason": "no Kiosk configured", "summary": (title or "")[:80]})
+            self.state.log("fault_skipped", {"reason": "no Kiosk configured", "summary": (title or "")[:80]})
             return None
         docs = None
         if document:
@@ -88,10 +88,10 @@ class Tickets:
                                           **({"origin": want["origin"]} if want["origin"] else {}),
                                           **({"check": want["check"]} if want["check"] else {}),
                                           **({"pattern": self._pattern(want)} if self._pattern(want) else {}))
-        log.info("Kiosk ticket %s created: %s", tid, headline(title)[:80])
+        log.info("Kiosk fault %s created: %s", tid, headline(title)[:80])
         if task_id:
             self._store().set_task_uid(int(task_id), tid)
-        self.state.log("executed", {"tool": "ticket", "ticket": tid, "entity": entity_id})
+        self.state.log("executed", {"tool": "fault", "fault": tid, "entity": entity_id})
         return tid
 
     def _card(self, problems: Problems, task: dict) -> dict:
@@ -125,7 +125,7 @@ class Tickets:
             return False
         uid = task.get("todo_uid")
         if uid and await self.kiosk.reopen_ticket(uid, headline(a.get("title") or task.get("summary") or ""), a.get("note")):
-            log.info("Kiosk ticket %s open again: %s", uid, (a.get("title") or "")[:80])
+            log.info("Kiosk fault %s open again: %s", uid, (a.get("title") or "")[:80])
             return True
         # a new fault is a fault like any other: its note says what to check (villa, 2026-10-11: the Onsen pump's new
         # fault read "Back again." where "Check: …" belongs — the reopening's note was taken for the fault's)
@@ -156,7 +156,7 @@ class Tickets:
         try:
             held = await self.kiosk.held_tickets()
         except Exception as e:  # noqa: BLE001 — the next start or night tries again
-            log.warning("The Kiosk's tickets could not be read (%s)", type(e).__name__)
+            log.warning("The Kiosk's faults could not be read (%s)", type(e).__name__)
             return nothing
         await self.kiosk.refresh()                # a Kiosk updated since the agent started says what it shows now
         helped = await self._take_in(problems, held)
@@ -186,14 +186,14 @@ class Tickets:
                 # ended the repair for every fault after it, every 5 minutes, and the log said "KioskError". The Kiosk's
                 # own sentence is logged; only a Kiosk that cannot be reached at all ends the round (the rest would fail
                 # the same way; the next repair tries again)
-                log.warning("A missing Kiosk ticket could not be created: %s", e)
+                log.warning("A missing Kiosk fault could not be created: %s", e)
                 if not e.refused:
                     break
             except Exception as e:  # noqa: BLE001 — the next start or night tries again
-                log.warning("A missing Kiosk ticket could not be created (%s)", type(e).__name__)
+                log.warning("A missing Kiosk fault could not be created (%s)", type(e).__name__)
                 break
         if made:
-            log.info("Kiosk tickets created for %d open task(s) that had none", made)
+            log.info("Kiosk faults created for %d open task(s) that had none", made)
             # ⚠️ A NEW FAULT TELLS ITS STORY AT ONCE (owner's end-to-end test, 2026-10-30: alert #95's card on the tablet
             # had no step, and its row no time, until the next repair 4 minutes later): step 3 ran before it existed,
             # so it is brought up to date now, as every fault is (_converge: its number, its check, its short story)
@@ -202,7 +202,7 @@ class Tickets:
                 for k, v in (await self._converge(problems, held)).items():
                     moved_cards[k] = moved_cards.get(k, 0) + v
             except Exception as e:  # noqa: BLE001 — the next repair (5 minutes) does it
-                log.warning("The new Kiosk tickets could not be brought up to date (%s)", type(e).__name__)
+                log.warning("The new Kiosk faults could not be brought up to date (%s)", type(e).__name__)
         moved_cards["resolved"] = moved_cards.get("resolved", 0) + await self._close_doubles(problems, held)
         # an open problem with no fault and no person's close is a fault the Cockpit never shows — said, not silent
         if unseen := problems.unseen():
@@ -271,9 +271,9 @@ class Tickets:
             if _before(t.get("done_at"), card.get("reopened_at")):
                 by, at = card.get("reopened_by") or "", card.get("reopened_at")
                 problems.reopened_in_kiosk(t["id"], by, kiosk_words.reopened(by, at, self.timezone), at=at)
-                log.info("Kiosk ticket %s reopened by a person: its task is open again", uid)
+                log.info("Kiosk fault %s reopened by a person: its task is open again", uid)
         if closed:
-            log.info("Kiosk tickets closed by a person: %d task(s) closed with them", closed)
+            log.info("Kiosk faults closed by a person: %d task(s) closed with them", closed)
         helped = await self._helps(problems, held)
         # ⚠️ AN ALERT TAKEN ON IN THE KIOSK IS NO LONGER CHASED (owner, 2026-10-15): "Open Ticket" on its card, and
         # Telegram kept reminding the facility manager, then escalating to the owner — of a job someone had taken
@@ -392,14 +392,14 @@ class Tickets:
                     fixed += await self.kiosk.amend(uid, confirming(want["confirms_by"]))
             except KioskError as e:
                 # a refusal of this fault is this fault's: the next one is tried (see the repair's own loop above)
-                log.warning("Kiosk ticket %s could not be brought up to date: %s", uid, e)
+                log.warning("Kiosk fault %s could not be brought up to date: %s", uid, e)
                 if not e.refused:
                     break
             except Exception as e:  # noqa: BLE001 — the next start or night tries again
-                log.warning("A Kiosk ticket could not be brought up to date (%s)", type(e).__name__)
+                log.warning("A Kiosk fault could not be brought up to date (%s)", type(e).__name__)
                 break
         if fixed:
-            log.info("Kiosk tickets brought up to date: %d", fixed)
+            log.info("Kiosk faults brought up to date: %d", fixed)
         return {"reopened": reopened, "resolved": resolved}
 
 

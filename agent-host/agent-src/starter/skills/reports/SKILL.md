@@ -52,7 +52,7 @@ the conclusions are yours.
    --optimiser-json optimiser.json` (it records the proposals the page shows).
 2. `reports` `facts.py fm-weekly --energy week.json --out facts.json` (or `owner-monthly --energy
    month.json`). It prints `to_do`: THE ONE LIST of what needs doing, the playbook's clues and the
-   open tasks, merged by device and grouped by kind (one line per device; "4 monitoring devices
+   open faults, merged by device and grouped by kind (one line per device; "4 monitoring devices
    offline" rather than four lines), each with its playbook guidance (what to look at, what it means,
    what to check, what to ask), and `to_write`: every sentence the page needs, with its instruction.
 3. For each line of `to_do`, before you write: look at what its `look_at` says, in the villa's system

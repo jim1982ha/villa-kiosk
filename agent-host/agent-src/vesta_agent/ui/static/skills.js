@@ -69,7 +69,7 @@ export async function switchTool(b) {
 // ⚠️ OPENED FROM ITS OWN CARD (owner, 2026-10-08: the "Try a command" tab became an "Offline Test" pill on each
 // command's card, in a popup): the script and the command are the card's, so only the options are asked; then Run.
 export const FLAG_HELP = { date: "a day, e.g. 2026-10-05", text: "a word or a few", switch: "" };
-export const OFFLINE_TEST_INFO = "Runs this command on the villa, exactly as the AI would: it changes nothing in the villa's system, uses no AI and costs nothing. Messages or tickets it would create are shown here, never sent. A file it saves stays in the agent's out folder, for a next step.";
+export const OFFLINE_TEST_INFO = "Runs this command on the villa, exactly as the AI would: it changes nothing in the villa's system, uses no AI and costs nothing. Messages or faults it would raise are shown here, never sent. A file it saves stays in the agent's out folder, for a next step.";
 export function tryPanel(name, d, script, command = null) {
   const out = h("div");
   let values = {};

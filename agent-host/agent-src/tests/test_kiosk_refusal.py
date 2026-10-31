@@ -48,7 +48,7 @@ def test_a_refused_change_leaves_the_other_faults_brought_up_to_date(tmp_path, c
     with caplog.at_level("WARNING", logger="vesta.outcome"):
         run(v.tickets.repair())
     assert k.titles == {"t1": "A offline", "t2": "B offline 2 days"}
-    assert "Kiosk ticket t1 could not be brought up to date: writing the Facility records answered 403: " + SENTENCE in caplog.text
+    assert "Kiosk fault t1 could not be brought up to date: writing the Facility records answered 403: " + SENTENCE in caplog.text
 
 
 def test_a_kiosk_that_cannot_be_reached_still_ends_the_round(tmp_path, caplog):
@@ -82,4 +82,4 @@ def test_the_refusals_words_reach_the_chat_answer(tmp_path):
     tools = {t.name: t for t in v.toolbox().tool_objects(None, None)}
     out = run(tools["create_ticket"].handler({"title": "Pump weak"}))
     assert out.get("is_error")
-    assert out["content"][0]["text"] == f"The Kiosk did not record the ticket: writing the Facility records answered 403: {SENTENCE}."
+    assert out["content"][0]["text"] == f"The Kiosk did not record the fault: writing the Facility records answered 403: {SENTENCE}."

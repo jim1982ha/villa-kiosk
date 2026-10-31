@@ -490,7 +490,7 @@ def test_a_switched_off_copy_never_knocks_out_the_live_skill(agent):
 def test_a_ticket_the_ai_creates_is_one_action(agent, monkeypatch):
     # architecture review 16: logged by the tool and by tickets.create, each ticket counted twice on the Overview
     async def create(**k):
-        agent.state.log("executed", {"tool": "ticket", "ticket": "T1"})
+        agent.state.log("executed", {"tool": "fault", "fault": "T1"})
         return "T1"
     tb = agent.toolbox()
     tb.ticket = create

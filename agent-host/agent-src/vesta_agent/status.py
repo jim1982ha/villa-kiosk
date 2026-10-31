@@ -19,9 +19,11 @@ from .in_progress import CUT, ENDED, FAILED, run_ends
 # agent_status: the records worth telling a person about, and the fields of each (never a chat id or a token)
 STATUS_KINDS = ("critical_event", "ladder", "executed", "requested", "approved", "refused_by_person", "failed",
                 "action_failed", "send_failed", "script_failed", "code_script_failed", "script_refused", "pack",
-                "ticket_skipped", agent_records.JOB_NO_RESULT)
+                "fault_skipped", "ticket_skipped", agent_records.JOB_NO_RESULT)
 #                                   code_script_failed: a failed script before 0.6.60 (records kept settings.keep days)
-STATUS_FIELDS = ("rule", "phase", "handled", "incident", "by", "reply", "tool", "ticket", "entity", "service",
+#                                   ticket_skipped, ticket: rows written before 0.6.414 (now fault_skipped, "fault":
+#                                   the Agent raises faults; only a person's Open Ticket makes a ticket)
+STATUS_FIELDS = ("rule", "phase", "handled", "incident", "by", "reply", "tool", "fault", "ticket", "entity", "service",
                  "skill", "script", "reason", "error", "code", "entities", "job", "why")
 
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.414 (1 November 2026)
+
+- A reported issue is a FAULT (owner, 2026-11-01): it becomes a ticket only when a person presses Open Ticket in the
+  Kiosk. Every text the model or a person reads says so: the starter instructions' rule 4 (with an
+  INSTRUCTION_REWRITES pair that brings both earlier wordings of an installed file to the new one), the alert-desk,
+  preventive-maintenance and villa-concierge SKILL.md / skill.yaml, create_ticket's descriptions and errors, the
+  run_skill_script "Carried out" line ("fault(s) raised or reopened, N fault(s) cleared"), agent_status's
+  description, tool_access's label, the offline-test hint, the start-up check, the tickets.py log lines ("Kiosk
+  fault …") and DOCS.md. The executed row of a raised fault is {"tool": "fault", "fault": id} and a skipped one
+  `fault_skipped` (older rows keep "ticket"/`ticket_skipped`, still listed by status). The reports skill's monthly
+  KPI is "faults closed / raised", "median N days to close". tests/test_fault_words.py: no starter text, tool
+  description, tool result or AI-tools label calls what VESTA raises a ticket (only create_ticket, Open Ticket and
+  "makes it a ticket" pass).
+
 ## 0.6.413 (31 October 2026)
 
 - Limits tab labels (owner, 2026-10-31: "describes fully and user friendly what each parameter does"): 68 code limits'

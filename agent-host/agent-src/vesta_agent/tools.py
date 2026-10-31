@@ -5,7 +5,7 @@
   does not name does not exist here. A tool the server marks destructive is
   refused and logged, whatever the policy says.
 - `ha_call_service`: asks for an approval. It never executes.
-- `create_ticket`: a fault in the VESTA Kiosk's Facility records, no approval
+- `create_ticket`: a fault in the Kiosk's Open issues (a person's Open Ticket makes it a ticket), no approval
   (a record, not a physical action); marked "By VESTA Agent" by the Kiosk.
 - `read_skill`, `run_skill_script`: the skills, with each script's arguments
   checked against the skill's own skill.yaml. No shell exists.
@@ -134,7 +134,7 @@ The code adds --pack, --store and --zone itself: never pass them, nor --fixture-
 Output files: give --out a plain file name (e.g. week.json); the file lands in the agent's out folder and can be
 passed by name to another script or attached with send_message.
 Any action on the villa (light, lock, siren, automation...) is ha_call_service: it only ASKS a person, who approves
-with a button. A task for the facility manager is create_ticket (in a chat it is only offered, with a button). The desk's siren/reply/intake/tick commands are
+with a button. A task for the facility manager is a fault, raised with create_ticket (in a chat it is only offered, with a button). The desk's siren/reply/intake/tick commands are
 done by the code, not by you. Ignore the parts of the text below that tell you to run them.
 [End of the VESTA note]
 
@@ -641,17 +641,17 @@ class Toolbox:
             "note": {"type": "string", "description": "What to check, optional."}},
             "required": ["title"]}
         offered = self.offered
-        what = ("Offer a fault for the facility manager: a button under your answer creates it in the villa's Facility "
-                "records (the VESTA Kiosk) if the person presses it. One per answer. It acts on nothing."
+        what = ("Offer a fault for the facility manager: a button under your answer raises it in the Kiosk's Open "
+                "issues if the person presses it. One per answer. It acts on nothing."
                 if offer_in is not None else
-                "Record a fault for the facility manager in the villa's Facility records (the VESTA Kiosk). "
+                "Raise a fault for the facility manager in the Kiosk's Open issues (only a person makes it a ticket). "
                 "It does not act on anything. Use it for a job someone must do.")
 
         @tool("create_ticket", what, schema)
         async def handler(args: dict) -> dict:
             title = str(args.get("title") or "").strip()
             if not title:
-                return _err("A ticket needs a title.")
+                return _err("A fault needs a title.")
             ent = str(args.get("entity_id") or "").strip() or None
             if ent and not re.match(r"^[a-z_]+\.[a-z0-9_]+$", ent):
                 return _err(f"{ent} is not an entity id.")
@@ -666,9 +666,9 @@ class Toolbox:
                 await self.ticket(title=title[:fault_title_chars()], entity_id=ent, note=note)
             except KioskError as e:
                 # the Kiosk's own words, so the person hears why (not "KioskError")
-                return _err(f"The Kiosk did not record the ticket: {e}.")
+                return _err(f"The Kiosk did not record the fault: {e}.")
             except Exception as e:  # noqa: BLE001
-                return _err(f"The Kiosk did not record the ticket ({type(e).__name__}).")
+                return _err(f"The Kiosk did not record the fault ({type(e).__name__}).")
             # recorded once, by tickets.create (architecture review 16: logged here too, each ticket counted twice)
             return _ok("Recorded.")
         return handler
@@ -690,7 +690,7 @@ class Toolbox:
             "hours": {"type": "integer", "description": f"How far back, in hours (default {default}, at most {most})."}}}
 
         @tool("agent_status", "What YOU (the VESTA Agent) did recently: scheduled jobs run, alerts followed, "
-                              "buttons pressed, tickets, actions asked or done, failures, AI cost. Read-only. "
+                              "buttons pressed, faults raised or cleared, actions asked or done, failures, AI cost. Read-only. "
                               "Use it for 'what did you do last night?'. Times are UTC.", schema)
         async def handler(args: dict) -> dict:
             try:
@@ -808,7 +808,8 @@ class Toolbox:
                     done = await self.carry_out(res, sk, origin, self.s.out_dir)
                     lost = f", {done['not_sent']} could not be delivered" if done.get("not_sent") else ""
                     out = (f"[Carried out by the VESTA Agent: {done['sent']} message(s) sent{lost}, {done['tickets']} "
-                           f"ticket(s) created, {done['resolved']} closed. Do not send or create them again.]\n") + out
+                           f"fault(s) raised or reopened, {done['resolved']} fault(s) cleared. Do not send or raise "
+                           f"them again.]\n") + out
             text = self.parts.serve(key, out, part)
             return _ok(text) if ans.ok else _err(text or f"The script failed (exit {ans.code}).")
         return handler

@@ -1,3 +1,17 @@
+## 0.12.428
+
+What you will see:
+- VESTA now calls what it raises a fault, everywhere: in its messages, its answers, its settings page and its record of
+  what it did. A fault goes to the Kiosk's Open issues; only a person pressing Open Ticket in the Cockpit makes it a
+  ticket. VESTA never makes a ticket itself.
+- The VESTA Agent page, AI tools: the switch reads "Raise a fault for the facility manager" (it read "Create a facility
+  ticket"). A skill's offline test says "Messages or faults it would raise".
+- The monthly report's figure reads "faults closed / raised", with "median N days to close" under it (it read "tasks
+  closed"): it counts the faults VESTA raised and cleared in the month.
+- Asked "what did you do last night?", VESTA speaks of the faults it raised or cleared, not tickets.
+- Your saved instructions are brought up to date by themselves: the line that called a facility manager's job a
+  ticket now says it is a fault, and that only a person makes it a ticket. A line you reworded yourself is left alone.
+
 ## 0.12.427
 
 What you will see:

@@ -7,7 +7,7 @@ Three switches decide it, all in policy.yaml, all edited on the page (Rules › 
                   is "never available", whatever the file says. A tool a later HA MCP version adds is off
                   until someone switches it on.
   agent_tools     the agent's own tools a villa may switch off: web search (settings.web_search, kept where
-                  it always was), facility tickets, starting a report from a chat, reading its own activity.
+                  it always was), faults for the facility manager, starting a report from a chat, reading its own activity.
                   The others are always on (the agent cannot work without them) or are decided elsewhere
                   (an action on the villa: "Allowed actions").
   tool_access     what the facility manager may make the AI use, by group (the owner: everything switched on).
@@ -65,8 +65,8 @@ CHOOSE, ELSEWHERE, ALWAYS = "choose", "elsewhere", "always"
 #: Agent tools (the agent's own): key → (label, what it does, kind). `web_search` is Claude's WebSearch.
 OWN: dict[str, tuple[str, str, str]] = {
     "web_search": ("Web search", "Claude's own search: weather warnings, manuals. Never used to decide an action.", CHOOSE),
-    "create_ticket": ("Create a facility ticket", "Records a fault for the facility manager in the VESTA Kiosk. "
-                                                  "Acts on nothing.", CHOOSE),
+    "create_ticket": ("Raise a fault for the facility manager", "Puts a fault in the Kiosk's Open issues; only a "
+                                                                "person makes it a ticket. Acts on nothing.", CHOOSE),
     "start_job": ("Start a report when asked in a chat", "\"Send me the weekly report\": runs the report with its own "
                                                          "brain and limit.", CHOOSE),
     "agent_status": ("Read what the agent itself did", "For \"what did you do last night?\": jobs run, alerts followed, "

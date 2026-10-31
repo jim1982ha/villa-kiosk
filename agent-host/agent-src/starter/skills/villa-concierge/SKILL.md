@@ -37,7 +37,7 @@ day it was found, not the hours asked about.
 Only what those lines say. Lines marked ⟵ are what is unusual, with the reason they give; a line with no ⟵ is usual for
 the device, even when the person called it a problem: then say plainly that it is its normal. A cause is named only
 when a line shows it; another device from the villa status (a relay that keeps reconnecting, a device offline) is a
-lead only when its own readings, read too, change at the same moments. Offer a ticket only for something marked ⟵.
+lead only when its own readings, read too, change at the same moments. Offer a fault only for something marked ⟵.
 
 Then end with this one line, as it is: "For a full analysis with a report page, write /investigate followed by your
 question." The investigation is its own skill, used only when the person writes /investigate: never try to do it here.

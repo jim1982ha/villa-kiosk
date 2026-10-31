@@ -59,7 +59,7 @@ def test_a_script_the_model_runs_in_a_chat_is_carried_out_like_a_scheduled_one(a
     v, kiosk = agent
     res = model_runs(v, GROUP)
     text = res["content"][0]["text"]
-    assert "Carried out by the VESTA Agent: 1 message(s) sent, 1 ticket(s) created" in text
+    assert "Carried out by the VESTA Agent: 1 message(s) sent, 1 fault(s) raised or reopened" in text
     assert kiosk.tickets == [("Pump draws less power", "sensor.example_pump_power")]
     task = Store(v.s.store_path).tasks("open")[0]
     assert task["todo_uid"] == "t1"                                        # the task knows its ticket
