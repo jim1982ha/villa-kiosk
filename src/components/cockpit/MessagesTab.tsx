@@ -24,7 +24,7 @@ import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { useSuperadminDelete } from "@/hooks/useSuperadminDelete";
 import type { LongPressHandlers } from "@/hooks/useLongPress";
-import { announcementWords, cardsOfIssue, idOf, messageOfLine, messagesView, openingFilter, readOnScreen, type MessageItem,
+import { announcementWords, cardsOfIssue, messageOfLine, messagesView, followingFilter, openingFilter, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -168,7 +168,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
     [canManage, devices, config.entityMap, entities, resolvedRooms]);
 
   const { open, watched } = useCockpitIssues();
-  const { kept, unread, unreadReports, shown } = useAnnouncements();
+  const { kept, unread, unreadReports } = useAnnouncements();
   // something unread: opened on Notifications, the newest open (ticket 18 of "One inbox"); a warning or the wrench first
   const opening = { warning: !!focusFaults?.length, form: !!reportFaultFor && canManage };
   const [filter, setFilter] = useState<MessagesFilter>(() => openingFilter(unread, opening, unreadReports));
@@ -177,7 +177,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   const [chosen, setChosen] = useState(false);
   const pickFilter = (f: MessagesFilter) => { setChosen(true); setFilter(f); };
   useEffect(() => {
-    if (!chosen) setFilter(openingFilter(unread, opening, unreadReports));
+    if (!chosen) setFilter((f) => followingFilter(f, unread, opening, unreadReports));
   }, [chosen, unread, unreadReports]);     // `opening`: the Cockpit's, fixed while the tab is open
   const [selected, setSelected] = useState<string | null>(null);
   // a device window's warning opens its issue until Back (or another line) is chosen
@@ -217,13 +217,6 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   // A phone shows the item someone chose (a line, a warning, the ticket form), else the list: an item that went (an
   // issue cleared, the form done) never leaves another open in its place.
   const reading = !!raising || view.openedBy === "asked" || view.openedBy === "focus";
-  // read on this tablet once in view, as the model says (messagesModel.readOnScreen)
-  const onScreen = readOnScreen(filter, { notifications: paged.page, reports: reportsPaged.page }, item, kept);
-  const onScreenKey = onScreen.map(idOf).join(",");
-  useEffect(() => {
-    if (onScreen.length) shown(onScreen);
-    // keyed on what is shown: a re-draw showing the same lines marks nothing again
-  }, [onScreenKey, shown]);
 
   return (
     <div className={`messages${reading ? " reading" : ""}`}>

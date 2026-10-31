@@ -448,6 +448,13 @@ ck("the Tickets tab draws ticketCards — the tickets in progress, by device —
      WORK_ACTIONS.raiseTicket.label === "Open Ticket" && WORK_ACTIONS.openTicket.label === WORK_ACTIONS.raiseTicket.label
      && JSX.elements(wb, "WorkLabel").length === 1 && JSX.propText(JSX.elements(wb, "WorkLabel")[0], "kind") === "a.kind");
   const shared = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  // owner, 2026-10-31: on a phone (360 to 430 px) Open Ticket still dropped to its own line, 2 to 42 px short in
+  // WebKit; the filter's button says "Notifs", its section keeps "Notifications"
+  const { FILTERS } = await import("@/messages/messagesModel");
+  const notesSection = JSX.elements(tab, "MessagesSection").find((s) => JSX.propText(s, "onToggle") === '() => fold("notes")');
+  ck("  ...the filters say Issues · Notifs · Reports, the buttons drawn from that one list; the section is still \"Notifications\"",
+     FILTERS.map((f) => f.label).join(" · ") === "Issues · Notifs · Reports" && /\{f\.label\}/.test(msg)
+     && !!notesSection && JSX.propText(notesSection, "title") === '"Notifications"', FILTERS);
   ck("  ...the two groups wrap whole: the filters never shrink, the button keeps the right",
      /\.messages-toolbar \{[^}]*flex-wrap: wrap;/.test(shared) && /\.messages-filters \{[^}]*flex: 0 0 auto;/.test(shared)
      && /\.messages-toolbar-actions \{[^}]*margin-left: auto;/.test(shared));
