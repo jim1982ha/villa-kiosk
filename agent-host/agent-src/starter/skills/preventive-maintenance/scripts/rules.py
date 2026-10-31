@@ -305,22 +305,24 @@ def availability_rules(asset: dict, entity_id: str, state: str | None, last_chan
 MISSING = "PM-MISSING"
 
 
-def missing_rules(name: str, entity_id: str, entities: list[str], since: str, since_words: str, critical: bool,
-                  named_in: list[str] = ()) -> list[Finding]:
+def missing_rules(name: str, entity_id: str, entities: list[str], since: str | None, since_words: str | None,
+                  critical: bool, named_in: list[str] = (), since_read: bool = False) -> list[Finding]:
     """PM-MISSING: a device VESTA watched that the villa's system no longer has at all — no state, its own "not found"
     (owner, 2026-10-31: an entrance lock its hub stopped sharing vanished at 00:19; offline needs a state, so nothing
-    was said, and the owner found it on the Kiosk's map). `name`: as the last pack named it; `since`: when a pack first
-    no longer had it (ISO), `since_words` that moment as a person reads it; `entities`: every entity of the device gone
+    was said, and the owner found it on the Kiosk's map). `name`: as the last pack named it; `since_words`: `since` (below,
+    ISO) as a person reads it; `entities`: every entity of the device gone
     with it; `named_in`: the automations and scripts still naming it ("automation 'Door watch'"). P2 when the device is
-    critical, as an offline one."""
+    critical, as an offline one. `since`: when it left the villa's system (its history), else when a pack first no
+    longer had it, None when neither is known — never the moment the check ran (villa, 2026-10-31); `since_read`: its
+    history was read, never again for this fault."""
     sev = P2 if critical else P3
     check = "Re-pair it, or press Done if it was removed on purpose."
     if named_in:
         check += f" Still named in {', '.join(named_in)}: remove it there."
     return [Finding(MISSING, entity_id, entity_id, "availability", sev,
-                    f"{name} is missing from the villa's system since {since_words}.",
+                    f"{name} is missing from the villa's system{f' since {since_words}' if since_words else ''}.",
                     {"critical": critical, "entities": list(entities), "since": since, "name": name,
-                     "named_in": list(named_in)}, check)]
+                     "named_in": list(named_in), "since_read": since_read}, check)]
 
 
 def silence_rules(asset: dict, entity_id: str, last_changed_hours: float | None, params: VillaParams,

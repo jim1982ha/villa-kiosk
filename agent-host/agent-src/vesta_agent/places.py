@@ -41,7 +41,7 @@ PLACES: dict[str, tuple[str, str]] = {
     "ha_tools": ("Villa system tools", "Rules › AI tools"),
     "agent_tools": ("Agent tools", "Rules › AI tools"),
     "tool_roles": ("Tools by role", "Rules › AI tools"),
-    # Knowledge: its sub-tabs (core.js tabbed), in this order
+    # Knowledge: two cards, then the device kinds and links as the tabs of one tabbed section (ORDER, TABBED)
     # what each device is, guessed or chosen (owner, 2026-10-28: a picker, never typed JSON — vesta_shared.asset_kinds)
     "kinds": ("Device kinds", "Knowledge"),
     # which helpers belong to each device, guessed or chosen (owner, 2026-10-30 — vesta_shared.asset_links)
@@ -76,9 +76,18 @@ assert all(place.split(" › ")[0] in TABS.values() for _, place in PLACES.value
 #: and every "move X below Y" edited it and the test that quoted it). The page draws its sections in this order.
 ORDER = {
     "rules": ["acting", "people", "actions", "protected", "ai", "tools"],   # AI tools below AI brains (owner, 2026-10-08)
-    "knowledge": ["kinds", "links", "asleep", "translations"],
+    # the two cards above the device tabs (owner, 2026-10-31: "Asleep between reports" and "Translations" were tabs
+    # beside Device kinds and Device links, each one tap away; now they are read without a tap)
+    "knowledge": ["asleep", "translations", "kinds", "links"],
 }
 assert all(k in PLACES for keys in ORDER.values() for k in keys), "an ordered section with no place"
+
+#: the sections of a tab drawn as the tabs of ONE tabbed section (core.js tabbed), the section where the first of them
+#: sits in ORDER; every other section of the tab is a card of its own
+TABBED = {
+    "knowledge": ["kinds", "links"],
+}
+assert all(ks and set(ks) <= set(ORDER[t]) for t, ks in TABBED.items()), "a tabbed section outside its tab's order"
 
 
 def title(key: str, **names: str) -> str:

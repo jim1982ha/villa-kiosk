@@ -93,9 +93,10 @@ body { min-height: 100vh; padding-bottom: 96px; }
 .eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); font-size: var(--text-xs); color: var(--accent); }
 .ver { color: var(--text-dim); font-size: var(--text-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tabs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 20px 0; max-width: var(--page-width); margin: 0 auto; border-bottom: 1px solid var(--hairline); }
+/* a tab's name on one line, never wrapped (owner, 2026-10-31, a phone: "(file)" fell under "Rules"): the bar scrolls */
 .tabs button {
   background: none; border: 0; padding: 10px 14px; cursor: pointer; color: var(--text-secondary);
-  border-bottom: 2px solid transparent; font-weight: 500; min-height: var(--touch-min);
+  border-bottom: 2px solid transparent; font-weight: 500; min-height: var(--touch-min); white-space: nowrap; flex: none;
 }
 .tabs button.on { color: var(--text-primary); border-bottom-color: var(--accent); }
 main { max-width: var(--page-width); margin: 0 auto; padding: 16px 20px; }
@@ -286,11 +287,9 @@ svg.bars .base { stroke: var(--text-dim); }
 .dropdown-option.on::after { content: "\2713"; margin-left: auto; padding-left: 12px; }
 
 /* Costs › Every run (owner, 2026-10-19): every cell at the row's top; a run's "What" is its label, its chat and its
-   question held to three lines (all of it in the tooltip); the steps open under the row, across every column */
+   pill; the question and the steps open under the row, across every column */
 table.data.runs td { vertical-align: top; }
 .what { display: grid; gap: 2px; min-width: 0; }
-.what-asked { font-size: var(--text-xs); overflow-wrap: anywhere; cursor: help;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .more-btn { justify-self: start; display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 2px 10px; min-height: 26px;
   border: 1px solid var(--hairline-strong); border-radius: 999px; background: none; color: var(--text-secondary); font: inherit; font-size: var(--text-xs); cursor: pointer; }
 .more-btn:hover, .more-btn[aria-expanded="true"] { background: var(--bg-input); color: var(--text-primary); }
@@ -308,7 +307,7 @@ td.nowrap { white-space: nowrap; }
 }
 table.data tr:has(+ tr.row-more:not([hidden])) td { border-bottom: 0; }
 table.data tr.row-more td { padding-top: 0; }
-table.data tr.row-more[hidden] { display: none; }   /* over the phone's card rows (display: grid), which outrank [hidden] */
+table.data tr.row-more[hidden] { display: none; }   /* over the phone's card rows (display: block), which outrank [hidden] */
 
 /* A paged data table (core.js paged) on a phone (owner, 2026-10-05: columns overlapped): each row a card,
    each value on its own line with its column's name; an empty value (a row's last chip column) takes no line. */
@@ -320,12 +319,16 @@ table.data tr.row-more[hidden] { display: none; }   /* over the phone's card row
   table.data td::before { content: attr(data-label); color: var(--text-dim); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; text-align: left; flex: none; }
   table.data td:empty, table.data td[data-label=""]:empty { display: none; }
   table.data td[data-label=""]::before { content: none; }
-  /* two half columns on one line, each its label above its value */
-  table.data tr { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }
-  table.data td { grid-column: 1 / -1; }
-  table.data td.ph-half { grid-column: auto; flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; gap: 0; padding: 4px 0; }
-  table.data td.ph-half:nth-child(even of .ph-half) { align-items: flex-end; text-align: right; }
-  table.data tr:has(+ tr.row-more:not([hidden])) { border-bottom: 0; padding-bottom: 0; }
+  /* ⚠️ EVERY LINE ITS NAME ON THE LEFT, ITS VALUE ON THE RIGHT (owner, 2026-10-31: Every run paired When with What and
+     Tokens with Cost, each name over its value, the first value left, the second right): a value of several lines
+     (Every run's What: its label and its chat) keeps to the right edge as it wraps */
+  table.data td > .what { justify-items: end; text-align: right; }
+  table.data td > .what .what-head { justify-content: flex-end; }
+  /* the steps' pill (costs.runWhat) after the card's last line, at the right (owner, 2026-10-31: it sat under What):
+     the same button, placed on the row's card, so it opens and closes the line under the row as on a wide screen */
+  table.data tr:has(.more-btn) { position: relative; padding-bottom: 46px; }
+  table.data tr .more-btn { position: absolute; right: 0; bottom: 10px; margin: 0; }
+  table.data tr:has(+ tr.row-more:not([hidden])) { border-bottom: 0; }
   table.data tr.row-more td { display: block; text-align: left; }
 }
 

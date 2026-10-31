@@ -31,7 +31,7 @@ from vesta_shared.limits import limit
 from .. import __version__, requests_box, status, tool_access
 from ..config import STARTER_DIR, Settings
 from ..history import History, file_change
-from ..places import ORDER, PLACES, TABS
+from ..places import ORDER, PLACES, TABBED, TABS
 from ..skills import FILE_NAME, REQUIRED_FILES, SKILL_NAME, TRASH, VILLA_CHOICES, Skills, switch_command, to_trash
 from ..state import State
 from . import kinds, links, setup_copy
@@ -43,7 +43,7 @@ log = logging.getLogger("vesta.ui")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 #: the page's places (one name per place, places.py), as the page reads them: "</" escaped, so no name can close the tag
-PLACES_JSON = json.dumps({"places": PLACES, "order": ORDER}).replace("</", "<\\/")
+PLACES_JSON = json.dumps({"places": PLACES, "order": ORDER, "tabbed": TABBED}).replace("</", "<\\/")
 STATIC = os.path.join(HERE, "static")
 INGRESS_GATEWAY = "172.30.32.2"
 MAX_FILE = 512 * 1024

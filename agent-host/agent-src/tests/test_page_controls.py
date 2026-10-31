@@ -640,7 +640,7 @@ def test_every_run_names_the_skills_it_used_before_the_tools_it_called(ui):
     from helpers import body_of
     js = body_of(page_js(), "costs")
     # the Tools called column went (owner, 2026-10-20): the run's steps list them, each with its skill first
-    assert '"Brain · model", "Skills",\n' in js and "usedSkills(r.skills),\n    { v:" in js and "usedTools" not in page_js()
+    assert '"Brain · model", "Skills", { v: "Tokens in / out"' in js and "usedSkills(r.skills),\n    { v:" in js and "usedTools" not in page_js()
     drawn = body_of(page_js(), "usedSkills")
     assert 'skills.map((k) => h("span", { class: "chip" }, k))' in drawn and ': "—"' in drawn
 

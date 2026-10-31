@@ -1,9 +1,10 @@
 // VESTA Agent page — the Knowledge tab: what the agent knows of the villa and keeps outside policy.yaml (owner,
 // 2026-10-30: "the Rule tab exclusively contain feature defined in the policy.yaml file", every other one in ONE tab).
-// Its sub-tabs (places.ORDER.knowledge): Device kinds, Device links, Asleep between reports, Translations. Each is
-// saved where it lives, at once (no save bar): a kind and a link through the page's one writer (ui/kinds.py,
+// Its sections (places.ORDER.knowledge): Asleep between reports and Translations, each a card, then Device kinds and
+// Device links as the tabs of one tabbed section (places.TABBED; owner, 2026-10-31: the two cards were tabs too). Each
+// is saved where it lives, at once (no save bar): a kind and a link through the page's one writer (ui/kinds.py,
 // ui/links.py: in Page changes, undoable), the translations forgotten in the agent's memory.
-import { api, ask, card, dropdown, fill, h, inOrder, paged, place, plural, problemsBox, reasons, tabbed, tell, toast, $view } from "./core.js";
+import { api, ask, card, dropdown, fill, h, inOrder, paged, place, plural, problemsBox, reasons, tabbed, tabbedIn, tell, toast, $view } from "./core.js";
 
 // a (i) in readable sections (owner, 2026-10-30: "barely understandable and very poorly formatted"): a heading, then
 // its sentences or a list of [bold words, the rest]
@@ -20,11 +21,15 @@ export async function knowledge() {
     asleep: () => asleepCard(v.asleep),
     translations: () => translationsCard(v),
   };
-  const t = tabbed("knowledge", inOrder("knowledge", Object.fromEntries(Object.keys(cards).map((k) => [k, k])))
-    .map((k) => [k, place(k), null, cards[k]]));
+  // the tabbed section where its first tab sits in the order (its problems above its bar), every other section a card;
+  // a tab kept from before (page.tabs) that is a card now opens the first tab (core.tabbed)
+  const inTabs = tabbedIn("knowledge");
+  const t = tabbed("knowledge", inTabs.map((k) => [k, place(k), null, cards[k]]));
+  const sections = Object.fromEntries(Object.keys(cards).map((k) =>
+    [k, !inTabs.includes(k) ? cards[k]() : k === inTabs[0] ? [probs, t.bar, t.body] : null]));
   // in the page, not behind a (i) (owner, 2026-10-15): hiding is done in the villa's system, not here (knowledge_pack)
   fill($view, h("p", { class: "muted" }, "Devices hidden in the villa's system are ignored by the agent: left out of the villa status, the reports, what the AI is told and every list of this tab."),
-    probs, t.bar, t.body);
+    ...inOrder("knowledge", sections));
 }
 
 // ---------------------------------------------------------------- knowledge › device kinds

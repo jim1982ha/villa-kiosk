@@ -425,11 +425,49 @@ def missing_findings(store, pack, cli, now: datetime, zone: str, near=None, name
         rows = [seen[e] for e in [eid, *es] if e in seen]
         name = (next((r["name"] for r in rows if r.get("name")), None) or was.get("name")
                 or (pack.device_name(eid, None) if pack is not None else None) or _plain_name(eid))
-        since = was.get("since") or min((r["gone_at"] for r in rows if r.get("gone_at")), default=None) or now.isoformat()
+        # ⚠️ SINCE IT LEFT, NEVER SINCE THE CHECK RAN (villa, 2026-10-31: a lock gone at 00:19 was "missing since 13:38",
+        # the moment 0.12.420 started and first looked): the villa's own history says when it left, read once per
+        # fault (`since_read`, a fault of 0.12.420 corrected in place); unreadable, when a pack first no longer had it
+        since, read = (was.get("since"), True) if was.get("since_read") else left_at(cli, es, rows, now)
+        since = since or min((r["gone_at"] for r in rows if r.get("gone_at")), default=None)
         labels = (list(dict.fromkeys(x for e in es for x in named.get(e, []))) if named_for_all or mine is None
                   else list(was.get("named_in") or []))
-        out += R.missing_rules(name, eid, es, since, moment_label(datetime.fromisoformat(since), zone), crit, labels)
+        out += R.missing_rules(name, eid, es, since, moment_label(datetime.fromisoformat(since), zone) if since else None,
+                               crit, labels, since_read=read)
     return out, back
+
+
+def left_at(cli, entities, seen_rows, now: datetime) -> tuple[str | None, bool]:
+    """(when the device of `entities` left the villa's system, ISO, or None; whether its history could be read). Read
+    from the last time a pack still had it (`seen_rows`' last_seen), else as far back as the villa keeps. Leaving
+    records one last row with NO state, at the moment it went: that row's time (villa, 2026-10-31: the lock's last
+    "locked" at 00:19:22, its removal at 00:19:32); no such row read, the time of its last row with a state, unless
+    that row is only the state carried over to the read's start (no moment of its own). The latest over its entities."""
+    starts = [datetime.fromisoformat(r["last_seen"]) for r in seen_rows if r.get("last_seen")]
+    start = min(starts, default=None)
+    if start is None or start >= now:
+        start = cli.kept_from(now)
+    if start is None or start >= now:
+        return None, False
+    try:
+        got = cli.history_read(list(entities), start, now, now=now)
+    except Exception as e:  # noqa: BLE001 — not read now: the pack's moment stands, the next check reads again
+        print(f"preventive-maintenance: when a missing device left could not be read ({type(e).__name__})",
+              file=sys.stderr)
+        return None, False
+    found = []
+    for e in entities:
+        last, gone = None, None
+        for r in got.rows.get(e) or []:
+            if r.get("state") not in (None, ""):
+                last, gone = r, None
+            elif last is not None and gone is None:
+                gone = r
+        if gone is not None:
+            found.append(gone["last_changed"])
+        elif last is not None and datetime.fromisoformat(last["last_changed"]) > start:
+            found.append(last["last_changed"])
+    return (max(found, key=datetime.fromisoformat) if found else None), True
 
 
 def missing_night(store, pack, cli, now: datetime, zone: str) -> tuple[list, list[str], list[dict]]:

@@ -12,7 +12,7 @@ import pytest
 from helpers import STARTER_SKILLS, body_of, page_js, settings
 from test_ui import HDR, call
 from vesta_agent.history import History
-from vesta_agent.places import ORDER, PLACES, TABS
+from vesta_agent.places import ORDER, PLACES, TABBED, TABS
 from vesta_agent.ui import links
 from vesta_agent.ui.changes import PageFiles, Refused
 from vesta_shared import asset_links
@@ -184,7 +184,10 @@ def test_the_knowledge_tab_holds_every_part_of_the_page_not_kept_in_policy_yaml(
     # owner, 2026-10-30: "the Rule tab exclusively contain feature defined in the policy.yaml file … the other ones
     # moved to another dedicated (single) tab"
     assert list(TABS) == ["overview", "rules", "knowledge", "skills", "costs", "limits"]
-    assert ORDER["knowledge"] == ["kinds", "links", "asleep", "translations"]
+    # owner, 2026-10-31: Asleep between reports and Translations are cards above the tabs, Device kinds and Device links
+    # the only tabs of the tabbed section, under them
+    assert ORDER["knowledge"] == ["asleep", "translations", "kinds", "links"]
+    assert TABBED["knowledge"] == ["kinds", "links"]
     assert all(PLACES[k][1] == "Knowledge" for k in ORDER["knowledge"])
     assert not set(ORDER["knowledge"]) & set(ORDER["rules"])
     js = page_js()
@@ -193,7 +196,14 @@ def test_the_knowledge_tab_holds_every_part_of_the_page_not_kept_in_policy_yaml(
                  "Devices hidden in the villa"):
         assert gone not in rules, gone
     tab = body_of(js, "knowledge")
-    assert 'api("GET", "api/knowledge")' in tab and 'tabbed("knowledge", inOrder("knowledge"' in tab
+    assert 'api("GET", "api/knowledge")' in tab
+    # the tabbed section holds the tabs places.TABBED names, drawn where the first of them sits in the order; every
+    # other section is its own card, drawn in the order too
+    assert 'const inTabs = tabbedIn("knowledge");' in tab
+    assert 'tabbed("knowledge", inTabs.map((k) => [k, place(k), null, cards[k]]))' in tab
+    assert "[k, !inTabs.includes(k) ? cards[k]() : k === inTabs[0] ? [probs, t.bar, t.body] : null]" in tab
+    assert '...inOrder("knowledge", sections));' in tab
+    assert "export const tabbedIn = (tab) => PAGE.tabbed?.[tab] || [];" in js
     assert "knowledge, skills" in js                                            # app.js: the tab's view
 
 

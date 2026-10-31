@@ -7,9 +7,10 @@ export const ktok = (n) => (n === null || n === undefined ? "—" : n >= 1e6 ? (
 let PROFILES = {};                     // the brains' names, from this tab's own answer (no shared page field)
 export const brain = (p, m) => [p ? (PROFILES[p] || p).replace(/ \(.*/, "") : null, m ? m.replace(/^claude-/, "") : null].filter(Boolean).join(" · ") || "—";
 
-// A run's "What" (owner, 2026-10-19): its label, the chat it came from, and the question as it was asked — whole,
-// held to three lines here, all of it in its tooltip and on the run's line underneath (runMore). The steps open on
-// demand under the row, across every column: squeezed into this column they pushed the row tall.
+// A run's "What" (owner, 2026-10-19): its label, the chat it came from, and the pill that opens the question as it was
+// asked, whole, and the steps, on the run's line underneath (runMore), across every column: squeezed into this column
+// they pushed the row tall. ⚠️ THE QUESTION ONCE (owner, 2026-10-31): it was also quoted here, three lines of it,
+// repeating what the pill opens.
 export function runWhat(r) {
   // a reply names its person; a job, or an alert card's translation (kind "translation"), its row's words
   const label = r.kind === "chat" ? `Reply to ${r.person || "someone"}` : r.job;
@@ -19,8 +20,7 @@ export function runWhat(r) {
   return h("div", { class: "what" },
     h("div", { class: "what-head" }, h("b", {}, label),
       r.kind === "chat" && r.chat ? h("span", { class: "muted" }, r.chat) : null,
-      steps.length || r.asked ? moreButton(steps.length ? plural(steps.length, "step", "steps") : "Whole question") : null),
-    r.asked ? h("div", { class: "muted what-asked", title: r.asked }, `“${r.asked}”`) : null);
+      steps.length || r.asked ? moreButton(steps.length ? plural(steps.length, "step", "steps") : "Whole question") : null));
 }
 
 // Under a run, across the table: what was asked, whole, then each step in a line — its number, its tool, and the
@@ -110,8 +110,8 @@ export async function costs(days = 7) {
       ["model", place("by_model"), "Which model ran each reply and each job.", () => groupTable(c.by_model, "Model")]]),
     tabbedCard(`${place("runs")} · last ${days} days`, "runs", [
       ["runs", place("every_run"), `${c.runs_count} runs, newest first. Open a run's steps to see what was asked, whole, and each tool it used (recorded from agent 0.6.42 on).`,
-        () => paged([{ v: "When", half: true }, { v: "What", half: true }, "Brain · model", "Skills",
-                     { v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }, ""], runRows, 10,
+        () => paged(["When", "What", "Brain · model", "Skills", { v: "Tokens in / out", cls: "num" }, { v: "Cost", cls: "num" }, ""],
+                    runRows, 10,
                     // the columns named, the row's cells at their top (a long question no longer centres the others);
                     // When on one line (owner, 2026-10-20: the Tools called column's room went to it)
                     { cls: "runs", widths: ["14%", null, "12%", "14%", "11%", "9%", "44"] })],

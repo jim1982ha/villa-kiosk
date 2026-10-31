@@ -10,6 +10,8 @@ const PLACES = PAGE.places || {};
 export const place = (k, names = {}) => (PLACES[k] || [k])[0].replace(/\{(\w+)\} ?/g, (_, v) => (names[v] ? `${names[v]} ` : ""));
 // a tab's sections in their order (places.ORDER): `sections` by place key → the nodes, top to bottom
 export const inOrder = (tab, sections) => (PAGE.order?.[tab] || Object.keys(sections)).map((k) => sections[k]);
+// the sections of a tab drawn as the tabs of one tabbed section (places.TABBED), in their order; none: every one a card
+export const tabbedIn = (tab) => PAGE.tabbed?.[tab] || [];
 export const where = (k) => (PLACES[k] ? `${PLACES[k][1]} › ${place(k)}` : k);
 
 // what several tabs read and change: one object (a module cannot assign another module's variables)
@@ -323,11 +325,10 @@ export function field(label, input, hint) {
 // another order (Knowledge › Device kinds, by name: "‹ Previous", "Next ›", "devices").
 export function paged(head, rows, per = 10, { cls = "", widths = null, nav = ["‹ Newer", "Older ›", "rows"] } = {}) {
   const body = h("tbody");
-  // each cell carries its column's name: on a phone the row becomes a card, every value labelled (app.css);
-  // a column whose head says `half` shares its line there with the next half one (owner, 2026-10-05)
+  // each cell carries its column's name: on a phone the row becomes a card, every value on its own line, its name on
+  // the left (app.css; owner, 2026-10-31: no two columns sharing a line any more, their values left and right)
   const label = head.map((c) => String(isCell(c) ? c.v : c || ""));
-  const half = head.map((c) => !!(isCell(c) && c.half));
-  const line = (cells) => h("tr", {}, cells.map((c, i) => cell(c, "td", { cls: half[i] ? "ph-half" : null, label: label[i] })));
+  const line = (cells) => h("tr", {}, cells.map((c, i) => cell(c, "td", { label: label[i] })));
   // a row is its cells, or {cells, more}: `more` drawn on its own line under the row, across every column, while the
   // row's moreButton is open (Costs › Every run: a run's question and steps, owner 2026-10-19 — they were squeezed
   // into the What column and pushed the row tall)

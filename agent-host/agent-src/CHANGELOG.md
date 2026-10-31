@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.407 (31 October 2026)
+
+- Knowledge layout (owner, 31 October, a phone): places.ORDER.knowledge is asleep, translations, kinds, links; new
+  places.TABBED names the sections drawn as the tabs of one tabbed section (kinds, links), written into the page's
+  places JSON and read by core.tabbedIn; knowledge.js draws every other section as its own card, in the order. A tab
+  kept in page.tabs that is a card now opens the first tab (core.tabbed's fallback).
+- .tabs button: white-space nowrap, flex none (the top tab's "(file)" wrapped).
+- paged(): the `half` columns (ph-half, the phone's two-column grid row) removed, its only user Every run: every
+  cell on a phone is its name left, its value right; Every run's What right-aligned (.what justify-items end). The
+  question's quote (.what-asked) left runWhat: runMore shows it whole, behind the pill every run with one has. On a
+  phone the pill is placed absolute at the row card's bottom right (tr:has(.more-btn), room kept open or shut).
+- PM-MISSING "since" (villa, 31 October: a lock gone at 00:19 said "since 13:38", 0.12.420's start): nightly.left_at
+  reads the device's history from the packs' last_seen (else kept_from) — the removal row's time (no state), else the
+  last stated row's unless only carried to the read's start — once per fault (detail.since_read); unread, the pack's
+  gone_at; never now (None: no "since" in the words). gone_missing rewrites an open fault's summary/detail in place
+  (raise_finding) when they changed; the night's record already did.
+
 ## 0.6.406 (31 October 2026)
 
 - PM-MISSING (owner, 31 October: a critical lock removed from the villa's system at 00:19, nothing said): rules.

@@ -165,3 +165,66 @@ def test_devices_gone_before_this_release_are_not_missing_now(tmp_path):
                    [(TH, "a", "level", None, "2026-10-30T01:30:00"), (LOCK, "a", "security", None, "2026-09-01T01:30:00")])
     db.commit(); db.close()
     assert set(Store(path).pack_seen_rows()) == {TH}
+
+
+def _left(tmp, at: datetime):
+    """The packs' last sighting set two hours before `at`, and the villa's history of the door: its lock and battery
+    reporting, then each one's removal row (no state) at 00:19:32 — as the villa recorded the lock that left."""
+    import sqlite3
+    db = sqlite3.connect(str(tmp / "s.sqlite"))
+    db.execute("UPDATE pack_seen SET last_seen=?", ((at - timedelta(hours=2)).isoformat(),))
+    db.commit(); db.close()
+    gone = at.replace(minute=19, second=32)
+    fx = tmp / "fx"
+    fx.mkdir(exist_ok=True)
+    (fx / "history_raw_door.json").write_text(json.dumps({"data": {"entities": [
+        {"entity_id": LOCK, "states": [{"state": "locked", "last_changed": (at - timedelta(days=3)).isoformat()},
+                                       {"state": "unlocked", "last_changed": (gone - timedelta(seconds=18)).isoformat()},
+                                       {"state": "locked", "last_changed": (gone - timedelta(seconds=10)).isoformat()},
+                                       {"state": None, "last_changed": gone.isoformat()}]},
+        {"entity_id": BATT, "states": [{"state": "80", "last_changed": (at - timedelta(days=1)).isoformat()},
+                                       {"state": None, "last_changed": gone.isoformat()}]}]}}))
+    return gone
+
+
+def test_a_missing_device_is_missing_since_it_left_never_since_the_check_first_looked(tmp_path):
+    # villa, 2026-10-31: the lock left at 00:19:32; 0.12.420, started at 13:38, said "missing … since 31/10/2026 13:38"
+    # (the moment its pack first lacked it). The villa's history says when it left: its removal row, the one with no state
+    from vesta_shared.timeutil import moment_label
+    _seen(tmp_path)
+    gone = _left(tmp_path, T0)
+    _recheck(tmp_path, {TH: _st()}, T0 + timedelta(hours=13), not_found=[LOCK, BATT])
+    (f,) = _missing(tmp_path)
+    assert f["summary"] == f"Example door is missing from the villa's system since {moment_label(gone, 'UTC')}."
+    d = json.loads(f["detail"])
+    assert d["since"] == gone.isoformat() and d["since_read"] is True
+
+
+def test_a_missing_fault_that_said_when_the_check_looked_is_corrected_in_place(tmp_path):
+    # a fault 0.12.420 opened, "since" the check's own moment, its history never read: the next check corrects its words
+    from vesta_shared.timeutil import moment_label
+    st = _seen(tmp_path)
+    gone = _left(tmp_path, T0)
+    wrong = (T0 + timedelta(hours=13)).isoformat()
+    fid, _ = st.raise_finding("PM-MISSING", LOCK, "availability", "2026-10-31", "P2",
+                              f"Example door is missing from the villa's system since {moment_label(datetime.fromisoformat(wrong), 'UTC')}.",
+                              {"critical": True, "entities": [LOCK, BATT], "since": wrong, "name": "Example door",
+                               "named_in": [], "check": "Re-pair it, or press Done if it was removed on purpose."})
+    out = _recheck(tmp_path, {TH: _st()}, T0 + timedelta(hours=14), not_found=[LOCK, BATT])
+    (f,) = _missing(tmp_path)
+    assert f["id"] == fid and out["send"] == []                                      # the same fault, not told again
+    assert f["summary"] == f"Example door is missing from the villa's system since {moment_label(gone, 'UTC')}."
+    assert json.loads(f["detail"])["since_read"] is True
+
+
+def test_a_missing_device_whose_history_is_not_read_is_missing_since_the_pack_lacked_it(tmp_path):
+    # no history of it: the moment a pack first no longer had it, never the moment of the check
+    st = _seen(tmp_path)
+    import sqlite3
+    db = sqlite3.connect(str(tmp_path / "s.sqlite"))
+    db.execute("UPDATE pack_seen SET last_seen=?, gone_at=? WHERE gone_at IS NOT NULL",
+               ((T0 - timedelta(hours=2)).isoformat(), (T0 - timedelta(hours=1)).isoformat()))
+    db.commit(); db.close()
+    _recheck(tmp_path, {TH: _st()}, T0 + timedelta(hours=13), not_found=[LOCK, BATT])
+    (f,) = _missing(tmp_path)
+    assert json.loads(f["detail"])["since"] == (T0 - timedelta(hours=1)).isoformat()

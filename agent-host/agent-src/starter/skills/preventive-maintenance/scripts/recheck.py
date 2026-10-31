@@ -233,6 +233,11 @@ def gone_missing(store, pack, client, now: datetime, params, zone: str, settle_m
     for f in found:
         row = store.open_finding(f.rule_id, f.entity_id)
         if row:
+            # its words corrected in place once its history said when it left (nightly.left_at: a fault of 0.12.420
+            # said the moment the check first looked)
+            if row["summary"] != f.summary or json.loads(row["detail"] or "{}").get("since") != f.detail.get("since"):
+                store.raise_finding(f.rule_id, f.entity_id, f.family, row["opened_day"], f.severity, f.summary,
+                                    {**json.loads(row["detail"] or "{}"), **f.detail, "check": f.check})
             moved += Problems(store).seen(row["id"], now.isoformat(), settle_minutes)
         else:
             new.append(f)

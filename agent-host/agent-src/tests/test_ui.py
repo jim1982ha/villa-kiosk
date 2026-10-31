@@ -342,8 +342,9 @@ def test_a_run_records_its_brain_model_tokens_and_what_was_asked(ui, monkeypatch
         return await (await c.get("/api/costs?days=7")).json()
     served = call(ui, fn)
     assert question in [r["asked"] for r in served["runs"]]                                     # served whole
-    what = body_of(page_js(), "runWhat")
-    assert 'title: r.asked }, `“${r.asked}”`)' in what and ".slice(" not in what and "substring(" not in what
+    # shown whole under the run (runMore), never cut (owner, 2026-10-31: once, no longer quoted on the run's line)
+    more = body_of(page_js(), "runMore")
+    assert 'r.asked ? h("p", { class: "run-asked" }, `“${r.asked}”`) : null' in more and ".slice(" not in more
 
 
 def test_a_question_keeps_no_secret():
@@ -406,16 +407,18 @@ def test_the_costs_period_sits_on_the_titles_line_and_the_figures_follow_with_no
     assert ".card-title-right { margin-left: auto; }" in css
 
 
-def test_a_runs_question_is_held_to_three_lines_and_its_steps_open_under_the_row():
-    # owner, 2026-10-04: the details as a tooltip, reachable by a tap on a phone. Owner, 2026-10-19: the question whole,
-    # held to three lines; the steps squeezed into the What column pushed the row tall and floated the other columns —
-    # they open on demand, on a line of their own under the row, across every column
+def test_a_runs_question_is_shown_once_under_the_row_with_its_steps():
+    # owner, 2026-10-04: the details reachable by a tap on a phone. Owner, 2026-10-19: the steps squeezed into the What
+    # column pushed the row tall and floated the other columns — they open on demand, on a line of their own under the
+    # row, across every column. Owner, 2026-10-31: the question was quoted on the run's line too, three lines of what
+    # the pill opens whole: it is shown once, there; a run with a question and no step gets the pill all the same
     from vesta_agent.ui.server import STATIC
     js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     what, more = body_of(js, "runWhat"), body_of(js, "runMore")
-    assert 'class: "muted what-asked", title: r.asked' in what and "moreButton(" in what and 'class: "steps"' not in what
-    assert "-webkit-line-clamp: 3" in css[css.index(".what-asked {"):] and "table.data.runs td { vertical-align: top; }" in css
+    assert "r.asked" not in what.replace("steps.length || r.asked ? moreButton(", "") and "what-asked" not in js + css
+    assert 'steps.length || r.asked ? moreButton(steps.length ? plural(steps.length, "step", "steps") : "Whole question")' in what
+    assert "moreButton(" in what and 'class: "steps"' not in what and "table.data.runs td { vertical-align: top; }" in css
     assert 'h("tr", { class: "row-more", hidden: true }, cell({ v: r.more, colspan: head.length }))' in body_of(js, "paged")
     assert "{ more: (r.steps || []).length || r.asked ? runMore(r) : null, cells: [" in body_of(js, "costs")
     # each step: the agent's line, its arguments as they were in the tooltip — never the page's own JSON of them
@@ -431,7 +434,7 @@ def test_a_data_table_becomes_labelled_cards_on_a_phone():
     from vesta_agent.ui.server import STATIC
     js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    assert 'cell(c, "td", { cls: half[i] ? "ph-half" : null, label: label[i] })' in body_of(js, "paged")
+    assert 'cell(c, "td", { label: label[i] })' in body_of(js, "paged")
     assert '"data-label": label' in body_of(js, "cell")
     assert "table.data td::before { content: attr(data-label);" in css and "table.data thead { display: none; }" in css
 
@@ -461,14 +464,58 @@ def test_a_run_recorded_before_jobs_had_names_counts_under_its_name(tmp_path):
         in inspect.getsource(Vesta.start)                                             # pin the caller
 
 
-def test_every_run_pairs_its_columns_on_a_phone():
-    # owner, 2026-10-05: "When" and "What" on one line, "Tokens in / out" and "Cost" on one line
+def _phone_css() -> str:
+    """The page's rules for a phone's width (every @media (max-width: 600px) block), as one text."""
+    import re
     from vesta_agent.ui.server import STATIC
-    js = page_js()
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
-    assert '{ v: "When", half: true }, { v: "What", half: true }, "Brain · model"' in js
-    assert '{ v: "Tokens in / out", cls: "num", half: true }, { v: "Cost", cls: "num", half: true }' in js
-    assert "table.data tr { display: grid; grid-template-columns: 1fr 1fr;" in css and "table.data td.ph-half { grid-column: auto;" in css
+    out, at = [], 0
+    while (m := re.compile(r"@media \(max-width: 600px\) \{").search(css, at)):
+        depth, k = 1, m.end()
+        while depth:
+            depth += {"{": 1, "}": -1}.get(css[k], 0)
+            k += 1
+        out.append(css[m.end():k - 1])
+        at = k
+    return "\n".join(out)
+
+
+def test_every_runs_card_on_a_phone_puts_each_name_left_and_its_value_right_on_one_line():
+    # owner, 2026-10-31 (a phone): Every run paired When with What and Tokens in / out with Cost, each name over its
+    # value — What's value sat left in its half, Cost's name on the right. Now every line is its name on the left, its
+    # value on the same line at the right; no column of any list shares a line with another
+    import re
+    js = page_js()
+    phone = _phone_css()
+    runs = body_of(js, "costs")
+    head = runs[runs.index('paged(["When"'):runs.index("runRows, 10")]
+    assert "half" not in head and "half" not in body_of(js, "paged") and "ph-half" not in phone
+    # one line per value: the row a block, each cell a row of name then value, never a column of them
+    assert "table.data, table.data tbody, table.data tr, table.data td { display: block;" in phone
+    assert not re.search(r"table\.data tr \{[^}]*display: grid", phone)
+    td = re.search(r"\n\s*table\.data td \{([^}]*)\}", phone).group(1)
+    assert "display: flex;" in td and "justify-content: space-between;" in td and "flex-direction" not in td
+    assert not re.search(r"table\.data td[^{]*\{[^}]*flex-direction: column", phone)
+    # What: its label and its chat at the right as they wrap (its pieces were left in its half)
+    assert "table.data td > .what { justify-items: end; text-align: right; }" in phone
+    assert "table.data td > .what .what-head { justify-content: flex-end; }" in phone
+    # the steps' pill after the card's last line, at the right (owner, 2026-10-31): the one button, placed on the row's
+    # card (room kept under the last line, open or shut), so it still opens the line under its own row
+    assert "table.data tr:has(.more-btn) { position: relative; padding-bottom: 46px; }" in phone
+    assert "table.data tr .more-btn { position: absolute; right: 0; bottom: 10px; margin: 0; }" in phone
+    assert not re.search(r"table\.data td[^{]*\{[^}]*position: relative", phone)
+    assert "table.data tr:has(+ tr.row-more:not([hidden])) { border-bottom: 0; }" in phone
+    assert 'const more = btn.closest("tr")?.nextElementSibling;' in body_of(js, "moreButton")
+
+
+def test_a_top_tabs_name_stays_on_one_line():
+    # owner, 2026-10-31 (a phone): "(file)" fell under "Rules"; the bar scrolls sideways instead
+    import re
+    from vesta_agent.ui.server import STATIC
+    css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
+    rule = re.search(r"\n\.tabs button \{([^}]*)\}", css).group(1)
+    assert "white-space: nowrap;" in rule and "flex: none;" in rule
+    assert "overflow-x: auto;" in re.search(r"\n\.tabs \{([^}]*)\}", css).group(1)
 
 
 def test_the_file_editors_wrap_long_lines_instead_of_scrolling_sideways():
@@ -763,8 +810,8 @@ def test_every_place_is_named_once_and_the_page_reads_the_names_from_the_server(
         return await (await c.get("/")).text()
     html = call(ui, fn)
     m = re.search(r'<script type="application/json" id="places">(.*?)</script>', html, re.S)
-    from vesta_agent.places import ORDER
-    assert m and json.loads(m.group(1)) == {"places": {k: list(v) for k, v in PLACES.items()}, "order": ORDER} and "{places}" not in html
+    from vesta_agent.places import ORDER, TABBED
+    assert m and json.loads(m.group(1)) == {"places": {k: list(v) for k, v in PLACES.items()}, "order": ORDER, "tabbed": TABBED} and "{places}" not in html
     # the page's where() is the server's: "Tab › Card"
     assert "`${PLACES[k][1]} › ${place(k)}`" in page_js() and where("tools") == "Rules › AI tools"
     # a {slot} is filled the same way on both sides (owner, 2026-10-08: "When the reports skill runs")
