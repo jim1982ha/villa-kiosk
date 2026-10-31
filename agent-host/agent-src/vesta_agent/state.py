@@ -817,6 +817,11 @@ class State:
         20: the expiry wrote "nothing was done" on a request a press had just carried out)."""
         return self._end_pending(aid, "expired")
 
+    def withdraw_approval(self, aid: str) -> bool:
+        """A pending request asked only while the villa was empty, someone in it now, is withdrawn — once (a press or the
+        expiry first: False)."""
+        return self._end_pending(aid, "withdrawn")
+
     def undeliver_approval(self, aid: str) -> bool:
         """A pending request no chat received ends "undelivered" (approvals.Approvals.ask): nothing waits for it."""
         return self._end_pending(aid, "undelivered")

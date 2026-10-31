@@ -327,7 +327,14 @@ class Policy:
         self.siren_entity: str | None = v["siren_entity"]
         self.system_actions: list[tuple[str, str | None]] = v["system_actions"]
 
-    # ------------------------------------------------------------------ load
+    @property
+    def owners_alone(self) -> set[str]:
+        """What only the owner may approve: the owner-only list, and the configured siren whatever that list says.
+
+        ⚠️ THE SIREN IS ALWAYS ASKED, AND ALWAYS THE OWNER'S (owner, 2026-10-31: "a guarantee that VESTA never turns the
+        siren on without asking"): a villa whose switch.turn_on was "direct", the siren not in owner_only_entities,
+        turned it on at a registered person's word with no Approve; an "any" rule let the facility manager approve it."""
+        return self.owner_only | ({self.siren_entity} if self.siren_entity else set())
     @classmethod
     def load(cls, path: str) -> "Policy":
         if not path or not os.path.exists(path):
@@ -572,8 +579,8 @@ class Policy:
             role, d.direct = "any", True
         else:
             return deny(f"Unknown rule '{mode}' for {full} in policy.yaml.")
-        if any(e in self.owner_only for e in ents):
-            role = "owner"
+        if any(e in self.owners_alone for e in ents):
+            role, d.direct = "owner", False
         d.allowed, d.required_role = True, role
         d.reason = "allowed without approval when a person asks" if d.direct and role == "any" else "allowed with approval"
         return self._act_gate(d)

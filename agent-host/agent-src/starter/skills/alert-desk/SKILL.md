@@ -112,8 +112,12 @@ answer (after a restart), the automation alerts anyway.
    `approval_ttl_minutes`). It sounds for policy.yaml's `siren_auto_off_min`, then stops.
 
 The approval goes through the engine's policy like any action, with read-back and its automatic stop
-(`siren_auto_off_min`). A single sensor, an occupied villa, a late press: nothing fires. The snapshot
-is always sent before the question so the human looks first.
+(`siren_auto_off_min`). A single sensor, an occupied villa, a late press: nothing fires. The request names the
+devices as the villa's system names them. When a camera can show the place (one an alert names as its snapshot, or
+one the villa's system places in the same area as a sensor that tripped), its picture is sent just before the
+question, and only then does the question say to look at it; with no picture, none is mentioned. The villa is read
+again just before asking and at every check while the request waits: someone in it, it is not asked, or it is
+withdrawn ("the villa is no longer empty"), and an Approve pressed after that sounds nothing.
 
 ## What you may do
 

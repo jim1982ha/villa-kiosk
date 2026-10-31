@@ -1079,6 +1079,25 @@ def siren_minutes() -> int:
     return Policy.load(os.environ.get("VESTA_POLICY", "")).siren_auto_off_min
 
 
+def signal_name(inc: dict) -> str:
+    """An intrusion signal as a person reads it: its device's name as the villa's system has it (the knowledge pack),
+    else its alert's own name — never its entity id."""
+    pack, eid = _pack(), inc["entity_id"]
+    named = pack.name_of(eid) if pack else None
+    return named or problem_name(str(notes_of(inc).get("label") or notes_of(inc).get("message") or "a sensor"))["headline"]
+
+
+def cameras_near(recent: list[dict]) -> list[str]:
+    """The cameras that can show where the intrusion signals tripped, best first: the snapshot each alert named, then
+    every camera the villa's system places in the same area as a signal (the knowledge pack). None: no picture."""
+    out = [str(notes_of(i).get("snapshot")) for i in recent if str(notes_of(i).get("snapshot") or "").startswith("camera.")]
+    pack = _pack()
+    if pack:
+        areas = {(pack.row(i["entity_id"]) or {}).get("area") for i in recent} - {None, ""}
+        out += sorted(r["entity_id"] for r in pack.rows() if r["entity_id"].startswith("camera.") and r.get("area") in areas)
+    return list(dict.fromkeys(out))
+
+
 def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
     cfg = RULES["siren"]
     window = now - timedelta(minutes=cfg["window_min"])
@@ -1090,14 +1109,21 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
     signals = {i["entity_id"] for i in recent}
     mode = (ev.get("occupancy") or UNKNOWN).lower()
     armed = len(signals) >= cfg["min_signals"] and mode == EMPTY
-    prompt = ""
+    prompt, cameras = "", []
     if armed:
         # The engine turns this into an Approve / Refuse request to the owner (outcome.carry_out). Its durations as
         # both apps word one (timeutil.lasting: "1 h 30 min", never "90 min")
+        # ⚠️ NAMES, AND A PICTURE ONLY WHEN THERE IS ONE (owner's Telegram, 2026-10-31 00:19): the request listed
+        # "binary_sensor.parking_motion, lock.outdoor_entrance_lock" and said "Look at the snapshot" — no snapshot was
+        # ever sent (the presence guard's alerts name no camera). The devices are named as the villa names them; the
+        # cameras that can show the place go to the engine, which sends their pictures first and adds `seen` only then
+        names = sorted({signal_name(i) for i in recent})
         prompt = (f"Intrusion suspected: {len(signals)} independent sensors in {lasting(cfg['window_min'] * 60)} while "
-                  f"the villa is {mode}: {', '.join(sorted(signals))}. Look at the snapshot. Approving sounds the siren "
-                  f"for {lasting(siren_minutes() * 60)}.")
-    return R.siren(armed, prompt, ("owner", "fm"), signals=sorted(signals), occupancy=mode,
+                  f"the villa is {mode}: {', '.join(names)}. Approving sounds the siren for "
+                  f"{lasting(siren_minutes() * 60)}.")
+        cameras = cameras_near(recent)
+    return R.siren(armed, prompt, ("owner", "fm"), signals=sorted(signals), occupancy=mode, cameras=cameras,
+                   seen="Look at the camera picture above first." if cameras else "",
                    reason=None if armed else ("villa not empty" if mode != EMPTY else "single signal"))
 
 

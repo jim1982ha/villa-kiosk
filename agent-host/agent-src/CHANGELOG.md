@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.405 (31 October 2026)
+
+- The siren's request (owner's Telegram, 31 October 00:19): alert-desk siren_gate names each signal by the pack's name
+  (signal_name: else its alert's name, never the id) and hands the engine `cameras` (cameras_near: each alert's
+  `snapshot`, then the pack's cameras in a signal's area) and `seen`. Outcome sends their pictures to the request's
+  chats first (_pictures) and adds `seen` only when every chat got one; a camera already shown is not sent again by
+  the incident's snapshot.get. SKILL.md no longer claims a snapshot is always sent.
+- Occupancy read again (Actions.villa_now: occupancy.now(reader, pack_path), now taking the engine's pack path): before
+  asking (not asked when occupied), at the press (approvals state "withdrawn", nothing executed) and at every
+  housekeeping pass (Approvals.expire withdraws a pending request marked `while_empty`, read once per pass only when one
+  waits). Only the siren's gate marks a request so; a person's own request is never withdrawn. Unknown is not occupied.
+- The configured siren_entity is owner-only by construction (Policy.owners_alone = owner_only | siren): check_service
+  makes it owner and never direct, and _wrap_check does for a wrapper (same device, a group's or a scene's entity_id
+  members). A script or button whose own steps turn the siren on is not seen (nothing cheap tells what it runs).
+
 ## 0.6.404 (31 October 2026)
 
 - A guest reads what the guest's tablet shows (architecture review round 8, card 1): vesta_shared.profiles.Reads, the

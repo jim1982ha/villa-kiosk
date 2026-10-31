@@ -29,6 +29,10 @@ log = logging.getLogger("vesta.approvals")
 #: An approval request's title, above "To:" (message_format: the one layout of every message sent on its own).
 TITLE = "Approval request"
 
+#: The mark of a request asked only while the villa is empty (the siren's gate, actions.Actions.request): withdrawn once
+#: someone is in it, at the press and at every pass (expire).
+WHILE_EMPTY = "while_empty"
+
 #: A device still on its way after an approval (a curtain says "closed" until it has finished moving): looked at this
 #: often, for this long; then the request says done or not done. A restart takes it up again (resume).
 FOLLOW_EVERY_S = 5
@@ -68,6 +72,10 @@ STATES: dict[str, tuple[str, str, str]] = {
                 "No longer allowed: {why}."),
     "refused": ("refused", "Already refused.", acted("Refused", "{time}", "{by}") + ". Nothing was done."),
     "expired": ("expired: nobody answered in time", "Expired. Ask again.", acted("Expired", "{time}") + ": nothing was done."),
+    # asked only while the villa was empty (the siren's gate), someone in it before anyone approved (owner's Telegram,
+    # 2026-10-31: the owner coming home was asked to sound the siren on themselves)
+    "withdrawn": ("withdrawn: the villa was no longer empty, nothing was done", "Withdrawn: the villa is no longer empty.",
+                  acted("Withdrawn", "{time}") + ": the villa is no longer empty. Nothing was done."),
     "unknown": ("approved; the agent restarted before it could see the result", "Already approved.", _APPROVED),
     # nobody received it (architecture review 21): never "waiting" — no chat had its buttons
     "undelivered": ("never delivered: no chat received it, nothing is waiting", "Never delivered.", ""),
@@ -263,14 +271,23 @@ class Approvals:
     async def expire(self, now: datetime | None = None) -> int:
         """Every request past its time that nobody answered says so, in every chat, and loses its buttons (before, only a
         press after the time did: a request kept "Waiting for approval" and its buttons for days). Only an expiry that was
-        recorded is announced: a press that claimed the request first keeps its own outcome. Returns how many."""
+        recorded is announced: a press that claimed the request first keeps its own outcome. A request asked only while
+        the villa is empty (the siren's gate) is withdrawn the same way once someone is in it. Returns how many."""
         now = now or datetime.now(timezone.utc)
         n = 0
-        for ap in self.state.approvals_in("pending"):
+        pending = self.state.approvals_in("pending")
+        # read once per pass, and only when such a request waits: the villa's sensor is not asked every 30 seconds
+        occupied = any(ap["action"].get(WHILE_EMPTY) for ap in pending) and self.actions.occupied()
+        for ap in pending:
             if datetime.fromisoformat(ap["expires_at"]) <= now and self.state.expire_approval(ap["id"]):
-                await self.thread.close(approval_thread(ap["id"]), note("expired"))
-                await self._tell_asker(ap["id"])
-                n += 1
+                ended = "expired"
+            elif occupied and ap["action"].get(WHILE_EMPTY) and self.state.withdraw_approval(ap["id"]):
+                ended = "withdrawn"
+            else:
+                continue
+            await self.thread.close(approval_thread(ap["id"]), note(ended))
+            await self._tell_asker(ap["id"])
+            n += 1
         return n
 
     # ------------------------------------------------------------------ what the AI is told

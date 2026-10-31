@@ -8,7 +8,8 @@ A skill script prints its decision in the standard form; this module does it:
   actions:    faults_changed (a task's fault opened, reopened or closed: the repair) · ticket {summary, entity_id?,
               note?} (a fault about no task: a chat's) · snapshot.get {entity_id, incident_id}
               (older, still read as faults_changed: ticket {task_id, …}, ticket.resolve, ticket.reopen)
-  siren_gate: {armed, prompt, to}  → an Approve / Refuse request to the owner for the policy's siren; with no
+  siren_gate: {armed, prompt, to, cameras?, seen?}  → an Approve / Refuse request to the owner for the policy's siren, the
+              cameras' pictures sent first (`seen` added to the question only then); with no
               siren configured, the prompt itself to `to`
   incident_id                  → the incident of the result (a message without its own)
   settle:     [{incident_id, note}]  → before this result's messages: every message still carrying that incident's buttons, in every chat,
@@ -298,15 +299,30 @@ class Outcome:
                 if self.incidents is not None:
                     self.incidents.unreached(iid)
                 log.warning("Incident #%s: no chat of the people asked to answer received it — handed on", iid)
-        if gate_prompt and pol.siren_entity:
-            # its own domain's turn_on (a switch or a siren entity: policy.SIREN_DOMAINS)
+        shown: set[tuple[int, str]] = set()          # (chat, camera) whose picture this result already sent
+        if gate_prompt and pol.siren_entity and await asyncio.to_thread(self.actions.occupied):
+            # ⚠️ READ AGAIN JUST BEFORE ASKING (owner's Telegram, 2026-10-31 00:19): the desk read the villa empty at the
+            # alert; someone in it now, the siren is not asked — the alerts themselves went as usual
+            self.state.log("siren_not_asked", {"reason": "villa no longer empty"})
+            log.info("The siren was not asked: the villa is no longer empty")
+        elif gate_prompt and pol.siren_entity:
+            # its own domain's turn_on (a switch or a siren entity: policy.SIREN_DOMAINS); asked only while the villa is
+            # empty: withdrawn once someone is in it (approvals.Approvals.expire, and at the press)
             answer, msg = await asyncio.to_thread(self.actions.request, pol.siren_entity.split(".")[0], "turn_on",
-                                                  pol.siren_entity, {}, None, None)
+                                                  pol.siren_entity, {}, None, None, True)
             if msg and self.ask is None:
                 answer, msg = "no way to ask for an approval here (Outcome built without the approvals)", None
+            # ⚠️ THE PICTURE BEFORE THE QUESTION, AND SAID ONLY WHEN SENT (owner's Telegram, 2026-10-31 00:19: "Look at
+            # the snapshot", and none came): the cameras the desk found near the signals, each in every chat of the
+            # request first; the request says to look only when every one of its chats has a picture
+            head = gate_prompt
+            if msg:
+                pictured = await self._pictures(gate.get("cameras"), msg.chats, {msg.to} if msg.to else (), origin, shown)
+                if gate.get("seen") and msg.chats and pictured >= set(msg.chats):
+                    head = f"{gate_prompt} {gate['seen']}"
             # ⚠️ THE INTRUSION IS SAID, WHATEVER BECOMES OF THE REQUEST (architecture review 21): its words travel only as
             # the siren request's lead — a request no owner chat received showed them nowhere
-            if msg and not await self.ask(msg, head=gate_prompt, origin=origin):
+            if msg and not await self.ask(msg, head=head, origin=origin):
                 answer, msg = "no chat of the owner's received the request", None
             if not msg:
                 said = f"The siren cannot be requested: {answer}"
@@ -342,7 +358,8 @@ class Outcome:
                         # its own thread: a newer snapshot of the incident replaces the older one in each chat; under the
                         # heading of every message the agent sends on its own (owner, 2026-10-10: "all formatted the same")
                         iid = int(a["incident_id"]) if str(a.get("incident_id") or "").isdigit() else None
-                        for chat in chats:
+                        # a chat that just got this camera's picture above the siren's request is not sent it twice
+                        for chat in [c for c in chats if (c, a.get("entity_id")) not in shown]:
                             await self.poster.post(chat, "Camera snapshot", incident=iid, photo=photo,
                                              thread=f"snapshot-{a.get('incident_id')}", origin=origin)
                 else:
@@ -359,6 +376,25 @@ class Outcome:
             except Exception as e:  # noqa: BLE001 — the next repair (5 minutes) does it
                 log.warning("The Kiosk's faults could not be brought up to date (%s: %s)", type(e).__name__, e)
         return done
+
+    async def _pictures(self, cameras, chats, roles, origin, shown: set) -> set[int]:
+        """What each camera of `cameras` shows now, posted in every chat of `chats` (for `roles`, as the question is),
+        before the question it goes with (the siren's request). Records each (chat, camera) in `shown`; returns the chats that received a picture."""
+        got: set[int] = set()
+        for cam in cameras or []:
+            try:
+                photo = await camera_photo(self.reader, cam)
+            except Exception as e:  # noqa: BLE001 — no picture: the question says nothing of one
+                log.warning("Camera %s gave no picture (%s: %s)", cam, type(e).__name__, e)
+                continue
+            if not photo:
+                continue
+            for chat in chats:
+                if await self.poster.post(chat, self.actions.names(cam), title="Camera snapshot", roles=roles,
+                                          photo=photo, thread=f"snapshot-{cam}", origin=origin):
+                    shown.add((chat, cam))
+                    got.add(chat)
+        return got
 
     async def adopt_ha(self, h: dict, skill_name: str | None = None, also=None, told=None) -> list[tuple[int, set[str]]]:
         """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages). `also`:

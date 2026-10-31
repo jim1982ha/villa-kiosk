@@ -1,3 +1,18 @@
+## 0.12.419
+
+What you will see:
+- The siren's approval request names the devices as the villa's system names them ("Drive Motion, Entrance Lock"),
+  never their codes.
+- When a camera can show the place (the camera an alert names, or one in the same room or area as a sensor that
+  tripped), its picture arrives in your chat just before the siren's request, and the request then says "Look at the
+  camera picture above first." With no picture, the request no longer mentions one.
+- When someone comes home: the villa's "empty" sensor is read again just before the siren is asked; someone is in
+  the villa, it is not asked. A request already waiting is withdrawn as soon as the villa is no longer empty, its
+  buttons gone and its message saying "Withdrawn on 31/10/2026 00:19: the villa is no longer empty. Nothing was done."; an
+  Approve pressed after that sounds nothing.
+- The siren is always the owner's to approve, whatever the rules for switches say: also when it is reached through
+  the plug it is on, or a scene that turns it on.
+
 ## 0.12.418
 
 What you will see:

@@ -26,9 +26,10 @@ from vesta_shared.message_format import ROLE_WORDS
 from vesta_shared.ha_client import error_chars, error_short_chars
 
 from . import button_data
-from .approvals import note as approval_note
+from .approvals import WHILE_EMPTY, note as approval_note
 from .policy import NOT_REGISTERED, Decision, Person, Policy, action_hash
 from .routing import Routing
+from vesta_shared.occupancy import OCCUPIED
 from .state import State
 
 log = logging.getLogger("vesta.actions")
@@ -180,7 +181,7 @@ class Actions:
                  writer_factory: Callable[[], Any], names: Callable[[str], str] | None = None,
                  related: Callable[[list[str]], set[str]] | None = None,
                  executed: Callable[[str, str, list[str]], None] | None = None,
-                 tablet_keeps: Callable[[], bool] = lambda: False):
+                 tablet_keeps: Callable[[], bool] = lambda: False, villa_now: Callable[[], str] = lambda: "unknown"):
         self.policy_loader = policy_loader
         # executed(domain, service, entity_ids): told of every execution, whatever the path (siren.py)
         self.on_executed = executed or (lambda *a: None)
@@ -193,6 +194,16 @@ class Actions:
         # a request no Telegram chat may approve can still wait on the tablet, with its buttons (the Kiosk keeps VESTA's
         # messages: ticket 22 of "One inbox", owner 2026-10-29: "if no Telegram is available but Kiosk is opened…")
         self.tablet_keeps = tablet_keeps
+        # the villa empty or not NOW (vesta_shared.occupancy.now: the Kiosk's pick, read live): a request asked only
+        # while the villa is empty (`while_empty`, the siren's gate) is read against it at the press
+        self.villa_now = villa_now
+
+    def occupied(self) -> bool:
+        """Someone is in the villa now, by its "empty" sensor. Only a reading that says so: unknown is not occupied."""
+        try:
+            return self.villa_now() == OCCUPIED
+        except Exception:  # noqa: BLE001 — unread is "cannot tell"
+            return False
 
     def _wrap_check(self, policy: Policy, d: Decision) -> Decision:
         if not d.allowed:
@@ -205,14 +216,16 @@ class Actions:
         hidden = set(related) - set(d.entity_ids)
         if hidden & policy.excluded:
             d.allowed, d.reason = False, "It includes an excluded device."
-        elif hidden & policy.owner_only:
-            d.required_role = "owner"
+        elif hidden & policy.owners_alone:
+            # a wrapper of the siren too: a plug or a group on its device, a scene that sets it (its entity_id members)
+            d.required_role, d.direct = "owner", False
         return d
 
     # ------------------------------------------------------------------ ask
     def request(self, domain: str, service: str, entity_id: Any, data: dict | None,
-                requester: Person | None, origin_chat: int | None) -> tuple[str, Outgoing | None]:
-        """Returns (answer for the model, message to send or None)."""
+                requester: Person | None, origin_chat: int | None, while_empty: bool = False) -> tuple[str, Outgoing | None]:
+        """Returns (answer for the model, message to send or None). `while_empty`: asked because the villa is empty
+        (the siren's gate) — someone in it before the press, it is withdrawn (decide; approvals.Approvals.expire)."""
         policy = self.policy_loader()
         d = self._wrap_check(policy, policy.check_service(domain, service, entity_id, data))
         base = {"domain": domain, "service": service, "entity_id": entity_id, "data": data,
@@ -250,7 +263,8 @@ class Actions:
             self.state.log("refused", dict(base, reason="no chat to ask in"))
             return "Refused: no chat to ask in.", None
         text = plain(d, self.names)
-        action = {"domain": d.domain, "service": d.service, "entity_ids": d.entity_ids, "data": d.data, "plain": text}
+        action = {"domain": d.domain, "service": d.service, "entity_ids": d.entity_ids, "data": d.data, "plain": text,
+                  **({WHILE_EMPTY: True} if while_empty else {})}
         aid = self.state.new_approval(action, d.action_hash(), d.required_role or "owner",
                                       int(targets[0]) if targets else int(origin_chat or 0),
                                       requester.telegram_id if requester else None, policy.approval_ttl_minutes)
@@ -298,6 +312,14 @@ class Actions:
             return {"toast": "Only the owner can approve this." if ap["required_role"] == "owner" else "You cannot approve this.",
                     "state": None, "executed": False}
         act = ap["action"]
+        if approve and act.get(WHILE_EMPTY) and self.occupied():
+            # ⚠️ NEVER ON AN APPROVE PRESSED AFTER SOMEONE CAME HOME (owner's Telegram, 2026-10-31 00:19): the siren was
+            # asked on the villa as it read at the alert — the owner arriving home, the "empty" sensor off 3 seconds
+            # later; the request stayed pressable for 15 minutes
+            if self.state.withdraw_approval(aid):
+                self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "villa no longer empty"})
+                return {"toast": toast("withdrawn"), "state": "withdrawn", "executed": False}
+            return {"toast": "Already decided.", "state": None, "executed": False}
         if not approve:
             if self.state.claim_approval(aid, "refused", person.telegram_id, now, name=person.name):
                 self.state.log("refused_by_person", {"approval": aid, "by": person.name})

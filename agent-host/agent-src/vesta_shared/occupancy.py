@@ -95,10 +95,11 @@ def state_of(state) -> str:
     return {"on": EMPTY, "off": OCCUPIED}.get(str(state or "").strip().lower(), UNKNOWN)
 
 
-def now(client) -> str:
+def now(client, pack_path: str | None = None) -> str:
     """The villa empty or not now (EMPTY / OCCUPIED / UNKNOWN), read from the sensor through `client` (a script's
-    client: .states(ids)). No sensor, or it cannot be read: UNKNOWN, never empty."""
-    eid = sensor()
+    client, or the engine's reader: .states(ids)). `pack_path`: the engine's knowledge pack (a script's is VESTA_PACK).
+    No sensor, or it cannot be read: UNKNOWN, never empty."""
+    eid = sensor(pack_path)
     if not eid or client is None:
         return UNKNOWN
     try:
