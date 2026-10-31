@@ -17,6 +17,12 @@ import RecordCard from "@/components/fm/RecordCard";
 import type { Announcement } from "@/messages/announcements";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 
+/** An issue's room, as a pill: the opened card's, beside its name, and its line's in the Inbox list, on a line of its own
+ *  (owner, 2026-11-01: "the area pill … reusing existing code"). The Spend tab's device pill's look. */
+export function RoomPill({ room }: { room: string }) {
+  return <span className="fm-entity-chip fm-chip-static">{room}</span>;
+}
+
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
  *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
  *  room, every problem a line INSIDE the card. Every card carries the same buttons (owner, 2026-10-30): Done · Need
@@ -58,7 +64,7 @@ export function AttentionCard({ card, onOpenEntity, actions, lineMessage, focuse
     <RecordCard
       title={card.title}
       // its room as a pill right after its name, on one line (owner, 2026-10-22) — the Spend tab's device pill
-      titlePills={card.room ? <span className="fm-entity-chip fm-chip-static">{card.room}</span> : undefined}
+      titlePills={card.room ? <RoomPill room={card.room} /> : undefined}
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look === "watched"

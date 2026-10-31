@@ -8,7 +8,7 @@
 // overdue work actually is.
 
 import InfoTip from "@/components/common/InfoTip";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
@@ -20,6 +20,7 @@ import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, s
 import FormActions from "./FormActions";
 import Tip from "@/components/common/Tip";
 import RecordCard from "./RecordCard";
+import FmForm from "./FmForm";
 
 /** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
  *  whole number of days rounds DOWN (twice a week -> 3, not 4) so a genuinely
@@ -65,7 +66,7 @@ export default function ScheduleEditor() {
   };
 
   const form = (
-    <div className="fm-form">
+    <FmForm>
       <h3>{editingId ? "Edit task" : "New maintenance task"}</h3>
 
       <label className="fm-field">
@@ -110,7 +111,7 @@ export default function ScheduleEditor() {
       )}
       <FormActions error={formError} onCancel={cancel} onSave={save} disabled={!valid}
         saveLabel={editingId ? "Save changes" : "Add task"} />
-    </div>
+    </FmForm>
   );
 
   return (
@@ -126,7 +127,8 @@ export default function ScheduleEditor() {
         </InfoTip>
       </div>
 
-      {(adding || editingId) && form}
+      {/* a new task's form here; an edit's in its task's place, below (FmForm) */}
+      {adding && form}
 
       <div className="fm-list">
         {data.schedules.length === 0 && (
@@ -136,6 +138,7 @@ export default function ScheduleEditor() {
           // Target date this task implies — from its last completion, or (if
           // never done) from when it was created. See fmEngine.scheduleStatus.
           const due = scheduleStatus(s, data.completions);
+          if (s.id === editingId) return <Fragment key={s.id}>{form}</Fragment>;
           return (
             // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22: "wherever there is a card, the same style")
             <RecordCard key={s.id} title={s.title}

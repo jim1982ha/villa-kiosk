@@ -39,13 +39,16 @@ export interface ModalTab<Id extends string> {
 }
 
 export default function ModalTabs<Id extends string>({
-  tabs, active, onSelect, label,
+  tabs, active, onSelect, label, counts,
 }: {
   tabs: readonly ModalTab<Id>[];
   active: Id;
   onSelect: (id: Id) => void;
   /** Names the tablist for assistive tech — "Facility sections". */
   label: string;
+  /** How many a tab holds, said after its name as a section's title says it: "Tickets (3)" (owner, 2026-11-01: "show
+   *  their number between ()"). None, or 0: its name alone. */
+  counts?: Partial<Record<Id, number>>;
 }) {
   const activeRef = useRef<HTMLButtonElement>(null);
   // ⚠️ `block: "nearest"` SO A VERTICAL PAGE DOES NOT JUMP. The strip is the
@@ -69,7 +72,7 @@ export default function ModalTabs<Id extends string>({
             className={`fm-tab${on ? " active" : ""}`}
             onClick={() => onSelect(t.id)}
           >
-            <Icon size={16} /><span>{t.label}</span>
+            <Icon size={16} /><span>{t.label}{counts?.[t.id] ? ` (${counts[t.id]})` : ""}</span>
           </button>
         );
       })}

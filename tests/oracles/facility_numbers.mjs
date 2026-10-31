@@ -18,6 +18,7 @@
 // load, and run-all.sh discards stderr, so it would have read as a rule
 // violation rather than a file that never ran.
 import { register } from "node:module";
+import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 
 const {
@@ -123,25 +124,33 @@ eq("a short date renders without throwing", typeof shortDate("2026-07-24T00:00:0
 
 console.log("\n  a figure names its period (architecture review, 2026-10-19: \"Resolved (all time)\" was the kept record):");
 {
-  const { keptDays, monthBounds } = await import("@/fm/fmEngine");
+  const { keptDays, monthBounds, closedTicketStats } = await import("@/fm/fmEngine");
   const { h, draw, text } = await import("../consistency/screen.mjs");
   const { TicketFigures } = await import("@/components/fm/TicketsTab");
   const NOW = Date.parse("2026-12-31T12:00:00Z"), DAY = 86_400_000;
   const iso = (ms) => new Date(ms).toISOString();
-  // closed `daysAgo`, after `hours` open; `cleared`: with no work done
-  const closed = (id, daysAgo, hours, cleared) => {
-    const end = NOW - daysAgo * DAY;
-    return { id, title: id, status: "resolved", openedAt: iso(end - hours * HOUR), resolvedAt: iso(end), photoIds: [],
-      updates: [{ at: iso(end), status: "resolved", photoIds: [], ...(cleared ? { kind: "cleared", note: "Closed without action" } : {}) }] };
+  // a TICKET closed `daysAgo`, `hours` after its Open Ticket; `cleared`: with no work done; `waited`: hours it sat as a
+  // fault before anyone took it on (owner, 2026-11-01: a ticket's time starts at its Open Ticket)
+  const closed = (id, daysAgo, hours, cleared, waited = 0) => {
+    const end = NOW - daysAgo * DAY, taken = end - hours * HOUR;
+    return { id, title: id, status: "resolved", openedAt: iso(taken - waited * HOUR), resolvedAt: iso(end), photoIds: [],
+      updates: [{ at: iso(taken), status: "in_progress", photoIds: [] },
+        { at: iso(end), status: "resolved", photoIds: [], ...(cleared ? { kind: "cleared", note: "Closed without action" } : {}) }] };
   };
-  const tickets = [closed("blip91", 91, 1, true), closed("blip89", 89, 1, true), closed("fix100", 100, 2), closed("fix10", 10, 6)];
+  // ...and a fault the VESTA Agent cleared by itself, nobody taking it on: never in the Tickets tab's figures
+  const agentCleared = { id: "agent5", title: "agent5", status: "resolved", openedAt: iso(NOW - 5 * DAY - HOUR), resolvedAt: iso(NOW - 5 * DAY),
+    photoIds: [], updates: [{ at: iso(NOW - 5 * DAY), status: "resolved", kind: "cleared", photoIds: [] }] };
+  const tickets = [closed("blip91", 91, 1, true), closed("blip89", 89, 1, true), closed("fix100", 100, 2), closed("fix10", 10, 6, false, 48)];
   eq("the kept record is the shorter window the server publishes (0 = for ever, not a bound)",
      [keptDays({ clearedDays: 90, repairedDays: 365 }), keptDays({ clearedDays: 90, repairedDays: 0 }), keptDays({ clearedDays: 0, repairedDays: 0 })], [90, 90, null]);
   const kept = ticketStats(tickets, { start: NOW - 90 * DAY, end: NOW + 1 });
-  eq("over the kept record: the 91-day-old no-action close and the 100-day-old repair are out",
-     [kept.closedWithoutAction, kept.resolved, kept.meanResolutionHours], [1, 1, 6]);
+  eq("over the kept record: the 91-day-old no-action close and the 100-day-old repair are out (a fault's time: from raised, 48h + 6h)",
+     [kept.closedWithoutAction, kept.resolved, kept.meanResolutionHours], [1, 1, 54]);
+  const keptTickets = closedTicketStats([...tickets, agentCleared], { start: NOW - 90 * DAY, end: NOW + 1 });
+  eq("  ...the TICKETS' figures: the Agent's own clear is not one, and a ticket's time runs from its Open Ticket (6h)",
+     [keptTickets.closedWithoutAction, keptTickets.resolved, keptTickets.meanResolutionHours], [1, 1, 6]);
   eq("  ...with no window, every record given (the old figures)", [ticketStats(tickets).closedWithoutAction, ticketStats(tickets).resolved], [2, 2]);
-  const tab = text(draw(h(TicketFigures, { tickets, inProgress: 0, retention: { clearedDays: 90, repairedDays: 365 }, now: NOW })));
+  const tab = text(draw(h(TicketFigures, { tickets: [...tickets, agentCleared], inProgress: 0, retention: { clearedDays: 90, repairedDays: 365 }, now: NOW })));
   eq("the Tickets tab draws those figures, and names their window",
      tab, "|0|in progress|6h|mean resolution|1|closed, no action|Over the kept record (90 days).|");
   const unsaid = text(draw(h(TicketFigures, { tickets, inProgress: 0, retention: null, now: NOW })));
@@ -166,6 +175,41 @@ console.log("\n  a figure names its period (architecture review, 2026-10-19: \"R
      [recordsKeptNote({ clearedDays: 90, repairedDays: 365, recordsDays: 365 }, "Spend"),
       recordsKeptNote({ clearedDays: 90, repairedDays: 0, recordsDays: 0 }, "Work"), recordsKeptNote(null, "Work")],
      ["Spend older than 365 days is no longer kept (Advanced Settings › System).", null, null]);
+}
+
+console.log("\n  the Tickets tab counts tickets, not every fault (owner, 2026-11-01: \"189 closed … are you mixing faults with tickets?\"):");
+{
+  // driven through the one way in for every change (fmCommands applyFmCommand), as the store runs it
+  const { applyFmCommand } = await import("@/fm/fmCommands");
+  const { wasTicket } = await import("@/fm/fmEngine");
+  const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
+  let n = 0;
+  const k = (min) => ({ now: new Date(Date.UTC(2026, 9, 31, 0, min)).toISOString(), id: (p) => p + (++n), by: "owner" });
+  const agentFault = { id: "a1", title: "Offline", status: "open", openedAt: "2026-10-31T00:00:00Z", photoIds: [],
+    updates: [{ at: "2026-10-31T00:00:00Z", status: "open", by: "VESTA Agent", photoIds: [] }] };
+  let d = { ...EMPTY_FM_DATA, tickets: [agentFault, { ...agentFault, id: "a2" }] };
+  d = applyFmCommand(d, { type: "addTicket", ticket: { title: "Tap drips", photoIds: [] }, asTicket: true }, k(1));
+  d = applyFmCommand(d, { type: "advanceTickets", ids: ["a2"], to: "in_progress", step: { photoIds: [] } }, k(2));
+  // the Agent clears a1 by itself; the owner resolves both tickets, and closes another fault with no action
+  d = { ...d, tickets: d.tickets.map((t) => (t.id === "a1" ? { ...t, status: "resolved", resolvedAt: "2026-10-31T00:05:00Z",
+    updates: [...t.updates, { at: "2026-10-31T00:05:00Z", status: "resolved", kind: "cleared", by: "VESTA Agent", photoIds: [] }] } : t)) };
+  const mine = d.tickets.find((t) => t.title === "Tap drips").id;
+  d = applyFmCommand(d, { type: "advanceTickets", ids: [mine, "a2"], to: "resolved", step: { photoIds: [] } }, k(3));
+  const by = Object.fromEntries(d.tickets.map((t) => [t.title === "Tap drips" ? "mine" : t.id, wasTicket(t)]));
+  eq("a fault the VESTA Agent cleared by itself was never a ticket; one taken on (Open Ticket) or opened as one was",
+     by, { a1: false, a2: true, mine: true });
+  eq("  ...closed, still a ticket: the step that took it on is kept", d.tickets.filter((t) => t.status === "resolved" && wasTicket(t)).length, 2);
+  const tab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
+  eq("  ...the tab's Closed list is the closed tickets' (wasTicket), never every record",
+     /const closed = useMemo\(\(\) => data\.tickets\.filter\(\(t\) => stageOf\(t\) === "closed" && wasTicket\(t\)\)/.test(tab), true);
+  // owner, 2026-11-01: "nothing shall be counted as a closed ticket if a ticket hasn't been opened first"
+  const { ticketTimeMs } = await import("@/fm/fmEngine");
+  const reopenedThenCleared = applyFmCommand(applyFmCommand(d, { type: "advanceTickets", ids: ["a2"], to: "open",
+    step: { photoIds: [] } }, k(4)), { type: "closeTickets", ids: ["a2"] }, k(5)).tickets.find((t) => t.id === "a2");
+  eq("  ...a ticket reopened (a fault again) and then closed is a closed FAULT, not a closed ticket",
+     [reopenedThenCleared.status, wasTicket(reopenedThenCleared)], ["resolved", false]);
+  eq("  ...a closed ticket's time runs from its Open Ticket to its close (1min here), not from when the fault was raised",
+     ticketTimeMs(d.tickets.find((t) => t.id === "a2")), 60_000);
 }
 
 console.log(`\n${fail ? `❌ ${fail} failed` : "✅ the owner's numbers hold"}`);

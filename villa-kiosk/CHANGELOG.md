@@ -1,3 +1,49 @@
+## 2.496.641
+
+What you will see:
+- The Inbox filter says "Notifications" wherever the four buttons still fit one line with it: a phone 412 px wide or
+  more, and the iPad. On a narrower phone (an iPhone of 390 px, say) it says "Notifs", so Open Ticket stays on the same
+  line.
+
+## 2.496.640
+
+What you will see:
+- A problem is a fault until someone presses Open Ticket on it; only then is it a ticket. Every screen and report now
+  keeps the two apart:
+  - Tickets lists and counts only tickets. A ticket that was reopened is a fault again: if it is then closed, it is a
+    closed fault, not a closed ticket.
+  - The Tickets tab's "mean resolution" now runs from the Open Ticket to the close. It used to include the days the
+    problem waited as a fault before anyone took it on.
+  - The monthly recap's "Faults and response" section says "Faults closed this month: N with work done, M with no
+    action", then the mean time from a fault raised to its fix. On its own line it says "Tickets closed this month
+    (opened with Open Ticket)", with the mean time from Open Ticket to done.
+  - The Recap's readiness line says "4 open faults · 1 ticket in progress", never "4 detected faults (1 open ticket)".
+  - The icon table's (i) note no longer says a problem the Owner or the Facility Manager raised is "a ticket … already
+    in progress". It says Open Ticket makes a ticket, while Done or Need help on a card raises a fault.
+  - A fault becomes a ticket "only when someone presses Open Ticket on its card in Inbox › Open issues". The (i) notes
+    no longer name the old "Messages" tab.
+  - Tickets › Closed counts "closed tickets", and the erase prompt says "Erase this ticket". Maintenance mode says "no
+    fault". The kept-days setting says "faults, tickets, attachments and messages".
+- An Inbox line has three lines: its name and time; its room as the same pill the opened card shows; then its first
+  words on one line across the full width, cut with "…".
+
+## 2.496.639
+
+What you will see:
+- The Tickets tab says how many tickets are in progress in its name: "Tickets (3)". With none, it says "Tickets".
+- In the Inbox, an issue that has a ticket open is framed in green, so you can tell it apart from the issues nobody
+  has taken on yet.
+- Each line of the Inbox shows its whole description, across the full width under its name and time. It was cut
+  short with "…" beside the time.
+- Tapping a ticket, a spend entry or a task to edit it now turns that card into its form, in the same place, and the
+  form scrolls into view. Before, the form opened at the top of the tab and the card stayed below. The "Log" form of a
+  task now opens right under that task, no longer under Recent work. Every other form ("Open Ticket", "Record spend",
+  "Add a task", "Spend settings") scrolls into view when it opens too.
+- The Tickets tab counts and lists only tickets: problems someone took on (Open Ticket). The faults VESTA opened and
+  cleared by itself, which nobody took on, were counted as closed tickets. So the Closed list, "closed, no action" and
+  "mean resolution" are now much smaller. The monthly recap's "Faults and response" section still counts every fault,
+  as its title says.
+
 ## 2.496.638
 
 What you will see:

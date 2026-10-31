@@ -22,6 +22,8 @@ import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import FacilitySections, { FACILITY_TABS, type FacilityTab } from "@/components/fm/FacilitySections";
 import { useFacilityLiveView, useFmData } from "@/fm/FmDataContext";
 import { fmRecordLine, heldLine } from "@/fm/fmSave";
+import { openCounts } from "@/fm/deviceWork";
+import { useDeviceIdentity } from "@/config/VillaModel";
 import MessagesTab from "./MessagesTab";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import Tip from "@/components/common/Tip";
@@ -79,7 +81,10 @@ export default function CockpitModal({
   // ⚠️ THE RECORD'S STATE IS SAID OVER EVERY TAB, THE OVERVIEW'S TOO (architecture review H, 2026-10-23): unread, its
   // faults are missing from "Open issues" as much as from Tickets; and a save's problem ("This fault was just changed on
   // another device") follows a button pressed on an Overview card. They were the Facility tabs' alone.
-  const { ready, unreachable, saveError, heldFor } = useFmData();
+  const { data, ready, unreachable, saveError, heldFor } = useFmData();
+  // the tickets in progress, counted on the Tickets tab's name as its own figure counts them (openCounts: one per device)
+  const { deviceOfRecord } = useDeviceIdentity();
+  const ticketsOpen = useMemo(() => openCounts(data.tickets, deviceOfRecord).tickets, [data.tickets, deviceOfRecord]);
   const held = heldLine(heldFor);
   const recordLine = fmRecordLine({ ready, unreachable });
   // Firmware / add-on updates waiting — Home Assistant's own `update` domain counts them, per device and per add-on.
@@ -111,7 +116,8 @@ export default function CockpitModal({
         )}
         </div>
       </div>
-      {tabs.length > 1 && <ModalTabs tabs={tabs} active={shownTab} onSelect={onTab} label="Cockpit sections" />}
+      {tabs.length > 1 && <ModalTabs tabs={tabs} active={shownTab} onSelect={onTab} label="Cockpit sections"
+        counts={{ tickets: ticketsOpen }} />}
 
       <div className="modal-body">
         {saveError && <div className="fm-banner warn">{saveError}</div>}

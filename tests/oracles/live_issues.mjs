@@ -260,9 +260,9 @@ const readyWith = (tickets) => ready(tickets);
 const mixedOpen = readyWith([agentRec({ id: "n1", origin: "night", entityId: "x.n1" }), agentRec({ id: "n2", origin: "night", entityId: "x.n2" }),
   agentRec({ id: "a1", alertNumber: 5, entityId: "x.a1" }), { ...rec("g", "x.g"), reportedBy: "guest" },
   { ...rec("t", "x.t"), status: "in_progress" }, { ...rec("r", "x.r"), status: "resolved", resolvedAt: "2026-10-14T09:00:00Z" }]);
-ck("4 faults and 1 ticket: \"4 detected faults (1 open ticket)\", where to deal with each, and the faults' source icons",
-   mixedOpen.label === "4 detected faults (1 open ticket)"
-   && mixedOpen.detail === 'Check the faults in "Messages", or the open tickets in "Tickets".'
+ck("4 faults and 1 ticket: \"4 open faults · 1 ticket in progress\" (owner, 2026-11-01: never one inside the other), where to deal with each, and the faults' source icons",
+   mixedOpen.label === "4 open faults · 1 ticket in progress"
+   && mixedOpen.detail === 'Check the faults in Inbox › Open issues, or the tickets in Tickets.'
    && mixedOpen.sources.join() === "guest,alert,night", mixedOpen);   // the legend's order: the Kiosk's, then the Agent's
 // ⚠️ COUNTED AS DRAWN, PER DEVICE (architecture review, 2026-10-15): the pump's two faults taken on together are ONE
 // ticket card in Tickets, so one open ticket — not "2 open tickets" over one card
@@ -270,19 +270,19 @@ const pumpBy = (devs) => ready([{ ...rec("p1", "switch.pump"), status: "in_progr
   { ...rec("p2", "sensor.pump_power"), status: "in_progress" }, rec("p3", "sensor.pump_temp")],
   { ...noDevices, deviceOf: devs, deviceOfRecord: devs });
 const onePump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
-ck("  ...counted per device, as drawn: one device's 2 tickets + 1 fault = \"1 detected fault (1 open ticket)\"",
-   onePump.label === "1 detected fault (1 open ticket)" && onePump.state === "warn", onePump);
-ck("  ...and three devices are three", pumpBy((id) => id).label === "1 detected fault (2 open tickets)", pumpBy((id) => id));
+ck("  ...counted per device, as drawn: one device's 2 tickets + 1 fault = \"1 open fault · 1 ticket in progress\"",
+   onePump.label === "1 open fault · 1 ticket in progress" && onePump.state === "warn", onePump);
+ck("  ...and three devices are three", pumpBy((id) => id).label === "1 open fault · 2 tickets in progress", pumpBy((id) => id));
 // the Recap files a record as every screen does — by the record's device (deviceOfRecord: a list of several sensors
 // included), never by its raw field looked up as one entity (review "One answer per question" #1, 2026-10-19)
 const byRecord = ready([rec("m1", "sensor.gone,sensor.pump_power"), rec("m2", "sensor.pump_power")],
   { ...noDevices, deviceOf: (id) => id, deviceOfRecord: (id) => (id.includes("pump") ? "sensor.pump_power" : id) });
-ck("  ...a fault naming several sensors counts on its device's card", byRecord.label === "1 detected fault (0 open tickets)", byRecord);
+ck("  ...a fault naming several sensors counts on its device's card", byRecord.label === "1 open fault", byRecord);
 const onlyFaults = readyWith([agentRec({ id: "n1", origin: "night" })]);
-ck("  ...one fault, no ticket: singular, and only Messages", onlyFaults.label === "1 detected fault (0 open tickets)"
-   && onlyFaults.detail === 'Check the faults in "Messages".', onlyFaults);
+ck("  ...one fault, no ticket: singular, no ticket said, and only Open issues", onlyFaults.label === "1 open fault"
+   && onlyFaults.detail === 'Check the faults in Inbox › Open issues.', onlyFaults);
 const onlyTickets = readyWith([{ ...rec("t", "x.y"), status: "in_progress" }]);
-ck("  ...tickets only: no icon, only Tickets", onlyTickets.detail === 'Check the open tickets in "Tickets".' && onlyTickets.sources.length === 0, onlyTickets);
+ck("  ...tickets only: no icon, only Tickets", onlyTickets.detail === 'Check the tickets in Tickets.' && onlyTickets.label === "1 ticket in progress" && onlyTickets.sources.length === 0, onlyTickets);
 const allClear = readyWith([]);
 ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass" && allClear.label === "No open faults or tickets"
    && allClear.detail === "Nothing to deal with.", allClear);
@@ -291,11 +291,11 @@ ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass
   const result = { checks: [mixedOpen], passed: 0, total: 1, overall: "warn" };
   const checks = (startOpen) => draw(h(ReadinessChecks, { readiness: result, label: (id) => id, onOpenEntity: () => {}, onOpenCheck: () => {}, ...(startOpen ? { startOpen } : {}) }));
   ck("  ...the Recap draws those icons in the line, after \"Check the\"",
-     text(checks(true)).includes('|Check the |G|[icon][icon]| faults in "Messages", or the open tickets in "Tickets".|'), text(checks(true)));
+     text(checks(true)).includes('|Check the |G|[icon][icon]| faults in Inbox › Open issues, or the tickets in Tickets.|'), text(checks(true)));
   const folded = checks();   // as the tab draws it: no startOpen
   ck("  ...the checks fold under their verdict, closed at first; a tap on the verdict opens them (owner, 2026-10-14)",
      /class="fm-headline-toggle" aria-expanded="false"/.test(folded) && text(folded).includes("|Ready, with things worth fixing|0 of 1 checks passing|")
-     && !folded.includes("4 detected faults") && checks(true).includes("4 detected faults")
+     && !folded.includes("4 open faults") && checks(true).includes("4 open faults")
      // its chevron right after the words (owner, 2026-10-14), not pushed to the far end — a stylesheet rule
      && /\.fm-headline-toggle > svg \{ flex: 0 0 auto; color/.test(readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")), text(folded));
 }
@@ -452,8 +452,10 @@ ck("the Tickets tab draws ticketCards — the tickets in progress, by device —
   // WebKit; the filter's button says "Notifs", its section keeps "Notifications"
   const { FILTERS } = await import("@/messages/messagesModel");
   const notesSection = JSX.elements(tab, "MessagesSection").find((s) => JSX.propText(s, "onToggle") === '() => fold("notes")');
-  ck("  ...the filters say Issues · Notifs · Reports, the buttons drawn from that one list; the section is still \"Notifications\"",
-     FILTERS.map((f) => f.label).join(" · ") === "Issues · Notifs · Reports" && /\{f\.label\}/.test(msg)
+  // owner, 2026-11-01: "Notifications if it fits": both words drawn, the toolbar's width shows one
+  ck("  ...the filters say Issues · Notifications · Reports, \"Notifs\" where the line is too narrow; drawn from that one list; the section is \"Notifications\"",
+     FILTERS.map((f) => f.label).join(" · ") === "Issues · Notifications · Reports" && FILTERS[1].short === "Notifs"
+     && /<span className="messages-filter-long">\{f\.label\}<\/span><span className="messages-filter-short">\{f\.short\}<\/span>/.test(msg)
      && !!notesSection && JSX.propText(notesSection, "title") === '"Notifications"', FILTERS);
   // ...and on one line with Open Ticket on every phone (owner, 2026-10-31). Measured in headless WebKit (the wider
   // engine) with the real Cockpit: the labels' own widths Issues 9 54.1, Notifs 36.5, Reports 47.6, the wrench and Open
@@ -488,6 +490,13 @@ ck("the Tickets tab draws ticketCards — the tickets in progress, by device —
     const fits = [360, 375, 390, 412, 430].filter((w) => needed <= w - 36);
     ck("  ...the filters and Open Ticket fit one line on every phone, 360 to 430 px (the filters' and the button's padding)",
        fPad > 0 && bPad > 0 && fits.length === 5, { fPad, bPad, needed: Math.round(needed * 10) / 10, fits });
+    // "Notifications" in place of "Notifs": its width from Notifs' measure, 13 letters for 6 (an estimate, the same font)
+    const longNeeded = needed + 36.5 * (13 / 6 - 1);
+    const shows = px(/@container \(min-width: (\d+)px\)/);
+    ck("  ...\"Notifications\" shows only on a line wide enough for the four with it, and from a 412 px phone up; \"Notifs\" below, and by default",
+       shows >= longNeeded && shows <= 412 - 36 && /container-type: inline-size;/.test(shared)
+       && /\.messages-filter-long \{ display: none; \}\s*@container \(min-width: \d+px\) \{\s*\.messages-filter-long \{ display: inline; \}\s*\.messages-filter-short \{ display: none; \}/.test(shared),
+       { shows, longNeeded: Math.round(longNeeded) });
   }
   ck("  ...the two groups wrap whole: the filters never shrink, the button keeps the right",
      /\.messages-toolbar \{[^}]*flex-wrap: wrap;/.test(shared) && /\.messages-filters \{[^}]*flex: 0 0 auto;/.test(shared)
@@ -620,8 +629,11 @@ console.log("\n  one line per problem (owner, 2026-10-17: \"#49 · One mains pha
      g.entityId === "sensor.phase_b_voltage" && !/,sensor/.test(g.title), g.entityId, g.title);
 }
 
-ck("the screens ask stageOf (or its count, openCounts), never the status themselves",
-   ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(|openCounts\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
+ck("the screens ask stageOf (or its count, openCounts, or wasTicket: was it a ticket), never the status themselves",
+   ["components/fm/TicketsTab.tsx", "components/fm/FaultForm.tsx", "components/fm/TodayTab.tsx"].every((f) => /stageOf\(|openCounts\(|wasTicket\(/.test(src(f)) && !/status === "in_progress"|status !== "in_progress"|status === "open"/.test(src(f))));
+// owner, 2026-11-01: a record is called a ticket only while it is one, or closed as one; a reopened ex-ticket is a fault
+ck("the form's heading says Edit ticket for a ticket (wasTicket) and Edit fault for anything else",
+   /const heading = !editing \? "Open a ticket" : wasTicket\(editing\) \? "Edit ticket" : "Edit fault";/.test(src("components/fm/FaultForm.tsx")));
 ck("the fault form is one, shared by raising and editing", /<FaultForm key=\{editing\.id\} editing=\{editing\}/.test(tt) && !/<input value=\{title\}/.test(ov + tt));
 
 done("✅ one list of live issues; faults become tickets; the same with or without the Agent");

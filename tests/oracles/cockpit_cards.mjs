@@ -271,8 +271,10 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
     [...css(f).replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)]
       .filter((m) => /text-overflow:\s*ellipsis|line-clamp/.test(m[2])).map((m) => m[1].trim().replace(/\s+/g, " ")));
   const CARD = /fm-record|fm-row|cockpit-attention|messages-card|messages-detail|announcement/;
-  ck("the Inbox's list: a message is one cut line (its title and its line under it end in \"…\")",
-     cuts.includes(".messages-row-text b, .messages-row-text span"), cuts);
+  // owner, 2026-11-01: the line under a title was cut at the time's column; it spans the row, on one line, cut with "…"
+  ck("the Inbox's list: a line's title and its first words are each one line cut with \"…\", the words over the row's width",
+     cuts.includes(".messages-row-head b") && cuts.includes(".messages-row-sub")
+     && /\.messages-row-text \{[^}]*flex: 1 1 auto;[^}]*min-width: 0;/.test(shared), cuts);
   ck("  ...an opened card: no text of it is ever cut, whatever its line (no rule cuts a card's text)",
      cuts.every((sel) => !CARD.test(sel)) && /\.cockpit-attention-sub-text \{[^}]*overflow-wrap: anywhere;/.test(shared),
      cuts.filter((sel) => CARD.test(sel)));

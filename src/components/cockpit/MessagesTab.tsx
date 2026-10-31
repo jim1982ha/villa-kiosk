@@ -35,7 +35,7 @@ import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent, PageLink, RecordButtons } from "@/components/messages/AnnouncementContent";
 import RecordCard from "@/components/fm/RecordCard";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
-import { AlertIssueCard, AttentionCard, CockpitAttentionRow } from "./IssueCard";
+import { AlertIssueCard, AttentionCard, CockpitAttentionRow, RoomPill } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 
 /** One line of the list — pure (a check draws it): its icon, its title, the line under it, its time. */
@@ -47,18 +47,26 @@ export function MessageRow({ item, selected, onSelect, hold }: {
   hold?: LongPressHandlers;
 }) {
   const row = rowOf(item);
+  const ticket = item.kind === "issue" && !!item.card.ticket;
   const { consumeClick, ...holding } = hold ?? { consumeClick: () => false };
   return (
-    <button type="button" className={`messages-row${selected ? " on" : ""}${hold ? " fm-erasable" : ""}`}
+    // ⚠️ AN ISSUE WITH A TICKET OPEN IS FRAMED (owner, 2026-11-01: "highlight the issue card … when a ticket had been
+    // opened for this issue"), its line the same otherwise
+    <button type="button" className={`messages-row${selected ? " on" : ""}${ticket ? " ticket" : ""}${hold ? " fm-erasable" : ""}`}
       aria-current={selected || undefined}
       // a completed hold is followed by a click: opening the message under the code's prompt would be wrong
       onClick={() => { if (!consumeClick()) onSelect(item.key); }} {...holding}>
       <span className="messages-row-icon">{row.icon}</span>
+      {/* ⚠️ THREE LINES (owner, 2026-11-01): its name and its time; an issue's room, the opened card's pill (RoomPill);
+          its first words on ONE line over the row's whole width, cut with "…" (it was cut at the time's column) */}
       <span className="messages-row-text">
-        <b>{row.title}</b>
-        {row.sub && <span>{row.sub}</span>}
+        <span className="messages-row-head">
+          <b>{row.title}</b>
+          {row.time && <span className="messages-row-time">{row.time}</span>}
+        </span>
+        {row.room && <span className="messages-row-room"><RoomPill room={row.room} /></span>}
+        {row.sub && <span className="messages-row-sub">{row.sub}</span>}
       </span>
-      {row.time && <span className="messages-row-time">{row.time}</span>}
       {hold && <span className="fm-erasable-dot" aria-hidden="true" />}
     </button>
   );
@@ -128,7 +136,8 @@ function rowOf(item: MessageItem) {
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
         : card.lead ? <SourceIcons {...card.lead} /> : null,
       title: card.title,
-      sub: [card.room, first?.text].filter(Boolean).join(" · "),
+      room: card.room,
+      sub: first?.text ?? "",
       time: when ? momentText(when) : "",
     };
   }
@@ -137,6 +146,7 @@ function rowOf(item: MessageItem) {
   return {
     icon: item.kind === "report" ? <FileText size={18} aria-hidden="true" /> : <Bell size={18} aria-hidden="true" />,
     title: w.title,
+    room: undefined,
     sub: w.line,
     time: w.at ? momentText(w.at) : "",
   };
@@ -229,7 +239,10 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
             {view.filters.map((f) => (
               <button key={f.id} type="button" className={`messages-filter${filter === f.id ? " on" : ""}`}
                 aria-pressed={filter === f.id} onClick={() => pickFilter(f.id)}>
-                {f.label}{f.count ? <span className="messages-filter-count">{f.count}</span> : null}
+                {/* both words drawn, the line's width shows one (08-shared.css .messages-filter-short) */}
+                {f.short ? <><span className="messages-filter-long">{f.label}</span><span className="messages-filter-short">{f.short}</span></>
+                  : f.label}
+                {f.count ? <span className="messages-filter-count">{f.count}</span> : null}
               </button>
             ))}
           </div>

@@ -116,7 +116,7 @@ ck("  ...Live does not name Home Assistant (owner, 2026-10-14)", !/Home Assistan
 ck("without an Agent: no row of the Agent's — nothing claims to open or close by itself",
    !alone.rows.some((r) => ["alert", "night", "chat"].includes(r.source)) && alone.rows.some((r) => r.source === "guest")
    && !/Agent|nightly/i.test(alone.note + alone.rows.map((r) => r.what + r.opens + r.goes).join(" ")), alone.rows.map((r) => r.source));
-ck("both say how a fault becomes a ticket", [withAgent, alone].every((t) => /becomes a ticket when someone presses Open Ticket on its card/.test(t.note)));
+ck("both say how a fault becomes a ticket", [withAgent, alone].every((t) => /becomes a ticket only when someone presses Open Ticket on its card in Inbox › Open issues/.test(t.note)));
 ck(`  ...and the list's own refresh, from the app's own numbers (${STORE_ACTIVE_MS / 1000} s open, ${STORE_HEARTBEAT_MS / 60000} min else)`,
    [withAgent, alone].every((t) => t.note.includes(`every ${fmtDuration(STORE_ACTIVE_MS)} while it is open`)
      && t.note.includes(`every ${fmtDuration(STORE_HEARTBEAT_MS)} otherwise`)));
@@ -142,8 +142,10 @@ ck("the card shows the Agent's rows when an Agent is connected OR one of its fau
 {
   const { WORK_ACTIONS } = await import("@/fm/deviceWork");
   const opened = withAgent.rows.filter((r) => r.source === "owner" || r.source === "fm");
-  ck("the (i) names the button a ticket is opened with in its one wording (Open Ticket), never \"Open a ticket\"",
-     opened.length === 2 && opened.every((r) => r.what.includes(`(${WORK_ACTIONS.raiseTicket.label})`))
+  // owner, 2026-11-01: a person RAISES a problem: a ticket only with Open Ticket, a fault with Done or Need help
+  ck("the (i) names the button a ticket is opened with in its one wording (Open Ticket), never \"Open a ticket\"; else a fault",
+     opened.length === 2 && opened.every((r) => r.what.includes("raised") && !/ticket/i.test(r.what)
+       && r.opens.includes(`a ticket in progress with ${WORK_ACTIONS.raiseTicket.label}`) && r.opens.includes("a fault with Done or Need help"))
      && withAgent.rows.every((r) => !/Open a ticket/.test(r.what + r.opens + r.goes)), opened.map((r) => r.what));
   const postcss = (await import("postcss")).default;
   const sheet = postcss.parse(readFileSync(new URL("../../src/styles/04-modals.css", import.meta.url), "utf8"));

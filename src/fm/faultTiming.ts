@@ -42,6 +42,9 @@ export interface SourceRow {
   goes: string;
 }
 
+/** When a person's problem opens: a ticket in progress with Open Ticket, else a fault (Done or Need help on a card). */
+const PERSON_OPENS = `At once: a ticket in progress with ${OPEN_TICKET}, a fault with Done or Need help on a card`;
+
 const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
   live: { what: "What the map shows right now: unavailable, missing, unlocked, too hot… Nobody is told", opens: "At once",
     goes: "As soon as the device is back to normal" },
@@ -57,11 +60,14 @@ const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
     goes: "When the VESTA Agent no longer finds it. Each card's Next check says when it looks again" },
   chat: { what: "From a Telegram chat with the VESTA Agent (\"Create this fault\")",
     opens: "When someone presses Create this fault", goes: "When someone resolves or closes it" },
-  owner: { what: `A ticket the ${ROLE_LABELS.owner} opened (${OPEN_TICKET})`, opens: "At once, already in progress",
+  // ⚠️ A PERSON RAISES A FAULT OR OPENS A TICKET (owner, 2026-11-01): Done or Need help on a card with no record raises
+  // a FAULT stamped with the profile (WorkButtons); only Open Ticket makes a ticket. These rows said "A ticket … already
+  // in progress" for both.
+  owner: { what: `A problem the ${ROLE_LABELS.owner} raised in the Kiosk`, opens: PERSON_OPENS,
     goes: "When someone resolves or closes it" },
-  fm: { what: `A ticket the ${ROLE_LABELS.ops} opened (${OPEN_TICKET})`, opens: "At once, already in progress",
+  fm: { what: `A problem the ${ROLE_LABELS.ops} raised in the Kiosk`, opens: PERSON_OPENS,
     goes: "When someone resolves or closes it" },
-  person: { what: "A ticket opened in the Kiosk", opens: "At once", goes: "When someone resolves or closes it" },
+  person: { what: "A problem raised in the Kiosk", opens: PERSON_OPENS, goes: "When someone resolves or closes it" },
   guest: { what: "A problem a guest reported (Report a problem)", opens: "At once, as a fault",
     goes: "When someone closes it" },
   schedule: { what: "Maintenance overdue (Schedule tab)", opens: "When its due date passes",
@@ -70,7 +76,7 @@ const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
 
 const REFRESH = `This list is read again every ${fmtDuration(STORE_ACTIVE_MS)} while it is open (every `
   + `${fmtDuration(STORE_HEARTBEAT_MS)} otherwise), and as soon as you come back to the app.`;
-const TICKET = "A fault becomes a ticket when someone presses Open Ticket on its card (Tickets tab).";
+const TICKET = "A fault becomes a ticket only when someone presses Open Ticket on its card in Inbox › Open issues; it then moves to Tickets.";
 
 /** How often the Agent looks, in its own numbers when it said them. */
 function agentClock(c: AgentCadence | null): string {
@@ -131,7 +137,7 @@ export function faultTiming(agent: boolean, cadence: AgentCadence | null = null)
     groups,
     confirming: agent ? confirmingRow(cadence) : null,
     note: agent
-      ? `${TICKET} The VESTA Agent closes its own faults and tickets when the problem goes away; ${agentClock(cadence)}. `
+      ? `${TICKET} The VESTA Agent closes the faults it raised, and a ticket opened on one of them, when the problem goes away; ${agentClock(cadence)}. `
         + REFRESH
       : `${TICKET} ${REFRESH}`,
   };

@@ -8,7 +8,7 @@
 
 import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Dropdown from "@/components/common/Dropdown";
 import { DocumentButtons } from "@/components/common/SaveButton";
 import { Plus, Sparkles } from "lucide-react";
@@ -36,6 +36,7 @@ import { useDeviceChoice } from "./useDeviceChoice";
 import { useRecordPlace } from "./useRecordPlace";
 import FormActions from "./FormActions";
 import { TONE_OF, toneClass } from "@/fm/tone";
+import FmForm from "./FmForm";
 
 export default function SpendTab(
   { onOpenEntity, deviceOptions, inputs }: {
@@ -96,6 +97,61 @@ export default function SpendTab(
   const b = budgetStatus(data.costs, month, terms);
   const amountIdr = parseAmount(amount);
 
+  const form = (
+    <FmForm>
+      <h3>{editingId ? "Edit spend entry" : "Record maintenance spend"}</h3>
+      <div className="fm-field">
+        <span className="with-tip">Device
+          <InfoTip label="About the device">Search, or type one not listed; leave it blank for a whole-villa expense.</InfoTip></span>
+        <DeviceSearchPicker
+          {...device.pickerProps}
+          options={deviceOptions}
+        />
+      </div>
+      <label className="fm-field">
+        <span>What the spend is about</span>
+        <input value={label} onChange={(e) => setLabel(e.target.value)}
+          placeholder="e.g. Gas top-up and filter clean" />
+      </label>
+      {/* The same free note a fault carries, for the same reason: the
+          person reading this in six months is not the person who typed
+          the one-line label. */}
+      <NotesField
+        label="Notes (optional)"
+        value={note}
+        onChange={setNote}
+        placeholder="e.g. Second refill this quarter, check for a leak"
+      />
+      <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory}
+        replacing={editingId ?? undefined} />
+
+      <div className="fm-field">
+        <span>Receipt / photo</span>
+        <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
+      </div>
+
+      <FormActions
+        error={formError} onCancel={resetForm} disabled={!label.trim() || amountIdr <= 0}
+        saveLabel={editingId ? "Save changes" : "Save"}
+        onSave={async () => {
+            const fields = {
+              amountIdr, label: label.trim(), category, photoIds,
+              note: note.trim() || undefined,
+              ...place(entityId, deviceText),   // the device, its name and room: ONE builder (fm/recordPlace)
+            };
+            // `at` is set once, when the spend happened, and is never
+            // rewritten by a later correction — it is what the monthly
+            // total and the cap are computed from.
+            const { done, note: why } = editingId
+              ? await updateCost(editingId, fields)
+              : await addCost({ ...fields, at: new Date().toISOString() });
+            // Empty the form only when saved or queued (2.496.252).
+            if (done) resetForm(); else setFormError(why);
+          }}
+      />
+    </FmForm>
+  );
+
   return (
     <div className="fm-stack">
       {/* The terms are the villa's agreement, set by whoever administers the
@@ -145,66 +201,15 @@ export default function SpendTab(
       </div>
 
 
-      {adding && (
-        <div className="fm-form">
-          <h3>{editingId ? "Edit spend entry" : "Record maintenance spend"}</h3>
-          <div className="fm-field">
-            <span className="with-tip">Device
-              <InfoTip label="About the device">Search, or type one not listed; leave it blank for a whole-villa expense.</InfoTip></span>
-            <DeviceSearchPicker
-              {...device.pickerProps}
-              options={deviceOptions}
-            />
-          </div>
-          <label className="fm-field">
-            <span>What the spend is about</span>
-            <input value={label} onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Gas top-up and filter clean" />
-          </label>
-          {/* The same free note a fault carries, for the same reason: the
-              person reading this in six months is not the person who typed
-              the one-line label. */}
-          <NotesField
-            label="Notes (optional)"
-            value={note}
-            onChange={setNote}
-            placeholder="e.g. Second refill this quarter, check for a leak"
-          />
-          <CostFields amount={amount} onAmount={setAmount} category={category} onCategory={setCategory}
-            replacing={editingId ?? undefined} />
-
-          <div className="fm-field">
-            <span>Receipt / photo</span>
-            <EvidenceRow photoIds={photoIds} onChange={setPhotoIds} />
-          </div>
-
-          <FormActions
-            error={formError} onCancel={resetForm} disabled={!label.trim() || amountIdr <= 0}
-            saveLabel={editingId ? "Save changes" : "Save"}
-            onSave={async () => {
-                const fields = {
-                  amountIdr, label: label.trim(), category, photoIds,
-                  note: note.trim() || undefined,
-                  ...place(entityId, deviceText),   // the device, its name and room: ONE builder (fm/recordPlace)
-                };
-                // `at` is set once, when the spend happened, and is never
-                // rewritten by a later correction — it is what the monthly
-                // total and the cap are computed from.
-                const { done, note: why } = editingId
-                  ? await updateCost(editingId, fields)
-                  : await addCost({ ...fields, at: new Date().toISOString() });
-                // Empty the form only when saved or queued (2.496.252).
-                if (done) resetForm(); else setFormError(why);
-              }}
-          />
-        </div>
-      )}
+      {/* a new entry's form here; an edit's in its entry's place, below (FmForm) */}
+      {adding && !editingId && form}
 
       <div className="fm-list">
         {b.entries.length === 0 && (
           <p className="muted body-text">No spend recorded for {month}.</p>
         )}
-        {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => (
+        {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => c.id === editingId
+          ? <Fragment key={c.id}>{form}</Fragment> : (
           // THE Cockpit card (RecordCard, architecture review 2026-10-15): the amount on the right, its receipt —
           // the whole point of attaching one is that somebody can later check it
           <RecordCard key={c.id} title={c.label} when={momentText(c.at)} notes={[c.note]} photoIds={c.photoIds}

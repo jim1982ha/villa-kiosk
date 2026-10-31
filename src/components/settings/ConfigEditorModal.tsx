@@ -195,7 +195,7 @@ function RecordsKept() {
     <div className="settings-field-row">
       {/* the owner's words (2026-10-22), widened to messages (2026-10-28: one number for every record kept); its (i)
           is the section title's */}
-      <label htmlFor="records-kept">How many days tickets, attachments and messages are kept</label>
+      <label htmlFor="records-kept">How many days faults, tickets, attachments and messages are kept</label>
       <input
         id="records-kept" inputMode="numeric" className="field-narrow"
         value={field.shown ?? String(config.recordsKeptDays)}
