@@ -1,3 +1,11 @@
+## 2.496.629
+
+What you will see:
+- An opened card in the Cockpit's Inbox now shows every line in full, over as many lines as it needs: "In progress:
+  ... against a normal 0.07 kWh/day ..." and "Also: ... is missing from the villa's system since ..." are no longer cut
+  with "...", the same as VESTA's message on an alert's card. The Inbox's list itself stays one short line per
+  message, cut with "...", and tapping one opens it whole.
+
 ## 2.496.628
 
 What you will see:
