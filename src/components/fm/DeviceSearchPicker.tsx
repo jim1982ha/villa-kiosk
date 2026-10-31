@@ -28,7 +28,7 @@ import { Search, X } from "lucide-react";
 import type { EntityMapping } from "@/types/scene.types";
 import { labelOf } from "@/config/EntityMap";
 import type { VillaDevices } from "@/config/deviceGroups";
-import { isOffline } from "@/utils/stateColors";
+import { lostContact } from "@/utils/stateColors";
 import { deviceRoom } from "@/config/devicePlace";
 import type { HassEntity } from "@/types/ha.types";
 import { matchesQuery } from "@/config/deviceRecord";
@@ -65,7 +65,7 @@ export function buildDeviceOptions(
       entityId: id,
       label: labelOf(id, entityMap, entities),
       room: deviceRoom(resolvedRooms, id),
-      offline: isOffline(entities[id]),
+      offline: lostContact(entities, id),
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }

@@ -169,7 +169,8 @@ export function AlertIssueCard({ card, messages, onOpenEntity, focused, canManag
   // named by its title ("#92-P2 (cleared)"), its words in the message; on a watched card its Status says how it closed
   const said: CardView = othersFirst({ ...card, lines: card.lines.map((l) => {
     const a = messages(l);
-    return a ? { ...l, text: a.title, closing: card.look === "watched" ? null : l.closing } : l;
+    // ...after its device's own state the alert does not say ("Missing, #100-P1 (new)": CardLine.state)
+    return a ? { ...l, text: l.state ? `${l.state}, ${a.title}` : a.title, closing: card.look === "watched" ? null : l.closing } : l;
   }) }, (l) => messages(l) !== null);
   return (
     <AttentionCard card={said} onOpenEntity={onOpenEntity} focused={focused}

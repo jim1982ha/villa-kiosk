@@ -55,6 +55,16 @@ function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
   return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail ?? "";
 }
 
+/** The word of a device's own state that a line says BESIDE the fault folded onto it, the fault not saying it already
+ *  ("Missing" before an unlocked-door alert); undefined when there is none (no fault, or its title says it, or an
+ *  "Unavailable" its fault is about: mergeFaults folds an offline device's fault onto that line). */
+function stateBesideFault(item: AttentionItem): string | undefined {
+  if (!item.fault) return undefined;
+  const word = item.detail ?? "";
+  const said = !word || (item.kind === "unavailable" && word === "Unavailable") || saysWord(item.fault.title, word);
+  return said ? undefined : word;
+}
+
 /** What a fault's line must say of its status: nothing while it is open, its stage's word (fmEngine.STAGE_WORDS:
  *  "In progress") once someone took it.
  *  ⚠️ "OPEN FAULT:" BEFORE EVERY FAULT SAID NOTHING (owner, 2026-10-14: "this seems providing no value"): the row's
@@ -136,9 +146,8 @@ function attentionLine(item: AttentionItem): string {
     // device is offline already. ⚠️ SO DID "UNLOCKED — #41 · LAUNDRY ROOM DOOR UNLOCKED" (owner, 2026-10-18): a state
     // word the fault's title already says is not said before it. A word the fault does not say stays: "Not in Home
     // Assistant", a live reading ("92 %").
-    const word = item.detail ?? "";
-    const said = (item.kind === "unavailable" && word === "Unavailable") || saysWord(item.fault.title, word);
-    return said ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${word}, ${fault}`;
+    const word = stateBesideFault(item);
+    return word === undefined ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${word}, ${fault}`;
   }
   if (item.kind === "fault") return titled(item);
   return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail ?? "";
@@ -164,6 +173,11 @@ export interface CardLine {
   text: string;
   /** Its own source icons (where they are drawn: cardIcons); absent for a line that has none to say. */
   own?: LineSources;
+  /** The word of its device's own state it says before the fault it holds ("Missing"): what a line named by VESTA's
+   *  title still says first (cockpit/IssueCard AlertIssueCard). Absent when its words hold none (stateBesideFault).
+   *  ⚠️ THE DEVICE'S OWN STATE WENT WITH THE ALERT'S TITLE (owner, 2026-10-31): a lock the villa's system had dropped
+   *  at night held its unlocked-door alert on its "Missing" line, and the Inbox named the line by the alert alone. */
+  state?: string;
   /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
    *  (ticket 19 of "One inbox"); [] when nothing was told. */
   story: { note: string; at: string }[];
@@ -242,6 +256,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     key: item.id,
     text: attentionLineIn(group, item),
     own: lineSources(item),
+    ...(stateBesideFault(item) !== undefined ? { state: stateBesideFault(item) } : {}),
     story: item.story ?? item.fault?.story ?? [],
     openedAt: item.openedAt ?? item.fault?.openedAt ?? null,
     ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
