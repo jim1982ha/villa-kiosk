@@ -1,3 +1,20 @@
+## 2.496.639
+
+What you will see:
+- The Tickets tab says how many tickets are in progress in its name: "Tickets (3)". With none, it says "Tickets".
+- In the Inbox, an issue that has a ticket open is framed in green, so you can tell it apart from the issues nobody
+  has taken on yet.
+- Each line of the Inbox shows its whole description, across the full width under its name and time. It was cut
+  short with "…" beside the time.
+- Tapping a ticket, a spend entry or a task to edit it now turns that card into its form, in the same place, and the
+  form scrolls into view. Before, the form opened at the top of the tab and the card stayed below. The "Log" form of a
+  task now opens right under that task, no longer under Recent work. Every other form ("Open Ticket", "Record spend",
+  "Add a task", "Spend settings") scrolls into view when it opens too.
+- The Tickets tab counts and lists only tickets: problems someone took on (Open Ticket). The faults VESTA opened and
+  cleared by itself, which nobody took on, were counted as closed tickets. So the Closed list, "closed, no action" and
+  "mean resolution" are now much smaller. The monthly recap's "Faults and response" section still counts every fault,
+  as its title says.
+
 ## 2.496.638
 
 What you will see:
