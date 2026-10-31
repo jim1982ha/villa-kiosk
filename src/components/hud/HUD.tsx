@@ -51,6 +51,7 @@ import VirtualJoystick from "./VirtualJoystick";
 import ViewControls from "./ViewControls";
 import { useLongPress, HOLD_MS_HUD } from "@/hooks/useLongPress";
 import { useHomeAnchor } from "./useHomeAnchor";
+import { barMicShown, useBarRoom } from "./barRoom";
 import RadialRoomMenu from "./RadialRoomMenu";
 import { openRoomDial, roomDialItems, roomsOnFloor, type RadialItem, type RoomDial } from "./roomDial";
 import LegendModal from "./LegendModal";
@@ -316,6 +317,10 @@ export default function HUD({
   // The desktop's account menu under the role badge (owner, 2026-10-12): the
   // same dropdown, the same closing rules, the same two rows (accountRows).
   const account = useHudMenu();
+  // The phone's "Ask VESTA" beside its gear, when the bar has room for it (owner, 2026-10-31): the room is the bar's
+  // own measurement (barRoom), never a device rule.
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const barMic = barMicShown(thread.shown, useBarRoom(barRef));
   const [legendOpen, setLegendOpen] = useState(false);
 
   // The view toggle + default-view anchor (and their tap-vs-hold gesture) live
@@ -417,7 +422,7 @@ export default function HUD({
         onBackdrop={onRadialBackdrop}
       />
 
-      <div className="hud-topbar">
+      <div className="hud-topbar" ref={barRef}>
         {/* Shrinks progressively on a narrow screen (clock, then the villa
             name, then the connection dot, drop out — see .hud-brand's media
             queries) but is never fully hidden: even on a phone the home icon
@@ -662,8 +667,14 @@ export default function HUD({
               group instead, which put "settings" wherever the category row's
               content happened to end rather than at the edge. */}
           <div className="hud-group hud-overflow" ref={menuRef}>
+            {/* "Ask VESTA" left of the gear (owner, 2026-10-31), the top bar's own talk button (tap: the conversation;
+                held: VESTA listens), only while VESTA runs and the bar has room; the menu's row stays either way */}
+            {barMic && (
+              <TalkButton place="bar" onOpen={onAskVesta} onTap={onAskVesta} className="icon-btn hud-bar-mic"
+                idle={talker ? "Ask VESTA: tap to open, hold to talk" : "Ask VESTA"} />
+            )}
             <button
-              className={`icon-btn${menuOpen ? " active" : ""}`}
+              className={`icon-btn hud-gear${menuOpen ? " active" : ""}`}
               onClick={() => setMenuOpen((o) => !o)}
               title={`Menu${unreadSaid}`}
               aria-label={`Menu${unreadSaid}`}

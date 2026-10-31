@@ -1,3 +1,12 @@
+## 2.496.627
+
+What you will see:
+- On a phone, the top bar now shows the "Ask VESTA" microphone just left of the gear, whenever the bar has room for
+  it: tap it to open VESTA's conversation, hold it to talk, exactly as the microphone on a tablet's top bar. Where the
+  bar is too narrow (many map categories, or the maintenance mark showing) it is simply not there, and "Ask VESTA"
+  in the gear's menu still works. It shows only while VESTA runs, for the same profiles as before.
+- Holding a microphone to talk now shows one listening orb, never two stacked.
+
 ## 2.496.626
 
 What you will see:
