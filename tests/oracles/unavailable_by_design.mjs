@@ -185,7 +185,8 @@ const recordedRows = [{ entity_id: DOOR, state: "unavailable", last_changed: "20
   { state: "off", last_changed: "2026-10-20T01:00:00Z" }, { state: "unavailable", last_changed: "2026-10-20T01:03:00Z" },
   { state: "on", last_changed: "2026-10-20T02:00:00Z" }];
 // what came before the window: the report it holds ("on" the day before, then asleep)
-const FROM = Date.parse("2026-10-20T00:00:00Z"), TO = FROM + 24 * 3600e3;
+// yesterday, midnight UTC: a fixed day fell out of the 10 days the villa keeps on 2026-10-31 and read "not kept"
+const FROM = Math.floor(Date.now() / 864e5) * 864e5 - 864e5, TO = FROM + 24 * 3600e3;
 let beforeRows = [{ entity_id: DOOR, state: "unavailable", last_changed: "2026-10-11T00:00:00Z" },
   { state: "on", last_changed: "2026-10-19T14:57:00Z" }, { state: "unavailable", last_changed: "2026-10-19T15:01:00Z" }];
 let windowRows = recordedRows;

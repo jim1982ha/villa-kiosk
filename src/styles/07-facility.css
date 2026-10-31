@@ -175,7 +175,13 @@
 .fm-meta-when { font-size: var(--text-xs); flex: 1 1 0; min-width: 14em; }
 /* a card's pills, the same size on its title's line (its room, a spend's device, its next check) and the meta line */
 :is(.fm-meta, .fm-record-head) .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
-.fm-fault-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* ⚠️ A CARD'S BUTTONS ON ONE LINE ON A PHONE (owner, 2026-10-31, iPhone: Open Ticket wrapped under Done · Need help):
+   one row of their own (WorkButtons, Inbox and Tickets alike), 12 px each side instead of the 18 of a .btn, and under
+   a card with an icon column the row takes that column's width too (it is empty under the buttons). On a phone narrower
+   still they wrap together, never cut. */
+.fm-work-row { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.fm-work-row > .btn { padding: 0 12px; white-space: nowrap; }
+.fm-record-head:has(> .fm-record-lead) + .fm-record-body .fm-work-row { margin-left: -30px; }
 /* A card's Need help that nothing has answered yet ("🆘 Need help asked …", WorkButtons): a line of its own above the
    buttons, on the Inbox and the Tickets tab alike (architecture review round 6). */
 .fm-work-asked { flex: 1 1 100%; min-width: 0; font-size: var(--text-xs); color: var(--text-dim); }

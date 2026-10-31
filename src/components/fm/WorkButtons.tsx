@@ -109,7 +109,7 @@ const ICON: Partial<Record<WorkActionKind, ReactNode>> = {
 /** Does pressing it open a form the card does not hold (the caller's `onOpen`)? */
 const leavesCard = (a: WorkAction) => a.step.kind === "raise" || a.step.kind === "edit";
 
-export default function WorkButtons({ actions, cardKey, work, onOpen, raised, asked, name, className }: {
+export default function WorkButtons({ actions, cardKey, work, onOpen, raised, asked, name }: {
   actions: readonly WorkAction[];
   /** The card's key (deviceWork) — whose question is being asked, whose step did not land. */
   cardKey: string;
@@ -122,8 +122,6 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
   asked?: HelpAsked | null;
   /** The card's title, for a screen reader's "Close “…”" on the Overview's Close. */
   name?: string;
-  /** Wraps the buttons (the Overview's row of them); none — they sit straight in the card's actions. */
-  className?: string;
 }) {
   const problem = work.problemFor(cardKey);
   const staging = work.staging?.key === cardKey ? work.staging : null;
@@ -149,7 +147,9 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
     <>
       {/* what a Need help did, on the card it was pressed on: the same line on the Inbox and the Tickets tab */}
       {asked && <div className="fm-work-asked">{helpLine(asked, momentText)}</div>}
-      {className ? <div className={className}>{buttons}</div> : buttons}
+      {/* ONE ROW, every card alike (owner, 2026-10-31, iPhone: Open Ticket dropped under Done · Need help): the
+          buttons are grouped in a row of their own, which the card's icon column lends its width (07-facility.css) */}
+      <div className="fm-work-row">{buttons}</div>
       {after}
     </>
   );

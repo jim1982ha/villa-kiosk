@@ -450,9 +450,27 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     { actions, cardKey: "device:x", work: work(asking, extra.problem ?? null), ...extra }));
   const ovActs = cardActions(pump), tkActs = W.ticketActions([{ id: "a", stage: "ticket" }]);
   ck("an issue card: Done, Need help, then Open Ticket with its wrench, in their row, Done named for a screen reader",
-     /^<div class="fm-fault-actions">/.test(drawButtons(ovActs, null, { name: "Pump", className: "fm-fault-actions" }))
+     /^<div class="fm-work-row">/.test(drawButtons(ovActs, null, { name: "Pump" }))
      && text(drawButtons(ovActs, null, { name: "Pump" })) === "|Done|Need help|[icon] Open Ticket|"
      && /aria-label="Done “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })), text(drawButtons(ovActs)));
+  // owner, 2026-10-31 (iPhone screenshot): Open Ticket wrapped under Done · Need help. Measured on that screenshot, a
+  // 390 px wide iPhone: the card 354 px wide; the labels' own widths at 15 px: Done 34, Need help 68, the wrench and
+  // Open Ticket 101. What the stylesheet gives the row and the buttons must hold all three on one line.
+  {
+    const { readFileSync } = await import("node:fs");
+    const css = (f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8");
+    const fac = css("07-facility.css"), base = css("01-base.css");
+    const num = (re, t) => Number((t.match(re) ?? [])[1]);
+    const pad = num(/\.fm-work-row > \.btn \{[^}]*padding: 0 (\d+)px/, fac);
+    const gap = num(/\.fm-work-row \{[^}]*gap: (\d+)px/, fac);
+    const lent = num(/\.fm-record-body \.fm-work-row \{ margin-left: -(\d+)px/, fac) || 0;
+    const gutter = num(/\.fm-record-head:has\(> \.fm-record-lead\) \+ \.fm-record-body \{ padding-left: (\d+)px/, fac);
+    const cardPad = num(/--card-pad: \d+px (\d+)px/, base);
+    const needed = [34, 68, 101].reduce((w, label) => w + label + 2 * pad + 2, 0) + 2 * gap;
+    const room = 354 - 2 * cardPad - gutter + lent;
+    ck("  ...on a 390 px iPhone the issue card's three buttons fit on one line (the row lent the icon column)",
+       pad > 0 && gap > 0 && lent === gutter && needed <= room, { pad, gap, lent, gutter, needed, room });
+  }
   ck("  ...a ticket: Done, Need help and Close, no icon; a closed record: Reopen",
      text(drawButtons(tkActs)) === "|Done|Need help|Close|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
   ck("  ...its Done asks ITS question in place of the buttons — the issue card's for the device, the ticket's Close for the ticket",
