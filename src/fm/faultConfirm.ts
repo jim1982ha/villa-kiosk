@@ -15,6 +15,12 @@
 // the field on every fault it watches after a close, whoever closed it: an alert the villa or the Agent cleared ("Watch
 // 1h" on Telegram, its reopen window) and a night-check fault (until the next night check). This file did not change
 // its rule for that, only its word for the Agent's own clearing: "Cleared".
+//
+// ⚠️ OPEN › CLEARED (ON THE WATCH LIST) › CLOSED (owner, 2026-10-31): a card here is NOT closed yet. Its pill said
+// "VESTA confirms by 02:00" beside the open cards' refresh icon, read as "next check" ("will it be closed at 2am?"), and a
+// Close pressed in the Cockpit said "Closed on …" on a card that was not. Its pill now says what happens then, "Closes
+// 02:00", with a clock (faultTiming CHECK_PILL), and a Close pressed in the Cockpit says "Cleared on … (Owner)": only a
+// problem that is really over says Closed.
 
 import { AGENT_STAMP, type AgentCadence } from "@/agent/agentApi";
 import { clockTime, momentText } from "@/utils/dateText";
@@ -29,9 +35,10 @@ export const CONFIRM_GRACE_LOOKS = 2;
 
 export interface ConfirmingFault {
   ticket: FmTicket;
-  /** How it closed: "Done" (a Done on Telegram, a repair recorded), "Closed" (the Cockpit's Close, nothing done),
-   *  "Cleared" (the VESTA Agent's own clearing: what it reported is over). */
-  word: "Done" | "Closed" | "Cleared";
+  /** How it was cleared: "Done" (a Done on Telegram, a repair recorded), "Cleared" (the Cockpit's Close, nothing done,
+   *  with who pressed it; or the VESTA Agent's own clearing, no name: what it reported is over). Never "Closed": it is
+   *  not closed until VESTA lets it go (owner, 2026-10-31). */
+  word: "Done" | "Cleared";
   /** Who did it — the person named on its close (`who`), else the profile that recorded it (`by`); "" when unsaid or
    *  the Agent's own clearing. */
   who: string;
@@ -61,7 +68,7 @@ export function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: num
   const agents = !!close && isClearedStep(close) && !close.who && close.by === AGENT_STAMP;
   return {
     ticket: t,
-    word: agents ? "Cleared" : close && isClearedStep(close) ? "Closed" : "Done",
+    word: close && isClearedStep(close) ? "Cleared" : "Done",
     who: agents ? "" : close?.who || authorWords(close),
     closedAt: Date.parse(close?.at ?? t.resolvedAt ?? ""),
     at,
@@ -75,23 +82,25 @@ export function confirmingFaults(d: FmData, cadence: AgentCadence | null, now: n
   return d.tickets.flatMap((t) => confirmingOf(t, cadence, now) ?? []).sort((a, b) => a.at - b.at || a.ticket.id.localeCompare(b.ticket.id));
 }
 
-/** Its line on the card: "Done on 25/10/2026 14:10 (JM) · VESTA confirms by 15:06" — the moment past, "· VESTA confirms it at its next
- *  look". The time is the villa's clock (the tablet's, as every other time on the card: dateText.clockTime). */
+/** Its line in words: "Done on 25/10/2026 14:10 (JM) · VESTA closes this at 15:06 if all is still well; …" — the moment
+ *  past, "· VESTA closes this at its next look if all is still well". The time is the villa's clock (the tablet's, as
+ *  every other time on the card: dateText.clockTime). */
 export function confirmLine(c: ConfirmingFault): string {
   const { did, tip } = confirmParts(c);
   return `${did} · ${tip}`;
 }
 
-/** The row's parts: how it closed and when, as the Agent's Telegram lines say it ("Done on 25/10/2026 14:10 (JM)",
+/** The row's parts: how it was cleared and when, as the Agent's Telegram lines say it ("Done on 25/10/2026 14:10 (JM)",
  *  "Cleared on 25/10/2026 14:10": what, when, then who; owner 2026-10-25: "complete it to mention the clear time"),
- *  and its pill — ⚠️ THE OPEN ISSUES' NEXT-CHECK PILL (owner,
- *  2026-10-23: "consistent with other pills, like `within 5 min`"): `when` its words ("15:06", once past "within
- *  5 min", the Agent's next look, as faultTiming says it), `tip` what hovering it says. */
+ *  and its pill — the card's one pill (RecordCard CheckPill), of the kind "closes" (owner, 2026-10-31: a clock, "Closes
+ *  02:00", never the open cards' refresh icon of a next check): `when` its words ("Closes 15:06", once past "Closes
+ *  within 5 min", the Agent's next look, as faultTiming says it), `tip` what touching it says. */
 export function confirmParts(c: ConfirmingFault): { did: string; when: string; tip: string } {
   const by = clockTime(c.at);
   return {
     did: `${c.word}${Number.isNaN(c.closedAt) ? "" : ` on ${momentText(c.closedAt)}`}${c.who ? ` (${c.who})` : ""}`,
-    when: c.due && c.lookMinutes ? withinLook({ checkMinutes: c.lookMinutes }) : by,
-    tip: c.due ? "VESTA confirms it at its next look" : `VESTA confirms by ${by}`,
+    when: `Closes ${c.due && c.lookMinutes ? withinLook({ checkMinutes: c.lookMinutes }) : by}`,
+    tip: c.due ? "VESTA closes this at its next look if all is still well."
+      : `VESTA closes this at ${by} if all is still well; if the problem is back before then, it reopens as the same problem.`,
   };
 }

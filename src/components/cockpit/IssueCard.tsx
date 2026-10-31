@@ -66,9 +66,10 @@ export function AttentionCard({ card, onOpenEntity, actions, lineMessage, focuse
         : icons.head ? <SourceIcons {...icons.head} />
         // the icon column kept when the lines draw the icons (config/cockpitCard.cardIcons): they stay inside the card
         : icons.column ? <span className="fm-record-lead-empty" aria-hidden="true" /> : undefined}
-      // when its problems are read again: a refresh icon and when, a pill at the right of its name (owner, 2026-10-22);
-      // hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
-      check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
+      // when its problems are read again (a refresh icon) or, on the Watch list, when VESTA closes it (a clock): the
+      // card's own pill kind, a pill at the right of its name (owner, 2026-10-22 / 2026-10-31); hovering it says it in
+      // words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
+      check={card.nextCheck ? { kind: card.nextCheck.kind, when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
       onOpen={open ? () => onOpenEntity(open) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
@@ -101,7 +102,7 @@ function CockpitAttentionSub({ line, icons, message }: { line: CardLine; icons: 
             </ul>
           ))}
           {/* when the VESTA Agent closes it if it stays right (owner, 2026-10-21) */}
-          {/* ...or, on a fault being confirmed, who closed it and when the Agent confirms it (owner, 2026-10-23) */}
+          {/* ...or, on a card on the Watch list, how it was cleared, when and by whom (owner, 2026-10-23) */}
           {line.closing && <span className="cockpit-attention-latest">{line.closing}</span>}
         </span>
       </div>

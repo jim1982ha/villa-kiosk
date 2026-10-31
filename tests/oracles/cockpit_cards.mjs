@@ -182,7 +182,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
 ck("  ...said whole, with its moment, by the pill's tooltip (the Kiosk's own: common/Tip)",
    /aria-label="Next check: within 5min \(\d\d\/\d\d\/\d{4} \d\d:\d\d\)"/.test(issue)
    && /<Tip text=\{tip\}>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8"))
-   && /<CheckPill when=\{check\.when\} tip=\{check\.tip\} \/>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8")));
+   && /<CheckPill kind=\{check\.kind\} when=\{check\.when\} tip=\{check\.tip\} \/>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8")));
 // owner, 2026-10-15: "there should always be the room line, to respect a consistent layout"
 const [roomless] = groupAttention([{ id: "fault:f9", kind: "fault", title: "Relay dropped", detail: "Fault", entityId: "sensor.relay_t",
   ticketId: "f9", stage: "fault", source: "night", device: { key: "sensor.relay_t", label: "Relay" } }]);

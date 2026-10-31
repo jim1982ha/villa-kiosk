@@ -267,14 +267,14 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
                 : <Pager paged={reportsPaged} unit="report" />}
             </MessagesSection>
           )}
-          {/* last, and not in Open issues' count: closed, the VESTA Agent confirming it (fm/faultConfirm); folded by
+          {/* last, and not in Open issues' count: cleared, the VESTA Agent still watching it (fm/faultConfirm); folded by
               default (owner, 2026-10-25); a section of its own, below Notifications (owner, 2026-10-28) */}
           {/* a problem's later life, with the issues and always there, empty or not (owner, 2026-10-28) */}
           {showsIssues && (
             <>
               <FoldedRows title="Watch" rows={view.watched} unit="watched item" open={folds.watch}
                 onToggle={() => fold("watch")} selected={item?.key} onSelect={choose} empty="Nothing is being watched."
-                tip="Closed faults and cleared alerts VESTA still watches: a fault back before the time on its card reopens as the same problem; after it, VESTA lets it go." />
+                tip="Cleared problems VESTA still watches: VESTA closes each at the time on its card if all is still well; a problem back before then reopens as the same problem." />
               {/* what is finished (placeOf): alerts that ended, requests and rings answered or over; folded, last */}
               <FoldedRows title="Closed" rows={view.closed} unit="closed item" open={folds.closed}
                 onToggle={() => fold("closed")} selected={item?.key} onSelect={choose} empty="Nothing closed yet."

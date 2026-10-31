@@ -1,3 +1,16 @@
+## 2.496.638
+
+What you will see:
+- A card in the Cockpit's Watch section now says when VESTA closes it: "Closes 02:00" with a clock, no longer the
+  time beside the refresh icon that the open cards use for their next check. Once that time has passed it says
+  "Closes within 5min".
+- Touching that pill says what happens then: "VESTA closes this at 02:00 if all is still well; if the problem is back
+  before then, it reopens as the same problem."
+- A Close pressed in the Cockpit now reads "Cleared on … (Owner)" on its card until VESTA closes it: only a problem
+  that is really over says Closed. A Done still says Done.
+- The Watch section's (i) and the icon table's last row ("On watch") say the same: cleared problems VESTA still
+  watches, closed at the time on their card if all is still well, open again as the same problem if it comes back.
+
 ## 2.496.637
 
 What you will see:

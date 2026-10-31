@@ -12,7 +12,8 @@
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
 // faults of one device: TicketsTab draws the frame). `lead`: what stands before the title (an open issue's source
 // icons); `titlePills`: pills right after the title, on its line (an open issue's room, a spend's device); `check`: a
-// pill at the right of that line, a refresh icon and when (an open issue's next check); `tone`: the card's own tint.
+// pill at the right of that line, its kind's icon and when (an open issue's next check: a refresh icon; a card on the
+// Watch list, when VESTA closes it: a clock); `tone`: the card's own tint.
 //
 // ⚠️ ONE LINE FOR THE NAME, ITS PLACE AND ITS NEXT CHECK (owner, 2026-10-22: "show the area right after the device name
 // … as the pills in the Spend tab … to save one line"; "instead of `Next check:` a refresh icon, as a pill, on the same
@@ -20,12 +21,13 @@
 // under a chevron on it.
 
 import type { ReactNode } from "react";
-import { FileText, RefreshCw } from "lucide-react";
+import { Clock, FileText, RefreshCw, type LucideIcon } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import ErasableRow from "./ErasableRow";
 import EvidenceRow from "./EvidenceRow";
 import RecordMeta, { RecordNotes } from "./RecordMeta";
 import { documentUrl } from "@/fm/fmApi";
+import type { CheckPillKind } from "@/fm/faultTiming";
 
 export interface RecordCardProps {
   title: ReactNode;
@@ -34,8 +36,8 @@ export interface RecordCardProps {
   lead?: ReactNode;
   /** Pills right after the title, on its line (an open issue's room, a spend's device). */
   titlePills?: ReactNode;
-  /** The pill at the right of the title's line: a refresh icon, `when` beside it, `tip` on hover (the next check). */
-  check?: { when: string; tip: string };
+  /** The pill at the right of the title's line: its kind's icon, `when` beside it, `tip` on hover (CheckPill). */
+  check?: { kind: CheckPillKind; when: string; tip: string };
   /** The pills before `when` (room, device chip, "by VESTA Agent"…). */
   pills?: ReactNode;
   when?: ReactNode;
@@ -54,13 +56,18 @@ export interface RecordCardProps {
   tone?: string;
 }
 
-/** The next-check pill: a refresh icon and when, its words on hover — ONE pill for every card that says when the VESTA
- *  Agent reads it next (an open issue's, a fault being confirmed's: owner, 2026-10-23). */
-export function CheckPill({ when, tip }: { when: string; tip: string }) {
+/** Each kind's icon (faultTiming CheckPillKind): a next look, the refresh icon; a close, a clock — never the refresh
+ *  icon, read as "next check" on a card about to close (owner, 2026-10-31), nor the check its card leads with. */
+const CHECK_ICON: Record<CheckPillKind, LucideIcon> = { next: RefreshCw, closes: Clock };
+
+/** ⚠️ ONE PILL for every card that says what VESTA does at a time (owner, 2026-10-23: an open issue's and a cleared
+ *  fault's alike): its kind's icon and when, its words on hover. Which kind is the card's data, never its caller's. */
+export function CheckPill({ kind, when, tip }: { kind: CheckPillKind; when: string; tip: string }) {
+  const Icon = CHECK_ICON[kind];
   return (
     <Tip text={tip}>
       <span className="fm-entity-chip fm-chip-static fm-record-check" aria-label={tip}>
-        <RefreshCw size={12} aria-hidden="true" />{when}
+        <Icon size={12} aria-hidden="true" />{when}
       </span>
     </Tip>
   );
@@ -77,7 +84,7 @@ export default function RecordCard({ title, status, lead, titlePills, check, pil
           {titlePills}
         </div>
         {status && <span className={`fm-badge ${status.tone}`}>{status.text}</span>}
-        {check && <CheckPill when={check.when} tip={check.tip} />}
+        {check && <CheckPill kind={check.kind} when={check.when} tip={check.tip} />}
       </div>
       {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}
       <div className="fm-record-body">

@@ -14,7 +14,7 @@
 // problems; how a card SAYS them lives here only, and a check reads what cockpitCard returns.
 
 import type { AgentCadence } from "@/agent/agentApi";
-import { nextCheck, nextCheckAt, nextCheckWhen } from "@/fm/faultTiming";
+import { nextCheck, nextCheckAt, nextCheckWhen, type CheckPillKind } from "@/fm/faultTiming";
 import { helpAsked, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { STAGE_WORDS, type HelpAsked } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
@@ -195,11 +195,11 @@ const alertNumberIn = (n: number | undefined) => (n !== undefined ? { alertNumbe
 
 export interface CardView {
   key: string;
-  /** "watched": a fault a person closed that the VESTA Agent reads again (fm/faultConfirm) — listed LAST among the open
-   *  issues, never counted, its frame marked `fault-watched`; absent on every open issue. */
+  /** "watched": a cleared fault the VESTA Agent still watches (fm/faultConfirm) — in the Watch section, never counted,
+   *  its frame marked `fault-watched`; absent on every open issue. */
   look?: "watched";
   /** A watched card's two halves (fm/faultConfirm.confirmParts): its compact row says "Done on 25/10/2026 14:10 (JM)" in its text and
-   *  "VESTA confirms by 15:06" in its pill. */
+   *  "Closes 15:06" in its pill. */
   watched?: { did: string; when: string; tip: string };
   title: string;
   room?: string;
@@ -207,9 +207,10 @@ export interface CardView {
   entityId?: string;
   /** The icons before its name: where each of its problems comes from (cardSources). */
   lead: LineSources | null;
-  /** "Next check: 02:00", and its moment ("20/10/2026 02:00") — null when it has none (live, by hand). `when`: the
-   *  pill's words beside its refresh icon ("02:00"); `tip`: what hovering the pill says (the text, then the moment). */
-  nextCheck: { text: string; at: string | null; when: string; tip: string } | null;
+  /** "Next check: 02:00", and its moment ("20/10/2026 02:00") — null when it has none (live, by hand). `kind`: what
+   *  happens then, so which icon its pill wears ("next" on an open card, "closes" on a watched one: faultTiming
+   *  CheckPillKind); `when`: the pill's words beside it ("02:00", "Closes 02:00"); `tip`: what hovering the pill says. */
+  nextCheck: { kind: CheckPillKind; text: string; at: string | null; when: string; tip: string } | null;
   /** Done · Need help · Open Ticket (or Edit Ticket) — on its records, or its device when it holds none (deviceWork). */
   actions: WorkAction[];
   /** The Need help pressed on it that nothing has answered yet (deviceWork.helpAsked): its buttons say so. */
@@ -220,7 +221,7 @@ export interface CardView {
 function nextCheckView(group: AttentionGroup, cadence: AgentCadence | null, now: Date, at: Date | null): CardView["nextCheck"] {
   const text = nextCheck(group.items, cadence, now);
   const moment = at ? momentText(at) : null;
-  return { text, at: moment, when: nextCheckWhen(group.items, cadence, now), tip: moment ? `${text} (${moment})` : text };
+  return { kind: "next", text, at: moment, when: nextCheckWhen(group.items, cadence, now), tip: moment ? `${text} (${moment})` : text };
 }
 
 /** ⚠️ EVERY ROW SAYS WHEN (owner, 2026-10-29: "why I don't see the time in the VESTA card, as any other notification?"):
@@ -272,10 +273,10 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
   };
 }
 
-/** ⚠️ A FAULT BEING CONFIRMED IS NOT AN OPEN ISSUE (owner, 2026-10-23: kept in the Open issues list, LAST, and never
- *  counted as a problem). Its card, one per fault: titled by its device and its
- *  room as an open issue's is, its fault's title as its line and "Done on 25/10/2026 14:10 (JM) · VESTA confirms by 15:06" under it — no
- *  buttons (it is closed), no next-check pill (its line says when). Only the faults whose device `may` be shown: the
+/** ⚠️ A CLEARED FAULT VESTA STILL WATCHES IS NOT AN OPEN ISSUE (owner, 2026-10-23: never counted as a problem; its own
+ *  Watch section since 2026-10-28). Its card, one per fault: titled by its device and its room as an open issue's is,
+ *  its fault's title as its line and "Done on 25/10/2026 14:10 (JM)" under it, "Closes 15:06" in its pill — no buttons
+ *  (it is cleared). Only the faults whose device `may` be shown: the
  *  profile's own predicate (VillaAttention.shows, hidden devices out), passed by config/cockpitIssues, the one caller;
  *  `confirming` from fm/faultConfirm.confirmingFaults. */
 export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
@@ -300,8 +301,9 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
       entityId: device?.key,
       // ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … the same style and the same
       // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
-      // issues' next-check pill (its time, then "within 5 min"), who closed it the line under its fault
-      lead: null, nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
+      // issues' pill, of the kind that says VESTA closes it then (owner, 2026-10-31: "Closes 02:00" with a clock, then
+      // "Closes within 5 min"), who cleared it the line under its fault
+      lead: null, nextCheck: { kind: "closes", text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
       lines: [{ key: `fault:${t.id}`, text: device ? title : "", story: [], openedAt: t.openedAt ?? null,
         closing: said.did,
         ...alertNumberIn(alertNumberOf(t)) }],
