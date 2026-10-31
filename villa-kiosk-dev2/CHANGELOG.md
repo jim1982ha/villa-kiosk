@@ -1,3 +1,14 @@
+## 2.496.634
+
+What you will see:
+- In the Cockpit's Inbox, the four buttons on the filters' line (Issues, Notifs, Reports and Open Ticket) now have
+  the same shape: the same round corners, height, border and padding. Before, Open Ticket had square-ish corners.
+  They still fit on one line on every phone.
+- The window of a device the villa's system no longer has now says "it has been missing since" the moment it left,
+  the same time VESTA gives on Telegram. Before, it said "last seen" at another time: for a device that had been
+  quiet for days, the start of what the villa's system keeps.
+- Nothing changes in how the dot on the robot and the gear clears when you open the Cockpit (less code behind it).
+
 ## 2.496.633
 
 What you will see:
