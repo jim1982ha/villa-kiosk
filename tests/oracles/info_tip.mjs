@@ -135,4 +135,27 @@ ck("the card shows the Agent's rows when an Agent is connected OR one of its fau
      inHead);
 }
 
+// owner, 2026-10-31 (phone): the (i)'s table squeezed into a third of its card, the rest empty; and it named the button
+// by its old words. The words driven by value, the layout read from the stylesheet's rules (postcss)
+{
+  const { WORK_ACTIONS } = await import("@/fm/deviceWork");
+  const opened = withAgent.rows.filter((r) => r.source === "owner" || r.source === "fm");
+  ck("the (i) names the button a ticket is opened with in its one wording (Open Ticket), never \"Open a ticket\"",
+     opened.length === 2 && opened.every((r) => r.what.includes(`(${WORK_ACTIONS.raiseTicket.label})`))
+     && withAgent.rows.every((r) => !/Open a ticket/.test(r.what + r.opens + r.goes)), opened.map((r) => r.what));
+  const postcss = (await import("postcss")).default;
+  const sheet = postcss.parse(readFileSync(new URL("../../src/styles/04-modals.css", import.meta.url), "utf8"));
+  const media = (r) => (r.parent?.type === "atrule" ? r.parent.params.replace(/\s+/g, " ") : "");
+  const widths = [], phone = [];
+  sheet.walkRules((r) => {
+    if (!r.selectors.some((x) => x.includes(".info-pop-table"))) return;
+    r.walkDecls("width", (d) => { if (d.value !== "100%" && d.value !== "auto") widths.push(`${media(r)} ${r.selector} ${d.value}`); });
+    if (media(r) === "(max-width: 640px)") r.walkDecls("display", (d) => { if (d.value === "block") phone.push(...r.selectors.map((x) => x.trim())); });
+  });
+  ck("  ...its columns' widths are the wide layout's only: a phone's rows take the card's whole width",
+     widths.length === 2 && widths.every((w) => w.startsWith("(min-width: 641px) ")), widths);
+  ck("  ...a phone stacks each row: the table, its rows and cells as blocks, one under the other",
+     [".info-pop-table", ".info-pop-table tbody", ".info-pop-table tr", ".info-pop-table td"].every((x) => phone.includes(x)), phone);
+}
+
 done("✅ one (i), tap-opened; Open issues says when faults open and close, with or without the Agent");

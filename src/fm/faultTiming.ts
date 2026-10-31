@@ -18,6 +18,11 @@ import { villaTime, wallClock } from "@/utils/villaClock";
 import { STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { AGENT_SOURCES, ISSUE_SOURCES, type IssueSource } from "./issueSource";
 import type { AgentCadence } from "@/agent/agentApi";
+import { WORK_ACTIONS } from "./deviceWork";
+
+/** The button a person opens a ticket with, in its one wording (fm/deviceWork): the (i) said "Open a ticket" after the
+ *  button became "Open Ticket" (owner, 2026-10-31). */
+const OPEN_TICKET = WORK_ACTIONS.raiseTicket.label;
 import { AGENT_CHECKS, type FmTicketCheck } from "./fmTypes";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import { ROLE_LABELS } from "@/auth/roles";
@@ -52,9 +57,9 @@ const ROWS: Record<IssueSource, Omit<SourceRow, "source">> = {
     goes: "When the VESTA Agent no longer finds it. Each card's Next check says when it looks again" },
   chat: { what: "From a Telegram chat with the VESTA Agent (\"Create this fault\")",
     opens: "When someone presses Create this fault", goes: "When someone resolves or closes it" },
-  owner: { what: `A ticket the ${ROLE_LABELS.owner} opened (Open a ticket)`, opens: "At once, already in progress",
+  owner: { what: `A ticket the ${ROLE_LABELS.owner} opened (${OPEN_TICKET})`, opens: "At once, already in progress",
     goes: "When someone resolves or closes it" },
-  fm: { what: `A ticket the ${ROLE_LABELS.ops} opened (Open a ticket)`, opens: "At once, already in progress",
+  fm: { what: `A ticket the ${ROLE_LABELS.ops} opened (${OPEN_TICKET})`, opens: "At once, already in progress",
     goes: "When someone resolves or closes it" },
   person: { what: "A ticket opened in the Kiosk", opens: "At once", goes: "When someone resolves or closes it" },
   guest: { what: "A problem a guest reported (Report a problem)", opens: "At once, as a fault",

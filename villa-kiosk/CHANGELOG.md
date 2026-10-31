@@ -1,3 +1,15 @@
+## 2.496.636
+
+What you will see:
+- Every "first few, then the rest" list works the same way: the first few and how many more, then "Show all" shows
+  the rest ten at a time, with arrows and "1–10 of 25", and "Show fewer" goes back. This is in Advanced Settings'
+  tables (no more 412 entities at once), "Also on this device" in a device's window (it now has "Show fewer", and
+  starts again with the first few for the next device), and Facility › Readiness, where the devices past the first
+  eight were only "+12 more" and can now be opened.
+- On a phone, the (i) after "OPEN ISSUES" now uses the whole width of its card: each row's name, what it is,
+  "Appears:" and "Goes:" one under the other. Before, its text was squeezed into a third of the card. A tablet keeps
+  its columns. It now names the button "Open Ticket", as the button says.
+
 ## 2.496.635
 
 What you will see:
