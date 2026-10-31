@@ -1,3 +1,20 @@
+## 0.12.421
+
+What you will see:
+- Knowledge: "Asleep between reports" and "Translations" are now two cards at the top of the tab, read without a tap.
+  Under them, the tabs hold only "Device kinds" and "Device links".
+- The page's tabs: a tab's name stays on one line on a phone ("Rules (file)" no longer breaks under "Rules"); the
+  row of tabs scrolls sideways instead.
+- Costs › AI runs › Every run, on a phone: every line of a run reads the same way, its name on the left and its value
+  on the same line at the right: When, What, Brain · model, Skills, Tokens in / out, Cost. What's label and its chat
+  sit at the right too.
+- On a phone, a run's "N steps" (or "Whole question") button now sits after its Cost line, at the right, and opens
+  the steps under it as before.
+- The question a run answered is shown once, in its steps, no longer repeated on the run's line.
+- A device missing from the villa's system now says since when it really left ("missing from the villa's system
+  since 31/10/2026 00:19"), read from the villa's history, not the moment VESTA first looked. A missing fault already
+  open is corrected at the next check, without a new message.
+
 ## 0.12.420
 
 What you will see:
