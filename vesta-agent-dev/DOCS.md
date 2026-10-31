@@ -53,7 +53,7 @@ Rules → **What the AI can use**, three tabs, saved in `policy.yaml`:
   changes Home Assistant is **Never available**, whatever the file says. A tool
   a later HA MCP version adds is **New** and off. **Read the list again** asks
   the agent to read the server's list now (it also does at start and nightly).
-- **The agent's own tools** — the ones you choose (web search, facility tickets,
+- **The agent's own tools** — the ones you choose (web search, faults for the facility manager,
   starting a report from a chat, reading its own activity: `agent_tools`), the
   one set elsewhere (asking for an action: "What the agent may do"), and the
   ones always on.
@@ -183,7 +183,7 @@ Telegram button.
   speech-to-text as before. `whisper: off` in the villa-concierge skill's
   `villa.voice.yaml` turns the direct way off.
 - Ask it "what did you do last night?": it reads its own record (the jobs run,
-  the alerts followed, the buttons pressed, the tickets, the cost).
+  the alerts followed, the buttons pressed, the faults raised or cleared, the cost).
 - `/new` starts a new conversation; a reply that reaches the cost limit stops
   and offers a **Continue** button.
 
@@ -191,9 +191,9 @@ Telegram button.
 
 | When | What | AI (cost) |
 |---|---|---|
-| A VESTA rule fires | the alert follow-up: the facility manager gets the alert with Done / Need help, a ticket in the Kiosk; a reminder after 15 min, the owner after 45 min; closed when Home Assistant says it cleared | No |
+| A VESTA rule fires | the alert follow-up: the facility manager gets the alert with Done / Need help, a fault in the Kiosk's Open issues (a person's Open Ticket makes it a ticket); a reminder after 15min, the owner after 45min; closed when the villa's system says it cleared | No |
 | Every 2 min | presence in the VESTA Kiosk (online / offline) | No |
-| 01:30 · 02:00 | inventory of Home Assistant, the night's maintenance checks, a ticket per job, anything urgent to the facility manager at once | No |
+| 01:30 · 02:00 | inventory of the villa's system, the night's maintenance checks, a fault per job, anything urgent to the facility manager at once | No |
 | 07:00 | the facility manager's daily digest (also the agent's daily sign of life) | Yes |
 | Monday 08:00 | the facility manager's weekly page (a file attached to the message) and three lines for the owner | Yes |
 | 1st of the month 08:00 | the owner's monthly report (a file attached to the message) | Yes |
@@ -302,11 +302,11 @@ lights without an approval.
 | `Alert handled by alert-desk: new, incident #…` | the follow-up started (`repeat`, `counted`, `resolved`, `abandoned` otherwise) |
 | `Sent to chat … (fm chat)` | one message sent, and to which chat |
 | `Button Done on incident #… pressed by …` | someone answered an alert |
-| `Kiosk ticket … created / resolved` | a fault in the Kiosk's Facility records |
+| `Kiosk fault … created` / `Kiosk fault … open again` | a fault raised (or raised again) in the Kiosk's Open issues |
 | `Answered … in chat … (0.012 USD)` | a conversation reply and what it cost |
 | `AI job … is not set in policy.yaml: it does not run` | set it on the VESTA Agent page → Rules → AI jobs (Add them) |
 | `AI job … done (… USD, stopped at its limit)` | a report reached its spending limit; it was still sent with what was done |
-| `Kiosk tickets created for N open task(s) that had none` | missing faults repaired (at start, every night) |
+| `Kiosk faults created for N open task(s) that had none` | missing faults repaired (at start, every night) |
 | `A message for 'fm' had nowhere to go` | a skill addressed a chat `policy.yaml` does not set |
 | `Skill <name>: <script> failed (exit …): …` | a skill's script stopped; the end says why |
 | `policy.yaml: …` | something in the file the agent ignores (a misspelt section, a person without an id) |
