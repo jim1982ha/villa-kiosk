@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.410 (31 October 2026)
+
+- tests: test_missing_devices runs every case of the agreement's leftAt.cases (Kiosk 2.496.634, copied in 0.12.423)
+  through nightly.left_at, in place of the Agent's own fixture; the Kiosk's history source runs the same cases.
+
 ## 0.6.409 (31 October 2026)
 
 - policy.chat_label names a chat's roles by message_format.ROLE_SHORT in ROLES order ("Owner and FM group"), never
