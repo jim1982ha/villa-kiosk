@@ -125,7 +125,6 @@
    (.weather-chart-head, 03-panels.css until grouped here, the later file). */
 .cockpit-issues-head, .weather-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .cockpit-issues-head .settings-section-title { margin-bottom: 0; }
-.cockpit-issues-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .fm-summary { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
 .fm-stat {
   display: flex; flex-direction: column; gap: 2px; min-width: 0;

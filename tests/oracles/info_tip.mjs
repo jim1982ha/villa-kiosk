@@ -122,6 +122,17 @@ const card = src("components/fm/FaultTiming.tsx");
 ck("the card shows the Agent's rows when an Agent is connected OR one of its faults is open (its icons are on the list)",
    /faultTiming\(agent, status\?\.cadence \?\? null\)/.test(card) && /groups\.map\(\(g\) =>/.test(card) && /const agent = agentSourcesShown\(status, data\.tickets\.some\(\(t\) => agentOwned\(t\) && stageOf\(t\) !== "closed"\)\);/.test(card)   // the rule by value: agent_view.mjs
    && /rows\.map/.test(card) && /\{note\}/.test(card) && /<table className="info-pop-table">/.test(card));
-ck("it sits just before Open a ticket, on the Open issues title line (Messages)", /<FaultTiming \/>\s*<button[^>]*>[^<]*<Plus size=\{16\} \/> Open a ticket/.test(src("components/cockpit/MessagesTab.tsx")));
+// owner, 2026-10-31: the (i) right after "OPEN ISSUES (9)", next to the words, not at the line's far end
+{
+  const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
+  const tab = parseTsx("components/cockpit/MessagesTab.tsx");
+  const issues = elements(tab, "MessagesSection").find((s) => propText(s, "title") === '"Open issues"');
+  const head = elements(tab, "div").find((d) => propText(d, "className") === '"with-tip"');
+  const inHead = head ? head.children.filter((c) => c.getText().trim()).map((c) => c.getText().replace(/\s+/g, " ")) : [];
+  ck("it is Open issues' own (i), drawn right after the section's title, in the same group (Messages)",
+     propText(issues, "tip") === "canManage ? <FaultTiming /> : undefined"
+     && inHead.length === 2 && inHead[0].startsWith('<button type="button" className="messages-section-toggle') && inHead[1] === "{tip}",
+     inHead);
+}
 
 done("✅ one (i), tap-opened; Open issues says when faults open and close, with or without the Agent");

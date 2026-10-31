@@ -138,7 +138,13 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .cockpit-modal .modal-body:has(> .messages) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
 .messages { flex: 1 1 auto; min-height: 0; display: flex; }
 .messages-list { flex: 0 0 420px; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--hairline); }
-.messages-filters { display: flex; flex-wrap: nowrap; gap: 6px; padding: 4px 12px 10px 0; flex: none; }
+/* the filters and, at the right of the same line, the Issues' "Open Ticket" (owner, 2026-10-31): two groups that wrap
+   whole, so a line too narrow for both puts the button under the filters and never squeezes or cuts them */
+.messages-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 12px 10px 0; flex: none; }
+.messages-filters { display: flex; flex-wrap: nowrap; gap: 6px; flex: 0 0 auto; max-width: 100%; }
+.messages-toolbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+/* the filters' own size and padding beside them, so the button joins their line on as many screens as it can */
+.messages-toolbar-actions .btn { padding: 0 12px; font-size: var(--text-sm); }
 .messages-filter {
   flex: none; white-space: nowrap; min-height: var(--touch-min); padding: 0 12px; border-radius: 999px;
   border: 1px solid var(--hairline); background: transparent; color: var(--text-primary); font: inherit;
@@ -174,7 +180,8 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 @media (max-width: 860px) {
   .messages-list { flex: 1 1 auto; border-right: 0; }
   .messages-scroll { padding-right: 0; }
-  .messages-filters { overflow-x: auto; padding-right: 0; }
+  .messages-toolbar { padding-right: 0; }
+  .messages-filters { overflow-x: auto; }
   .messages-detail { display: none; padding-left: 0; }
   .messages.reading .messages-list { display: none; }
   .messages.reading .messages-detail { display: block; }
