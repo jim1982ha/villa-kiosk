@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 
 from vesta_agent.kiosk import CLEARED, HELP, READING, REOPENED, RETITLED, Kiosk, KioskError, _mine
@@ -32,6 +33,59 @@ TICKET_CHECKS = list(_AGREEMENT["ticket"]["checks"])
 #: What a message's rewrite keeps of the record it replaces, as the add-on keeps it (vestaMessage.keptOnRewrite)
 KEPT_ON_REWRITE = tuple(_AGREEMENT["vestaMessage"]["keptOnRewrite"])
 CONVERSATION = _AGREEMENT["conversation"]
+#: VESTA's messages as the add-on keeps them (vestaMessage: its limits, its examples)
+VESTA_MESSAGE = _AGREEMENT["vestaMessage"]
+#: The add-on's own patterns for a page (a document id, FM_EVIDENCE_ID_RE) and a language code
+#: (VESTA_MESSAGE_LANGUAGE_RE): the examples hold the fake to them (test_contract_messages.py)
+_PAGE_ID = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
+_LANGUAGE = re.compile(r"^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$")
+
+
+def message_record(body) -> dict | None:
+    """The record the add-on keeps of one pushed message, less its `seq` and `at` (supervisor-proxy
+    _vesta_message_record), or None when it refuses it. ⚠️ THE FAKE KEPT EVERYTHING IT WAS SENT (architecture review
+    round 13, 2026-11-01): the add-on quietly drops a part it does not accept and still answers 200, so a test could pass
+    on a page, a button or a language the tablet never shows."""
+    limits = VESTA_MESSAGE["limits"]
+    if not isinstance(body, dict):
+        return None
+    text = lambda v, name: v.strip()[:int(limits.get(name) or 0)] if isinstance(v, str) else ""   # noqa: E731
+    lines = lambda v, many, one: [x for x in (text(x, one) for x in (v if isinstance(v, list) else [])) if x][  # noqa: E731
+        :int(limits.get(many) or 0)]
+    page = lambda v: v if isinstance(v, str) and _PAGE_ID.fullmatch(v) else ""   # noqa: E731
+    language = lambda c: isinstance(c, str) and bool(_LANGUAGE.match(c)) and len(c) <= int(limits.get("language") or 0)  # noqa: E731
+    rec = {"key": text(body.get("key"), "key")}
+    if isinstance(body.get("at"), str):                   # its moment as sent (the add-on stamps its own when none)
+        rec["at"] = body["at"]
+    if isinstance(body.get("photo"), str) and body["photo"]:   # the add-on keeps the picture apart and names it in the
+        rec["photo"] = body["photo"]                            # record (_keep_pushed_photo); here, the picture as sent
+    for field in ("title", "to", "lead", "body", "stage", "mark", "report"):
+        if value := text(body.get(field), field):
+            rec[field] = value
+    for field, one in (("roles", "role"), ("status", "statusLine"), ("takes", "key")):
+        if value := lines(body.get(field), field, one):
+            rec[field] = value
+    if value := page(body.get("page")):
+        rec["page"] = value
+    if language(body.get("language")):
+        rec["language"] = body["language"]
+    buttons = []
+    for b in body.get("buttons") if isinstance(body.get("buttons"), list) else []:
+        made = {f: text(b.get(f), f) for f in ("label", "kind", "id")} if isinstance(b, dict) else {}
+        if made and all(made.values()) and len(buttons) < int(limits.get("buttons") or 0):
+            buttons.append(made)
+    if buttons:
+        rec["buttons"] = buttons
+    langs = {}
+    for code, words in body.get("languages").items() if isinstance(body.get("languages"), dict) else ():
+        if language(code) and isinstance(words, dict) and len(langs) < int(limits.get("languages") or 0):
+            one = {"body": text(words.get("body"), "body"), "status": lines(words.get("status"), "status", "statusLine"),
+                   "page": page(words.get("page"))}
+            if one["body"] or one["status"]:
+                langs[code] = {k: v for k, v in one.items() if v}
+    if langs:
+        rec["languages"] = langs
+    return rec if rec["key"] and any(f in rec for f in ("title", "lead", "body", "status")) else None
 
 
 class FakeKiosk(Kiosk):
@@ -126,11 +180,13 @@ class FakeKiosk(Kiosk):
             if self.message_refusals:
                 self.message_refusals -= 1
                 return 500, {"error": "restarting"}
+            kept = message_record(body)                       # what the add-on keeps of it, as the add-on keeps it
+            if kept is None:
+                return 400, {"error": "not a message"}
             self.pushed.append(copy.deepcopy(body))
             # the agreement's rule, as the add-on keeps it (_announcements_with): what a rewrite naming none keeps
-            was = self.messages.get(body["key"]) or {}
-            self.messages[body["key"]] = {**{f: was[f] for f in KEPT_ON_REWRITE if f in was and f not in body},
-                                          **copy.deepcopy(body)}
+            was = self.messages.get(kept["key"]) or {}
+            self.messages[kept["key"]] = {**{f: was[f] for f in KEPT_ON_REWRITE if f in was and f not in kept}, **kept}
             return 200, {"ok": True, "seq": len(self.pushed)}
         return 200, {}
 

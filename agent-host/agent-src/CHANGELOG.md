@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.416 (1 November 2026)
+
+- Architecture review round 13, card 7 (Agent half): `tests/kiosk_fake.py` keeps a pushed message as the add-on's
+  `_vesta_message_record` does (`message_record`: the agreement's limits, its page and language patterns, buttons with
+  every part, languages with words, refusal with no key or no words), and `tests/test_contract_messages.py` replays the
+  agreement's `vestaMessage.examples` through it. The agreement copied from dev2 2.496.643.
+
 ## 0.6.415 (1 November 2026)
 
 - Architecture review round 13, card 2 (owner: "Proceed to all of them"): preventive-maintenance `scripts/endings.py`
