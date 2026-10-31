@@ -25,18 +25,18 @@ needs thirty.
 """
 from __future__ import annotations
 
-import json
-import os
 from datetime import date, datetime, time, timedelta
 from typing import NamedTuple
 
-from .asleep import path_beside
+from . import kiosk_told
 from .limits import limit
 from .stats import med
 
 OCCUPIED, EMPTY, UNKNOWN = "occupied", "empty", "unknown"
-#: the Kiosk's pick as the agent was last told it, beside the knowledge pack (VESTA_PACK's folder)
-FILE = "villa_empty_sensor.json"
+#: ⚠️ ON MEANS EMPTY, WRITTEN ONCE (architecture review round 10, card 2): what each reading of the Kiosk's sensor says —
+#: state_of, day_states and the reports' "electricity while empty" (reports playbook.py) read this one table; the
+#: starter's reports.yaml said `empty: ["on"]` a third time.
+SAYS = {"on": EMPTY, "off": OCCUPIED}
 #: How a day's state is kept in the skills' store (Store.put_feature): family, name; value 1 occupied, 0 empty.
 FEATURE = ("villa", "occupied")
 
@@ -50,49 +50,15 @@ def min_days() -> int:
                          "explain is said (less while occupied, more while empty).", told="")
 
 
-def _path(pack_path: str | None) -> str | None:
-    beside = path_beside(pack_path)
-    return os.path.join(os.path.dirname(beside), FILE) if beside else None
-
-
-def _entity_id(v) -> str:
-    v = str(v or "").strip().lower()
-    return v if "." in v and " " not in v else ""
-
-
 def sensor(pack_path: str | None = None) -> str | None:
-    """The villa's "empty" sensor (on = empty) as the Kiosk last named it; None when it never did, picked none, or the
-    file cannot be read."""
-    try:
-        with open(_path(pack_path) or "", encoding="utf-8") as f:
-            return _entity_id((json.load(f) or {}).get("entity_id")) or None
-    except (OSError, ValueError, AttributeError):
-        return None
-
-
-def told(answer: dict) -> str | None:
-    """The pick in the Kiosk's heartbeat answer: its entity id, "" for no pick (or not an entity id); None when the
-    answer has none (an older Kiosk, or one that cannot read its settings): what was kept stays."""
-    v = (answer or {}).get("villaEmptySensor")
-    return _entity_id(v) if isinstance(v, str) else None
-
-
-def save(pack_path: str, entity_id: str) -> bool:
-    """Keep `entity_id` ("" for no pick) as the villa's "empty" sensor, beside the pack at `pack_path`; True when it
-    changed."""
-    path = _path(pack_path)
-    if path is None or (os.path.exists(path) and (sensor(pack_path) or "") == entity_id):
-        return False
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"entity_id": entity_id}, f)
-    os.replace(tmp, path)
-    return True
+    """The villa's "empty" sensor (on = empty) as the Kiosk last named it (vesta_shared.kiosk_told); None when it never
+    did, picked none, or the file cannot be read."""
+    return kiosk_told.get("villaEmptySensor", pack_path) or None
 
 
 def state_of(state) -> str:
     """What one reading of the sensor says: on EMPTY, off OCCUPIED, anything else (unavailable, unknown) UNKNOWN."""
-    return {"on": EMPTY, "off": OCCUPIED}.get(str(state or "").strip().lower(), UNKNOWN)
+    return SAYS.get(str(state or "").strip().lower(), UNKNOWN)
 
 
 def now(client, pack_path: str | None = None) -> str:
@@ -124,7 +90,7 @@ def day_states(rows: list[dict], first: date, last: date, zone) -> dict[date, st
             at = datetime.fromisoformat(str(r.get("last_changed") or r.get("last_updated")).replace("Z", "+00:00"))
         except ValueError:
             continue
-        marks.append((at.astimezone(zone), {"on": EMPTY, "off": OCCUPIED}.get(str(r.get("state")))))
+        marks.append((at.astimezone(zone), SAYS.get(str(r.get("state")))))
     marks.sort(key=lambda m: m[0])
     out: dict[date, str] = {}
     d = first

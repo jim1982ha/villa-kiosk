@@ -95,6 +95,7 @@ ANONYMOUS_TELEGRAM_IDS = {1087968824, 136817688, 777000}
 #: the people's roles and what the page calls them (architecture review 9: the page typed "Owner" / "Facility manager"
 #: twice, and the chats' words a third time)
 from vesta_shared.message_format import ROLE_WORDS  # noqa: E402  (the roles' words: "To:", history lines, the page)
+from vesta_shared.message_format import ROLE_SHORT  # noqa: E402  (the same, as a card says them: "FM")
 ROLES = tuple(ROLE_WORDS)
 
 # ------------------------------------------------------------------ the file's defaults, once
@@ -485,12 +486,15 @@ class Policy:
         return named[0] if len(set(named)) == 1 else (p.name if p else None)
 
     def chat_label(self, chat_id: int) -> str:
-        """Which chat this is, in words, never who is in it: "owner and fm group", "private chat". "" for a tablet's
+        """Which chat this is, in words, never who is in it: "Owner and FM group", "private chat". "" for a tablet's
         conversation (owner, 2026-10-31: Every run read "Reply to Owner at the tablet  private chat"): no Telegram chat,
-        and its person already says "at the tablet" (tablet_person)."""
+        and its person already says "at the tablet" (tablet_person) — so "" means "no Telegram chat" (app.py's prompt).
+        ⚠️ THE ROLES' OWN WORDS, IN THEIR ORDER (architecture review round 10: Costs read "fm and owner group", the
+        sorted role ids, after every other place had been given the alert card's words): ROLE_SHORT, in ROLES order."""
         if tablet_profile(chat_id) is not None:
             return ""
-        roles = " and ".join(sorted(self.roles_in(chat_id)))
+        mine = self.roles_in(chat_id)
+        roles = " and ".join(w for r, w in ROLE_SHORT.items() if r in mine)
         kind = "group" if int(chat_id) < 0 else "private chat"
         return f"{roles} {kind}" if roles else kind
 

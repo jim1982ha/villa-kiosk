@@ -292,7 +292,7 @@ def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
     # the group says itself that nothing was recorded (the page compared the name, architecture review 9)
     assert {g["name"]: g["recorded"] for g in c["by_model"]}["not recorded"] is False and "g.recorded ?" in page_js()
     reply = next(r for r in c["runs"] if r["person"] == "Ann")
-    assert reply["chat"] == "owner group" and reply["asked"] == "is the pool ok?" and reply["tokens_in"] == 300
+    assert reply["chat"] == "Owner group" and reply["asked"] == "is the pool ok?" and reply["tokens_in"] == 300
     bob = next(r for r in c["runs"] if r["person"] == "Bob")
     assert bob["model"] is None and bob["tokens_in"] is None and bob["chat"] == "private chat"   # recorded before 0.6.9
     assert len(c["by_day"]) == 30 and sum(d["cost"] for d in c["by_day"]) == 1.5
@@ -321,9 +321,9 @@ def test_a_reply_at_the_tablet_names_no_chat_and_a_telegram_one_keeps_its_chat(u
     async def fn(c):
         return await (await c.get("/api/costs?days=7")).json()
     runs = {r["person"]: r["chat"] for r in call(ui, fn)["runs"]}
-    assert runs == {"Owner at the tablet": None, "Villa group": "fm and owner group"}, runs
+    assert runs == {"Owner at the tablet": None, "Villa group": "Owner and FM group"}, runs
     pol = Policy.load(ui.policy_path)
-    assert pol.chat_label(tab) == "" and pol.chat_label(-100) == "fm and owner group"
+    assert pol.chat_label(tab) == "" and pol.chat_label(-100) == "Owner and FM group"
 
 
 def test_a_run_records_its_brain_model_tokens_and_what_was_asked(ui, monkeypatch):

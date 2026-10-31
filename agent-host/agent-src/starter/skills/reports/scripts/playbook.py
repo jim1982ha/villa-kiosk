@@ -102,7 +102,8 @@ def clue_offline(c, when):
 def clue_use_while_empty(c, when):
     # the Kiosk's pick of the villa's "empty" sensor (owner-side, one for every reader); `mode_entity` only when a
     # playbook names another (architecture review round 7, card 2: the starter named one villa's sensor)
-    ent = when.get("mode_entity") or occupancy.sensor()
+    mode = when.get("mode_entity")
+    ent = mode or occupancy.sensor()
     if not c.total_from() or not ent:
         return []
     days = int(when.get("days", 10))
@@ -122,7 +123,10 @@ def clue_use_while_empty(c, when):
         c.problems.append("Electricity while the villa is empty: "
                           + unread("its mode", day_time_label(got.reach(ent).astimezone(c.Z)))
                           + ", the days after that are not counted.")
-    empty = {str(x).lower() for x in when.get("empty") or []}
+    # ⚠️ ON MEANS EMPTY, WRITTEN ONCE (architecture review round 10, card 2): the Kiosk's sensor says it by the villa's
+    # one rule (vesta_shared.occupancy.SAYS); `empty` names the states only of a playbook's own `mode_entity`
+    empty = {str(x).lower() for x in when.get("empty") or []} if mode else \
+        {s for s, says in occupancy.SAYS.items() if says == occupancy.EMPTY}
     per = c.daily_total(start, c.end)
     empty_days, other_days = [], []
     for k in range((c.end - start).days + 1):

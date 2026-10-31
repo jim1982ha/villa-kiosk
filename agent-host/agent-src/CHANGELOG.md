@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.409 (31 October 2026)
+
+- policy.chat_label names a chat's roles by message_format.ROLE_SHORT in ROLES order ("Owner and FM group"), never
+  the sorted role ids ("fm and owner group"); app's question prompt reads `chat_label(cid) or tablet.WHERE`, one
+  tablet test (architecture review round 10, card 3).
+- New vesta_shared.kiosk_told: one table (heartbeat answer key → file, field, parse, unset, log words) with told /
+  get / save / keep, replacing the told / save / file copies in asleep, maintenance and occupancy and the three blocks
+  of app.kiosk_answered. Same files and shapes on disk, no migration; an absent key keeps what was kept.
+  occupancy.SAYS is "on means empty" once (state_of, day_states, the reports' use_while_empty for the Kiosk's sensor;
+  reports.yaml no longer says `empty: ["on"]`, `empty` is for a playbook's own mode_entity only) (card 2).
+- tests: the shared "when it left" fixture (carry-over row at FROM, removal row at REMOVED → REMOVED), the Kiosk's
+  device window reads the same rows (card 1); nightly.left_at already gave it.
+
 ## 0.6.408 (31 October 2026)
 
 - policy.chat_label is "" for a tablet's conversation (tablet_profile): no Telegram chat, its person already "at the

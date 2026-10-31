@@ -250,18 +250,18 @@ def test_maintenance_mode_holds_a_device_gone_offline_and_the_next_check_after_i
     """The Kiosk's promise (MaintenanceMode.tsx): while maintenance mode is on, a new problem below P1 is not taken up —
     no message, no fault — and audited; still there when the mode ends, the next 5-minute check takes it up as usual.
     (Architecture review round 7, card 1: only the alert desk asked the switch; this door told the facility manager.)"""
-    from vesta_shared import maintenance
+    from vesta_shared import kiosk_told, maintenance
     states = {**_off_since(NIGHT), "lock.example_door": {"state": "unavailable", "attributes": {},
                                                          "last_changed": NIGHT.isoformat()}}
     states.pop("sensor.example_th_humidity")
-    maintenance.save(_villa_pack(tmp_path), True)
+    kiosk_told.save(_villa_pack(tmp_path), "maintenance", True)
     held = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=12))
     assert held["send"] == [] and held["actions"] == [] and _open_tasks(tmp_path) == []
     st = Store(str(tmp_path / "s.sqlite"))
     assert st.findings("open") == []
     (audit,) = st.db.execute("SELECT detail FROM audit WHERE action = 'suppressed_maintenance'").fetchall()
     assert json.loads(audit[0])["findings"][0]["entity_id"] == "lock.example_door"                  # audited
-    maintenance.save(_villa_pack(tmp_path), False)
+    kiosk_told.save(_villa_pack(tmp_path), "maintenance", False)
     out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=17))
     assert out["actions"] == MOVED and [t["entity_id"] for t in _open_tasks(tmp_path)] == ["lock.example_door"]
     (msg,) = out["send"]

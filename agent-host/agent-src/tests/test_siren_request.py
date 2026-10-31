@@ -14,7 +14,7 @@ import pytest
 
 from ha_fake import FakeHA, tool
 from helpers import STARTER_SKILLS, make_agent
-from vesta_shared import occupancy
+from vesta_shared import kiosk_told
 from vesta_shared import result as R
 from vesta_shared.knowledge_pack import build_pack
 from vesta_shared.store import Store
@@ -108,7 +108,7 @@ def villa(tmp_path, empty="on", images=None):
                    reader=FakeHA(tools=[tool("ha_get_state")], states=states, images=images or {}))
     with open(v.s.pack_path, "w", encoding="utf-8") as f:
         f.write(build_pack(REGISTRY, []).to_json())
-    occupancy.save(v.s.pack_path, EMPTY_SENSOR)              # the Kiosk's pick, as its heartbeat answer keeps it
+    kiosk_told.save(v.s.pack_path, "villaEmptySensor", EMPTY_SENSOR)              # the Kiosk's pick, as its heartbeat answer keeps it
     v.actions.writer_factory = Writer
     return v
 

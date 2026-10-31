@@ -1,3 +1,12 @@
+## 0.12.423
+
+What you will see:
+- Costs › AI runs › Every run: a reply in a Telegram group now names the group with the same role words as everywhere
+  else, "Owner and FM group" or "Owner group" (it read "fm and owner group").
+- Nothing else changes on screen. What the tablet tells VESTA (devices asleep between reports, Maintenance, the villa
+  empty sensor) is now kept by one shared piece, in the same files as before, and "on means empty" is said in one
+  place for every report.
+
 ## 0.12.422
 
 What you will see:

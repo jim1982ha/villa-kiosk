@@ -111,7 +111,7 @@ def test_the_status_says_whether_the_villa_is_empty_from_the_kiosks_pick(tmp_pat
     """Architecture review round 7, card 2: the concierge answers "is the villa empty?" from the sensor the Kiosk picked
     (vesta_shared.occupancy.sensor), the one the siren reads, given in the status before every answer."""
     import concierge
-    from vesta_shared import occupancy
+    from vesta_shared import kiosk_told
     from vesta_shared.store import Store
     monkeypatch.setenv("VESTA_PACK", str(tmp_path / "pack.json"))
     store = Store(str(tmp_path / "s.sqlite"))
@@ -119,6 +119,6 @@ def test_the_status_says_whether_the_villa_is_empty_from_the_kiosks_pick(tmp_pat
     s = concierge.status(_pack(), states, store)
     assert s["villa_empty"] == "unknown" and "Villa empty: cannot tell (no sensor picked in the VESTA Kiosk's " \
         "Settings › Villa)" in s["text"]
-    occupancy.save(str(tmp_path / "pack.json"), "binary_sensor.example_empty")
+    kiosk_told.save(str(tmp_path / "pack.json"), "villaEmptySensor", "binary_sensor.example_empty")
     s = concierge.status(_pack(), states, store)
     assert s["villa_empty"] == "empty" and "Villa empty: yes (binary_sensor.example_empty)" in s["text"]

@@ -124,7 +124,7 @@ def test_one_person_in_both_roles_is_named_as_each_chat_knows_them():
     assert p.name_in(2, 1) == "Fabien_FM" and p.name_in(2, -5) == "Fabien"                    # a press's footer
     # where each role's messages go: every chat listed with it (owner, 2026-10-10)
     assert p.chats_for("owner") == [2, -5] and p.chats_for("fm") == [1, 2]
-    assert p.roles_in(2) == {"owner", "fm"} and p.chat_label(-5) == "owner group" and p.chat_label(9) == "private chat"
+    assert p.roles_in(2) == {"owner", "fm"} and p.chat_label(-5) == "Owner group" and p.chat_label(9) == "private chat"
     twice = Policy({"people": [{"telegram_id": 2, "name": "A", "role": "fm"}, {"telegram_id": 2, "name": "B", "role": "fm"}]})
     assert [e.name for e in twice.entries] == ["A"]                         # twice in ONE role: still refused
 

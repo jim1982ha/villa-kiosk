@@ -12,7 +12,7 @@ from test_offline import NOW, STATES, _pack
 from vesta_agent.app import Vesta
 from vesta_agent.policy import FIELDS
 from vesta_agent.tools import with_asleep
-from vesta_shared import asleep
+from vesta_shared import asleep, kiosk_told
 from vesta_shared.ha_client import HABase
 from vesta_shared.knowledge_pack import KnowledgePack
 from vesta_shared.offline import devices_offline
@@ -21,15 +21,15 @@ from vesta_shared.offline import devices_offline
 def _kept(tmp_path, ids):
     """The Kiosk's list as the agent keeps it, beside a pack at tmp_path; the pack's path."""
     pack = str(tmp_path / "pack.json")
-    asleep.save(pack, ids)
+    kiosk_told.save(pack, "unavailableByDesign", ids)
     return pack
 
 
 def test_the_kiosk_hands_the_list_over_and_the_agent_keeps_it_beside_its_pack(tmp_path):
     pack = str(tmp_path / "pack.json")
     assert asleep.listed(pack) == frozenset()                                        # never told: none
-    assert asleep.told({"every": 60}) is None                                        # a Kiosk older than the list
-    assert asleep.told({"unavailableByDesign": ["Binary_Sensor.Door", 3]}) == ["binary_sensor.door"]
+    assert kiosk_told.told({"every": 60}) == {}                                      # a Kiosk older than the list
+    assert kiosk_told.told({"unavailableByDesign": ["Binary_Sensor.Door", 3]}) == {"unavailableByDesign": ["binary_sensor.door"]}
 
     class _App:
         kiosk_answered = Vesta.kiosk_answered
@@ -187,7 +187,7 @@ def _night_of_a_sleeping_door(tmp, listed):
     path = str(tmp / "pack.json")
     with open(path, "w", encoding="utf-8") as f:
         f.write(pack.to_json())
-    asleep.save(path, ["binary_sensor.door"] if listed else [])
+    kiosk_told.save(path, "unavailableByDesign", ["binary_sensor.door"] if listed else [])
     r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts", "nightly.py"),
                         "--pack", path, "--store", str(tmp / "s.sqlite"), "--fixture-dir", str(fx), "--skip-raw",
                         "--as-of", "2026-10-03", "--out", str(tmp / "res.json")],

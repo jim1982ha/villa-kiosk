@@ -228,3 +228,28 @@ def test_a_missing_device_whose_history_is_not_read_is_missing_since_the_pack_la
     _recheck(tmp_path, {TH: _st()}, T0 + timedelta(hours=13), not_found=[LOCK, BATT])
     (f,) = _missing(tmp_path)
     assert json.loads(f["detail"])["since"] == (T0 - timedelta(hours=1)).isoformat()
+
+
+#: ⚠️ ONE FIXTURE, THE KIOSK'S TOO (architecture review round 10, card 1): the device window on the tablet said "last
+#: seen" at the start of what it read (the state carried over to it), Telegram the removal. The same rows, the same
+#: answer, on both sides: the moment the read starts (FROM), the removal row with no state (REMOVED).
+FROM, REMOVED = "2026-10-21T15:40:00+00:00", "2026-10-31T00:19:32+00:00"
+
+
+def test_when_it_left_is_the_removal_row_never_the_state_carried_over_to_the_reads_start():
+    sys.path.insert(0, os.path.join(SKILL, "scripts"))
+    import nightly
+    from vesta_shared.past import History
+
+    class Cli:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def kept_from(self, now):
+            return datetime.fromisoformat(FROM)
+
+        def history_read(self, ids, start, end, now=None):
+            return History({LOCK: self.rows}, start, end)
+    rows = [{"state": "locked", "last_changed": FROM}, {"state": None, "last_changed": REMOVED}]
+    assert nightly.left_at(Cli(rows), [LOCK], [], T0) == (REMOVED, True)
+    assert nightly.left_at(Cli(rows[:1]), [LOCK], [], T0) == (None, True)          # carried over only: no moment

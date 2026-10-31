@@ -741,17 +741,17 @@ def test_the_siren_reads_the_kiosks_empty_sensor(tmp_path, monkeypatch):
     # the siren could never be offered. Architecture review round 7, card 2: the sensor is the Kiosk's pick (Settings ›
     # Villa), told at each heartbeat — never one named in rules.yaml; none picked, or unreadable, is never empty
     from fixture_client import FixtureClient
-    from vesta_shared import occupancy
+    from vesta_shared import kiosk_told
     pack = str(tmp_path / "pack.json")
     monkeypatch.setenv("VESTA_PACK", pack)
     fx = tmp_path / "fx"
     fx.mkdir()
-    occupancy.save(pack, occupancy.told({"villaEmptySensor": "binary_sensor.example_empty"}))
+    kiosk_told.keep(pack, {"villaEmptySensor": "binary_sensor.example_empty"})
     for state, mode in (("on", "empty"), ("off", "occupied"), ("unavailable", "unknown")):
         (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.example_empty": {"state": state}}}))
         assert desk.occupancy(FixtureClient(str(fx))) == mode
     (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.example_empty": {"state": "on"}}}))
-    occupancy.save(pack, occupancy.told({"villaEmptySensor": ""}))                       # none picked: cannot tell
+    kiosk_told.keep(pack, {"villaEmptySensor": ""})                                      # none picked: cannot tell
     assert desk.occupancy(FixtureClient(str(fx))) == "unknown"
 
 
@@ -1089,22 +1089,22 @@ def test_maintenance_mode_is_the_kiosks_switch_and_lets_only_p1_through(store, t
     """The villa's maintenance mode (owner, 2026-10-29): the Kiosk's switch, told in its heartbeat's answer and kept
     beside the pack (vesta_shared.maintenance). While on, a P2 is not taken up (no number, no send, no fault), a P1 is;
     an answer without the switch (an older Kiosk) keeps what was told; never told, off."""
-    from vesta_shared import maintenance
+    from vesta_shared import kiosk_told, maintenance
     pack = str(tmp_path / "pack.json")
     monkeypatch.setenv("VESTA_PACK", pack)
-    assert maintenance.on() is False and maintenance.told({"ok": True}) is None             # never told: off
-    assert maintenance.save(pack, maintenance.told({"maintenance": True})) is True and maintenance.on() is True
-    assert maintenance.save(pack, True) is False                                            # unchanged: not written again
+    assert maintenance.on() is False and kiosk_told.told({"ok": True}) == {}                # never told: off
+    assert kiosk_told.keep(pack, {"maintenance": True}) and maintenance.on() is True
+    assert kiosk_told.save(pack, "maintenance", True) is False                              # unchanged: not written again
     p2 = desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied")
     assert p2["decision"] == "maintenance_mode" and not p2["send"] and p2["incident_id"] is None
     p1 = desk.intake(store, event(rule="automation.critical_condition_phase_a", priority="P1", entities=("sensor.p",),
                                   label="Phase lost"), T0, occupancy_reader=lambda: "occupied")
     assert p1["decision"] == "new" and p1["send"]
-    maintenance.save(pack, False)
+    kiosk_told.save(pack, "maintenance", False)
     assert desk.intake(store, event(rule="automation.critical_condition_back_door", entities=("lock.back",)), T0,
                        occupancy_reader=lambda: "occupied")["decision"] == "new"
     # an alert already open carries on as before (the Kiosk's promise): its repeat is counted, never held
-    maintenance.save(pack, True)
+    kiosk_told.save(pack, "maintenance", True)
     again = desk.intake(store, event(rule="automation.critical_condition_back_door", entities=("lock.back",)),
                         T0 + timedelta(minutes=1), occupancy_reader=lambda: "occupied")
     assert again["decision"] in ("counted", "repeat") and again["incident_id"] is not None

@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from helpers import STARTER_SKILLS
+from vesta_shared import kiosk_told
 from vesta_shared import occupancy as O
 from vesta_shared.params import VillaParams
 from vesta_shared.skill_settings import load
@@ -109,7 +110,7 @@ def _picked(tmp_path, monkeypatch, entity_id="binary_sensor.example_empty"):
     """The Kiosk named `entity_id` as the villa's "empty" sensor in its heartbeat answer; kept beside the pack."""
     pack = str(tmp_path / "pack.json")
     monkeypatch.setenv("VESTA_PACK", pack)
-    O.save(pack, O.told({"villaEmptySensor": entity_id}))
+    kiosk_told.keep(pack, {"villaEmptySensor": entity_id})
     return entity_id
 
 
@@ -134,12 +135,14 @@ def test_the_villas_empty_sensor_is_the_kiosks_pick_kept_while_it_does_not_say(t
     one named in the agent's files. An answer without the key keeps the pick; "" is no pick; never told, none."""
     pack = str(tmp_path / "pack.json")
     monkeypatch.setenv("VESTA_PACK", pack)
-    assert O.sensor() is None and O.told({"ok": True}) is None                     # never told; an older Kiosk
-    assert O.save(pack, O.told({"villaEmptySensor": "binary_sensor.example_empty"})) and \
+    assert O.sensor() is None and kiosk_told.told({"ok": True}) == {}              # never told; an older Kiosk
+    assert kiosk_told.keep(pack, {"villaEmptySensor": "binary_sensor.example_empty"}) and \
         O.sensor() == "binary_sensor.example_empty"
-    assert O.told({"maintenance": False}) is None and O.sensor() == "binary_sensor.example_empty"   # absent: kept
-    assert O.save(pack, "binary_sensor.example_empty") is False                    # unchanged: not written again
-    assert O.told({"villaEmptySensor": "not an id"}) == "" and O.save(pack, "") and O.sensor() is None
+    kiosk_told.keep(pack, {"maintenance": False})                                  # the key absent: kept
+    assert O.sensor() == "binary_sensor.example_empty"
+    assert kiosk_told.save(pack, "villaEmptySensor", "binary_sensor.example_empty") is False   # unchanged: not written
+    assert kiosk_told.told({"villaEmptySensor": "not an id"}) == {"villaEmptySensor": ""}
+    assert kiosk_told.keep(pack, {"villaEmptySensor": "not an id"}) and O.sensor() is None
 
 
 def test_the_energy_reports_waste_line_says_only_a_rise_occupancy_cannot_explain():

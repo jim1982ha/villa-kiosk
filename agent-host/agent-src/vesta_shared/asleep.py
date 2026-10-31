@@ -8,8 +8,8 @@ fault, never a drop, never an unusual moment, and what it reads is its LAST REAL
 KIOSK'S LIST, NOT THE AGENT'S (owner, the same night: "the KIOSK will be always here and the agent might not always be
 configured … a list at a unique place, and all of the consumers can see it"): 0.12.308 kept it in policy.yaml; the
 Kiosk keeps it now, and hands it over in its answer to every heartbeat (agent-contract.json `unavailableByDesign`).
-The agent writes what it was last told beside its knowledge pack (`save`, FILE) — kept while the Kiosk does not
-answer — and the pack carries it from there: KnowledgePack.load reads it with the pack, so whoever has the pack has the
+The agent writes what it was last told beside its knowledge pack (vesta_shared.kiosk_told) — kept while the Kiosk does
+not answer — and the pack carries it from there: KnowledgePack.load reads it with the pack, so whoever has the pack has the
 list. An entity listed stands for its whole physical device (KnowledgePack.is_asleep: a sensor's battery or signal
 entity sleeps with it).
 
@@ -23,10 +23,9 @@ the battery checks were missed: a sleeping door sensor's battery was read as "un
 """
 from __future__ import annotations
 
-import json
-import os
 from datetime import datetime, timedelta
 
+from . import kiosk_told
 from .device_state import has_value, is_offline
 from .limits import limit
 from .past import History
@@ -37,47 +36,10 @@ LAST_REAL_DAYS = limit("asleep.last_real_days", 7, unit="days", group="read", lo
                        reached="Older than this, it is said to have sent no report for that long.", told="person")
 
 
-#: the Kiosk's list as the agent was last told it, beside the knowledge pack (VESTA_PACK's folder)
-FILE = "unavailable_by_design.json"
-
-
-def path_beside(pack_path: str | None) -> str | None:
-    """Where the list is kept: beside the knowledge pack at `pack_path` (else VESTA_PACK — the skills' environment)."""
-    pack_path = pack_path if pack_path is not None else os.environ.get("VESTA_PACK", "")
-    return os.path.join(os.path.dirname(pack_path), FILE) if pack_path else None
-
-
 def listed(pack_path: str | None = None) -> frozenset[str]:
-    """The entities the Kiosk lists as unavailable by design, as last told; none when it never said (no Kiosk, an
-    older Kiosk) or the file cannot be read — then every "unavailable" counts, as before."""
-    path = path_beside(pack_path)
-    try:
-        with open(path or "", encoding="utf-8") as f:
-            ids = (json.load(f) or {}).get("ids") or []
-    except (OSError, ValueError, AttributeError):
-        return frozenset()
-    return frozenset(str(e).strip().lower() for e in ids if isinstance(e, str) and "." in e)
-
-
-def told(answer: dict) -> list[str] | None:
-    """The list in the Kiosk's heartbeat answer (agent-contract.json `unavailableByDesign`); None when the answer has
-    none (a Kiosk older than the list): what was kept stays."""
-    ids = (answer or {}).get("unavailableByDesign")
-    if not isinstance(ids, list):
-        return None
-    return sorted({str(e).strip().lower() for e in ids if isinstance(e, str) and "." in e})
-
-
-def save(pack_path: str, ids: list[str]) -> bool:
-    """Keep `ids` as the list (beside the pack at `pack_path`); True when it changed."""
-    path = path_beside(pack_path)
-    if path is None or sorted(listed(pack_path)) == sorted(ids) and os.path.exists(path):
-        return False
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"ids": sorted(ids)}, f)
-    os.replace(tmp, path)
-    return True
+    """The entities the Kiosk lists as unavailable by design, as last told (vesta_shared.kiosk_told); none when it
+    never said (no Kiosk, an older Kiosk) or the file cannot be read — then every "unavailable" counts, as before."""
+    return frozenset(kiosk_told.get("unavailableByDesign", pack_path))
 
 
 def _real_before(client, entity_ids, start: datetime, end: datetime) -> dict[str, dict | None]:

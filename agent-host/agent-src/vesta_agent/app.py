@@ -265,7 +265,7 @@ class Vesta:
     def pack(self):
         """The knowledge pack, read again when a rebuild changes it, the Kiosk's list beside it or the owner's device
         kinds change (None until it is built)."""
-        from vesta_shared.asleep import path_beside
+        from vesta_shared import kiosk_told
         from vesta_shared.choice_files import CHOICES
         from vesta_shared.knowledge_pack import KnowledgePack
 
@@ -274,7 +274,7 @@ class Vesta:
                 return os.path.getmtime(path)
             except (OSError, TypeError):
                 return None
-        m = (mtime(self.s.pack_path), mtime(path_beside(self.s.pack_path)),
+        m = (mtime(self.s.pack_path), mtime(kiosk_told.path("unavailableByDesign", self.s.pack_path)),
              *(mtime(c.path(self.s.config_dir)) for c in CHOICES))
         if m != self._pack_mtime:
             self._pack, self._pack_mtime = KnowledgePack.read(self.s.pack_path, self.s.config_dir), m
@@ -497,23 +497,12 @@ class Vesta:
 
     # ------------------------------------------------------------------ Home Assistant's events
     def kiosk_answered(self, answer: dict) -> None:
-        """The Kiosk's answer to a heartbeat: its list of devices unavailable by design (vesta_shared.asleep), the
-        villa's maintenance mode (vesta_shared.maintenance) and its "empty" sensor (vesta_shared.occupancy), kept beside the knowledge pack for every check — a Kiosk
-        that does not say one leaves the kept one as it is."""
-        from vesta_shared import asleep, maintenance, occupancy
-        ids = asleep.told(answer)
-        if ids is not None and asleep.save(self.s.pack_path, ids):
-            log.info("The VESTA Kiosk's devices unavailable by design: %s", ", ".join(ids) or "none")
-        # the villa's maintenance mode, the Kiosk's switch (vesta_shared.maintenance): the alert desk reads it
-        mm = maintenance.told(answer)
-        if mm is not None and maintenance.save(self.s.pack_path, mm):
-            log.info("The VESTA Kiosk's maintenance mode: %s", "on, only P1 alerts are taken up" if mm else "off")
-        # the villa's "empty" sensor, the Kiosk's pick (vesta_shared.occupancy.sensor): the siren, the reports and the
-        # like-with-like comparisons read it
-        empty = occupancy.told(answer)
-        if empty is not None and occupancy.save(self.s.pack_path, empty):
-            log.info("The VESTA Kiosk's villa empty sensor: %s", empty or "none picked, whether the villa is empty "
-                     "cannot be told")
+        """The Kiosk's answer to a heartbeat: the villa's settings it owns (vesta_shared.kiosk_told — its devices
+        unavailable by design, maintenance mode, its "empty" sensor), kept beside the knowledge pack for every check —
+        a Kiosk that does not say one leaves the kept one as it is."""
+        from vesta_shared import kiosk_told
+        for words in kiosk_told.keep(self.s.pack_path, answer):
+            log.info("%s", words)
 
     def devices_changed(self, settle: float | None = None) -> None:
         """The villa's devices changed (ha_events.REGISTRY_EVENTS): read them again once they have been still for
@@ -883,8 +872,9 @@ class Vesta:
             sk = request.skill if request else None
             if not is_continue:
                 # ⚠️ WHERE IT WAS WRITTEN, AND HOW THAT PLACE SHOWS THE ANSWER: a tablet's conversation (tablet.WHERE) is
-                # no Telegram chat (ticket 21 of "One inbox"); the words of the question: answering.question_words
-                where = tablet.WHERE if tablet.profile_of(cid) else self.policy().chat_label(cid)
+                # no Telegram chat (ticket 21 of "One inbox"), which chat_label says by naming none — one tablet test, not
+                # a second copy here (architecture review round 10); the words of the question: answering.question_words
+                where = self.policy().chat_label(cid) or tablet.WHERE
                 prompt = answering.question_words(
                     text, image=bool(image), voice=bool(voice), spoken=ask.spoken, who=person.name if person else None,
                     role=person.role if person else None, language=lang, where=where, skill=sk,
