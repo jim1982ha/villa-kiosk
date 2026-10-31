@@ -1,3 +1,10 @@
+## 0.12.429
+
+What you will see:
+- Everything in 0.12.428 (VESTA calls what it raises a fault; only Open Ticket in the Cockpit makes a ticket), now
+  published: that release stopped before reaching the store because the Kiosk had just reworded one line of its
+  agreement with VESTA ("Close, nothing done"). VESTA's copy now matches. Nothing else changes.
+
 ## 0.12.428
 
 What you will see:
