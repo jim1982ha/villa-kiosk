@@ -51,10 +51,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 from datetime import datetime, time, timedelta, timezone
-from types import SimpleNamespace
 from typing import Callable, NamedTuple
 from zoneinfo import ZoneInfo
 
@@ -62,113 +60,52 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from vesta_shared import kiosk_words, result, script  # noqa: E402
-from vesta_shared.device_state import OFFLINE, out_for  # noqa: E402  ("is it back": one answer)
 from vesta_shared.problems import Problems  # noqa: E402
 from vesta_shared.timeutil import day_time_label  # noqa: E402
 import nightly as N  # noqa: E402  (what is offline: the night's one reading of it)
+import endings as E  # noqa: E402  (how a fault ends: one table, the night's too)
 from vesta_shared.problems import STILL_THERE  # noqa: E402
 from vesta_shared import battery  # noqa: E402  (the battery rules' ids: one owner)
 from vesta_shared.device_state import has_value, is_offline  # noqa: E402
 from vesta_shared.asleep import read_states  # noqa: E402  (a sleeping device reads its last real state)
 from vesta_shared.limits import limit  # noqa: E402
-from vesta_shared.offline import device_answers, watched_kinds  # noqa: E402  (a device that answers is not offline)
+from vesta_shared.offline import watched_kinds  # noqa: E402
 from vesta_shared.past import Logbook  # noqa: E402
 from vesta_shared.history_memory import remembered  # noqa: E402  (the offline devices' past, kept between ticks)
 import rules as R  # noqa: E402
 
 
 
-GONE_NOTE = "Closed: this device no longer exists in the villa's system."
-HIDDEN_NOTE = "Closed: this device is hidden in the villa's system, and hidden devices are not watched."
-ANSWERS_NOTE = "Closed: the device answers; only some of its sensors are waiting for their next report."
-ASLEEP_NOTE = ("Closed: this device sleeps between its reports "
-               "(VESTA Kiosk › Advanced Settings › Asleep between reports).")
-ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")     # only a real entity id can be "not found"
-
-
-class Ending(NamedTuple):
-    """One way an open offline fault ends: `holds` (the device's reading now → whether it ended so), `note` (its close
-    note: the sentence the Cockpit's fault and its Telegram message say), `handed` (another problem follows it now:
-    closed, never counted cleared)."""
-    name: str
-    holds: Callable
-    note: Callable
-    handed: bool = False
-
-
-#: EVERY WAY AN OFFLINE FAULT ENDS, in the order it is asked (architecture review N card 2, 2026-10-27: one rule opened
-#: it, five tests scattered through a ladder closed it, the hand-over to an alert only at night). `r`: the fault's
-#: reading now — its entities (`es`), those the villa's system no longer has (`gone`), their states, the pack, the
-#: client, `now`, `minutes` (back_online_minutes) and the alerts that follow an offline device (`handed_over`). A
-#: device no longer in the villa's system at all is not here: every fault of every rule closes for it (back_online).
-OFFLINE_ENDS = (
-    # ⚠️ HIDDEN SINCE IT WAS FOUND (architecture review, 2026-10-21): the night check no longer saw it and closed it at
-    # 02:00 as "Cleared" — said of a device still off. It is closed now, saying why.
-    Ending("hidden", lambda r: r.pack is not None and r.es and not any(r.pack.is_watched(e) for e in r.es),
-           lambda r: HIDDEN_NOTE),
-    # listed as unavailable by design since it was found (vesta_shared.asleep): never a fault
-    Ending("asleep", lambda r: r.pack is not None and r.es and all(r.pack.is_asleep(e) for e in r.es),
-           lambda r: ASLEEP_NOTE),
-    Ending("back", lambda r: out_for(r.client(), [e for e in r.es if e not in r.gone], r.states, OFFLINE, r.now,
-                                     r.minutes, unknown_tells=True),
-           lambda r: "Cleared: back online."),
-    # ⚠️ ITS DEVICE ANSWERS (villa, 2026-10-25): a camera's event sensors read "unavailable" until its next event while
-    # its stream and Wi-Fi report; opened under the older reading, it closes now, saying why
-    Ending("answers", lambda r: r.pack is not None and r.es and device_answers(r.pack, r.es, r.client().states),
-           lambda r: ANSWERS_NOTE),
-    # still off, and the villa's own alert follows it now: one problem, the alert's (nightly.handed_to_alerts, the
-    # night's rule too) — handed over within 5 minutes, never cleared
-    Ending("alert", lambda r: (r.f["rule_id"], r.f["entity_id"]) in r.handed_over,
-           lambda r: r.handed_over[(r.f["rule_id"], r.f["entity_id"])], handed=True),
-)
+#: The sentences a fault ends with and the one table of how it ends: endings.py, the night check's too
+GONE_NOTE, HIDDEN_NOTE, ANSWERS_NOTE, ASLEEP_NOTE, ENTITY_ID = E.GONE_NOTE, E.HIDDEN_NOTE, E.ANSWERS_NOTE, E.ASLEEP_NOTE, E.ENTITY_ID
 
 
 def back_online(store, client, now: datetime, minutes: float, zone: str, pack=None) -> dict:
     """{closed: [finding ids], gone: [the ones whose devices no longer exist], handed: {finding id: its note, for the
-    offline faults an alert now follows (nightly.handed_to_alerts)}, actions: [the Kiosk faults to resolve]}: each open
-    offline fault ended by the first of OFFLINE_ENDS that holds; any fault whose devices no longer exist, closed.
-    `client()`: Home Assistant, asked for only when a finding is open."""
+    faults another problem now follows}, actions: [the Kiosk faults to resolve]}: each open fault (a missing one's own
+    end is gone_missing's) asked how it ended (endings.ending: the night check asks the same table) — its devices
+    read now, the alerts that follow an offline device (nightly.handed_to_alerts) and the missing faults that follow a
+    device gone (nightly.missing_hands, gone_missing run first). `client()`: Home Assistant, asked for only when a
+    finding is open."""
     rows = store.findings(status="open")
     if not rows or client() is None:
         return {"closed": [], "gone": [], "handed": {}, "actions": []}
-    handed_over = N.handed_to_alerts(store, pack, N.alerted_offline(store, pack)) if pack is not None else {}
-    ents = {f["id"]: json.loads(f.get("detail") or "{}").get("entities") or [f["entity_id"]] for f in rows}
-    ids = sorted({e for es in ents.values() for e in es if ENTITY_ID.match(str(e))})
-    states = client().states(ids)
-    # only what has no state is asked about: "not found" is Home Assistant's answer, a missing row is not
-    gone = client().not_found([e for e in ids if e not in states]) if len(states) < len(ids) else set()
+    asked = [f for f in rows if f["rule_id"] != MISSING_RULE]
+    r = E.read(client(), asked, pack=pack, now=now, minutes=minutes, missing=N.missing_hands(rows, rows),
+               alerts=N.handed_to_alerts(store, pack, N.alerted_offline(store, pack)) if pack is not None else {})
     day = now.astimezone(ZoneInfo(zone)).date().isoformat()
     closed, deleted, moved, handed = [], [], [], {}
-    # ⚠️ A DEVICE GONE IS MISSING, NOT OVER (owner, 2026-10-31): an entrance lock its hub stopped sharing closed its
-    # faults "this device no longer exists" and nothing more was said. A fault about a device VESTA watched follows its
-    # missing fault (gone_missing, run first: nightly.missing_hands); only one about something no longer watched (an
-    # automation deleted, a device a person said was removed on purpose) closes as gone.
-    follows = N.missing_hands(rows, rows)
-    for f in rows:
-        es = ents[f["id"]]
-        if f["rule_id"] == MISSING_RULE:
-            continue                                     # its own close is gone_missing's (back, or a person's Done)
-        if es and all(e in gone for e in es):
-            note = follows.get((f["rule_id"], f["entity_id"]))
-            moved += Problems(store).close_finding(f, day, note or GONE_NOTE)
-            if note:
-                handed[f["id"]] = note
-            else:
-                closed.append(f["id"]); deleted.append(f["id"])
-            continue
-        if f["rule_id"] != OFFLINE_RULE:
-            continue
-        r = SimpleNamespace(f=f, es=es, gone=gone, states=states, pack=pack, client=client, now=now, minutes=minutes,
-                            handed_over=handed_over)
-        end = next((x for x in OFFLINE_ENDS if x.holds(r)), None)
+    for f in asked:
+        end = E.ending(f, r)
         if end is None:
             continue
-        note = end.note(r)
-        moved += Problems(store).close_finding(f, day, note)
+        moved += Problems(store).close_finding(f, day, end.note)
         if end.handed:
-            handed[f["id"]] = note
+            handed[f["id"]] = end.note
         else:
             closed.append(f["id"])
+            if end.name == "gone":
+                deleted.append(f["id"])
     if closed or handed:
         store.audit("preventive-maintenance", "back_online", {"findings": closed, "gone": deleted, "handed": list(handed)})
     return {"closed": closed, "gone": deleted, "handed": handed, "actions": result.moved(moved)}
@@ -258,7 +195,7 @@ def gone_missing(store, pack, client, now: datetime, params, zone: str, settle_m
     return {"actions": result.moved(moved + rec["task_ids"]), "send": send, "found": ids, "closed": closed}
 
 
-OFFLINE_RULE = "PM-UNAVAILABLE"     # read by back_online (a device back for `back_online_minutes`), not in READS
+OFFLINE_RULE = E.OFFLINE_RULE      # read by back_online (a device back for `back_online_minutes`), not in READS
 MISSING_RULE = R.MISSING            # read by gone_missing, not in READS
 #: How long after midnight a finished day's statistics are taken as complete before its day rules are read over it:
 #: the villa's system writes an hour's figures a few minutes after the hour.
@@ -458,7 +395,7 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
     # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery fault is judged
     # on its charge, never left open on "unavailable"
     t.states = read_states(client(), pack, now, ids) if ids else {}
-    read, seen, steps, handed, restated = [], [], [], {}, []
+    read, seen, steps, moved_step, restated = [], [], [], {}, []
     for f, rule, rows, es in plan:
         st = t.states.get(f["entity_id"]) or {}
         if es and not rule.readable(st):
@@ -477,7 +414,7 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
             was = {"seen": v.seen}
             if v.handed:
                 steps += list(v.opens)
-                handed[int(f["id"])] = v.handed
+                moved_step[(f["rule_id"], f["entity_id"])] = v.handed
             if v.restate is not None:
                 restated.append((int(f["id"]), v.restate))
             if rule.per_day:
@@ -488,8 +425,11 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
     if not read:
         return none
     day = t.at.date().isoformat()
-    rec = Problems(store).record_rechecked(read, seen, day, now.isoformat(), note=N.cleared_note(now, zone),
-                                           settle_minutes=settle_minutes, handed=handed)
+    # what is no longer found asks how it ended (endings.py, the night's table too) before "no longer sees it": its
+    # devices were read by back_online this tick, so here only what its own reading said follows it (a battery's step)
+    rec = Problems(store).record_rechecked(read, seen, day, now.isoformat(), note=E.cleared_note(now, zone),
+                                           settle_minutes=settle_minutes,
+                                           ended=lambda rows: E.endings(rows, E.read(None, rows, battery=moved_step)))
     if rec["closed"] or rec["handed"]:
         store.audit("preventive-maintenance", "recheck", {"read": read, "closed": rec["closed"], "handed": rec["handed"]})
     send, task_ids = [], rec["task_ids"]

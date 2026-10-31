@@ -24,6 +24,9 @@ closure, and never raise the same thing twice.
   ("Closed: this device no longer exists in the villa's system."), hidden in it
   ("Closed: this device is hidden in the villa's system, …") or listed as asleep
   between its reports ("Closed: this device sleeps between its reports …").
+  Every way a fault ends says the same sentence whichever check sees it first,
+  this one or the night check (`endings.py`, one table): "no longer sees it" is
+  only for what nothing else explains.
   A device asleep between its reports is judged on its last real reading (its
   battery included), never on "unavailable".
   Every open finding of the night is read again at that same check too, each by its

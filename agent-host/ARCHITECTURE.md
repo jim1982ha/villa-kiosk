@@ -1057,3 +1057,25 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   config_dir)` and `Vesta.pack`'s change times; `Settings.choice_path(kind)` for a page's own reads. The modules keep
   only what differs (FILE, parse, problems, text_of; asset_kinds' migration). A new choice file is a module and a row:
   tests/test_choice_files.py drives every row through check, write, Page changes, Undo and the pack.
+
+
+## How a fault ends, and the siren's request: one place each (architecture review round 13, 2026-11-01)
+
+- **How a fault ends: preventive-maintenance `scripts/endings.py`** (card 2). `ENDS` is every way: missing (followed by
+  the device's missing fault), gone (every entity "not found"), hidden, asleep, back online, answers, an alert follows
+  it, a battery that moved a step — each with its rules (`about`), its test and its sentence, in that order.
+  `read(client, faults, …)` reads the faults' devices once (a failed read reads nothing); `ending(f, reading)` /
+  `endings(faults, reading)` answer. Asked by recheck.back_online (every open fault but a missing one),
+  recheck.recheck_open (what a rule's own reading no longer finds: its battery step) and the night
+  (`Problems.record_night(ended=)` for what closes tonight); `Problems.record_rechecked(ended=)` likewise. Only what no
+  ending explains says `cleared_note` ("no longer sees it"). The sentences (GONE_NOTE, HIDDEN_NOTE, ANSWERS_NOTE,
+  ASLEEP_NOTE, BACK_ONLINE_NOTE, BACK_NOTE, CLEARED) are written there once; recheck and nightly name them. The old
+  `handed_over` / `handed` arguments stay for a skill edited before 0.12.430. tests/test_fault_endings.py runs one table
+  through recheck.py and nightly.py and asserts the same note.
+- **The siren's request: `vesta_agent/siren.py`** (card 5). `Request.gate` carries a script's `siren_gate` out — not
+  asked with someone home, asked (never executed) of the owner while the villa is empty (`WHILE_EMPTY`), the cameras'
+  pictures first and "look" said only when every chat got one, and when it cannot be asked (no siren chosen, or the
+  request reached nobody) the warning to every chat of the gate's `to` (the skill's people: the owner AND the facility
+  manager, each chat once). `withdrawn_now` is the withdrawal at the press (actions.decide) and at every pass
+  (approvals.expire); `always_owners` is policy.owners_alone; `Siren` keeps the automatic stop. Outcome.carry_out only
+  hands it the gate. tests/test_siren_request.py proves each guarantee on the module with stand-ins.

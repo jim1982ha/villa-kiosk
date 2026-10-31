@@ -267,7 +267,7 @@ class Problems:
     # rules are states and which are events, the worsened step and which severities get a task stay the skill's.
     def record_night(self, findings, day: str, _muted_at_iso: str | None = None, *, state_rules, event_rules, worsened_step: float,
                      resolved_note: str = "", handed_over: dict[tuple[str, str], str] | None = None,
-                     at: str | None = None, settle_minutes: float | None = None) -> dict:
+                     at: str | None = None, settle_minutes: float | None = None, ended=None) -> dict:
         """The night check's findings for `day`: {new, still_open, closed, again (came back: AGAIN_DAYS), task_ids (the
         ids of the tasks opened or opened again), resolved (the ids of the tasks closed)} — ids only: what each fault
         says is Problems.card's, the repair writes it. (`_muted_at_iso`: what a night check edited before 0.12.132
@@ -278,22 +278,33 @@ class Problems:
         `handed_over`: (rule, entity) → the note of a finding the night left out because something else now follows it
         (an open alert on the same device): it closes with that note, never `resolved_note`, and is not counted closed.
         ⚠️ LEFT OUT IS NOT CLEARED (architecture review scan 1, 2026-10-19): a device offline at 5 minutes, then alerted
-        on by the villa's rule at 10, read "Cleared: the nightly check no longer sees it" at 02:00 while still off."""
+        on by the villa's rule at 10, read "Cleared: the nightly check no longer sees it" at 02:00 while still off.
+
+        `ended`: the skill's question of how a fault ended (preventive-maintenance endings.py, the 5-minute recheck's
+        too), asked once with the findings closing tonight → {finding id: (name, note, handed)} for those it explains:
+        each closes with its note, `handed` ones not counted closed. `resolved_note` only for what nothing explains
+        (architecture review round 13, card 2: a hidden or deleted device read "the nightly check no longer sees it" at
+        night and its own sentence in the day). `handed_over` is what a skill edited before 0.12.430 still passes.
+        Returns also `notes`: {finding id: the note it closed with}."""
         handed_over = handed_over or {}
         out = self.record(findings, day, state_rules=state_rules, event_rules=event_rules, worsened_step=worsened_step,
                           at=at, settle_minutes=settle_minutes)
         fired = {(f.rule_id, f.entity_id) for f in findings}
-        closed, resolve = [], []
+        closed, resolve, notes = [], [], {}
         handed = []
-        for o in closes_tonight(self.store.findings(status="open"), fired, state_rules, event_rules):
-            note = handed_over.get((o["rule_id"], o["entity_id"]))
-            (handed if note else closed).append(o)
+        closing = closes_tonight(self.store.findings(status="open"), fired, state_rules, event_rules)
+        ends = ended(closing) if ended is not None and closing else {}
+        for o in closing:
+            end = ends.get(int(o["id"]))
+            note = end.note if end else handed_over.get((o["rule_id"], o["entity_id"]))
+            (handed if (end.handed if end else note) else closed).append(o)
+            notes[int(o["id"])] = note or resolved_note
             # ⚠️ ITS TASK AND ITS KIOSK TICKET CLOSE WITH IT (villa, 2026-10-01): the finding closed, the ticket
             # stayed "Open fault" for ever, and the Kiosk's Cockpit filled with faults long gone
             self.store.close_finding(o["rule_id"], o["entity_id"], day)
             resolve += self.settle(f"finding:{int(o['id'])}", note=note or resolved_note)
         # `resolve_actions`: kept for a skill edited before 0.12.267 (its nightly.py reads each one's task_id)
-        return {**out, "closed": closed, "handed_over": handed, "resolved": resolve,
+        return {**out, "closed": closed, "handed_over": handed, "resolved": resolve, "notes": notes,
                 "resolve_actions": [result.resolved(tid, (self.store.task(tid) or {}).get("close_note")) for tid in resolve]}
 
     # ⚠️ A RECHECK OF THE VERY FINDINGS IT READ MAY CLOSE THEM (owner, 2026-10-19: "refresh the open ones … by closing
@@ -301,14 +312,25 @@ class Problems:
     # night may close" stays for a reading that does not say WHICH findings it judged (the 5-minute recheck's new
     # findings: record). The recheck names them: each finding it read again is a complete reading of that finding.
     def record_rechecked(self, rechecked, seen, day: str, at: str, *, note: str = "",
-                         settle_minutes: float | None = None, handed: dict[int, str] | None = None) -> dict:
+                         settle_minutes: float | None = None, handed: dict[int, str] | None = None,
+                         ended=None) -> dict:
         """Open findings `rechecked` (ids) read again at `at` by their own rule; `seen`: those of them still found. Each
         seen is recorded as seen (Problems.seen: a person's close `settle_minutes` or more before opens its task again,
         STILL_THERE); each not seen closes on `day`, its task closing saying `note` — as record_night closes what the
         night did not see, and only among the findings read: {seen, closed (finding ids), task_ids (the tasks that
         moved)}. A finding no longer open is left as it is; an id in `seen` not read is ignored. What decides each
-        task is settle()'s: a task a person reopened stays theirs, a person's close holds while it is not read again."""
+        task is settle()'s: a task a person reopened stays theirs, a person's close holds while it is not read again.
+        `ended`: as record_night's — asked once with the findings no longer found, before `note`; `handed` is what a skill
+        edited before 0.12.430 still passes."""
         found, handed = {int(i) for i in seen}, {int(k): v for k, v in (handed or {}).items()}
+        said: dict[int, str] = {}
+        rows = [r for i in sorted({int(i) for i in rechecked} - found) if (r := self.store.finding(i)) and r["status"] == "open"]
+        for i, end in (ended(rows) if ended is not None and rows else {}).items():
+            # an ending the skill explains: its own note; a handed one, never counted cleared
+            if end.handed:
+                handed[int(i)] = end.note
+            else:
+                said[int(i)] = end.note
         out_seen, closed, gone, moved = [], [], [], []
         for fid in sorted({int(i) for i in rechecked}):
             row = self.store.finding(fid)
@@ -321,7 +343,7 @@ class Problems:
                 # `handed`: finding id → its note, one followed now by another fault (as record_night's handed_over):
                 # closed with that note, never counted cleared
                 self.store.close_finding(row["rule_id"], row["entity_id"], day)
-                moved += self.settle(f"finding:{fid}", note=handed.get(fid) or note)
+                moved += self.settle(f"finding:{fid}", note=handed.get(fid) or said.get(fid) or note)
                 (gone if fid in handed else closed).append(fid)
         return {"seen": out_seen, "closed": closed, "handed": gone, "task_ids": moved}
 

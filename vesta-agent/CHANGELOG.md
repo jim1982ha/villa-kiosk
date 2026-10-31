@@ -1,3 +1,21 @@
+## 0.12.430
+
+What you will see:
+- A fault now closes with the same sentence whichever check notices first, the 5-minute check or the 02:00 night
+  check. A device you hid reads "Closed: this device is hidden in the villa's system, and hidden devices are not
+  watched." at night too, a device you set asleep "Closed: this device sleeps between its reports …", a device deleted
+  "Closed: this device no longer exists in the villa's system.", a device back "Cleared: back online.", one followed by
+  an alert "Followed by alert #41-P2, which says when it is back.", one now missing "Followed by: … is missing from the
+  villa's system …". The night check no longer says "Cleared: the nightly check no longer sees it" for any of these; it
+  says it only when nothing else explains why the fault is gone (a battery that was changed, for example).
+- During an intrusion, when VESTA cannot ask you for the siren (no siren chosen, or the request reached none of your
+  chats), the "Intrusion suspected…" warning now goes to you AND the facility manager, every time. Before, with a siren
+  chosen but the request unsendable, only you were told (the facility manager only if none of your chats took it). A
+  chat listed for both of you gets it once.
+- Nothing else changes about the siren: VESTA only ever asks you for it, never while someone is home, the camera
+  pictures come before the question, a waiting request is withdrawn as soon as someone is home, and the siren stops by
+  itself after its minutes.
+
 ## 0.12.429
 
 What you will see:

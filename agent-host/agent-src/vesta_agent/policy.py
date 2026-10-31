@@ -32,6 +32,7 @@ from vesta_shared.limits import limit
 from vesta_shared.timeutil import lasting
 
 from .places import title
+from .siren import always_owners
 
 # ------------------------------------------------------------------ constants
 # The languages a person can be answered in: the agent writes in them, and the VESTA Agent page offers
@@ -347,12 +348,9 @@ class Policy:
 
     @property
     def owners_alone(self) -> set[str]:
-        """What only the owner may approve: the owner-only list, and the configured siren whatever that list says.
-
-        ⚠️ THE SIREN IS ALWAYS ASKED, AND ALWAYS THE OWNER'S (owner, 2026-10-31: "a guarantee that VESTA never turns the
-        siren on without asking"): a villa whose switch.turn_on was "direct", the siren not in owner_only_entities,
-        turned it on at a registered person's word with no Approve; an "any" rule let the facility manager approve it."""
-        return self.owner_only | ({self.siren_entity} if self.siren_entity else set())
+        """What only the owner may approve: the owner-only list, and the configured siren whatever that list says
+        (siren.always_owners: the siren's rule, one place)."""
+        return always_owners(self.owner_only, self.siren_entity)
     @classmethod
     def load(cls, path: str) -> "Policy":
         if not path or not os.path.exists(path):

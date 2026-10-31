@@ -8,9 +8,9 @@ A skill script prints its decision in the standard form; this module does it:
   actions:    faults_changed (a task's fault opened, reopened or closed: the repair) · ticket {summary, entity_id?,
               note?} (a fault about no task: a chat's) · snapshot.get {entity_id, incident_id}
               (older, still read as faults_changed: ticket {task_id, …}, ticket.resolve, ticket.reopen)
-  siren_gate: {armed, prompt, to, cameras?, seen?}  → an Approve / Refuse request to the owner for the policy's siren, the
-              cameras' pictures sent first (`seen` added to the question only then); with no
-              siren configured, the prompt itself to `to`
+  siren_gate: {armed, prompt, to, cameras?, seen?}  → handed to siren.Request: an Approve / Refuse request to the owner
+              for the policy's siren, the cameras' pictures first; when it cannot be asked, the
+              prompt itself to `to`
   incident_id                  → the incident of the result (a message without its own)
   settle:     [{incident_id, note}]  → before this result's messages: every message still carrying that incident's buttons, in every chat,
               loses them and shows the note ("{time}": the villa's time now)
@@ -46,9 +46,9 @@ from vesta_shared.result import FAULTS_CHANGED
 from vesta_shared.ha_client import error_short_chars
 
 from . import layout
-from vesta_shared.message_format import PRESSED_STAGE, ROLES
-from vesta_shared.messaging import SIREN_TITLE
+from vesta_shared.message_format import PRESSED_STAGE
 from vesta_shared.status_words import pick
+from . import siren
 from .incidents import Incidents
 from .posting import Poster
 from .routing import Origin, Routing
@@ -101,6 +101,10 @@ class Outcome:
         # putting one message in one chat (posting.py), shared with the approvals; built from `send` (delivery.Delivery.send)
         # and the parts above when alone
         self.poster = poster or Poster(send=send, thread=thread, notices=notices, timezone_name=timezone_name, edit=edit)
+        # the siren's request, its whole life (siren.py): this module only hands it the gate
+        self.siren = siren.Request(policy=policy, state=state, actions=actions, ask=ask, post=self.poster.post,
+                                   photo=lambda cam: camera_photo(self.reader, cam),
+                                   name=lambda cam: self.actions.names(cam))
 
     async def rewrite(self, e: dict, skill_name: str | None) -> int:
         """A message sent earlier with this `key` (result.message key=), rewritten in every chat it went to, in its
@@ -159,14 +163,8 @@ class Outcome:
         if not isinstance(res, dict) or not res:
             return done
         route = Routing(self.policy())
-        gate = res.get("siren_gate") or {}
-        gate_prompt = gate.get("prompt") if gate.get("armed") else None
         chats: set[int] = set()
-        pol = self.policy()
         items = list(res.get("send") or []) + self.unkept_backups(res)
-        if gate_prompt and not pol.siren_entity:
-            # no siren to ask for: the warning itself goes to the gate's people (it was dropped before, 0.12.80)
-            items += [{"to": to, "text": gate_prompt} for to in gate.get("to") or ("owner",)]
         # one result's messages are ONE notice of its incident: one history line, its chats together (notice.py)
         # one history line per kind of notice this result sent (owner, 2026-10-11: "Escalated … to Jim, Fabien" — Fabien
         # had only been told his own "Need help" was passed on): {(incident, stage): chats}
@@ -304,38 +302,9 @@ class Outcome:
                     self.incidents.unreached(iid)
                 log.warning("Incident #%s: no chat of the people asked to answer received it — handed on", iid)
         shown: set[tuple[int, str]] = set()          # (chat, camera) whose picture this result already sent
-        if gate_prompt and pol.siren_entity and await asyncio.to_thread(self.actions.occupied):
-            # ⚠️ READ AGAIN JUST BEFORE ASKING (owner's Telegram, 2026-10-31 00:19): the desk read the villa empty at the
-            # alert; someone in it now, the siren is not asked — the alerts themselves went as usual
-            self.state.log("siren_not_asked", {"reason": "villa no longer empty"})
-            log.info("The siren was not asked: the villa is no longer empty")
-        elif gate_prompt and pol.siren_entity:
-            # its own domain's turn_on (a switch or a siren entity: policy.SIREN_DOMAINS); asked only while the villa is
-            # empty: withdrawn once someone is in it (approvals.Approvals.expire, and at the press)
-            answer, msg = await asyncio.to_thread(self.actions.request, pol.siren_entity.split(".")[0], "turn_on",
-                                                  pol.siren_entity, {}, None, None, True)
-            if msg and self.ask is None:
-                answer, msg = "no way to ask for an approval here (Outcome built without the approvals)", None
-            # ⚠️ THE PICTURE BEFORE THE QUESTION, AND SAID ONLY WHEN SENT (owner's Telegram, 2026-10-31 00:19: "Look at
-            # the snapshot", and none came): the cameras the desk found near the signals, each in every chat of the
-            # request first; the request says to look only when every one of its chats has a picture
-            head = gate_prompt
-            if msg:
-                pictured = await self._pictures(gate.get("cameras"), msg.chats, {msg.to} if msg.to else (), origin, shown)
-                if gate.get("seen") and msg.chats and pictured >= set(msg.chats):
-                    head = f"{gate_prompt} {gate['seen']}"
-            # ⚠️ THE INTRUSION IS SAID, WHATEVER BECOMES OF THE REQUEST (architecture review 21): its words travel only as
-            # the siren request's lead — a request no owner chat received showed them nowhere
-            if msg and not await self.ask(msg, head=head, origin=origin):
-                answer, msg = "no chat of the owner's received the request", None
-            if not msg:
-                said = f"The siren cannot be requested: {answer}"
-                # every chat of the first role, in the roles' order, that receives it: the owner's, else the facility
-                # manager's (message_format.ROLES — never the two written out again here)
-                for role in ROLES:
-                    if any([bool(await self.poster.post(chat, gate_prompt, status=said, roles={role}, origin=origin,
-                                                        title=SIREN_TITLE, keep=True)) for chat in route.target(role)]):
-                        break
+        # the siren's request, start to end (siren.Request: when it is asked, pictures first, who hears of an intrusion
+        # when it cannot be): its warning's chats get this result's snapshot too
+        chats |= (await self.siren.gate(res.get("siren_gate") or {}, origin=origin, shown=shown))["warned"]
         # ⚠️ ONE HAND MOVES THE CARDS (architecture review, 2026-10-15): a script's fault actions were carried out here,
         # and the repair worked the same cards out from the tasks — two routes, a 2-day "redo the close" window for when
         # the first failed, and a person's Done that could meet the agent's close. A fault about a task is now the
@@ -380,25 +349,6 @@ class Outcome:
             except Exception as e:  # noqa: BLE001 — the next repair (5 minutes) does it
                 log.warning("The Kiosk's faults could not be brought up to date (%s: %s)", type(e).__name__, e)
         return done
-
-    async def _pictures(self, cameras, chats, roles, origin, shown: set) -> set[int]:
-        """What each camera of `cameras` shows now, posted in every chat of `chats` (for `roles`, as the question is),
-        before the question it goes with (the siren's request). Records each (chat, camera) in `shown`; returns the chats that received a picture."""
-        got: set[int] = set()
-        for cam in cameras or []:
-            try:
-                photo = await camera_photo(self.reader, cam)
-            except Exception as e:  # noqa: BLE001 — no picture: the question says nothing of one
-                log.warning("Camera %s gave no picture (%s: %s)", cam, type(e).__name__, e)
-                continue
-            if not photo:
-                continue
-            for chat in chats:
-                if await self.poster.post(chat, self.actions.names(cam), title="Camera snapshot", roles=roles,
-                                          photo=photo, thread=f"snapshot-{cam}", origin=origin):
-                    shown.add((chat, cam))
-                    got.add(chat)
-        return got
 
     async def adopt_ha(self, h: dict, skill_name: str | None = None, also=None, told=None) -> list[tuple[int, set[str]]]:
         """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages). `also`:

@@ -27,7 +27,8 @@ from vesta_shared.ha_client import error_chars, error_short_chars
 from vesta_shared import automation_words as AW  # an automation in words: one writer
 
 from . import button_data
-from .approvals import WHILE_EMPTY, note as approval_note
+from .approvals import note as approval_note
+from .siren import WHILE_EMPTY, withdrawn_now
 from .policy import NOT_REGISTERED, Decision, Person, Policy, action_hash
 from .routing import Routing
 from vesta_shared.occupancy import OCCUPIED
@@ -315,10 +316,8 @@ class Actions:
             return {"toast": "Only the owner can approve this." if ap["required_role"] == "owner" else "You cannot approve this.",
                     "state": None, "executed": False}
         act = ap["action"]
-        if approve and act.get(WHILE_EMPTY) and self.occupied():
-            # ⚠️ NEVER ON AN APPROVE PRESSED AFTER SOMEONE CAME HOME (owner's Telegram, 2026-10-31 00:19): the siren was
-            # asked on the villa as it read at the alert — the owner arriving home, the "empty" sensor off 3 seconds
-            # later; the request stayed pressable for 15 minutes
+        if approve and withdrawn_now(act, self.occupied):
+            # never on an Approve pressed after someone came home (siren.withdrawn_now: the siren's rule, one place)
             if self.state.withdraw_approval(aid):
                 self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "villa no longer empty"})
                 return {"toast": toast("withdrawn"), "state": "withdrawn", "executed": False}

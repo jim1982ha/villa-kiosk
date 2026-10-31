@@ -23,15 +23,12 @@ from . import layout
 from .press import TABLET
 from .notice import when
 from .policy import Decision
+from . import siren
 
 log = logging.getLogger("vesta.approvals")
 
 #: An approval request's title, above "To:" (message_format: the one layout of every message sent on its own).
 TITLE = "Approval request"
-
-#: The mark of a request asked only while the villa is empty (the siren's gate, actions.Actions.request): withdrawn once
-#: someone is in it, at the press and at every pass (expire).
-WHILE_EMPTY = "while_empty"
 
 #: A device still on its way after an approval (a curtain says "closed" until it has finished moving): looked at this
 #: often, for this long; then the request says done or not done. A restart takes it up again (resume).
@@ -277,11 +274,16 @@ class Approvals:
         n = 0
         pending = self.state.approvals_in("pending")
         # read once per pass, and only when such a request waits: the villa's sensor is not asked every 30 seconds
-        occupied = any(ap["action"].get(WHILE_EMPTY) for ap in pending) and self.actions.occupied()
+        read: list[bool] = []
+
+        def occupied() -> bool:
+            if not read:
+                read.append(bool(self.actions.occupied()))
+            return read[0]
         for ap in pending:
             if datetime.fromisoformat(ap["expires_at"]) <= now and self.state.expire_approval(ap["id"]):
                 ended = "expired"
-            elif occupied and ap["action"].get(WHILE_EMPTY) and self.state.withdraw_approval(ap["id"]):
+            elif siren.withdrawn_now(ap["action"], occupied) and self.state.withdraw_approval(ap["id"]):
                 ended = "withdrawn"
             else:
                 continue

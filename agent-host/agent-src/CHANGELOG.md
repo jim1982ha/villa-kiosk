@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.415 (1 November 2026)
+
+- Architecture review round 13, card 2 (owner: "Proceed to all of them"): preventive-maintenance `scripts/endings.py`
+  is the one table of how a fault ends (missing, gone, hidden, asleep, back, answers, alert, battery step), with its
+  sentences and `read()`/`ending()`/`endings()`. recheck.back_online and recheck_open ask it; the night asks it through
+  `Problems.record_night(ended=)` for every fault it no longer finds (before, only alert/missing/battery hand-overs and a
+  catch-all). `Problems.record_rechecked(ended=)` likewise; the old `handed_over`/`handed` arguments stay for an edited
+  skill; record_night returns `notes`. recheck's OFFLINE_ENDS / Ending and nightly's CLEARED / cleared_note / BACK_NOTE
+  now name endings'. tests/test_fault_endings.py: every ending through recheck.py and nightly.py, same note (replaces
+  test_back_online's recheck-only table); 6 mutants red.
+- Card 5: `vesta_agent/siren.py` owns the siren request's whole life: `Request.gate` (not asked with someone home,
+  asked of the owner while empty, pictures first, the warning when it cannot be asked), `withdrawn_now` (actions.decide,
+  approvals.expire), `always_owners` (policy.owners_alone), `WHILE_EMPTY` (moved from approvals), and the stop.
+  Outcome.carry_out only hands it the gate (its `_pictures` moved). The warning when the siren cannot be asked goes to
+  every chat of the gate's `to` (the desk's owner and fm) in both cases, each chat once with its roles; before, an
+  unsendable request told the owner only (fm as a fallback). tests/test_siren_request.py drives siren.Request with
+  stand-ins; 9 mutants red.
+
 ## 0.6.414 (1 November 2026)
 
 - A reported issue is a FAULT (owner, 2026-11-01): it becomes a ticket only when a person presses Open Ticket in the

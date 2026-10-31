@@ -33,7 +33,7 @@ sys.path.insert(0, HERE)
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
 from vesta_shared import occupancy  # noqa: E402  (the villa's state per day: like with like)
-from vesta_shared.timeutil import clock, day_label, day_time_label, moment_label, villa_day  # noqa: E402
+from vesta_shared.timeutil import day_label, day_time_label, moment_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title, status_line  # noqa: E402  (the one shape of a message)
 from vesta_shared import status_words as SW  # noqa: E402  (each step as the alert card says it, in each chat's language)
@@ -50,6 +50,7 @@ from vesta_shared import battery  # noqa: E402  (a battery's ids and its rested 
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
 import features as F  # noqa: E402
 import rules as R  # noqa: E402
+import endings as E  # noqa: E402  (how a fault ends: one table, the 5-minute recheck's too)
 
 # The night check's reading windows written in code, set on the Limits tab (vesta_shared.limits)
 WINDOW_MARGIN_DAYS = limit("night.window_margin_days", 2, unit="days", group="read", lo=0, hi=14,
@@ -125,8 +126,8 @@ def run(args) -> dict:
     alerted = alerted_offline(store, pack)
     findings += offline_findings(pack, states, now_ref, params, set(alerted), history=cli.history, states_of=cli.states)
     # an offline fault open from before its alert: closed as handed over, never "cleared" while the device is still off
-    # (Problems.record_night) — the same hand-over recheck.py makes every 5 minutes
-    handed_over = handed_to_alerts(store, pack, alerted)
+    # (endings.py) — the same hand-over recheck.py makes every 5 minutes
+    alerts = handed_to_alerts(store, pack, alerted)
     # the reconnect loops' logbook, read once: it also says when the villa's system restarted, so the silence check
     # reads past a restart's stamp only for the sensors stamped by one (or after what was read)
     try:
@@ -160,17 +161,23 @@ def run(args) -> dict:
     for f in back:
         Problems(store).close_finding(f, today.isoformat(), BACK_NOTE)
     # its other faults (offline, a battery) follow the missing one, never "cleared" while it is gone
-    handed_over.update(missing_hands(store.findings(status="open"), found))
+    missing = missing_hands(store.findings(status="open"), found)
 
     # a battery that moved a step ("within the week" → "replace now", or back) is handed to its new fault, never cleared
-    handed_over.update(battery_moved(store.findings(status="open"), findings))
+    moved = battery_moved(store.findings(status="open"), findings)
 
     # ---- persist findings, dedup, close ---------------------------------------
-    # the night's ledger is Problems' (vesta_shared/problems.py); what is a state, an event, worse, a task: here
+    # the night's ledger is Problems' (vesta_shared/problems.py); what is a state, an event, worse, a task: here.
+    # ⚠️ HOW A FAULT ENDED, ONE ANSWER (architecture review round 13, card 2): a fault the night no longer finds asks the
+    # table the 5-minute recheck asks (endings.py) — its devices read now; "the nightly check no longer sees it" is left
+    # for what no ending explains
     night = Problems(store).record_night(
         findings, today.isoformat(), state_rules=STATE_RULES,
         event_rules=EVENT_RULES, worsened_step=params.behaviour("worsened_step_pct"),
-        resolved_note=cleared_note(), handed_over=handed_over,
+        resolved_note=cleared_note(),
+        ended=lambda rows: E.endings(rows, E.read(cli, rows, pack=pack, now=now_ref,
+                                                  minutes=params.behaviour("back_online_minutes"),
+                                                  missing=missing, alerts=alerts, battery=moved)),
         settle_minutes=still_there_minutes(ctx.settings))
     new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["task_ids"]
     again = night["again"]
@@ -187,8 +194,7 @@ def run(args) -> dict:
     result["edits"] = one_edit_per_message(
         told_watch_over(store, now_ref, zone, ctx.settings)
         + told_cleared(store, [o["id"] for o in closed], now_ref, zone, ctx.settings,
-                       handed={o["id"]: handed_over[(o["rule_id"], o["entity_id"])] for o in night["handed_over"]
-                               if (o["rule_id"], o["entity_id"]) in handed_over}))
+                       handed={o["id"]: night["notes"][int(o["id"])] for o in night["handed_over"]}))
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(result, fh, indent=1, default=str)
@@ -346,7 +352,7 @@ def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[
 #: takes it out. One that answers again is watched again.
 FORGOTTEN = "pm-missing-forgotten"
 FORGOTTEN_NOTE = "Closed: removed on purpose, no longer watched."
-BACK_NOTE = "Cleared: back in the villa's system."
+BACK_NOTE = E.BACK_NOTE
 
 
 def _entities_of(f: dict) -> list[str]:
@@ -529,15 +535,8 @@ def still_there_minutes(settings: dict | None = None) -> float | None:
     return None
 
 
-#: What a fault closed because a check no longer sees its problem says — the night's and the 5-minute recheck's, one
-#: wording (owner, 2026-10-19: "refresh the open ones"): {check} is "nightly check", or "check at 12:05" for the
-#: recheck (cleared_note).
-CLEARED = "Cleared: the {check} no longer sees it."
-
-
-def cleared_note(at: datetime | None = None, zone: str | None = None) -> str:
-    """CLEARED for the night (`at` None), or for the recheck at `at`, its villa time said ("… the check at 12:05 …")."""
-    return CLEARED.format(check="nightly check" if at is None else f"check at {clock(at, zone or 'UTC', days=False)}")
+#: What a fault closed because a check no longer sees its problem says, when no ending explains it (endings.py)
+CLEARED, cleared_note = E.CLEARED, E.cleared_note
 
 
 # ⚠️ ONE RULE, READ AT NIGHT OR FOR ONE FINDING EVERY 5 MINUTES (owner, 2026-10-19: "just re-check the identified ones

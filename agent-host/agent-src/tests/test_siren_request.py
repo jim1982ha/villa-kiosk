@@ -222,3 +222,128 @@ def test_an_any_rule_lets_only_the_owner_approve_the_siren(tmp_path):
     out = v.actions.decide(msg.approval_id, FM, True, chat=FM)
     assert out["state"] is None and out["toast"] == "Only the owner can approve this."
     assert v.state.approval(msg.approval_id)["status"] == "pending"
+
+
+# ---------------------------------------------------------------------- the request's whole life, on siren.py itself
+# (architecture review round 13, card 5): the owner's rule — never on without asking, never asked with someone home,
+# pictures first, withdrawn once someone is home — and who hears of an intrusion when the siren cannot be asked, each
+# proved on siren.Request with stand-ins, no script result built
+from types import SimpleNamespace  # noqa: E402
+
+from vesta_agent import siren as S  # noqa: E402
+
+
+class _Actions:
+    """actions.Actions as the request uses it: who is home, and the request (an approval, never an execution)."""
+
+    def __init__(self, home=False, refuse=None):
+        self.home, self.refuse, self.calls = home, refuse, []
+
+    def occupied(self):
+        self.calls.append(("occupied",))
+        return self.home
+
+    def request(self, *a):
+        self.calls.append(("request", *a))
+        if self.refuse:
+            return self.refuse, None
+        return "asked", SimpleNamespace(chats=[OWNER], to="owner", approval_id="a1")
+
+
+def _request(siren=SIREN, home=False, refuse=None, photos=None, delivered=True):
+    """A siren.Request over stand-ins: its posts and questions recorded in order in `seen`."""
+    seen = []
+
+    async def post(chat, text, **kw):
+        seen.append(("post", chat, text, kw))
+        return 7
+
+    async def ask(msg, head="", origin=None):
+        seen.append(("ask", tuple(msg.chats), head))
+        return len(msg.chats) if delivered else 0
+
+    async def photo(cam):
+        return (photos or {}).get(cam)
+    acts = _Actions(home, refuse)
+    pol = SimpleNamespace(siren_entity=siren, chats_for=lambda role, lang=None: {"owner": [OWNER], "fm": [FM]}[role])
+    log = []
+    req = S.Request(policy=lambda: pol, state=SimpleNamespace(log=lambda *a: log.append(a)), actions=acts, ask=ask,
+                    post=post, photo=photo, name=lambda cam: "Drive Camera")
+    return req, acts, seen
+
+
+def test_the_siren_is_only_ever_asked_for_never_turned_on():
+    req, acts, seen = _request()
+    out = run(req.gate(gate(())))
+    assert out["asked"] is True
+    # the one call that could sound it is a REQUEST, of the villa's siren, marked "only while the villa is empty",
+    # asked by nobody (an alert): actions.request makes it an Approve the owner presses
+    (call,) = [c for c in acts.calls if c[0] != "occupied"]
+    assert call == ("request", "switch", "turn_on", SIREN, {}, None, None, True)
+    assert [k for k, *_ in seen] == ["ask"]
+    # and the siren is always the owner's to approve, whatever the owner-only list says
+    assert S.always_owners(set(), SIREN) == {SIREN} and S.always_owners({"lock.x"}, None) == {"lock.x"}
+
+
+def test_never_asked_while_someone_is_home():
+    req, acts, seen = _request(home=True)
+    out = run(req.gate(gate()))
+    assert out == {"asked": False, "why": "the villa is no longer empty", "warned": set()}
+    assert [c[0] for c in acts.calls] == ["occupied"] and seen == []
+
+
+def test_the_pictures_come_first_and_only_then_is_it_said_to_look():
+    req, _, seen = _request(photos={CAMERA: ("SlBFRw==", "image/jpeg")})
+    run(req.gate(gate()))
+    assert [k for k, *_ in seen] == ["post", "ask"]
+    assert seen[0][3]["photo"] == ("SlBFRw==", "image/jpeg") and seen[0][1] == OWNER
+    assert seen[1][2].endswith("Look at the camera picture above first.")
+    # a camera that gives no picture: nothing sent, and the question never says to look
+    req, _, seen = _request()
+    run(req.gate(gate()))
+    assert [k for k, *_ in seen] == ["ask"] and "picture" not in seen[0][2]
+
+
+def test_a_request_asked_while_empty_is_withdrawn_once_someone_is_home():
+    asked = {S.WHILE_EMPTY: True}
+    assert S.withdrawn_now(asked, lambda: True) is True
+    assert S.withdrawn_now(asked, lambda: False) is False
+    # a request a person asked is theirs: never withdrawn, and who is home is not even read for it
+    assert S.withdrawn_now({}, lambda: (_ for _ in ()).throw(AssertionError("read"))) is False
+
+
+@pytest.mark.parametrize("siren,refuse,delivered", [(None, None, True), (SIREN, "Refused by the agent's rules", True),
+                                                    (SIREN, None, False)])
+def test_when_the_siren_cannot_be_asked_the_owner_and_the_facility_manager_hear_of_the_intrusion(siren, refuse,
+                                                                                                 delivered):
+    # architecture review round 13, card 5: with no siren chosen the warning went to the owner and the facility manager;
+    # with a siren chosen but its request unsendable, to the owner only. One answer: the gate's people, every time
+    req, _, seen = _request(siren=siren, refuse=refuse, delivered=delivered)
+    out = run(req.gate(gate(())))
+    assert out["asked"] is False and out["warned"] == {OWNER, FM}
+    posts = [(chat, text, kw) for k, chat, text, kw in [s for s in seen if s[0] == "post"]]
+    assert {c for c, *_ in posts} == {OWNER, FM}
+    assert all(t == "Intrusion suspected: Drive Motion, Entrance Lock." for _, t, _ in posts)
+    if siren:                                         # said why it is not asked, under the siren's title
+        assert all(kw["status"].startswith("The siren cannot be requested: ") and kw["title"] == "Siren"
+                   for *_, kw in posts)
+    else:
+        assert all(kw["status"] == "" for *_, kw in posts)
+
+
+def test_a_chat_listed_for_both_roles_hears_of_it_once():
+    req, _, seen = _request(siren=None)
+    req.policy().chats_for = lambda role, lang=None: [OWNER]           # one group for the owner and the FM
+    out = run(req.gate(gate(())))
+    (post,) = [s for s in seen if s[0] == "post"]
+    assert out["warned"] == {OWNER} and post[3]["roles"] == {"owner", "fm"}
+
+
+def test_the_engine_hands_the_gate_to_the_siren_and_nothing_else_asks_for_it():
+    # outcome.Outcome only hands the gate over: the decision's words live in siren.py alone
+    import inspect
+    from vesta_agent import outcome
+    src = inspect.getsource(outcome)
+    assert "self.siren.gate(" in src
+    for word in ("siren_entity", "occupied", "turn_on", "cannot be requested", "_pictures"):
+        assert word not in src, word

@@ -230,7 +230,8 @@ def ha_message(incident: int, text: str, context: str | None, stage: str | None 
 
 
 def siren(armed: bool, prompt: str | None, to: tuple[str, ...] = ("owner", "fm"), **detail) -> dict:
-    """The siren's gate. Armed: the owner gets an Approve / Refuse request (the configured siren); with no siren
-    configured, `prompt` goes to `to` as it is. Never fired by a script. `detail` may carry `cameras` (whose pictures
+    """The siren's gate (the engine's vesta_agent/siren.py carries it out). Armed: the owner gets an Approve / Refuse
+    request (the configured siren); when it cannot be asked (no siren configured, or the request reached nobody),
+    `prompt` goes to every chat of `to`. Never fired by a script. `detail` may carry `cameras` (whose pictures
     the engine sends before the question) and `seen` (the words added to the question once they arrived)."""
     return {"armed": bool(armed), "prompt": prompt, "to": list(to), **detail}
