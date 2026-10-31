@@ -111,6 +111,16 @@ export function missingFromHa(entities: Record<string, HassEntity>, id: string):
   return false;
 }
 
+/** Has `id` lost contact: its state is lost (isOffline), or the villa's system no longer has it at all (missingFromHa)
+ *  — and never before the villa's system has sent its states (an empty list is "not yet").
+ *  ⚠️ ONE ANSWER FOR THE DEVICE LIST AND ITS FAULTS (2026-10-31): the villa's offline devices asked isOffline of a
+ *  missing state, true even before any state had come (every device of the model "Unavailable" for that moment), while
+ *  a fault on one asked this rule written out inline. */
+export function lostContact(entities: Record<string, HassEntity>, id: string): boolean {
+  const e = entities[id];
+  return e ? isOffline(e) : missingFromHa(entities, id);
+}
+
 /**
  * THE status vocabulary — five meanings, one colour each, defined here and
  * nowhere else.

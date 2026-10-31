@@ -1,3 +1,10 @@
+## 2.496.626
+
+What you will see:
+- A device the villa's system no longer has now says so on its Inbox card even when an alert sits on it: the card's
+  line reads "Missing, #100-P1 (new)" (for example), with VESTA's message under it, where it showed only the alert.
+  A device whose own alert already says it is offline still reads as before.
+
 ## 2.496.625
 
 What you will see:

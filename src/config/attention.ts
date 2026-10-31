@@ -22,7 +22,7 @@ import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
-import { isOffline, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
+import { isOffline, lostContact, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
 import { countOf } from "@/utils/countOf";
 import type { Since } from "@/config/presence";
 
@@ -418,7 +418,7 @@ export function buildAttentionItems(opts: {
       // reads it: the device's offline line takes it. ⚠️ A MISSING ENTITY TOO (architecture review, 2026-10-21): only
       // one the villa's system still had counted, so a ticket on a sibling deleted with its device stood as a second
       // line under the device's "Missing".
-      offline: !!entityId && (entities[entityId] ? isOffline(entities[entityId]) : missingFromHa(entities, entityId)),
+      offline: !!entityId && lostContact(entities, entityId),
     });
   }
 

@@ -7,7 +7,7 @@
 import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
-import { isOffline } from "@/utils/stateColors";
+import { lostContact } from "@/utils/stateColors";
 import { domainOf } from "@/utils/entityDomain";
 
 /** Every entity_id folded into some group as a (non-primary) member — these
@@ -352,7 +352,7 @@ export interface VillaDevices {
   /** Every device the villa actually has — real, not hidden, not dismissed,
    *  folded so a multi-entity device appears once. */
   readonly ids: readonly string[];
-  /** The subset that has lost contact (isOffline: "unavailable", or an entity the villa's system does not have —
+  /** The subset that has lost contact (lostContact: "unavailable", or an entity the villa's system does not have —
    *  "Missing"); never "unknown" (2026-10-18). */
   readonly unavailable: readonly string[];
   /** Is this entity one of the villa's devices? Provided so callers stop
@@ -382,8 +382,9 @@ export function villaDevices(input: VillaDeviceInput): VillaDevices {
     // (hidden, config debris, dismissed, group folding) is the list above's
     // job, so the two cannot drift apart. They did once: the fault picker had
     // its own, laxer idea of what counted as a device.
-    // lost contact (isOffline), never "unknown": a sensor with no value to give is not offline (2026-10-18)
-    unavailable: ids.filter((id) => isOffline(input.entities[id])),
+    // lost contact, never "unknown": a sensor with no value to give is not offline (2026-10-18); a device the villa's
+    // system no longer has is, but never before its states have come (lostContact)
+    unavailable: ids.filter((id) => lostContact(input.entities, id)),
     has: (id) => set.has(id),
     deviceOf: (id) => deviceOf(folding, id),
     deviceOfRecord: recordDeviceOf(folding, (id) => id in input.entities),
