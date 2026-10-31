@@ -214,14 +214,17 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* no height of its own: 36 px, its text centred, was a blank line under the room on a card without buttons (owner,
    2026-10-15) — the card's text starts level with the top of its buttons (RecordCard) */
 .cockpit-attention-sub-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
-/* a problem's words on ONE line, cut with "…" (the whole of them on hover, and in the device it opens) — owner,
-   2026-10-18: "use truncation for the description text" */
-.cockpit-attention-sub-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ⚠️ A CARD'S WORDS ARE WHOLE; ONLY THE INBOX'S LIST ROW IS CUT (owner, 2026-10-31: an opened card cut "In progress:
+   … against a normal 0.07 kWh/da…" while VESTA's message under the next line showed in full). The cut ("use truncation
+   for the description text", 2026-10-18) belonged to the Overview's list of cards; since that list became one line
+   per device (.messages-row-text, the one place a message is cut), an issue's card is only ever drawn opened, so a
+   line of it wraps over as many lines as its words need, like every other text of the card. */
+.cockpit-attention-sub-title { display: block; }
 .cockpit-attention-latest { display: block; margin-top: 2px; font-size: var(--text-2xs); color: var(--text-dim); }
 /* a problem's short story on Telegram, one line each under it (ticket 19 of "One inbox") */
 .cockpit-attention-story { list-style: none; margin: 0; padding: 0; }
 .cockpit-attention-sub-text {
-  /* basis 0: the cut text never claims its full length, so a line's Close stays beside it */
+  /* basis 0: a long line wraps inside the card's text column rather than claiming its full length */
   flex: 1 1 0; min-width: 0; font-size: var(--text-xs); color: var(--text-secondary);
   overflow-wrap: anywhere;
 }

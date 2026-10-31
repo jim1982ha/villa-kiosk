@@ -1,3 +1,19 @@
+## 2.496.629
+
+What you will see:
+- An opened card in the Cockpit's Inbox now shows every line in full, over as many lines as it needs: "In progress:
+  ... against a normal 0.07 kWh/day ..." and "Also: ... is missing from the villa's system since ..." are no longer cut
+  with "...", the same as VESTA's message on an alert's card. The Inbox's list itself stays one short line per
+  message, cut with "...", and tapping one opens it whole.
+
+## 2.496.628
+
+What you will see:
+- The "Ask VESTA" microphone left of the gear on a phone's top bar now really shows: 2.496.627 never drew it, at any
+  width. It shows whenever the bar has room for it beside the map categories, for example on a 390px wide phone with
+  six categories; the categories then sit a few pixels left of the middle. On a narrower phone, with more categories,
+  or with the maintenance mark showing, it is left out and "Ask VESTA" in the gear's menu still works.
+
 ## 2.496.627
 
 What you will see:

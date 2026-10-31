@@ -5,6 +5,7 @@
 import { React, h, draw, inside, btn } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
+import { elements, parseTsx, propText } from "../consistency/jsx.mjs";
 const { default: RecordCard } = await import("@/components/fm/RecordCard");
 const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 const { cockpitCard } = await import("@/config/cockpitCard");
@@ -247,24 +248,41 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
 
 // owner, 2026-10-18: a problem's words ran on, and no button showed the mouse was on it. Drawn: the words cut on one line
 // (whole on hover); in the stylesheets: every button lights under the mouse, the card does not light over a button.
+// owner, 2026-10-31: an opened card still cut its lines ("…against a normal 0.07 kWh/da…"). ONE rule: the Inbox's list
+// row is the one place a message is cut; a card, only ever drawn opened, shows every line whole.
 // (Each line's own Close went on 2026-10-30: one Done closes everything on the card.)
 {
   const { readFileSync } = await import("node:fs");
   const css = (f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8");
   const dev = { key: "lock.door4", label: "Door", room: "Hall" };
-  const words = "A long problem that has to be cut on one line";
+  const words = "A long problem whose words are all shown, over as many lines as they need";
   const [two] = groupAttention([
     { id: "fault:x", kind: "fault", title: words, detail: "Fault", entityId: "lock.door4", ticketId: "x", stage: "fault", source: "alert", device: dev },
     { id: "fault:y", kind: "fault", title: "Another", detail: "Fault", entityId: "lock.door4", ticketId: "y", stage: "fault", source: "alert", device: dev }]);
   const card = draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {} }));
-  ck("  ...a problem's words sit in one cut line, whole on hover; no line carries a button of its own",
+  ck("  ...a problem's words are drawn whole in the card, no hover repeating them; no line carries a button of its own",
      card.includes(`<span class="cockpit-attention-sub-title">${words}</span>`)
-     && /<Tip text=\{line\.text\}><span className="cockpit-attention-sub-title">/.test(readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8"))
+     && elements(parseTsx("components/cockpit/IssueCard.tsx"), "Tip").length === 0
      && !card.includes("cockpit-line-act"), card.slice(0, 600));
   const shared = css("08-shared.css"), fac = css("07-facility.css"), base = css("01-base.css");
-  ck("  ...cut with \"…\", in the room the line has",
-     /\.cockpit-attention-sub-title \{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;/.test(shared)
-     && /\.cockpit-attention-sub-text \{[^}]*flex: 1 1 0;/.test(shared));
+  // every rule of every stylesheet that cuts a text with "…" (comments dropped; a rule body holds no brace)
+  const { readdirSync } = await import("node:fs");
+  const cuts = readdirSync(new URL("../../src/styles/", import.meta.url)).filter((f) => f.endsWith(".css")).flatMap((f) =>
+    [...css(f).replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((m) => /text-overflow:\s*ellipsis|line-clamp/.test(m[2])).map((m) => m[1].trim().replace(/\s+/g, " ")));
+  const CARD = /fm-record|fm-row|cockpit-attention|messages-card|messages-detail|announcement/;
+  ck("the Inbox's list: a message is one cut line (its title and its line under it end in \"…\")",
+     cuts.includes(".messages-row-text b, .messages-row-text span"), cuts);
+  ck("  ...an opened card: no text of it is ever cut, whatever its line (no rule cuts a card's text)",
+     cuts.every((sel) => !CARD.test(sel)) && /\.cockpit-attention-sub-text \{[^}]*overflow-wrap: anywhere;/.test(shared),
+     cuts.filter((sel) => CARD.test(sel)));
+  // a card is only ever drawn opened: every issue card the Inbox draws sits in its opened pane, none in its list
+  const tab = parseTsx("components/cockpit/MessagesTab.tsx");
+  const inPane = (el) => { for (let n = el.parent; n; n = n.parent) if (n.openingElement && propText(n, "className") === '"messages-detail"') return true; return false; };
+  const cards = ["AttentionCard", "AlertIssueCard", "CockpitAttentionRow", "NoteDetail", "ReportDetail"].flatMap((t) => elements(tab, t))
+    .filter((el) => { for (let n = el.parent; n; n = n.parent) if (n.name?.getText?.() === "ReportDetail") return false; return true; });  // a report is a note: drawn by its own card
+  ck("  ...and a card is only drawn opened: every card the Inbox draws is in its opened pane (\"← Inbox\")",
+     cards.length >= 5 && cards.every(inPane), cards.filter((c) => !inPane(c)).map((c) => c.getText().slice(0, 60)));
   ck("every button lights under the mouse, and the card does not light while the mouse is on any of its buttons",
      /@media \(hover: hover\) \{\s*\.btn:hover:not\(:disabled\) \{/.test(base)
      && /\.fm-record-card:has\(> \.fm-openable\):hover:not\(:has\(\.fm-record-actions:hover\)\):not\(:has\(button:hover\)\)/.test(fac));

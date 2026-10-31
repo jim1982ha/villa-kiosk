@@ -7,7 +7,6 @@
 import { momentText } from "@/utils/dateText";
 import type { ReactNode } from "react";
 import { CheckCircle2 } from "lucide-react";
-import Tip from "@/components/common/Tip";
 import WorkButtons, { useCardWork, type RaisedFault } from "@/components/fm/WorkButtons";
 import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
@@ -91,7 +90,8 @@ function CockpitAttentionSub({ line, icons, message }: { line: CardLine; icons: 
         {/* in the card's icon column (RecordCard's gutter), not before the text: every line's text lines up */}
         {icons && <span className="fm-record-gutter-icon"><SourceIcons {...icons} size={14} /></span>}
         <span className="cockpit-attention-sub-text">
-          <Tip text={line.text}><span className="cockpit-attention-sub-title">{line.text}</span></Tip>
+          {/* its words whole, over as many lines as they need: no hover repeats them (owner, 2026-10-31) */}
+          <span className="cockpit-attention-sub-title">{line.text}</span>
           {/* what happened about it on Telegram — the short story its Status tells: the alert sent, a reminder, an
               escalation, a button pressed (owner, 2026-10-14; every line since ticket 19 of "One inbox") */}
           {/* VESTA's message of its alert says it all (its "To:", "What to do", its Status: the same story) */}
