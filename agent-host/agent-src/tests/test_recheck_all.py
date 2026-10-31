@@ -193,7 +193,7 @@ def test_every_rule_of_the_night_is_read_again_every_5_minutes_and_every_card_sa
     recheck = _recheck_module()
     import nightly as N
     rules = N.STATE_RULES | N.EVENT_RULES
-    assert recheck.unreadable() == [] and set(recheck.READS) | {recheck.OFFLINE_RULE} == rules
+    assert recheck.unreadable() == [] and set(recheck.READS) | {recheck.OFFLINE_RULE, recheck.MISSING_RULE} == rules
     assert sk.rechecks == ["*"] and sk.every_5_min == "recheck.py"
     store = Store(str(tmp_path / "s.sqlite"))
     pb = Problems(store)

@@ -139,11 +139,22 @@ def back_online(store, client, now: datetime, minutes: float, zone: str, pack=No
     gone = client().not_found([e for e in ids if e not in states]) if len(states) < len(ids) else set()
     day = now.astimezone(ZoneInfo(zone)).date().isoformat()
     closed, deleted, moved, handed = [], [], [], {}
+    # ⚠️ A DEVICE GONE IS MISSING, NOT OVER (owner, 2026-10-31): an entrance lock its hub stopped sharing closed its
+    # faults "this device no longer exists" and nothing more was said. A fault about a device VESTA watched follows its
+    # missing fault (gone_missing, run first: nightly.missing_hands); only one about something no longer watched (an
+    # automation deleted, a device a person said was removed on purpose) closes as gone.
+    follows = N.missing_hands(rows, rows)
     for f in rows:
         es = ents[f["id"]]
+        if f["rule_id"] == MISSING_RULE:
+            continue                                     # its own close is gone_missing's (back, or a person's Done)
         if es and all(e in gone for e in es):
-            moved += Problems(store).close_finding(f, day, GONE_NOTE)
-            closed.append(f["id"]); deleted.append(f["id"])
+            note = follows.get((f["rule_id"], f["entity_id"]))
+            moved += Problems(store).close_finding(f, day, note or GONE_NOTE)
+            if note:
+                handed[f["id"]] = note
+            else:
+                closed.append(f["id"]); deleted.append(f["id"])
             continue
         if f["rule_id"] != OFFLINE_RULE:
             continue
@@ -196,7 +207,54 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_m
     return {"actions": actions, "send": send, "found": [d["id"] for d in rec["new"] + rec["again"]]}
 
 
+def gone_missing(store, pack, client, now: datetime, params, zone: str, settle_minutes: float | None = None) -> dict:
+    """{actions, send: [the facility manager's message for a critical device], found: [finding ids], closed: [the
+    missing ones back]}: the night's reading of what is missing (nightly.missing_findings) over the villa's critical
+    devices and the devices of the open faults, every 5 minutes — a critical device gone from the villa's system gets
+    its fault within minutes, and an open fault's device gone is missing before back_online reads it. A person's Done
+    on a missing fault first (nightly.forget_dismissed). One whose device answers again closes (BACK_NOTE)."""
+    none = {"actions": [], "send": [], "found": [], "closed": []}
+    at = now.astimezone(ZoneInfo(zone))
+    day = at.date().isoformat()
+    N.forget_dismissed(store, day)
+    near = {e for f in store.findings(status="open")
+            for e in json.loads(f.get("detail") or "{}").get("entities") or [f["entity_id"]] if ENTITY_ID.match(str(e))}
+    if not (near or (pack is not None and pack.critical) or store.cache_get(N.FORGOTTEN)) or client() is None:
+        return none
+    try:
+        found, back = N.missing_findings(store, pack, client(), now, zone, near=near, named_for_all=False)
+    except Exception as e:  # noqa: BLE001 — a read that failed finds nothing missing; the next tick reads again
+        print(f"preventive-maintenance: what is missing could not be read ({type(e).__name__})", file=sys.stderr)
+        return none
+    moved, closed, new = [], [], []
+    for f in back:
+        moved += Problems(store).close_finding(f, day, N.BACK_NOTE)
+        closed.append(f["id"])
+    for f in found:
+        row = store.open_finding(f.rule_id, f.entity_id)
+        if row:
+            moved += Problems(store).seen(row["id"], now.isoformat(), settle_minutes)
+        else:
+            new.append(f)
+    if closed:
+        store.audit("preventive-maintenance", "missing_back", {"findings": closed})
+    if not new:
+        return {**none, "actions": result.moved(moved), "closed": closed}
+    rec = Problems(store).record(new, day, state_rules=N.STATE_RULES, event_rules=N.EVENT_RULES,
+                                 worsened_step=params.behaviour("worsened_step_pct"), at=now.isoformat(),
+                                 settle_minutes=settle_minutes)
+    send = N.told_now({"villa": getattr(pack, "villa", None), "as_of": day, "new_findings": rec["new"],
+                       "again": rec["again"]},
+                      title=f"{getattr(pack, 'villa', None) or 'The villa'}, devices missing on {day_time_label(at)}.",
+                      store=store, at=now)
+    ids = [d["id"] for d in rec["new"] + rec["again"]]
+    if ids:
+        store.audit("preventive-maintenance", "gone_missing", {"findings": ids})
+    return {"actions": result.moved(moved + rec["task_ids"]), "send": send, "found": ids, "closed": closed}
+
+
 OFFLINE_RULE = "PM-UNAVAILABLE"     # read by back_online (a device back for `back_online_minutes`), not in READS
+MISSING_RULE = R.MISSING            # read by gone_missing, not in READS
 #: How long after midnight a finished day's statistics are taken as complete before its day rules are read over it:
 #: the villa's system writes an hour's figures a few minutes after the hour.
 DAY_SETTLE_MINUTES = limit("recheck.day_settle_minutes", 15, unit="minutes", group="read", lo=0, hi=180,
@@ -338,7 +396,7 @@ class Unreadable(Exception):
 
 def unreadable() -> list[str]:
     """The night check's rules this recheck cannot read again, sorted — none, or the tick stops."""
-    return sorted((N.STATE_RULES | N.EVENT_RULES) - set(READS) - {OFFLINE_RULE})
+    return sorted((N.STATE_RULES | N.EVENT_RULES) - set(READS) - {OFFLINE_RULE, MISSING_RULE})
 
 
 def loopbook(store, client, now: datetime, days: int):
@@ -381,7 +439,7 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
     none = {"actions": [], "closed": [], "seen": [], "send": []}
     if unreadable():
         raise Unreadable(", ".join(unreadable()))
-    open_ = [f for f in store.findings(status="open") if f["rule_id"] != OFFLINE_RULE]
+    open_ = [f for f in store.findings(status="open") if f["rule_id"] not in (OFFLINE_RULE, MISSING_RULE)]
     if not open_ or pack is None or client() is None:
         return none
     t = Tick(store, pack, client, now, params, zone)
@@ -513,6 +571,8 @@ def main(argv=None):
     ctx = script.Context(a, skill=os.path.dirname(HERE))
     now = datetime.fromisoformat(a.now) if getattr(a, "now", None) else datetime.now(timezone.utc)
     settle = N.still_there_minutes(ctx.settings)
+    # what is missing first: a fault whose device is gone then follows its missing fault (back_online)
+    miss = gone_missing(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)
     res = back_online(ctx.store, lambda: ctx.live_client, now, ctx.params.behaviour("back_online_minutes"), ctx.zone,
                       ctx.pack)
     try:
@@ -522,15 +582,16 @@ def main(argv=None):
         print(f"preventive-maintenance cannot read these checks again: {e}", file=sys.stderr)
         return 1
     found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)
-    closed = res["closed"] + again["closed"]
+    closed = res["closed"] + again["closed"] + miss["closed"]
     # a close sends nothing new: a P2 told earlier says it on its own message (told_cleared, owner 2026-10-20) — and an
     # offline fault an alert took over says so there; a reopening is told anew AND marked on that message
     edits = N.told_cleared(ctx.store, closed, now, ctx.zone, ctx.settings, handed=res["handed"])
     told = again["send"] + reopened_untold(ctx.store, ctx.zone, ctx.settings, edits) + still_there_untold(
         ctx.store, ctx.zone, ctx.settings, edits)
-    print(json.dumps({"actions": result.moved(res["actions"] + again["actions"] + found["actions"]),
-                      "send": found["send"] + told, "edits": N.one_edit_per_message(edits),
-                      result.FAULTS_CHANGED: bool(closed or res["handed"] or again["actions"] or found["actions"])},
+    print(json.dumps({"actions": result.moved(res["actions"] + again["actions"] + found["actions"] + miss["actions"]),
+                      "send": miss["send"] + found["send"] + told, "edits": N.one_edit_per_message(edits),
+                      result.FAULTS_CHANGED: bool(closed or res["handed"] or again["actions"] or found["actions"]
+                                                  or miss["actions"])},
                      default=str))
     return 0
 

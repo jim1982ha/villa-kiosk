@@ -1110,3 +1110,25 @@ def test_a_skill_file_with_its_files_at_the_top_is_named_by_its_skill_md():
     import base64
     got = read_skill(base64.b64decode(_skill_file({"SKILL.md": "---\nname: tide\ndescription: d\n---\n"})))
     assert got["name"] == "tide" and set(got["files"]) == {"SKILL.md", "skill.yaml"} and got["notes"] == []
+
+
+def test_a_phones_keyboard_opening_never_closes_a_floating_list_being_typed_in():
+    # owner, 2026-10-31 (phone): the owner-only devices' list, a tap in the device list's search box, and the keyboard
+    # vanished at once — the keyboard resizes the page and scrolls the field into view, and the panel closed on both.
+    # The decision (float.afterMove) driven in Node, as the browser runs it; its wiring in the one floating()
+    import json, shutil, subprocess
+    from vesta_agent.ui.server import STATIC
+    node = shutil.which("node")
+    assert node, "Node is needed to test the page's plain modules (GitHub's runners have it)"     # never skipped
+    code = ("import { afterMove } from " + json.dumps("file://" + os.path.join(STATIC, "float.js")) + ";"
+            "console.log(JSON.stringify([[false, true], [false, false], [true, false], [true, true]]"
+            ".map(([p, f]) => afterMove(p, f))));")
+    r = subprocess.run([node, "--input-type=module", "-e", code], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    # typing in it: placed again; the page moved with the focus elsewhere: closed; its own list scrolled: kept
+    assert json.loads(r.stdout) == ["place", "close", "keep", "keep"]
+    fl = body_of(page_js(), "floating")
+    assert "panel.contains(document.activeElement)" in fl and 'window.addEventListener("resize", moved)' in fl
+    assert 'window.addEventListener("resize", close)' not in fl
+    # iPhone: the keyboard moves the visual viewport, often with no resize of the window; absent, the window's alone
+    assert 'vv.addEventListener("resize", moved)' in fl and "window.visualViewport || null" in fl

@@ -33,7 +33,7 @@ sys.path.insert(0, HERE)
 
 from vesta_shared import script  # noqa: E402  (client, pack, store, settings, zone: one set-up)
 from vesta_shared import occupancy  # noqa: E402  (the villa's state per day: like with like)
-from vesta_shared.timeutil import clock, day_label, day_time_label, villa_day  # noqa: E402
+from vesta_shared.timeutil import clock, day_label, day_time_label, moment_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import STATUS, document, split_title, status_line  # noqa: E402  (the one shape of a message)
 from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart  # noqa: E402
@@ -69,7 +69,7 @@ MIN_RUN_MINUTES = limit("night.min_run_minutes", 30, unit="minutes", group="dete
 
 STATE_RULES = {"PM-POWER-CHANGE", "PM-ENERGY-CHANGE", "PM-UNAVAILABLE",
                "PM-BATTERY-LOW", "PM-BATTERY-CRIT", "PM-SILENT", "PM-RECONNECT-LOOP", "PM-LEVEL-HIGH",
-               R.HIDDEN_IN_RULE, result.PARAM_MISSING}
+               R.HIDDEN_IN_RULE, result.PARAM_MISSING, R.MISSING}
 EVENT_RULES = {"PM-RUNHOURS", "PM-RUN-SAG", "PM-EXPECTED-SILENT", result.COUNTER_RESET, "PM-BATTERY-TREND"}
 
 
@@ -144,6 +144,17 @@ def run(args) -> dict:
     found, said = hidden_in_rule_findings(cli, pack, states, store)
     findings += found
     notes += said
+
+    # ---- the devices gone from the villa's system ------------------------------
+    # a person's Done on one first: it was removed on purpose, never found again (forget_dismissed)
+    forget_dismissed(store, today.isoformat())
+    found, said, back = missing_night(store, pack, cli, now_ref, zone)
+    findings += found
+    notes += said
+    for f in back:
+        Problems(store).close_finding(f, today.isoformat(), BACK_NOTE)
+    # its other faults (offline, a battery) follow the missing one, never "cleared" while it is gone
+    handed_over.update(missing_hands(store.findings(status="open"), found))
 
     # a battery that moved a step ("within the week" → "replace now", or back) is handed to its new fault, never cleared
     handed_over.update(battery_moved(store.findings(status="open"), findings))
@@ -322,6 +333,139 @@ def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[
                 for o in store.findings(status="open") if o["rule_id"] == R.HIDDEN_IN_RULE]
         return kept, [f"The villa's automations could not be read for hidden devices ({type(e).__name__}): nothing changed."]
     return R.hidden_in_rule_rules(rules, hidden, name_of), []
+
+
+#: The devices a person said were removed on purpose (a PM-MISSING fault's Done), {entity_id: when}: never missing
+#: again while the villa's system has no state for them — a critical one stays named in its automation until someone
+#: takes it out. One that answers again is watched again.
+FORGOTTEN = "pm-missing-forgotten"
+FORGOTTEN_NOTE = "Closed: removed on purpose, no longer watched."
+BACK_NOTE = "Cleared: back in the villa's system."
+
+
+def _entities_of(f: dict) -> list[str]:
+    return json.loads(f.get("detail") or "{}").get("entities") or [f["entity_id"]]
+
+
+def forget_dismissed(store, day: str) -> list[int]:
+    """The open PM-MISSING faults a person closed (Done on Telegram, or in the Cockpit): the device was removed on
+    purpose. Forgotten — out of the devices seen (store.forget_seen) and kept in FORGOTTEN — and its finding closed, so
+    no check finds it again. Returns the ids of the findings closed. Runs before any reading of what is missing: read
+    first, a fault a person closed would be read still there and opened again."""
+    p, forgotten, done = Problems(store), store.cache_get(FORGOTTEN) or {}, []
+    for f in store.findings(status="open"):
+        if f["rule_id"] != R.MISSING or not p.closed_by_person(f"finding:{int(f['id'])}", f.get("reopened_at") or ""):
+            continue
+        es = _entities_of(f)
+        store.forget_seen(es)
+        forgotten.update({e: store.now() for e in es})
+        p.close_finding(f, day, FORGOTTEN_NOTE)
+        done.append(int(f["id"]))
+    if done:
+        store.cache_put(FORGOTTEN, forgotten)
+        store.audit("preventive-maintenance", "missing_forgotten", {"findings": done})
+    return done
+
+
+def missing_findings(store, pack, cli, now: datetime, zone: str, near=None, named_for_all: bool = True):
+    """(PM-MISSING findings, the open PM-MISSING findings whose device answers again). Missing: a device of the
+    baseline — every device a pack had (store.pack_seen_rows) and the villa's critical list (pack.critical), never the
+    Kiosk's asleep list — for which the villa's system has no state AND answers its own "not found"
+    (client.not_found). ⚠️ A FAILED READ IS NEVER MISSING: a state not brought back that is not "not found" is nothing.
+    One finding per device (pack_seen's `device`), kept under the entity of its open finding, else its critical
+    entity, else its first. `near`: only the baseline's entities among these, their devices and the critical list (the
+    5-minute recheck); None: the whole baseline (the night). `named_for_all`: the automations still naming each one
+    are read for every device (the night); else only for one with no open finding yet."""
+    seen = store.pack_seen_rows()
+    critical = set(getattr(pack, "critical", None) or ())
+    forgotten = store.cache_get(FORGOTTEN) or {}
+    base = set(seen) | critical
+    if near is None:
+        ids = set(base)
+    else:
+        ids = {e for e in near if e in base} | critical
+        devs = {seen[e]["device"] for e in ids if e in seen and seen[e].get("device")}
+        ids |= {e for e, r in seen.items() if r.get("device") in devs}       # the whole device: one fault, as at night
+    open_ = [f for f in store.findings(status="open") if f["rule_id"] == R.MISSING]
+    ids |= {e for f in open_ for e in _entities_of(f)} | set(forgotten)
+    if not ids:
+        return [], []
+    states = cli.states(sorted(ids))
+    if any(e in states for e in forgotten):          # answers again: watched again
+        forgotten = {e: t for e, t in forgotten.items() if e not in states}
+        store.cache_put(FORGOTTEN, forgotten)
+    back = [f for f in open_ if any(e in states for e in _entities_of(f))]
+    nostate = sorted(e for e in ids if e not in states and e not in forgotten and e in base)
+    gone = cli.not_found(nostate) if nostate else set()
+    groups: dict[str, list[str]] = {}
+    for e in sorted(gone):
+        groups.setdefault((seen.get(e) or {}).get("device") or e, []).append(e)
+    plan = []
+    for es in groups.values():
+        mine = next((f for f in open_ if f not in back and set(_entities_of(f)) & set(es)), None)
+        crit = [e for e in es if e in critical or (pack is not None and pack.is_critical(e))]
+        eid = mine["entity_id"] if mine else (crit or es)[0]
+        plan.append((eid, es, bool(crit), mine))
+    # the automations and scripts still naming each one (rules.ids_named: a whole id, never its prose)
+    ask = sorted({e for _, es, _, mine in plan if named_for_all or mine is None for e in es})
+    named: dict[str, list[str]] = {}
+    if ask:
+        try:
+            for r in cli.rules_mentioning(ask):
+                kind = "script" if str(r.get("kind") or "") == "script" else "automation"
+                label = f"{kind} '{(r.get('config') or {}).get('alias') or _plain_name(r['entity_id'])}'"
+                for e in R.ids_named(r.get("config") or {}, ask):
+                    named.setdefault(e, []).append(label)
+        except Exception as e:  # noqa: BLE001 — the villa's search failed: the fault is said without them
+            print(f"preventive-maintenance: the automations naming a missing device could not be read "
+                  f"({type(e).__name__})", file=sys.stderr)
+    out = []
+    for eid, es, crit, mine in plan:
+        was = json.loads(mine.get("detail") or "{}") if mine else {}
+        rows = [seen[e] for e in [eid, *es] if e in seen]
+        name = (next((r["name"] for r in rows if r.get("name")), None) or was.get("name")
+                or (pack.device_name(eid, None) if pack is not None else None) or _plain_name(eid))
+        since = was.get("since") or min((r["gone_at"] for r in rows if r.get("gone_at")), default=None) or now.isoformat()
+        labels = (list(dict.fromkeys(x for e in es for x in named.get(e, []))) if named_for_all or mine is None
+                  else list(was.get("named_in") or []))
+        out += R.missing_rules(name, eid, es, since, moment_label(datetime.fromisoformat(since), zone), crit, labels)
+    return out, back
+
+
+def missing_night(store, pack, cli, now: datetime, zone: str) -> tuple[list, list[str], list[dict]]:
+    """missing_findings over the whole baseline, for the night: (findings, notes, the open ones back). A reading that
+    fails keeps the open ones as they are — the night saw nothing, it must not say they are over."""
+    try:
+        found, back = missing_findings(store, pack, cli, now, zone)
+        return found, [], back
+    except Exception as e:  # noqa: BLE001 — the villa's system not readable now
+        kept = [R.Finding(o["rule_id"], o["entity_id"], o["entity_id"], o["family"], o["severity"], o["summary"],
+                          {k: v for k, v in json.loads(o["detail"] or "{}").items() if k != "check"},
+                          json.loads(o["detail"] or "{}").get("check", ""))
+                for o in store.findings(status="open") if o["rule_id"] == R.MISSING]
+        return kept, [f"The devices missing from the villa's system could not be read ({type(e).__name__}): "
+                      "nothing changed."], []
+
+
+def missing_hands(open_rows, missing) -> dict[tuple[str, str], str]:
+    """The open faults of another rule (offline, a battery…) about a device now missing (`missing`: PM-MISSING findings
+    or open rows), each (rule, entity) → the note it closes with: "Followed by: Example door is missing from …". Its
+    every entity among the missing one's. ⚠️ NEVER CLOSED AS IF IT CAME BACK (owner, 2026-10-31): a device gone from
+    the villa's system closed its offline fault "this device no longer exists", and nothing else was said."""
+    def parts(m):
+        if isinstance(m, dict):
+            return m["rule_id"], set(_entities_of(m)), m.get("summary") or ""
+        return m.rule_id, set(m.detail.get("entities") or [m.entity_id]), m.summary
+    gone = [(es, summary) for rule, es, summary in map(parts, missing) if rule == R.MISSING]
+    out = {}
+    for o in open_rows:
+        if o["rule_id"] == R.MISSING:
+            continue
+        es = set(_entities_of(o))
+        said = next((summary for ges, summary in gone if es and es <= ges), None)
+        if said:
+            out[(o["rule_id"], o["entity_id"])] = f"Followed by: {said}"
+    return out
 
 
 def still_there_minutes(settings: dict) -> float | None:

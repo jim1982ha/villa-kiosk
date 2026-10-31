@@ -1,0 +1,167 @@
+"""A device gone from the villa's system altogether is MISSING, not over (owner, 2026-10-31: an entrance lock its hub
+stopped sharing vanished at 00:19 — no state, no registry entry — and VESTA said nothing; the owner found it on the
+Kiosk's map). Driven through recheck.py and nightly.py as the engine runs them. Invented entities."""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timedelta, timezone
+
+from helpers import PYTHONPATH, STARTER_SKILLS
+from vesta_shared.problems import Problems
+from vesta_shared.store import Store
+
+SKILL = os.path.join(STARTER_SKILLS, "preventive-maintenance")
+T0 = datetime(2026, 10, 31, 0, 25, tzinfo=timezone.utc)
+LOCK, BATT, TH = "lock.example_door", "sensor.example_door_battery", "sensor.example_th_humidity"
+WATCHDOG = {"entity_id": "automation.example_watchdog", "kind": "automation", "config": {
+    "alias": "Critical watchdog", "use_blueprint": {"path": "critical_watchdog.yaml",
+                                                    "input": {"critical_entities": [LOCK, "switch.example_pump"]}}}}
+
+
+def _pack(tmp, critical=(LOCK,)) -> str:
+    """The pack as rebuilt a minute after the lock left: the lock is no longer in it, only the critical list names it."""
+    path = tmp / "pack.json"
+    path.write_text(json.dumps({
+        "villa": "Example Villa", "time_zone": "UTC", "generated_at": "x", "ha_version": None, "areas": [], "people": [],
+        "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
+        "families": {"level": [{"entity_id": TH, "name": "TH humidity", "family": "level", "asset": "th",
+                                "device_id": "dev-th"}]},
+        "assets": {}, "critical": list(critical)}))
+    return str(path)
+
+
+def _seen(tmp):
+    """The packs before: the lock and its battery seen (one device), then a pack without them."""
+    st = Store(str(tmp / "s.sqlite"))
+    th = {"entity_id": TH, "family": "level", "seen_name": "TH sensor", "device": "dev-th"}
+    st.pack_diff([{"entity_id": LOCK, "family": "security", "seen_name": "Example door", "device": "dev-door"},
+                  {"entity_id": BATT, "family": "battery", "seen_name": "Example door", "device": "dev-door"}, th])
+    st.pack_diff([th])
+    return st
+
+
+def _fx(tmp, states: dict, not_found=(), rules=None):
+    fx = tmp / "fx"
+    fx.mkdir(exist_ok=True)
+    (fx / "states.json").write_text(json.dumps({"states": states, "not_found": list(not_found)}))
+    (fx / "rules.json").write_text(json.dumps(rules if rules is not None else [WATCHDOG]))
+    return fx
+
+
+def _recheck(tmp, states, now, not_found=(), critical=(LOCK,), rules=None):
+    fx = _fx(tmp, states, not_found, rules)
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--store", str(tmp / "s.sqlite"),
+                        "--pack", _pack(tmp, critical), "--fixture-dir", str(fx), "--now", now.isoformat()],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def _st(state="55"):
+    return {"state": state, "last_changed": (T0 - timedelta(hours=1)).isoformat(), "attributes": {}}
+
+
+def _missing(tmp):
+    return [f for f in Store(str(tmp / "s.sqlite")).findings("open") if f["rule_id"] == "PM-MISSING"]
+
+
+def test_a_critical_device_gone_from_the_villas_system_is_a_fault_within_the_five_minute_check(tmp_path):
+    _seen(tmp_path)
+    out = _recheck(tmp_path, {TH: _st()}, T0, not_found=[LOCK, BATT])
+    (f,) = _missing(tmp_path)
+    assert f["severity"] == "P2" and f["entity_id"] == LOCK
+    assert f["summary"].startswith("Example door is missing from the villa's system since ")
+    assert sorted(json.loads(f["detail"])["entities"]) == sorted([BATT, LOCK])  # one device, one fault
+    check = json.loads(f["detail"])["check"]
+    assert check == ("Re-pair it, or press Done if it was removed on purpose. "
+                     "Still named in automation 'Critical watchdog': remove it there.")
+    (msg,) = out["send"]
+    assert msg["to"] == "fm" and "Example door is missing from the villa's system" in msg["text"]
+    assert LOCK not in f["summary"] and "Home Assistant" not in msg["text"]
+    # once: the next check sees it still missing and says nothing more
+    assert _recheck(tmp_path, {TH: _st()}, T0 + timedelta(minutes=5), not_found=[LOCK, BATT])["send"] == []
+    assert len(_missing(tmp_path)) == 1
+
+
+def test_a_critical_device_the_packs_never_named_is_missing_too_named_in_words(tmp_path):
+    Store(str(tmp_path / "s.sqlite"))
+    _recheck(tmp_path, {TH: _st()}, T0, not_found=[LOCK])
+    (f,) = _missing(tmp_path)
+    assert f["summary"].startswith("Example door is missing")                  # never the raw id
+
+
+def test_a_failed_read_is_never_missing(tmp_path):
+    _seen(tmp_path)
+    # no state for the lock, but the villa's system never answered "not found" (a timeout, a refusal)
+    out = _recheck(tmp_path, {TH: _st()}, T0, not_found=[])
+    assert _missing(tmp_path) == [] and out["send"] == []
+
+
+def test_done_forgets_the_device_and_it_is_never_said_again(tmp_path):
+    _seen(tmp_path)
+    _recheck(tmp_path, {TH: _st()}, T0, not_found=[LOCK, BATT])
+    st = Store(str(tmp_path / "s.sqlite"))
+    (task,) = st.tasks("open")
+    Problems(st).closed_in_kiosk(task["id"])
+    _recheck(tmp_path, {TH: _st()}, T0 + timedelta(minutes=5), not_found=[LOCK, BATT])
+    st = Store(str(tmp_path / "s.sqlite"))
+    assert _missing(tmp_path) == [] and LOCK not in st.pack_seen_rows() and BATT not in st.pack_seen_rows()
+    # still missing an hour on, still on the critical list: nothing opens again, nothing is sent
+    out = _recheck(tmp_path, {TH: _st()}, T0 + timedelta(hours=1), not_found=[LOCK, BATT])
+    assert _missing(tmp_path) == [] and out["send"] == [] and Store(str(tmp_path / "s.sqlite")).tasks("open") == []
+    # ...and it answers again one day: watched again, missing again if it goes
+    _recheck(tmp_path, {TH: _st(), LOCK: _st("locked")}, T0 + timedelta(hours=2))
+    _recheck(tmp_path, {TH: _st()}, T0 + timedelta(hours=3), not_found=[LOCK])
+    assert len(_missing(tmp_path)) == 1
+
+
+def test_a_missing_device_that_comes_back_closes_its_fault(tmp_path):
+    _seen(tmp_path)
+    _recheck(tmp_path, {TH: _st()}, T0, not_found=[LOCK, BATT])
+    out = _recheck(tmp_path, {TH: _st(), LOCK: _st("locked"), BATT: _st("80")}, T0 + timedelta(minutes=5))
+    assert _missing(tmp_path) == [] and out["faults_changed"] is True
+    st = Store(str(tmp_path / "s.sqlite"))
+    assert st.tasks("open") == []
+    assert [t["close_note"] for t in st.tasks(None)] == ["Cleared: back in the villa's system."]
+
+
+def test_an_offline_fault_whose_device_is_gone_follows_the_missing_one_never_closed_in_silence(tmp_path):
+    st = _seen(tmp_path)
+    fid, _ = st.raise_finding("PM-UNAVAILABLE", LOCK, "security", "2026-10-30", "P3",
+                              "Example door has been offline for 1h.", {"hours": 1, "entities": [LOCK]})
+    Problems(st).open_task("finding", fid, "PM-UNAVAILABLE", LOCK, "Example door offline")
+    # not on the critical list: found through its open fault
+    _recheck(tmp_path, {TH: _st()}, T0, not_found=[LOCK, BATT], critical=())
+    st = Store(str(tmp_path / "s.sqlite"))
+    (m,) = _missing(tmp_path)
+    assert m["severity"] == "P3"
+    assert st.finding(fid)["status"] == "closed"
+    notes = [t["close_note"] for t in st.tasks(None) if t["status"] != "open"]
+    assert notes == [f"Followed by: {m['summary']}"]
+
+
+def test_the_night_check_finds_a_device_gone_that_no_fault_was_about(tmp_path):
+    _seen(tmp_path)
+    fx = _fx(tmp_path, {TH: _st()}, [LOCK, BATT], rules=[])
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "nightly.py"), "--pack", _pack(tmp_path, ()),
+                        "--store", str(tmp_path / "s.sqlite"), "--fixture-dir", str(fx), "--skip-raw",
+                        "--as-of", "2026-10-30", "--out", str(tmp_path / "res.json")],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=120)
+    assert r.returncode == 0, r.stderr
+    (f,) = _missing(tmp_path)
+    assert f["severity"] == "P3" and json.loads(f["detail"])["check"] == (
+        "Re-pair it, or press Done if it was removed on purpose.")
+
+
+def test_devices_gone_before_this_release_are_not_missing_now(tmp_path):
+    import sqlite3
+    path = str(tmp_path / "old.sqlite")
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE pack_seen (entity_id TEXT PRIMARY KEY, first_seen TEXT, family TEXT, area TEXT, last_seen TEXT)")
+    db.executemany("INSERT INTO pack_seen VALUES (?,?,?,?,?)",
+                   [(TH, "a", "level", None, "2026-10-30T01:30:00"), (LOCK, "a", "security", None, "2026-09-01T01:30:00")])
+    db.commit(); db.close()
+    assert set(Store(path).pack_seen_rows()) == {TH}

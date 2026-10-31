@@ -234,7 +234,8 @@ def test_the_kiosk_is_read_every_five_minutes(agent, monkeypatch):
         calls.append(1)
         return 0
     agent.tickets.repair = repair
-    agent.kiosk = type("K", (), {"enabled": True})()
+    # villa_devices: at a minute ending in 0 housekeeping reads the tool list again, and its toolbox asks for it
+    agent.kiosk = type("K", (), {"enabled": True, "villa_devices": None})()
     clock = [1000.0]
     monkeypatch.setattr(app_module.time, "monotonic", lambda: clock[0])
     run(agent.housekeeping())

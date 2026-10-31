@@ -75,6 +75,12 @@ def main(argv=None):
         st = Store(args.store)
         watched = [r for fam in ("power", "energy", "runtime", "battery", "level", "water", "security", "generation")
                    for r in pack.families.get(fam, [])]
+        # the villa's critical devices too, whatever their family: one that leaves the villa's system is missing
+        # (PM-MISSING), named as the pack names it now — once gone, nothing else does
+        listed = {r["entity_id"] for r in watched}
+        watched += [pack.row(e) or {"entity_id": e} for e in pack.critical if e not in listed]
+        watched = [{**r, "seen_name": pack.device_name(r["entity_id"], r.get("name")),
+                    "device": pack.physical_device_of(r["entity_id"])} for r in watched]
         first_run = st.pack_seen_empty()
         new, gone = st.pack_diff(watched)
         summary["onboarding"] = (f"Initial inventory: {len(new)} monitored entities recorded, nothing to ask."

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.406 (31 October 2026)
+
+- PM-MISSING (owner, 31 October: a critical lock removed from the villa's system at 00:19, nothing said): rules.
+  missing_rules; nightly.missing_findings over the baseline (store.pack_seen_rows, now with name/device/gone_at, and
+  pack.critical; never the asleep list), confirmed only by client.not_found; one finding per pack_seen device, P2 when
+  critical, the automations still naming it from rules_mentioning + ids_named. The night reads the whole baseline
+  (missing_night: a failed read keeps the open ones); recheck.gone_missing every 5 minutes reads the critical list and
+  the open faults' devices, and closes one that answers again (BACK_NOTE). STATE_RULES gains it; recheck READS do not.
+- A person's Done on it (nightly.forget_dismissed, run before every reading): store.forget_seen and the FORGOTTEN
+  cache; a forgotten device that answers again is watched again.
+- recheck.back_online no longer closes a fault whose entities are all not found as GONE_NOTE when a missing fault
+  covers them (nightly.missing_hands): handed, "Followed by: …"; the night hands over the same way.
+- build_pack records the critical devices in pack_seen too, with the device's name. Migration: the pack_seen rows a
+  pack had already dropped are deleted once (no fault for every device ever removed).
+- UI: core.floating places a panel again on a resize or page scroll while the focus is inside it (float.afterMove,
+  visualViewport listened to when present): a phone's keyboard no longer closes the device picker.
+
 ## 0.6.405 (31 October 2026)
 
 - The siren's request (owner's Telegram, 31 October 00:19): alert-desk siren_gate names each signal by the pack's name

@@ -1,4 +1,5 @@
 // VESTA Agent page — the shared pieces: the page's state, the helpers every tab draws with, the dialog, the tab switch.
+import { afterMove } from "./float.js";   // what a floating panel does when the page moves under it
 
 // ⚠️ THE PAGE'S PLACES (owner, 2026-10-08: one name per place). vesta_agent/places.py names every card and tab, and
 // the server writes that table into the page: a title is place("tools"), a sentence that sends the reader there says
@@ -48,7 +49,8 @@ export function h(tag, attrs = {}, ...kids) {
 // device picker's list and the (i)'s tooltip all float over the page the same way: on the page body, fixed, so a
 // table cell or a card cannot clip or squeeze them (the picker's list inside a table cell took the cell's input
 // rules); under the anchor, or above it when there is no room below; closed by a click outside, Escape, a scroll
-// of the page or a resize. `width`: a fixed width (else the anchor's, at least 180 px); `center`: centred on it.
+// of the page or a resize — placed again instead while the focus is inside it (float.afterMove: a phone's keyboard
+// opening is a resize). `width`: a fixed width (else the anchor's, at least 180 px); `center`: centred on it.
 export function floating(anchor, panel, { width = null, center = false, onClose = () => {} } = {}) {
   panel.classList.add("floating");
   // inside an open popup (a modal <dialog>, the top layer), a panel on the body would draw UNDER it
@@ -64,7 +66,12 @@ export function floating(anchor, panel, { width = null, center = false, onClose 
     if (up) panel.style.bottom = `${vh - b.top + 6}px`; else panel.style.top = `${b.bottom + 6}px`;
   };
   const outside = (e) => { if (!panel.contains(e.target) && !anchor.contains(e.target)) close(); };
-  const moved = (e) => { if (!(e && e.target instanceof Node && panel.contains(e.target))) close(); };
+  const moved = (e) => {
+    const did = afterMove(!!(e && e.target instanceof Node && panel.contains(e.target)), panel.contains(document.activeElement));
+    if (did === "close") close(); else if (did === "place") place();
+  };
+  // the keyboard of a phone moves the visual viewport (iOS Safari: often without a window resize); absent: window's only
+  const vv = window.visualViewport || null;
   const esc = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); if (anchor.focus) anchor.focus(); } };
   let closed = false;
   function close() {
@@ -72,12 +79,14 @@ export function floating(anchor, panel, { width = null, center = false, onClose 
     closed = true;
     panel.remove();
     document.removeEventListener("pointerdown", outside, true); window.removeEventListener("scroll", moved, true);
-    window.removeEventListener("resize", close); document.removeEventListener("keydown", esc, true);
+    window.removeEventListener("resize", moved); document.removeEventListener("keydown", esc, true);
+    if (vv) { vv.removeEventListener("resize", moved); vv.removeEventListener("scroll", moved); }
     onClose();
   }
   place();
   document.addEventListener("pointerdown", outside, true); window.addEventListener("scroll", moved, true);
-  window.addEventListener("resize", close); document.addEventListener("keydown", esc, true);
+  window.addEventListener("resize", moved); document.addEventListener("keydown", esc, true);
+  if (vv) { vv.addEventListener("resize", moved); vv.addEventListener("scroll", moved); }
   return { close, place };
 }
 

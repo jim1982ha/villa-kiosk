@@ -203,6 +203,17 @@ class Store:
         for col in ("reopened_at", "occurrences"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE incidents ADD COLUMN {col} TEXT")
+        # pack_seen keeps, for a device that leaves the villa's system, what the night check and the recheck need to
+        # say so (PM-MISSING): its name and its device as the last pack had them, and when a pack first no longer had it
+        # (gone_at). ⚠️ GONE BEFORE THIS COLUMN IS NOT MISSING NOW (0.6.406): every device ever removed stayed in the
+        # table; the first night would have opened a fault for each. The rows a pack had already dropped are forgotten
+        # here, once.
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(pack_seen)")}
+        if "gone_at" not in cols:
+            for col in ("name", "device", "gone_at"):
+                if col not in cols:
+                    self.db.execute(f"ALTER TABLE pack_seen ADD COLUMN {col} TEXT")
+            self.db.execute("DELETE FROM pack_seen WHERE last_seen < (SELECT MAX(last_seen) FROM pack_seen)")
         # ...and its rows are rewritten ONCE in today's shape (0.6.42), so no reader keeps a second way of
         # reading them: a task's source is the latest finding, else incident, of its rule and device
         # ("none:0" when neither exists: it then waits for a person, as before), and its "<what> Check: <how>"
@@ -563,20 +574,39 @@ class Store:
         return self.db.execute("SELECT COUNT(*) FROM pack_seen").fetchone()[0] == 0
 
     def pack_diff(self, entities: list[dict]) -> tuple[list[dict], list[dict]]:
-        """Returns (new, gone) versus the previous night."""
+        """Returns (new, gone) versus the previous pack: `gone`, the rows a pack no longer has for the first time (their
+        gone_at set now, cleared when one comes back). Each row keeps its `seen_name` (else `name`) and `device`: what
+        names it once the villa's system no longer does."""
         seen = {r["entity_id"]: dict(r) for r in self.db.execute("SELECT * FROM pack_seen")}
         now = _now()
         new, current = [], set()
         for e in entities:
             current.add(e["entity_id"])
+            name, device = e.get("seen_name") or e.get("name"), e.get("device")
             if e["entity_id"] not in seen:
                 new.append(e)
-                self.db.execute("INSERT INTO pack_seen VALUES (?,?,?,?,?)", (e["entity_id"], now, e.get("family"), e.get("area"), now))
+                self.db.execute("INSERT INTO pack_seen (entity_id, first_seen, family, area, last_seen, name, device) "
+                                "VALUES (?,?,?,?,?,?,?)", (e["entity_id"], now, e.get("family"), e.get("area"), now,
+                                                            name, device))
             else:
-                self.db.execute("UPDATE pack_seen SET last_seen=?, family=?, area=? WHERE entity_id=?", (now, e.get("family"), e.get("area"), e["entity_id"]))
-        gone = [seen[e] for e in seen if e not in current and seen[e]["last_seen"] != now]
+                self.db.execute("UPDATE pack_seen SET last_seen=?, family=?, area=?, name=?, device=?, gone_at=NULL "
+                                "WHERE entity_id=?", (now, e.get("family"), e.get("area"), name, device, e["entity_id"]))
+        gone = [seen[e] for e in seen if e not in current and not seen[e].get("gone_at")]
+        for g in gone:
+            self.db.execute("UPDATE pack_seen SET gone_at=? WHERE entity_id=?", (now, g["entity_id"]))
         self.db.commit()
         return new, gone
+
+    def pack_seen_rows(self) -> dict[str, dict]:
+        """Every device a pack had, by entity id: {entity_id, first_seen, family, area, last_seen, name, device,
+        gone_at} — the baseline of what may go missing (PM-MISSING)."""
+        return {r["entity_id"]: dict(r) for r in self.db.execute("SELECT * FROM pack_seen")}
+
+    def forget_seen(self, entity_ids) -> None:
+        """Forget these devices: a person said they were removed on purpose (PM-MISSING's Done). One that comes back
+        is a new device to the next pack."""
+        self.db.executemany("DELETE FROM pack_seen WHERE entity_id=?", [(e,) for e in entity_ids])
+        self.db.commit()
 
     def first_seen(self, entity_id: str) -> str | None:
         r = self.db.execute("SELECT first_seen FROM pack_seen WHERE entity_id=?", (entity_id,)).fetchone()

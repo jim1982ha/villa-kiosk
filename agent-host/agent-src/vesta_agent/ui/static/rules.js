@@ -205,7 +205,7 @@ export function rulesForms(doc, jobs = [], tools = null) {
       search.value = ""; drawList();
       float = floating(shown, panel, { width: Math.max(shown.getBoundingClientRect().width, 340),
                                        onClose: () => { float = null; shown.setAttribute("aria-expanded", "false"); } });
-      shown.setAttribute("aria-expanded", "true"); search.focus({ preventScroll: true });   // a scroll would close it
+      shown.setAttribute("aria-expanded", "true"); search.focus({ preventScroll: true });   // no jump of the page under it
     });
     search.addEventListener("input", () => { drawList(); if (float) float.place(); });
     panel.append(search, list,

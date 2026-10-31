@@ -302,6 +302,27 @@ def availability_rules(asset: dict, entity_id: str, state: str | None, last_chan
     return out
 
 
+MISSING = "PM-MISSING"
+
+
+def missing_rules(name: str, entity_id: str, entities: list[str], since: str, since_words: str, critical: bool,
+                  named_in: list[str] = ()) -> list[Finding]:
+    """PM-MISSING: a device VESTA watched that the villa's system no longer has at all — no state, its own "not found"
+    (owner, 2026-10-31: an entrance lock its hub stopped sharing vanished at 00:19; offline needs a state, so nothing
+    was said, and the owner found it on the Kiosk's map). `name`: as the last pack named it; `since`: when a pack first
+    no longer had it (ISO), `since_words` that moment as a person reads it; `entities`: every entity of the device gone
+    with it; `named_in`: the automations and scripts still naming it ("automation 'Door watch'"). P2 when the device is
+    critical, as an offline one."""
+    sev = P2 if critical else P3
+    check = "Re-pair it, or press Done if it was removed on purpose."
+    if named_in:
+        check += f" Still named in {', '.join(named_in)}: remove it there."
+    return [Finding(MISSING, entity_id, entity_id, "availability", sev,
+                    f"{name} is missing from the villa's system since {since_words}.",
+                    {"critical": critical, "entities": list(entities), "since": since, "name": name,
+                     "named_in": list(named_in)}, check)]
+
+
 def silence_rules(asset: dict, entity_id: str, last_changed_hours: float | None, params: VillaParams,
                   now=None) -> list[Finding]:
     if last_changed_hours is not None and last_changed_hours >= params.behaviour("silence_hours"):
