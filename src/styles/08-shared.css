@@ -143,13 +143,18 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 12px 10px 0; flex: none; }
 .messages-filters { display: flex; flex-wrap: nowrap; gap: 6px; flex: 0 0 auto; max-width: 100%; }
 .messages-toolbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-/* the filters' own size and padding beside them, so the button joins their line: with "Notifs", 8px each side holds
-   the three filters and Open Ticket on one line on a 360 px phone (owner, 2026-10-31; tests/oracles/live_issues.mjs) */
-.messages-toolbar-actions .btn { padding: 0 8px; font-size: var(--text-sm); }
 .messages-filter {
-  flex: none; white-space: nowrap; min-height: var(--touch-min); padding: 0 8px; border-radius: 999px;
-  border: 1px solid var(--hairline); background: transparent; color: var(--text-primary); font: inherit;
-  font-size: var(--text-sm); display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  flex: none; white-space: nowrap; background: transparent; color: var(--text-primary); font: inherit;
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+}
+/* ⚠️ ONE SHAPE FOR THE LINE'S FOUR BUTTONS (owner, 2026-10-31: "the corners are not the same: style them all the
+   same"): the filters were round pills, Open Ticket a card button's 12px corners. Their height, round corners, border,
+   padding and size are this one rule, after each one's own (the filter's `font: inherit` would undo the size). With
+   "Notifs", 8px each side holds the three filters and Open Ticket on one line on a 360 px phone
+   (tests/oracles/live_issues.mjs) */
+.messages-filter, .messages-toolbar-actions .btn {
+  min-height: var(--touch-min); padding: 0 8px; border-radius: 999px; border: 1px solid var(--hairline);
+  font-size: var(--text-sm);
 }
 .messages-filter.on { background: var(--accent); border-color: transparent; color: var(--bg-base); font-weight: 600; }
 .messages-filter-count { font-weight: 700; }

@@ -442,13 +442,20 @@
 .info-pop-source { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); white-space: nowrap; }
 .info-pop-source > b { font-weight: 600; }
 /* The sources' table (FaultTiming): four columns, a few words each, smaller type — one line or two per source. */
-.info-pop-table td.info-pop-what { color: var(--text-dim); width: 34%; }
-.info-pop-table td.info-pop-when { color: var(--text-primary); width: 24%; }
+.info-pop-table td.info-pop-what { color: var(--text-dim); }
+.info-pop-table td.info-pop-when { color: var(--text-primary); }
 .info-pop-table td, .info-pop-table th { font-size: var(--text-xs, 0.85em); line-height: 1.35; }
+/* ⚠️ THE COLUMNS' WIDTHS ARE THE WIDE LAYOUT'S ONLY (owner, 2026-10-31, phone: the text squeezed into a third of the
+   card, the rest empty): set for every width, `td.info-pop-what`'s 34% outranked the phone's `width: auto` below */
+@media (min-width: 641px) {
+  .info-pop-table td.info-pop-what { width: 34%; }
+  .info-pop-table td.info-pop-when { width: 24%; }
+}
 @media (max-width: 640px) {
-  /* a phone: each source one block — its name, then what it is, appears and goes, one under the other */
+  /* a phone: each source one block, the card's whole width — its name, then what it is, appears and goes, one under
+     the other */
   .info-pop-table thead { display: none; }
-  .info-pop-table tr, .info-pop-table td { display: block; width: auto; }
+  .info-pop-table, .info-pop-table tbody, .info-pop-table tr, .info-pop-table th, .info-pop-table td { display: block; width: auto; }
   .info-pop-table td { border-bottom: none; padding: 1px 0; }
   .info-pop-table tbody tr { border-bottom: 1px solid var(--hairline); padding: 4px 0; }
   .info-pop-table td.info-pop-when::before { content: attr(data-label); font-weight: 600; margin-right: 4px; }
@@ -671,7 +678,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .panel-reading-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--touch-min); padding: 6px 4px; border: none; background: none; color: var(--text-primary); text-align: left; cursor: pointer; border-radius: 10px; }
 .panel-reading-row + .panel-reading-row { border-top: 1px solid var(--hairline); border-radius: 0; }
 /* "Show all (n)" — the rest of a busy device's readings, on request (DeviceReadings). */
-.panel-readings-more { display: block; width: 100%; min-height: var(--touch-min); margin-top: 2px; padding: 6px 4px; border: none; border-top: 1px solid var(--hairline); background: none; color: var(--accent); font-size: var(--text-sm); font-weight: 600; text-align: left; cursor: pointer; }
 @media (hover: hover) {
   .panel-reading-row:hover:not(:disabled) { background: var(--bg-input); }
 }

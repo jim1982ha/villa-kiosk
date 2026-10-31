@@ -22,7 +22,7 @@ export default function CoverPanel({ entity, mapping, onClose }: PanelProps) {
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Blinds size={22} />} onClose={onClose}>
       {/* ab0ffb46 routed Cover through the shared notice in a comment only —
           the bespoke pill carried no detail. The notice, as every panel. */}
-      <ControlFrame entity={entity} mapping={mapping} device="cover">
+      <ControlFrame entity={entity} mapping={mapping}>
         <div className="center" style={{ marginBottom: 16 }}>
           <span className={`status-pill ${pill.tone}`}>{pill.text}</span>
         </div>

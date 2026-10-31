@@ -60,9 +60,9 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
       icon={<PadIcon size={22} />}
       onClose={onClose}
     >
-      {/* The shared frame: its notice when HA has lost the lock, the state
-          pill and the buttons otherwise (ControlFrame). */}
-      <ControlFrame entity={entity} mapping={mapping} device="lock">
+      {/* The shared frame: nothing to command when the villa's system has lost the lock (the window's notice says
+          so: BasePanel), the state pill and the buttons otherwise (ControlFrame). */}
+      <ControlFrame entity={entity} mapping={mapping}>
       <div className="center" style={{ margin: "8px 0 20px" }}>
         <span className={`status-pill ${pill.tone}`}>
           {/* The open padlock is reserved for a lock that is genuinely NOT

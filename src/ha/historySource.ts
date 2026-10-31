@@ -85,7 +85,7 @@ export type HistoryRequest =
       fields: readonly StatisticField[]; hours?: number; since?: number }
   /** When each id's CURRENT state began, as far back as the villa keeps (stateSince). */
   | { kind: "since"; ids: readonly string[]; hours?: undefined }
-  /** When each id was last in the villa's system, as far back as the villa keeps (lastRecorded): a device the villa's
+  /** When each id left the villa's system, as far back as the villa keeps (lastRecorded): a device the villa's
    *  system no longer has at all. */
   | { kind: "lastSeen"; ids: readonly string[]; hours?: undefined };
 
@@ -336,27 +336,32 @@ async function since(port: HistoryPort, id: string, now: number): Promise<StateS
   return stateSince(await port.stateRows(id, from, now, from), from);
 }
 
-// ── When a device the villa's system no longer has was last in it ─────────
+// ── When a device the villa's system no longer has left it ────────────────
 /**
- * The last moment `rows` show the entity in the villa's system: its last row WITH a state (unavailable included: it
- * was there, out of contact). null when nothing is kept: never in it, or gone longer than the villa keeps.
+ * When `rows` (read from `from`) show the entity leaving the villa's system: the moment of its removal row, the one
+ * row with no state that removing an entity records; with none read, its last change of state, unless that is only
+ * the state carried over to the read's start (`from`: no moment of its own); else null (never in it, or gone longer
+ * than the villa keeps).
  *
- * ⚠️ THE REMOVAL ROW IS NOT A SIGHTING (owner, 2026-10-31: a door lock the villa's system dropped at night, when its
- * hub stopped sharing it, read "Rename or remove its object in the 3D model"). Removing an entity records one last row
- * with no state, at the moment it went: the state before it is the last time it was seen.
+ * ⚠️ ONE RULE WITH VESTA (architecture review 2026-10-31 #1, agent-contract.json `leftAt`): the device's window said
+ * "last seen" at its last state, or at the start of what the villa keeps for a device quiet for days (the row the
+ * read is led by), while Telegram said "missing since" its removal: two times for one lock that left at 00:19. The
+ * Agent's preventive-maintenance left_at reads the same rows the same way.
  */
-export function lastRecorded(rows: readonly StateRow[]): number | null {
-  let seen: number | null = null;
+export function lastRecorded(rows: readonly StateRow[], from: number): number | null {
+  let last: number | null = null, gone: number | null = null;
   for (const r of rows) {
     const t = new Date(r.last_changed).getTime();
-    if (r.state != null && r.state !== "" && Number.isFinite(t) && (seen === null || t > seen)) seen = t;
+    if (!Number.isFinite(t)) continue;
+    if (r.state != null && r.state !== "") { last = t; gone = null; }
+    else if (last !== null && gone === null) gone = t;
   }
-  return seen;
+  return gone ?? (last !== null && last > from ? last : null);
 }
 
 async function lastSeen(port: HistoryPort, id: string, now: number): Promise<number | null> {
   const from = readBackFrom(await keptFrom(port, now), now);
-  return lastRecorded(await port.stateRows(id, from, now, from));
+  return lastRecorded(await port.stateRows(id, from, now, from), from);
 }
 
 // ── How far back the villa's system keeps every change ────────────────────

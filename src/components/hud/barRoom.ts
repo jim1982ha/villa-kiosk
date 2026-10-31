@@ -49,6 +49,15 @@ export function barMicShown(vestaRuns: boolean, room: BarRoom | null): boolean {
   return vestaRuns && micFits(room);
 }
 
+/** The gear menu's "Ask VESTA" row: while VESTA runs and only where the top bar does not already show its microphone
+ *  (owner, 2026-10-31: "Since the 'Ask VESTA' icon is appearing directly in the top bar, it shall not appear in the
+ *  dropdown menu"). It reads the bar's own decision, never a room check of its own, so the two can never both show
+ *  or both hide; and that decision holds while the menu is open (the dropdown floats, the reading leaves the
+ *  microphone out). Pure. */
+export function menuAskShown(vestaRuns: boolean, barMic: boolean): boolean {
+  return vestaRuns && !barMic;
+}
+
 /** The classes the measurement finds its pieces by (HUD.tsx draws them). */
 export const BAR_PARTS = {
   brand: "hud-brand",

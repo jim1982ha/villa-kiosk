@@ -10,7 +10,8 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-import { elements, guardsOf, parseTsx } from "../consistency/jsx.mjs";
+import { elements, guardsOf, parseTsx, propText, tagOf } from "../consistency/jsx.mjs";
+import ts from "typescript";
 const { dismissedEntitySet, orphanObjects, inventoryGaps } = await import("@/config/dismissedEntities");
 const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
 const { effectiveMapped, visibleTo } = await import("@/config/villaVisibility");
@@ -60,13 +61,50 @@ const ed = src("components/settings/ConfigEditor.tsx"), notice = src("components
 ck("  ...and a row of the model has no bin", /onRemove=\{sceneEntityIds\.has\(key\) \? undefined : remove\}/.test(ed));
 ck("the device's window says it is not in Home Assistant, and what to do",
    /missingFromHa\(entities, entityId\)/.test(notice) && /NOT_IN_HA/.test(notice) && /missingAdvice\(/.test(notice));      // what to do: panel_rules drives its words
+// ⚠️ EVERY DEVICE WINDOW, ONE NOTICE (architecture review 2026-10-31 round 12 #1: a missing sensor said only
+// "UNAVAILABLE", a missing camera "Camera unavailable"): the one frame draws it, and every window PanelRouter opens
+// is that frame for a missing device. Read through the compiler's tree, from the router's own list of windows.
+const base = parseTsx("components/panels/BasePanel.tsx");
+const declared = (tree, name) => { let f = null; const v = (n) => { if (ts.isVariableDeclaration(n) && n.name.getText() === name) f = n.initializer.getText().replace(/\s+/g, " "); ts.forEachChild(n, v); }; v(tree); return f; };
+const baseNotice = elements(base, "UnavailableNotice");
+ck("  ...the device window's frame draws the notice itself: missing, or lost contact, at the top of its content",
+   baseNotice.length === 1 && guardsOf(baseNotice[0]).join() === "(missing || offline)" && propText(baseNotice[0], "entityId") === "entityId"
+   && declared(base, "missing") === "!!entityId && missingFromHa(entities, entityId)"
+   && declared(base, "offline") === "!!entityId && !missing && (lost ?? isOffline(entities[entityId]))",
+   [baseNotice.map((n) => guardsOf(n)), declared(base, "missing"), declared(base, "offline")]);
+let kids = null;
+ts.forEachChild(base, function v(n) { if (ts.isJsxExpression(n) && n.expression?.getText() === "!missing && children") kids = n; ts.forEachChild(n, v); });
+ck("  ...and, missing, draws none of the window's own content (nothing to show or command)", !!kids);
 ck("  ...and waits for no history it will never have",
-   (() => { const bands = elements(parseTsx("components/panels/BasePanel.tsx"), "LastDayTimeline");
-     return bands.length === 1 && guardsOf(bands[0]).includes("!missingFromHa(entities, entityId)"); })());
-ck("the three windows that show the notice give it their entity",
-   /UnavailableNotice device=\{device\} entityId=\{mapping\.entityId\}/.test(src("components/panels/ControlFrame.tsx"))
-   && /UnavailableNotice entityId=\{mapping\.entityId\}/.test(src("components/panels/GenericPanel.tsx"))
-   && /UnavailableNotice device="device" entityId=\{primaryMapping\.entityId\}/.test(src("components/panels/DeviceGroupPanel.tsx")));
+   (() => { const bands = elements(base, "LastDayTimeline");
+     return bands.length === 1 && guardsOf(bands[0]).includes("!missing"); })());
+const router = parseTsx("components/panels/PanelRouter.tsx");
+const kinds = [...new Set([...router.statements].filter(ts.isImportDeclaration)
+  .map((d) => d.moduleSpecifier.text).filter((m) => /^\.\/\w+Panel$/.test(m)).map((m) => m.slice(2)))];
+const routed = new Set(kinds.filter((k) => elements(router, k).length > 0));
+// a window is the frame for a missing device when it draws BasePanel about its device, with no notice of its own and
+// no way round it: CameraPanel's own full-screen view returns early to the frame while its camera is missing
+const frameFor = (k) => {
+  const t = parseTsx(`components/panels/${k}.tsx`);
+  const frames = elements(t, "BasePanel").filter((b) => /^(mapping|primaryMapping)\.entityId$/.test(propText(b, "entityId") ?? ""));
+  const own = elements(t, "UnavailableNotice").length;
+  const ret = elements(t, "div").some((d) => /camera-fullscreen/.test(propText(d, "className") ?? ""));
+  let early = false;
+  ts.forEachChild(t, function v(n) {
+    if (ts.isIfStatement(n) && /^missingFromHa\(entities, mapping\.entityId\)$/.test(n.expression.getText())
+      && elements(n.thenStatement, "BasePanel").length === 1) early = true;
+    ts.forEachChild(n, v);
+  });
+  return frames.length > 0 && own === 0 && (!ret || early);
+};
+const notFramed = [...routed].filter((k) => !frameFor(k));
+ck("  ...every window PanelRouter opens is that frame for a missing device, the camera's too, none with a notice of its own",
+   routed.size >= 10 && routed.has("SensorPanel") && routed.has("CameraPanel") && notFramed.length === 0, { routed: [...routed], notFramed });
+const { readingOf } = await import("@/config/reading");
+ck("  ...and a missing reading says Missing, never UNAVAILABLE (\"Also on this device\", a grouped device's member)",
+   readingOf("sensor.gone", undefined, "sensor").value === NOT_IN_HA.toUpperCase()
+   && readingOf("binary_sensor.gone", undefined, "binary_sensor").value === NOT_IN_HA.toUpperCase()
+   && readingOf("sensor.away", { entity_id: "sensor.away", state: "unavailable", attributes: {} }, "sensor").value === "UNAVAILABLE");
 ck("the list's \"Show all\" says entities, not entitys", /noun="entity" plural="entities"/.test(ed));
 
 done("✅ the model's objects are never removed, and a missing entity is said everywhere");

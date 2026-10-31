@@ -459,9 +459,30 @@ ck("the Tickets tab draws ticketCards — the tickets in progress, by device —
   // engine) with the real Cockpit: the labels' own widths Issues 9 54.1, Notifs 36.5, Reports 47.6, the wrench and Open
   // Ticket 94.7, a 1 px border; the filters' line is the screen less 36 px. With 12 px each side it was 1 px short on a
   // 390 px iPhone, 31 on a 360 px phone
+  // owner, 2026-10-31: "the corners are not the same: style them all the same". The four buttons' shape, read from the
+  // stylesheet's rules (postcss): every declaration of it, for either selector, anywhere (a phone's @media too), must
+  // be ONE rule naming both, with the filters' round pill
+  const postcss = (await import("postcss")).default;
+  const SHAPE = ["min-height", "padding", "border-radius", "border", "font-size"];
+  const FILTER = ".messages-filter", OPEN = ".messages-toolbar-actions .btn";
+  const sheet = postcss.parse(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8"));
+  const shaping = [];
+  sheet.walkRules((r) => {
+    const sel = r.selectors.map((x) => x.trim());
+    if (!sel.includes(FILTER) && !sel.includes(OPEN)) return;
+    r.walkDecls((d) => { if (SHAPE.includes(d.prop) || d.prop.startsWith("border-") || d.prop.startsWith("padding-")) shaping.push({ r, d }); });
+  });
+  const rules = [...new Set(shaping.map((x) => x.r))];
+  const shape = rules.length === 1 ? Object.fromEntries(shaping.map(({ d }) => [d.prop, d.value])) : {};
+  ck("  ...the line's four buttons are ONE shape, defined once: the filters' round pill, its height, border and padding",
+     rules.length === 1 && rules[0].selectors.map((x) => x.trim()).sort().join() === [FILTER, OPEN].sort().join()
+     && shape["border-radius"] === "999px" && shape["min-height"] === "var(--touch-min)" && /^1px solid /.test(shape.border ?? "")
+     && /^0 \d+px$/.test(shape.padding ?? "") && SHAPE.every((p) => shaping.filter(({ d }) => d.prop === p).length === 1),
+     rules.map((r) => `${r.selector} { ${r.nodes.map(String).join("; ")} }`));
   {
+    const pad = Number(/^0 (\d+)px$/.exec(shape.padding ?? "")?.[1]);
     const px = (re) => Number((shared.match(re) ?? [])[1]);
-    const fPad = px(/\.messages-filter \{[^}]*padding: 0 (\d+)px/), bPad = px(/\.messages-toolbar-actions \.btn \{[^}]*padding: 0 (\d+)px/);
+    const fPad = pad, bPad = pad;
     const fGap = px(/\.messages-filters \{[^}]*gap: (\d+)px/), tGap = px(/\.messages-toolbar \{[^}]*gap: (\d+)px/);
     const needed = [54.1, 36.5, 47.6].reduce((w, l) => w + l + 2 * fPad + 2, 0) + 2 * fGap + tGap + 94.7 + 2 * bPad + 2;
     const fits = [360, 375, 390, 412, 430].filter((w) => needed <= w - 36);

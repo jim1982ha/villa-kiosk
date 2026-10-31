@@ -25,5 +25,5 @@ ck("the panel's class table holds no words at all (binarySensorWords is the one 
    !/onLabel|offLabel/.test(cls));
 ck("every class has two words", Object.values(BINARY_WORDS).every((w) => w.length === 2 && w[0] && w[1]) && binaryWord("sensor.x", "battery", "off") === null);
 const picker = readFileSync(new URL("../../src/components/settings/EntityPicker.tsx", import.meta.url), "utf8");
-ck("Settings' entity search words its states the same way", /deviceRowText\(e, domainOf\(e\.entity_id\)\)/.test(picker) && !/>\{e\.state\}</.test(picker));
+ck("Settings' entity search words its states the same way", /deviceRowText\(entities\[id\], domainOf\(id\)\)/.test(picker) && !/>\{e\.state\}</.test(picker));
 done("✅ a binary sensor reads in its class's words everywhere");

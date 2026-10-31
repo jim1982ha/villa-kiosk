@@ -11,6 +11,9 @@
 // object ↔ entity link.
 
 import type { EntityMapping } from "@/types/scene.types";
+import { searchNames } from "./EntityMap";
+import { deviceRoom } from "./devicePlace";
+import { domainOf } from "@/utils/entityDomain";
 
 export interface DeviceRow {
   id: string;
@@ -37,13 +40,49 @@ export function deviceRows(
     .map(([id, mapping]) => ({ id, mapping, objects: objects.get(id) ?? [] }));
 }
 
+/** What a device search reads: the stored devices, the villa's system's entities, the rooms. */
+export interface SearchSource {
+  entityMap: Parameters<typeof searchNames>[1];
+  entities: Parameters<typeof searchNames>[2];
+  resolvedRooms: Readonly<Record<string, string | undefined>>;
+}
+
 /**
- * Does a search find this row? Its entity id, the NAME THE MAP SHOWS (not the stored label: a
- * stored entity-id fallback is not a name anyone sees — EntityMap.labelField), its room, or one of
- * its linked objects. Case-insensitive; an empty search finds everything.
+ * What a device is found by, in EVERY device search (Advanced Settings' rows, "Add a device…", the device groups, the
+ * ticket form): the NAME THE MAP SHOWS (not the stored label: a stored entity-id fallback is not a name anyone sees),
+ * the villa's system's own name, its room and its id.
+ *
+ * ⚠️ ONE SEARCH (architecture review 2026-10-31 round 12 #2): typing "pool" found a device by its room in Settings ›
+ * Devices, by the system's name but not the room in "Add a device…", by neither in the device groups.
  */
-export function rowMatches(row: DeviceRow, query: string, shownName: string, room: string): boolean {
-  return matchesQuery(query, row.id, shownName, room, ...row.objects);
+export function deviceSearchTexts(id: string, src: SearchSource): string[] {
+  const [shown, platform] = searchNames(id, src.entityMap, src.entities);
+  const room = deviceRoom(src.resolvedRooms, id);
+  // ...and the three as one line, so a search may run from the name into the room ("kitchen tap" for a tap in the
+  // kitchen), as the ticket form's own search did
+  return [shown, platform, room, id, `${shown} ${room} ${id}`].filter(Boolean);
+}
+
+/** The entities "Add a device…" (EntityPicker) lists for a search: of `domains` when given, found by what any device
+ *  is found by, in id order. Pure. */
+export function entitySearch(query: string, src: SearchSource, domains?: readonly string[]): string[] {
+  return Object.keys(src.entities)
+    .filter((id) => !domains || domains.includes(domainOf(id)))
+    .filter((id) => matchesQuery(query, ...deviceSearchTexts(id, src)))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/** Does a search find this device group: any of its devices, its lead and its members alike, by what any device is
+ *  found by (Advanced Settings' device groups). Pure. */
+export function groupMatches(group: { primaryEntityId: string; memberEntityIds: readonly string[] }, query: string,
+  src: SearchSource): boolean {
+  return matchesQuery(query, ...[group.primaryEntityId, ...group.memberEntityIds].flatMap((id) => deviceSearchTexts(id, src)));
+}
+
+/** Does a search find this row: what any device is found by (deviceSearchTexts), or one of its linked objects.
+ *  Case-insensitive; an empty search finds everything. */
+export function rowMatches(row: DeviceRow, query: string, src: SearchSource): boolean {
+  return matchesQuery(query, ...deviceSearchTexts(row.id, src), ...row.objects);
 }
 
 /** Does a typed search find any of these texts — trimmed, case-insensitive, a part of one is enough; an empty search

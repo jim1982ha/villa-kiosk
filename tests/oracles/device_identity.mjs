@@ -105,9 +105,10 @@ console.log("\n  the same on every panel (2.496.271):");
   ck("a reading grouped under ANOTHER device is listed there, not here",
      !deviceReadings("sensor.pump_power", deviceFolding(entityMap, grouped, reg2), ents2, hidden, grouped, reg2).includes("sensor.pump_temp"));
   const rd = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
-  ck("every panel frame draws the one list, the first 3 then 'Show all'",
+  // the first few, then the rest: the one truncated list (tests/oracles/truncated_list.mjs drives it)
+  ck("every panel frame draws the one list, the first few then 'Show all'",
      /\{deviceReadings !== false && <DeviceReadings \/>\}/.test(rd("components/panels/BasePanel.tsx"))
-     && /export const READINGS_SHOWN = 3;/.test(rd("components/panels/DeviceReadings.tsx"))
+     && /useTruncated\(/.test(rd("components/panels/DeviceReadings.tsx"))
      && /readingsOf: \(id: string\) => deviceReadings\(id, folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds,\s*hiddenInHaEntityIds\)/.test(rd("config/VillaModel.tsx")));
 }
 
@@ -149,7 +150,7 @@ ck("the open panel lists its device's readings, each opening its own panel",
    // the open panel's actions: components/panels/useOpenPanelActions (architecture review 11), fed the identity by the page
    /useOpenPanelActions\(\{\s+screen, open: activePanel, go, panelFor, readingsOf: identity\.readingsOf, doors, marks: windowMarks,\s+\}\)/.test(d) && /<PanelActionsProvider value=\{openPanel\.actions/.test(d)
    && /readingsOf\(activePanel\.entityId\)/.test(src("components/panels/useOpenPanelActions.ts")) && /onOpenReading: openReading,/.test(src("components/panels/useOpenPanelActions.ts")) && /go\(\{ type: "openReading", panel: panelFor\(entityId\) \}\)/.test(src("components/panels/useOpenPanelActions.ts"))
-   && /rows\.map\(\(r\) =>/.test(src("components/panels/DeviceReadings.tsx")) && /onOpenReading\(r\.id\)/.test(src("components/panels/DeviceReadings.tsx")));
+   && /list\.visible\.map\(\(r\) =>/.test(src("components/panels/DeviceReadings.tsx")) && /onOpenReading\(r\.id\)/.test(src("components/panels/DeviceReadings.tsx")));
 ck("grouping never trades controls for a summary: only a READING-led group opens the combined view",
    /if \(group && \(mapping\.type === "sensor" \|\| mapping\.type === "binary_sensor"\)\)/.test(router)
    && /deviceReadings=\{false\}/.test(src("components/panels/DeviceGroupPanel.tsx")));

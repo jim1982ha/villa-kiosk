@@ -61,12 +61,15 @@ console.log("\n  the device window's lost-contact notice and its linked row");
   ck("isOffline decides the notice: lost for 'unavailable' and a missing entity, not for 'unknown'",
      isOffline(ent("switch.x", "unavailable")) && isOffline(undefined) && !isOffline(ent("switch.x", "unknown")) && !isOffline(ent("switch.x", "on")));
   const src = (p) => readFileSync(new URL(`../../src/components/panels/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-  const PANELS = ["ControlFrame.tsx", "GenericPanel.tsx"];
-  ck("the control frame and the generic window show the notice on isOffline, never on isUnavailable",
-     PANELS.every((p) => /isOffline\(entity\)[\s\S]*<UnavailableNotice/.test(src(p)) && !/isUnavailable/.test(src(p))),
-     PANELS.filter((p) => !/isOffline\(entity\)/.test(src(p)) || /isUnavailable/.test(src(p))));
+  const PANELS = ["BasePanel.tsx", "ControlFrame.tsx", "GenericPanel.tsx"];
+  // the notice is the frame's (BasePanel, its placement pinned by tests/oracles/glb_ground_truth.mjs); the frame, the
+  // control frame and the generic window decide lost contact on isOffline
+  ck("the frame, the control frame and the generic window decide lost contact on isOffline, never on isUnavailable",
+     PANELS.every((p) => /isOffline\(entit(y|ies\[entityId\])\)/.test(src(p)) && !/isUnavailable/.test(src(p))),
+     PANELS.filter((p) => !/isOffline\(entit(y|ies\[entityId\])\)/.test(src(p)) || /isUnavailable/.test(src(p))));
   ck("  ...and the grouped window only when every member's contact is lost",
-     /rows\.every\(\(r\) => r\.reading\.contact === "lost"\)/.test(src("DeviceGroupPanel.tsx")));
+     /const allLost = rows\.length > 0 && rows\.every\(\(r\) => r\.reading\.contact === "lost"\);/.test(src("DeviceGroupPanel.tsx"))
+     && /lost=\{allLost\}/.test(src("DeviceGroupPanel.tsx")));
   const { linkedStateWords } = await import("@/components/panels/panelHeader");
   const w = (contact, known = true, isOn = false) => linkedStateWords({ isOn, known, contact });
   ck("the linked row: 'Unavailable' only when contact is lost, 'Unknown' for no value (or a lock in motion), else On / Off",

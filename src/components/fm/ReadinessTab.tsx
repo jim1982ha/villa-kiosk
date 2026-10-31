@@ -17,10 +17,14 @@ import { SourceIconRow } from "./sourceIcons";
 import { CHECK_WORDS, VERDICT_WORDS, type CheckState, type CheckTarget, type ReadinessCheck, type ReadinessResult } from "@/fm/readiness";
 import { toneClass } from "@/fm/tone";
 import RecordCard from "./RecordCard";
+import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 
 const ICON: Record<CheckState, typeof CheckCircle2> = {
   pass: CheckCircle2, warn: AlertTriangle, fail: XCircle,
 };
+
+/** Chips before "Show all": a row of chips holds more than a list's first three rows, and eight fit a phone's two lines. */
+const CHECK_CHIPS = 8;
 
 export default function ReadinessTab({
   inputs, onOpenEntity, onOpenCheck,
@@ -106,7 +110,7 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
           const Icon = ICON[c.state];
           const opens = c.entityIds?.length ? c.opens : undefined;
           // Every check names its devices as chips, the devices not reporting too (owner, 2026-10-18: "the same way the
-          // unlocked device or on lights are shown as pills"); past 8, "+N more" — the button opens the whole list.
+          // unlocked device or on lights are shown as pills"); the first few, then the rest by pages (CheckDevices).
           const chips = !!c.entityIds?.length;
           return (
             // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22: "wherever there is a card, the same style")
@@ -121,20 +125,7 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
               ) : undefined}
               body={<>
                 <div className="fm-row-sub muted"><CheckDetail check={c} /></div>
-                {chips && c.entityIds && (
-                  <div className="fm-chiprow">
-                    {c.entityIds.slice(0, 8).map((id) => (
-                      <button key={id} className="fm-entity-chip" onClick={() => onOpenEntity(id)}>
-                        {label(id)}
-                      </button>
-                    ))}
-                    {c.entityIds.length > 8 && (
-                      <span className="muted" style={{ fontSize: "var(--text-xs)" }}>
-                        +{c.entityIds.length - 8} more
-                      </span>
-                    )}
-                  </div>
-                )}
+                {chips && c.entityIds && <CheckDevices ids={c.entityIds} label={label} onOpenEntity={onOpenEntity} />}
               </>} />
           );
         })}
@@ -150,4 +141,25 @@ export function CheckDetail({ check }: { check: ReadinessCheck }) {
   const lead = "Check the faults";
   if (!check.sources?.length || !check.detail.startsWith(lead)) return <>{check.detail}</>;
   return <>Check the <SourceIconRow sources={check.sources} severity={check.state === "fail" ? "danger" : "warn"} /> faults{check.detail.slice(lead.length)}</>;
+}
+
+/** A check's devices as chips: the first eight, then the rest a page of ten at a time, with a way back (the one
+ *  truncated list, common/TruncatedList). ⚠️ "+N MORE" COULD NOT BE TAPPED (architecture review 2026-10-31 round 12
+ *  #3): past eight, a device not reporting was named nowhere on the screen. */
+function CheckDevices({ ids, label, onOpenEntity }: {
+  ids: string[]; label: (id: string) => string; onOpenEntity: (id: string) => void;
+}) {
+  const list = useTruncated(ids, CHECK_CHIPS);
+  return (
+    <>
+      <div className="fm-chiprow">
+        {list.visible.map((id) => (
+          <button key={id} className="fm-entity-chip" onClick={() => onOpenEntity(id)}>
+            {label(id)}
+          </button>
+        ))}
+      </div>
+      <ShowAll list={list} noun="device" />
+    </>
+  );
 }

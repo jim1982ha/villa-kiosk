@@ -31,7 +31,7 @@ export default function FanPanel({ entity, mapping, onClose }: PanelProps) {
 
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Fan size={22} />} onClose={onClose}>
-      <ControlFrame entity={entity} mapping={mapping} device="fan" power>
+      <ControlFrame entity={entity} mapping={mapping} power>
       {levels.length > 0 && (
         <div className="field">
           <label className="entity-label">Speed</label>

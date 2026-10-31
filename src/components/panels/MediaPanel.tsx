@@ -13,7 +13,7 @@ export default function MediaPanel({ entity, mapping, onClose }: PanelProps) {
   return (
     <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Tv size={22} />} onClose={onClose}>
       {/* POWER, not activity: a paused or idle TV is on (devicePower, in the frame). */}
-      <ControlFrame entity={entity} mapping={mapping} device="media player" power>
+      <ControlFrame entity={entity} mapping={mapping} power>
 
           {title && <p className="body-text center mt">Now playing: {title}</p>}
 

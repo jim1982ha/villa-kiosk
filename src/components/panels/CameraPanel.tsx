@@ -24,7 +24,8 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { tapDebug } from "@/utils/tapDebug";
 import { WHEEL_IDLE_MS, swipeStep, wheelOwner, wheelStep } from "./cameraGestures";
-import { STATUS_COLOR } from "@/utils/stateColors";
+import { missingFromHa, STATUS_COLOR } from "@/utils/stateColors";
+import BasePanel from "./BasePanel";
 import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
 import { useHistorySource } from "@/hooks/useHistorySource";
 import { cameraBarHistory } from "./cameraStatusBar";
@@ -572,6 +573,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     }
     return <img key={key} ref={attachFeed} alt={mapping.label} />;
   };
+
+  // ⚠️ A MISSING CAMERA SAID ONLY "Camera unavailable" (architecture review 2026-10-31 round 12 #1): it has no
+  // stream to try, so its window is the one device window's frame, whose notice says since when and what to check
+  if (missingFromHa(entities, mapping.entityId)) {
+    return <BasePanel title={mapping.label} entityId={mapping.entityId} icon={<Video size={22} />} onClose={onClose}>{null}</BasePanel>;
+  }
 
   return (
     <div

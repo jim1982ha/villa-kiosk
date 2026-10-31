@@ -10,7 +10,6 @@ import { Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
 import NumericHistory from "./NumericHistory";
 import ReadingPill from "./ReadingPill";
-import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
@@ -71,6 +70,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   // A reading with a unit is a measurement even while it is UNAVAILABLE —
   // that is exactly when its chart's shaded outage has something to say
   // (config/sensorReading, the rule the sensor panel shares).
+  const allLost = rows.length > 0 && rows.every((r) => r.reading.contact === "lost");
   const numericRows = rows.filter((r) => historyOf(r.reading) === "numbers" && (r.numeric !== undefined || r.unit !== ""));
   return (
     <BasePanel
@@ -78,6 +78,8 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       entityId={primaryMapping.entityId}
       icon={<Layers size={22} />}
       deviceReadings={false}
+      // the frame's notice only when EVERY member is lost (reading.contact): one lost reading shows its own pill
+      lost={allLost}
       history={<>
         {/* One range for the whole group — a temp+humidity pair plotted over two
             different windows would invite exactly the wrong comparison. */}
@@ -96,13 +98,9 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       </>}
       onClose={onClose}
     >
-      {/* EVERY member offline → the same shared notice every other panel shows
-          (UnavailableNotice), instead of this panel's own "Unavailable" text —
-          one presentation of "HA lost contact" across the whole app. Offline is
-          LOST contact (reading.contact); members with no value show UNKNOWN. */}
-      {rows.length > 0 && rows.every((r) => r.reading.contact === "lost") ? (
-        <UnavailableNotice device="device" entityId={primaryMapping.entityId} />
-      ) : (
+      {/* EVERY member offline → nothing of its own: the frame's notice (BasePanel `lost`), the one presentation
+          of lost contact across the whole app. Members with no value show UNKNOWN. */}
+      {!allLost && (
         <div className="row-buttons" style={{ marginBottom: 18 }}>
           {rows.map((r) => (
             <div key={r.id} className="center" style={{ flex: 1, minWidth: 90 }}>

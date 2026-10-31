@@ -1,3 +1,57 @@
+## 2.496.637
+
+What you will see:
+- Every box that searches for a device finds it the same way: by the name the screens show, by the name the villa's
+  system gives it, by its room, and by its id. Typing "pool" now finds the pool's devices in "Add a device…"
+  (Asleep devices, Grouped devices, Bindings) and in the Grouped devices filter, as it already did in Settings ›
+  Devices.
+- The device box of the ticket form and of Spend now looks and behaves like the other device boxes: it opens with the
+  list as soon as you tap it, shows up to 60 devices instead of 8, and typing narrows it. It still keeps what you type
+  when no device matches ("it will be saved as free text"), still flags an offline device, and its × still clears it
+  (the × shows while the list is closed).
+
+## 2.496.636
+
+What you will see:
+- Every "first few, then the rest" list works the same way: the first few and how many more, then "Show all" shows
+  the rest ten at a time, with arrows and "1–10 of 25", and "Show fewer" goes back. This is in Advanced Settings'
+  tables (no more 412 entities at once), "Also on this device" in a device's window (it now has "Show fewer", and
+  starts again with the first few for the next device), and Facility › Readiness, where the devices past the first
+  eight were only "+12 more" and can now be opened.
+- On a phone, the (i) after "OPEN ISSUES" now uses the whole width of its card: each row's name, what it is,
+  "Appears:" and "Goes:" one under the other. Before, its text was squeezed into a third of the card. A tablet keeps
+  its columns. It now names the button "Open Ticket", as the button says.
+
+## 2.496.635
+
+What you will see:
+- Every device window now shows the same "Missing" block for a device the villa's system no longer has: since when
+  it is missing (the time VESTA gives on Telegram) and what to check. Before, only the windows of lights, locks,
+  switches and a few others had it; a missing sensor said only "UNAVAILABLE", and a missing camera "Camera
+  unavailable".
+- A device that has only lost contact shows "UNAVAILABLE" at the same place, the top of its window, in every
+  window, sensors included.
+- In "Also on this device" and in a grouped device's window, a reading the villa's system no longer has says
+  "MISSING" instead of "UNAVAILABLE".
+
+## 2.496.634
+
+What you will see:
+- In the Cockpit's Inbox, the four buttons on the filters' line (Issues, Notifs, Reports and Open Ticket) now have
+  the same shape: the same round corners, height, border and padding. Before, Open Ticket had square-ish corners.
+  They still fit on one line on every phone.
+- The window of a device the villa's system no longer has now says "it has been missing since" the moment it left,
+  the same time VESTA gives on Telegram. Before, it said "last seen" at another time: for a device that had been
+  quiet for days, the start of what the villa's system keeps.
+- Nothing changes in how the dot on the robot and the gear clears when you open the Cockpit (less code behind it).
+
+## 2.496.633
+
+What you will see:
+- On a phone, when the microphone "Ask VESTA" shows in the top bar beside the gear, the gear's menu no longer lists
+  "Ask VESTA" as well. Where the top bar has no room for the microphone (a narrow phone, or the maintenance mark
+  beside the gear), the menu keeps its "Ask VESTA" row, so there is always exactly one way to ask VESTA from there.
+
 ## 2.496.632
 
 What you will see:

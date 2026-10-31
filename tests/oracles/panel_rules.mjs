@@ -5,6 +5,8 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
+import * as JSX from "../consistency/jsx.mjs";
+import ts from "typescript";
 const R = await import("@/utils/panelRules");
 
 const band = { min: 16, max: 30 };
@@ -48,9 +50,8 @@ ck("FanPanel's levels come from fanLevels (no SPEED_LABELS of its own)", /fanLev
 ck("the light's sliders and the cover's follow the device (useLiveDraft, one set of range handlers)",
    (light.match(/useLiveDraft</g) ?? []).length === 2 && (light.match(/\.rangeProps\}/g) ?? []).length === 2
    && /useLiveDraft</.test(cover) && /position\.rangeProps\}/.test(cover) && !/useState/.test(light));
-// The control panels show it through ControlFrame (live_draft.mjs pins that).
-for (const f of ["GenericPanel.tsx", "ControlFrame.tsx"])
-  ck(`${f} shows the shared UnavailableNotice`, /<UnavailableNotice\b/.test(src(f)));
+// The notice is the device window's frame's (BasePanel), drawn for every window PanelRouter opens:
+// tests/oracles/glb_ground_truth.mjs reads that from the compiler's tree.
 
 // owner, 2026-10-21: a camera that turns and has a siren shows them on its video — found on the camera's DEVICE
 {
@@ -98,7 +99,7 @@ for (const f of ["GenericPanel.tsx", "ControlFrame.tsx"])
 // A Missing device's advice (owner, 2026-10-25: "i don't have any devices named light.gym_light in the GLB file"): the 3D
 // model is named only when it has the object; a deleted device opened from its Cockpit card says where it went.
 // (owner, 2026-10-31: "the door lock entity should exist, no?"): a device the villa's system HAD, and dropped, is never
-// blamed on the 3D model: the window says when it was last seen and to check it there. Driven from the history rows
+// blamed on the 3D model: the window says since when it is missing and to check it there. Driven from the history rows
 // the villa's system keeps, through the history source, to the words.
 {
   const { missingAdvice } = await import("@/utils/stateColors");
@@ -111,14 +112,28 @@ for (const f of ["GenericPanel.tsx", "ControlFrame.tsx"])
   const port = (rows) => ({ stateRows: async () => rows, getStatisticsDuringPeriod: async () => ({}), keptFrom: async () => t0 - 60 * M });
   const seenOf = async (rows) => (await loadOne(port(rows), { kind: "lastSeen", ids: ["lock.x"] }, t0 + 600 * M))["lock.x"];
   const seen = await seenOf(dropped), never = await seenOf([]);
-  ck("Missing, seen before: last seen at its last report, never at the removal row", seen === t0 + 9 * M && never === null, { seen, never });
+  ck("Missing, seen before: missing since its removal row, the moment VESTA names (architecture review 2026-10-31 #1)",
+     seen === t0 + 10 * M && never === null, { seen, never });
+  // ONE rule with VESTA: the agreement's cases (agent-contract.json leftAt), the Agent's left_at checked on the same
+  const { lastRecorded } = await import("@/ha/historySource");
+  const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
+  const cases = contract.leftAt?.cases ?? [];
+  const wrong = cases.filter((c) => lastRecorded(c.rows, Date.parse(c.from)) !== (c.leftAt === null ? null : Date.parse(c.leftAt)));
+  ck("  ...the agreement's cases, one rule with VESTA: the removal's moment, never the state carried over to the read's start",
+     cases.length >= 5 && wrong.length === 0, wrong.map((c) => c._));
+  // the shared fixture through the window's own read: quiet for days, removed; the read starts where the villa keeps
+  const quiet = cases[0];
+  const quietSeen = quiet && await loadOne({ stateRows: async () => quiet.rows, getStatisticsDuringPeriod: async () => ({}),
+    keptFrom: async () => Date.parse(quiet.from) }, { kind: "lastSeen", ids: ["lock.x"] }, Date.parse(quiet.leftAt) + 600 * M);
+  ck("  ...a device quiet for days, then removed: its window names the removal, never the start of what the villa keeps",
+     !!quietSeen && quietSeen["lock.x"] === Date.parse(quiet.leftAt), quietSeen);
   const had = missingAdvice(true, seen);
   ck("  ...the window says when, to check the villa's system, and Edit if it comes back renamed; never the 3D model",
-     had.includes(dayTime(t0 + 9 * M)) && /check that it is still connected there/.test(had) && /another name.*Edit/.test(had)
+     had.includes(`missing since ${dayTime(t0 + 10 * M)}`) && /check that it is still connected there/.test(had) && /another name.*Edit/.test(had)
      && !/3D model/.test(had), had);
   const hadGone = missingAdvice(false, seen);
   ck("  ...with no 3D object: when, and that it went in the villa's system; no Edit",
-     hadGone.includes(dayTime(t0 + 9 * M)) && /villa's system/.test(hadGone) && !/3D model|Edit/.test(hadGone), hadGone);
+     hadGone.includes(`missing since ${dayTime(t0 + 10 * M)}`) && /villa's system/.test(hadGone) && !/3D model|Edit/.test(hadGone), hadGone);
   ck("Missing, no record: a 3D object is renamed, removed or re-pointed; anything else went away in the villa's system",
      /3D model/.test(missingAdvice(true, null)) && !/3D model|Edit/.test(missingAdvice(false, null))
      && /villa's system/.test(missingAdvice(false, null)), [missingAdvice(true, null), missingAdvice(false, null)]);
@@ -129,9 +144,22 @@ for (const f of ["GenericPanel.tsx", "ControlFrame.tsx"])
   ck("  ...words a person reads: no id, no \"entity\", no platform's name, no long dash",
      all.every((t) => !/lock\.|entity|Home Assistant|\bHA\b| — /.test(t)), all);
   const notice = readFileSync(new URL("../../src/components/panels/UnavailableNotice.tsx", import.meta.url), "utf8");
+  // drawn: the paragraph the advice is written in, its words the model's objects and the history's answer, once read
+  const tree = JSX.parseTsx("components/panels/UnavailableNotice.tsx");
+  let advice = null, asked = null;
+  const visit = (n) => {
+    if (ts.isCallExpression(n) && n.expression.getText() === "missingAdvice") advice = n;
+    if (ts.isVariableDeclaration(n) && n.name.getText() === "seen") asked = n.initializer.getText();
+    ts.forEachChild(n, visit);
+  };
+  visit(tree);
+  let para = advice?.parent;
+  while (para && !JSX.tagOf(para)) para = para.parent;
   ck("  ...the window asks the model's own objects and the history (useLastSeen), never a fixed sentence",
-     /\{missingAdvice\(mappedEntityIds\.has\(entityId!\), seen\)\}/.test(notice) && /useLastSeen\(missing \? entityId! : null\)/.test(notice)
-     && !/Rename or remove its object|No device has the id/.test(notice));
+     !!advice && advice.arguments.map((a) => a.getText()).join() === "mappedEntityIds.has(entityId!),seen"
+     && ts.isJsxExpression(advice.parent) && JSX.tagOf(para) === "p" && JSX.guardsOf(para).join() === 'seen !== "loading"'
+     && asked === "useLastSeen(missing ? entityId! : null)" && !/Rename or remove its object|No device has the id/.test(notice),
+     [advice?.getText(), para && JSX.guardsOf(para), asked]);
 }
 
 done("✅ panel rules hold");

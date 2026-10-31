@@ -216,21 +216,18 @@ export function labelOf(
 }
 
 /**
- * Whether a search finds this entity: by its name as every screen shows it (labelOf), by the villa's system's own
- * name for it, or by its id. ⚠️ BOTH NAMES (owner, 2026-10-28): the device pickers showed the platform's name; they
- * show VESTA's now, and a device renamed in VESTA is still found by the name the villa's system knows it by.
+ * The names a search finds an entity by: its name as every screen shows it (labelOf), and the villa's system's own
+ * name for it. ⚠️ BOTH NAMES (owner, 2026-10-28): the device pickers showed the platform's name; they show VESTA's
+ * now, and a device renamed in VESTA is still found by the name the villa's system knows it by. Every device search
+ * reads them through deviceRecord.deviceSearchTexts.
  */
-export function matchesName(
-  query: string,
+export function searchNames(
   entityId: string,
   entityMap: Parameters<typeof labelOf>[1],
   entities: Parameters<typeof labelOf>[2],
-): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
+): string[] {
   const platform = entities[entityId]?.attributes.friendly_name;
-  return [entityId, labelOf(entityId, entityMap, entities), typeof platform === "string" ? platform : ""]
-    .some((s) => s.toLowerCase().includes(q));
+  return [labelOf(entityId, entityMap, entities), typeof platform === "string" ? platform : ""];
 }
 
 /**

@@ -72,8 +72,9 @@ export function contactOf(state: string | undefined | null): "lost" | "no-value"
  *  everywhere: Needs attention, the device's window, Advanced Settings). */
 export const NOT_IN_HA = "Missing";
 
-/** What the villa's system's history says of a Missing device: when it was last in it (epoch ms), null when it has no
- *  record of it (never there, or gone longer than it keeps), "unknown" when the history could not be read. */
+/** What the villa's system's history says of a Missing device: when it left it (epoch ms, historySource.lastRecorded:
+ *  the moment VESTA's "missing since" names too), null when it has no record of it (never there, or gone longer than
+ *  it keeps), "unknown" when the history could not be read. */
 export type MissingSeen = number | null | "unknown";
 
 /** What a Missing device's window says: what the villa's system knows of it, and what to do. Its 3D object (`inModel`)
@@ -86,7 +87,9 @@ export type MissingSeen = number | null | "unknown";
  *  pointed at the 3D model. A device the history has seen (`seen`) went away THERE: it says when, and what to check. */
 export function missingAdvice(inModel: boolean, seen: MissingSeen): string {
   if (typeof seen === "number") {
-    return `The villa's system no longer has this device. It was last seen ${dayTime(seen)}; `
+    // ⚠️ VESTA'S WORDS AND MOMENT (architecture review 2026-10-31 #1): "last seen" gave another time than Telegram's
+    // "missing from the villa's system since"
+    return `The villa's system no longer has this device: it has been missing since ${dayTime(seen)}; `
       + (inModel
         ? "its device may have been removed from the villa's system: check that it is still connected there. "
           + "If it comes back with another name, point this object at it with Edit."

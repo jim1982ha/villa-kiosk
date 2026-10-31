@@ -3,15 +3,11 @@
 // "20 at a time, with a count and a way to the rest" — the app's ONE answer to
 // a long append-only log rendered inside a dialog.
 //
-// ⚠️ IT IS THE SECOND LIST PATTERN AND THAT IS DELIBERATE, NOT DRIFT. The other
-// is `useTruncated` — "first three plus Show all" — and the two answer different
-// questions. A CONFIG list (bindings, devices, people) is read to see whether
-// something is there, so three rows plus a count is the whole answer and any
-// pager is friction. A LOG (usage requests, telemetry events) runs to hundreds
-// of chronological rows nobody wants dumped into a dialog at once. One
-// component for both would either page a three-row list or dump a five-hundred
-// row one. Written down because "use the shared one" is the right instinct and
-// would be the wrong call here.
+// ⚠️ A CONFIG LIST PAGES TOO (owner's rule, "long lists are tables paged ten rows at a time"; architecture review
+// 2026-10-31 round 12 #3). This header once argued that a config list (bindings, devices, people) wants only its
+// first three and a count, any pager being friction — and "Show all" then dumped 412 entities at once.
+// `useTruncated` (common/TruncatedList) keeps the first few and the count, and pages the rest through this file's
+// arithmetic and its Pager; a log pages from its first row.
 //
 // ⚠️ WHAT WAS ACTUALLY WRONG BEFORE THIS FILE: there were FOUR mechanisms, not
 // two. `useTruncated` (3 + Show all), UsagePanel's own pager (20 + prev/next),

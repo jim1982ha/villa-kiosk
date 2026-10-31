@@ -3,6 +3,11 @@
 // picker says only WHICH rows match (EntityPicker: the villa's devices; Advanced Settings › Messages: what the villa
 // has announced). Rule: "No free-text field where the value comes from a known set: choose from a searchable dropdown".
 //
+// ⚠️ ONE LIST FOR THE TICKET FORM TOO (architecture review 2026-10-31 round 12 #2): DeviceSearchPicker had built its
+// own box before this one existed, with eight results and a list that opened only once something was typed. Its free
+// text ("Spare pool pump", saved as typed) is this shell's `text` mode; every picker lists up to SEARCH_ROWS rows and
+// opens on a tap.
+//
 // ⚠️ IT WAS ENTITYPICKER'S OWN (to 2.496.560): a second list to pick from (an announcement's title, ticket 16 of "One
 // inbox") would have copied its box, its outside-tap close and its rows. The shell is here, once.
 
@@ -21,8 +26,11 @@ export interface SearchRow {
   strong?: boolean;
 }
 
+/** The rows a picker lists at most: past it, typing narrows the list. One number for every picker. */
+export const SEARCH_ROWS = 60;
+
 export default function SearchPicker({
-  rows, onPick, placeholder, compact, before, empty, trailing, onOpenChange,
+  rows, onPick, placeholder, compact, before, empty, none, trailing, onOpenChange, text,
 }: {
   /** The rows matching what is typed ("" when nothing is). */
   rows: (query: string) => readonly SearchRow[];
@@ -34,16 +42,23 @@ export default function SearchPicker({
   before?: (query: string) => SearchRow | null;
   /** Said in the open list when there is nothing to pick from at all. */
   empty?: string;
+  /** Said in the open list when nothing matches what is typed (the ticket form: "it will be saved as free text"). */
+  none?: (query: string) => ReactNode;
   /** Beside the box while the list is closed (EntityPicker's clear button). */
   trailing?: ReactNode;
   /** The list opened or closed (EntityPicker hides its "Bound to" line while it is open). */
   onOpenChange?: (open: boolean) => void;
+  /** FREE TEXT: the box's words are the value (a device or a description typed as is), kept when the list closes;
+   *  without it the box only searches, and closing clears it. */
+  text?: { value: string; onChange: (text: string) => void };
 }) {
-  const [query, setQuery] = useState("");
+  const [own, setOwn] = useState("");
+  const query = text ? text.value : own;
+  const setQuery = text ? text.onChange : setOwn;
   const [open, setOpenState] = useState(false);
   const setOpen = (o: boolean) => { setOpenState(o); onOpenChange?.(o); };
   const containerRef = useRef<HTMLDivElement>(null);
-  const close = () => { setOpen(false); setQuery(""); };
+  const close = () => { setOpen(false); if (!text) setOwn(""); };
 
   // Outside tap or Escape closes the list and clears the query.
   useOutsideClose([containerRef], open, close);
@@ -61,10 +76,14 @@ export default function SearchPicker({
         {!open && trailing}
       </div>
 
-      {open && (
+      {open && (() => {
+        const found = rows(query).slice(0, SEARCH_ROWS);
+        return (
         <div className="picker-dropdown">
           {empty && <div className="muted body-text" style={{ padding: 12 }}>{empty}</div>}
-          {[before?.(query), ...rows(query)].filter((r): r is SearchRow => !!r).map((r) => (
+          {!empty && found.length === 0 && query.trim() && none
+            && <div className="muted body-text" style={{ padding: 12 }}>{none(query.trim())}</div>}
+          {[before?.(query), ...found].filter((r): r is SearchRow => !!r).map((r) => (
             <button key={r.key} className={`row picker-option${r.strong ? " strong" : ""}`} onClick={() => { onPick(r.key); close(); }}>
               <span style={{ flex: 1, textAlign: "left" }}>
                 {r.label}
@@ -74,7 +93,8 @@ export default function SearchPicker({
             </button>
           ))}
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

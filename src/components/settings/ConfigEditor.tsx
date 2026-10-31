@@ -18,20 +18,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
+import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { forgetMappings, repointDevice } from "@/config/mappingEdits";
 import { matchesQuery, rowMatches } from "@/config/deviceRecord";
-import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useHA } from "@/ha/HAStateStore";
 import { useVillaModel } from "@/config/VillaModel";
 import EntityMapRow from "./EntityMapRow";
 import EntityPicker from "./EntityPicker";
-import { deviceRoom } from "@/config/devicePlace";
 import { countOf } from "@/utils/countOf";
 
 export default function ConfigEditor({ initialSearch }: { initialSearch?: string } = {}) {
-  const { update, resolvedRooms } = useConfig();
+  const { update } = useConfig();
   const { entities } = useHA();
   const villa = useVillaModel();
   const { sceneEntityIds } = villa;
@@ -84,12 +83,12 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   // the others".
   const removeStale = useCallback(() => update(forgetMappings(staleIds)), [staleIds, update]);
 
-  // Live filter by entity id, the NAME THE MAP SHOWS, room, or a linked object (deviceRecord.rowMatches):
+  // Live filter by what every device search finds a device by, or a linked object (deviceRecord.rowMatches):
   // it filtered on the stored label, entity-id fallbacks included, which nobody sees.
-  const entityLabel = useEntityLabel();
+  const searchSource = useDeviceSearch();
   const entries = useMemo(
-    () => allRows.filter((r) => rowMatches(r, search, entityLabel(r.id), deviceRoom(resolvedRooms, r.id))),
-    [allRows, search, entityLabel, resolvedRooms],
+    () => allRows.filter((r) => rowMatches(r, search, searchSource)),
+    [allRows, search, searchSource],
   );
 
   // ⚠️ THE FIRST FEW, NOT A COLLAPSE, and applied AFTER the filter above — so

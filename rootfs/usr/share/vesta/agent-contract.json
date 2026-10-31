@@ -658,6 +658,81 @@
       }
     ]
   },
+  "_leftAt": "When a device the villa's system no longer has LEFT it, the moment BOTH apps name (architecture review 2026-10-31 #1: the device's window said \"last seen\" at its last state, or at the start of what the villa keeps, while Telegram said \"missing since\" its removal: two times for one lock). Read from the history rows from `from`, which the villa's system leads with the state the device was already in at `from`: the time of the row with NO state that follows its last row with a state (removing an entity records it); with none, the time of its last row with a state, only when later than `from` (the carried-over row has no moment of its own); else none. Every case is checked by tests/oracles/panel_rules.mjs (Kiosk: historySource.lastRecorded) and by the VESTA Agent's preventive-maintenance left_at.",
+  "leftAt": {
+    "cases": [
+      {
+        "_": "quiet for days, then removed: the removal's moment, never the start of the read",
+        "from": "2026-10-21T07:40:00+00:00",
+        "rows": [
+          {
+            "state": "locked",
+            "last_changed": "2026-10-21T07:40:00+00:00"
+          },
+          {
+            "state": null,
+            "last_changed": "2026-10-30T16:19:32+00:00"
+          }
+        ],
+        "leftAt": "2026-10-30T16:19:32+00:00"
+      },
+      {
+        "_": "changed, then removed: the removal's moment, never its last state",
+        "from": "2026-10-21T07:40:00+00:00",
+        "rows": [
+          {
+            "state": "locked",
+            "last_changed": "2026-10-21T07:40:00+00:00"
+          },
+          {
+            "state": "unlocked",
+            "last_changed": "2026-10-30T16:10:00+00:00"
+          },
+          {
+            "state": "locked",
+            "last_changed": "2026-10-30T16:19:22+00:00"
+          },
+          {
+            "state": null,
+            "last_changed": "2026-10-30T16:19:32+00:00"
+          }
+        ],
+        "leftAt": "2026-10-30T16:19:32+00:00"
+      },
+      {
+        "_": "no removal read: its last change of state",
+        "from": "2026-10-21T07:40:00+00:00",
+        "rows": [
+          {
+            "state": "locked",
+            "last_changed": "2026-10-21T07:40:00+00:00"
+          },
+          {
+            "state": "unavailable",
+            "last_changed": "2026-10-30T16:19:22+00:00"
+          }
+        ],
+        "leftAt": "2026-10-30T16:19:22+00:00"
+      },
+      {
+        "_": "no removal read and only the state carried over to the read's start: no moment",
+        "from": "2026-10-21T07:40:00+00:00",
+        "rows": [
+          {
+            "state": "locked",
+            "last_changed": "2026-10-21T07:40:00+00:00"
+          }
+        ],
+        "leftAt": null
+      },
+      {
+        "_": "nothing kept",
+        "from": "2026-10-21T07:40:00+00:00",
+        "rows": [],
+        "leftAt": null
+      }
+    ]
+  },
   "_criticalDevices": "The villa's critical devices: ONE list, the one its \"critical devices offline\" rule watches (owner, 2026-10-18 — architecture review, offline devices #2: the Kiosk, the agent's night check and its reports each had their own idea). Every automation built from the blueprint whose file name (its path's last part, without .yaml) is `blueprint` names them in its input `input` (one id or a list); the list is the union. The Kiosk's proxy reads it (GET /critical-devices) and the VESTA Agent reads the same; a critical device offline is red (danger), any other offline device amber.",
   "criticalDevices": {
     "blueprint": "critical_watchdog",

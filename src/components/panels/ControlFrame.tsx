@@ -12,7 +12,6 @@
 
 import type { ReactNode } from "react";
 import { PowerSection } from "./PowerToggle";
-import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { isOffline } from "@/utils/stateColors";
@@ -23,8 +22,6 @@ import type { EntityMapping } from "@/types/scene.types";
 interface Props {
   entity: HassEntity | undefined;
   mapping: EntityMapping;
-  /** Noun for the notice's description ("light", "fan", "AC"…). */
-  device: string;
   /** Draw the power button (devicePower.deviceSwitch: its flip, and its ask). */
   power?: boolean;
   /** Beside the power button, in one row with a compact button (PowerToggle.PowerSection) — a light's colours and
@@ -35,15 +32,13 @@ interface Props {
   children?: ReactNode;
 }
 
-export default function ControlFrame({ entity, mapping, device, power, beside, always, children }: Props) {
+export default function ControlFrame({ entity, mapping, power, beside, always, children }: Props) {
   const { ws } = useHA();
   // ⚠️ LOST CONTACT, NOT "UNKNOWN" (owner, 2026-10-18; architecture review 2026-10-19): a device whose state is
   // "unknown" is answering — it can be commanded (a toggle needs no value), so its controls stay, without the notice;
   // its power button then sits "off" until the device says (devicePower: no position). Only "unavailable" or a
-  // missing entity is lost (stateColors.isOffline), and then the notice replaces the controls.
-  if (isOffline(entity)) {
-    return <><UnavailableNotice device={device} entityId={mapping.entityId} />{always}</>;
-  }
+  // missing entity is lost (stateColors.isOffline): no controls, and the window's frame says so (BasePanel's notice).
+  if (isOffline(entity)) return <>{always}</>;
   return (
     <>
       {power && (() => {
