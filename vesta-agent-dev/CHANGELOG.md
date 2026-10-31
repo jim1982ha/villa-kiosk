@@ -1,3 +1,9 @@
+## 0.12.424
+
+What you will see:
+- Nothing changes on screen. VESTA and the tablet now check "since when a missing device left" against the same
+  examples, so Telegram and the device's window on the tablet give the same moment.
+
 ## 0.12.423
 
 What you will see:
