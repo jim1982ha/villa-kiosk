@@ -10,7 +10,7 @@
 // Every section here is read-only reporting on its own face; a device opens its own window (onOpenEntity).
 
 import Window from "@/components/common/Window";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Inbox, RefreshCw } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -23,6 +23,7 @@ import FacilitySections, { FACILITY_TABS, type FacilityTab } from "@/components/
 import { useFacilityLiveView, useFmData } from "@/fm/FmDataContext";
 import { fmRecordLine, heldLine } from "@/fm/fmSave";
 import MessagesTab from "./MessagesTab";
+import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import Tip from "@/components/common/Tip";
 import { countOf } from "@/utils/countOf";
 
@@ -70,6 +71,11 @@ export default function CockpitModal({
   // it was the Facility tabs' alone, so the Overview's "Open issues" — the list the (i) promised was "read again every
   // 15 seconds while it is open" — was read every three minutes until someone opened Tickets.
   useFacilityLiveView();
+  // ⚠️ OPENING THE COCKPIT CLEARS THE UNREAD MARK (owner, 2026-10-31), whichever tab it opens on: everything kept now is
+  // read on this tablet (messagesModel.readAtOpening). Once, at the opening: what comes while it is open lights the mark
+  // again. Inbox picked its filter from what was unread in its first draw, before this runs (effects run after it).
+  const { opened } = useAnnouncements();
+  useEffect(() => { opened(); }, []);
   // ⚠️ THE RECORD'S STATE IS SAID OVER EVERY TAB, THE OVERVIEW'S TOO (architecture review H, 2026-10-23): unread, its
   // faults are missing from "Open issues" as much as from Tickets; and a save's problem ("This fault was just changed on
   // another device") follows a button pressed on an Overview card. They were the Facility tabs' alone.

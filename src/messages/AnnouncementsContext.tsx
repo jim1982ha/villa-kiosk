@@ -2,7 +2,7 @@
 // The page's ONE watch on the add-on's announcements (ticket 17 of "One inbox"): what it keeps, for the Cockpit's
 // Notifications, and what just came, for the notice (components/hud/AnnouncementNotice). They were the notice's own
 // watch, which threw the list away; two watches would read the add-on twice and could disagree. It also holds what
-// this tablet has shown in Messages (ticket 18), for the unread mark on the robot, the gear and the menu's Cockpit row,
+// this tablet has seen (ticket 18; since 2026-10-31 everything kept when the Cockpit opens), for the unread mark on the robot, the gear and the menu's Cockpit row,
 // and what became of each button pressed (review Q 2), whichever screen it was pressed on.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore,
@@ -12,11 +12,11 @@ import { readJson, writeJson } from "@/utils/storedJson";
 import { fetchAnnouncements, fetchVestaMessages, inLanguage, pressOf, type Announcement, type Pressable } from "./announcements";
 import { useConfig } from "@/config/ConfigContext";
 import { pauseFor, watchFeed, type FeedRead } from "./feed";
-import { afterRead, isReport, markShown, shownTogether, unreadOf } from "./messagesModel";
+import { afterRead, isReport, readAtOpening, shownTogether, unreadOf } from "./messagesModel";
 import { pressesOf, type PressState, type Presses } from "./presses";
 import { useCockpitIssues } from "@/components/cockpit/useVillaAttention";
 
-/** What this tablet has shown in Messages (messagesModel.markShown): per tablet, so in this browser's storage. Private
+/** What this tablet has seen (messagesModel.readAtOpening): per tablet, so in this browser's storage. Private
  *  mode or a full store keeps it for the page only: storedJson never throws. */
 const READ_KEY = "villa-kiosk:messages-read";
 const isIds = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
@@ -35,12 +35,12 @@ interface Announcements {
 }
 
 interface AnnouncementsAndUnread extends Announcements {
-  /** How many kept announcements this tablet has not shown in Messages yet (messagesModel.unreadOf). */
+  /** How many kept announcements this tablet has not seen yet (messagesModel.unreadOf). */
   unread: number;
   /** How many of them are VESTA's reports (Messages opens on Reports when they are all the unread). */
   unreadReports: number;
-  /** Messages showed these: read on this tablet from now on. */
-  shown: (items: readonly Announcement[]) => void;
+  /** The Cockpit opened: everything kept now is read on this tablet (messagesModel.readAtOpening). */
+  opened: () => void;
   /** The page's one record of presses (messages/presses). */
   presses: Presses;
 }
@@ -65,7 +65,7 @@ function useFeed(read: (after: number | null, stop: AbortSignal) => Promise<Feed
   return state;
 }
 const NO_PRESSES = pressesOf(async () => "failed");
-const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, unreadReports: 0, shown: () => {}, presses: NO_PRESSES });
+const AnnouncementsContext = createContext<AnnouncementsAndUnread>({ ...NONE, unread: 0, unreadReports: 0, opened: () => {}, presses: NO_PRESSES });
 
 export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   // ⚠️ TWO FEEDS, ONE LIST (tickets 26-27 of "One inbox"): the villa's announcements and VESTA's cards are read apart
@@ -92,9 +92,9 @@ export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   }, [villa, vesta]);
   const [read, setRead] = useState<string[]>(() => readJson(READ_KEY, isIds) ?? []);
   const { kept } = state;
-  const shown = useCallback((items: readonly Announcement[]) => setRead((r) => {
-    const next = markShown(r, items, kept);
-    // the same list again (Messages re-drawn, nothing new shown) changes nothing, so nothing re-draws
+  const opened = useCallback(() => setRead((r) => {
+    const next = readAtOpening(r, kept);
+    // opened again with nothing new changes nothing, so nothing re-draws
     return next.length === r.length && next.every((id, i) => id === r[i]) ? r : next;
   }), [kept]);
   useEffect(() => { writeJson(READ_KEY, read); }, [read]);
@@ -103,8 +103,8 @@ export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   const { open, watched } = useCockpitIssues();
   const issueCards = useMemo(() => [...open, ...watched], [open, watched]);
   const value = useMemo(() => ({ ...state, unread: unreadOf(kept, read, issueCards),
-    unreadReports: unreadOf(kept.filter(isReport), read), shown, presses }),
-    [state, kept, read, issueCards, shown, presses]);
+    unreadReports: unreadOf(kept.filter(isReport), read), opened, presses }),
+    [state, kept, read, issueCards, opened, presses]);
   return <AnnouncementsContext.Provider value={value}>{children}</AnnouncementsContext.Provider>;
 }
 

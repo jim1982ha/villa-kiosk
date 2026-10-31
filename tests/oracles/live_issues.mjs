@@ -448,6 +448,26 @@ ck("the Tickets tab draws ticketCards — the tickets in progress, by device —
      WORK_ACTIONS.raiseTicket.label === "Open Ticket" && WORK_ACTIONS.openTicket.label === WORK_ACTIONS.raiseTicket.label
      && JSX.elements(wb, "WorkLabel").length === 1 && JSX.propText(JSX.elements(wb, "WorkLabel")[0], "kind") === "a.kind");
   const shared = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  // owner, 2026-10-31: on a phone (360 to 430 px) Open Ticket still dropped to its own line, 2 to 42 px short in
+  // WebKit; the filter's button says "Notifs", its section keeps "Notifications"
+  const { FILTERS } = await import("@/messages/messagesModel");
+  const notesSection = JSX.elements(tab, "MessagesSection").find((s) => JSX.propText(s, "onToggle") === '() => fold("notes")');
+  ck("  ...the filters say Issues · Notifs · Reports, the buttons drawn from that one list; the section is still \"Notifications\"",
+     FILTERS.map((f) => f.label).join(" · ") === "Issues · Notifs · Reports" && /\{f\.label\}/.test(msg)
+     && !!notesSection && JSX.propText(notesSection, "title") === '"Notifications"', FILTERS);
+  // ...and on one line with Open Ticket on every phone (owner, 2026-10-31). Measured in headless WebKit (the wider
+  // engine) with the real Cockpit: the labels' own widths Issues 9 54.1, Notifs 36.5, Reports 47.6, the wrench and Open
+  // Ticket 94.7, a 1 px border; the filters' line is the screen less 36 px. With 12 px each side it was 1 px short on a
+  // 390 px iPhone, 31 on a 360 px phone
+  {
+    const px = (re) => Number((shared.match(re) ?? [])[1]);
+    const fPad = px(/\.messages-filter \{[^}]*padding: 0 (\d+)px/), bPad = px(/\.messages-toolbar-actions \.btn \{[^}]*padding: 0 (\d+)px/);
+    const fGap = px(/\.messages-filters \{[^}]*gap: (\d+)px/), tGap = px(/\.messages-toolbar \{[^}]*gap: (\d+)px/);
+    const needed = [54.1, 36.5, 47.6].reduce((w, l) => w + l + 2 * fPad + 2, 0) + 2 * fGap + tGap + 94.7 + 2 * bPad + 2;
+    const fits = [360, 375, 390, 412, 430].filter((w) => needed <= w - 36);
+    ck("  ...the filters and Open Ticket fit one line on every phone, 360 to 430 px (the filters' and the button's padding)",
+       fPad > 0 && bPad > 0 && fits.length === 5, { fPad, bPad, needed: Math.round(needed * 10) / 10, fits });
+  }
   ck("  ...the two groups wrap whole: the filters never shrink, the button keeps the right",
      /\.messages-toolbar \{[^}]*flex-wrap: wrap;/.test(shared) && /\.messages-filters \{[^}]*flex: 0 0 auto;/.test(shared)
      && /\.messages-toolbar-actions \{[^}]*margin-left: auto;/.test(shared));

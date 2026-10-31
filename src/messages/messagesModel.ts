@@ -17,7 +17,9 @@ export const FILTERS: readonly { id: MessagesFilter; label: string }[] = [
   // ⚠️ "ISSUES", NOT "OPEN ISSUES" (owner, 2026-10-28): it lists a problem's whole life — open, watched, closed —
   // its count the open ones only
   { id: "issues", label: "Issues" },
-  { id: "notifications", label: "Notifications" },
+  // ⚠️ "NOTIFS" ON THE BUTTON (owner, 2026-10-31): with "Notifications" the filters left no room on a phone for the
+  // Issues' Open Ticket at their right, which dropped to a line of its own; the section keeps its full name
+  { id: "notifications", label: "Notifs" },
   // ticket 20 of "One inbox": the facility manager's daily, weekly and monthly reports, the night check's message
   { id: "reports", label: "Reports" },
 ];
@@ -165,18 +167,6 @@ export function announcementWords(a: Announcement, { step = false }: { step?: bo
   return { title: a.title, line: (step && a.status) || a.text.split("\n")[0] || a.status, at: a.at };
 }
 
-/** The announcements the Messages tab shows as read on this tablet (ticket 18; review Q 5: decided here, not in the
- *  tab): the page shown of the Notifications or the Reports filter (`pages`: each section's page on screen), and the
- *  one open on the right. */
-export function readOnScreen(filter: MessagesFilter,
-  pages: { notifications?: readonly MessageItem[]; reports?: readonly MessageItem[] }, open: MessageItem | null,
-  kept: readonly Announcement[] = []): Announcement[] {
-  const page = (filter === "notifications" ? pages.notifications : filter === "reports" ? pages.reports : undefined) ?? [];
-  // an issue open on the right shows VESTA's card of its alert: read too (its line is the card's only line)
-  return [...page, ...(open ? [open] : [])]
-    .flatMap((i) => (i.kind === "issue" ? cardsOfIssue(i.card, kept) : [i.announcement]));
-}
-
 /** What this tablet remembers it has shown: one announcement as the add-on stored it, its number and when it came. A
  *  rewrite (a new number) is news again; so is the first of a store that started again (an old number, a new time). */
 // ⚠️ VESTA'S CARD BY ITS STEP, NOT ITS NUMBER (spec review, 2026-10-29): a quiet rewrite (its bottom line unchanged)
@@ -184,7 +174,7 @@ export function readOnScreen(filter: MessagesFilter,
 // (VESTA's card: its version, announcements.versionOf — the identity its presses are kept by too)
 const readId = (a: Announcement) => (a.feed === "vesta" ? versionOf(a) : `${idOf(a)}@${a.at}`);
 
-/** How many of the kept announcements this tablet has not shown in Messages yet: the light mark on the robot, the
+/** How many of the kept announcements this tablet has not seen yet (readAtOpening): the light mark on the robot, the
  *  phone's gear and the menu's Cockpit row. The open issues are not in it: they have their own count — nor VESTA's card
  *  of an alert listed with its issue (`issues`: the open and watched cards, messagesView's own rule, cardsOfIssue). */
 export function unreadOf(kept: readonly Announcement[], read: readonly string[],
@@ -206,15 +196,29 @@ export function markShown(read: readonly string[], shown: readonly Announcement[
   return [...new Set([...read, ...shown.map(readId)])].filter((id) => still.has(id));
 }
 
+/** What this tablet has read once the Cockpit OPENED: everything kept at that moment (owner, 2026-10-31: "Shall opening
+ *  the Cockpit clear the dot?" "Yes"); only what comes after (a new one, VESTA's card at a new step) lights it again.
+ *  ⚠️ IT WAS WHAT THE PAGE ON SCREEN SHOWED (readOnScreen): one on Notifications' page 2, under the other filter, or a
+ *  reminder's step kept the mark lit for ever. */
+export const readAtOpening = (read: readonly string[], kept: readonly Announcement[]): string[] => markShown(read, kept, kept);
+
 /** The filter Messages opens on: a device window's warning on Issues, its issue open; the wrench's "Open a ticket" on
  *  Issues; else Notifications while something is unread (the robot opens on what was not seen) — Reports when the
- *  unread are reports only (`unreadReports` of `unread`) —, else Issues (owner, 2026-10-30: the default). Decided before the first draw: a first draw on
- *  Notifications would mark its page read before anyone saw it. */
+ *  unread are reports only (`unreadReports` of `unread`) —, else Issues (owner, 2026-10-30: the default). Decided from what was unread BEFORE the opening marked it all
+ *  read (readAtOpening): after it, nothing is. */
 export function openingFilter(unread: number, opening: { warning?: boolean; form?: boolean } = {}, unreadReports = 0):
   MessagesFilter {
   if (opening.warning) return "issues";
   if (opening.form || unread <= 0) return "issues";
   return unread > unreadReports ? "notifications" : "reports";
+}
+
+/** The filter while none is chosen, as what is unread changes: something unread moves it as the opening would (VESTA's
+ *  feed read a moment after the Cockpit opened); nothing unread leaves it, so the opening's own mark (readAtOpening)
+ *  never sends the Inbox off the Notifications it opened on. */
+export function followingFilter(current: MessagesFilter, unread: number,
+  opening: { warning?: boolean; form?: boolean } = {}, unreadReports = 0): MessagesFilter {
+  return unread > 0 ? openingFilter(unread, opening, unreadReports) : current;
 }
 
 /** Notifications listing nothing, and nothing anywhere else either. */

@@ -6,7 +6,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { h, draw } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
-const { messagesView, mergeAnnouncements, FILTERS, unreadOf, markShown, openingFilter, readOnScreen, shownTogether,
+const { messagesView, mergeAnnouncements, FILTERS, unreadOf, markShown, readAtOpening, openingFilter, followingFilter, shownTogether,
   afterRead, cardsOfIssue } = await import("@/messages/messagesModel");
 const { parseVestaMessage, inLanguage } = await import("@/messages/announcements");
 const { noticeStep, NO_NOTICE } = await import("@/messages/noticeModel");
@@ -17,8 +17,8 @@ const ann = (seq, extra = {}) => ({ seq, at: `2026-10-28T1${seq % 10}:00:00+08:0
 const J = JSON.stringify;
 
 console.log("  the filters, on one line:");
-ck("Issues · Notifications · Reports, in that order, no All (owner, 2026-10-30; 2026-10-28: \"Issues\" holds open, watched and closed; ticket 20: Reports)",
-   J(FILTERS.map((f) => f.label)) === J(["Issues", "Notifications", "Reports"]));
+ck("Issues · Notifs · Reports, in that order, no All (owner, 2026-10-30, 2026-10-31: \"Notifs\"; 2026-10-28: \"Issues\" holds open, watched and closed; ticket 20: Reports)",
+   J(FILTERS.map((f) => f.label)) === J(["Issues", "Notifs", "Reports"]));
 const base = { open: [card("a"), card("b")], watched: [card("w", { look: "watched" })], announcements: [ann(1), ann(2), ann(3)] };
 const issues = messagesView({ ...base, filter: "issues", selected: null });
 ck("  ...Issues counts the open issues only (the watched never counted); the others no count",
@@ -87,10 +87,6 @@ ck("  ...a report is never also a notification (one place per thing)",
 const asked = messagesView({ ...withReports, filter: "reports", selected: "v:note:d1" });
 ck("  ...one asked for opens on Reports",
    asked.reports.length === 3 && asked.selected?.key === "v:note:d1", asked.reports);
-ck("  ...a report open, or the Reports page shown, is read; on another filter a report is not",
-   J(readOnScreen("reports", { reports: onReports.reports.slice(0, 2) }, null).map((a) => a.seq)) === J([32, 31])
-   && readOnScreen("issues", { reports: asked.reports }, null).length === 0
-   && J(readOnScreen("issues", {}, asked.selected).map((a) => a.seq)) === J([30]));
 ck("  ...Messages opens on Reports when only reports are unread, on Notifications when anything else is",
    openingFilter(2, {}, 2) === "reports" && openingFilter(3, {}, 2) === "notifications" && openingFilter(2, { warning: true }, 2) === "issues");
 
@@ -151,12 +147,45 @@ ck("a guest (one tab, Messages) gets no tab strip: the strip is drawn only with 
    !!strip && guardsOf(strip).some((g) => /tabs\.length > 1/.test(g)), strip && guardsOf(strip));
 const tab = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
 ck("  ...the tab lists, counts and opens what messagesView says, from the open issues and the page's announcements",
-   /const \{ kept, unread, unreadReports, shown \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, announcements: kept, filter, selected,/.test(tab)
+   /const \{ kept, unread, unreadReports \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, announcements: kept, filter, selected,/.test(tab)
    && /view\.filters\.map\(/.test(tab) && /const item = raising \? null : view\.selected;/.test(tab)
    && /const \{ issues: showsIssues, notifications: showsNotes, reports: showsReports \} = view\.shows;/.test(tab));
 ck("  ...a phone shows the item someone chose (a line, a warning, the ticket form), else the list",
    /const reading = !!raising \|\| view\.openedBy === "asked" \|\| view\.openedBy === "focus";/.test(tab)
    && /className=\{`messages\$\{reading \? " reading" : ""\}`\}/.test(tab));
+
+console.log("\n  opening the Cockpit clears the unread mark (owner, 2026-10-31):");
+{
+  // twelve notifications (a page holds ten: two on page 2), two reports, VESTA's card at a reminder step
+  const notes12 = Array.from({ length: 12 }, (_, i) => ann(i + 1));
+  const reports2 = [ann(20, { feed: "vesta", key: "note:r1", report: "weekly" }), ann(21, { feed: "vesta", key: "note:r2", report: "weekly" })];
+  const step = parseVestaMessage({ seq: 22, at: "2026-10-31T09:00:00+08:00", key: "incident:95", title: "#95-P2 (existing)",
+    body: "Door", status: ["⚠️ ⚙️ Reminder sent"], stage: "existing" });
+  const keptNow = [...notes12, ...reports2, step];
+  const before = unreadOf(keptNow, []), beforeReports = unreadOf(keptNow.filter((a) => !!a.report), []);
+  const page1 = messagesView({ open: [], watched: [], announcements: keptNow, filter: "notifications", selected: null })
+    .notifications.slice(0, 10).map((i) => i.announcement);
+  const read = readAtOpening(markShown([], page1, keptNow), keptNow);
+  ck("unread on page 2, under Reports and at a reminder step: the Cockpit opened, the mark is out",
+     before === 15 && beforeReports === 2 && unreadOf(keptNow, markShown([], page1, keptNow)) === 5
+     && unreadOf(keptNow, read) === 0 && unreadOf(keptNow.filter((a) => !!a.report), read) === 0, { before, read });
+  ck("  ...the Inbox opens on Notifications all the same: its filter is picked from what was unread before the opening",
+     openingFilter(before, {}, beforeReports) === "notifications"
+     && followingFilter(openingFilter(before, {}, beforeReports), unreadOf(keptNow, read)) === "notifications");
+  ck("  ...on Reports when only reports were unread; on Issues when nothing was",
+     openingFilter(beforeReports, {}, beforeReports) === "reports" && openingFilter(0) === "issues");
+  const later = [...keptNow, ann(30, { at: "2026-10-31T10:00:00+08:00" })];
+  const nextStep = [...keptNow.filter((a) => a !== step), { ...step, seq: 23, status: "🚨 Escalated" }];
+  ck("  ...something after the opening lights it again: a new one, or VESTA's card at a new step",
+     unreadOf(later, read) === 1 && unreadOf(nextStep, read) === 1);
+  ck("  ...and the open Inbox follows it to Notifications unless a filter was chosen",
+     followingFilter("issues", 1) === "notifications" && followingFilter("issues", 0) === "issues");
+  const cockpit = readFileSync(new URL("../../src/components/cockpit/CockpitModal.tsx", import.meta.url), "utf8");
+  const ctxNow = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");
+  ck("  ...the Cockpit window marks it once, at its opening, whichever tab it opens on; the page's mark is readAtOpening",
+     /const \{ opened \} = useAnnouncements\(\);\s*useEffect\(\(\) => \{ opened\(\); \}, \[\]\);/.test(cockpit)
+     && /const next = readAtOpening\(r, kept\);/.test(ctxNow));
+}
 
 console.log("\n  the unread mark, drawn where the model says (ticket 18):");
 const hud = parseTsx("components/hud/HUD.tsx");
@@ -170,12 +199,11 @@ ck("  ...on the robot, apart from its count of open issues", holds((b) => propTe
 ck("  ...on a phone, on the gear and on the menu's Cockpit row",
    holds((b) => /Menu/.test(propText(b, "aria-label") ?? "")) && holds((b) => propText(b, "role") === '"menuitem"'
      && /onOpenCockpit\(\)/.test(propText(b, "onClick") ?? "")));
-ck("Messages opens where the model says, and marks read what it shows",
-   /useState<MessagesFilter>\(\(\) => openingFilter\(unread, opening, unreadReports\)\)/.test(tab) && /if \(onScreen\.length\) shown\(onScreen\);/.test(tab)
+ck("Messages opens where the model says, and marks nothing itself (the Cockpit's opening does: readAtOpening)",
+   /useState<MessagesFilter>\(\(\) => openingFilter\(unread, opening, unreadReports\)\)/.test(tab) && !/shown\(/.test(tab)
    // ...and until a filter is chosen it follows what is unread (VESTA's feed read after the Cockpit opened)
-   && /if \(!chosen\) setFilter\(openingFilter\(unread, opening, unreadReports\)\);/.test(tab)
-   && /onClick=\{\(\) => pickFilter\(f\.id\)\}/.test(tab)
-   && /const onScreen = readOnScreen\(filter, \{ notifications: paged\.page, reports: reportsPaged\.page \}, item, kept\);/.test(tab));
+   && /if \(!chosen\) setFilter\(\(f\) => followingFilter\(f, unread, opening, unreadReports\)\);/.test(tab)
+   && /onClick=\{\(\) => pickFilter\(f\.id\)\}/.test(tab));
 
 console.log("\n  a report, drawn (ticket 20):");
 const { NoteDetail, ReportDetail } = await import("@/components/cockpit/MessagesTab");
@@ -265,17 +293,6 @@ ck("  ...its line: its title and first words", reportLine.includes("<b>Rapport</
 const sections = elements(parseTsx("components/cockpit/MessagesTab.tsx"), "MessagesSection").map((e) => propText(e, "title"));
 ck("the tab draws a Reports section, its lines from the model's reports",
    sections.includes('"Reports"') && /reportsPaged = usePaged\(view\.reports\)/.test(tab), sections);
-// what counts as read, driven by value (review Q 5: it was decided in the tab, pinned by its source text)
-{
-  const page = notes.notifications.slice(0, 2), opened = notes.notifications[2], issue = issues.issues[0];
-  const seqs = (xs) => xs.map((x) => x.seq).join();
-  ck("  ...read: the Notifications page shown and the one open; on another filter, only the one open; an open issue is no announcement",
-     seqs(readOnScreen("notifications", { notifications: page }, opened)) === "3,2,1"
-     && seqs(readOnScreen("issues", { notifications: page }, opened)) === "1"
-     && seqs(readOnScreen("issues", { notifications: page }, issue)) === "" && seqs(readOnScreen("issues", {}, null)) === ""
-     && seqs(readOnScreen("reports", { notifications: page }, null)) === "",
-     [readOnScreen("notifications", { notifications: page }, opened), readOnScreen("issues", { notifications: page }, opened)]);
-}
 
 
 // ── VESTA's card in place of the villa's own message (tickets 26-27 of "One inbox", owner 2026-10-28: "update the
@@ -384,8 +401,8 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
   const openNotes = messagesView({ open: [openIssue], watched: [], announcements: shown, filter: "notifications", selected: null });
   ck("an OPEN alert with a ticket is listed once, as its open issue: its card leaves Notifications (owner, 2026-10-29)",
      J(openNotes.notifications.map((i) => i.key)) === J(["n3"]) && withOpen.issues.length === 1, openNotes.notifications);
-  ck("  ...and its card, shown on the right when its line is open, is read there",
-     J(readOnScreen("issues", {}, withOpen.issues[0], shown).map((a) => a.key)) === J(["incident:90"]));
+  ck("  ...and its card is read once the Cockpit opens, as everything kept",
+     withOpen.issues.length === 1 && unreadOf(shown, readAtOpening([], shown)) === 0);
   ck("what this tablet read of one feed is not read of the other (two feeds number apart)",
      unreadOf([ann(1), { ...card90, seq: 1, at: ann(1).at }], markShown([], [ann(1)], [ann(1)])) === 1);
 }
@@ -406,8 +423,7 @@ const ctxNow = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx
 ck("  ...and the page's unread count is given the open and watched issues",
    /unreadOf\(kept, read, issueCards\)/.test(ctxNow) && /const \{ open, watched \} = useCockpitIssues\(\);/.test(ctxNow));
 const tabNow = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
-ck("what is marked read is keyed by each record's identity (two feeds number apart), never its number alone",
-   /onScreen\.map\(idOf\)\.join\(","\)/.test(tabNow));
+void tabNow;
 
 console.log("\n  architecture review 2026-10-29, round 2: one rule places a record and counts it:");
 const { placeOf } = await import("@/messages/messagesModel");

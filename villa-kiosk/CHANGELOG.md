@@ -1,3 +1,22 @@
+## 2.496.632
+
+What you will see:
+- In the Cockpit's Inbox on a phone, "Open Ticket" now sits on the same line as Issues, Notifs and Reports, at the
+  right, on every phone from the narrowest (360 px) to the widest: the filter buttons and Open Ticket are a little
+  narrower. Where a line is even narrower, the button still moves whole to the line under the filters.
+
+## 2.496.631
+
+What you will see:
+- Opening the Cockpit clears the dot on the robot; it lights again only for something new. The same goes for the dot
+  on the phone's gear and on the menu's Cockpit row. Before, a notification on the second page, a report while you
+  looked at Notifications, or a reminder could keep the dot lit for good. The Inbox still opens on Notifications (or
+  Reports) when something there was new.
+- In the Cockpit's Inbox, the Notifications filter button now reads "Notifs", so "Open Ticket" fits on the same line
+  as the filters on more phones (on wide phones, 412 px and up, and on a 390 px Android phone). The list below keeps
+  its "Notifications" title. On the narrowest phones (360 and 375 px, and a 390 px iPhone by 1 px) the button still
+  moves whole to the line under the filters.
+
 ## 2.496.630
 
 What you will see:
