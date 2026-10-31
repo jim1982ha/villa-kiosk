@@ -4,13 +4,14 @@
 // counted and open is the Messages model's (messages/messagesModel); this draws it.
 //
 // ⚠️ OPEN ISSUES IS TODAY'S OVERVIEW, MOVED (owner): one line per device in the same order, its card with the same
-// buttons (Open Ticket, Close, Edit ticket) opened on the right, "Open a ticket" and the (i) above the list, Watch
+// buttons (Open Ticket, Close, Edit ticket) opened on the right, "Open Ticket" on the filters' line, Watch
 // folded at the end, a device window's warning opening on its issue. On a phone the list and the item take the
 // screen in turn.
 
 import { momentText } from "@/utils/dateText";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Bell, CheckCircle2, ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
+import { CARD_BUTTON, WorkLabel } from "@/components/fm/WorkButtons";
 import type { ReactNode } from "react";
 import type { Doors } from "@/auth/doors";
 import { useHA } from "@/ha/HAStateStore";
@@ -76,10 +77,11 @@ function ErasableMessageRow({ item, selected, onSelect }: {
   return <MessageRow item={item} selected={selected} onSelect={onSelect} hold={a ? hold : undefined} />;
 }
 
-/** One section of the list — Open issues, Notifications, Watch — its name, count and (i) on one line with its actions,
- *  folded or open by its chevron (owner, 2026-10-28: the three at one level, each collapsible). */
-export function MessagesSection({ title, count, open, onToggle, tip, actions, children }: {
-  title: string; count?: number; open: boolean; onToggle: () => void; tip?: ReactNode; actions?: ReactNode;
+/** One section of the list — Open issues, Notifications, Watch — its name and count, its (i) right after them (`tip`,
+ *  owner 2026-10-31: next to the words, not at the far end), folded or open by its chevron (owner, 2026-10-28: the
+ *  three at one level, each collapsible). Its buttons are the filters' line's (the Inbox's "Open Ticket"). */
+export function MessagesSection({ title, count, open, onToggle, tip, children }: {
+  title: string; count?: number; open: boolean; onToggle: () => void; tip?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -91,9 +93,8 @@ export function MessagesSection({ title, count, open, onToggle, tip, actions, ch
             {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
             {title}{count ? ` (${count})` : ""}
           </button>
-          {tip && <InfoTip label={`About ${title}`}>{tip}</InfoTip>}
+          {tip}
         </div>
-        {actions && <div className="cockpit-issues-actions">{actions}</div>}
       </div>
       {open && children}
     </section>
@@ -102,13 +103,13 @@ export function MessagesSection({ title, count, open, onToggle, tip, actions, ch
 
 /** A section that only grows (Watch, Closed): its lines a page at a time; `empty` said while it has none (it is always
  *  there: owner, 2026-10-28). */
-function FoldedRows({ rows, unit, selected, onSelect, empty, ...section }: {
-  title: string; rows: MessageItem[]; unit: string; open: boolean; onToggle: () => void; tip?: ReactNode;
+function FoldedRows({ rows, unit, selected, onSelect, empty, tip, ...section }: {
+  title: string; rows: MessageItem[]; unit: string; open: boolean; onToggle: () => void; tip: string;
   selected?: string; onSelect: (key: string) => void; empty: string;
 }) {
   const paged = usePaged(rows);
   return (
-    <MessagesSection {...section} count={rows.length}>
+    <MessagesSection {...section} count={rows.length} tip={<InfoTip label={`About ${section.title}`}>{tip}</InfoTip>}>
       {paged.page.map((r) => <MessageRow key={r.key} item={r} selected={selected === r.key} onSelect={onSelect} />)}
       {rows.length === 0 ? <p className="muted body-text messages-empty">{empty}</p> : <Pager paged={paged} unit={unit} />}
     </MessagesSection>
@@ -227,26 +228,31 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   return (
     <div className={`messages${reading ? " reading" : ""}`}>
       <div className="messages-list">
-        {/* the filters, always on one line (owner: the list pane keeps its width) */}
-        <div className="messages-filters" role="group" aria-label="Show">
-          {view.filters.map((f) => (
-            <button key={f.id} type="button" className={`messages-filter${filter === f.id ? " on" : ""}`}
-              aria-pressed={filter === f.id} onClick={() => pickFilter(f.id)}>
-              {f.label}{f.count ? <span className="messages-filter-count">{f.count}</span> : null}
-            </button>
-          ))}
+        {/* the filters, always on one line (owner: the list pane keeps its width), and on the same line at its right the
+            Issues' own button (owner, 2026-10-31: "Open Ticket", the card's own words and wrench): two groups, so a
+            narrow phone wraps the button whole under the filters, never squeezing them */}
+        <div className="messages-toolbar">
+          <div className="messages-filters" role="group" aria-label="Show">
+            {view.filters.map((f) => (
+              <button key={f.id} type="button" className={`messages-filter${filter === f.id ? " on" : ""}`}
+                aria-pressed={filter === f.id} onClick={() => pickFilter(f.id)}>
+                {f.label}{f.count ? <span className="messages-filter-count">{f.count}</span> : null}
+              </button>
+            ))}
+          </div>
+          {/* only while the issues are listed, as when it sat over Open issues */}
+          {showsIssues && (canManage || canReport) && (
+            <div className="messages-toolbar-actions">
+              {canManage
+                ? <button type="button" className={CARD_BUTTON} onClick={raise}><WorkLabel kind="raiseTicket" /></button>
+                : <button type="button" className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>}
+            </div>
+          )}
         </div>
         <div className="messages-scroll">
           {showsIssues && (
             <MessagesSection title="Open issues" count={open.length} open={folds.issues} onToggle={() => fold("issues")}
-              actions={canManage ? (
-                <>
-                  <FaultTiming />
-                  <button className="btn ghost" onClick={raise}><Plus size={16} /> Open a ticket</button>
-                </>
-              ) : canReport ? (
-                <button className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
-              ) : null}>
+              tip={canManage ? <FaultTiming /> : undefined}>
               {view.issues.map((i) => <MessageRow key={i.key} item={i} selected={item?.key === i.key} onSelect={choose} />)}
               {open.length === 0 && <p className="muted body-text messages-empty">Nothing needs attention.</p>}
             </MessagesSection>

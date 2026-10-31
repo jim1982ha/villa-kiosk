@@ -425,9 +425,33 @@ const tt = src("components/fm/TicketsTab.tsx");
 // here, that the tab draws it — and counts it (openCounts: the same cards)
 ck("the Tickets tab draws ticketCards — the tickets in progress, by device — and Closed; never a raise form",
    /ticketCards\(data\.tickets, deviceOfRecord\)/.test(tt) && /openCounts\(data\.tickets, deviceOfRecord\)\.tickets/.test(tt) && !/Raise a fault/.test(tt));
-ck("the Open issues title line (Messages): the (i) then Open a ticket, for the profiles that manage tickets; a guest reports a problem",
-   /<FaultTiming \/>\s*<button className="btn ghost" onClick=\{raise\}><Plus size=\{16\} \/> Open a ticket<\/button>/.test(msg)
-   && /const raise = \(\) => setRaising\(\{\}\);/.test(msg) && /Report a problem<\/button>/.test(msg) && /<FaultForm /.test(msg));
+// owner, 2026-10-31: "Open Ticket" on the filters' line, at its right, in the card's own words; wrapping whole
+{
+  const tab = JSX.parseTsx("components/cockpit/MessagesTab.tsx");
+  const cls = (el) => JSX.propText(el, "className");
+  const bar = JSX.elements(tab, "div").find((d) => cls(d) === '"messages-toolbar"');
+  const kids = bar ? bar.children.filter((c) => JSX.tagOf(c) || (c.expression && c.getText().trim())) : [];
+  const actions = bar ? JSX.elements(bar, "div").find((d) => cls(d) === '"messages-toolbar-actions"') : undefined;
+  const open = actions ? JSX.elements(actions, "WorkLabel") : [];
+  ck("the filters' line: the filters, then at its right the Issues' button (manage: Open Ticket; a guest: Report a problem)",
+     !!bar && JSX.tagOf(kids[0]) === "div" && cls(kids[0]) === '"messages-filters"' && !!actions
+     && open.length === 1 && JSX.propText(open[0], "kind") === '"raiseTicket"'
+     && JSX.propText(open[0].parent, "onClick") === "raise" && /Report a problem/.test(actions.getText())
+     && /const raise = \(\) => setRaising\(\{\}\);/.test(msg) && /<FaultForm /.test(msg), kids.map((k) => k.getText().slice(0, 50)));
+  ck("  ...only while the issues are listed, as when it sat over Open issues",
+     !!actions && JSX.guardsOf(actions).join() === "showsIssues,(canManage || canReport)", actions && JSX.guardsOf(actions));
+  ck("  ...and nothing of it left on the section's title line", !/Open a ticket<\/button>/.test(msg)
+     && !JSX.elements(tab, "MessagesSection").some((s) => JSX.propText(s, "actions") !== null));
+  const { WORK_ACTIONS } = await import("@/fm/deviceWork");
+  const wb = JSX.parseTsx("components/fm/WorkButtons.tsx");
+  ck("  ...its words and wrench are the card's Open Ticket, defined once (WorkLabel, the card's buttons draw it too)",
+     WORK_ACTIONS.raiseTicket.label === "Open Ticket" && WORK_ACTIONS.openTicket.label === WORK_ACTIONS.raiseTicket.label
+     && JSX.elements(wb, "WorkLabel").length === 1 && JSX.propText(JSX.elements(wb, "WorkLabel")[0], "kind") === "a.kind");
+  const shared = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  ck("  ...the two groups wrap whole: the filters never shrink, the button keeps the right",
+     /\.messages-toolbar \{[^}]*flex-wrap: wrap;/.test(shared) && /\.messages-filters \{[^}]*flex: 0 0 auto;/.test(shared)
+     && /\.messages-toolbar-actions \{[^}]*margin-left: auto;/.test(shared));
+}
 // WHAT the buttons are, on which records, with which question: by value at the top and in "the buttons, drawn".
 // Here only the wiring a drawing cannot reach — the Overview hands cardActions to the shared buttons, and acts on
 // what each button names (its stage, its records), with no status or rule of its own

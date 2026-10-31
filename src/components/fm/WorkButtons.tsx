@@ -15,7 +15,7 @@ import { Pencil, Wrench } from "lucide-react";
 import { useFmData, type FmDataContextValue } from "@/fm/FmDataContext";
 import { DONE_STEP } from "@/fm/fmCommands";
 import type { FmSaveOutcome } from "@/fm/fmSave";
-import { helpLine, type WorkAction, type WorkActionKind } from "@/fm/deviceWork";
+import { WORK_ACTIONS, helpLine, type WorkAction, type WorkActionKind } from "@/fm/deviceWork";
 import type { HelpAsked } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import { momentText } from "@/utils/dateText";
@@ -106,6 +106,12 @@ const ICON: Partial<Record<WorkActionKind, ReactNode>> = {
   editTicket: <Pencil size={14} aria-hidden />,
 };
 
+/** What a work button says: its icon, then its words (fm/deviceWork's ONE wording per action) — a card's buttons and
+ *  the Inbox's own "Open Ticket" above its list (owner, 2026-10-31) alike. */
+export function WorkLabel({ kind }: { kind: WorkActionKind }) {
+  return <>{ICON[kind]}{ICON[kind] ? " " : null}{WORK_ACTIONS[kind].label}</>;
+}
+
 /** Does pressing it open a form the card does not hold (the caller's `onOpen`)? */
 const leavesCard = (a: WorkAction) => a.step.kind === "raise" || a.step.kind === "edit";
 
@@ -140,7 +146,7 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
     <button key={a.kind} type="button" className={CARD_BUTTON}
       aria-label={a.step.kind === "close" && name ? `${a.label} “${name}”` : undefined}
       onClick={() => (a.step.kind === "close" ? work.ask(cardKey) : leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised))}>
-      {ICON[a.kind]}{ICON[a.kind] ? " " : null}{a.label}
+      <WorkLabel kind={a.kind} />
     </button>
   ));
   return (

@@ -1,3 +1,13 @@
+## 2.496.630
+
+What you will see:
+- In the Cockpit's Inbox, "Open a ticket" is now "Open Ticket", with the same wrench and words as the button on a
+  card, and it sits on the same line as Issues, Notifications and Reports, at the right. It still shows only while
+  Issues is chosen, and does the same as before (a guest still sees "Report a problem" there). Where that line is too
+  narrow for all four, as on most phones, the button moves whole to the line under the filters, at the right; the
+  filters are never squeezed or cut.
+- The (i) explaining the icons now sits right after "OPEN ISSUES (9)", next to the words.
+
 ## 2.496.629
 
 What you will see:
