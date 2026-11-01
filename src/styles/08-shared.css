@@ -135,8 +135,10 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .cockpit-modal { max-width: 1080px; }
 /* the filters and, at the right of the same line, the Issues' "Open Ticket" (owner, 2026-10-31): two groups that wrap
    whole, so a line too narrow for both puts the button under the filters and never squeezes or cuts them */
-.messages-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 4px;
-  container-type: inline-size; }
+.messages-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 8px;
+  container-type: inline-size; position: sticky; top: 0; z-index: 2; background: var(--bg-modal); }
+/* what brings itself into view stops under that line */
+.messages-card, .messages-toolbar ~ .fm-form { scroll-margin-top: 72px; }
 /* a filter's full word where the four buttons still fit one line, its short word below that width (owner, 2026-11-01:
    "Notifications if it fits"); the short one is the default, so a browser without container queries keeps one line */
 .messages-filter-long { display: none; }
@@ -199,8 +201,17 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 @keyframes cockpit-focus-flash { 0%, 100% { box-shadow: none; } 40% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--status-warning) 35%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .fm-record-card.cockpit-focus { animation: none; } }
 /* An issue's problems, one or several (config/attention.groupAttention): one line each, inside the card's text. */
-.cockpit-attention-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.cockpit-attention-sub { display: flex; flex-direction: column; gap: 4px; }
+.cockpit-attention-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;
+  container-type: inline-size; }
+.cockpit-attention-sub { display: flex; flex-direction: column; gap: 8px; }
+.cockpit-attention-sub + .cockpit-attention-sub { border-top: 1px solid var(--hairline); padding-top: 10px; margin-top: 10px; }
+/* each problem's buttons on the right of its words where the card has the width (owner, 2026-11-01), under them on a phone */
+@container (min-width: 640px) {
+  .cockpit-attention-sub { flex-direction: row; align-items: flex-start; gap: 16px; }
+  .cockpit-attention-sub > .cockpit-attention-sub-line { flex: 1 1 0; min-width: 0; }
+  .cockpit-attention-sub > .fm-record-actions { flex: 0 0 auto; }
+  .fm-record-head:has(> .fm-record-lead) ~ .fm-record-body .cockpit-attention-sub .fm-work-row { margin-left: 0; }
+}
 /* no height of its own: 36 px, its text centred, was a blank line under the room on a card without buttons (owner,
    2026-10-15) — the card's text starts level with the top of its buttons (RecordCard) */
 .cockpit-attention-sub-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }

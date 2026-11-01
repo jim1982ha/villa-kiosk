@@ -1,5 +1,5 @@
 // src/components/cockpit/IssueCard.tsx
-// An issue's card, with its buttons: one card of the Inbox (cockpit/MessagesTab), folded until tapped. It was the
+// An issue's card, with its buttons: one card of the Inbox (cockpit/MessagesTab). It was the
 // Overview tab's list, one card per device; the Overview became Messages › Open issues (ticket 17 of "One inbox", owner
 // 2026-10-28). The villa by room / floor / category and Recent activity were removed before (owner, 2026-10-20).
 
@@ -16,56 +16,49 @@ import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
  *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
- *  room, every problem a line INSIDE the card. Every card carries the same buttons (owner, 2026-10-30): Done · Need
- *  help · Open Ticket (fm/deviceWork.overviewActions). Done resolves every record of the card as work done, each read
- *  again by the VESTA Agent; Need help asks the owner to act; "Open Ticket" (the Tickets tab's wrench and Title Case,
- *  owner 2026-10-14) makes the device's faults ONE ticket (each still its own record, so the VESTA Agent can clear one
- *  alone), then "Edit Ticket" opens it in the Tickets tab. A card that is only what the villa's system reports raises
- *  its fault with a Done or a Need help, and Open Ticket opens the ticket form for its device (owner, 2026-10-29). */
-export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicket, onRaiseTicket, ...shown }: {
+ *  room, every problem a section INSIDE the card, always whole (owner, 2026-11-01: never folded, the card itself not
+ *  pressed), each with its own buttons beside it where the width allows: Done · Need help · Open Ticket
+ *  (fm/deviceWork.overviewActions). Done resolves that problem's records as work done, each read again by the VESTA
+ *  Agent; Need help asks the owner to act; "Open Ticket" makes them a ticket, then "Edit Ticket" opens it in the Tickets
+ *  tab. A problem that is only what the villa's system reports raises its fault with a Done or a Need help, and Open
+ *  Ticket opens the ticket form for its device (owner, 2026-10-29). */
+export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicket, onRaiseTicket, focused }: {
   card: CardView;
   onOpenEntity: (id: string) => void;
   canManage: boolean;
   onEditTicket: (ticketId: string) => void;
-  /** Open the ticket form pointed at this device: a card with no record's Open Ticket. */
+  /** Open the ticket form pointed at this device: a problem with no record's Open Ticket. */
   onRaiseTicket: (entityId: string) => void;
   /** The device a window's warning opened the Cockpit for: its card marked. */
   focused?: boolean;
-  folded?: string[];
-  onToggle?: () => void;
 }) {
-  // a profile that does not manage Facility work, or a card with nothing to do (a watched one): no row of buttons
-  const actions = canManage && card.actions.length > 0
-    ? <CardActionRow card={card} onEditTicket={onEditTicket} onRaiseTicket={onRaiseTicket} /> : undefined;
-  return <AttentionCard card={card} onOpenEntity={onOpenEntity} actions={actions} {...shown} />;
+  // a profile that does not manage Facility work, or a problem with nothing to do (a watched one): no buttons
+  const buttons = (line: CardLine) => (canManage && line.actions.length > 0
+    ? <LineActions card={card} line={line} onEditTicket={onEditTicket} onRaiseTicket={onRaiseTicket} /> : null);
+  return <AttentionCard card={card} onOpenEntity={onOpenEntity} buttons={buttons} focused={focused} />;
 }
 
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
- *  source icons before the device's name, its time, the room under it, its problems' lines, its buttons under them.
- *  Tapping it opens or folds it; opened, its name opens the device, its buttons take their own presses. Draws `card`
- *  (config/cockpitCard) and nothing else: what it says is decided there, by value. Pure: a check draws it. */
-export function AttentionCard({ card, onOpenEntity, actions, focused, folded, onToggle }: {
+ *  source icons before the device's name, its time, the room under it, its problems' sections. Its name opens the
+ *  device. Draws `card` (config/cockpitCard) and nothing else: what it says is decided there, by value. Pure: a check
+ *  draws it. */
+export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
   /** The issue as told (messagesModel issueAsTold): a line holding VESTA's message of its alert draws it. */
   card: CardView;
   onOpenEntity: (id: string) => void;
-  actions?: ReactNode;
+  /** A problem's buttons, beside it. */
+  buttons?: (line: CardLine) => ReactNode;
   /** Marked, as the card a device window's warning asked for (owner, 2026-10-24). */
   focused?: boolean;
-  /** Folded: its lines (RecordCard `folded`). */
-  folded?: string[];
-  /** A tap on the card opens or folds it. */
-  onToggle?: () => void;
 }) {
   const icons = cardIcons(card);
-  const latest = [...new Set(card.lines.map((l) => l.latest).filter((w): w is string => !!w))];
   return (
     <RecordCard
-      // ⚠️ OPENED, ITS NAME OPENS THE DEVICE (owner, 2026-11-01, the audit: a device pill said the name again under it)
-      title={folded === undefined && card.entityId
+      // ⚠️ ITS NAME OPENS THE DEVICE (owner, 2026-11-01, the audit: a device pill said the name again under it)
+      title={card.entityId
         ? <button type="button" className="fm-title-link" onClick={() => onOpenEntity(card.entityId!)}>{card.title}</button> : card.title}
       // the time of its problem, the same as its ticket's (rowWhen)
       when={card.lines.length ? rowWhen(card) : undefined}
-      folded={folded}
       // the card's room pill, on the line under its name (CardPillLine)
       room={card.room}
       // its device's own state ("Missing"): the status pill every card has
@@ -74,8 +67,6 @@ export function AttentionCard({ card, onOpenEntity, actions, focused, folded, on
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
-        // folded, its lines not drawn: every icon before its name
-        : folded !== undefined && card.lead ? <SourceIcons {...card.lead} />
         : icons.head ? <SourceIcons {...icons.head} />
         // the icon column kept when the lines draw the icons (config/cockpitCard.cardIcons): they stay inside the card
         : icons.column ? <span className="fm-record-lead-empty" aria-hidden="true" /> : undefined}
@@ -83,21 +74,18 @@ export function AttentionCard({ card, onOpenEntity, actions, focused, folded, on
       // 2026-11-01); hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is
       // the button.
       check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
-      onOpen={onToggle}
-      pills={latest.length ? latest.map((w) => <Pill key={w} text={w} />) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
-          {card.lines.map((line, i) => <CockpitAttentionSub key={line.key} line={line} icons={icons.lines[i] ?? null} />)}
+          {card.lines.map((line, i) => <CockpitAttentionSub key={line.key} line={line} icons={icons.lines[i] ?? null} buttons={buttons?.(line)} />)}
         </ul>
       )}
-      actions={actions ?? undefined}
       // a fault being confirmed: its frame marked, the one place its look differs (owner, 2026-10-23)
       tone={[card.look === "watched" ? "fault-watched" : "", focused ? "cockpit-focus" : ""].filter(Boolean).join(" ") || undefined}
     />
   );
 }
 
-function CockpitAttentionSub({ line, icons }: { line: CardLine; icons: LineSources | null }) {
+function CockpitAttentionSub({ line, icons, buttons }: { line: CardLine; icons: LineSources | null; buttons?: ReactNode }) {
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line fm-record-gutter">
@@ -106,6 +94,8 @@ function CockpitAttentionSub({ line, icons }: { line: CardLine; icons: LineSourc
         <span className="cockpit-attention-sub-text">
           {/* its words whole, over as many lines as they need: no hover repeats them (owner, 2026-10-31) */}
           <span className="cockpit-attention-sub-title">{line.text}</span>
+          {/* who last moved this fault, beside its words (owner, 2026-11-01: a merged card holds several) */}
+          {line.latest && <span className="fm-meta"><Pill text={line.latest} /></span>}
           {/* what happened about it on Telegram — the short story its Status tells: the alert sent, a reminder, an
               escalation, a button pressed (owner, 2026-10-14; every line since ticket 19 of "One inbox") */}
           {/* ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components"):
@@ -121,25 +111,27 @@ function CockpitAttentionSub({ line, icons }: { line: CardLine; icons: LineSourc
           {line.closing && <span className="cockpit-attention-latest">{line.closing}</span>}
         </span>
       </div>
+      {buttons && <div className="fm-record-actions">{buttons}</div>}
     </li>
   );
 }
 
-/** ⚠️ ONE ROW OF BUTTONS ON EVERY ISSUE CARD (owner, 2026-10-30: "I expect to consistently see always Done / Need Help
- *  / Open Ticket"): an alert's card drew VESTA's own buttons, a fault's Open Ticket · Close. WHICH buttons, on which records and with which question is the card's
- *  (cockpitCard `actions`: fm/deviceWork, tested by value); WorkButtons draws them. Done closes the records (VESTA reads
- *  each again), Need help writes a "help" step on them, Open Ticket takes them on; on a card with no record, Done and
+/** ⚠️ THE SAME BUTTONS ON EVERY PROBLEM (owner, 2026-10-30: "I expect to consistently see always Done / Need Help /
+ *  Open Ticket"): an alert's card drew VESTA's own buttons, a fault's Open Ticket · Close. WHICH buttons, on which records and with which question is the card's
+ *  (its line's `actions`: fm/deviceWork, tested by value); WorkButtons draws them. Done closes the records (VESTA reads
+ *  each again), Need help writes a "help" step on them, Open Ticket takes them on; on a line with no record, Done and
  *  Need help raise its device's fault with the press. */
-function CardActionRow({ card, onEditTicket, onRaiseTicket }: {
+function LineActions({ card, line, onEditTicket, onRaiseTicket }: {
   card: CardView;
+  line: CardLine;
   onEditTicket: (ticketId: string) => void;
   onRaiseTicket: (entityId: string) => void;
 }) {
   const work = useCardWork();
   const place = useRecordPlace();
   return (
-    <WorkButtons actions={card.actions} cardKey={card.key} work={work} name={card.title}
-      asked={card.asked} raised={(entityId) => raisedFor(card, place(entityId, card.title))}
+    <WorkButtons actions={line.actions} cardKey={`${card.key}|${line.key}`} work={work} name={card.title}
+      asked={line.asked} raised={(entityId) => raisedFor({ title: card.title, lines: [line] }, place(entityId, card.title))}
       onOpen={(a) => (a.step.kind === "raise" ? onRaiseTicket(a.ids[0]) : onEditTicket(a.ids[0]))} />
   );
 }

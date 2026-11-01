@@ -3,9 +3,9 @@
 // announcements. What is listed, counted and open is the Messages model's (messages/messagesModel); this draws it.
 //
 // ⚠️ ONE COLUMN OF CARDS, AS TICKETS (owner, 2026-11-01): a list of rows on the left, the item chosen on the right, and
-// a phone showing them in turn, were replaced by the cards themselves, folded, a tap opening one in its place. An issue,
-// a notification, a report, a Watch and a Closed item are ONE card (InboxCard → RecordCard): the row and the opened
-// card were two drawings of the same thing, kept alike by hand.
+// a phone showing them in turn, were replaced by the cards themselves: whole under Issues, a notification or a report
+// folded until tapped. All are ONE card (InboxCard → RecordCard): the row and the opened card were two drawings of the
+// same thing, kept alike by hand.
 //
 // Open issues keep the Overview's order: one card per device, "Open Ticket" on the filters' line, Watch folded at the
 // end, a device window's warning opening on its issue.
@@ -25,7 +25,7 @@ import type { CardView } from "@/config/cockpitCard";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { useInView } from "@/hooks/useInView";
-import { announcementWords, isReport, issueRowLines, messagesView, followingFilter, openingFilter, type MessageItem,
+import { announcementWords, isReport, messagesView, followingFilter, openingFilter, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -77,19 +77,14 @@ function FoldedRows({ rows, unit, card, empty, tip, ...section }: {
   );
 }
 
-/** What stands under a folded card's pills: each of an issue's problems (in the words its opened card says it: the
- *  issue as told, messagesModel issueAsTold), a notification's first words. */
-export function foldedLines(item: MessageItem): string[] {
-  return item.kind === "issue" ? issueRowLines(item.card) : [announcementWords(item.announcement).line];
-}
-
 /** ⚠️ ONE CARD OF THE INBOX, WHATEVER IT HOLDS (owner, 2026-11-01: "NEVER add dedicated lines of code for specific
- *  cards"): folded until tapped, opened in its place and brought into view (an open card above it folds as it opens).
- *  The look is RecordCard's alone, here only which card it is. */
+ *  cards"): whole under Issues (`opened`, no `onToggle`: the card itself is not pressed, its buttons are); a notification
+ *  or a report folded until tapped, opened in its place and brought into view. A device window's warning brings its
+ *  issue into view too. The look is RecordCard's alone, here only which card it is. */
 export function InboxCard({ item, opened, onToggle, canManage, onOpenEntity, onEditTicket, onRaiseTicket, focused }: {
   item: MessageItem;
   opened: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
   /** This profile may manage Facility work: an issue's buttons, a report's page. */
   canManage: boolean;
   onOpenEntity: (id: string) => void;
@@ -97,17 +92,21 @@ export function InboxCard({ item, opened, onToggle, canManage, onOpenEntity, onE
   onRaiseTicket: (entityId: string) => void;
   focused?: boolean;
 }) {
-  const ref = useInView<HTMLDivElement>(opened, "start");
-  const shown = { folded: opened ? undefined : foldedLines(item), onToggle };
+  const ref = useInView<HTMLDivElement>(!!focused || (opened && !!onToggle), "start");
   return (
-    <div ref={ref}>
+    <div ref={ref} className="messages-card">
       {item.kind === "issue"
         ? <CockpitAttentionRow card={item.card} onOpenEntity={onOpenEntity} canManage={canManage} onEditTicket={onEditTicket}
-            onRaiseTicket={onRaiseTicket} focused={focused} {...shown} />
-        : item.kind === "report" ? <ReportDetail announcement={item.announcement} canOpenPage={canManage} {...shown} />
-        : <NoteDetail announcement={item.announcement} {...shown} />}
+            onRaiseTicket={onRaiseTicket} focused={focused} />
+        : <AnnouncementCard item={item} canManage={canManage} folded={opened ? undefined : announcementWords(item.announcement).line}
+            onToggle={onToggle} />}
     </div>
   );
+}
+
+function AnnouncementCard({ item, canManage, ...shown }: CardShown & { item: Exclude<MessageItem, { kind: "issue" }>; canManage: boolean }) {
+  return item.kind === "report" ? <ReportDetail announcement={item.announcement} canOpenPage={canManage} {...shown} />
+    : <NoteDetail announcement={item.announcement} {...shown} />;
 }
 
 export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket,
@@ -148,8 +147,6 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
     if (!chosen) setFilter((f) => followingFilter(f, unread, opening, unreadReports));
   }, [chosen, unread, unreadReports]);     // `opening`: the Cockpit's, fixed while the tab is open
   const [selected, setSelected] = useState<string | null>(null);
-  // a device window's warning opens its issue until it is folded (or another card opened)
-  const [focusDone, setFocusDone] = useState(false);
   /** The "Open a ticket" form, above the cards: closed, or open (pointed at a device when it came from a wrench). */
   const [raising, setRaising] = useState<{ entity?: string } | null>(null);
   useEffect(() => {
@@ -158,18 +155,17 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
     onFaultFormOpened?.();
     // once per request: the form keeps what was typed while the rest re-renders
   }, [reportFaultFor]);
-  // a device window's warning: its issue open, the list on Open issues
+  // a device window's warning: the list on Open issues, its issue in view
   const focusKey = (focusFaults ?? []).join("|");
   useEffect(() => {
     if (!focusKey) return;
     setSelected(null);
     pickFilter("issues");
-    setFocusDone(false);
   }, [focusKey]);
-  const isFocus = focusKey && !focusDone
+  const isFocus = focusKey
     ? (card: CardView) => cardFocused(card.entityId, focusFaults, devices.deviceOf) : undefined;
 
-  const view = messagesView({ open, watched, closed, announcements: kept, filter, selected, focus: isFocus });
+  const view = messagesView({ open, watched, closed, announcements: kept, filter, selected });
   const paged = usePaged(view.notifications);
   const reportsPaged = usePaged(view.reports);
   // which sections are open: Open issues, Notifications and Reports open, Watch and Closed folded (owner, 2026-10-25,
@@ -179,17 +175,17 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   const raise = () => setRaising({});
   const { issues: showsIssues, notifications: showsNotes, reports: showsReports } = view.shows;
   const item = view.selected;
-  // a tap opens a card, or folds the one open; one card open at a time, the warning's issue let go
-  const toggle = (key: string) => { setSelected(item?.key === key ? null : key); setFocusDone(true); };
+  // ⚠️ UNDER ISSUES EVERY CARD IS WHOLE AND NOT PRESSED (owner, 2026-11-01); elsewhere a tap opens one, or folds the one open
   const card = (i: MessageItem) => (
-    <InboxCard key={i.key} item={i} opened={item?.key === i.key} onToggle={() => toggle(i.key)} canManage={canManage}
+    <InboxCard key={i.key} item={i} opened={showsIssues || item?.key === i.key} canManage={canManage}
+      onToggle={showsIssues ? undefined : () => setSelected(item?.key === i.key ? null : i.key)}
       onOpenEntity={onOpenEntity} onEditTicket={onEditTicket} onRaiseTicket={(entity) => setRaising({ entity })}
       focused={i.kind === "issue" && !!isFocus?.(i.card)} />
   );
 
   return (
     <div className="fm-stack">
-      {/* the filters, always on one line, and on the same line at its right the
+      {/* always in view while the cards scroll (owner, 2026-11-01): the filters, always on one line, and on the same line at its right the
           Issues' own button (owner, 2026-10-31: "Open Ticket", the card's own words and wrench): two groups, so a
           narrow phone wraps the button whole under the filters, never squeezing them */}
       <div className="messages-toolbar">

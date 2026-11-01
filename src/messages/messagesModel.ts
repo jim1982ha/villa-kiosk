@@ -47,8 +47,8 @@ interface MessagesView {
   /** What Notifications says when it lists nothing (NOTHING_YET, or NOTHING_WAITING when finished records sit under
    *  Issues › Closed). */
   notificationsEmpty: string;
-  /** The card open: the one asked for when listed, else the issue a device window's warning asked for; null: every
-   *  card folded (owner, 2026-11-01), so an item that went never leaves another one open by itself. */
+  /** The notification or report open: the one asked for when listed; null: every one folded (owner, 2026-11-01), so an
+   *  item that went never leaves another open by itself. Issues are never folded. */
   selected: MessageItem | null;
   /** Which parts the filter shows: the issues' (Open issues, Watch, Closed), the notifications', the reports'. */
   shows: { issues: boolean; notifications: boolean; reports: boolean };
@@ -111,8 +111,7 @@ export function messageOfLine(line: CardView["lines"][number], kept: readonly An
  * and nothing else, whatever the device (owner, 2026-11-01: "Missing, #100-P1" was one kind of card with its own format:
  * a device's state is the card's status pill, CardView.status). The message is the line's (`told`: its words in place of its short story) and, on the Watch list, its Status says how it closed (no
  * closing line of the card's own: said once, owner 2026-10-29). The card's other problems come first as "Also: …"
- * (othersFirst, owner 2026-10-30). The folded card (issueRowLines), the opened card and the Watch card all read THIS
- * card. Pure.
+ * (othersFirst, owner 2026-10-30). The card and the Watch card read THIS card. Pure.
  */
 export function issueAsTold(card: CardView, kept: readonly Announcement[]): CardView {
   const lines = card.lines.map((l) => {
@@ -124,16 +123,6 @@ export function issueAsTold(card: CardView, kept: readonly Announcement[]): Card
   const said = lines.flatMap((l) => [l.text, l.told?.title ?? "", l.told?.text ?? ""]);
   const status = card.status?.filter((s) => !said.some((words) => saysWord(words, s.text)));
   return othersFirst({ ...card, lines, ...(status ? { status } : {}) }, (l) => l.told !== undefined);
-}
-
-/** ⚠️ ONE LINE PER PROBLEM, ON EVERY CARD (owner, 2026-11-01: "#102-P2 (existing), 🔓 Laundry Room door unlocked",
- *  "everywhere"; cut by the card; two alerts on a device, a line each): what an issue's folded card says under its
- *  name: each alert's title then its first words, the alerts first (an alert leads), then its other problems' words.
- *  Pure. */
-export function issueRowLines(card: CardView): string[] {
-  const alerts = card.lines.filter((l) => l.told), others = card.lines.filter((l) => !l.told);
-  return [...alerts.map((l) => [l.text, announcementWords(l.told!).line].filter(Boolean).join(", ")), ...others.map((l) => l.text)]
-    .filter(Boolean);
 }
 
 // the list's one order (feed.byTime): two feeds' numbers do not compare
@@ -260,7 +249,7 @@ export const NOTHING_YET = "Nothing announced yet.";
  *  announced is finished, and where it went. */
 export const NOTHING_WAITING = "Nothing waiting. Answered rings and finished items are under Issues › Closed.";
 
-export function messagesView({ open, watched, closed: closedFaults = [], announcements, filter, selected, focus }: {
+export function messagesView({ open, watched, closed: closedFaults = [], announcements, filter, selected }: {
   open: readonly CardView[];
   watched: readonly CardView[];
   /** The faults that are over (config/cockpitIssues); one VESTA holds a message for is listed by that message. */
@@ -269,10 +258,8 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
   filter: MessagesFilter;
   /** The item asked for (its key); null: none. */
   selected: string | null;
-  /** The issue a device window's warning opened the Cockpit for. */
-  focus?: (card: CardView) => boolean;
 }): MessagesView {
-  // every issue as told, once: its folded and opened card read the same lines (issueAsTold)
+  // every issue as told, once: its card reads these lines (issueAsTold)
   const issueItem = (card: CardView): MessageItem => ({ kind: "issue", key: card.key, card: issueAsTold(card, announcements) });
   const showIssues = filter === "issues";
   const showNotes = filter === "notifications";
@@ -301,8 +288,6 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
   const reports = asNotes(showReports, (a) => placeOf(a) === "report", "report");
   const watchedAll = [...watchedItems, ...watchedCards];
   const listed = [...issues, ...notifications, ...reports, ...watchedAll, ...closed];
-  const asked = listed.find((i) => i.key === selected);
-  const focused = focus ? issues.find((i) => i.kind === "issue" && focus(i.card)) : undefined;
   return {
     filters: FILTERS.map((f) => ({ ...f, count: f.id === "issues" ? open.length : null })),
     issues,
@@ -311,7 +296,7 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
     closed,
     reports,
     notificationsEmpty: announcements.some((a) => !inWatch.has(a) && placeOf(a) === "closed") ? NOTHING_WAITING : NOTHING_YET,
-    selected: asked ?? focused ?? null,
+    selected: listed.find((i) => i.key === selected) ?? null,
     shows: { issues: showIssues, notifications: showNotes, reports: showReports },
   };
 }

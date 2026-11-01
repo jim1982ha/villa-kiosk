@@ -15,9 +15,8 @@
 // the title (CardPillLine); `check`: its next check, a refresh icon and when, right after the room; `tone`: the card's own
 // tint.
 //
-// ⚠️ ONE FOLD (owner, 2026-11-01: the Inbox's list of rows and its pane on the right replaced by its cards, tapped open):
-// `folded` is the whole of a folded card: every caller hands its card whole and this one place swaps its text for those
-// cut lines, its buttons staying as on a Tickets card, so no kind of card can fold its own way.
+// ⚠️ ONE FOLD (owner, 2026-11-01): `folded`, a notification's or a report's until tapped: its caller hands its card whole
+// and this one place swaps its text for that cut line, so no card can fold its own way.
 //
 // ⚠️ THE NAME AND ITS TIME, THEN ITS PILLS (owner, 2026-11-01: the next check "right after the room area pill"): folded or
 // opened, a card's second line is the same CardPillLine: the room and its next check on the left, its state on the right.
@@ -51,8 +50,8 @@ export interface RecordCardProps {
   notes?: (string | undefined | null)[];
   /** Lines of its own, in place of the notes (an open issue's problems). */
   body?: ReactNode;
-  /** Folded: these lines, one per problem, each cut with "…", stand for its text; undefined: the card whole. */
-  folded?: string[];
+  /** Folded: this line, cut with "…", stands for its text; undefined: the card whole. */
+  folded?: string;
   photoIds?: string[];
   documentIds?: string[];
   /** A cost, formatted, at the right of the text. */
@@ -134,7 +133,7 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
       {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}
       <div className="fm-record-body">
         <div className="fm-row-main">
-          {folded?.map((line, i) => <span key={i} className="fm-card-folded">{line}</span>)}
+          {!whole && <span className="fm-card-folded">{folded}</span>}
           {whole && pills && <RecordMeta>{pills}</RecordMeta>}
           {whole && (body ?? <RecordNotes notes={notes ?? []} />)}
           {whole && (photoIds?.length ?? 0) > 0 && <EvidenceRow photoIds={photoIds!} disabled />}

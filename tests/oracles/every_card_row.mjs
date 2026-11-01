@@ -48,19 +48,19 @@ const table = { offline: issue("unavailable:camera.offline"), missing: issue("un
 const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 console.log("\n  each field of the row, on each kind:");
 for (const [name, item] of Object.entries(table)) {
-  const row = draw(h(InboxCard, { item, opened: false, onToggle() {}, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
-  ck(`${name}: its name on the first line, the time beside it, as a pill`, /<strong>[^<]+<\/strong>/.test(inside(row, "fm-record-head"))
+  const row = draw(h(InboxCard, { item, opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
+  ck(`${name}: its name on the first line, the time beside it, as a pill`, /<strong>.+<\/strong>/.test(inside(row, "fm-record-head"))
      && text(inside(row, "fm-record-head")).includes(momentText(began)) && /fm-chip-static fm-record-check"/.test(row), row);
   const opened = draw(h(AttentionCard, { card: item.card, onOpenEntity() {} }));
   ck("  ...the opened card's second line is the row's own, the first keeps only its name and its next check",
      (inside(row, "card-pill-line") ?? "") === (inside(opened, "card-pill-line") ?? "")
      && !/fm-badge/.test(inside(opened, "fm-record-head")), opened);
-  ck("  ...the one card, folded, the same frame opened", /fm-record-card/.test(row) && /fm-record-card/.test(opened)
+  ck("  ...the one card, in the Inbox as drawn alone", /fm-record-card/.test(row) && /fm-record-card/.test(opened)
      && /fm-record-check[^>]*>[^<]*</.test(inside(opened, "fm-record-head")), row);
   const pills = row.indexOf("card-pill-status"), room = row.indexOf("fm-entity-chip");
   ck("  ...its room left, its state pills in the group pushed right, nothing of its state in the words",
      (pills >= 0) === ((item.card.status ?? []).length > 0) && (pills < 0 || room < 0 || room < pills) && !row.slice(0, pills < 0 ? 0 : pills).includes("fm-badge")
-     && (pills < 0 || !/Missing|Unavailable|In progress/.test(text(inside(row, "fm-card-folded") || ""))), row);
+     && (pills < 0 || !/Missing|Unavailable|In progress/.test(text(inside(row, "cockpit-attention-sub-title") || ""))), row);
 }
 ck("each kind that has a state shows it as a pill", ["offline", "missing", "alarm", "task never done", "ticket"]
    .every((k) => (table[k].card.status ?? []).length > 0), Object.entries(table).map(([k, v]) => [k, v.card.status]));

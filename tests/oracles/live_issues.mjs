@@ -15,8 +15,8 @@ const W = await import("@/fm/deviceWork");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { groupAttention, buildAttentionItems } = await import("@/config/attention");
 // a card as the Overview draws it (cockpitCard) — its buttons, the records its Close reaches, its lines' words
-const cardActions = (g) => cockpitCard(g, null).actions;
-const cardRecords = (g) => cardActions(g).find((a) => a.step.kind === "close")?.ids ?? [];
+const cardActions = (g) => cockpitCard(g, null).lines.flatMap((l) => l.actions);
+const cardRecords = (g) => cockpitCard(g, null).lines.flatMap((l) => l.records.map((r) => r.id));
 const lineText = (g, n = 0) => cockpitCard(g, null).lines[n]?.text;
 const { screenReducer, START } = await import("@/pages/screen");
 
@@ -39,12 +39,13 @@ const [pump] = groupAttention([
 ]);
 const acts = cardActions(pump);
 ck("a device's live state and its faults are ONE card", pump.items.length >= 2 && cardRecords(pump).length === 2, pump.items.map((i) => i.id));
-ck("  ...Done and Need help act on both, the fault AND the ticket; a ticket is open, so the button is Edit Ticket, never Open Ticket (owner, 2026-11-01)",
-   said(acts).join(" | ") === `Done → a,b ${OV_DONE} | Need help → a,b | Edit Ticket → b`, said(acts));
+// owner, 2026-11-01: "for each issue of a potential merged cards", Edit Ticket where a ticket is open
+ck("  ...each problem its own buttons: the ticket's Edit Ticket, the fault's Open Ticket, each Done and Need help on its record alone",
+   said(acts).join(" | ") === `Done → b ${OV_DONE} | Need help → b | Edit Ticket → b | Done → a ${OV_DONE} | Need help → a | Open Ticket → a (in_progress)`, said(acts));
 const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" }),
   item("fault:c", "fault", "sensor.pump_energy", { ticketId: "c", stage: "ticket" })]);
-ck("  ...once every fault is a ticket, the button is Edit Ticket, on its first record",
-   said(cardActions(taken)).join(" | ") === `Done → b,c ${OV_DONE} | Need help → b,c | Edit Ticket → b`, said(cardActions(taken)));
+ck("  ...two tickets: Edit Ticket on each",
+   said(cardActions(taken)).join(" | ") === `Done → b ${OV_DONE} | Need help → b | Edit Ticket → b | Done → c ${OV_DONE} | Need help → c | Edit Ticket → c`, said(cardActions(taken)));
 const [lock] = groupAttention([item("alarm:lock.door", "alarm", "lock.door")]);
 // a card with no record: the same three for its device — Done and Need help raise its fault with the press, Open Ticket
 // opens the ticket form already pointed at it (owner, 2026-10-29; 2026-10-30)
@@ -61,7 +62,7 @@ const JSX = await import("../consistency/jsx.mjs");
 const [icButtons] = JSX.elements(JSX.parseTsx("components/cockpit/IssueCard.tsx"), "WorkButtons");
 ck("  ...pressed, Open Ticket opens Messages' ticket form pointed at the device (the one \"Open a ticket\" form); Done and Need help raise it in one write, at the device's place",
    /a\.step\.kind === "raise" \? onRaiseTicket\(a\.ids\[0\]\)/.test(JSX.propText(icButtons, "onOpen") || "")
-   && JSX.propText(icButtons, "raised") === "(entityId) => raisedFor(card, place(entityId, card.title))"
+   && JSX.propText(icButtons, "raised") === "(entityId) => raisedFor({ title: card.title, lines: [line] }, place(entityId, card.title))"
    && /onRaiseTicket=\{\(entity\) => setRaising\(\{ entity \}\)\}/.test(MT));
 // owner, 2026-10-30: the Tickets tab's "Mark resolved" is the Inbox's Done (work done, its form kept), with Need help
 ck("a ticket in progress (Tickets): Done (its resolve form), Need help, Close — each on every record of it, its own Close question",
@@ -129,11 +130,12 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
      && records.filter(E.isTicketOpen).every((t) => overview.find((g) => g.key === W.recordWorkKey(t, fold))?.items
        .some((i) => (i.fault ?? i).ticketId === t.id)),
      tickets.map((t) => [t.key, t.records.map((r) => r.id)]));
-  ck("  ...the Tickets card's buttons are its records', the Overview card's the whole device's",
+  ck("  ...the Tickets card's buttons are its records', the Overview card's each its problem's",
      said(W.ticketActions(tickets.find((t) => t.key === "device:sensor.pump_power").records.map(W.workRecord))).join(" | ")
        === `Done → p2 (resolved) | Need help → p2 | No action needed → p2 ${TK_CLOSE}`
      && said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))).join(" | ")
-       === `Done → p1,p2 ${OV_DONE} | Need help → p1,p2 | Edit Ticket → p2`);
+       === `Done → p1 ${OV_DONE} | Need help → p1 | Open Ticket → p1 (in_progress) | Done → p2 ${OV_DONE} | Need help → p2 | Edit Ticket → p2`,
+     said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))));
   ck("  ...Tickets lists the device whose ticket was opened last first, never an open fault or a closed record",
      tickets.map((t) => t.key).join() === "item:fault:n2,device:lock.back,device:sensor.pump_power", tickets.map((t) => t.key));
 }
@@ -509,7 +511,7 @@ ck("the Tickets tab draws ticketCards — the tickets in progress, by device —
 // Here only the wiring a drawing cannot reach — the Overview hands cardActions to the shared buttons, and acts on
 // what each button names (its stage, its records), with no status or rule of its own
 ck("a card draws what cardActions says (no rule of its own)",
-   JSX.propText(icButtons, "actions") === "card.actions" && JSX.propText(icButtons, "asked") === "card.asked"
+   JSX.propText(icButtons, "actions") === "line.actions" && JSX.propText(icButtons, "asked") === "line.asked"
    && !/closeTickets|InlineConfirm|in_progress"|"resolved"/.test(ov + tt));
 // ⚠️ ONE CARRIER OF EVERY STEP (architecture review round 6, 2026-10-30): each tab wrote its own Need help, failure line
 // and stage form, and neither said what a Need help did. Both hand their buttons the one useCardWork; neither writes a
@@ -573,8 +575,9 @@ console.log("\n  a Need help pressed is said on its card, and asked once (archit
   const pump = [rec("a", "sensor.pump_power"), { ...rec("b", "sensor.pump_energy"), status: "in_progress" }];
   const before = fm(pump), after = press(before, ["a", "b"]);
   // the Inbox's card, built as Messages builds it, from the records
-  const inbox = (d) => cockpitCard(groupAttention(buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {},
+  const inbox = (d) => { const { lines } = cockpitCard(groupAttention(buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {},
     fmData: d })).find((g) => g.items.some((i) => i.ticketId === "a")), null);
+    return { asked: lines.find((l) => l.asked)?.asked ?? null, actions: lines.flatMap((l) => l.actions) }; };
   const ticket = (d) => d.tickets.filter((t) => t.id === "b").map(W.workRecord);
   ck("pressed on the Inbox: its card says who asked and when, and offers no second Need help",
      inbox(before).asked === null && JSON.stringify(inbox(after).asked) === JSON.stringify({ at, by: "Owner" })

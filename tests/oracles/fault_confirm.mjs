@@ -104,7 +104,7 @@ ck("  ...and the map's fault marks (the amber \"!\") only its device",
 console.log("\n  in the Open issues list, last, uncounted, marked:");
 const cards = confirmingCards(conf, { devices, entities, entityMap: {}, resolvedRooms: { "lock.door": "Hall" }, may: () => true });
 ck("one card per fault, titled by its device, its fault's title its line, the confirm line under it, no buttons",
-   cards.length === 3 && cards.every((c) => c.look === "watched" && c.actions.length === 0 && c.nextCheck?.when)
+   cards.length === 3 && cards.every((c) => c.look === "watched" && c.lines.every((l) => l.actions.length === 0) && c.nextCheck?.when)
    && cards[1].title === "door" && cards[1].room === "Hall" && cards[1].lines[0].text === "#65 · Door unlocked"
    && cards[1].lines[0].closing === `Done${on(-2)} (JM)` && cards[1].nextCheck.tip === line("w1").split(" · ")[1], cards[1]);
 ck("  ...only the faults whose device the profile may open (as the open issues)",

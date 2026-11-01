@@ -1,3 +1,14 @@
+## 2.496.657
+
+What you will see:
+- Every card in Inbox › Issues is always shown whole, Open issues, Watch and Closed alike. A card can't be pressed any more,
+  only its buttons and the underlined device name. Notifications and Reports still open with a tap.
+- The line with `Issues`, `Notifications`, `Reports` and `Open Ticket` stays in view while the Inbox scrolls.
+- Each problem has its own buttons, on the right of its text on a wide screen and under it on a phone. On a card holding two
+  faults, `Done` and `Need help` act on that fault only, and the fault with a ticket says `Edit Ticket` while the other says
+  `Open Ticket`.
+- `Opened by …` sits with the fault it is about.
+
 ## 2.496.656
 
 What you will see:
