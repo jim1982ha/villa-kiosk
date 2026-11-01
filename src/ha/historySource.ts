@@ -331,6 +331,21 @@ export function stateSinceNow(h: StateSince | null | undefined, live: { state: s
   return h;
 }
 
+/** What to read for when each of `ids` began its state: `gone`, those the villa's system no longer has, when they left
+ *  it (lastRecorded), their "state" being their absence. */
+export function stateSinceRequests(ids: readonly string[], gone: readonly string[]) {
+  return { since: { kind: "since" as const, ids: ids.filter((id) => !gone.includes(id)) },
+    gone: { kind: "lastSeen" as const, ids: gone } };
+}
+
+/** The answer of `stateSinceRequests` for `id`; undefined: not read yet. */
+export function stateSinceAnswer(data: { since: Record<string, StateSince | null>; gone: Record<string, number | null> } | null,
+  id: string, live: { state: string; last_changed?: string } | undefined): Pick<StateSince, "at" | "before"> | null | undefined {
+  const left = data?.gone[id];
+  if (left !== undefined) return left === null ? null : { at: left, before: false };
+  return stateSinceNow(data?.since[id], live);
+}
+
 async function since(port: HistoryPort, id: string, now: number): Promise<StateSince | null> {
   const from = readBackFrom(await keptFrom(port, now), now);
   return stateSince(await port.stateRows(id, from, now, from), from);
