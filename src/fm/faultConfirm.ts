@@ -24,7 +24,8 @@
 
 import { AGENT_STAMP, type AgentCadence } from "@/agent/agentApi";
 import { clockTime, momentText } from "@/utils/dateText";
-import { withinLook } from "./faultTiming";
+import { nextAt, withinLook } from "./faultTiming";
+import { agentOwned } from "./issueSource";
 import { isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
 import type { FmData, FmTicket } from "./fmTypes";
 import { authorWords } from "@/auth/roles";
@@ -75,10 +76,20 @@ function closedOf(t: FmTicket): ClosedFault {
   };
 }
 
-/** The fault `t` as being confirmed now, or null: resolved, its confirmsBy a moment, and not shown past shownUntil. */
+/** ⚠️ EVERY DONE GOES TO WATCH (owner, 2026-11-02: "if a user clicks on done, the associated card and fault shall be
+ *  considered as a watchlist for the relevant amount of time"): the Agent writes `confirmsBy` on the faults it follows;
+ *  one a person raised has no task of its, so nothing wrote it and it left at once. Its watch is a night-check finding's,
+ *  until the nightly check after its close, the time being the Agent's own: with no Agent, nothing watches. */
+function watchedUntil(t: FmTicket, cadence: AgentCadence | null): number {
+  if (t.confirmsBy) return Date.parse(t.confirmsBy);
+  if (agentOwned(t) || !t.resolvedAt || !cadence) return NaN;
+  return nextAt(cadence.nightlyAt, new Date(t.resolvedAt))?.getTime() ?? NaN;
+}
+
+/** The fault `t` as being confirmed now, or null: resolved, watched until a moment, and not shown past shownUntil. */
 function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: number = Date.now()): ConfirmingFault | null {
-  if (!isTicketResolved(t) || !t.confirmsBy) return null;
-  const at = Date.parse(t.confirmsBy);
+  if (!isTicketResolved(t)) return null;
+  const at = watchedUntil(t, cadence);
   if (Number.isNaN(at) || now > shownUntil(at, cadence)) return null;
   return {
     ...closedOf(t),

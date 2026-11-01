@@ -162,7 +162,7 @@ function clocksOf(problems: readonly CheckedProblem[]): Clock[] {
 /** The next moment after `now` at villa time `hhmm` (today, else tomorrow) — on the villa's clock (utils/villaClock),
  *  as the Agent reads its nightlyAt; null for a time that is not HH:MM. ⚠️ IT WAS THE DEVICE'S CLOCK (owner,
  *  2026-10-28): a phone abroad put the nightly check at another hour than Telegram did. */
-function nextAt(hhmm: string, now: Date): Date | null {
+export function nextAt(hhmm: string, now: Date): Date | null {
   const [h, m] = hhmm.split(":").map(Number);
   if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
   const w = wallClock(now);

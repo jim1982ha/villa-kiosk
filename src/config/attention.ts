@@ -16,6 +16,7 @@ import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
 import { alertNumberOf, DUE_WORDS, faultBegan, faultTitle, fmAttention, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
+import type { AgentCadence } from "@/agent/agentApi";
 import { confirmingFaults } from "@/fm/faultConfirm";
 import { faultLatest, notedStory } from "@/fm/faultNotes";
 import { momentText } from "@/utils/dateText";
@@ -411,6 +412,8 @@ export function buildAttentionItems(opts: {
   fmData: FmData;
   /** Since when an entity is in its state, from its history (useStateSince over sinceEntities); absent: not said. */
   sinceOf?: (id: string) => Since;
+  /** The VESTA Agent's own timing: how long what is Done stays on Watch; absent: it did not say. */
+  cadence?: AgentCadence | null;
 }): AttentionItem[] {
   const { devices, entities, entityMap, resolvedRooms, fmData } = opts;
   const sinceOf = opts.sinceOf ?? (() => null);
@@ -517,7 +520,7 @@ export function buildAttentionItems(opts: {
   // ⚠️ DONE MOVES THE CARD TO WATCH (owner, 2026-11-02: an offline device's Done closed its fault, and the device's live
   // state stayed as an open issue with nothing left to press): a device whose fault VESTA is watching has its live line
   // on Watch only, until VESTA's verdict; any other fault of the device stays. VESTA reopens it if it is still wrong.
-  const watched = new Set(confirmingFaults(fmData, null).flatMap((c) => {
+  const watched = new Set(confirmingFaults(fmData, opts.cadence ?? null).flatMap((c) => {
     const id = recordEntity(c.ticket.entityId, (x) => x in entities) ?? c.ticket.entityId;
     return id ? [devices.deviceOf(id)] : [];
   }));
