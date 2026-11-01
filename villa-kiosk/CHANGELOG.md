@@ -1,3 +1,15 @@
+## 2.496.654
+
+What you will see:
+- Every fault card has its next check back, in a pill with the refresh icon right after the room: `within 5min`, `02:00`,
+  `by hand`, or `Closes 02:00` under Watch. This holds folded or opened, in Inbox › Issues and on Tickets. The time at the
+  top right stays when the problem was opened.
+- A fault's time is when the problem began, on its Inbox card and on its ticket alike: a device "offline for over 8d 19h"
+  shows the day it went offline, no longer the day the record was written.
+- A ticket's device pill says the same name as its Inbox card.
+- A fault that leaves Watch now goes to `Closed`. Those with no VESTA message used to leave the Inbox altogether.
+- In a ticket's form, `Summary` is now `Title`, the words shown on the card. An alert's number stays in front of it, fixed.
+
 ## 2.496.653
 
 What you will see:

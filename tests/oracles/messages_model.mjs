@@ -165,9 +165,20 @@ ck("a guest (one tab, Messages) gets no tab strip: the strip is drawn only with 
    !!strip && guardsOf(strip).some((g) => /tabs\.length > 1/.test(g)), strip && guardsOf(strip));
 const tab = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
 ck("  ...the tab lists, counts and opens what messagesView says, from the open issues and the page's announcements",
-   /const \{ kept, unread, unreadReports \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, announcements: kept, filter, selected,/.test(tab)
+   /const \{ kept, unread, unreadReports \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, closed, announcements: kept, filter, selected,/.test(tab)
    && /view\.filters\.map\(/.test(tab) && /const item = view\.selected;/.test(tab)
    && /const \{ issues: showsIssues, notifications: showsNotes, reports: showsReports \} = view\.shows;/.test(tab));
+
+{
+  // owner, 2026-11-01: "I expect to see them go in the closed section"
+  const gone = card("closed:f", { look: "closed", closedAt: "2026-10-30T10:00:00+08:00", nextCheck: null, lines: [{ key: "l", text: "Pump", story: [], closing: "Done" }] });
+  const told = card("closed:g", { look: "closed", closedAt: "2026-10-30T10:00:00+08:00", nextCheck: null, lines: [{ key: "m", text: "Lock", story: [], alertNumber: 90, closing: "Done" }] });
+  const msg = ann(50, { feed: "vesta", key: "incident:90", at: "2026-10-31T10:00:00+08:00", status: "✅ Closed" });
+  const v = messagesView({ ...base, announcements: [], closed: [gone, told], filter: "issues", selected: null });
+  const w = messagesView({ ...base, announcements: [msg], closed: [gone, told], filter: "issues", selected: null });
+  ck("a fault that left Watch is in Closed, a card of its own", v.closed.map((i) => i.key).join() === "closed:f,closed:g", v.closed);
+  ck("  ...one VESTA holds a message for is listed once, by that message", !w.closed.some((i) => i.key === "closed:g"), w.closed);
+}
 
 console.log("\n  opening the Cockpit clears the unread mark (owner, 2026-10-31):");
 {

@@ -12,24 +12,23 @@
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
 // faults of one device: TicketsTab draws the frame). `lead`: what stands before the title (an open issue's source
 // icons); `titlePills`: pills right after the title, on its line (a spend's device); `room` and `status`: the line under
-// the title (CardPillLine); `check`: a pill at the right of that line, its kind's icon and when (an open issue's next check: a refresh icon; a card on the
-// Watch list, when VESTA closes it: a clock); `tone`: the card's own tint.
+// the title (CardPillLine); `check`: its next check, a refresh icon and when, right after the room; `tone`: the card's own
+// tint.
 //
 // ⚠️ ONE FOLD (owner, 2026-11-01: the Inbox's list of rows and its pane on the right replaced by its cards, tapped open):
 // `folded` is the whole of a folded card: every caller hands its card whole and this one place swaps its text for those
 // cut lines, its buttons staying as on a Tickets card, so no kind of card can fold its own way.
 //
-// ⚠️ THE NAME AND ITS NEXT CHECK, THEN ITS PILLS (owner, 2026-11-01: "only keep the refresh interval on the first line"):
-// opened or as a line in the Inbox, a card's second line is the same CardPillLine, the room left, the pills right.
+// ⚠️ THE NAME AND ITS TIME, THEN ITS PILLS (owner, 2026-11-01: the next check "right after the room area pill"): folded or
+// opened, a card's second line is the same CardPillLine: the room and its next check on the left, its state on the right.
 
 import type { ReactNode } from "react";
-import { Clock, FileText, RefreshCw, type LucideIcon } from "lucide-react";
+import { FileText, RefreshCw } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import ErasableRow from "./ErasableRow";
 import EvidenceRow from "./EvidenceRow";
 import RecordMeta, { RecordNotes } from "./RecordMeta";
 import { documentUrl } from "@/fm/fmApi";
-import type { CheckPillKind } from "@/fm/faultTiming";
 
 /** A card's status pill: `tone` is the badge's colour class (fm/tone pillClass). */
 export interface RecordStatus { text: string; tone: string }
@@ -43,8 +42,8 @@ export interface RecordCardProps {
   titlePills?: ReactNode;
   /** Its room, as THE room pill (Pill), on the title's line after its pills: every card that shows a room. */
   room?: string;
-  /** The pill at the right of the title's line: its kind's icon, `when` beside it, `tip` on hover (CheckPill). */
-  check?: { kind: CheckPillKind; when: string; tip: string };
+  /** Its next check, right after the room: `when` beside the refresh icon, `tip` on hover (CheckPill). */
+  check?: { when: string; tip: string };
   /** The line of tags above its text (the device, who last moved it, "by VESTA Agent" on a task or a spend line…). */
   pills?: ReactNode;
   /** When, as a pill at the right of the title's line, on every card (owner, 2026-11-01). */
@@ -66,18 +65,13 @@ export interface RecordCardProps {
   tone?: string;
 }
 
-/** Each kind's icon (faultTiming CheckPillKind): a next look, the refresh icon; a close, a clock — never the refresh
- *  icon, read as "next check" on a card about to close (owner, 2026-10-31), nor the check its card leads with. */
-const CHECK_ICON: Record<CheckPillKind, LucideIcon> = { next: RefreshCw, closes: Clock };
-
-/** ⚠️ ONE PILL for every card that says what VESTA does at a time (owner, 2026-10-23: an open issue's and a cleared
- *  fault's alike): its kind's icon and when, its words on hover. Which kind is the card's data, never its caller's. */
-export function CheckPill({ kind, when, tip }: { kind: CheckPillKind; when: string; tip: string }) {
-  const Icon = CHECK_ICON[kind];
+/** ⚠️ ONE PILL for when VESTA looks again (owner, 2026-10-23: an open issue's and a cleared fault's alike; 2026-11-01:
+ *  the refresh icon on both, so a time on a card is plainly its next check): the icon and when, its words on hover. */
+export function CheckPill({ when, tip }: { when: string; tip: string }) {
   return (
     <Tip text={tip}>
       <span className="fm-entity-chip fm-chip-static fm-record-check" aria-label={tip}>
-        <Icon size={12} aria-hidden="true" />{when}
+        <RefreshCw size={12} aria-hidden="true" />{when}
       </span>
     </Tip>
   );
@@ -109,13 +103,14 @@ export function StatusPill({ text, tone }: RecordStatus) {
   return <span className={`fm-badge ${tone}`}>{text}</span>;
 }
 
-/** A card's line of pills, folded or whole: its room on the left, its state on the right (owner, 2026-11-01); nothing
- *  with neither. */
-function CardPillLine({ room, status }: { room?: string; status: readonly RecordStatus[] }) {
-  if (!room && status.length === 0) return null;
+/** A card's line of pills, folded or whole: its room and next check on the left, its state on the right (owner,
+ *  2026-11-01); nothing with none. */
+function CardPillLine({ room, check, status }: { room?: string; check?: RecordCardProps["check"]; status: readonly RecordStatus[] }) {
+  if (!room && !check && status.length === 0) return null;
   return (
     <span className="card-pill-line">
       {room && <Pill text={room} />}
+      {check && <CheckPill {...check} />}
       {status.length > 0 && (
         <span className="card-pill-status">{status.map((s) => <StatusPill key={s.text} {...s} />)}</span>
       )}
@@ -135,9 +130,8 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
           {titlePills}
         </div>
         {when && <Pill text={when} className="fm-record-check" />}
-        {whole && check && <CheckPill kind={check.kind} when={check.when} tip={check.tip} />}
       </div>
-      <CardPillLine room={room} status={[status ?? []].flat()} />
+      <CardPillLine room={room} check={check} status={[status ?? []].flat()} />
       {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}
       <div className="fm-record-body">
         <div className="fm-row-main">

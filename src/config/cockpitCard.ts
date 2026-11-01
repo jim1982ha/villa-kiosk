@@ -16,14 +16,15 @@
 import { pillClass } from "@/fm/tone";
 import type { RecordStatus } from "@/components/fm/RecordCard";
 import type { AgentCadence } from "@/agent/agentApi";
-import { nextCheck, nextCheckAt, nextCheckWhen, type CheckPillKind } from "@/fm/faultTiming";
+import { checkPill } from "@/fm/faultTiming";
 import { helpAsked, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import { STAGE_WORDS, type HelpAsked } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, dayMonth, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
-import { confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
-import { alertNumberOf, faultTitle } from "@/fm/fmEngine";
+import { closedFaults, closedWords, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
+import { alertNumberOf, faultBegan, faultTitle } from "@/fm/fmEngine";
+import type { FmData, FmTicket } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { Announcement } from "@/messages/announcements";
 import { labelOf } from "./EntityMap";
@@ -187,7 +188,7 @@ export interface CardLine {
   /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
    *  (ticket 19 of "One inbox"); [] when nothing was told. */
   story: { note: string; at: string }[];
-  /** When its fault was opened (ISO); null for a live state with no fault. */
+  /** When its fault began (fmEngine.faultBegan, ISO); null for a live state with no fault. */
   openedAt: string | null;
   /** Who last moved its fault and when (faultNotes.faultLatest), said by the card's pill; "" or absent: nobody yet. */
   latest?: string;
@@ -209,8 +210,10 @@ const alertNumberIn = (n: number | undefined) => (n !== undefined ? { alertNumbe
 export interface CardView {
   key: string;
   /** "watched": a cleared fault the VESTA Agent still watches (fm/faultConfirm) — in the Watch section, never counted,
-   *  its frame marked `fault-watched`; absent on every open issue. */
-  look?: "watched";
+   *  its frame marked `fault-watched`; "closed": one over, in the Closed section; absent on every open issue. */
+  look?: "watched" | "closed";
+  /** When a closed card closed (ISO): its place among what is closed. */
+  closedAt?: string;
   /** A watched card's two halves (fm/faultConfirm.confirmParts): its compact row says "Done on 25/10/2026 14:10 (JM)" in its text and
    *  "Closes 15:06" in its pill. */
   watched?: { did: string; when: string; tip: string };
@@ -220,10 +223,9 @@ export interface CardView {
   entityId?: string;
   /** The icons before its name: where each of its problems comes from (cardSources). */
   lead: LineSources | null;
-  /** "Next check: 02:00", and its moment ("20/10/2026 02:00") — null when it has none (live, by hand). `kind`: what
-   *  happens then, so which icon its pill wears ("next" on an open card, "closes" on a watched one: faultTiming
-   *  CheckPillKind); `when`: the pill's words beside it ("02:00", "Closes 02:00"); `tip`: what hovering the pill says. */
-  nextCheck: { kind: CheckPillKind; text: string; at: string | null; when: string; tip: string } | null;
+  /** "Next check: 02:00", and its moment ("20/10/2026 02:00") (faultTiming.checkPill); `when`: the pill's words beside
+   *  its refresh icon ("02:00", "Closes 02:00"); `tip`: what hovering the pill says. null: no next check, it is closed. */
+  nextCheck: { text: string; at: string | null; when: string; tip: string } | null;
   /** Done · Need help · Open Ticket (or Edit Ticket) — on its records, or its device when it holds none (deviceWork). */
   actions: WorkAction[];
   /** The Need help pressed on it that nothing has answered yet (deviceWork.helpAsked): its buttons say so. */
@@ -233,15 +235,9 @@ export interface CardView {
   status?: RecordStatus[];
 }
 
-function nextCheckView(group: AttentionGroup, cadence: AgentCadence | null, now: Date, at: Date | null): CardView["nextCheck"] {
-  const text = nextCheck(group.items, cadence, now);
-  const moment = at ? momentText(at) : null;
-  return { kind: "next", text, at: moment, when: nextCheckWhen(group.items, cadence, now), tip: moment ? `${text} (${moment})` : text };
-}
-
 /** ⚠️ EVERY CARD SAYS WHEN, AND A PROBLEM HAS ONE TIME (owner, 2026-11-01: an issue's row said 01:07, its escalation, its
- *  ticket said 00:19, the opening, of the same alert: "it shall be the same time"): when its lead problem was opened,
- *  on every screen. What was told of it since is its Status. A new alert had no time before this (2026-10-29); every
+ *  ticket said 00:19, the opening, of the same alert: "it shall be the same time"): when its lead problem began
+ *  (fmEngine.faultBegan), on every screen. What was told of it since is its Status. A new alert had no time before this (2026-10-29); every
  *  line has a moment (attention openedAt), a live state too; null only for a device gone longer than the villa keeps.
  *  Pure. */
 export function rowTime(card: Pick<CardView, "lines">): string | null {
@@ -284,7 +280,6 @@ export function othersFirst(card: CardView, hasMessage: (line: CardLine) => bool
 
 /** The card of `group`, as drawn. `cadence`: the VESTA Agent's own timing (null: it did not say). */
 export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null, now: Date = new Date()): CardView {
-  const at = nextCheckAt(group.items, cadence, now);
   const line = (item: AttentionItem): CardLine => ({
     key: item.id,
     text: attentionLineIn(group, item),
@@ -300,7 +295,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
   return {
     key: group.key, title: group.title, room: group.room, entityId: group.entityId,
     lead: cardSources(group.items),
-    nextCheck: nextCheckView(group, cadence, now, at),
+    nextCheck: checkPill(group.items, cadence, now),
     actions: cardActions(group),
     asked: helpAsked(cardRecords(group)),
     lines: group.items.map(line),
@@ -314,34 +309,50 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
  *  (it is cleared). Only the faults whose device `may` be shown: the
  *  profile's own predicate (VillaAttention.shows, hidden devices out), passed by config/cockpitIssues, the one caller;
  *  `confirming` from fm/faultConfirm.confirmingFaults. */
-export function confirmingCards(confirming: readonly ConfirmingFault[], opts: {
+export function confirmingCards(confirming: readonly ConfirmingFault[], opts: CardsOpts): CardView[] {
+  return confirming.flatMap((c): CardView[] => {
+    const said = confirmParts(c);
+    // ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … the same style and the same
+    // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
+    // issues' pill, saying VESTA closes it then ("Closes 02:00", then "Closes within 5 min", owner 2026-10-31), who
+    // cleared it the line under its fault
+    return clearedCard(c.ticket, said.did, opts, { key: `watched:${c.ticket.id}`, look: "watched", watched: said,
+      nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip } });
+  });
+}
+
+/** Every closed fault as its card, for the Closed section (owner, 2026-11-01): a watched card's, with nothing left to
+ *  check, the last closed first (faultConfirm.closedFaults). */
+export function closedCards(fmData: FmData, cadence: AgentCadence | null, now: Date, opts: CardsOpts): CardView[] {
+  return closedFaults(fmData, cadence, now.getTime()).flatMap((c) => clearedCard(c.ticket, closedWords(c), opts,
+    { key: `closed:${c.ticket.id}`, look: "closed", nextCheck: null,
+      ...(Number.isNaN(c.closedAt) ? {} : { closedAt: new Date(c.closedAt).toISOString() }) }));
+}
+
+interface CardsOpts {
   devices: Pick<VillaDevices, "deviceOf">;
   entities: Record<string, HassEntity>;
   entityMap: Parameters<typeof labelOf>[1];
   resolvedRooms: Record<string, string>;
   may: (entityId: string) => boolean;
-}): CardView[] {
+}
+
+/** The card of a fault no longer open: titled by its device and its room as an open issue's is, its fault's title as
+ *  its line and how it closed (`did`) under it, no buttons. None when the profile may not see its device. */
+function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardView, "key" | "look" | "nextCheck" | "watched" | "closedAt">): CardView[] {
   const { devices, entities, entityMap, resolvedRooms, may } = opts;
-  return confirming.flatMap((c): CardView[] => {
-    const t = c.ticket;
-    const entityId = recordEntity(t.entityId, (x) => x in entities);
-    if (entityId && !may(entityId)) return [];
-    // its device, title and room as an open issue's card has them (attention cardDevice / cardHead)
-    const device = entityId ? cardDevice(entityId, t.room, { devices, entityMap, entities, resolvedRooms }) : undefined;
-    const title = faultTitle(t);
-    const said = confirmParts(c);
-    return [{
-      key: `watched:${t.id}`, look: "watched", watched: said,
-      ...cardHead(device, title, t.room),
-      entityId: device?.key,
-      // ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … the same style and the same
-      // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
-      // issues' pill, of the kind that says VESTA closes it then (owner, 2026-10-31: "Closes 02:00" with a clock, then
-      // "Closes within 5 min"), who cleared it the line under its fault
-      lead: null, nextCheck: { kind: "closes", text: said.tip, at: null, when: said.when, tip: said.tip }, actions: [],
-      lines: [{ key: `fault:${t.id}`, text: device ? title : "", story: [], openedAt: t.openedAt ?? null,
-        closing: said.did,
-        ...alertNumberIn(alertNumberOf(t)) }],
-    }];
-  });
+  const entityId = recordEntity(t.entityId, (x) => x in entities);
+  if (entityId && !may(entityId)) return [];
+  // its device, title and room as an open issue's card has them (attention cardDevice / cardHead)
+  const device = entityId ? cardDevice(entityId, t.room, { devices, entityMap, entities, resolvedRooms }) : undefined;
+  const title = faultTitle(t);
+  return [{
+    ...own,
+    ...cardHead(device, title, t.room),
+    entityId: device?.key,
+    lead: null, actions: [],
+    lines: [{ key: `fault:${t.id}`, text: device ? title : "", story: [], openedAt: faultBegan(t),
+      closing: did,
+      ...alertNumberIn(alertNumberOf(t)) }],
+  }];
 }

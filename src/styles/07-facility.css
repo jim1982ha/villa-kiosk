@@ -88,8 +88,8 @@
    (owner, 2026-10-15: "don't skip a line between the device name and the next section") */
 .fm-record-body { flex: 1 1 100%; min-width: 0; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; }
 /* the next check: a pill at the right of the title's line, its refresh icon before when (RecordCard `check`) */
-.fm-record-check { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; margin-top: 2px; margin-left: auto; }
-.fm-record-check + .fm-record-check { margin-left: 0; }
+.fm-record-check { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.fm-record-head .fm-record-check { margin-top: 2px; margin-left: auto; }
 /* a folded card's lines, each one line cut with "…" (RecordCard `folded`): the one place a card's words are cut */
 .fm-card-folded { display: block; font-size: var(--text-xs); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* ⚠️ THE CARD'S WIDTH, NEVER ITS LONGEST LINE (owner, 2026-10-14: a "VESTA reads: …" note ran past a Closed card's
@@ -98,6 +98,9 @@
 /* ⚠️ THE BUTTONS UNDER THE TEXT, ON THE RIGHT (owner, 2026-10-29: "the description take all the width of the cards and
    the buttons to appear below it, aligned on the right", every card alike): beside it, they squeezed an alert's story
    into a narrow column, a date cut over two lines. A row of their own; a cost stays beside the text. */
+/* a form's title: an alert's number stays, fixed, before the words that can be changed */
+.fm-title-field { display: flex; align-items: center; gap: 8px; }
+.fm-title-field input { flex: 1 1 auto; min-width: 0; }
 .fm-record-actions { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .fm-record-actions .modal-actions { justify-content: flex-end; flex-wrap: wrap; }
 /* ⚠️ A CARD'S "Close this? No action needed." ON A PHONE (owner, 2026-10-21: "very buggy" on iPhone): the row of
@@ -178,8 +181,8 @@
 /* The line of a card's tags (RecordMeta.tsx, owner 2026-10-11).
    A device chip there is a pill like the others — the same height, still a button. */
 .fm-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-/* a card's pills, the same size on its title's line (its room, a spend's device, its next check) and the meta line */
-:is(.fm-meta, .fm-record-head) .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
+/* a card's pills, the same size on its title's line (its time, a spend's device), its room's line and the meta line */
+:is(.fm-meta, .fm-record-head, .card-pill-line) .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
 /* ⚠️ A CARD'S BUTTONS ON ONE LINE ON A PHONE (owner, 2026-10-31, iPhone: Open Ticket wrapped under Done · Need help):
    one row of their own (WorkButtons, Inbox and Tickets alike), 12 px each side instead of the 18 of a .btn, and under
    a card with an icon column the row takes that column's width too (it is empty under the buttons). On a phone narrower

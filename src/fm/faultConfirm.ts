@@ -19,7 +19,7 @@
 // ⚠️ OPEN › CLEARED (ON THE WATCH LIST) › CLOSED (owner, 2026-10-31): a card here is NOT closed yet. Its pill said
 // "VESTA confirms by 02:00" beside the open cards' refresh icon, read as "next check" ("will it be closed at 2am?"), and a
 // Close pressed in the Cockpit said "Closed on …" on a card that was not. Its pill now says what happens then, "Closes
-// 02:00", with a clock (faultTiming CHECK_PILL), and a Close pressed in the Cockpit says "Cleared on … (Owner)": only a
+// 02:00", and a Close pressed in the Cockpit says "Cleared on … (Owner)": only a
 // problem that is really over says Closed.
 
 import { AGENT_STAMP, type AgentCadence } from "@/agent/agentApi";
@@ -33,7 +33,8 @@ import { authorWords } from "@/auth/roles";
  *  verdict lands at its next look, the second covers a look that ran long. */
 const CONFIRM_GRACE_LOOKS = 2;
 
-export interface ConfirmingFault {
+/** How a closed fault was closed, in the words of its card. */
+interface ClosedFault {
   ticket: FmTicket;
   /** How it was cleared: "Done" (a Done on Telegram, a repair recorded), "Cleared" (the Cockpit's No action needed, nothing done,
    *  with who pressed it; or the VESTA Agent's own clearing, no name: what it reported is over). Never "Closed": it is
@@ -44,6 +45,9 @@ export interface ConfirmingFault {
   who: string;
   /** When it closed (its last resolution's moment), in ms; NaN when unrecorded. */
   closedAt: number;
+}
+
+export interface ConfirmingFault extends ClosedFault {
   /** When the VESTA Agent reads it again (confirmsBy), in ms. */
   at: number;
   /** That moment is past: its verdict is due at the Agent's next look. */
@@ -59,11 +63,8 @@ export function shownUntil(at: number, cadence: AgentCadence | null): number {
   return at + CONFIRM_GRACE_LOOKS * look;
 }
 
-/** The fault `t` as being confirmed now, or null: resolved, its confirmsBy a moment, and not shown past shownUntil. */
-function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: number = Date.now()): ConfirmingFault | null {
-  if (!isTicketResolved(t) || !t.confirmsBy) return null;
-  const at = Date.parse(t.confirmsBy);
-  if (Number.isNaN(at) || now > shownUntil(at, cadence)) return null;
+/** How `t` was closed: from its last resolution. */
+function closedOf(t: FmTicket): ClosedFault {
   const close = lastResolution(t);
   const agents = !!close && isClearedStep(close) && !close.who && close.by === AGENT_STAMP;
   return {
@@ -71,6 +72,16 @@ function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: number = D
     word: close && isClearedStep(close) ? "Cleared" : "Done",
     who: agents ? "" : close?.who || authorWords(close),
     closedAt: Date.parse(close?.at ?? t.resolvedAt ?? ""),
+  };
+}
+
+/** The fault `t` as being confirmed now, or null: resolved, its confirmsBy a moment, and not shown past shownUntil. */
+function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: number = Date.now()): ConfirmingFault | null {
+  if (!isTicketResolved(t) || !t.confirmsBy) return null;
+  const at = Date.parse(t.confirmsBy);
+  if (Number.isNaN(at) || now > shownUntil(at, cadence)) return null;
+  return {
+    ...closedOf(t),
     at,
     due: now >= at,
     lookMinutes: cadence && cadence.checkMinutes > 0 ? cadence.checkMinutes : null,
@@ -82,15 +93,28 @@ export function confirmingFaults(d: FmData, cadence: AgentCadence | null, now: n
   return d.tickets.flatMap((t) => confirmingOf(t, cadence, now) ?? []).sort((a, b) => a.at - b.at || a.ticket.id.localeCompare(b.ticket.id));
 }
 
+/** ⚠️ WHAT LEFT THE WATCH LIST GOES TO CLOSED (owner, 2026-11-01: "i expect to see them go in the closed section"): a
+ *  fault with no VESTA message of its own just left the Inbox. Every resolved fault no longer watched, the last closed
+ *  first; the server drops them after their retention window. */
+export function closedFaults(d: FmData, cadence: AgentCadence | null, now: number = Date.now()): ClosedFault[] {
+  return d.tickets.filter((t) => isTicketResolved(t) && !confirmingOf(t, cadence, now)).map(closedOf)
+    .sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0));
+}
+
+/** How it was closed, as the Agent's Telegram lines say it: what, when, then who. */
+export function closedWords(c: ClosedFault): string {
+  return `${c.word}${Number.isNaN(c.closedAt) ? "" : ` on ${momentText(c.closedAt)}`}${c.who ? ` (${c.who})` : ""}`;
+}
+
 /** The row's parts: how it was cleared and when, as the Agent's Telegram lines say it ("Done on 25/10/2026 14:10 (JM)",
  *  "Cleared on 25/10/2026 14:10": what, when, then who; owner 2026-10-25: "complete it to mention the clear time"),
- *  and its pill — the card's one pill (RecordCard CheckPill), of the kind "closes" (owner, 2026-10-31: a clock, "Closes
- *  02:00", never the open cards' refresh icon of a next check): `when` its words ("Closes 15:06", once past "Closes
+ *  and its pill — the card's one pill (RecordCard CheckPill: the same refresh icon, owner 2026-11-01, this being its next
+ *  check, the one that closes it): `when` its words ("Closes 15:06", once past "Closes
  *  within 5 min", the Agent's next look, as faultTiming says it), `tip` what touching it says. */
 export function confirmParts(c: ConfirmingFault): { did: string; when: string; tip: string } {
   const by = clockTime(c.at);
   return {
-    did: `${c.word}${Number.isNaN(c.closedAt) ? "" : ` on ${momentText(c.closedAt)}`}${c.who ? ` (${c.who})` : ""}`,
+    did: closedWords(c),
     when: `Closes ${c.due && c.lookMinutes ? withinLook({ checkMinutes: c.lookMinutes }) : by}`,
     tip: c.due ? "VESTA closes this at its next look if all is still well."
       : `VESTA closes this at ${by} if all is still well; if the problem is back before then, it reopens as the same problem.`,

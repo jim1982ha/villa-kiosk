@@ -14,7 +14,7 @@ import { confirmingFaults } from "@/fm/faultConfirm";
 import type { FmData } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { VillaAttention } from "./attention";
-import { cockpitCard, confirmingCards, type CardView } from "./cockpitCard";
+import { closedCards, cockpitCard, confirmingCards, type CardView } from "./cockpitCard";
 import type { labelOf } from "./EntityMap";
 
 export interface CockpitIssues {
@@ -22,6 +22,8 @@ export interface CockpitIssues {
   open: CardView[];
   /** The Watched list: closed faults the VESTA Agent confirms, never counted, the soonest verdict first. */
   watched: CardView[];
+  /** The faults that are over, the last closed first: the Closed section's, with what VESTA told of them. */
+  closed: CardView[];
 }
 
 /** Every card Open issues draws for the profile whose view is `view` (useVillaAttention). `fmData`: the fault
@@ -35,9 +37,10 @@ export function cockpitIssues(view: Pick<VillaAttention, "attentionGroups" | "de
   resolvedRooms: Record<string, string>;
 }): CockpitIssues {
   const { fmData, cadence, now, entities, entityMap, resolvedRooms } = opts;
+  const cards = { devices: view.devices, entities, entityMap, resolvedRooms, may: view.shows };
   return {
     open: view.attentionGroups.map((g) => cockpitCard(g, cadence, now)),
-    watched: confirmingCards(confirmingFaults(fmData, cadence, now.getTime()),
-      { devices: view.devices, entities, entityMap, resolvedRooms, may: view.shows }),
+    watched: confirmingCards(confirmingFaults(fmData, cadence, now.getTime()), cards),
+    closed: closedCards(fmData, cadence, now, cards),
   };
 }

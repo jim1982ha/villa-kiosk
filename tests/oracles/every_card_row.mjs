@@ -128,6 +128,18 @@ ck("  ...a fault on that device: the fault's moment", rowWhen(cockpitCard(told, 
      rowWhen(cockpitCard(groupAttention([told])[0], null, new Date(now))) === momentText(taken.openedAt));
 }
 
+{
+  // owner, 2026-11-01: "offline for over 8d 19h" under a time 2 days old
+  const { faultBegan } = await import("@/fm/fmEngine");
+  const since = new Date(now - 200 * HOUR).toISOString(), openedAt = new Date(now - 48 * HOUR).toISOString();
+  const offline = ticket("f9", "lock.taken", { status: "in_progress", openedAt, since });
+  const [i] = buildAttentionItems({ devices, entities, entityMap, resolvedRooms, fmData: { ...EMPTY_FM_DATA, tickets: [offline] }, sinceOf }).filter((x) => x.id === "fault:f9");
+  ck("  ...a fault counting from when its device went offline: that moment, on its card and its ticket alike",
+     rowWhen(cockpitCard(groupAttention([i])[0], null, new Date(now))) === momentText(since) && faultBegan(offline) === since
+     && faultBegan({ openedAt }) === openedAt && faultBegan({ openedAt, since: "x" }) === openedAt);
+  ck("  ...the Tickets tab asks the same", /when=\{momentText\(faultBegan\(t\)\)\}/.test(readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8")));
+}
+
 console.log("\n  the wiring: every moment is actually read:");
 const asked = sinceEntities({ fmData, devices, entities, entityMap });
 ck("every device a card says since of is read from its history", items.filter((i) => i.kind === "unavailable" || i.kind === "alarm")

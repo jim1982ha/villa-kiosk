@@ -39,8 +39,8 @@ interface MessagesView {
   watched: MessageItem[];
   /** The announcements, newest first. */
   notifications: MessageItem[];
-  /** Alerts that are closed — VESTA's card "#90-P2 (closed)", the villa's own ✅ message — newest first: their own
-   *  folded section, after Watch (owner, 2026-10-28), never among the notifications (announcements.alertStage). */
+  /** What is over — VESTA's card "#90-P2 (closed)", the villa's own ✅ message, a fault with neither — newest first: their
+   *  own folded section, after Watch (owner, 2026-10-28), never among the notifications (announcements.alertStage). */
   closed: MessageItem[];
   /** VESTA's reports, newest first: their own filter and section, never among the notifications. */
   reports: MessageItem[];
@@ -256,9 +256,11 @@ export const NOTHING_YET = "Nothing announced yet.";
  *  announced is finished, and where it went. */
 export const NOTHING_WAITING = "Nothing waiting. Answered rings and finished items are under Issues › Closed.";
 
-export function messagesView({ open, watched, announcements, filter, selected, focus }: {
+export function messagesView({ open, watched, closed: closedFaults = [], announcements, filter, selected, focus }: {
   open: readonly CardView[];
   watched: readonly CardView[];
+  /** The faults that are over (config/cockpitIssues); one VESTA holds a message for is listed by that message. */
+  closed?: readonly CardView[];
   announcements: readonly Announcement[];
   filter: MessagesFilter;
   /** The item asked for (its key); null: none. */
@@ -287,7 +289,9 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   // ⚠️ A PROBLEM'S LIFE IS ONE PLACE (owner, 2026-10-28): open, then watched once it cleared, then closed — Watch and
   // Closed are shown with the issues, never with the notifications
   // each record in ONE place (placeOf): a report under Reports, an alert that is over in Watch or Closed
-  const closed = asNotes(showIssues, (a) => placeOf(a) === "closed");
+  const closedIssues = showIssues ? closedFaults.filter((c) => cardsOfIssue(c, announcements).length === 0).map(issueItem) : [];
+  const closedAt = (i: MessageItem) => Date.parse((i.kind === "issue" ? i.card.closedAt : i.announcement.at) ?? "") || 0;
+  const closed = [...closedIssues, ...asNotes(showIssues, (a) => placeOf(a) === "closed")].sort((a, b) => closedAt(b) - closedAt(a));
   const watchedCards = asNotes(showIssues, (a) => placeOf(a) === "watch");
   const notifications = asNotes(showNotes, (a) => placeOf(a) === "notification");
   const reports = asNotes(showReports, (a) => placeOf(a) === "report", "report");

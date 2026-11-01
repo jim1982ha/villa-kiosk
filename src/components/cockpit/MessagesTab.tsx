@@ -135,7 +135,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
     () => (canManage ? buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms) : []),
     [canManage, devices, config.entityMap, entities, resolvedRooms]);
 
-  const { open, watched } = useCockpitIssues();
+  const { open, watched, closed } = useCockpitIssues();
   const { kept, unread, unreadReports } = useAnnouncements();
   // something unread: opened on Notifications (ticket 18 of "One inbox"); a warning or the wrench first
   const opening = { warning: !!focusFaults?.length, form: !!reportFaultFor && canManage };
@@ -169,7 +169,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   const isFocus = focusKey && !focusDone
     ? (card: CardView) => cardFocused(card.entityId, focusFaults, devices.deviceOf) : undefined;
 
-  const view = messagesView({ open, watched, announcements: kept, filter, selected, focus: isFocus });
+  const view = messagesView({ open, watched, closed, announcements: kept, filter, selected, focus: isFocus });
   const paged = usePaged(view.notifications);
   const reportsPaged = usePaged(view.reports);
   // which sections are open: Open issues, Notifications and Reports open, Watch and Closed folded (owner, 2026-10-25,
@@ -249,10 +249,10 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           <FoldedRows title="Watch" rows={view.watched} unit="watched item" open={folds.watch}
             onToggle={() => fold("watch")} card={card} empty="Nothing is being watched."
             tip="Cleared problems VESTA still watches: VESTA closes each at the time on its card if all is still well; a problem back before then reopens as the same problem." />
-          {/* what is finished (placeOf): alerts that ended, requests and rings answered or over; folded, last */}
+          {/* what is finished (placeOf, closedCards): faults and alerts that ended, requests and rings answered or over; folded, last */}
           <FoldedRows title="Closed" rows={view.closed} unit="closed item" open={folds.closed}
             onToggle={() => fold("closed")} card={card} empty="Nothing closed yet."
-            tip="Finished: alerts that ended, and messages that asked something and were answered or are over (a request approved, refused or expired, a ring opened or missed)." />
+            tip="Finished: faults and alerts that ended, and messages that asked something and were answered or are over (a request approved, refused or expired, a ring opened or missed)." />
         </>
       )}
     </div>

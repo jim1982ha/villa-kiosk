@@ -14,6 +14,7 @@
 // stood here whatever the villa had set; an Agent that does not say gets no number. The list's own refresh is this app's
 // (useStoreRefresh: STORE_ACTIVE_MS while the Cockpit is open, else the heartbeat).
 
+import { momentText } from "@/utils/dateText";
 import { villaTime, wallClock } from "@/utils/villaClock";
 import { STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { AGENT_SOURCES, ISSUE_SOURCES, type IssueSource } from "./issueSource";
@@ -103,12 +104,6 @@ function nightGoes(c: AgentCadence | null): string {
 /** The table's two groups (owner, 2026-10-15): what the Kiosk and its people produce, then what the VESTA Agent does. */
 interface SourceGroup { title: string; rows: readonly SourceRow[] }
 
-/** What the pill at the right of a card's name says happens at its time (RecordCard CheckPill draws each kind's icon):
- *  "next", VESTA looks again then (an open card's refresh icon); "closes", VESTA closes it then if all is still well (a
- *  card on the Watch list, its clock: owner, 2026-10-31, the refresh icon read as "next check" on a card about to close).
- *  The card's data says which (config/cockpitCard), never the caller. */
-export type CheckPillKind = "next" | "closes";
-
 /** ⚠️ THE CHECK ON A CLEARED PROBLEM VESTA STILL WATCHES IS EXPLAINED TOO (owner, 2026-10-23: "include the new icon
  *  (validated ones)"): the last row of the VESTA Agent's group — a cleared fault on the Watch list (fm/faultConfirm), no
  *  source of its own; its pill's words in the Agent's own numbers when its heartbeat said them. Its words follow the
@@ -120,7 +115,7 @@ export function confirmingRow(c: AgentCadence | null): ConfirmingRow {
     words: "On watch",
     what: "A problem cleared (Done on Telegram, Close here, or VESTA's own clearing) that the VESTA Agent still watches. In the Watch section, not counted",
     opens: "When a problem is cleared",
-    goes: `VESTA closes it at the time on its clock pill ("Closes"), ${look} once that time is past, if all is still well. Back before then: open again, as the same problem`,
+    goes: `VESTA closes it at the time on its refresh pill ("Closes"), ${look} once that time is past, if all is still well. Back before then: open again, as the same problem`,
   };
 }
 
@@ -228,6 +223,16 @@ export function nextCheckAt(problems: readonly CheckedProblem[], cadence: AgentC
  *  gets none. */
 export function nextCheck(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): string {
   return `Next check: ${nextCheckWhen(problems, cadence, now)}`;
+}
+
+/** ⚠️ ONE ANSWER FOR THE NEXT-CHECK PILL (owner, 2026-11-01: "the time each fault ticket will be rechecked", on every
+ *  fault card): an Inbox card's and a ticket's, from their problems: its words, its moment, what hovering it says. */
+export function checkPill(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()):
+  { text: string; at: string | null; when: string; tip: string } {
+  const text = nextCheck(problems, cadence, now);
+  const moment = nextCheckAt(problems, cadence, now);
+  const at = moment ? momentText(moment) : null;
+  return { text, at, when: nextCheckWhen(problems, cadence, now), tip: at ? `${text} (${at})` : text };
 }
 
 /** nextCheck's answer alone, without its "Next check:" — what the card's pill says beside its refresh icon (owner,

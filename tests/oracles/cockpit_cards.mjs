@@ -61,12 +61,13 @@ ck("  ...its device's pill opens the device, and its buttons stop their own pres
     actions: btn("Done") }));
   ck("  ...folded: its name, time, pills, a line per problem and its buttons, as a Tickets card; a tap on it is the card's",
      /role="button"/.test(folded) && /class="fm-card-folded">One line</.test(folded) && /class="fm-card-folded">Another</.test(folded)
-     && /fm-record-actions[\s\S]*Done/.test(folded) && !/fm-record-check" aria-label/.test(folded) && !/cockpit-attention-sub/.test(folded), folded);
+     && /fm-record-actions[\s\S]*Done/.test(folded) && /fm-record-check" aria-label/.test(inside(folded, "card-pill-line")) && !/cockpit-attention-sub/.test(folded), folded);
 }
 // owner, 2026-10-22: "instead of `Next check:` show a refresh icon, as a pill, on this same first line, on the right"
-ck("  ...its next check a pill at the right of that line: a refresh icon, then when",
-   /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>within 5min<\/span><\/div>$/.test(inside(issue, "fm-record-head")),
-   inside(issue, "fm-record-head"));
+// owner, 2026-11-01: "right after the room area pill"
+ck("  ...its next check a pill right after its room: a refresh icon, then when",
+   /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>within 5min<\/span>/.test(pillLine(issue)) && pillLine(issue).indexOf("Hall") < pillLine(issue).indexOf("fm-record-check"),
+   pillLine(issue));
 const { nextCheck } = await import("@/fm/faultTiming");
 // at a fixed noon: the soonest of the 02:00 night and the 5-minute look is the night's from 01:55 to 02:00, and this
 // check failed those five minutes every night (2026-10-22, 01:58)
@@ -194,7 +195,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
 ck("  ...said whole, with its moment, by the pill's tooltip (the Kiosk's own: common/Tip)",
    /aria-label="Next check: within 5min \(\d\d\/\d\d\/\d{4} \d\d:\d\d\)"/.test(issue)
    && /<Tip text=\{tip\}>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8"))
-   && /<CheckPill kind=\{check\.kind\} when=\{check\.when\} tip=\{check\.tip\} \/>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8")));
+   && /<CheckPill \{\.\.\.check\} \/>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8")));
 // owner, 2026-10-15: "there should always be the room line, to respect a consistent layout"
 const [roomless] = groupAttention([{ id: "fault:f9", kind: "fault", title: "Relay dropped", detail: "Fault", entityId: "sensor.relay_t",
   ticketId: "f9", stage: "fault", source: "night", device: { key: "sensor.relay_t", label: "Relay" } }]);

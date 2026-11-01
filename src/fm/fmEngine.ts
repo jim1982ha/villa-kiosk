@@ -318,6 +318,13 @@ export const STAGE_WORDS: Record<FmStage, { word: string; tone: Tone }> = {
   closed: { word: "Resolved", tone: "ok" },
 };
 
+/** ⚠️ WHEN A PROBLEM BEGAN, ONE ANSWER (owner, 2026-11-01: a card said "offline for over 8d 19h" under a time 2 days old,
+ *  when the record was written): the moment the fault's own words count from (`since`: when its device went offline),
+ *  else when it was opened. The time of its Inbox card and of its ticket, closed or not. Pure. */
+export function faultBegan(t: Pick<FmTicket, "openedAt" | "since">): string {
+  return t.since && Number.isFinite(Date.parse(t.since)) ? t.since : t.openedAt;
+}
+
 /** A fault's alert number when it carries a real one (a positive integer), else undefined — the one reading of
  *  FmTicket.alertNumber (faultTitle, the open issue's and the Watch line's link to VESTA's card). */
 export const alertNumberOf = (t: Pick<FmTicket, "alertNumber">): number | undefined =>

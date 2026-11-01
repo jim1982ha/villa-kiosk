@@ -70,17 +70,17 @@ export function AttentionCard({ card, onOpenEntity, actions, focused, folded, on
       status={card.status}
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
-      lead={card.look === "watched"
+      lead={card.look
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
         // folded, its lines not drawn: every icon before its name
         : folded !== undefined && card.lead ? <SourceIcons {...card.lead} />
         : icons.head ? <SourceIcons {...icons.head} />
         // the icon column kept when the lines draw the icons (config/cockpitCard.cardIcons): they stay inside the card
         : icons.column ? <span className="fm-record-lead-empty" aria-hidden="true" /> : undefined}
-      // when its problems are read again (a refresh icon) or, on the Watch list, when VESTA closes it (a clock): the
-      // card's own pill kind, a pill at the right of its name (owner, 2026-10-22 / 2026-10-31); hovering it says it in
-      // words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
-      check={card.nextCheck ? { kind: card.nextCheck.kind, when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
+      // when its problems are read again or, on the Watch list, when VESTA closes it: a pill after its room (owner,
+      // 2026-11-01); hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is
+      // the button.
+      check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
       onOpen={onToggle}
       pills={card.entityId || latest.length ? <>
         {card.entityId && <DeviceChip entityId={card.entityId} label={card.title} onOpenEntity={onOpenEntity} />}
