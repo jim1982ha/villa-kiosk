@@ -391,7 +391,7 @@ export function isKnownWorker(known: readonly string[], name: string): boolean {
   return known.some((n) => workerKey(n) === k);
 }
 
-/** A step that resolved a fault with no work done: the Kiosk's "Close" (nothing done), the VESTA Agent's own
+/** A step that resolved a fault with no work done: the Kiosk's "No action needed" (nothing done), the VESTA Agent's own
  *  clearing of a problem gone (kind "cleared", agent-contract.json). ⚠️ The one place a step written before the kind
  *  existed is read by its note (review 31: such closes counted as repairs in every figure). */
 export function isClearedStep(u: FmTicketUpdate): boolean {

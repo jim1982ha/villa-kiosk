@@ -1,7 +1,7 @@
 // src/components/fm/WorkButtons.tsx
 // A card's buttons for its faults and tickets — the Inbox's and the Tickets tab's (architecture review, 2026-10-16).
 // WHICH buttons, on which records and with which question is fm/deviceWork's answer (tested by value); this draws it,
-// and CARRIES OUT every step a button names, for both tabs: Close asks its question in place of the buttons, a stage
+// and CARRIES OUT every step a button names, for both tabs: No action needed and Done ask their question in place of the buttons, a stage
 // change opens its form (FaultStageModal), Need help writes its step, Done or Need help on a card with no record raises
 // its fault in the same write. A step that did not land says why under the card; a Need help that stands says so.
 //
