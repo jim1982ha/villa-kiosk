@@ -1,3 +1,9 @@
+## 2.496.647
+
+What you will see:
+- On a ticket, the Close button now says `No action needed`, beside `Done` and `Need help`: it says what it records,
+  nothing was done and no cost. Everything else about it is unchanged.
+
 ## 2.496.646
 
 What you will see:
