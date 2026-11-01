@@ -1,3 +1,9 @@
+## 2.496.648
+
+What you will see:
+- A card with a ticket in progress now always says `Edit Ticket`. It said `Open Ticket` when a second fault had joined
+  the same device; `Done` still closes everything on the card.
+
 ## 2.496.647
 
 What you will see:
