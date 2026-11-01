@@ -1,19 +1,12 @@
 // src/components/fm/RecordMeta.tsx
-// A Facility card's line of tags: its pills (category, "by VESTA Agent", the
-// device…) then what came after it opened, on ONE line that wraps
-// on a phone (owner, 2026-10-11: "the pills and the time on the same line,
-// right below the title — consistent for all cards"). One component, so every
-// list — faults, spend, tasks, work done, saved documents — reads the same.
+// A Facility card's line of tags: its pills (category, the device, who last moved it…), on ONE line that wraps on a
+// phone (owner, 2026-10-11: "consistent for all cards"). One component, so every list — faults, spend, tasks, work done,
+// saved documents — reads the same.
 
 import type { ReactNode } from "react";
 
-export default function RecordMeta({ children, detail }: { children?: ReactNode; detail?: ReactNode }) {
-  return (
-    <div className="fm-meta">
-      {children}
-      {detail ? <span className="fm-meta-when muted">{detail}</span> : null}
-    </div>
-  );
+export default function RecordMeta({ children }: { children?: ReactNode }) {
+  return <div className="fm-meta">{children}</div>;
 }
 
 /** A card's notes — "Check: …", "Cleared: …", "Done, …" — each its own line, in one style

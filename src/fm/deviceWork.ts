@@ -86,7 +86,7 @@ interface WorkActionSpec { label: string; step: WorkStep }
 
 /** The words Done and Need help say on every card, the Inbox's and the Tickets tab's alike. */
 const DONE = "Done";
-const NEED_HELP = "Need help";
+export const NEED_HELP = "Need help";
 
 /** ONE wording per action. */
 export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {

@@ -369,8 +369,6 @@ ck("  ...and Recent work is the SCHEDULED work: a ticket's repair is told on its
    /\.filter\(\(c\) => completionSource\(data, c\)\.kind === "schedule"\)/.test(recent)
    && /const work = data\.completions\.find\(\(c\) => c\.ticketId === t\.id && c\.costId\);/.test(ticketsTab));
 
-ck("a card's \"Opened … by …\" stays on its pills' line and wraps there (owner, 2026-10-15)",
-   /\.fm-meta-when \{ font-size: var\(--text-xs\); flex: 1 1 0; min-width: 14em; \}/.test(readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")));
 
 console.log("\n  a line from Telegram is never a status change (architecture review, 2026-10-15):");
 // the villa's case: open 23:40 on 30 Sep, reminder 23:50, taken on 00:10 on 1 Oct — the reminder's line written after
@@ -411,9 +409,9 @@ ck("  ...a line the Agent wrote late (the repair, minutes after its moment) stil
 ck("  ...a fault the Agent told nothing about has none (no line drawn)",
    buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([{ ...told, updates: [told.updates[0]] }]) })[0]
      .story.length === 0);
-ck("  ...a noted line is never a status change: \"reopened by Owner\" still read under it",
-   N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /reopened .* by Owner/.test(N.faultSince(reopenedThenTold, (a) => a.slice(11, 16))),
-   N.faultSince(reopenedThenTold, (a) => a.slice(11, 16)));
+ck("  ...a noted line is never a status change: \"Reopened by Owner\" still read under it",
+   N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /^Reopened by Owner, on /.test(N.faultLatest(reopenedThenTold, (a) => a.slice(11, 16))),
+   N.faultLatest(reopenedThenTold, (a) => a.slice(11, 16)));
 ck("  ...and each one is a note in the Tickets tab, with its time",
    N.faultNoteLines(told, (a) => a.slice(11, 16)).join("|") === "Escalation sent to Owner (08:49)|🆘 Need help pressed by Fabien (09:10)",
    N.faultNoteLines(told, (a) => a.slice(11, 16)));

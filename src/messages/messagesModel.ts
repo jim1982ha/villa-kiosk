@@ -1,6 +1,6 @@
 // src/messages/messagesModel.ts
 // The Cockpit's Messages tab (ticket 17 of "One inbox", owner 2026-10-28): what it lists, its filters' counts and the
-// item open on the right, from the open issues (config/cockpitIssues), the watched faults and the villa's
+// card open, from the open issues (config/cockpitIssues), the watched faults and the villa's
 // announcements (messages/announcements), and what this tablet has not seen yet (ticket 18). One pure model every
 // Messages screen reads; the later tickets add the reports and VESTA's conversation to it. Pure:
 // tests/oracles/messages_model.mjs.
@@ -47,12 +47,9 @@ interface MessagesView {
   /** What Notifications says when it lists nothing (NOTHING_YET, or NOTHING_WAITING when finished records sit under
    *  Issues › Closed). */
   notificationsEmpty: string;
-  /** The item open on the right: the one asked for when listed, else the issue a device window's warning asked
-   *  for, else the first listed; null when nothing is listed. */
+  /** The card open: the one asked for when listed, else the issue a device window's warning asked for; null: every
+   *  card folded (owner, 2026-11-01), so an item that went never leaves another one open by itself. */
   selected: MessageItem | null;
-  /** Why it is open: asked for, a warning's, or only the first listed — a phone shows an item someone chose (asked,
-   *  a warning) and the list otherwise, so an item that went never leaves another one open by itself. */
-  openedBy: "asked" | "focus" | "first" | null;
   /** Which parts the filter shows: the issues' (Open issues, Watch, Closed), the notifications', the reports'. */
   shows: { issues: boolean; notifications: boolean; reports: boolean };
 }
@@ -114,7 +111,7 @@ export function messageOfLine(line: CardView["lines"][number], kept: readonly An
  * and nothing else, whatever the device (owner, 2026-11-01: "Missing, #100-P1" was one kind of card with its own format:
  * a device's state is the card's status pill, CardView.status). The message is the line's (`told`: its words in place of its short story) and, on the Watch list, its Status says how it closed (no
  * closing line of the card's own: said once, owner 2026-10-29). The card's other problems come first as "Also: …"
- * (othersFirst, owner 2026-10-30). The Inbox's row (issueRowWords), the opened card and the Watch card all read THIS
+ * (othersFirst, owner 2026-10-30). The folded card (issueRowWords), the opened card and the Watch card all read THIS
  * card. Pure.
  */
 export function issueAsTold(card: CardView, kept: readonly Announcement[]): CardView {
@@ -125,8 +122,8 @@ export function issueAsTold(card: CardView, kept: readonly Announcement[]): Card
   return othersFirst({ ...card, lines }, (l) => l.told !== undefined);
 }
 
-/** ⚠️ ONE LINE PER ALERT, ON EVERY ROW (owner, 2026-11-01: "#102-P2 (existing), 🔓 Laundry Room door unlocked",
- *  "everywhere"; cut by the row): what an issue's collapsed row says under its name: its alert's title then its first
+/** ⚠️ ONE LINE PER ALERT, ON EVERY CARD (owner, 2026-11-01: "#102-P2 (existing), 🔓 Laundry Room door unlocked",
+ *  "everywhere"; cut by the card): what an issue's folded card says under its name: its alert's title then its first
  *  words, else its lead line's words. Pure. */
 export function issueRowWords(card: CardView): string {
   const lead = leadLine(card);
@@ -267,7 +264,7 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   /** The issue a device window's warning opened the Cockpit for. */
   focus?: (card: CardView) => boolean;
 }): MessagesView {
-  // every issue as told, once: its row and its opened card read the same lines (issueAsTold)
+  // every issue as told, once: its folded and opened card read the same lines (issueAsTold)
   const issueItem = (card: CardView): MessageItem => ({ kind: "issue", key: card.key, card: issueAsTold(card, announcements) });
   const showIssues = filter === "issues";
   const showNotes = filter === "notifications";
@@ -296,7 +293,6 @@ export function messagesView({ open, watched, announcements, filter, selected, f
   const listed = [...issues, ...notifications, ...reports, ...watchedAll, ...closed];
   const asked = listed.find((i) => i.key === selected);
   const focused = focus ? issues.find((i) => i.kind === "issue" && focus(i.card)) : undefined;
-  const first = listed[0];
   return {
     filters: FILTERS.map((f) => ({ ...f, count: f.id === "issues" ? open.length : null })),
     issues,
@@ -305,8 +301,7 @@ export function messagesView({ open, watched, announcements, filter, selected, f
     closed,
     reports,
     notificationsEmpty: announcements.some((a) => !inWatch.has(a) && placeOf(a) === "closed") ? NOTHING_WAITING : NOTHING_YET,
-    selected: asked ?? focused ?? first ?? null,
-    openedBy: asked ? "asked" : focused ? "focus" : first ? "first" : null,
+    selected: asked ?? focused ?? null,
     shows: { issues: showIssues, notifications: showNotes, reports: showReports },
   };
 }

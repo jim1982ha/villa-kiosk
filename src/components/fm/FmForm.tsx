@@ -7,13 +7,10 @@
 // opens, here, once, so no form can open off screen. Its heading at the top: a tall form scrolled only "nearest"
 // showed its buttons and hid what it was.
 
-import { useEffect, useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { useInView } from "@/hooks/useInView";
 
 export default function FmForm({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-    ref.current?.scrollIntoView?.({ block: "start", behavior: reduce ? "auto" : "smooth" });
-  }, []);
+  const ref = useInView<HTMLDivElement>();
   return <div ref={ref} className="fm-form">{children}</div>;
 }

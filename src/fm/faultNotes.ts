@@ -1,5 +1,5 @@
 // src/fm/faultNotes.ts
-// What a fault's card says about its history: the "when" line under its title and the notes below it. Pure, so the
+// What a fault's card says about its history: the pill of its latest status and the notes below it. Pure, so the
 // oracle drives it (tests/oracles/agent_view.mjs).
 //
 // ⚠️ A STEP SAYS WHAT IT IS (architecture review 26): the card used to recognise the VESTA Agent's title changes by
@@ -7,9 +7,9 @@
 // facility manager's own time and name the night the agent updated the title, and the kept "Now: …" line repeated the
 // title word for word. Each step now carries its kind (FmTicketUpdate.kind, agent-contract.json `ticketUpdate`).
 
-import { isTicketResolved, stageOf, statusChanges, stepsInTimeOrder } from "./fmEngine";
+import { NEED_HELP } from "./deviceWork";
+import { isClearedStep, isTicketResolved, stageOf, standingHelp, statusChanges, stepsInTimeOrder } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
-import { agentOwned } from "./issueSource";
 import { authorWords } from "@/auth/roles";
 
 /** A note written before steps had a kind (VESTA Agent before 0.12.151): its title change read "Now: <new title>".
@@ -39,33 +39,27 @@ export function notedStory(t: Pick<FmTicket, "updates">): { note: string; at: st
   return stepsInTimeOrder(t).filter((x) => x.kind === "noted" && x.note).map((x) => ({ note: x.note as string, at: x.at }));
 }
 
-/** When it was opened, and by whom: the card's time pill (RecordCard `when`). */
-export function faultOpened(t: FmTicket, stamp: (at: string) => string): string {
-  const first = statusSteps(t)[0];
-  const who = first?.who || authorWords(first);
-  // who raised it: its first step, when that step is the raising (fmCommands.addTicket stamps it, as every other step)
-  // — a person; the VESTA Agent's own faults already wear its mark beside this line (AgentMark)
-  const raised = !agentOwned(t) && first?.status === "open" && !first?.kind && who ? ` by ${who}` : "";
-  return `Opened ${stamp(t.openedAt)}${raised}`;
-}
-
-/** What came after it, in one line: reopened, picked up, resolved — and by whom (the name typed for who does the
- *  work, else the profile that recorded it), from its status steps only; "" with nothing yet. */
-export function faultSince(t: FmTicket, stamp: (at: string) => string): string {
+/**
+ * ⚠️ WHO LAST MOVED IT, AND WHEN, IN ONE PILL (owner, 2026-11-01: "Opened by Wayan, on 31/10/2026 09:55", in place of
+ * "by VESTA Agent", confusing and redundant, and of the words "in progress since … by Wayan"): the
+ * latest of its status steps said in one form, so the pill follows it: opened, help asked, reopened, done, closed.
+ * Who: the name typed for who does the work, else the profile that recorded it. "" while it is only a fault nobody
+ * moved. Pure.
+ */
+export function faultLatest(t: FmTicket, stamp: (at: string) => string): string {
+  const said = (word: string, at: string, who?: string) => `${word}${who ? ` by ${who}` : ""}, on ${stamp(at)}`;
   const steps = statusSteps(t);
   const last = steps[steps.length - 1];
-  const by = (u?: FmTicketUpdate) => {
-    const who = u?.who || authorWords(u);
-    return who ? ` by ${who}` : "";
-  };
-  const parts: string[] = [];
-  if (t.status === "open" && last?.kind === "reopened") parts.push(`reopened ${stamp(last.at)}${by(last)}`);
-  if (stageOf(t) === "ticket" && last?.status === "in_progress") parts.push(`in progress since ${stamp(last.at)}${by(last)}`);
-  if (t.resolvedAt && isTicketResolved(t)) {
-    const done = [...steps].reverse().find((u) => isTicketResolved(u));
-    parts.push(`resolved ${stamp(t.resolvedAt)}${by(done)}`);
+  const help = standingHelp(t);
+  if (help && (!last || Date.parse(help.at) >= Date.parse(last.at))) return said(`${NEED_HELP} asked`, help.at, help.by);
+  if (!last) {
+    if (t.resolvedAt && isTicketResolved(t)) return said("Done", t.resolvedAt);
+    return stageOf(t) === "ticket" ? said("Opened", t.openedAt) : "";
   }
-  return parts.join(" · ");
+  const who = last.who || authorWords(last);
+  if (isTicketResolved(last)) return said(isClearedStep(last) ? "Closed" : "Done", last.at, who);
+  if (last.kind === "reopened") return said("Reopened", last.at, who);
+  return last.status === "in_progress" ? said("Opened", last.at, who) : "";
 }
 
 /** The card's notes, in order, each with its date: the fault's own note ("Check: …"), every step's note, and of its

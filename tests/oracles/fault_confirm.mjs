@@ -137,8 +137,6 @@ ck("  ...and its next-check pill keeps the refresh icon: VESTA looks again then"
   // watched is the Messages model's, by value (messages_model.mjs); the tab draws them in that order
   const tree = parseTsx("components/cockpit/MessagesTab.tsx");
   const tab = tree.statements.find((s) => s.name?.getText() === "MessagesTab");
-  const rows = elements(tab, "MessageRow");
-  const issueRow = rows.find((r) => propText(r, "item") === "i");
   const sections = elements(tab, "MessagesSection");
   const named = (t) => sections.find((e) => propText(e, "title") === `"${t}"`);
   const issuesSec = named("Open issues"), notesSec = named("Notifications");
@@ -149,7 +147,7 @@ ck("  ...and its next-check pill keeps the refresh icon: VESTA looks again then"
   // own named Watch, below Notifications, at the same level, then Closed (owner, 2026-10-28)
   ck("  ...Messages draws them in the Watch section, after Open issues AND Notifications, then Closed; never among the open issues",
      !!watch && !!closedSec && !!issuesSec && !!notesSec && propText(watch, "rows") === "view.watched"
-     && within(issueRow, issuesSec) && watch.getStart() > notesSec.getEnd() && notesSec.getStart() > issuesSec.getEnd()
+     && /view\.issues\.map\(card\)/.test(issuesSec?.getText() ?? "") && watch.getStart() > notesSec.getEnd() && notesSec.getStart() > issuesSec.getEnd()
      && closedSec.getStart() > watch.getEnd(),
      [!!issuesSec, !!notesSec, !!watch, !!closedSec]);
   ck("  ...the count stays the open issues' (cockpitIssues' open cards), never the watched",

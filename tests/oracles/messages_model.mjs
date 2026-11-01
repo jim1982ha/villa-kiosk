@@ -32,26 +32,21 @@ const notes = messagesView({ ...base, filter: "notifications", selected: null })
 ck("  ...Notifications: the notifications alone, newest first", notes.issues.length === 0 && notes.watched.length === 0
    && J(notes.notifications.map((i) => i.key)) === J(["n3", "n2", "n1"]), notes);
 
-console.log("\n  the item open on the right:");
+console.log("\n  the card open:");
 ck("the one asked for, wherever it is listed (an issue, a watched fault, a notification)",
    messagesView({ ...base, filter: "issues", selected: "b" }).selected?.key === "b"
    && messagesView({ ...base, filter: "issues", selected: "w" }).selected?.key === "w"
    && messagesView({ ...base, filter: "notifications", selected: "n2" }).selected?.key === "n2");
-ck("  ...none asked: the first listed; nothing listed, none",
-   issues.selected?.key === "a" && notes.selected?.key === "n3"
+// owner, 2026-11-01: "directly display the cards (in their collapsed version)"
+ck("  ...none asked: every card folded",
+   issues.selected === null && notes.selected === null
    && messagesView({ open: [], watched: [], announcements: [], filter: "issues", selected: null }).selected === null);
-ck("  ...one the filter does not list is not kept: the first listed instead",
-   messagesView({ ...base, filter: "notifications", selected: "a" }).selected?.key === "n3");
-ck("  ...one gone (an issue that cleared) gives way to the first listed",
-   messagesView({ ...base, filter: "issues", selected: "gone" }).selected?.key === "a");
+ck("  ...one the filter does not list is not kept: every card folded",
+   messagesView({ ...base, filter: "notifications", selected: "a" }).selected === null);
+ck("  ...one gone (an issue that cleared) leaves no other open in its place",
+   messagesView({ ...base, filter: "issues", selected: "gone" }).selected === null);
 ck("a device window's warning: its issue open, when nothing else was asked",
    messagesView({ ...base, filter: "issues", selected: null, focus: (c) => c.key === "b" }).selected?.key === "b");
-ck("why it is open: asked for, a warning's, or only the first listed (a phone then shows the list, not an item no one chose)",
-   messagesView({ ...base, filter: "issues", selected: "b" }).openedBy === "asked"
-   && messagesView({ ...base, filter: "issues", selected: null, focus: (c) => c.key === "b" }).openedBy === "focus"
-   && issues.openedBy === "first" && messagesView({ ...base, filter: "issues", selected: "gone" }).openedBy === "first"
-   && messagesView({ ...base, filter: "issues", selected: null, focus: () => false }).openedBy === "first"
-   && messagesView({ open: [], watched: [], announcements: [], filter: "issues", selected: null }).openedBy === null);
 ck("which parts each filter shows (the tab draws those, never its own rule)",
    J(issues.shows) === J({ issues: true, notifications: false, reports: false })
    && J(notes.shows) === J({ issues: false, notifications: true, reports: false }));
@@ -77,9 +72,9 @@ ck("  ...else in the language it was written in, with that language's page",
    french?.text === "Trois choses" && french.page === "page-fr-0002", french);
 const withReports = { ...base, announcements: [ann(1), digest, weekly, french, card91] };
 const onReports = messagesView({ ...withReports, filter: "reports", selected: null });
-ck("Reports lists the reports alone, newest first; the first open on the right",
+ck("Reports lists the reports alone, newest first, folded",
    J(onReports.reports.map((i) => i.announcement.seq)) === J([32, 31, 30]) && onReports.notifications.length === 0
-   && onReports.issues.length === 0 && onReports.selected?.key === "v:note:w2" && onReports.selected?.kind === "report",
+   && onReports.issues.length === 0 && onReports.selected === null,
    onReports);
 const onNotes = messagesView({ ...withReports, filter: "notifications", selected: null });
 ck("  ...a report is never also a notification (one place per thing)",
@@ -118,36 +113,36 @@ ck("  ...the add-on's store started again: its first new one, with an old number
 const pruned = readAtOpening(seen, [ann(3), ann(4)]);
 ck("  ...the list keeps only what the add-on still keeps (it never grows past it)", pruned.length === 2, pruned);
 
-ck("something unread: Messages opens on Notifications, its newest open on the right; nothing unread, on Issues (the default)",
-   openingFilter(1) === "notifications" && openingFilter(0) === "issues"
-   && messagesView({ ...base, filter: openingFilter(1), selected: null }).selected?.key === "n3");
+ck("something unread: Messages opens on Notifications; nothing unread, on Issues (the default)",
+   openingFilter(1) === "notifications" && openingFilter(0) === "issues");
 ck("  ...opened for something else, never on Notifications, so nothing is read unseen: a warning or the wrench's form on Issues",
    openingFilter(1, { warning: true }) === "issues" && openingFilter(1, { form: true }) === "issues"
    && openingFilter(0, { warning: true }) === "issues");
 
 console.log("\n  one line per item, drawn:");
-const { MessageRow } = await import("@/components/cockpit/MessagesTab");
-const issueLine = draw(h(MessageRow, { item: { kind: "issue", key: "a", card: card("a", { room: "Kitchen",
-  lines: [{ key: "l", text: "Too warm", icons: null, story: [], closing: null, actions: [] }] }) }, selected: true, onSelect() {} }));
-// owner, 2026-11-01: the room the opened card's pill (RecordCard RoomPill), on its own line; then its first problem
-const { RoomPill } = await import("@/components/fm/RecordCard");
-const pill = draw(h(RoomPill, { room: "Kitchen" }));
-ck("an open issue: its device; its room, the opened card's own pill, on the line under; then its first problem; chosen, marked",
-   /class="messages-row on"/.test(issueLine) && issueLine.includes("<b>Device a</b>")
+const { InboxCard } = await import("@/components/cockpit/MessagesTab");
+const foldedCard = (item) => draw(h(InboxCard, { item, opened: false, onToggle() {}, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
+const issueLine = foldedCard({ kind: "issue", key: "a", card: card("a", { room: "Kitchen",
+  lines: [{ key: "l", text: "Too warm", icons: null, story: [], closing: null, actions: [] }] }) });
+// owner, 2026-11-01: the room the opened card's pill (RecordCard Pill), on its own line; then its first problem
+const { Pill } = await import("@/components/fm/RecordCard");
+const pill = draw(h(Pill, { text: "Kitchen" }));
+ck("an open issue, folded: its device; its room, the opened card's own pill, on the line under; then its first problem",
+   /class="fm-record-card/.test(issueLine) && issueLine.includes("<strong>Device a</strong>")
    && issueLine.includes(`<span class="card-pill-line">${pill}</span>`) && pill.includes("fm-entity-chip")
-   && issueLine.includes('<span class="messages-row-sub">Too warm</span>')
-   && issueLine.indexOf("card-pill-line") < issueLine.indexOf("messages-row-sub"), issueLine);
+   && issueLine.includes('<span class="fm-card-folded">Too warm</span>')
+   && issueLine.indexOf("card-pill-line") < issueLine.indexOf("fm-card-folded"), issueLine);
 {
   const { AttentionCard } = await import("@/components/cockpit/IssueCard");
   const opened = draw(h(AttentionCard, { card: card("a", { room: "Kitchen", lines: [{ key: "l", text: "Too warm", story: [], closing: null }] }),
     onOpenEntity() {} }));
   ck("  ...the opened card draws its room with the same pill", opened.includes(pill), opened);
 }
-const noteLine = draw(h(MessageRow, { item: { kind: "notification", key: "n1", announcement: ann(1, { title: "🔔 Visitor",
-  text: "Someone is at the door.\nGate A", at: "2026-10-28T10:00:00+08:00" }) }, selected: false, onSelect() {} }));
-ck("  ...a notification: its title, its first words, when it came; not chosen, not marked",
-   /class="messages-row"/.test(noteLine) && noteLine.includes("<b>🔔 Visitor</b>") && !noteLine.includes("card-pill-line") && noteLine.includes('<span class="messages-row-sub">Someone is at the door.</span>')
-   && !noteLine.includes("Gate A") && /messages-row-time">28\/10\/2026 \d\d:00</.test(noteLine), noteLine);
+const noteLine = foldedCard({ kind: "notification", key: "n1", announcement: ann(1, { title: "🔔 Visitor",
+  text: "Someone is at the door.\nGate A", at: "2026-10-28T10:00:00+08:00" }) });
+ck("  ...a notification, folded: the same card: its title, its first words, when it came, as a pill",
+   /class="fm-record-card/.test(noteLine) && noteLine.includes("<strong>🔔 Visitor</strong>") && !noteLine.includes("card-pill-line") && noteLine.includes('<span class="fm-card-folded">Someone is at the door.</span>')
+   && !noteLine.includes("Gate A") && /fm-record-check">28\/10\/2026 \d\d:00</.test(noteLine), noteLine);
 
 {
   // owner, 2026-11-01: "show their number between () in the tab Ticket label"
@@ -171,11 +166,8 @@ ck("a guest (one tab, Messages) gets no tab strip: the strip is drawn only with 
 const tab = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
 ck("  ...the tab lists, counts and opens what messagesView says, from the open issues and the page's announcements",
    /const \{ kept, unread, unreadReports \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, announcements: kept, filter, selected,/.test(tab)
-   && /view\.filters\.map\(/.test(tab) && /const item = raising \? null : view\.selected;/.test(tab)
+   && /view\.filters\.map\(/.test(tab) && /const item = view\.selected;/.test(tab)
    && /const \{ issues: showsIssues, notifications: showsNotes, reports: showsReports \} = view\.shows;/.test(tab));
-ck("  ...a phone shows the item someone chose (a line, a warning, the ticket form), else the list",
-   /const reading = !!raising \|\| view\.openedBy === "asked" \|\| view\.openedBy === "focus";/.test(tab)
-   && /className=\{`messages\$\{reading \? " reading" : ""\}`\}/.test(tab));
 
 console.log("\n  opening the Cockpit clears the unread mark (owner, 2026-10-31):");
 {
@@ -312,11 +304,10 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   // card drew VESTA's own Done · Need help, a fault's Open Ticket · Close
   const ic = parseTsx("components/cockpit/IssueCard.tsx");
   ck("  ...its buttons the row of every issue card (CardActions, the card's Done · Need help · Open Ticket), never VESTA's own",
-     elements(ic, "CardActions").length === 1 && elements(ic, "RecordButtons").length === 0);
+     elements(ic, "CardActionRow").length === 1 && elements(ic, "RecordButtons").length === 0);
   const tab = parseTsx("components/cockpit/MessagesTab.tsx");
-  ck("  ...the Inbox draws an open issue, alert or not, as THE issue card with its buttons; a watched one without",
-     elements(tab, "CockpitAttentionRow").length === 1 && elements(tab, "AttentionCard").length === 1
-     && guardsOf(elements(tab, "CockpitAttentionRow")[0]).join() === 'item?.kind === "issue"'
+  ck("  ...the Inbox draws every issue, alert or not, watched or not, as THE issue card (a watched one has no buttons to draw)",
+     elements(tab, "CockpitAttentionRow").length === 1 && elements(tab, "AttentionCard").length === 0
      && elements(tab, "NoteDetail").every((e) => !/cardsOfIssue|messageOfLine/.test(e.getText())));
 
   console.log("\n  the row, the opened card and the Watch card say an alert alike (architecture review round 13):");
@@ -335,9 +326,9 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   const words = (html, cls) => (html.match(new RegExp(`class="${cls}">([^<]*)<`)) ?? [])[1];
   const lines = (html) => [...html.matchAll(/class="cockpit-attention-sub-title">([^<]*)</g)].map((m) => m[1]);
   for (const [what, item, Card] of [["an open issue", v.issues[0], CockpitAttentionRow], ["a watched one", v.watched[0], AttentionCard]]) {
-    const row = draw(h(MessageRow, { item, selected: false, onSelect() {} }));
+    const row = foldedCard(item);
     const opened = draw(h(Card, { card: item.card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
-    const named = words(row, "messages-row-sub"), alertName = lines(opened).find((l) => l.includes("#"));
+    const named = words(row, "fm-card-folded"), alertName = lines(opened).find((l) => l.includes("#"));
     ck(`${what}: its row and its opened card name the alert as Telegram does, in the same words`,
        !!named && !!alertName && named.startsWith(`${alertName}, `) && /^#(100-P1|92-P2) \(/.test(named), { row: named, card: lines(opened) });
     ck("  ...its row: that name, then the alert's first words", named.endsWith(item.card.lines.find((l) => l.told).told.text.split("\n")[0]), named);
@@ -347,18 +338,18 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   const pill = /class="fm-badge tone-warn">Missing</;
   ck("  ...the open one: its device's state in the card's status pill, on the card and on its row alike, the alert named alone, the other problem as \"Also\", VESTA's words in it",
      JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low", "#100-P1 (existing)"]) && pill.test(opened)
-     && pill.test(draw(h(MessageRow, { item: v.issues[0], selected: false, onSelect() {} })))
+     && pill.test(foldedCard(v.issues[0]))
      && opened.includes("The outdoor entrance lock is missing."), lines(opened));
-  const rowTimeShown = words(draw(h(MessageRow, { item: v.issues[0], selected: false, onSelect() {} })), "messages-row-time");
-  ck("  ...and its row's time is its alert's last step, not the other problem's", !!rowTimeShown && rowTimeShown.length > 0, rowTimeShown);
+  const rowTimeShown = words(foldedCard(v.issues[0]), "fm-entity-chip fm-chip-static fm-record-check");
+  ck("  ...and its time pill is its alert's, not the other problem's", !!rowTimeShown && rowTimeShown.length > 0, rowTimeShown);
 }
 ck("its words, then its page opened in the document viewer (the add-on's sandboxed page)",
    opened.includes("Two things") && opened.includes('href="/fm-document/page-en-0001"') && opened.includes("Open the page"), opened);
 ck("  ...no page link for a profile the add-on serves no page to, nor for a report without a page",
    !draw(h(ReportDetail, { announcement: weekly, canOpenPage: false })).includes("Open the page")
    && !draw(h(ReportDetail, { announcement: digest, canOpenPage: true })).includes("Open the page"));
-const reportLine = draw(h(MessageRow, { item: onReports.reports[0], selected: false, onSelect() {} }));
-ck("  ...its line: its title and first words", reportLine.includes("<b>Rapport</b>") && reportLine.includes('<span class="messages-row-sub">Trois choses</span>'), reportLine);
+const reportLine = foldedCard(onReports.reports[0]);
+ck("  ...folded: its title and first words", reportLine.includes("<strong>Rapport</strong>") && reportLine.includes('<span class="fm-card-folded">Trois choses</span>'), reportLine);
 const sections = elements(parseTsx("components/cockpit/MessagesTab.tsx"), "MessagesSection").map((e) => propText(e, "title"));
 ck("the tab draws a Reports section, its lines from the model's reports",
    sections.includes('"Reports"') && /reportsPaged = usePaged\(view\.reports\)/.test(tab), sections);
@@ -555,4 +546,4 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
   ck("  ...the tab says the view's words", readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8")
      .includes("{view.notificationsEmpty}") && !readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8").includes("Nothing announced yet."));
 }
-done("✅ the Messages model: what the tab lists, its counts and the item open on the right");
+done("✅ the Messages model: what the tab lists, its counts and the card open");

@@ -1,16 +1,18 @@
 // src/components/cockpit/MessagesTab.tsx
-// The Cockpit's first tab, Messages (ticket 17 of "One inbox", owner 2026-10-28; proposal B): the Overview's open
-// issues and the villa's announcements in one list on the left, the item chosen open on the right. What is listed,
-// counted and open is the Messages model's (messages/messagesModel); this draws it.
+// The Cockpit's first tab, Messages (ticket 17 of "One inbox", owner 2026-10-28): the open issues and the villa's
+// announcements. What is listed, counted and open is the Messages model's (messages/messagesModel); this draws it.
 //
-// ⚠️ OPEN ISSUES IS TODAY'S OVERVIEW, MOVED (owner): one line per device in the same order, its card with the same
-// buttons (Open Ticket, Close, Edit ticket) opened on the right, "Open Ticket" on the filters' line, Watch
-// folded at the end, a device window's warning opening on its issue. On a phone the list and the item take the
-// screen in turn.
+// ⚠️ ONE COLUMN OF CARDS, AS TICKETS (owner, 2026-11-01): a list of rows on the left, the item chosen on the right, and
+// a phone showing them in turn, were replaced by the cards themselves, folded, a tap opening one in its place. An issue,
+// a notification, a report, a Watch and a Closed item are ONE card (InboxCard → RecordCard): the row and the opened
+// card were two drawings of the same thing, kept alike by hand.
+//
+// Open issues keep the Overview's order: one card per device, "Open Ticket" on the filters' line, Watch folded at the
+// end, a device window's warning opening on its issue.
 
 import { momentText } from "@/utils/dateText";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bell, CheckCircle2, ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
 import { CARD_BUTTON, WorkLabel } from "@/components/fm/WorkButtons";
 import type { ReactNode } from "react";
 import type { Doors } from "@/auth/doors";
@@ -18,69 +20,23 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
-import { rowWhen, type CardView } from "@/config/cockpitCard";
+import type { CardView } from "@/config/cockpitCard";
 
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
-import { useSuperadminDelete } from "@/hooks/useSuperadminDelete";
-import type { LongPressHandlers } from "@/hooks/useLongPress";
-import { announcementWords, issueRowWords, messagesView, followingFilter, openingFilter, type MessageItem,
+import { useInView } from "@/hooks/useInView";
+import { announcementWords, isReport, issueRowWords, messagesView, followingFilter, openingFilter, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
-import { SourceIcons } from "@/components/fm/sourceIcons";
 import InfoTip from "@/components/common/InfoTip";
 import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent, PageLink, RecordButtons } from "@/components/messages/AnnouncementContent";
-import RecordCard, { CardPillLine } from "@/components/fm/RecordCard";
+import RecordCard, { type RecordCardProps } from "@/components/fm/RecordCard";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
-import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
+import { CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
-
-/** One line of the list — pure (a check draws it): its icon, its title, the line under it, its time. */
-export function MessageRow({ item, selected, onSelect, hold }: {
-  item: MessageItem;
-  selected: boolean;
-  onSelect: (key: string) => void;
-  /** Held, then the superadmin code: the message is erased (ErasableMessageRow). */
-  hold?: LongPressHandlers;
-}) {
-  const row = rowOf(item);
-  const { consumeClick, ...holding } = hold ?? { consumeClick: () => false };
-  return (
-    <button type="button" className={`messages-row${selected ? " on" : ""}${hold ? " fm-erasable" : ""}`}
-      aria-current={selected || undefined}
-      // a completed hold is followed by a click: opening the message under the code's prompt would be wrong
-      onClick={() => { if (!consumeClick()) onSelect(item.key); }} {...holding}>
-      <span className="messages-row-icon">{row.icon}</span>
-      {/* ⚠️ THREE LINES (owner, 2026-11-01): its name and its time; an issue's room, the opened card's pill (RoomPill);
-          its first words on ONE line over the row's whole width, cut with "…" (it was cut at the time's column) */}
-      <span className="messages-row-text">
-        <span className="messages-row-head">
-          <b>{row.title}</b>
-          {row.time && <span className="messages-row-time">{row.time}</span>}
-        </span>
-        <CardPillLine room={row.room} status={row.status} />
-        {row.sub && <span className="messages-row-sub">{row.sub}</span>}
-      </span>
-      {hold && <span className="fm-erasable-dot" aria-hidden="true" />}
-    </button>
-  );
-}
-
-/** A notification's or a report's line, erased as a Facility record is (owner, 2026-10-29: a card left from an
- *  older format): held, then the superadmin code (hooks/useSuperadminDelete, the add-on's /message-erase). */
-function ErasableMessageRow({ item, selected, onSelect }: {
-  item: MessageItem;
-  selected: boolean;
-  onSelect: (key: string) => void;
-}) {
-  const a = item.kind === "issue" ? null : item.announcement;
-  const hold = useSuperadminDelete({ title: "Delete message", detail: a ? announcementWords(a).title : "" },
-    async (token) => (a ? eraseMessage(a, token, backendFetch) : false), { nativeButton: true });
-  return <MessageRow item={item} selected={selected} onSelect={onSelect} hold={a ? hold : undefined} />;
-}
 
 /** One section of the list — Open issues, Notifications, Watch — its name and count, its (i) right after them (`tip`,
  *  owner 2026-10-31: next to the words, not at the far end), folded or open by its chevron (owner, 2026-10-28: the
@@ -101,53 +57,57 @@ export function MessagesSection({ title, count, open, onToggle, tip, children }:
           {tip}
         </div>
       </div>
-      {open && children}
+      {open && <div className="fm-list">{children}</div>}
     </section>
   );
 }
 
-/** A section that only grows (Watch, Closed): its lines a page at a time; `empty` said while it has none (it is always
+/** A section that only grows (Watch, Closed): its cards a page at a time; `empty` said while it has none (it is always
  *  there: owner, 2026-10-28). */
-function FoldedRows({ rows, unit, selected, onSelect, empty, tip, ...section }: {
+function FoldedRows({ rows, unit, card, empty, tip, ...section }: {
   title: string; rows: MessageItem[]; unit: string; open: boolean; onToggle: () => void; tip: string;
-  selected?: string; onSelect: (key: string) => void; empty: string;
+  card: (item: MessageItem) => ReactNode; empty: string;
 }) {
   const paged = usePaged(rows);
   return (
     <MessagesSection {...section} count={rows.length} tip={<InfoTip label={`About ${section.title}`}>{tip}</InfoTip>}>
-      {paged.page.map((r) => <MessageRow key={r.key} item={r} selected={selected === r.key} onSelect={onSelect} />)}
+      {paged.page.map(card)}
       {rows.length === 0 ? <p className="muted body-text messages-empty">{empty}</p> : <Pager paged={paged} unit={unit} />}
     </MessagesSection>
   );
 }
 
-/** What a line says about its item: an issue its device, room and lead problem (its alert's, in the words its opened
- *  card says it: the issue as told, messagesModel issueAsTold); a notification its title and first words, and when it
- *  came. */
-function rowOf(item: MessageItem) {
-  if (item.kind === "issue") {
-    const { card } = item;
-    return {
-      icon: card.look === "watched"
-        ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
-        : card.lead ? <SourceIcons {...card.lead} /> : null,
-      title: card.title,
-      room: card.room,
-      status: card.status ?? [],
-      sub: issueRowWords(card),
-      time: card.lines.length ? rowWhen(card) : "",
-    };
-  }
-  // its words as every screen says them (messagesModel.announcementWords)
-  const w = announcementWords(item.announcement);
-  return {
-    icon: item.kind === "report" ? <FileText size={18} aria-hidden="true" /> : <Bell size={18} aria-hidden="true" />,
-    title: w.title,
-    room: undefined,
-    status: [],
-    sub: w.line,
-    time: w.at ? momentText(w.at) : "",
-  };
+/** What stands under a folded card's pills: an issue's lead problem (in the words its opened card says it: the issue as
+ *  told, messagesModel issueAsTold), a notification's first words. */
+export function foldedLine(item: MessageItem): string {
+  return item.kind === "issue" ? issueRowWords(item.card) : announcementWords(item.announcement).line;
+}
+
+/** ⚠️ ONE CARD OF THE INBOX, WHATEVER IT HOLDS (owner, 2026-11-01: "NEVER add dedicated lines of code for specific
+ *  cards"): folded until tapped, opened in its place and brought into view (an open card above it folds as it opens).
+ *  The look is RecordCard's alone, here only which card it is. */
+export function InboxCard({ item, opened, onToggle, canManage, onOpenEntity, onEditTicket, onRaiseTicket, focused }: {
+  item: MessageItem;
+  opened: boolean;
+  onToggle: () => void;
+  /** This profile may manage Facility work: an issue's buttons, a report's page. */
+  canManage: boolean;
+  onOpenEntity: (id: string) => void;
+  onEditTicket: (ticketId: string) => void;
+  onRaiseTicket: (entityId: string) => void;
+  focused?: boolean;
+}) {
+  const ref = useInView<HTMLDivElement>(opened, "start");
+  const shown = { folded: opened ? undefined : foldedLine(item), onToggle };
+  return (
+    <div ref={ref}>
+      {item.kind === "issue"
+        ? <CockpitAttentionRow card={item.card} onOpenEntity={onOpenEntity} canManage={canManage} onEditTicket={onEditTicket}
+            onRaiseTicket={onRaiseTicket} focused={focused} {...shown} />
+        : item.kind === "report" ? <ReportDetail announcement={item.announcement} canOpenPage={canManage} {...shown} />
+        : <NoteDetail announcement={item.announcement} {...shown} />}
+    </div>
+  );
 }
 
 export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket,
@@ -177,7 +137,7 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
 
   const { open, watched } = useCockpitIssues();
   const { kept, unread, unreadReports } = useAnnouncements();
-  // something unread: opened on Notifications, the newest open (ticket 18 of "One inbox"); a warning or the wrench first
+  // something unread: opened on Notifications (ticket 18 of "One inbox"); a warning or the wrench first
   const opening = { warning: !!focusFaults?.length, form: !!reportFaultFor && canManage };
   const [filter, setFilter] = useState<MessagesFilter>(() => openingFilter(unread, opening, unreadReports));
   // ⚠️ UNTIL ONE IS CHOSEN, IT FOLLOWS WHAT IS UNREAD (architecture review, 2026-10-30): VESTA's feed may be read a moment
@@ -188,9 +148,9 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
     if (!chosen) setFilter((f) => followingFilter(f, unread, opening, unreadReports));
   }, [chosen, unread, unreadReports]);     // `opening`: the Cockpit's, fixed while the tab is open
   const [selected, setSelected] = useState<string | null>(null);
-  // a device window's warning opens its issue until Back (or another line) is chosen
+  // a device window's warning opens its issue until it is folded (or another card opened)
   const [focusDone, setFocusDone] = useState(false);
-  /** The "Open a ticket" form, on the right: closed, or open (pointed at a device when it came from a wrench). */
+  /** The "Open a ticket" form, above the cards: closed, or open (pointed at a device when it came from a wrench). */
   const [raising, setRaising] = useState<{ entity?: string } | null>(null);
   useEffect(() => {
     if (!reportFaultFor || !canManage) return;
@@ -216,128 +176,114 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   // 2026-10-28)
   const [folds, setFolds] = useState({ issues: true, notes: true, reports: true, watch: false, closed: false });
   const fold = (k: keyof typeof folds) => setFolds((f) => ({ ...f, [k]: !f[k] }));
-  const choose = (key: string) => { setSelected(key); setRaising(null); setFocusDone(true); };
   const raise = () => setRaising({});
-  // the list again (a phone's Back): nothing asked, the warning's issue let go
-  const back = () => { setSelected(null); setRaising(null); setFocusDone(true); };
   const { issues: showsIssues, notifications: showsNotes, reports: showsReports } = view.shows;
-  const item = raising ? null : view.selected;
-  // A phone shows the item someone chose (a line, a warning, the ticket form), else the list: an item that went (an
-  // issue cleared, the form done) never leaves another open in its place.
-  const reading = !!raising || view.openedBy === "asked" || view.openedBy === "focus";
+  const item = view.selected;
+  // a tap opens a card, or folds the one open; one card open at a time, the warning's issue let go
+  const toggle = (key: string) => { setSelected(item?.key === key ? null : key); setFocusDone(true); };
+  const card = (i: MessageItem) => (
+    <InboxCard key={i.key} item={i} opened={item?.key === i.key} onToggle={() => toggle(i.key)} canManage={canManage}
+      onOpenEntity={onOpenEntity} onEditTicket={onEditTicket} onRaiseTicket={(entity) => setRaising({ entity })}
+      focused={i.kind === "issue" && !!isFocus?.(i.card)} />
+  );
 
   return (
-    <div className={`messages${reading ? " reading" : ""}`}>
-      <div className="messages-list">
-        {/* the filters, always on one line (owner: the list pane keeps its width), and on the same line at its right the
-            Issues' own button (owner, 2026-10-31: "Open Ticket", the card's own words and wrench): two groups, so a
-            narrow phone wraps the button whole under the filters, never squeezing them */}
-        <div className="messages-toolbar">
-          <div className="messages-filters" role="group" aria-label="Show">
-            {view.filters.map((f) => (
-              <button key={f.id} type="button" className={`messages-filter${filter === f.id ? " on" : ""}`}
-                aria-pressed={filter === f.id} onClick={() => pickFilter(f.id)}>
-                {/* both words drawn, the line's width shows one (08-shared.css .messages-filter-short) */}
-                {f.short ? <><span className="messages-filter-long">{f.label}</span><span className="messages-filter-short">{f.short}</span></>
-                  : f.label}
-                {f.count ? <span className="messages-filter-count">{f.count}</span> : null}
-              </button>
-            ))}
+    <div className="fm-stack">
+      {/* the filters, always on one line, and on the same line at its right the
+          Issues' own button (owner, 2026-10-31: "Open Ticket", the card's own words and wrench): two groups, so a
+          narrow phone wraps the button whole under the filters, never squeezing them */}
+      <div className="messages-toolbar">
+        <div className="messages-filters" role="group" aria-label="Show">
+          {view.filters.map((f) => (
+            <button key={f.id} type="button" className={`messages-filter${filter === f.id ? " on" : ""}`}
+              aria-pressed={filter === f.id} onClick={() => pickFilter(f.id)}>
+              {/* both words drawn, the line's width shows one (08-shared.css .messages-filter-short) */}
+              {f.short ? <><span className="messages-filter-long">{f.label}</span><span className="messages-filter-short">{f.short}</span></>
+                : f.label}
+              {f.count ? <span className="messages-filter-count">{f.count}</span> : null}
+            </button>
+          ))}
+        </div>
+        {/* only while the issues are listed, as when it sat over Open issues */}
+        {showsIssues && (canManage || canReport) && (
+          <div className="messages-toolbar-actions">
+            {canManage
+              ? <button type="button" className={CARD_BUTTON} onClick={raise}><WorkLabel kind="raiseTicket" /></button>
+              : <button type="button" className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>}
           </div>
-          {/* only while the issues are listed, as when it sat over Open issues */}
-          {showsIssues && (canManage || canReport) && (
-            <div className="messages-toolbar-actions">
-              {canManage
-                ? <button type="button" className={CARD_BUTTON} onClick={raise}><WorkLabel kind="raiseTicket" /></button>
-                : <button type="button" className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>}
-            </div>
-          )}
-        </div>
-        <div className="messages-scroll">
-          {showsIssues && (
-            <MessagesSection title="Open issues" count={open.length} open={folds.issues} onToggle={() => fold("issues")}
-              tip={canManage ? <FaultTiming /> : undefined}>
-              {view.issues.map((i) => <MessageRow key={i.key} item={i} selected={item?.key === i.key} onSelect={choose} />)}
-              {open.length === 0 && <p className="muted body-text messages-empty">Nothing needs attention.</p>}
-            </MessagesSection>
-          )}
-          {showsNotes && (
-            <MessagesSection title="Notifications" open={folds.notes} onToggle={() => fold("notes")}>
-              {paged.page.map((n) => <ErasableMessageRow key={n.key} item={n} selected={item?.key === n.key} onSelect={choose} />)}
-              {view.notifications.length === 0
-                ? <p className="muted body-text messages-empty">{view.notificationsEmpty}</p>
-                : <Pager paged={paged} unit="notification" />}
-            </MessagesSection>
-          )}
-          {/* VESTA's reports (ticket 20 of "One inbox"): the daily digest, the weekly and monthly reports, the night check */}
-          {showsReports && (
-            <MessagesSection title="Reports" open={folds.reports} onToggle={() => fold("reports")}>
-              {reportsPaged.page.map((r) => <ErasableMessageRow key={r.key} item={r} selected={item?.key === r.key} onSelect={choose} />)}
-              {view.reports.length === 0
-                ? <p className="muted body-text messages-empty">No report yet.</p>
-                : <Pager paged={reportsPaged} unit="report" />}
-            </MessagesSection>
-          )}
-          {/* last, and not in Open issues' count: cleared, the VESTA Agent still watching it (fm/faultConfirm); folded by
-              default (owner, 2026-10-25); a section of its own, below Notifications (owner, 2026-10-28) */}
-          {/* a problem's later life, with the issues and always there, empty or not (owner, 2026-10-28) */}
-          {showsIssues && (
-            <>
-              <FoldedRows title="Watch" rows={view.watched} unit="watched item" open={folds.watch}
-                onToggle={() => fold("watch")} selected={item?.key} onSelect={choose} empty="Nothing is being watched."
-                tip="Cleared problems VESTA still watches: VESTA closes each at the time on its card if all is still well; a problem back before then reopens as the same problem." />
-              {/* what is finished (placeOf): alerts that ended, requests and rings answered or over; folded, last */}
-              <FoldedRows title="Closed" rows={view.closed} unit="closed item" open={folds.closed}
-                onToggle={() => fold("closed")} selected={item?.key} onSelect={choose} empty="Nothing closed yet."
-                tip="Finished: alerts that ended, and messages that asked something and were answered or are over (a request approved, refused or expired, a ring opened or missed)." />
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="messages-detail">
-        <button type="button" className="btn ghost messages-back" onClick={back}>
-          <ArrowLeft size={16} aria-hidden /> Inbox
-        </button>
-        {raising && (
-          <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
-            onDone={() => setRaising(null)} />
         )}
-        {/* an issue: ONE card, as told (VESTA's message inside its alert's line), every card's buttons (owner, 2026-10-29,
-            2026-10-30); a watched one, none */}
-        {item?.kind === "issue" && (item.card.look === "watched"
-          ? <AttentionCard card={item.card} onOpenEntity={onOpenEntity} />
-          : <CockpitAttentionRow key={item.key} card={item.card} onOpenEntity={onOpenEntity} canManage={canManage}
-              onEditTicket={onEditTicket} onRaiseTicket={(entity) => setRaising({ entity })}
-              focused={!!isFocus?.(item.card)} />)}
-        {item?.kind === "notification" && <NoteDetail announcement={item.announcement} />}
-        {item?.kind === "report" && <ReportDetail announcement={item.announcement} canOpenPage={canManage} />}
-        {!raising && !item && <p className="muted body-text messages-empty">Nothing to show.</p>}
       </div>
+      {raising && (
+        <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
+          onDone={() => setRaising(null)} />
+      )}
+      {showsIssues && (
+        <MessagesSection title="Open issues" count={open.length} open={folds.issues} onToggle={() => fold("issues")}
+          tip={canManage ? <FaultTiming /> : undefined}>
+          {view.issues.map(card)}
+          {open.length === 0 && <p className="muted body-text messages-empty">Nothing needs attention.</p>}
+        </MessagesSection>
+      )}
+      {showsNotes && (
+        <MessagesSection title="Notifications" open={folds.notes} onToggle={() => fold("notes")}>
+          {paged.page.map(card)}
+          {view.notifications.length === 0
+            ? <p className="muted body-text messages-empty">{view.notificationsEmpty}</p>
+            : <Pager paged={paged} unit="notification" />}
+        </MessagesSection>
+      )}
+      {/* VESTA's reports (ticket 20 of "One inbox"): the daily digest, the weekly and monthly reports, the night check */}
+      {showsReports && (
+        <MessagesSection title="Reports" open={folds.reports} onToggle={() => fold("reports")}>
+          {reportsPaged.page.map(card)}
+          {view.reports.length === 0
+            ? <p className="muted body-text messages-empty">No report yet.</p>
+            : <Pager paged={reportsPaged} unit="report" />}
+        </MessagesSection>
+      )}
+      {/* last, and not in Open issues' count: cleared, the VESTA Agent still watching it (fm/faultConfirm); folded by
+          default (owner, 2026-10-25); a section of its own, below Notifications (owner, 2026-10-28) */}
+      {/* a problem's later life, with the issues and always there, empty or not (owner, 2026-10-28) */}
+      {showsIssues && (
+        <>
+          <FoldedRows title="Watch" rows={view.watched} unit="watched item" open={folds.watch}
+            onToggle={() => fold("watch")} card={card} empty="Nothing is being watched."
+            tip="Cleared problems VESTA still watches: VESTA closes each at the time on its card if all is still well; a problem back before then reopens as the same problem." />
+          {/* what is finished (placeOf): alerts that ended, requests and rings answered or over; folded, last */}
+          <FoldedRows title="Closed" rows={view.closed} unit="closed item" open={folds.closed}
+            onToggle={() => fold("closed")} card={card} empty="Nothing closed yet."
+            tip="Finished: alerts that ended, and messages that asked something and were answered or are over (a request approved, refused or expired, a ring opened or missed)." />
+        </>
+      )}
     </div>
   );
 }
 
-/** A report, open on the right: what VESTA wrote, then its page in the document viewer — for the profiles the add-on
- *  serves pages to (the owner and the facility manager: fm-document), so no one is offered a page they cannot open. */
-export function ReportDetail({ announcement: a, canOpenPage }: { announcement: Announcement; canOpenPage: boolean }) {
+/** Folded or opened, as every Inbox card (InboxCard). */
+type CardShown = Pick<RecordCardProps, "folded"> & { onToggle?: () => void };
+
+/** A report: what VESTA wrote, then its page in the document viewer — for the profiles the add-on serves pages to (the
+ *  owner and the facility manager: fm-document), so no one is offered a page they cannot open. */
+export function ReportDetail({ announcement: a, canOpenPage, ...shown }: CardShown & { announcement: Announcement; canOpenPage: boolean }) {
   return (
-    <NoteDetail announcement={a}>
+    <NoteDetail announcement={a} {...shown}>
       {a.page && canOpenPage && <PageLink page={a.page} />}
     </NoteDetail>
   );
 }
 
-/** A notification's title, when it came and all it says: on its own, VESTA's card of an open issue's alert above the
- *  issue's own card, or a report. ⚠️ THE COCKPIT'S ONE CARD (owner, 2026-10-29: "the notification cards styled the same
- *  way as the Issue cards, text colour, font, size"): its frame, title and text sizes are an issue's (RecordCard), its
- *  buttons under it on the right. ⚠️ IT OWNS ITS PRESS (architecture review 2026-10-29 #4): the screens each decided
- *  whether to pass one — an issue's card and a report passed none — so whatever buttons a message carries are pressed
- *  here, the same wherever it shows (RecordButtons, the one button row). */
-export function NoteDetail({ announcement: a, children }: { announcement: Announcement; children?: ReactNode }) {
+/** A notification's title, when it came and all it says, or a report. ⚠️ THE COCKPIT'S ONE CARD (owner, 2026-10-29: "the
+ *  notification cards styled the same way as the Issue cards, text colour, font, size"): its frame, title and text sizes
+ *  are an issue's (RecordCard), its buttons under it on the right; held, then the superadmin code, it is erased as a
+ *  Facility record is (owner, 2026-10-29: a card left from an older format). ⚠️ IT OWNS ITS PRESS (architecture review
+ *  2026-10-29 #4): the screens each decided whether to pass one — an issue's card and a report passed none — so whatever
+ *  buttons a message carries are pressed here, the same wherever it shows (RecordButtons, the one button row). */
+export function NoteDetail({ announcement: a, children, folded, onToggle }: CardShown & { announcement: Announcement; children?: ReactNode }) {
   return (
-    <RecordCard title={a.title}
+    <RecordCard title={a.title} folded={folded} onOpen={onToggle}
+      lead={isReport(a) ? <FileText size={18} aria-hidden="true" /> : <Bell size={18} aria-hidden="true" />}
       when={a.at ? momentText(a.at) : undefined}
+      erase={{ title: "Delete message", detail: a.title, run: (token) => eraseMessage(a, token, backendFetch) }}
       body={<div className="messages-card-body"><AnnouncementContent announcement={a} />{children}</div>}
       actions={a.buttons.length > 0 ? <RecordButtons record={a} /> : undefined} />
   );
