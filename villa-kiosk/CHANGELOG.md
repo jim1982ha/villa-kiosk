@@ -1,3 +1,10 @@
+## 2.496.658
+
+What you will see:
+- `Done` on a device that is still offline now moves its card to `Watch`. It used to stay under `Open issues` as
+  `Unavailable`, because the device itself had not come back. If it is still wrong when VESTA checks again, it comes back
+  as an open issue.
+
 ## 2.496.657
 
 What you will see:

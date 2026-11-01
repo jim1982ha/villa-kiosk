@@ -200,6 +200,18 @@ console.log("\n  a hidden device: no card in any section (config/cockpitIssues, 
      && /const view = useVillaAttention\(\);[\s\S]*cockpitIssues\(view, /.test(readFileSync(new URL("../../src/components/cockpit/useVillaAttention.ts", import.meta.url), "utf8")));
 }
 
+{
+  // owner, 2026-11-02: Done pressed on an offline device: its card goes to Watch, its live state does not stay as an issue
+  const offline = devicesOf({ ids: ["switch.pump", "lock.door"], unavailable: ["switch.pump", "lock.door"] });
+  const ents = { "switch.pump": { entity_id: "switch.pump", state: "unavailable", attributes: {} }, "lock.door": { entity_id: "lock.door", state: "unavailable", attributes: {} } };
+  const at = (t) => new Date(Date.now() + t).toISOString();
+  const closing = { ...closedIn("n1", "switch.pump", at(600_000)), openedAt: at(-3_600_000) };
+  const left = buildAttentionItems({ devices: offline, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: { ...EMPTY_FM_DATA, tickets: [closing] } }).map((i) => i.entityId);
+  const past = buildAttentionItems({ devices: offline, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: { ...EMPTY_FM_DATA, tickets: [{ ...closing, confirmsBy: at(-600_000) }] } }).map((i) => i.entityId);
+  ck("a device on Watch is no open issue while it stays offline; another offline device is", left.join() === "lock.door", left);
+  ck("  ...once the watch is over and it is still offline, it is an issue again", past.includes("switch.pump"), past);
+}
+
 console.log("\n  gone or back as the Agent says:");
 const without = (t) => { const { confirmsBy: _c, ...rest } = t; return rest; };
 const right = { ...data, tickets: data.tickets.map((t) => (t.id === "w1" ? without(t) : t)) };

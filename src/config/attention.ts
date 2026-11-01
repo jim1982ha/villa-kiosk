@@ -16,6 +16,7 @@ import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
 import { alertNumberOf, DUE_WORDS, faultBegan, faultTitle, fmAttention, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
+import { confirmingFaults } from "@/fm/faultConfirm";
 import { faultLatest, notedStory } from "@/fm/faultNotes";
 import { momentText } from "@/utils/dateText";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
@@ -513,7 +514,15 @@ export function buildAttentionItems(opts: {
   // ⚠️ HIDDEN MEANS HIDDEN EVERYWHERE (owner, 2026-10-25): a device hidden in the villa's system had no badge on the
   // map, yet its fault or late task was listed and counted by the Cockpit and lit its window's sign. The ONE list every
   // count, card, mark and sign reads leaves it out (devices.isHidden: the device or any of its folded entities).
-  return items.filter((i) => !i.entityId || !devices.isHidden(i.entityId));
+  // ⚠️ DONE MOVES THE CARD TO WATCH (owner, 2026-11-02: an offline device's Done closed its fault, and the device's live
+  // state stayed as an open issue with nothing left to press): a device whose fault VESTA is watching has its live line
+  // on Watch only, until VESTA's verdict; any other fault of the device stays. VESTA reopens it if it is still wrong.
+  const watched = new Set(confirmingFaults(fmData, null).flatMap((c) => {
+    const id = recordEntity(c.ticket.entityId, (x) => x in entities) ?? c.ticket.entityId;
+    return id ? [devices.deviceOf(id)] : [];
+  }));
+  return items.filter((i) => (!i.entityId || !devices.isHidden(i.entityId))
+    && !((i.kind === "unavailable" || i.kind === "alarm") && i.entityId && watched.has(devices.deviceOf(i.entityId))));
 }
 
 /** The villa's problems, role-blind — what the villa model holds. Nothing
