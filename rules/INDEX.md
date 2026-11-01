@@ -5,6 +5,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 
 ## The owner's rules
 
+- [The siren needs a human, always](owner-rules.md#the-siren-needs-a-human-always) — ULTIMATE rule: no siren ever sounds without a person's own validation; silence is never a yes; every path to it counts
 - [Branches and backport](owner-rules.md#branches-and-backport) — work on dev2 (Kiosk) / agent-dev (Agent); main only by `npm run backport -- --owner-asked`, on the owner's word, that prompt only
 - [Shipped means published](owner-rules.md#shipped-means-published) — release with the ship command; exit 0 = the store offers it; never `git push` and say done
 - [The owner installs updates](owner-rules.md#the-owner-installs-updates) — shipping ends at published; never install or update an app on the villa

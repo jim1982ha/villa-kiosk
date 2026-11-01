@@ -1,3 +1,9 @@
+## 2.496.644
+
+What you will see:
+- Nothing changes on the tablet. The rule that no siren ever sounds without a person validating it is now the first of
+  the rules every change to VESTA has to follow.
+
 ## 2.496.643
 
 What you will see:
