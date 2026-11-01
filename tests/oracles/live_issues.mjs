@@ -31,7 +31,7 @@ const item = (id, kind, entityId, extra = {}) => ({ id, kind, title: id, detail:
 // a card's buttons as the owner reads them: "label → the records it acts on [what it asks first]"
 const said = (acts) => acts.map((a) => `${a.label} → ${[...a.ids].sort().join(",")}${a.step.kind === "close" ? ` [${a.step.question} / ${a.step.confirmLabel}]` : ""}${a.step.kind === "stage" ? ` (${a.step.to})` : ""}`);
 // owner, 2026-10-30: Done · Need help · Open Ticket on every issue card, one Done closing everything on it
-const OV_DONE = "[Done? VESTA checks it again before it closes. / Done]", TK_CLOSE = "[Close this ticket? Nothing was done, no cost is recorded. / Close ticket]";
+const OV_DONE = "[Done? VESTA checks it again before it closes. / Done]", TK_CLOSE = "[Close this ticket? Nothing was done, no cost is recorded. / No action needed]";
 const [pump] = groupAttention([
   item("unavailable:sensor.pump_power", "unavailable", "sensor.pump_power"),
   item("fault:a", "fault", "sensor.pump_energy", { ticketId: "a", stage: "fault" }),
@@ -66,7 +66,7 @@ ck("  ...pressed, Open Ticket opens Messages' ticket form pointed at the device 
 // owner, 2026-10-30: the Tickets tab's "Mark resolved" is the Inbox's Done (work done, its form kept), with Need help
 ck("a ticket in progress (Tickets): Done (its resolve form), Need help, Close — each on every record of it, its own Close question",
    said(W.ticketActions([{ id: "a", stage: "ticket" }, { id: "b", stage: "ticket" }])).join(" | ")
-   === `Done → a,b (resolved) | Need help → a,b | Close → a,b ${TK_CLOSE}`
+   === `Done → a,b (resolved) | Need help → a,b | No action needed → a,b ${TK_CLOSE}`
    && W.WORK_ACTIONS.ticketDone.label === W.WORK_ACTIONS.done.label && W.ticketActions([{ id: "a", stage: "ticket" }])[1].step.kind === "help");
 ck("  ...a closed record: Reopen, on it alone — and nothing else on a record that is not where the card expects it",
    said(W.closedActions({ id: "r", stage: "closed" })).join() === "Reopen → r (open)"
@@ -131,7 +131,7 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
      tickets.map((t) => [t.key, t.records.map((r) => r.id)]));
   ck("  ...the Tickets card's buttons are its records', the Overview card's the whole device's",
      said(W.ticketActions(tickets.find((t) => t.key === "device:sensor.pump_power").records.map(W.workRecord))).join(" | ")
-       === `Done → p2 (resolved) | Need help → p2 | Close → p2 ${TK_CLOSE}`
+       === `Done → p2 (resolved) | Need help → p2 | No action needed → p2 ${TK_CLOSE}`
      && said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))).join(" | ")
        === `Done → p1,p2 ${OV_DONE} | Need help → p1,p2 | Open Ticket → p1 (in_progress)`);
   ck("  ...Tickets lists the device whose ticket was opened last first, never an open fault or a closed record",
@@ -551,18 +551,18 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
        pad > 0 && gap > 0 && lent === gutter && needed <= room, { pad, gap, lent, gutter, needed, room });
   }
   ck("  ...a ticket: Done, Need help and Close, no icon; a closed record: Reopen",
-     text(drawButtons(tkActs)) === "|Done|Need help|Close|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
+     text(drawButtons(tkActs)) === "|Done|Need help|No action needed|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
   ck("  ...its Done asks ITS question in place of the buttons — the issue card's for the device, the ticket's Close for the ticket",
      text(drawButtons(ovActs, "device:x")) === "|Done? VESTA checks it again before it closes.|Cancel|Done|"
-     && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|Close ticket|",
+     && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|No action needed|",
      [text(drawButtons(ovActs, "device:x")), text(drawButtons(tkActs, "device:x"))]);
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
-     text(drawButtons(tkActs, "device:y")) === "|Done|Need help|Close|" && drawButtons([]) === "");
+     text(drawButtons(tkActs, "device:y")) === "|Done|Need help|No action needed|" && drawButtons([]) === "");
   const { momentText } = await import("@/utils/dateText");
   const at = "2026-10-30T09:20:00.000Z";
   ck("  ...a Need help that stands is said above the buttons, when and by whom; a step that did not land, under them",
-     text(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })) === `|🆘 Need help asked ${momentText(at)} (Owner)|Done|Need help|Close|`
-     && text(drawButtons(tkActs, null, { problem: "Not saved." })) === "|Done|Need help|Close|Not saved.|",
+     text(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })) === `|🆘 Need help asked ${momentText(at)} (Owner)|Done|Need help|No action needed|`
+     && text(drawButtons(tkActs, null, { problem: "Not saved." })) === "|Done|Need help|No action needed|Not saved.|",
      [text(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })), text(drawButtons(tkActs, null, { problem: "Not saved." }))]);
 }
 
@@ -584,7 +584,7 @@ console.log("\n  a Need help pressed is said on its card, and asked once (archit
      [inbox(after).asked, said(inbox(after).actions)]);
   ck("  ...the Tickets tab's card the same, from the same records",
      JSON.stringify(W.helpAsked(ticket(after))) === JSON.stringify({ at, by: "Owner" })
-     && said(W.ticketActions(ticket(after))).join(" | ") === `Done → b (resolved) | Close → b ${TK_CLOSE}`
+     && said(W.ticketActions(ticket(after))).join(" | ") === `Done → b (resolved) | No action needed → b ${TK_CLOSE}`
      && said(W.ticketActions(ticket(before))).some((x) => x.startsWith("Need help")), said(W.ticketActions(ticket(after))));
   ck("  ...in words: \"🆘 Need help asked <when> (Owner)\"",
      W.helpLine(W.helpAsked(ticket(after)), momentText) === `🆘 Need help asked ${momentText(at)} (Owner)`, W.helpLine(W.helpAsked(ticket(after)), momentText));

@@ -63,7 +63,7 @@ export function ticketCards(records: readonly FmTicket[], deviceOfRecord: (field
 
 /** Every button a card of open work can carry. An issue card's (the Inbox's): Done · Need help · Open Ticket (or Edit
  *  Ticket), `doneNew` / `helpNew` on a card with no record yet (only what the villa's system reports: a fault for its
- *  device is raised with the press). A Tickets card's: Done · Need help · Close (`ticketDone`: the resolve form, work
+ *  device is raised with the press). A Tickets card's: Done · Need help · No action needed (`ticketDone`: the resolve form, work
  *  done; `closeTicket`: that ticket's records closed with nothing done and no cost, fmCommands' closeTickets). */
 export type WorkActionKind = "done" | "needHelp" | "doneNew" | "helpNew" | "openTicket" | "raiseTicket" | "editTicket"
   | "ticketDone" | "closeTicket" | "reopen";
@@ -105,7 +105,8 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // ⚠️ THE TICKETS TAB SAYS DONE TOO (owner, 2026-10-30: "I agree with your recommendation"): its "Mark resolved" was
   // the same work done as the Inbox's Done, in other words; it keeps its form (what was done, cost, photos)
   ticketDone: { label: DONE, step: { kind: "stage", to: "resolved" } },
-  closeTicket: { label: "Close", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "Close ticket" } },
+  // what it records in its words (owner, 2026-11-01): "Close" read as the normal end of a ticket, beside Done
+  closeTicket: { label: "No action needed", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "No action needed" } },
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
 };
 
@@ -161,7 +162,7 @@ export function overviewActions(records: readonly WorkRecord[], device?: string)
 }
 
 /** The buttons of a ticket in progress (a Tickets card): Done (its resolve form: work done), Need help (the same "help"
- *  step as an issue card's: the VESTA Agent asks the owner to act) and Close (nothing done) — each on every record of it. */
+ *  step as an issue card's: the VESTA Agent asks the owner to act) and No action needed (nothing done) — each on every record of it. */
 export function ticketActions(records: readonly WorkRecord[]): WorkAction[] {
   const tickets = records.filter((r) => r.stage === "ticket");
   const ids = tickets.map((r) => r.id);

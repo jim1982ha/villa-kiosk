@@ -35,7 +35,7 @@ export const CONFIRM_GRACE_LOOKS = 2;
 
 export interface ConfirmingFault {
   ticket: FmTicket;
-  /** How it was cleared: "Done" (a Done on Telegram, a repair recorded), "Cleared" (the Cockpit's Close, nothing done,
+  /** How it was cleared: "Done" (a Done on Telegram, a repair recorded), "Cleared" (the Cockpit's No action needed, nothing done,
    *  with who pressed it; or the VESTA Agent's own clearing, no name: what it reported is over). Never "Closed": it is
    *  not closed until VESTA lets it go (owner, 2026-10-31). */
   word: "Done" | "Cleared";
