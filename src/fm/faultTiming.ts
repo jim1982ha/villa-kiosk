@@ -14,6 +14,7 @@
 // stood here whatever the villa had set; an Agent that does not say gets no number. The list's own refresh is this app's
 // (useStoreRefresh: STORE_ACTIVE_MS while the Cockpit is open, else the heartbeat).
 
+import { momentText } from "@/utils/dateText";
 import { villaTime, wallClock } from "@/utils/villaClock";
 import { STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { AGENT_SOURCES, ISSUE_SOURCES, type IssueSource } from "./issueSource";
@@ -103,12 +104,6 @@ function nightGoes(c: AgentCadence | null): string {
 /** The table's two groups (owner, 2026-10-15): what the Kiosk and its people produce, then what the VESTA Agent does. */
 interface SourceGroup { title: string; rows: readonly SourceRow[] }
 
-/** What the pill at the right of a card's name says happens at its time (RecordCard CheckPill draws each kind's icon):
- *  "next", VESTA looks again then (an open card's refresh icon); "closes", VESTA closes it then if all is still well (a
- *  card on the Watch list, its clock: owner, 2026-10-31, the refresh icon read as "next check" on a card about to close).
- *  The card's data says which (config/cockpitCard), never the caller. */
-export type CheckPillKind = "next" | "closes";
-
 /** ⚠️ THE CHECK ON A CLEARED PROBLEM VESTA STILL WATCHES IS EXPLAINED TOO (owner, 2026-10-23: "include the new icon
  *  (validated ones)"): the last row of the VESTA Agent's group — a cleared fault on the Watch list (fm/faultConfirm), no
  *  source of its own; its pill's words in the Agent's own numbers when its heartbeat said them. Its words follow the
@@ -120,7 +115,7 @@ export function confirmingRow(c: AgentCadence | null): ConfirmingRow {
     words: "On watch",
     what: "A problem cleared (Done on Telegram, Close here, or VESTA's own clearing) that the VESTA Agent still watches. In the Watch section, not counted",
     opens: "When a problem is cleared",
-    goes: `VESTA closes it at the time on its clock pill ("Closes"), ${look} once that time is past, if all is still well. Back before then: open again, as the same problem`,
+    goes: `VESTA closes it at the time on its refresh pill ("Closes"), ${look} once that time is past, if all is still well. Back before then: open again, as the same problem`,
   };
 }
 
@@ -195,47 +190,33 @@ function nextOf(clock: FmTicketCheck, c: AgentCadence, now: Date): { at: Date; w
 }
 
 /** ⚠️ THE SOONEST BY MOMENT, NOT BY RANK (owner, 2026-10-19): a card can hold an alert's fault and a night check's
- *  ("Alert and Night check"), each read at its own clock — the next look or the nightly 02:00. Each fault's next moment is computed and the
- *  card says the soonest. `undefined`: the card is only what the map shows now; `hand`: only a person closes it;
- *  `agent`: the Agent does but did not say when. */
-function soonest(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date):
-  { at: Date; words: string } | "hand" | "agent" | undefined {
-  const clocks = clocksOf(problems);
-  if (!clocks.length) return undefined;
-  const agent = clocks.filter((k): k is FmTicketCheck => k !== "hand");
-  if (!agent.length) return "hand";
-  if (!cadence) return "agent";
+ *  ("Alert and Night check"), each read at its own clock — the next look or the nightly 02:00. Each fault's next moment
+ *  is computed and the card says the soonest. null: nothing has a time: the card is only what the map shows now, only a
+ *  person closes it, or the Agent did not say its cadence. */
+function soonest(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date): { at: Date; words: string } | null {
+  if (!cadence) return null;
   let best: { at: Date; words: string } | null = null;
-  for (const k of new Set(agent)) {
+  for (const k of new Set(clocksOf(problems).filter((c): c is FmTicketCheck => c !== "hand"))) {
     const next = nextOf(k, cadence, now);
     if (next && (!best || next.at < best.at)) best = next;
   }
-  return best ?? "agent";
+  return best;
 }
 
-/** WHEN the card's "Next check" happens, as a moment (owner, 2026-10-19: hovering it shows "20/10/2026 02:00"): the
- *  soonest of its faults' next reads — `now` plus the Agent's `checkMinutes`, or its next `nightlyAt`;
- *  null when it has no time (live, by hand, or an Agent that did not say its cadence) — the same moment nextCheck words. */
+/** WHEN the card's next check happens, as a moment (owner, 2026-10-19: hovering it shows "20/10/2026 02:00"): the
+ *  soonest of its faults' next reads; null when it has none. */
 export function nextCheckAt(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): Date | null {
-  const next = soonest(problems, cadence, now);
-  return typeof next === "object" ? next.at : null;
+  return soonest(problems, cadence, now)?.at ?? null;
 }
 
-/** A card's "Next check" (owner, 2026-10-15: "when the next test for this card will be done"), beside its room: the
- *  soonest of its faults' next reads — the VESTA Agent's next look ("within 5 min") or its nightly
- *  check ("02:00"), or "by hand" when only a person closes it; a card that is only what the map shows now:
- *  "live". The Agent's numbers are the ones it says (its heartbeat's `cadence`) — never a copy: one that does not say
- *  gets none. */
-export function nextCheck(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): string {
-  return `Next check: ${nextCheckWhen(problems, cadence, now)}`;
-}
-
-/** nextCheck's answer alone, without its "Next check:" — what the card's pill says beside its refresh icon (owner,
- *  2026-10-22: "instead of `Next check:` show a refresh icon"): "within 5 min", "02:00", "live", "by hand". */
-export function nextCheckWhen(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): string {
+/** ⚠️ ONE ANSWER FOR THE NEXT-CHECK PILL (owner, 2026-11-01: "the time each fault ticket will be rechecked", on every
+ *  fault card): an Inbox card's and a ticket's, from their problems: its words ("within 5min", "02:00", the Agent's own
+ *  numbers, never a copy), what hovering it says. ⚠️ A PILL ONLY WITH A TIME (owner, 2026-11-01, the audit: "simple,
+ *  comprehensible, logical"): a refresh icon beside "live" or "by hand" announced a check no one will make. */
+export function checkPill(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()):
+  { text: string; at: string; when: string; tip: string } | null {
   const next = soonest(problems, cadence, now);
-  if (next === undefined) return "live";
-  if (next === "hand") return "by hand";
-  if (next === "agent") return "by the VESTA Agent";
-  return next.words;
+  if (!next) return null;
+  const text = `Next check: ${next.words}`, at = momentText(next.at);
+  return { text, at, when: next.words, tip: `${text} (${at})` };
 }

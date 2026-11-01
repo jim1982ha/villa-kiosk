@@ -67,9 +67,9 @@ ck("  ...the Kiosk's sources first, then the Agent's, each group under its headi
   const told15 = faultTiming(true, { checkMinutes: 15, nightlyAt: "04:30" }).confirming;
   const src = readFileSync(new URL("../../src/components/fm/FaultTiming.tsx", import.meta.url), "utf8");
   // its words the owner's life of a problem, Open › Cleared (on the Watch list) › Closed (owner, 2026-10-31)
-  ck("  ...the Agent's group ends with \"On watch\", its check icon explained, closed at its clock pill's time; none without an Agent",
+  ck("  ...the Agent's group ends with \"On watch\", its check icon explained, closed at its refresh pill's time; none without an Agent",
      withAgent.confirming?.words === "On watch" && withAgent.confirming.what && withAgent.confirming.opens
-     && /^VESTA closes it at the time on its clock pill \("Closes"\), at its next look once that time is past, if all is still well\. Back before then: open again, as the same problem$/.test(withAgent.confirming.goes)
+     && /^VESTA closes it at the time on its refresh pill \("Closes"\), at its next look once that time is past, if all is still well\. Back before then: open again, as the same problem$/.test(withAgent.confirming.goes)
      && /, within 15min once/.test(told15.goes)
      && alone.confirming === null
      && /confirming && g === groups\[groups\.length - 1\]/.test(src) && /<CheckCircle2 size=\{15\} className="fault-watched-icon"/.test(src),

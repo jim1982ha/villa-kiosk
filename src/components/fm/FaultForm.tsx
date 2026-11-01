@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
 import type { FmTicket } from "@/fm/fmTypes";
-import { recordLife } from "@/fm/fmEngine";
+import { alertLabel, alertNumberOf, recordLife } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
@@ -20,6 +20,7 @@ import { useDeviceChoice } from "./useDeviceChoice";
 import { useRecordPlace } from "./useRecordPlace";
 import FormActions from "./FormActions";
 import FmForm from "./FmForm";
+import { Pill } from "./RecordCard";
 
 export default function FaultForm({ editing, presetEntity, deviceOptions, onDone }: {
   /** The record being edited; absent when raising a new fault. */
@@ -54,6 +55,7 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
 
   // A person OPENS A TICKET (owner, 2026-10-14): what they open starts in progress, in the Tickets tab.
   // ...and a record is called a ticket only while it is one, or closed as one (its life: recordLife, owner 2026-11-01)
+  const number = editing ? alertNumberOf(editing) : undefined;
   const heading = !editing ? "Open a ticket" : recordLife(editing).ticket ? "Edit ticket" : "Edit fault";
   return (
     <FmForm>
@@ -67,9 +69,14 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
         />
       </div>
       <label className="fm-field">
-        <span>Summary</span>
-        {/* One line: the headline someone scans a list for; what is actually wrong belongs below. */}
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Pool pump not starting" />
+        <span>Title</span>
+        {/* One line: the headline someone scans a list for; what is actually wrong belongs below.
+            ⚠️ THE CARD'S TITLE, SAID SO (owner, 2026-11-01: "i don't see how i can change the title"): this field was
+            "Summary", and the alert's number before the words on the card was nowhere: it stays, the words change. */}
+        <span className="fm-title-field">
+          {number !== undefined && <Pill text={alertLabel(number, editing?.alertPriority)} />}
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Pool pump not starting" />
+        </span>
       </label>
       <NotesField
         label="Details (optional)"
@@ -88,6 +95,8 @@ export default function FaultForm({ editing, presetEntity, deviceOptions, onDone
         onSave={async () => {
           const fields = {
             title: title.trim(),
+            // words typed replace those VESTA keeps up to date ("offline for 3d"), or the card would keep showing those
+            ...(editing?.titlePattern && title.trim() !== editing.title ? { titlePattern: undefined } : {}),
             ...place(entityId, deviceText),   // the device, its name and room: ONE builder (fm/recordPlace)
             note: note.trim() || undefined,
             photoIds,

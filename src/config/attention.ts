@@ -15,7 +15,7 @@ import { alarmText, rowText } from "@/config/reading";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
-import { alertNumberOf, DUE_WORDS, faultTitle, fmAttention, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
+import { alertNumberOf, DUE_WORDS, faultBegan, faultTitle, fmAttention, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import { faultLatest, notedStory } from "@/fm/faultNotes";
 import { momentText } from "@/utils/dateText";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
@@ -445,7 +445,7 @@ export function buildAttentionItems(opts: {
       story: notedStory(t),
       latest: faultLatest(t, momentText),
       help: standingHelp(t),
-      openedAt: t.openedAt,
+      openedAt: faultBegan(t),
       ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t) } : {}),
       source: faultSource(t),
       check: t.check,

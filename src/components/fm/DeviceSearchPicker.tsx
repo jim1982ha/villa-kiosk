@@ -140,11 +140,6 @@ export default function DeviceSearchPicker({
           </button>
         )}
       />
-      {matchedEntityId && !open && (
-        <div className="muted body-text field-hint">
-          Linked to <strong>{matchedEntityId}</strong>
-        </div>
-      )}
       {!matchedEntityId && value.trim() && !open && (
         <div className="muted body-text field-hint">
           No matching device, this will be saved as free text.

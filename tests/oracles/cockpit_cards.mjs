@@ -48,40 +48,43 @@ const issue = draw(h(AttentionCard, { card: cockpitCard(group, CADENCE), onOpenE
 // the chevron, it's redundant"
 ck("it IS the Cockpit card: its source icons, then its name; its room as a pill on the line under — no chevron",
    /class="fm-record-card"/.test(issue) && /fm-record-lead[\s\S]*<svg/.test(inside(issue, "fm-record-head"))
-   && /<strong>Test lock<\/strong><\/div>/.test(issue) && /fm-entity-chip fm-chip-static">Hall</.test(pillLine(issue))
+   && /<strong><button[^>]*fm-title-link[^>]*>Test lock<\/button><\/strong><\/div>/.test(issue) && /fm-entity-chip fm-chip-static">Hall</.test(pillLine(issue))
    && !/lucide-chevron-right/.test(issue) && !/fm-record-subtitle/.test(issue), issue.slice(0, 400));
 ck("  ...its problem's line on the left, Open Ticket and Close inside on the right of it",
    /fm-row-main[\s\S]*#33 · Test lock unavailable[\s\S]*fm-record-actions[\s\S]*Open Ticket[\s\S]*Close/.test(inside(issue, "fm-record-body")));
-ck("  ...its device's pill opens the device, and its buttons stop their own presses",
-   /<button class="fm-entity-chip">Test lock<\/button>/.test(issue) && /class="fm-record-actions"/.test(issue), issue);
+ck("  ...opened, its name opens the device, no pill says it again, and its buttons stop their own presses",
+   /fm-title-link/.test(issue) && !/fm-meta/.test(issue) && /class="fm-record-actions"/.test(issue), issue);
 {
   // owner, 2026-11-01: "a click on a card shall expand it", on the same card (RecordCard's one fold)
   const { AttentionCard: Card } = await import("@/components/cockpit/IssueCard");
-  const folded = draw(h(Card, { card: cockpitCard(group, CADENCE), onOpenEntity() {}, onToggle() {}, folded: "One line" }));
-  ck("  ...folded, only its name, time, pills and one line; a tap on it is the card's",
-     /role="button"/.test(folded) && /class="fm-card-folded">One line</.test(folded) && !/fm-record-actions|fm-record-check" aria-label|<button/.test(folded)
-     && !/cockpit-attention-sub/.test(folded), folded);
+  const folded = draw(h(Card, { card: cockpitCard(group, CADENCE), onOpenEntity() {}, onToggle() {}, folded: ["One line", "Another"],
+    actions: btn("Done") }));
+  ck("  ...folded: its name, time, pills, a line per problem and its buttons, as a Tickets card; a tap on it is the card's",
+     /role="button"/.test(folded) && /class="fm-card-folded">One line</.test(folded) && /class="fm-card-folded">Another</.test(folded)
+     && /fm-record-actions[\s\S]*Done/.test(folded) && /fm-record-check" aria-label/.test(inside(folded, "card-pill-line")) && !/cockpit-attention-sub/.test(folded), folded);
 }
 // owner, 2026-10-22: "instead of `Next check:` show a refresh icon, as a pill, on this same first line, on the right"
-ck("  ...its next check a pill at the right of that line: a refresh icon, then when",
-   /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>within 5min<\/span><\/div>$/.test(inside(issue, "fm-record-head")),
-   inside(issue, "fm-record-head"));
-const { nextCheck } = await import("@/fm/faultTiming");
+// owner, 2026-11-01: "right after the room area pill"
+ck("  ...its next check a pill right after its room: a refresh icon, then when",
+   /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>within 5min<\/span>/.test(pillLine(issue)) && pillLine(issue).indexOf("Hall") < pillLine(issue).indexOf("fm-record-check"),
+   pillLine(issue));
+const { checkPill } = await import("@/fm/faultTiming");
+const nextCheck = (...a) => checkPill(...a)?.text ?? null;
 // at a fixed noon: the soonest of the 02:00 night and the 5-minute look is the night's from 01:55 to 02:00, and this
 // check failed those five minutes every night (2026-10-22, 01:58)
 const NOON = new Date(2026, 9, 21, 12, 0, 0);
 const said = (problems, cadence = CADENCE) => nextCheck(problems, cadence, NOON);
 ck("  ...each card says when its problems are read again, the Agent's numbers its own",
-   said([{ source: "live" }]) === "Next check: live"
+   said([{ source: "live" }]) === null
    && said([{ source: "night", check: "nightly" }]) === "Next check: 02:00"
    && said([{ source: "night", check: "nightly" }], { checkMinutes: 15, nightlyAt: "04:30" }) === "Next check: 04:30"
    && said([{ source: "live", fault: { source: "night", check: "minutes" } }]) === "Next check: within 5min"   // offline: rechecked
    && said([{ source: "night", check: "nightly" }, { source: "alert", check: "minutes" }]) === "Next check: within 5min"
    && said([{ source: "alert" }]) === "Next check: within 5min" && said([{ source: "night" }]) === "Next check: within 5min" // older: read at every look now
-   && said([{ source: "owner" }]) === "Next check: by hand" && said([{ source: "chat" }]) === "Next check: by hand"
-   && said([{ source: "live" }, { source: "guest" }]) === "Next check: by hand"
-   && said([{ source: "schedule" }]) === "Next check: by hand"
-   && said([{ source: "night", check: "nightly" }], null) === "Next check: by the VESTA Agent");
+   && said([{ source: "owner" }]) === null && said([{ source: "chat" }]) === null
+   && said([{ source: "live" }, { source: "guest" }]) === null
+   && said([{ source: "schedule" }]) === null
+   && said([{ source: "night", check: "nightly" }], null) === null);
 // owner, 2026-10-19: hovering "Next check" says when, as a date and time — the nightly check's next run, or the
 // Agent's next look; nothing for a card with no time (live, by hand, an Agent that did not say)
 const { nextCheckAt } = await import("@/fm/faultTiming");
@@ -109,8 +112,8 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
      && nextCheck([{ source: "live", fault: { source: "night", check: "day" } }], CADENCE, new Date(2026, 9, 19, 1, 58)) === "Next check: within 5min");
   ck("  ...a live item beside them keeps its rule: the faults decide; live alone stays live; a person's alone: by hand",
      nextCheck([{ source: "live" }, { source: "night", check: "minutes" }], CADENCE, t1310) === "Next check: within 5min"
-     && nextCheck([{ source: "live" }], CADENCE, t1310) === "Next check: live"
-     && nextCheck([{ source: "night", check: "day" }], null, t1310) === "Next check: by the VESTA Agent");
+     && nextCheck([{ source: "live" }], CADENCE, t1310) === null
+     && nextCheck([{ source: "night", check: "day" }], null, t1310) === null);
 }
 // owner, 2026-10-21: "the tooltip is updating every minute, whereas I expect it to reflect the 5 min check period" —
 // it said now + 5 min. The Agent says when its look last started (cadence lastLookAt): the next one is a fixed moment.
@@ -193,7 +196,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
 ck("  ...said whole, with its moment, by the pill's tooltip (the Kiosk's own: common/Tip)",
    /aria-label="Next check: within 5min \(\d\d\/\d\d\/\d{4} \d\d:\d\d\)"/.test(issue)
    && /<Tip text=\{tip\}>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8"))
-   && /<CheckPill kind=\{check\.kind\} when=\{check\.when\} tip=\{check\.tip\} \/>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8")));
+   && /<CheckPill \{\.\.\.check\} \/>/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8")));
 // owner, 2026-10-15: "there should always be the room line, to respect a consistent layout"
 const [roomless] = groupAttention([{ id: "fault:f9", kind: "fault", title: "Relay dropped", detail: "Fault", entityId: "sensor.relay_t",
   ticketId: "f9", stage: "fault", source: "night", device: { key: "sensor.relay_t", label: "Relay" } }]);

@@ -11,7 +11,7 @@ import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
 import { cardIcons, rowWhen, type CardLine, type CardView, type LineSources } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
-import RecordCard, { DeviceChip, Pill } from "@/components/fm/RecordCard";
+import RecordCard, { Pill } from "@/components/fm/RecordCard";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
@@ -31,7 +31,7 @@ export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicke
   onRaiseTicket: (entityId: string) => void;
   /** The device a window's warning opened the Cockpit for: its card marked. */
   focused?: boolean;
-  folded?: string;
+  folded?: string[];
   onToggle?: () => void;
 }) {
   // a profile that does not manage Facility work, or a card with nothing to do (a watched one): no row of buttons
@@ -42,7 +42,7 @@ export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicke
 
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
  *  source icons before the device's name, its time, the room under it, its problems' lines, its buttons under them.
- *  Tapping it opens or folds it; its device's pill opens the device, its buttons take their own presses. Draws `card`
+ *  Tapping it opens or folds it; opened, its name opens the device, its buttons take their own presses. Draws `card`
  *  (config/cockpitCard) and nothing else: what it says is decided there, by value. Pure: a check draws it. */
 export function AttentionCard({ card, onOpenEntity, actions, focused, folded, onToggle }: {
   /** The issue as told (messagesModel issueAsTold): a line holding VESTA's message of its alert draws it. */
@@ -51,8 +51,8 @@ export function AttentionCard({ card, onOpenEntity, actions, focused, folded, on
   actions?: ReactNode;
   /** Marked, as the card a device window's warning asked for (owner, 2026-10-24). */
   focused?: boolean;
-  /** Folded: its one line (RecordCard `folded`). */
-  folded?: string;
+  /** Folded: its lines (RecordCard `folded`). */
+  folded?: string[];
   /** A tap on the card opens or folds it. */
   onToggle?: () => void;
 }) {
@@ -60,7 +60,9 @@ export function AttentionCard({ card, onOpenEntity, actions, focused, folded, on
   const latest = [...new Set(card.lines.map((l) => l.latest).filter((w): w is string => !!w))];
   return (
     <RecordCard
-      title={card.title}
+      // ⚠️ OPENED, ITS NAME OPENS THE DEVICE (owner, 2026-11-01, the audit: a device pill said the name again under it)
+      title={folded === undefined && card.entityId
+        ? <button type="button" className="fm-title-link" onClick={() => onOpenEntity(card.entityId!)}>{card.title}</button> : card.title}
       // the time of its problem, the same as its ticket's (rowWhen)
       when={card.lines.length ? rowWhen(card) : undefined}
       folded={folded}
@@ -70,22 +72,19 @@ export function AttentionCard({ card, onOpenEntity, actions, focused, folded, on
       status={card.status}
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
-      lead={card.look === "watched"
+      lead={card.look
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
         // folded, its lines not drawn: every icon before its name
         : folded !== undefined && card.lead ? <SourceIcons {...card.lead} />
         : icons.head ? <SourceIcons {...icons.head} />
         // the icon column kept when the lines draw the icons (config/cockpitCard.cardIcons): they stay inside the card
         : icons.column ? <span className="fm-record-lead-empty" aria-hidden="true" /> : undefined}
-      // when its problems are read again (a refresh icon) or, on the Watch list, when VESTA closes it (a clock): the
-      // card's own pill kind, a pill at the right of its name (owner, 2026-10-22 / 2026-10-31); hovering it says it in
-      // words, with its date and time (owner, 2026-10-19). No chevron: the card is the button.
-      check={card.nextCheck ? { kind: card.nextCheck.kind, when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
+      // when its problems are read again or, on the Watch list, when VESTA closes it: a pill after its room (owner,
+      // 2026-11-01); hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is
+      // the button.
+      check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
       onOpen={onToggle}
-      pills={card.entityId || latest.length ? <>
-        {card.entityId && <DeviceChip entityId={card.entityId} label={card.title} onOpenEntity={onOpenEntity} />}
-        {latest.map((w) => <Pill key={w} text={w} />)}
-      </> : undefined}
+      pills={latest.length ? latest.map((w) => <Pill key={w} text={w} />) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
           {card.lines.map((line, i) => <CockpitAttentionSub key={line.key} line={line} icons={icons.lines[i] ?? null} />)}

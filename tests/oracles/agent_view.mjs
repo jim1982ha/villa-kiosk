@@ -19,7 +19,8 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
 const online = parseAgentStatus({ state: "online", last_seen: "2026-09-29T00:00:00Z", offline_after_minutes: 5 });
 const offline = parseAgentStatus({ state: "offline", last_seen: null });
 const off = parseAgentStatus({ state: "not_configured" });
-const { nextCheck } = await import("@/fm/faultTiming");
+const { checkPill } = await import("@/fm/faultTiming");
+const nextCheck = (...a) => checkPill(...a)?.text ?? null;
 console.log("  who sees the agent:");
 ck("owner and facility manager, never a guest",
    roleCan("owner", "viewAgent") && roleCan("ops", "viewAgent") && !roleCan("guest", "viewAgent") && !roleCan(null, "viewAgent"));
@@ -174,7 +175,7 @@ ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0,
 const faults = src("components/fm/TicketsTab.tsx");
 ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",
    !/fm-timeline-head|fm-timeline-dot/.test(faults) && /notes=\{faultNoteLines\(t, momentText\)\}/.test(faults)
-   && /when=\{momentText\(t\.openedAt\)\}/.test(faults) && /faultLatest\(t, momentText\)/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
+   && /when=\{momentText\(faultBegan\(t\)\)\}/.test(faults) && /faultLatest\(t, momentText\)/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
 {
   // what the button is: fm/deviceWork's, by value; that the Closed list draws it: the one wiring line
   const { closedActions, workRecord } = await import("@/fm/deviceWork");
@@ -191,7 +192,7 @@ console.log("\n  the Agent's clock, only while it is online:");
   const alert = [{ source: "alert", check: "minutes" }];
   const quiet = parseAgentStatus({ state: "offline", last_seen: "2026-09-29T00:00:00Z", cadence: null });
   ck("offline: 'Next check: by the VESTA Agent' — no 'within 5min' from a heartbeat days old",
-     quiet.cadence === null && nextCheck(alert, quiet.cadence) === "Next check: by the VESTA Agent", nextCheck(alert, quiet.cadence));
+     quiet.cadence === null && nextCheck(alert, quiet.cadence) === null, nextCheck(alert, quiet.cadence));
   const awake = parseAgentStatus({ state: "online", last_seen: "2026-09-29T00:00:00Z", cadence: { checkMinutes: 5, nightlyAt: "02:00" } });
   ck("  ...online, its own number", nextCheck(alert, awake.cadence) === "Next check: within 5min");
   // owner, 2026-10-20: the Agent reads every open night finding at every look and no longer says day times; an older

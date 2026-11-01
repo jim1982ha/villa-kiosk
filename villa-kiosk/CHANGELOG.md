@@ -1,3 +1,33 @@
+## 2.496.655
+
+What you will see:
+- A state pill no longer repeats the card's words: `Missing` goes when a line of the card already says the device is
+  missing. It stays where nothing else says it, like `Unavailable` on a device with no fault.
+- The next check pill shows only a real time. `live` and `by hand` are gone: nothing is checked then.
+- An opened Inbox card no longer repeats its name in a pill: the name itself, underlined, opens the device.
+- A ticket has the same icon on its left as its Inbox card, so its text lines up the same way.
+- The ticket form no longer shows the device's technical id.
+
+## 2.496.654
+
+What you will see:
+- Every fault card has its next check back, in a pill with the refresh icon right after the room: `within 5min`, `02:00`,
+  `by hand`, or `Closes 02:00` under Watch. This holds folded or opened, in Inbox › Issues and on Tickets. The time at the
+  top right stays when the problem was opened.
+- A fault's time is when the problem began, on its Inbox card and on its ticket alike: a device "offline for over 8d 19h"
+  shows the day it went offline, no longer the day the record was written.
+- A ticket's device pill says the same name as its Inbox card.
+- A fault that leaves Watch now goes to `Closed`. Those with no VESTA message used to leave the Inbox altogether.
+- In a ticket's form, `Summary` is now `Title`, the words shown on the card. An alert's number stays in front of it, fixed.
+
+## 2.496.653
+
+What you will see:
+- A folded Inbox card keeps its buttons, as a card in Tickets: Done, Need help, Open Ticket or Edit Ticket, and a message's
+  own buttons.
+- A card holding several problems shows one line for each when folded: each alert with its number and first words, then
+  its other problems.
+
 ## 2.496.652
 
 What you will see:

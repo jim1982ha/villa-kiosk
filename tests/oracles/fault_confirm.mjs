@@ -115,23 +115,21 @@ const drawn = draw(h(AttentionCard, { card: cards[1], onOpenEntity: () => {} }))
 // RecordCard's frame (marked), its title and room pill, the open issues' next-check pill, the check as its lead
 ck("  ...drawn by the open issues' own card: marked frame, a check, its device and room pill, its fault, who closed it",
    /^<div class="fm-record-card fault-watched">/.test(drawn) && /class="[^"]*fault-watched-icon/.test(drawn)
-   && /<strong>door<\/strong><\/div>/.test(drawn) && /card-pill-line"><span class="fm-entity-chip fm-chip-static">Hall<\/span>/.test(drawn)
+   && /<strong><button[^>]*>door<\/button><\/strong><\/div>/.test(drawn) && /card-pill-line"><span class="fm-entity-chip fm-chip-static">Hall<\/span>/.test(drawn)
    && /#65 · Door unlocked/.test(drawn) && drawn.includes(`<span class="cockpit-attention-latest">Done${on(-2)} (JM)</span>`), drawn.slice(0, 900));
 const pillOf = (html) => /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="([^"]*)">(<svg[^>]*class="([^"]*)"[\s\S]*?<\/svg>)([^<]*)<\/span>/.exec(html);
 {
   const pill = pillOf(drawn);
   ck("  ...its pill is the open issues' pill (CheckPill): \"Closes\" and its time, what VESTA does then on touch",
      !!pill && pill[4] === `Closes ${clockTime(NOW + 8 * 60_000)}` && pill[1] === closesAt(8), pill?.slice(1));
-  // ⚠️ A CLOCK, NEVER THE REFRESH ICON OF A NEXT CHECK (owner, 2026-10-31), nor the check the card leads with
-  ck("  ...with a clock, not the open cards' refresh icon nor the card's lead check",
-     !!pill && /\blucide-clock\b/.test(pill[3]) && !/refresh|circle-check|check-circle/.test(pill[3]), pill?.[3]);
+  // owner, 2026-11-01: the refresh icon "to clearly indicate … the date when the next check will be done"
+  ck("  ...with the refresh icon of every next check",
+     !!pill && /\blucide-refresh-cw\b/.test(pill[3]) && !/circle-check|check-circle/.test(pill[3]), pill?.[3]);
 }
 ck("  ...no Close and no Open Ticket: it is closed", !/fm-record-actions/.test(drawn));
 const activeCard = draw(h(AttentionCard, { card: cockpitCard(att.attentionGroups[0], CADENCE, new Date(NOW)), onOpenEntity: () => {} }));
 ck("an active fault keeps its look: no marker", /^<div class="fm-record-card">/.test(activeCard) && !/fault-watched/.test(activeCard));
-ck("  ...and its next-check pill keeps the refresh icon: VESTA looks again then",
-   /\blucide-refresh-cw\b/.test(pillOf(activeCard)?.[3] ?? "") && !/\blucide-clock\b/.test(pillOf(activeCard)?.[3] ?? "")
-   && !/^Closes/.test(pillOf(activeCard)?.[4] ?? "Closes"), pillOf(activeCard)?.slice(1));
+ck("  ...and a fault only a person closes has no next-check pill: nothing checks it", pillOf(activeCard) === null, pillOf(activeCard)?.slice(1));
 {
   // Messages' own markup (the component needs the app's contexts to render): which cards are open issues and which
   // watched is the Messages model's, by value (messages_model.mjs); the tab draws them in that order
@@ -198,7 +196,7 @@ console.log("\n  a hidden device: no card in any section (config/cockpitIssues, 
      && quiet.watched.map((c) => c.key).join() === "watched:w3,watched:w2" && quiet.open.length === seen.open.length - 1,
      { open: quiet.open.map((c) => c.key), watched: quiet.watched.map((c) => c.key) });
   ck("  ...and Messages draws exactly these, its open issues and its Watched rows from useCockpitIssues (the profile's view)",
-     /const \{ open, watched \} = useCockpitIssues\(\);/.test(readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8"))
+     /const \{ open, watched, closed \} = useCockpitIssues\(\);/.test(readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8"))
      && /const view = useVillaAttention\(\);[\s\S]*cockpitIssues\(view, /.test(readFileSync(new URL("../../src/components/cockpit/useVillaAttention.ts", import.meta.url), "utf8")));
 }
 

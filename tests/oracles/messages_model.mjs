@@ -165,9 +165,20 @@ ck("a guest (one tab, Messages) gets no tab strip: the strip is drawn only with 
    !!strip && guardsOf(strip).some((g) => /tabs\.length > 1/.test(g)), strip && guardsOf(strip));
 const tab = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
 ck("  ...the tab lists, counts and opens what messagesView says, from the open issues and the page's announcements",
-   /const \{ kept, unread, unreadReports \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, announcements: kept, filter, selected,/.test(tab)
+   /const \{ kept, unread, unreadReports \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, closed, announcements: kept, filter, selected,/.test(tab)
    && /view\.filters\.map\(/.test(tab) && /const item = view\.selected;/.test(tab)
    && /const \{ issues: showsIssues, notifications: showsNotes, reports: showsReports \} = view\.shows;/.test(tab));
+
+{
+  // owner, 2026-11-01: "I expect to see them go in the closed section"
+  const gone = card("closed:f", { look: "closed", closedAt: "2026-10-30T10:00:00+08:00", nextCheck: null, lines: [{ key: "l", text: "Pump", story: [], closing: "Done" }] });
+  const told = card("closed:g", { look: "closed", closedAt: "2026-10-30T10:00:00+08:00", nextCheck: null, lines: [{ key: "m", text: "Lock", story: [], alertNumber: 90, closing: "Done" }] });
+  const msg = ann(50, { feed: "vesta", key: "incident:90", at: "2026-10-31T10:00:00+08:00", status: "✅ Closed" });
+  const v = messagesView({ ...base, announcements: [], closed: [gone, told], filter: "issues", selected: null });
+  const w = messagesView({ ...base, announcements: [msg], closed: [gone, told], filter: "issues", selected: null });
+  ck("a fault that left Watch is in Closed, a card of its own", v.closed.map((i) => i.key).join() === "closed:f,closed:g", v.closed);
+  ck("  ...one VESTA holds a message for is listed once, by that message", !w.closed.some((i) => i.key === "closed:g"), w.closed);
+}
 
 console.log("\n  opening the Cockpit clears the unread mark (owner, 2026-10-31):");
 {
@@ -333,12 +344,24 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
        !!named && !!alertName && named.startsWith(`${alertName}, `) && /^#(100-P1|92-P2) \(/.test(named), { row: named, card: lines(opened) });
     ck("  ...its row: that name, then the alert's first words", named.endsWith(item.card.lines.find((l) => l.told).told.text.split("\n")[0]), named);
   }
+  {
+    // owner, 2026-11-01: "both lines appears in the collapsed version": two alerts on one device, a line each
+    const two = card("two", { lines: [{ key: "a", text: "x", story: [], alertNumber: 100, closing: null }, { key: "b", text: "y", story: [], alertNumber: 92, closing: null },
+      { key: "c", text: "Battery low", story: [], closing: null }] });
+    const folded = foldedCard(messagesView({ open: [two], watched: [], announcements: [msg100, msg92], filter: "issues", selected: null }).issues[0]);
+    const shown = [...folded.matchAll(/class="fm-card-folded">([^<]*)</g)].map((m) => m[1]);
+    ck("a card of several problems, folded: a line for each, its alerts first", shown.length === 3 && shown[0].startsWith("#100-P1 (existing), ")
+       && shown[1].startsWith("#92-P2 (cleared), ") && shown[2] === "Also: Battery low", shown);
+  }
   const opened = draw(h(CockpitAttentionRow, { card: v.issues[0].card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
   // owner, 2026-11-01: a device's state is the status pill of every card, on the opened card and its row alike
   const pill = /class="fm-badge tone-warn">Missing</;
-  ck("  ...the open one: its device's state in the card's status pill, on the card and on its row alike, the alert named alone, the other problem as \"Also\", VESTA's words in it",
-     JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low", "#100-P1 (existing)"]) && pill.test(opened)
-     && pill.test(foldedCard(v.issues[0]))
+  // owner, 2026-11-01: "Missing" beside words saying it was clutter; a state nothing says stays
+  const quiet = card("q", { lines: [{ key: "q", text: "Battery low", story: [], closing: null }], status: [{ text: "Missing", tone: "tone-warn" }] });
+  ck("  ...a state its words say is no pill, on the card and folded alike; a state nothing says stays one",
+     !pill.test(opened) && !pill.test(foldedCard(v.issues[0])) && pill.test(foldedCard(messagesView({ open: [quiet], watched: [], announcements: [], filter: "issues", selected: null }).issues[0])));
+  ck("  ...the open one: the alert named alone, the other problem as \"Also\", VESTA's words in it",
+     JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low", "#100-P1 (existing)"])
      && opened.includes("The outdoor entrance lock is missing."), lines(opened));
   const rowTimeShown = words(foldedCard(v.issues[0]), "fm-entity-chip fm-chip-static fm-record-check");
   ck("  ...and its time pill is its alert's, not the other problem's", !!rowTimeShown && rowTimeShown.length > 0, rowTimeShown);

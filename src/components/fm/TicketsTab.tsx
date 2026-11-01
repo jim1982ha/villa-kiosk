@@ -14,7 +14,8 @@ import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
-import { closedTickets, closedTicketStats, faultTitle, keptDays, STAGE_WORDS, stageOf, type FmRetention } from "@/fm/fmEngine";
+import { useHA } from "@/ha/HAStateStore";
+import { closedTickets, closedTicketStats, faultBegan, faultTitle, keptDays, STAGE_WORDS, stageOf, type FmRetention } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
 import { closedActions, helpAsked, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
@@ -23,6 +24,11 @@ import FaultForm from "./FaultForm";
 import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
 import { faultLatest, faultNoteLines } from "@/fm/faultNotes";
+import { checkPill } from "@/fm/faultTiming";
+import { SourceIcons } from "./sourceIcons";
+import { faultSource } from "@/fm/issueSource";
+import { useAgent } from "@/agent/AgentContext";
+import { useNow } from "@/hooks/useInterval";
 import WorkButtons, { useCardWork } from "./WorkButtons";
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
@@ -43,8 +49,11 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const terms = useFmTerms();
   const { deviceOfRecord } = useDeviceIdentity();
   const label = useEntityLabel();
+  const { entities } = useHA();
   /** Every card's buttons carried out: Done's form, Need help, Close's question, Reopen's form (WorkButtons). */
   const work = useCardWork();
+  const cadence = useAgent().status?.cadence ?? null;
+  const now = useNow(60_000);
 
   // in progress: the cards below, one per device (openCounts) — the other figures are per record (a repair's time)
   const inProgress = openCounts(data.tickets, deviceOfRecord).tickets;
@@ -82,7 +91,11 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     const latest = faultLatest(t, momentText);
     return (
       <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={status} actions={actions}
-        when={momentText(t.openedAt)} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
+        // where it comes from, the icon its Inbox card leads with (owner, 2026-11-01, the audit)
+        lead={<SourceIcons sources={[faultSource(t)]} severities={["warn"]} />}
+        // a ticket in progress is read again as its Inbox card is; a closed one is not
+        check={stageOf(t) === "ticket" ? checkPill([{ source: faultSource(t), check: t.check }], cadence, new Date(now)) ?? undefined : undefined}
+        when={momentText(faultBegan(t))} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
         documentIds={t.documentIds} amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
         erase={{ title: "Erase this ticket", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => editor.edit(t.id)}
@@ -91,8 +104,9 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         pills={<>
           {/* a guest reports a symptom from inside the villa, not a diagnosis */}
           {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
-          <DeviceChip entityId={t.entityId} label={t.deviceLabel ?? (t.entityId ? label(t.entityId) : undefined)}
-            onOpenEntity={onOpenEntity} />
+          {/* its device's name as its Inbox card says it (attention.cardDevice), the stored one with no device there */}
+          <DeviceChip entityId={t.entityId} onOpenEntity={onOpenEntity}
+            label={t.entityId && t.entityId in entities ? label(deviceOfRecord(t.entityId)) : t.deviceLabel ?? (t.entityId ? label(t.entityId) : undefined)} />
           {latest && <Pill text={latest} />}
         </>} />
     );
