@@ -356,6 +356,16 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   const opened = draw(h(CockpitAttentionRow, { card: v.issues[0].card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
   // owner, 2026-11-01: a device's state is the status pill of every card, on the opened card and its row alike
   const pill = /class="fm-badge tone-warn">Missing</;
+  {
+    // owner, 2026-11-01: "isn't it already covered by the 2 above lines ?"
+    const same = card("same", { lines: [
+      { key: "a", text: "x", story: [], alertNumber: 100, closing: null, own: { sources: ["alert"], severities: ["warn"] } },
+      { key: "n", text: "the outdoor entrance lock is missing", story: [], closing: null, own: { sources: ["night"], severities: ["warn"] } },
+      { key: "o", text: "Battery low", story: [], closing: null, own: { sources: ["night"], severities: ["warn"] } }] });
+    const told = messagesView({ open: [same], watched: [], announcements: [msg100], filter: "issues", selected: null }).issues[0].card;
+    ck("a problem an alert tells already is no \"Also\": its words go, its icon stays on the alert; another stays",
+       told.lines.map((l) => l.text).join("|") === "Also: Battery low|#100-P1 (existing)" && told.lines[1].own.sources.join() === "alert,night", told.lines);
+  }
   // owner, 2026-11-01: "Missing" beside words saying it was clutter; a state nothing says stays
   const quiet = card("q", { lines: [{ key: "q", text: "Battery low", story: [], closing: null }], status: [{ text: "Missing", tone: "tone-warn" }] });
   ck("  ...a state its words say is no pill, on the card and folded alike; a state nothing says stays one",

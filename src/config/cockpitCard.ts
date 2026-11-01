@@ -272,10 +272,23 @@ export const ALSO = "Also: ";
 export function othersFirst(card: CardView, hasMessage: (line: CardLine) => boolean): CardView {
   const alerts = card.lines.filter(hasMessage), others = card.lines.filter((l) => !hasMessage(l));
   if (alerts.length === 0 || others.length === 0) return card;
+  // ⚠️ A PROBLEM AN ALERT TELLS ALREADY IS NO "ALSO" (owner, 2026-11-01: the night check's "… is missing from the villa's
+  // system" under #103's same words): its line goes, its icon stays on the alert that tells it
+  const tells = (alert: CardLine, other: CardLine) => !!other.text && norm(alert.told?.text ?? "").includes(norm(other.text));
   return { ...card, lines: [
-    ...others.filter((l) => l.text).map((l) => ({ ...l, text: ALSO + l.text })),
-    ...alerts,
+    ...others.filter((l) => l.text && !alerts.some((a) => tells(a, l))).map((l) => ({ ...l, text: ALSO + l.text })),
+    ...alerts.map((a) => others.filter((l) => tells(a, l)).reduce((line, l) => ({ ...line, own: mergedSources(line.own, l.own) }), a)),
   ] };
+}
+
+/** Words as compared: their case and closing stop aside. */
+const norm = (s: string) => s.trim().replace(/\.$/, "").toLowerCase();
+
+/** Two lines' icons on one line, each source once. */
+function mergedSources(a: LineSources | undefined, b: LineSources | undefined): LineSources | undefined {
+  if (!a || !b) return a ?? b;
+  const fresh = b.sources.flatMap((s, i) => (a.sources.includes(s) ? [] : [{ s, sev: b.severities[i] ?? b.severities[0] }]));
+  return { sources: [...a.sources, ...fresh.map((f) => f.s)], severities: [...a.severities, ...fresh.map((f) => f.sev)] };
 }
 
 /** The card of `group`, as drawn. `cadence`: the VESTA Agent's own timing (null: it did not say). */
