@@ -1,3 +1,9 @@
+## 2.496.659
+
+What you will see:
+- Every `Done` goes to `Watch`, a fault someone raised by hand or a card that had no fault yet included. It stays there until
+  VESTA's next nightly check, then moves to `Closed`, or comes back as an open issue if the device is still offline.
+
 ## 2.496.658
 
 What you will see:
