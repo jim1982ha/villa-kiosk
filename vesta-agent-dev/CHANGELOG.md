@@ -1,3 +1,14 @@
+## 0.12.433
+
+What you will see:
+- During an intrusion you keep the siren's Approve button when something moves indoors and neither known phone is home.
+  Before, any movement indoors took it away, so an intruder walking past a motion sensor removed your button. The
+  request says "while no known phone is home, with movement indoors": look at the camera first, it could be staff.
+- The request is withdrawn only when a known phone comes home, and then says "someone came home". If VESTA cannot tell
+  where the phones are, it treats someone as home and does not ask.
+- The siren still never sounds without a person's press. Unanswered, expired, refused or withdrawn: nothing sounds.
+  That is now the first of the rules every change to VESTA follows, and a test proves each of those cases.
+
 ## 0.12.432
 
 What you will see:
