@@ -13,7 +13,7 @@
 import { deviceLook, storeLookSource } from "@/utils/deviceActivity";
 import { alarmText, rowText } from "@/config/reading";
 import { labelOf } from "@/config/EntityMap";
-import { deviceRoom, deviceRoomOrRecord, firstRoom, roomLabel } from "@/config/devicePlace";
+import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
 import { alertNumberOf, DUE_WORDS, faultTitle, fmAttention, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import { notedStory } from "@/fm/faultNotes";
@@ -378,6 +378,15 @@ export function cardDevice(entityId: string, recordRoom: string | undefined, ctx
   // ⚠️ EMPTY MEANS ABSENT (2026-10-16): this was `rooms[key] ?? rooms[entityId] ?? i.room`, and resolveRooms stores ""
   // for no room, so `??` stopped there — a device with no room whose sensor had one read "Other".
   return { key, label: labelOf(key, ctx.entityMap, ctx.entities), room: deviceRoomOrRecord(ctx.resolvedRooms, key, entityId, recordRoom) };
+}
+
+/** The room a stored record shows now, ONE answer with its Inbox card's (cardDevice): its device's room, the stored one
+ *  only with no device. ⚠️ A MISSING DEVICE HAS ITS ROOM TOO (owner, 2026-11-01: one lock read "Living Room" in the Inbox
+ *  and no room in Tickets): the Tickets tab asked only about a device the villa's system still has. */
+export function recordRoom(r: { entityId?: string; room?: string }, ctx: { entities: Record<string, HassEntity>;
+  resolvedRooms: Record<string, string>; deviceOf: (id: string) => string }): string {
+  const id = recordEntity(r.entityId, (x) => x in ctx.entities);
+  return recordRoomNow(ctx.resolvedRooms, id ? { key: ctx.deviceOf(id), entityId: id } : null, r.room);
 }
 
 /** A card's title and room line: the DEVICE, whatever its problems (a problem with no device stands for itself), and

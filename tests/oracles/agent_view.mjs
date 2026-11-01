@@ -108,16 +108,17 @@ ck("every Facility list shows the 'by VESTA Agent' mark", marks.length === 0, ma
 // room, the device are inside RecordMeta, never in the title row; a fault's history shows its notes, not
 // "Open · date · VESTA Agent" lines that repeat that line
 // the shared card (RecordCard, 2026-10-14) puts the `pills` it is given in RecordMeta: a card handing it its pills is fine
-const cardPutsPillsInMeta = /<RecordMeta when=\{when\}>\{pills\}<\/RecordMeta>/.test(src("components/fm/RecordCard.tsx"));
+const cardPutsPillsInMeta = /<RecordMeta detail=\{detail\}>\{pills\}<\/RecordMeta>/.test(src("components/fm/RecordCard.tsx"));
 const loose = ["TicketsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
   .filter((f) => { const s = src(`components/fm/${f}.tsx`), m = s.indexOf("<AgentMark");
     if (cardPutsPillsInMeta && /pills=\{/.test(s) && s.lastIndexOf("pills={", m) > -1 && s.indexOf("<RecordCard") > -1) return false;
     return !(s.indexOf("<RecordMeta") > -1 && s.indexOf("<RecordMeta") < m && m < s.indexOf("</RecordMeta>")); });
-ck("every Facility card: its pills and when on one line under the title (RecordMeta)", loose.length === 0, loose);
+ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0, loose);
 {
   // review 26: a step says what it is (agent-contract.json ticketUpdate) — the card read the agent's title changes by
   // their first words and took them for status steps. Driven through the functions, with a fixed clock.
-  const { faultNoteLines, faultWhen } = await import("../../src/fm/faultNotes.ts");
+  const { faultNoteLines, faultOpened, faultSince } = await import("../../src/fm/faultNotes.ts");
+  const faultWhen = (t, s) => [faultOpened(t, s), faultSince(t, s)].filter(Boolean).join(" · ");
   const at = (h) => `2026-10-10T${String(h).padStart(2, "0")}:00:00Z`;
   const stamp = (s) => s.slice(5, 13).replace("T", " ");
   const t = { id: "t", status: "in_progress", openedAt: at(1), title: "Motion battery at 7%", note: "Check: Replace the battery.",
@@ -171,7 +172,7 @@ ck("every Facility card: its pills and when on one line under the title (RecordM
 const faults = src("components/fm/TicketsTab.tsx");
 ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",
    !/fm-timeline-head|fm-timeline-dot/.test(faults) && /notes=\{faultNoteLines\(t, momentText\)\}/.test(faults)
-   && /when=\{faultWhen\(t, momentText\)\}/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
+   && /when=\{faultOpened\(t, momentText\)\} detail=\{faultSince\(t, momentText\)\}/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
 {
   // what the button is: fm/deviceWork's, by value; that the Closed list draws it: the one wiring line
   const { closedActions, workRecord } = await import("@/fm/deviceWork");

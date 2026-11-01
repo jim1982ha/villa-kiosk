@@ -12,7 +12,7 @@ import InfoTip from "@/components/common/InfoTip";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { useDeviceIdentity, useRecordRoom } from "@/config/VillaModel";
+import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
 import { closedTickets, closedTicketStats, faultTitle, keptDays, STAGE_WORDS, stageOf, type FmRetention } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
@@ -23,7 +23,7 @@ import FaultForm from "./FaultForm";
 import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
 import AgentMark from "./AgentMark";
-import { faultNoteLines, faultWhen } from "@/fm/faultNotes";
+import { faultNoteLines, faultOpened, faultSince } from "@/fm/faultNotes";
 import WorkButtons, { useCardWork } from "./WorkButtons";
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
@@ -41,7 +41,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   onEditOpened?: () => void;
 }) {
   const { data, retention, removeTicket } = useFmData();
-  const roomOf = useRecordRoom();
+  const roomOf = useCardRoom();
   const terms = useFmTerms();
   const { deviceOfRecord } = useDeviceIdentity();
   const label = useEntityLabel();
@@ -83,12 +83,12 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
     return (
       <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={status} actions={actions}
-        when={faultWhen(t, momentText)} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
+        when={faultOpened(t, momentText)} detail={faultSince(t, momentText)} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
         documentIds={t.documentIds} amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
         erase={{ title: "Erase this ticket", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => editor.edit(t.id)}
         // its device's room now, the stored one only with no device (owner, 2026-10-30: devicePlace.recordRoomNow)
-        room={roomOf(t) || undefined}
+        room={roomOf(t)}
         pills={<>
           {/* a guest reports a symptom from inside the villa, not a diagnosis */}
           {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}

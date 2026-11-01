@@ -39,15 +39,16 @@ export interface RecordCardProps {
   titlePills?: ReactNode;
   /** Its room, as THE room pill (RoomPill), on the title's line after its pills: every card that shows a room. */
   room?: string;
-  /** A time, as a pill at the right of the title's line (every pill but the room's is on the right, owner 2026-11-01). */
-  stamp?: string;
   /** The pill at the right of the title's line: its kind's icon, `when` beside it, `tip` on hover (CheckPill). */
   check?: { kind: CheckPillKind; when: string; tip: string };
   /** The pills before `when` (room, device chip, "by VESTA Agent"…). */
   pills?: ReactNode;
-  when?: ReactNode;
+  /** When, as a pill at the right of the title's line, on every card (owner, 2026-11-01). */
+  when?: string;
+  /** What came after it, in words after its tags (a ticket's "in progress since …"). */
+  detail?: ReactNode;
   notes?: (string | undefined | null)[];
-  /** Lines of its own, in place of the pills/when/notes block (an open issue's problems). */
+  /** Lines of its own, in place of the tags and notes block (an open issue's problems). */
   body?: ReactNode;
   photoIds?: string[];
   documentIds?: string[];
@@ -106,7 +107,7 @@ export function CardPillLine({ room, status }: { room?: string; status: readonly
   );
 }
 
-export default function RecordCard({ title, status, lead, titlePills, room, stamp, check, pills, when, notes, body, photoIds,
+export default function RecordCard({ title, status, lead, titlePills, room, when, check, pills, detail, notes, body, photoIds,
   documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const inside = (
     <>
@@ -116,7 +117,7 @@ export default function RecordCard({ title, status, lead, titlePills, room, stam
           <strong>{title}</strong>
           {titlePills}
         </div>
-        {stamp && <span className="fm-entity-chip fm-chip-static fm-record-check">{stamp}</span>}
+        {when && <span className="fm-entity-chip fm-chip-static fm-record-check">{when}</span>}
         {check && <CheckPill kind={check.kind} when={check.when} tip={check.tip} />}
       </div>
       <CardPillLine room={room} status={[status ?? []].flat()} />
@@ -125,7 +126,7 @@ export default function RecordCard({ title, status, lead, titlePills, room, stam
         <div className="fm-row-main">
           {body ?? (
             <>
-              <RecordMeta when={when}>{pills}</RecordMeta>
+              <RecordMeta detail={detail}>{pills}</RecordMeta>
               <RecordNotes notes={notes ?? []} />
             </>
           )}

@@ -18,13 +18,13 @@ import { useStateSince } from "@/hooks/useStateSince";
 import { useConfig } from "./ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCriticalDevices } from "@/ha/criticalDevices";
-import { villaDevices, deviceFolding, deviceOf, deviceReadings, lookFacts, recordDeviceOf, recordEntity, type VillaDevices } from "./deviceGroups";
-import { recordRoomNow } from "./devicePlace";
+import { villaDevices, deviceFolding, deviceOf, deviceReadings, lookFacts, recordDeviceOf, type VillaDevices } from "./deviceGroups";
+import { roomLabel } from "./devicePlace";
 import { marksOf, type DeviceMarks } from "@/utils/deviceActivity";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
-import { buildAttentionItems, deviceIssues, faultsFor, groupAttention, sinceEntities, type DeviceIssues, type VillaProblems } from "./attention";
+import { buildAttentionItems, deviceIssues, recordRoom, faultsFor, groupAttention, sinceEntities, type DeviceIssues, type VillaProblems } from "./attention";
 import { deviceRows, type DeviceRow } from "./deviceRecord";
 import { dismissedEntitySet, inventoryGaps } from "./dismissedEntities";
 
@@ -190,16 +190,19 @@ export function useDeviceIdentity() {
   }), [folding, entities, suppressedEntityIds, deviceGroups, entityDeviceIds, hiddenInHaEntityIds]);
 }
 
-/** The room a stored record shows now (devicePlace.recordRoomNow): its device's current room, the stored one only for
- *  a record on no device, or on a device the villa's system no longer has. Every screen showing a ticket's room asks this. */
+/** The room a stored record shows now (attention.recordRoom). Every screen storing a ticket's room asks this. */
 export function useRecordRoom(): (r: { entityId?: string; room?: string }) => string {
   const { entities } = useHA();
   const { resolvedRooms } = useConfig();
   const { deviceOfRecord } = useDeviceIdentity();
-  return useMemo(() => (r: { entityId?: string; room?: string }) => {
-    const id = recordEntity(r.entityId, (x) => x in entities);
-    return recordRoomNow(resolvedRooms, id && id in entities ? { key: deviceOfRecord(id), entityId: id } : null, r.room);
-  }, [entities, resolvedRooms, deviceOfRecord]);
+  return useMemo(() => (r: { entityId?: string; room?: string }) => recordRoom(r, { entities, resolvedRooms, deviceOf: deviceOfRecord }),
+    [entities, resolvedRooms, deviceOfRecord]);
+}
+
+/** A card's room pill: useRecordRoom, "Other" with none, so every card has its room line (owner, 2026-10-15). */
+export function useCardRoom(): (r: { entityId?: string; room?: string }) => string {
+  const roomOf = useRecordRoom();
+  return useMemo(() => (r: { entityId?: string; room?: string }) => roomLabel(roomOf(r)), [roomOf]);
 }
 
 /** The villa model, or null outside its provider (a window drawn on its own: a check). */

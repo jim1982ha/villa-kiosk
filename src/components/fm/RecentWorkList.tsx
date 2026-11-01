@@ -16,6 +16,7 @@
 import { momentText } from "@/utils/dateText";
 import { useMemo } from "react";
 import { useFmData } from "@/fm/FmDataContext";
+import { useCardRoom } from "@/config/VillaModel";
 import { completionSource, workedBy, recordsKeptNote } from "@/fm/fmEngine";
 import { useFmTerms } from "@/fm/useFmTerms";
 import AgentMark from "./AgentMark";
@@ -25,6 +26,7 @@ import FoldedList from "@/components/common/FoldedList";
 
 export default function RecentWorkList() {
   const { data, removeCompletion, retention } = useFmData();
+  const roomOf = useCardRoom();
   const terms = useFmTerms();
 
   const rows = useMemo(() => {
@@ -49,6 +51,7 @@ export default function RecentWorkList() {
       tip={kept ? `${kept} A task's latest completion is always kept.` : undefined}>
       {({ completion: c, title, cost }) => (
         <RecordCard key={c.id} title={title}
+          room={roomOf(data.schedules.find((s) => s.id === c.scheduleId) ?? {})}
           when={`${momentText(c.at)}${workedBy(c) !== "—" ? ` · ${workedBy(c)}` : ""}`}
           pills={<AgentMark record={c} />} notes={[c.note]} photoIds={c.photoIds}
           amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}

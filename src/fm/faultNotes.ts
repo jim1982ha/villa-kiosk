@@ -39,19 +39,26 @@ export function notedStory(t: Pick<FmTicket, "updates">): { note: string; at: st
   return stepsInTimeOrder(t).filter((x) => x.kind === "noted" && x.note).map((x) => ({ note: x.note as string, at: x.at }));
 }
 
-/** When it happened, in one line: opened, reopened, picked up, resolved — and by whom (the name typed for who does the
- *  work, else the profile that recorded it), from its status steps only. */
-export function faultWhen(t: FmTicket, stamp: (at: string) => string): string {
+/** When it was opened, and by whom: the card's time pill (RecordCard `when`). */
+export function faultOpened(t: FmTicket, stamp: (at: string) => string): string {
+  const first = statusSteps(t)[0];
+  const who = first?.who || authorWords(first);
+  // who raised it: its first step, when that step is the raising (fmCommands.addTicket stamps it, as every other step)
+  // — a person; the VESTA Agent's own faults already wear its mark beside this line (AgentMark)
+  const raised = !agentOwned(t) && first?.status === "open" && !first?.kind && who ? ` by ${who}` : "";
+  return `Opened ${stamp(t.openedAt)}${raised}`;
+}
+
+/** What came after it, in one line: reopened, picked up, resolved — and by whom (the name typed for who does the
+ *  work, else the profile that recorded it), from its status steps only; "" with nothing yet. */
+export function faultSince(t: FmTicket, stamp: (at: string) => string): string {
   const steps = statusSteps(t);
   const last = steps[steps.length - 1];
   const by = (u?: FmTicketUpdate) => {
     const who = u?.who || authorWords(u);
     return who ? ` by ${who}` : "";
   };
-  // who raised it: its first step, when that step is the raising (fmCommands.addTicket stamps it, as every other step)
-  // — a person; the VESTA Agent's own faults already wear its mark beside this line (AgentMark)
-  const raised = !agentOwned(t) && steps[0]?.status === "open" && !steps[0]?.kind ? by(steps[0]) : "";
-  const parts = [`Opened ${stamp(t.openedAt)}${raised}`];
+  const parts: string[] = [];
   if (t.status === "open" && last?.kind === "reopened") parts.push(`reopened ${stamp(last.at)}${by(last)}`);
   if (stageOf(t) === "ticket" && last?.status === "in_progress") parts.push(`in progress since ${stamp(last.at)}${by(last)}`);
   if (t.resolvedAt && isTicketResolved(t)) {

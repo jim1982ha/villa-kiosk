@@ -412,8 +412,8 @@ ck("  ...a fault the Agent told nothing about has none (no line drawn)",
    buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([{ ...told, updates: [told.updates[0]] }]) })[0]
      .story.length === 0);
 ck("  ...a noted line is never a status change: \"reopened by Owner\" still read under it",
-   N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /reopened .* by Owner/.test(N.faultWhen(reopenedThenTold, (a) => a.slice(11, 16))),
-   N.faultWhen(reopenedThenTold, (a) => a.slice(11, 16)));
+   N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /reopened .* by Owner/.test(N.faultSince(reopenedThenTold, (a) => a.slice(11, 16))),
+   N.faultSince(reopenedThenTold, (a) => a.slice(11, 16)));
 ck("  ...and each one is a note in the Tickets tab, with its time",
    N.faultNoteLines(told, (a) => a.slice(11, 16)).join("|") === "Escalation sent to Owner (08:49)|🆘 Need help pressed by Fabien (09:10)",
    N.faultNoteLines(told, (a) => a.slice(11, 16)));

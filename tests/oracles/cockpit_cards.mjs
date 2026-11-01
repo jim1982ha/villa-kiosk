@@ -29,8 +29,8 @@ ck("its pill on the line under its title, in its tone's class (a filled pill: .f
 ck("  ...its buttons INSIDE the card, on the right of its text (owner, 2026-10-14)",
    /fm-record-actions[\s\S]*Mark resolved[\s\S]*Close/.test(body) && /fm-row-main[\s\S]*fm-record-actions/.test(body)
    && inside(ticket, "fm-record-card").includes("Mark resolved"), body);
-ck("  ...the pills and when on one line, then its notes, its cost on the right",
-   /fm-meta[\s\S]*Test lock[\s\S]*Opened 2026-10-15 00:08/.test(body) && /What to do: power[\s\S]*Reminder sent/.test(body)
+ck("  ...its time a pill on the first line, its tags, then its notes, its cost on the right",
+   /fm-record-check">Opened 2026-10-15 00:08/.test(head) && /fm-meta[\s\S]*Test lock/.test(body) && /What to do: power[\s\S]*Reminder sent/.test(body)
    && /fm-amount">IDR 1,000/.test(body));
 ck("  ...it opens when tapped, as a button for the keyboard", /role="button"[^>]*tabindex="0"|tabindex="0"[^>]*role="button"/.test(ticket));
 
@@ -336,8 +336,8 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   const issue = draw(h(AttentionCard, { card: { key: "k", title: "Pump", room: "Kitchen", lead: null, nextCheck: null, actions: [],
     lines: [{ key: "l", text: "Stopped", story: [], closing: null, openedAt: null }] }, onOpenEntity() {} }));
   ck("  ...the Inbox's opened card draws the same pill", pillLine(issue).includes(pill), issue);
-  const roomed = { "fm/TicketsTab.tsx": "roomOf(t) || undefined", "fm/ScheduleEditor.tsx": "s.room || undefined",
-    "fm/TodayTab.tsx": "s.schedule.room || undefined", "fm/SpendTab.tsx": "roomOf(c) || undefined", "cockpit/IssueCard.tsx": "card.room" };
+  const roomed = { "fm/TicketsTab.tsx": "roomOf(t)", "fm/ScheduleEditor.tsx": "roomOf(s)",
+    "fm/TodayTab.tsx": "roomOf(s.schedule)", "fm/SpendTab.tsx": "roomOf(c)", "cockpit/IssueCard.tsx": "card.room" };
   const given = Object.fromEntries(Object.keys(roomed).map((f) => [f, elements(parseTsx(`components/${f}`), "RecordCard")
     .map((e) => propText(e, "room")).filter((x) => x !== undefined && x !== null)]));
   ck("  ...Tickets, Schedule, Today, Spend and the Inbox's card each give their card its room, none as a tag of its own",

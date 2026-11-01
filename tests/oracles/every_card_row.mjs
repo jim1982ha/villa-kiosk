@@ -67,6 +67,40 @@ const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta
 ck("the pills' group is pushed right; no rule frames a row", /\.card-pill-status \{[^}]*margin-left: auto/.test(css)
    && !/\.messages-row\.ticket/.test(css));
 
+console.log("\n  every card of the app, wherever it is drawn:");
+{
+  const { readdirSync } = await import("node:fs");
+  const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
+  const root = new URL("../../src/components/", import.meta.url);
+  const files = readdirSync(root, { recursive: true }).filter((f) => f.endsWith(".tsx") && f !== "fm/RecordCard.tsx")
+    .filter((f) => readFileSync(new URL(f, root), "utf8").includes("<RecordCard"));
+  // a card that belongs to no place: every other card has its room line. A new one fails here until it is decided.
+  const NO_ROOM = { "cockpit/MessagesTab.tsx": 1 /* an opened notification or report */, "fm/ReadinessTab.tsx": 1 /* a villa-wide check */,
+    "fm/SavedDocumentsList.tsx": 1 /* a saved document */, "fm/TicketsTab.tsx": 1 /* "No ticket in progress" */, "fm/TodayTab.tsx": 1 /* "Nothing due" */ };
+  const cards = files.map((f) => { const all = elements(parseTsx(`components/${f}`), "RecordCard");
+    return { f, all, roomless: all.filter((e) => propText(e, "room") === undefined || propText(e, "room") === null).length,
+      perCaller: all.filter((e) => /\|\| undefined/.test(propText(e, "room") ?? "")).length }; });
+  ck("every card has its room line, derived from the tree: only the listed ones go without",
+     cards.every((c) => c.roomless === (NO_ROOM[c.f] ?? 0) && c.perCaller === 0), cards.map((c) => [c.f, c.all.length, c.roomless, c.perCaller]));
+  const { default: RecordCard } = await import("@/components/fm/RecordCard");
+  const drawn = draw(h(RecordCard, { title: "T", room: "Hall", when: "Opened 01/01/2026 10:00", detail: "in progress since 11:00",
+    pills: h("span", { className: "fm-clause" }, "tag") }));
+  ck("  ...its time a pill on the first line, what came after it in words among the tags, its room on the second",
+     /fm-record-check">Opened/.test(inside(drawn, "fm-record-head")) && !inside(drawn, "fm-record-body").includes("Opened")
+     && inside(drawn, "fm-meta").includes("in progress since") && inside(drawn, "card-pill-line").includes("Hall"), drawn);
+}
+
+console.log("\n  the same device, the same room, in the Inbox and on its ticket:");
+{
+  const { recordRoom } = await import("@/config/attention");
+  const ctx = { entities, resolvedRooms: { ...resolvedRooms, "camera.gone": "Living Room" }, deviceOf: devices.deviceOf };
+  const inbox = buildAttentionItems({ devices, entities, entityMap, resolvedRooms: ctx.resolvedRooms, fmData, sinceOf })
+    .find((i) => i.id === "unavailable:camera.gone");
+  ck("a Missing device: the room of its Inbox card", recordRoom({ entityId: "camera.gone" }, ctx) === inbox.room && inbox.room === "Living Room", inbox);
+  ck("  ...a device still there: the same", recordRoom({ entityId: "camera.offline", room: "Old" }, ctx) === "Storage");
+  ck("  ...no device: the stored one", recordRoom({ room: "Hall" }, ctx) === "Hall");
+}
+
 console.log("\n  what the corner says, and where the moment comes from:");
 const one = (id, s) => buildAttentionItems({ devices, entities, entityMap, resolvedRooms, fmData, sinceOf: () => s }).find((i) => i.id === id);
 const corner = (i) => rowWhen(cockpitCard(groupAttention([i])[0], null, new Date(now)));
