@@ -1,3 +1,20 @@
+## 2.496.651
+
+What you will see:
+- The Inbox is one column of cards, like the Tickets tab: the left list and the right pane are gone, on the tablet and on
+  a phone. Every card starts folded: its name and time, its room and state, and one line. A tap opens it where it is,
+  another tap folds it. Issues, notifications, reports, Watch and Closed are all this same card.
+- `Issues`, `Notifications`, `Reports` and `Open Ticket` stay on their line, and `Open issues`, `Watch` and `Closed` stay
+  as they were. `Open Ticket` now opens its form above the cards.
+- A problem has one time: the moment it was opened, the same on its Inbox card and on its ticket. The Inbox used to show
+  the time of its last reminder or escalation.
+- The time is a pill on every card, without the word "Opened".
+- On a ticket, the `by VESTA Agent` pill is gone. A pill now says who last changed its status and when, for instance
+  `Opened by Wayan, on 31/10/2026 09:55`, then `Need help asked by …`, `Done by …`, `Closed by …` or `Reopened by …`. An
+  Inbox card with a ticket shows the same pill.
+- An opened issue has its device's pill: pressing it opens the device's window. A tap on the card itself now folds it.
+- Holding a card to delete it, then the code, now works on every message card, those under Watch and Closed included.
+
 ## 2.496.650
 
 What you will see:
