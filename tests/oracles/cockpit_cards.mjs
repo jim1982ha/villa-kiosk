@@ -152,7 +152,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   // villa, 2026-10-26: last_changed is the restart of the villa's system — the time is the history's (sinceOf), never it
   const restart = new Date(2026, 9, 21, 14, 44);
   const entities = { "lock.example": { entity_id: "lock.example", state: "locked", attributes: {}, last_changed: restart.toISOString() } };
-  const { closingEntities } = await import("@/config/attention");
+  const { sinceEntities } = await import("@/config/attention");
   const fmData = { ...EMPTY_FM_DATA, tickets: [ticket] };
   const asked = [];
   const items = buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
@@ -160,7 +160,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const c = items.find((i) => i.ticketId === "c1")?.closing;
   ck("  ...from the fault's closesAt and its device as it reads now, since when from its history (never the restart)",
      c?.at === closes.toISOString() && c?.word === "Locked" && c?.since?.at === locked.getTime()
-     && asked.join() === "lock.example" && closingEntities(fmData, entities).join() === "lock.example", c);
+     && asked.join() === "lock.example" && sinceEntities({ fmData, devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {} }).join() === "lock.example", c);
   const unread = buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
     fmData }).find((i) => i.ticketId === "c1")?.closing;
   ck("  ...no history to ask: no time said, never last_changed", unread?.since === null, unread);

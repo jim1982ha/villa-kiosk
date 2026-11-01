@@ -113,3 +113,15 @@ format; the same code path does not mean the same format.
 
 **How to apply:** before adding a condition to anything every card goes through, ask whether it creates a second format;
 if so, ask the owner first. `tests/oracles/cockpit_cards.mjs` fails on a second pill or a state in a line's words.
+
+## A row's every field, on every kind of card
+
+A card's row has a name, a time, a room on the left and its state pills on the right, whatever kind of problem it is. A
+new field, or a change to one, is proven on EVERY kind (offline, Missing, red device, late task, fault, ticket, Watch),
+not on the kinds the change touched; a time comes from `beganAt` or the record, never a per-kind blank.
+
+**Why:** owner, 2026-11-01: an offline camera's row had no time. The review after the one-pill change compared state and
+words only, and the time existed on faults alone, so "consistent everywhere" was claimed over a field nobody had asked.
+
+**How to apply:** `tests/oracles/every_card_row.mjs` draws the real row of each kind through the real path and fails when
+a kind of line is not in its table; add a new field there, and prove it red on one kind.

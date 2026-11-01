@@ -149,17 +149,6 @@ ck("  ...a notification: its title, its first words, when it came; not chosen, n
    /class="messages-row"/.test(noteLine) && noteLine.includes("<b>🔔 Visitor</b>") && !noteLine.includes("messages-row-room") && noteLine.includes('<span class="messages-row-sub">Someone is at the door.</span>')
    && !noteLine.includes("Gate A") && /messages-row-time">28\/10\/2026 \d\d:00</.test(noteLine), noteLine);
 
-// owner, 2026-11-01: "highlight the issue card … when a ticket had been opened for this issue"
-const ticketLine = (ticket) => draw(h(MessageRow, { item: { kind: "issue", key: "t", card: card("t", { ...(ticket ? { ticket: true } : {}),
-  lines: [{ key: "l", text: "In progress", icons: null, story: [], closing: null, actions: [] }] }) }, selected: false, onSelect() {} }));
-ck("an issue with a ticket open: its line is framed; without one, not",
-   /class="messages-row ticket"/.test(ticketLine(true)) && /class="messages-row"/.test(ticketLine(false)), ticketLine(true));
-{
-  const { cockpitCard } = await import("@/config/cockpitCard");
-  const group = (stage) => ({ key: "device:d", title: "D", items: [{ id: "fault:f1", kind: "fault", ticketId: "f1", stage, detail: "x" }] });
-  ck("  ...the card says it from its records: a ticket taken on, yes; a fault nobody took on, no",
-     cockpitCard(group("ticket"), null).ticket === true && cockpitCard(group("fault"), null).ticket === undefined);
-}
 {
   // owner, 2026-11-01: "show their number between () in the tab Ticket label"
   const { default: ModalTabs } = await import("@/components/common/ModalTabs");

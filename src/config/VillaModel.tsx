@@ -24,7 +24,7 @@ import { marksOf, type DeviceMarks } from "@/utils/deviceActivity";
 import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility";
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
-import { buildAttentionItems, closingEntities, deviceIssues, faultsFor, groupAttention, type DeviceIssues, type VillaProblems } from "./attention";
+import { buildAttentionItems, deviceIssues, faultsFor, groupAttention, sinceEntities, type DeviceIssues, type VillaProblems } from "./attention";
 import { deviceRows, type DeviceRow } from "./deviceRecord";
 import { dismissedEntitySet, inventoryGaps } from "./dismissedEntities";
 
@@ -125,9 +125,9 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
       entityDeviceIds, folding, critical, deviceUnits, facts }),
     [entityMap, deviceGroups, dismissedIds, hidden, mappedEntityIds, visibleEntities, entityDeviceIds, folding, critical, deviceUnits, facts],
   );
-  // since when a device waiting to close reads as it does: its history, never its last_changed (useStateSince)
-  const closingIds = useMemo(() => closingEntities(fmData, entities), [fmData, entities]);
-  const sinceOf = useStateSince(closingIds);
+  // since when a device on a card reads as it does: its history, never its last_changed (useStateSince)
+  const sinceIds = useMemo(() => sinceEntities({ fmData, devices, entities, entityMap }), [fmData, devices, entities, entityMap]);
+  const sinceOf = useStateSince(sinceIds);
   const attention = useMemo((): VillaProblems => {
     const attentionItems = buildAttentionItems({
       devices, entities, entityMap, resolvedRooms, fmData, sinceOf });

@@ -18,7 +18,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
-import { rowTime, type CardView } from "@/config/cockpitCard";
+import { rowWhen, type CardView } from "@/config/cockpitCard";
 
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
@@ -47,12 +47,9 @@ export function MessageRow({ item, selected, onSelect, hold }: {
   hold?: LongPressHandlers;
 }) {
   const row = rowOf(item);
-  const ticket = item.kind === "issue" && !!item.card.ticket;
   const { consumeClick, ...holding } = hold ?? { consumeClick: () => false };
   return (
-    // ⚠️ AN ISSUE WITH A TICKET OPEN IS FRAMED (owner, 2026-11-01: "highlight the issue card … when a ticket had been
-    // opened for this issue"), its line the same otherwise
-    <button type="button" className={`messages-row${selected ? " on" : ""}${ticket ? " ticket" : ""}${hold ? " fm-erasable" : ""}`}
+    <button type="button" className={`messages-row${selected ? " on" : ""}${hold ? " fm-erasable" : ""}`}
       aria-current={selected || undefined}
       // a completed hold is followed by a click: opening the message under the code's prompt would be wrong
       onClick={() => { if (!consumeClick()) onSelect(item.key); }} {...holding}>
@@ -67,7 +64,10 @@ export function MessageRow({ item, selected, onSelect, hold }: {
         {(row.room || row.status.length > 0) && (
           <span className="messages-row-room">
             {row.room && <RoomPill room={row.room} />}
-            {row.status.map((s) => <StatusPill key={s.text} {...s} />)}
+            {/* every pill on the right; the room's alone on the left (owner, 2026-11-01), as in the opened card */}
+            {row.status.length > 0 && (
+              <span className="messages-row-status">{row.status.map((s) => <StatusPill key={s.text} {...s} />)}</span>
+            )}
           </span>
         )}
         {row.sub && <span className="messages-row-sub">{row.sub}</span>}
@@ -135,7 +135,6 @@ function FoldedRows({ rows, unit, selected, onSelect, empty, tip, ...section }: 
 function rowOf(item: MessageItem) {
   if (item.kind === "issue") {
     const { card } = item;
-    const when = rowTime(card);
     return {
       icon: card.look === "watched"
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
@@ -144,7 +143,7 @@ function rowOf(item: MessageItem) {
       room: card.room,
       status: card.status ?? [],
       sub: issueRowWords(card),
-      time: when ? momentText(when) : "",
+      time: card.lines.length ? rowWhen(card) : "",
     };
   }
   // its words as every screen says them (messagesModel.announcementWords)
@@ -346,7 +345,7 @@ export function ReportDetail({ announcement: a, canOpenPage }: { announcement: A
 export function NoteDetail({ announcement: a, children }: { announcement: Announcement; children?: ReactNode }) {
   return (
     <RecordCard title={a.title}
-      titlePills={a.at ? <span className="fm-entity-chip fm-chip-static">{momentText(a.at)}</span> : undefined}
+      stamp={a.at ? momentText(a.at) : undefined}
       body={<div className="messages-card-body"><AnnouncementContent announcement={a} />{children}</div>}
       actions={a.buttons.length > 0 ? <RecordButtons record={a} /> : undefined} />
   );

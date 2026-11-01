@@ -173,8 +173,6 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   cursor: pointer; border-radius: 8px;
 }
 .messages-row.on { background: var(--accent-soft); }
-/* an issue with a ticket open: framed in the accent, the app's focus ring (owner, 2026-11-01), chosen or not */
-.messages-row.ticket { box-shadow: inset 0 0 0 2px var(--accent); }
 .messages-row-icon { flex: none; width: 24px; display: flex; justify-content: center; padding-top: 2px; color: var(--text-secondary); }
 .messages-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 /* its title and its time on the first line; an issue's room pill on the second; its first words on ONE line over the
@@ -182,6 +180,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-row-head { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .messages-row-head b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .messages-row-room { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.messages-row-status { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
 .messages-row-sub { font-size: var(--text-xs); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* a line's title at the size of every other menu's rows (owner, 2026-10-28: the HUD menu's Settings / Logout) */
 .messages-row-head b { font-size: var(--text-base); }

@@ -67,8 +67,12 @@ export interface AttentionItem {
    *  reads now and since when — "Locked since 14:38 · closes at about 14:49 if it stays locked" (cockpitCard). `since`:
    *  read from its history (useStateSince), never its last_changed. */
   closing?: { at: string; word?: string; since?: Since };
-  /** Set on a fault: when it was opened (FmTicket.openedAt): its row's time until something is told of it. */
+  /** When this problem began, on EVERY kind of line (beganAt, a late task its due day): a fault when it was opened
+   *  (FmTicket.openedAt): its row's time until something is told of it. Absent only for a device gone from the
+   *  villa's system longer than it keeps, or until its history is read. */
   openedAt?: string;
+  /** `openedAt` is only as far back as the villa keeps: it began before that. */
+  openedBefore?: true;
   /** Set on a fault: its short story on Telegram, in time order (faultNotes.notedStory — "Escalation sent to Owner"). */
   story?: { note: string; at: string }[];
   /** Set on a fault: the Need help pressed on it that nothing has answered yet (fmEngine.standingHelp). */
@@ -99,11 +103,29 @@ function closingOf(closesAt: string | undefined, entity: HassEntity | undefined,
   return { at: closesAt, word: rowText(entityId, entity), since };
 }
 
-/** The entities whose state a fault waiting to close says "since" of (closingOf): the ones useStateSince reads. */
-export function closingEntities(fmData: FmData, entities: Record<string, HassEntity>): string[] {
-  const ids = fmAttention(fmData).unresolved.filter((t) => t.closesAt)
+/** When a device's state on a card began: its history, else (not read yet, or it cannot say) its last_changed, else
+ *  nothing. ⚠️ EVERY CARD SAYS WHEN (owner, 2026-11-01: an offline camera's row had no time): only a fault had a
+ *  moment; the kinds of line that are a device's live state had none, and their row showed an empty corner. */
+function beganAt(id: string, entity: HassEntity | undefined, sinceOf: (id: string) => Since): Pick<AttentionItem, "openedAt" | "openedBefore"> {
+  const since = sinceOf(id);
+  if (since && since !== "loading") return { openedAt: new Date(since.at).toISOString(), ...(since.before ? { openedBefore: true as const } : {}) };
+  return entity?.last_changed ? { openedAt: entity.last_changed } : {};
+}
+
+/** The devices the map paints red (their deviceLook says `alert`): one line each, "alarm". */
+function alarmIds(devices: VillaDevices, entities: Record<string, HassEntity>, entityMap: Record<string, EntityMapping>): string[] {
+  const looks = storeLookSource(entities, { entityMap, isCritical: devices.isCritical, isHidden: devices.isHidden });
+  return devices.ids.filter((id) => entities[id] && deviceLook(id, looks).alert);
+}
+
+/** The entities the cards say "since" of, the ones useStateSince reads: a fault's waiting to close (closingOf), an
+ *  offline or red device's (beganAt). */
+export function sinceEntities(opts: { fmData: FmData; devices: VillaDevices; entities: Record<string, HassEntity>;
+  entityMap: Record<string, EntityMapping> }): string[] {
+  const { fmData, devices, entities, entityMap } = opts;
+  const closing = fmAttention(fmData).unresolved.filter((t) => t.closesAt)
     .map((t) => recordEntity(t.entityId, (x) => x in entities)).filter((id): id is string => !!id);
-  return [...new Set(ids)].sort();
+  return [...new Set([...closing, ...devices.unavailable, ...alarmIds(devices, entities, entityMap)])].sort();
 }
 
 /**
@@ -374,7 +396,7 @@ export function buildAttentionItems(opts: {
   entityMap: Record<string, EntityMapping>;
   resolvedRooms: Record<string, string>;
   fmData: FmData;
-  /** Since when an entity is in its state, from its history (useStateSince over closingEntities); absent: not said. */
+  /** Since when an entity is in its state, from its history (useStateSince over sinceEntities); absent: not said. */
   sinceOf?: (id: string) => Since;
 }): AttentionItem[] {
   const { devices, entities, entityMap, resolvedRooms, fmData } = opts;
@@ -393,6 +415,7 @@ export function buildAttentionItems(opts: {
       source: "live",
       room: deviceRoom(resolvedRooms, id),
       entityId: id,
+      ...beganAt(id, entities[id], sinceOf),
     });
   }
 
@@ -431,6 +454,9 @@ export function buildAttentionItems(opts: {
       source: "schedule",
       room: s.schedule.room,
       entityId: s.schedule.entityId,
+      // the day it was due; one never done counts from when it was set up (its first due day may still be to come)
+      ...(s.state === "never" && s.schedule.createdAt ? { openedAt: s.schedule.createdAt }
+        : s.dueAt === null ? {} : { openedAt: new Date(s.dueAt).toISOString() }),
     });
   }
 
@@ -446,10 +472,8 @@ export function buildAttentionItems(opts: {
   // unlocked) is never `alert` either (config/deviceCondition: in use, owner
   // 2026-10-26), so it is no line here. ⚠️ A SECOND FILTER SAID IT AGAIN (to
   // 2.496.542, alertIsFault): once in use stopped being red it matched nothing.
-  const looks = storeLookSource(entities, { entityMap, isCritical: devices.isCritical, isHidden: devices.isHidden });
-  for (const id of devices.ids) {
+  for (const id of alarmIds(devices, entities, entityMap)) {
     const entity = entities[id];
-    if (!entity || !deviceLook(id, looks).alert) continue;
     items.push({
       id: `alarm:${id}`,
       kind: "alarm",
@@ -461,6 +485,7 @@ export function buildAttentionItems(opts: {
       source: "live",
       room: deviceRoom(resolvedRooms, id),
       entityId: id,
+      ...beganAt(id, entity, sinceOf),
     });
   }
 

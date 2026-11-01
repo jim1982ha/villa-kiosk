@@ -6,20 +6,23 @@
 
 import { useMemo } from "react";
 import { useHA } from "@/ha/HAStateStore";
-import { stateSinceNow } from "@/ha/historySource";
+import { stateSinceAnswer, stateSinceRequests } from "@/ha/historySource";
 import type { Since } from "@/config/presence";
 import { useHistorySource } from "./useHistorySource";
 
-/** For each of `ids`: when its current state began — "loading" until the history is read, null when it cannot say. */
+/** For each of `ids`: when its current state began — "loading" until the history is read, null when it cannot say.
+ *  A device the villa's system no longer has: when it left it (historySource.lastRecorded, the time its window and
+ *  VESTA say), its "state" being its absence. */
 export function useStateSince(ids: readonly string[]): (id: string) => Since {
   const { entities } = useHA();
   const key = ids.join(",");
-  const requests = useMemo(() => (key ? { since: { kind: "since" as const, ids: key.split(",") } } : null), [key]);
+  const goneKey = ids.filter((id) => !entities[id]).join(",");
+  const requests = useMemo(() => (key ? stateSinceRequests(key.split(","), goneKey ? goneKey.split(",") : []) : null), [key, goneKey]);
   // a real change of state reads again; a restart rewriting the same state does not need to
   const refresh = ids.map((id) => entities[id]?.state ?? "").join(",");
   const { data, status } = useHistorySource(requests, refresh);
   return (id) => {
-    const s = stateSinceNow(data?.since[id], entities[id]);
+    const s = stateSinceAnswer(data, id, entities[id]);
     if (s !== undefined) return s && { at: s.at, before: s.before };
     return status === "failed" ? null : "loading";
   };

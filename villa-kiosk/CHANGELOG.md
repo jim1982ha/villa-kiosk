@@ -1,3 +1,13 @@
+## 2.496.646
+
+What you will see:
+- Every line in the Inbox now says when: an offline or Missing device since when it is so (a Missing device, when it left
+  the villa's system), a red device since when, a late task the day it was due. A state older than what the villa keeps
+  reads "Before" that date, and a device gone for longer reads "Time unknown".
+- All pills sit on the right; the room pill alone stays on the left. An opened notification has its time on the right
+  too.
+- The green frame around a line with a ticket is gone: the "In progress" pill says it.
+
 ## 2.496.645
 
 What you will see:

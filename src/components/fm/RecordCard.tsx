@@ -42,6 +42,8 @@ export interface RecordCardProps {
   titlePills?: ReactNode;
   /** Its room, as THE room pill (RoomPill), on the title's line after its pills: every card that shows a room. */
   room?: string;
+  /** A time, as a pill at the right of the title's line (every pill but the room's is on the right, owner 2026-11-01). */
+  stamp?: string;
   /** The pill at the right of the title's line: its kind's icon, `when` beside it, `tip` on hover (CheckPill). */
   check?: { kind: CheckPillKind; when: string; tip: string };
   /** The pills before `when` (room, device chip, "by VESTA Agent"…). */
@@ -93,7 +95,7 @@ export function StatusPill({ text, tone }: RecordStatus) {
   return <span className={`fm-badge ${tone}`}>{text}</span>;
 }
 
-export default function RecordCard({ title, status, lead, titlePills, room, check, pills, when, notes, body, photoIds,
+export default function RecordCard({ title, status, lead, titlePills, room, stamp, check, pills, when, notes, body, photoIds,
   documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const inside = (
     <>
@@ -105,6 +107,7 @@ export default function RecordCard({ title, status, lead, titlePills, room, chec
           {room && <RoomPill room={room} />}
         </div>
         {[status ?? []].flat().map((s) => <StatusPill key={s.text} {...s} />)}
+        {stamp && <span className="fm-entity-chip fm-chip-static fm-record-check">{stamp}</span>}
         {check && <CheckPill kind={check.kind} when={check.when} tip={check.tip} />}
       </div>
       {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}
