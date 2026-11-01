@@ -20,7 +20,7 @@ import { extractEmbeddedRoomDataJson } from "./glbRoomDataExtractor";
 
 export type UploadKind = "glb" | "rooms";
 
-export interface UploadStep {
+interface UploadStep {
   file: File;
   kind: UploadKind;
   /** Where the room data came from: picked beside the GLB (or alone), read
@@ -28,7 +28,7 @@ export interface UploadStep {
   origin: "picked" | "embedded" | "reset" | "model";
 }
 
-export type UploadPlan =
+type UploadPlan =
   | { ok: true; steps: UploadStep[]; rooms: ParsedRoomData }
   | { ok: false; message: string };
 
@@ -78,7 +78,7 @@ export async function planModelUpload(files: readonly File[]): Promise<UploadPla
 
 export interface Written { kind: UploadKind; path: string; size: number }
 
-export interface UploadOutcome {
+interface UploadOutcome {
   written: Written[];
   /** The step that failed, if one did — every step after it was not tried. */
   failed?: { kind: UploadKind; message: string };

@@ -151,7 +151,7 @@ export function sceneSelectOf(
  *  whose object id ends in `move_`/`pan_`/`tilt_` + up, down, left or right, as the camera integrations name them —
  *  and its siren (the first `siren` of the device). Found through the villa's device registry, never by a camera's
  *  name; null when its device has neither. */
-export interface CameraControls {
+interface CameraControls {
   moves: Partial<Record<"up" | "down" | "left" | "right", string>>;
   siren: string | null;
 }

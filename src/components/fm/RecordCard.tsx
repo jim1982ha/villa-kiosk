@@ -11,15 +11,12 @@
 //
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
 // faults of one device: TicketsTab draws the frame). `lead`: what stands before the title (an open issue's source
-// icons); `titlePills`: pills right after the title, on its line (a spend's device); `room`: its room, the room pill
-// after them (RoomPill, every card showing a room); `check`: a
-// pill at the right of that line, its kind's icon and when (an open issue's next check: a refresh icon; a card on the
+// icons); `titlePills`: pills right after the title, on its line (a spend's device); `room` and `status`: the line under
+// the title (CardPillLine); `check`: a pill at the right of that line, its kind's icon and when (an open issue's next check: a refresh icon; a card on the
 // Watch list, when VESTA closes it: a clock); `tone`: the card's own tint.
 //
-// ⚠️ ONE LINE FOR THE NAME, ITS PLACE AND ITS NEXT CHECK (owner, 2026-10-22: "show the area right after the device name
-// … as the pills in the Spend tab … to save one line"; "instead of `Next check:` a refresh icon, as a pill, on the same
-// first line, on the right"; "remove the chevron, it's redundant"): the room had a line of its own, the next check sat
-// under a chevron on it.
+// ⚠️ THE NAME AND ITS NEXT CHECK, THEN ITS PILLS (owner, 2026-11-01: "only keep the refresh interval on the first line"):
+// opened or as a line in the Inbox, a card's second line is the same CardPillLine, the room left, the pills right.
 
 import type { ReactNode } from "react";
 import { Clock, FileText, RefreshCw, type LucideIcon } from "lucide-react";
@@ -95,6 +92,20 @@ export function StatusPill({ text, tone }: RecordStatus) {
   return <span className={`fm-badge ${tone}`}>{text}</span>;
 }
 
+/** A card's line of pills, in the Inbox's list and on the opened card alike: its room on the left, its state on the
+ *  right (owner, 2026-11-01); nothing with neither. */
+export function CardPillLine({ room, status }: { room?: string; status: readonly RecordStatus[] }) {
+  if (!room && status.length === 0) return null;
+  return (
+    <span className="card-pill-line">
+      {room && <RoomPill room={room} />}
+      {status.length > 0 && (
+        <span className="card-pill-status">{status.map((s) => <StatusPill key={s.text} {...s} />)}</span>
+      )}
+    </span>
+  );
+}
+
 export default function RecordCard({ title, status, lead, titlePills, room, stamp, check, pills, when, notes, body, photoIds,
   documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const inside = (
@@ -104,12 +115,11 @@ export default function RecordCard({ title, status, lead, titlePills, room, stam
         <div className="fm-row-title">
           <strong>{title}</strong>
           {titlePills}
-          {room && <RoomPill room={room} />}
         </div>
-        {[status ?? []].flat().map((s) => <StatusPill key={s.text} {...s} />)}
         {stamp && <span className="fm-entity-chip fm-chip-static fm-record-check">{stamp}</span>}
         {check && <CheckPill kind={check.kind} when={check.when} tip={check.tip} />}
       </div>
+      <CardPillLine room={room} status={[status ?? []].flat()} />
       {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}
       <div className="fm-record-body">
         <div className="fm-row-main">

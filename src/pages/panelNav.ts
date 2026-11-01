@@ -34,7 +34,7 @@ export interface PanelNav {
 
 export const NO_PANEL: PanelNav = { panel: null, back: [] };
 
-export type PanelNavAction =
+type PanelNavAction =
   /** A fresh open (the map, the bottom bar, a top-bar list): no Back. */
   | { type: "open"; panel: ActivePanel | null }
   /** A window or a list hands a device over: Back reopens it. */

@@ -17,7 +17,7 @@ import { contactOf } from "@/utils/stateColors";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { mergeStateHistories } from "./chartUtils";
 
-export type CameraBarState = "offline" | "online" | "motion" | "motion-unavailable";
+type CameraBarState = "offline" | "online" | "motion" | "motion-unavailable";
 
 /** The bar's state at one instant, from each series' state then. */
 export function cameraBarState(camera: string | undefined, motion: string | undefined, hasMotion: boolean): CameraBarState {

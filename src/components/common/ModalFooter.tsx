@@ -44,7 +44,7 @@ import BackButton from "./BackButton";
  *  draft owner be passed straight in; the interface is the written contract for
  *  the next dialog that wants a Save, and it is the thing to implement rather
  *  than a prop list to copy. */
-export interface ModalCommit {
+interface ModalCommit {
   /** Is there anything to save? Drives the whole footer. */
   dirty: boolean;
   saving?: boolean;

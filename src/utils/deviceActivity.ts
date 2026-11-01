@@ -27,7 +27,7 @@ import { phantomEntity } from "@/utils/phantomEntity";
 import { domainOf } from "./entityDomain";
 import { shownAsleep } from "@/ha/unavailableByDesign";
 
-export type DeviceActivity = "on" | "off" | "alert" | "info";
+type DeviceActivity = "on" | "off" | "alert" | "info";
 
 /**
  * Everything a badge is painted from, as ONE argument.
@@ -107,7 +107,7 @@ export type BadgeMark = "critical" | "alarm" | "fault" | "lost" | "asleep" | "mo
 export const MARK_ORDER: readonly BadgeMark[] = ["critical", "alarm", "fault", "lost", "asleep", "moving", "active"];
 
 /** The facts a mark is chosen from — each one independent, the ORDER decides (badgeMarkFor). */
-export type MarkFacts = Record<BadgeMark, boolean>;
+type MarkFacts = Record<BadgeMark, boolean>;
 
 /** The one corner mark: the first true fact in MARK_ORDER, or null. Pure — tests/oracles/badge_mark.mjs. */
 export function badgeMarkFor(f: MarkFacts): BadgeMark | null {
@@ -291,7 +291,7 @@ export function classifyDeviceActivity({ type, entity: s, condition }: DeviceRea
  *   * `dark` — no emissive at all (the baked marker glow must not show);
  *   * `none` — nothing to paint here (lights: BulbSet; covers: their pose).
  */
-export type MeshLook =
+type MeshLook =
   | { kind: "none" }
   | { kind: "dark" }
   | { kind: "glow"; on: boolean }
@@ -595,7 +595,7 @@ export function mapLookSource(
 
 /** What a summary of several devices — a room chip, a group card, a Cockpit
  *  tile, a device list's header — shows. */
-export interface GroupLook {
+interface GroupLook {
   /** Red ring: needs attention — a member alerting, or a CRITICAL member that
    *  lost contact (DeviceLook.critical). Never for "on" (owner, 2026-10-01: red
    *  is the Map-colours legend's "Needs attention"). */

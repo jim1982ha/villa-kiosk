@@ -23,13 +23,13 @@ import type { ViewBasis } from "./badgeProjection";
 
 /** The badge solver's question (EntityVisuals.solveRoomZoomRadius): the
  *  closest zoom rung, between the bounds, where the room's badges separate. */
-export type RoomZoomSolve = (shot: {
+type RoomZoomSolve = (shot: {
   frame: ViewBasis; cx: number; cy: number; cz: number;
   dir: { x: number; y: number; z: number };
   minRadius: number; maxRadius: number;
 }) => { radius: number; declutters: boolean } | null;
 
-export interface RoomShotInput {
+interface RoomShotInput {
   /** Each room asked for: its wall outline when it has one (real), else the
    *  box of its devices' anchors; null when neither exists. */
   rooms: readonly { bounds: RoomBounds | null; real: boolean }[];
@@ -43,7 +43,7 @@ export interface RoomShotInput {
   solve?: RoomZoomSolve;
 }
 
-export interface RoomShot {
+interface RoomShot {
   /** The pose the camera takes, already within its limits. */
   pose: Pose;
   /** The radius asked for before the camera's limits — `pose.radius` differs

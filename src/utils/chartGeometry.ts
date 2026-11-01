@@ -23,9 +23,9 @@ import type { HistoryGap } from "@/types/ha.types";
 import { HOUR_MS } from "./localDay";
 import type { ChartFit } from "./viewPrefs";
 
-export interface PlotRect { left: number; right: number; top: number; bottom: number }
+interface PlotRect { left: number; right: number; top: number; bottom: number }
 
-export interface ChartSeriesInput {
+interface ChartSeriesInput {
   /** The real readings, in time order — what hover reports. */
   pts: readonly Reading[];
   /** Where this series reported nothing (HistorySeries.gaps). */
@@ -44,7 +44,7 @@ export interface ChartSeriesInput {
 }
 
 /** The margin a finite limit keeps from its axis' end, as a fraction of the axis (a chart drawn with no pad). */
-export const LIMIT_MARGIN = 0.08;
+const LIMIT_MARGIN = 0.08;
 
 /**
  * The range a unit's readings normally live in: a percentage between 0 and
@@ -60,7 +60,7 @@ export function naturalBounds(unit: string | undefined): { min: number; max: num
   return unit?.trim() === "%" ? { min: 0, max: 100 } : null;
 }
 
-export interface HoverReading { t: number; v: number; x: number; y: number }
+interface HoverReading { t: number; v: number; x: number; y: number }
 
 export interface ChartHover {
   /** Where the crosshair goes, and the one stamp that describes every row:
@@ -122,7 +122,7 @@ export interface ChartGeometry {
 
 /** Runs with every stretch inside a band removed: each run is cut at the
  *  band's edges, the cut point on the run's own segment. */
-export function clipRuns(
+function clipRuns(
   runs: readonly { x: number; y: number }[][], bands: readonly { x: number; w: number }[],
 ): { x: number; y: number }[][] {
   const inside = (x: number) => bands.some((b) => x > b.x && x < b.x + b.w);

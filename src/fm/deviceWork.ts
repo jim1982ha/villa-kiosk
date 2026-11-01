@@ -49,7 +49,7 @@ export interface DeviceWork {
 }
 
 /** `records` grouped by device, in the order each device first appears. */
-export function workByDevice(records: readonly FmTicket[], deviceOfRecord: (field: string) => string): DeviceWork[] {
+function workByDevice(records: readonly FmTicket[], deviceOfRecord: (field: string) => string): DeviceWork[] {
   return groupByDevice(records, (t) => recordWorkKey(t, deviceOfRecord)).map(({ key, items }) => ({ key, records: items }));
 }
 
@@ -72,7 +72,7 @@ export type WorkActionKind = "done" | "needHelp" | "doneNew" | "helpNew" | "open
  *  the ticket form pointed at a device, ask for help on the records (a "help" step: the VESTA Agent asks the owner to
  *  act), raise a fault for the device and close it or ask for help on it in the same write (`then`), or — after its
  *  question — close the records with no action. */
-export type WorkStep =
+type WorkStep =
   | { kind: "stage"; to: FmTicketStatus }
   | { kind: "edit" }
   | { kind: "raise" }
@@ -82,7 +82,7 @@ export type WorkStep =
    *  records it: the Agent's resolve_ticket); without, closed with no action (no completion, no cost). */
   | { kind: "close"; question: string; confirmLabel: string; work?: true };
 
-export interface WorkActionSpec { label: string; step: WorkStep }
+interface WorkActionSpec { label: string; step: WorkStep }
 
 /** The words Done and Need help say on every card, the Inbox's and the Tickets tab's alike. */
 const DONE = "Done";
@@ -145,7 +145,9 @@ export function helpLine(h: HelpAsked, stamp: (at: string) => string): string {
  * a live state's line): Done · Need help · Open Ticket, the same three on every card. Done closes them ALL, faults and
  * tickets, each read again by the VESTA Agent ("one Done closes everything on the card", owner 2026-10-30, in place of
  * each line's own Close of 2026-10-18); Need help writes a "help" step on each not asked about yet (none left: no
- * Need help); Open Ticket takes on its faults (one ticket for the device), "Edit Ticket" once every one is a ticket. A card holding no record — only what the villa's
+ * Need help); Open Ticket takes on its faults (one ticket for the device), "Edit Ticket" as soon as one is a ticket:
+ * ⚠️ A TICKET IS ALREADY OPEN (owner, 2026-11-01: an "In progress" card offered Open Ticket because a second fault had
+ * joined it; Done closes that one with the rest). A card holding no record — only what the villa's
  * system reports — has the same three for its `device`: Done and Need help raise its fault with the press, Open Ticket
  * opens the ticket form (owner, 2026-10-29). With no device and no record, none.
  */
@@ -157,7 +159,7 @@ export function overviewActions(records: readonly WorkRecord[], device?: string)
   const ids = open.map((r) => r.id);
   return [
     action("done", ids), ...needHelp(open),
-    faults.length ? action("openTicket", faults) : action("editTicket", [tickets[0]]),
+    tickets.length ? action("editTicket", [tickets[0]]) : action("openTicket", faults),
   ];
 }
 
@@ -183,18 +185,17 @@ export const workRecord = (t: Pick<FmTicket, "id" | "status" | "updates">): Work
 // ── The counts ───────────────────────────────────────────────────────────────
 
 /** What the Cockpit counts as open, in the unit it DRAWS: cards. `faults` — the devices with a fault nobody has taken
- *  on (each an Overview card with "Open Ticket"); `tickets` — the Tickets tab's cards; `total` — the devices with
+ *  on (each an Overview card); `tickets` — the Tickets tab's cards; `total` — the devices with
  *  anything open (each an issue card with a Done). ⚠️ ONE UNIT (architecture review, 2026-10-15): the pump's two
  *  faults taken on together showed one ticket card under "2 in progress", and readiness said "2 open tickets". The
  *  figures that must stay per record (a repair's mean time, the closed list) are ticketStats'. */
-export interface OpenCounts { faults: number; tickets: number; total: number }
+interface OpenCounts { faults: number; tickets: number; total: number }
 
 export function openCounts(records: readonly FmTicket[], deviceOfRecord: (field: string) => string): OpenCounts {
-  const cards = workByDevice(records.filter(isTicketOpen), deviceOfRecord)
-    .map((d) => overviewActions(d.records.map(workRecord)));
+  const cards = workByDevice(records.filter(isTicketOpen), deviceOfRecord).map((d) => d.records.map(workRecord));
   return {
-    faults: cards.filter((acts) => acts.some((a) => a.kind === "openTicket")).length,
+    faults: cards.filter((rs) => rs.some((r) => r.stage === "fault")).length,
     tickets: ticketCards(records, deviceOfRecord).length,
-    total: cards.filter((acts) => acts.length > 0).length,
+    total: cards.filter((rs) => overviewActions(rs).length > 0).length,
   };
 }

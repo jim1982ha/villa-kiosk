@@ -18,7 +18,7 @@ export const TALK_IDLE: TalkView = { phase: "idle", place: null };
 
 /** What the session needs from the page: injected, so a check gives it a recorder and a clock of its own.
  *  ⚠️ `after`/`cancel` are called, never stored browser functions (kiosk-code: "Node green, browser dead"). */
-export interface TalkDeps {
+interface TalkDeps {
   record: (onLevel: (level: number) => void) => Recording;
   /** The microphone may open at the touch (voice.microphoneAllowed): the person allowed it. */
   allowed: () => boolean;

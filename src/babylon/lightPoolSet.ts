@@ -52,7 +52,7 @@ export interface LightReading { on: boolean; colour: Color3; frac: number }
 export interface PoolRoom { name: string; pts: Pt2[]; floorY: number; storey?: number }
 
 /** A fixture's box, as the load path already has it. */
-export interface FixtureBounds {
+interface FixtureBounds {
   min: { x: number; z: number };
   max: { x: number; z: number };
   centerY: number;

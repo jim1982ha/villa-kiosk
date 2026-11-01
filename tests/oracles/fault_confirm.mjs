@@ -8,7 +8,8 @@
 import { h, draw } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
-const { confirmingFaults, confirmLine, confirmParts, shownUntil } = await import("@/fm/faultConfirm");
+const { confirmingFaults, confirmParts, shownUntil } = await import("@/fm/faultConfirm");
+const confirmLine = (c) => { const { did, tip } = confirmParts(c); return `${did} · ${tip}`; };
 const { buildAttentionItems, attentionFor, deviceIssues } = await import("@/config/attention");
 const { confirmingCards, cockpitCard } = await import("@/config/cockpitCard");
 const { AttentionCard } = await import("@/components/cockpit/IssueCard");
@@ -114,7 +115,7 @@ const drawn = draw(h(AttentionCard, { card: cards[1], onOpenEntity: () => {} }))
 // RecordCard's frame (marked), its title and room pill, the open issues' next-check pill, the check as its lead
 ck("  ...drawn by the open issues' own card: marked frame, a check, its device and room pill, its fault, who closed it",
    /^<div class="fm-record-card fault-watched">/.test(drawn) && /class="[^"]*fault-watched-icon/.test(drawn)
-   && /<strong>door<\/strong><span class="fm-entity-chip fm-chip-static">Hall<\/span>/.test(drawn)
+   && /<strong>door<\/strong><\/div>/.test(drawn) && /card-pill-line"><span class="fm-entity-chip fm-chip-static">Hall<\/span>/.test(drawn)
    && /#65 · Door unlocked/.test(drawn) && drawn.includes(`<span class="cockpit-attention-latest">Done${on(-2)} (JM)</span>`), drawn.slice(0, 900));
 const pillOf = (html) => /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="([^"]*)">(<svg[^>]*class="([^"]*)"[\s\S]*?<\/svg>)([^<]*)<\/span>/.exec(html);
 {

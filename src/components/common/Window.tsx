@@ -19,7 +19,7 @@ import type { CSSProperties, ReactNode } from "react";
 import DialogLayer from "./DialogLayer";
 import { useModalA11y } from "@/hooks/useModalA11y";
 
-export type WindowKind = "content" | "device" | "question" | "screen";
+type WindowKind = "content" | "device" | "question" | "screen";
 
 export default function Window({ kind, label, onClose, onEscape, className, layer, zIndex, style, frameKey, outside, children }: {
   kind: WindowKind;

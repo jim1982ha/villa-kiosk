@@ -48,7 +48,7 @@ export function shown(state: Surfaces, s: Surface, doors: Doors): boolean {
   return state[s] && mayOpen(s, doors);
 }
 
-export type SurfaceAction =
+type SurfaceAction =
   | { type: "open"; surface: Surface; doors: Doors }
   | { type: "close"; surface: Surface };
 
@@ -68,7 +68,7 @@ export function chipRooms(roomNames: readonly string[], room: string): string[] 
 
 /** One row of "Which room?": the room, its device count, and the frame and
  *  pill its own chip wears on the map (summaryLook.roomLook). */
-export interface RoomChoiceRow extends ReturnType<typeof roomLook> { room: string; count: number }
+interface RoomChoiceRow extends ReturnType<typeof roomLook> { room: string; count: number }
 
 /** The rows of a merged chip's "Which room?" list: each room's own devices
  *  among the chip's (`roomOf`: where a device resolved), and how its chip

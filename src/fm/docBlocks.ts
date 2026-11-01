@@ -8,7 +8,7 @@
 // tested (document_cells.mjs) and its reader was not: nothing checked that a
 // table the recap writes is read back with its header's columns.
 
-export type Block =
+type Block =
   | { type: "h1" | "h2" | "h3"; text: string }
   | { type: "hr" }
   | { type: "ul"; items: string[] }

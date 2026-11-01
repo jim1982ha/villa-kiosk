@@ -134,7 +134,7 @@ const OVERVIEW_HORIZON_DROP = 700;
 //     constraint below says exactly that, and says it for every room instead
 //     of approximately for all of them.
 
-export interface SceneManagerOptions {
+interface SceneManagerOptions {
   config: AppConfig;
   /** Called when a mesh mapped to an entity is tapped (fast on/off action).
    *  clientX/clientY are the tap's screen position — used to spawn a brief
@@ -181,7 +181,7 @@ function polygonKey(pts: Pt2[], floor: number): string {
 }
 
 /** A calibrated room in world space — what the plan (storeys.ts) holds. */
-export interface WorldRoom {
+interface WorldRoom {
   name: string;
   pts: Pt2[];
   floorY: number;

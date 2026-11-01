@@ -40,7 +40,7 @@ export function draftDays(everyDays: string): number | null {
 
 type Fields = Pick<FmSchedule, "title" | "clause" | "everyDays" | "room">;
 
-export type ScheduleWrite =
+type ScheduleWrite =
   | { ok: true; kind: "add"; fields: Fields & { enabled: true } }
   | { ok: true; kind: "edit"; id: string; patch: Fields }
   | { ok: false; problem: string };

@@ -12,7 +12,7 @@
 // visibility. So the stores never re-read when the network returned, and the
 // socket never health-checked on focus. One subscription, both callers.
 
-export type Unsubscribe = () => void;
+type Unsubscribe = () => void;
 
 /** Call `fn` whenever the device wakes: visible again, focused, or online.
  *  Nothing is registered where there is no document/window (the oracles). */

@@ -12,7 +12,7 @@ import { glowsRoom } from "@/config/deviceCondition";
 import { roomKey } from "@/config/roomKey";
 import type { EntityType } from "@/types/scene.types";
 
-export interface MotionRoutingInput {
+interface MotionRoutingInput {
   entityId: string;
   deviceClass: string | undefined;
   /** The sensor reads "on". */

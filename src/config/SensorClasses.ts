@@ -54,7 +54,7 @@ export function effectiveSensorClass(deviceClass?: string, unit?: string): strin
  *  under-reported by 1000×, on the most-glanced tile on the wall. And
  *  `UNIT_DEVICE_CLASS_HINT` above has held `"kw": "power"` the whole time.
  */
-export const UNIT_SCALE_TO_BASE: Record<string, number> = {
+const UNIT_SCALE_TO_BASE: Record<string, number> = {
   // ⚠️ CASE-SENSITIVE, AND THAT IS THE WHOLE POINT. Keyed on
   // `unit.toLowerCase()` this table collapses `mW` (milliwatt) onto `MW`
   // (megawatt). A 500 mW sensor would read as 500000 kW: a 10⁹ error, by the

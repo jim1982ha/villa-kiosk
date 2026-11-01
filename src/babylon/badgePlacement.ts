@@ -988,7 +988,7 @@ export function solvePlacement(
 }
 
 /** An axis-aligned box on the view plane: centre plus half-extents. */
-export interface PileBox { cx: number; cy: number; hw: number; hh: number; }
+interface PileBox { cx: number; cy: number; hw: number; hh: number; }
 
 /** Lexicographic order on a PAIR of boxes, for breaking an exact overlap tie.
  *  Geometry only: two piles whose boxes compare equal are interchangeable, so

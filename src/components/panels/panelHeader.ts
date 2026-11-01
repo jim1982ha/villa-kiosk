@@ -24,7 +24,7 @@ import { domainOf } from "@/utils/entityDomain";
 
 type LookConfig = Parameters<typeof storeLookSource>[1];
 
-export interface PanelHeader {
+interface PanelHeader {
   badge: {
     category: Category; iconKey: string; color?: string; categoryColor: string;
     state: DeviceSurfaceState; mark: BadgeMark | null; linkPill: LinkPill;
@@ -45,7 +45,7 @@ export interface PanelHeader {
   issueIds: string[];
 }
 
-export interface HeaderInput {
+interface HeaderInput {
   /** The open device as it is set now (openDevice). */
   panel: OpenDevice;
   entities: Record<string, HassEntity>;
@@ -59,7 +59,7 @@ export interface HeaderInput {
 
 /** A linked entity's switch: its position (`isOn`, as just pressed), whether its position is known at all (`known`:
  *  not for a lock in motion, devicePower), and its contact (stateColors.contactOf). */
-export interface LinkedState { isOn: boolean; known: boolean; contact: "lost" | "no-value" | "ok" }
+interface LinkedState { isOn: boolean; known: boolean; contact: "lost" | "no-value" | "ok" }
 
 /** The word under a linked entity's name: "Unavailable" only when contact is LOST, "Unknown" when the device answers
  *  but this entity has no value (or its position is not known), else On / Off. ⚠️ UNKNOWN IS NOT LOST CONTACT (owner,

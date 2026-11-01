@@ -218,7 +218,7 @@ export function uvScalePosition(uv: number): number {
  *  high — roughly 1000 W/m² at sea level. What the Sun & UV tile measures
  *  "how much sunshine" against: a bar full at clear noon, never a claim that
  *  a reading is "low" or "high" for this place or season. */
-export const CLEAR_SKY_WM2 = 1000;
+const CLEAR_SKY_WM2 = 1000;
 export function sunshineFraction(wm2: number): number {
   return Math.max(0, Math.min(1, wm2 / CLEAR_SKY_WM2));
 }
@@ -276,7 +276,7 @@ export const TEMPERATURE_ROLES: ReadonlySet<WeatherRole> = new Set(["temperature
 
 /** Gusts from this (Beaufort 6, "strong breeze") make open windows and the
  *  terrace a poor idea. */
-export const STRONG_GUST_KMH = 39;
+const STRONG_GUST_KMH = 39;
 /** Window advice: outside must be at least this much cooler, and at most
  *  this much more humid (dew point), to open up; this much more humid
  *  outside and the windows stay shut. */
@@ -384,7 +384,7 @@ export function outdoorsAdvice(r: { raining?: boolean; gustKmh?: number; windKmh
 }
 
 /** A rain rate in mm/h, from the sensor's own unit (in/h is converted). */
-export function toMmPerHour(value: number, unit: string): number {
+function toMmPerHour(value: number, unit: string): number {
   return /in/i.test(unit) ? value * 25.4 : value;
 }
 
@@ -395,7 +395,7 @@ export function toMmPerHour(value: number, unit: string): number {
 
 /** One sensor's reading as Home Assistant reports it; undefined when the role
  *  has no sensor or it is unavailable. */
-export interface RoleReading { state: unknown; unit: string }
+interface RoleReading { state: unknown; unit: string }
 
 /** Every reading the Weather window uses, by role, converted; undefined where
  *  the station has no such sensor or it has no number. */
@@ -436,7 +436,7 @@ export function barometerAngle(hpa: number): number {
   return ((Math.max(lo, Math.min(hi, hpa)) - lo) / (hi - lo)) * 270 - 135;
 }
 /** The thermometer bars' top, °C (their foot is 0). */
-export const THERMOMETER_TOP_C = 40;
+const THERMOMETER_TOP_C = 40;
 /** How full a thermometer bar is, 0.04–1: never empty, so a cold reading
  *  still shows its colour. */
 export function thermometerFraction(c: number): number {

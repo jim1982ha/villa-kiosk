@@ -102,10 +102,10 @@ const CEILING_SLACK_M = 0.02;
  * divided by a mid surface colour (0.5): a mid-toned surface GLOW_AT_M under
  * a bulb then gets what the floor under that bulb shows.
  */
-export const LAMP_GLOW_GAIN = Math.pow(POOL_CENTRE, 2.2) / (POOL_CENTRE * 0.5);
+const LAMP_GLOW_GAIN = Math.pow(POOL_CENTRE, 2.2) / (POOL_CENTRE * 0.5);
 
 /** One pool that is on, as the glow needs it (LightPoolSet.glowLamps). */
-export interface GlowLamp {
+interface GlowLamp {
   x: number; y: number; z: number;
   r: number; g: number; b: number;
   /** The pool's own strength (poolStrength). */
@@ -235,7 +235,7 @@ export const GLOW_TERM: ReadonlyArray<readonly [string, string]> = [
   ["lgW", "lgFall * lgNdl * lgAbove"],
 ];
 /** The cap on every bulb together, as a multiple of a pool's centre. */
-export const GLOW_CAP_TOTAL = POOL_CENTRE * GLOW_CAP_ALL;
+const GLOW_CAP_TOTAL = POOL_CENTRE * GLOW_CAP_ALL;
 
 /** The bulbs' light on this fragment, into `lgAdd` — shared by both hooks. */
 const ACCUMULATE = `

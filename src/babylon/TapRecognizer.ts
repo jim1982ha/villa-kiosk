@@ -12,7 +12,7 @@ import { suppressGhostClick } from "@/utils/ghostClick";
 import { DOUBLE_PRESS_MS, DOUBLE_PRESS_TOL_PX, LONG_PRESS_MS, TAP_MOVE_TOL_PX }
   from "@/utils/tapThresholds";
 
-export type TapKind = "tap" | "longpress" | null;
+type TapKind = "tap" | "longpress" | null;
 
 export class TapRecognizer {
   // ⚠️ THE VALUES LIVE IN `utils/tapThresholds.ts` — the camera feed reads the

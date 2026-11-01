@@ -45,10 +45,10 @@ export interface GlassClearance {
 
 /** A badge's drawn box, from labelBoxes: half extents and how far above its
  *  anchor it hangs. */
-export interface DrawnBox { halfW: number; halfH: number; cy: number }
+interface DrawnBox { halfW: number; halfH: number; cy: number }
 
 /** Where a badge is on the glass and the room it claims there. */
-export interface OnGlass { sx: number; sy: number; sz: number; reach: number; reachY: number }
+interface OnGlass { sx: number; sy: number; sz: number; reach: number; reachY: number }
 
 /**
  * How much more room a badge must claim because of its OWN depth.

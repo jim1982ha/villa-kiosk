@@ -19,7 +19,7 @@
 import { sessionLostDecision, type ServerSession } from "./sessionLost";
 import { isRole, type Role } from "./roles";
 
-export interface SessionState {
+interface SessionState {
   /** Active profile, or null when nobody is signed in. */
   role: Role | null;
   /** The switch-profile overlay is showing over an active session. */

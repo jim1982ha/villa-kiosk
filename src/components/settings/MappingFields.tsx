@@ -26,7 +26,7 @@ import { ENTITY_DOMAINS, type HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 
 /** One field's place in the row's layout. */
-export type FieldCell = (key: string, label: string, field: ReactNode, opts?: { wide?: boolean }) => ReactNode;
+type FieldCell = (key: string, label: string, field: ReactNode, opts?: { wide?: boolean }) => ReactNode;
 
 /** How long a click on a device's field waits before it is written (a run of clicks is one write). */
 const FIELD_COMMIT_MS = 350;

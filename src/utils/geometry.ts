@@ -40,7 +40,7 @@ export function pointInPolygon(x: number, z: number, poly: Pt2[]): boolean {
 }
 
 /** Twice the signed area of a polygon on the XZ plane (positive ⇒ CCW winding). */
-export function signedArea2(poly: Pt2[]): number {
+function signedArea2(poly: Pt2[]): number {
   let a = 0;
   for (let i = 0; i < poly.length; i++) {
     const p = poly[i], q = poly[(i + 1) % poly.length];

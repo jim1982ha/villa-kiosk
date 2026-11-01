@@ -383,7 +383,7 @@ async function lastSeen(port: HistoryPort, id: string, now: number): Promise<num
 /** A device every villa's system has, changing twice a day: its oldest change kept is where the detail begins. */
 export const KEPT_PROBE = "sun.sun";
 /** How far back the probe looks: past it, every window is taken as kept. */
-export const KEPT_LOOKBACK_DAYS = 400;
+const KEPT_LOOKBACK_DAYS = 400;
 const KEPT_CACHE_MS = HOUR_MS;
 const keptCache = new WeakMap<HistoryPort, { at: number; value: number | undefined }>();
 

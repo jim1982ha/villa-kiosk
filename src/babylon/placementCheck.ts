@@ -87,7 +87,7 @@ const COUNT_KEYS: readonly (keyof PlacementCounts)[] = [
 ];
 
 /** The failures among `f`'s counts (see PlacementFindings.failures). */
-export function failuresOf(f: PlacementCounts & { chipWidthErr: number; orderDependent: boolean }, minGapPx: number): number {
+function failuresOf(f: PlacementCounts & { chipWidthErr: number; orderDependent: boolean }, minGapPx: number): number {
   let n = 0;
   for (const k of COUNT_KEYS) if (ALLOWED_FINDINGS[k] === undefined) n += f[k];
   return n + (f.chipWidthErr > minGapPx ? 1 : 0) + (f.orderDependent ? 1 : 0);

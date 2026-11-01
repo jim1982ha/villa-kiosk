@@ -75,7 +75,7 @@ interface RoomEntry {
 
 /** A calibrated room as the highlight draws it: its outline on its floor, or
  *  a stepped room's surface-hugging mesh. */
-export interface HighlightRoom {
+interface HighlightRoom {
   name: string;
   pts: Pt2[];
   floorY: number;

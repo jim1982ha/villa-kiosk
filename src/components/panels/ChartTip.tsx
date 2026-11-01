@@ -17,7 +17,7 @@ import { placeTip, tipFlips } from "@/utils/chartHover";
 
 /** A row: bold by default; `event` rows are the plain lines of a list (a
  *  timeline's detections under their time range). */
-export interface ChartTipRow { key: string; text: string; marker?: ReactNode; event?: boolean }
+interface ChartTipRow { key: string; text: string; marker?: ReactNode; event?: boolean }
 
 /**
  * `x`, `y` — WHERE, as fractions of the chart's positioned box (0–1 across,

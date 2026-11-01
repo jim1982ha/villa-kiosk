@@ -10,7 +10,7 @@ export interface PlanWorldPair {
   wz: number;
 }
 
-export type Affine = (px: number, py: number) => { x: number; z: number };
+type Affine = (px: number, py: number) => { x: number; z: number };
 
 /** Solve a 3x3 linear system Ax=b by Gaussian elimination; null if singular. */
 function solve3(A: number[][], b: number[]): number[] | null {

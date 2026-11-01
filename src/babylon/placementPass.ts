@@ -73,7 +73,7 @@ export const BADGE_PLACEMENT = "priority" as "priority" | "legacy";
  *  the reference depth (atReferenceDepth), in world units (metres): a device
  *  at the walker's feet would otherwise be flung to infinity. Half a metre is
  *  inside arm's reach — nothing is viewed from closer. */
-export const WALK_MIN_MEASURE_DIST = 0.5;
+const WALK_MIN_MEASURE_DIST = 0.5;
 
 /**
  * How much of its own width a badge ICON may overlap a neighbour before the
@@ -417,7 +417,7 @@ export function measuredAt(
 }
 
 /** Scratch for the projection helpers — one per caller, reused per frame. */
-export interface GlassScratch { measure: { x: number; y: number; z: number }; proj: ProjectedPoint }
+interface GlassScratch { measure: { x: number; y: number; z: number }; proj: ProjectedPoint }
 export function glassScratch(): GlassScratch {
   return { measure: { x: 0, y: 0, z: 0 }, proj: { px: 0, py: 0, pz: 0, pd: 0 } };
 }

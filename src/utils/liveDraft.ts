@@ -29,7 +29,7 @@ export type DraftEvent<T> =
 
 /** What the hook must do after a step: send the value now, send it once the
  *  keys stop (a keyboard burst is one command), or nothing. */
-export type DraftEffect = "send-now" | "send-soon" | null;
+type DraftEffect = "send-now" | "send-soon" | null;
 
 export function draftStep<T>(s: DraftState<T>, e: DraftEvent<T>): { state: DraftState<T>; effect: DraftEffect } {
   switch (e.type) {

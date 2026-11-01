@@ -99,7 +99,7 @@ export function shortName(full: string, owner: string): string {
 
 /** The (i)'s last line: the names in full, as the villa's system gives them (owner, 2026-10-25: "mention the full name
  *  of the used entity in the tooltip"). */
-export function fullNames(names: readonly string[]): string {
+function fullNames(names: readonly string[]): string {
   return names.length ? `In the villa's system: ${names.join(", ")}.` : "";
 }
 

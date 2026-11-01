@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { h, draw } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
-const { readLayout, parseAnnouncement, ANNOUNCEMENT_NOTICE_MS, noticeFor, pressButton, PRESS_SAID } =
+const { readLayout, parseAnnouncement, ANNOUNCEMENT_NOTICE_MS, noticeFor, pressOf, PRESS_SAID } =
   await import("@/messages/announcements");
 const { watchFeed } = await import("@/messages/feed");
 const { afterRead, announcementWords } = await import("@/messages/messagesModel");
@@ -282,7 +282,7 @@ const buttonsIn = (html) => (html.match(/<button/g) ?? []).length;
 }
 const replies = { 200: "sent", 409: "withdrawn", 502: "failed", 401: "failed" };
 for (const [status, want] of Object.entries(replies)) {
-  const got = await pressButton("run-1", "/unlock", async (url, init) => {
+  const { outcome: got } = await pressOf({ key: "run-1" }, "/unlock", async (url, init) => {
     pressed.push([url, init.method, init.body]);
     return { ok: Number(status) === 200, status: Number(status) };
   });
@@ -291,7 +291,7 @@ for (const [status, want] of Object.entries(replies)) {
 ck("the press names the ring's key and the button's command, posted to the add-on",
    JSON.stringify(pressed[0]) === JSON.stringify(["/announcement-press", "POST", JSON.stringify({ key: "run-1", command: "/unlock" })]),
    pressed[0]);
-ck("  ...a lost connection is not sent", await pressButton("k", "/c", async () => { throw new Error("offline"); }) === "failed");
+ck("  ...a lost connection is not sent", (await pressOf({ key: "k" }, "/c", async () => { throw new Error("offline"); })).outcome === "failed");
 
 console.log("\n  how it shows (ticket 16: full screen for what the owner picked, a problem stays, the rest 10s):");
 const { stageOf } = await import("@/messages/announcements");

@@ -24,13 +24,13 @@
 
 import { centralModelUrl, type AddonConfig, type AddonConfigAnswer } from "./centralModel";
 
-export type ModelSource =
+type ModelSource =
   | { ok: true; data: ArrayBuffer; cfg: AddonConfig; source: string; prefetched: boolean; kept: boolean }
   | { ok: false; reason: "none" }
   | { ok: false; reason: "cancelled" }
   | { ok: false; reason: "http"; status: number; code: string; message: string };
 
-export interface ModelSourceDeps {
+interface ModelSourceDeps {
   readAddonConfig(): Promise<AddonConfigAnswer>;
   modelBytes(url: string, onProgress: (f: number) => void, onRetrying?: () => void):
     Promise<{ ok: true; data: ArrayBuffer; prefetched: boolean; kept: boolean } | { ok: false; status: number }>;

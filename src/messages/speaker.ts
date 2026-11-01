@@ -10,7 +10,7 @@ import { arrivedSpeech, playsAloud } from "./conversationModel";
 
 /** What the speaker needs from the page: injected, never stored browser functions (kiosk-code: "Node green, browser
  *  dead"). `play`: messages/voice.playSpeech; `sound`: the answer's sound by its name (conversation.fetchSpeech). */
-export interface SpeakerDeps {
+interface SpeakerDeps {
   play: (sound: () => Promise<ArrayBuffer | null>, atTheTouch: boolean, ended: () => void) => Promise<boolean>;
   stop: () => void;
   sound: (name: string) => Promise<ArrayBuffer | null>;

@@ -30,9 +30,9 @@ export const LOST_GREY = new Color3(0.42, 0.44, 0.42);
 // static match to the light-theme value rather than a live read.
 export const AVAILABLE_GREEN_HEX = "#34845A";
 // --status-warning (light theme): a FAULT, check soon — as a hex for the pill below.
-export const FAULT_AMBER_HEX = "#B8801F";
+const FAULT_AMBER_HEX = "#B8801F";
 // --status-lost (light theme): no contact — the same grey as LOST_GREY, as a hex for the pill below.
-export const LOST_GREY_HEX = "#6B706B";
+const LOST_GREY_HEX = "#6B706B";
 
 /** A room's count pill, by the room's HEALTH (summaryLook.roomHealth): red —
  *  something needs attention; amber — a device has an open fault; grey —

@@ -103,7 +103,7 @@ export function clampPill(text: string): string {
   return text.length > 16 ? `${text.slice(0, 15)}…` : text;
 }
 
-export interface SensorValueOptions {
+interface SensorValueOptions {
   /** Return "" for a nominal status ("Connected", "OK", …). The badge sets
    *  this; a panel row does not. See SENSOR_NOMINAL_STATES. */
   hideNominal?: boolean;

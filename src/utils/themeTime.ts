@@ -10,8 +10,8 @@
 import { getSunPosition } from "./sunCalc";
 import { skyNow } from "./skyClock";
 
-export type EffectiveTheme = "light" | "dark" | "night";
-export type ThemeSetting = EffectiveTheme | "auto";
+type EffectiveTheme = "light" | "dark" | "night";
+type ThemeSetting = EffectiveTheme | "auto";
 
 // The scene's day/night lighting transition finishes at -6deg (TWILIGHT in
 // babylon/sunState.ts). "Night" starts deliberately past that, approximating
@@ -22,7 +22,7 @@ export type ThemeSetting = EffectiveTheme | "auto";
 // `?skyTime=` previewing an hour, the sky went to night under a day theme.
 const NIGHT_ALTITUDE_RAD = (-10 * Math.PI) / 180;
 
-export function isDeepNight(latitude: number, longitude: number, date: Date = skyNow()): boolean {
+function isDeepNight(latitude: number, longitude: number, date: Date = skyNow()): boolean {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
   const { altitude } = getSunPosition(date, latitude, longitude);
   return altitude < NIGHT_ALTITUDE_RAD;

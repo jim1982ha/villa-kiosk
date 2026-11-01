@@ -28,7 +28,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { onFailure } from "@/ha/serviceOutcome";
 
-export interface OptimisticToggle {
+interface OptimisticToggle {
   /** What the switch should render: pending intent if any, else real state. */
   isOn: boolean;
   /** Flip it: paint the new state now, fire the service call, reconcile later. */

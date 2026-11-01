@@ -41,7 +41,7 @@ export interface DocumentInputs {
   deviceOfRecord: (field: string) => string;
 }
 
-export interface DocumentKindInfo {
+interface DocumentKindInfo {
   /** What one is called on screen: "snapshot". */
   noun: string;
   /** And several: "snapshots" ("Saved snapshots (3)"). */

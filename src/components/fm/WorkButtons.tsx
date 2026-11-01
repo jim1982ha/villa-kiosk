@@ -27,7 +27,7 @@ export type RaisedFault = Omit<FmTicket, "id" | "openedAt" | "status">;
 
 /** The steps of one list's cards, carried out — one per list, keyed by card, so a second card's Close puts the first
  *  one's buttons back. */
-export interface CardWork {
+interface CardWork {
   /** The card whose Close question is being asked. */
   asking: string | null;
   /** Why the last step on this card did not land; null when it did, or none was tried. */

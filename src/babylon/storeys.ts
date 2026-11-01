@@ -87,12 +87,12 @@ export function isStairwell(name: string): boolean { return STAIR_NAME_RE.test(n
 
 /** A room as the storeys need it. `storey` is the plan's number for it —
  *  absent when the room list has none. */
-export interface StoreyRoomIn { name: string; pts: Pt2[]; floorY: number; storey?: number }
+interface StoreyRoomIn { name: string; pts: Pt2[]; floorY: number; storey?: number }
 
 /** How far above one storey's floor the next one's must be, when there are
  *  no storey numbers to go by — a storey is a ceiling height, and a
  *  staircase's tread or a raised terrace is not one. */
-export const STOREY_MIN_HEIGHT_M = 2.0;
+const STOREY_MIN_HEIGHT_M = 2.0;
 /** A point this close above a room's floor still stands in it (a slab's own
  *  thickness, a probe's rounding). */
 const FLOOR_SLACK_M = 0.05;

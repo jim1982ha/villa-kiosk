@@ -47,7 +47,7 @@ const CEILING_LIGHT_KEY = "vk_ceiling_light";
 const LEGACY_STRUCTURE_RE = /^Structure(?:_L(\d+)|_Exterior)?$/i;
 const LEGACY_EXTERIOR_RE = /^Structure_Exterior$/i;
 
-export interface StructureRole {
+interface StructureRole {
   /** True when this mesh is villa structure (walls/slabs/ceilings), as opposed
    *  to furniture, an entity-bound prop, or a helper mesh. */
   isStructure: boolean;
@@ -351,7 +351,7 @@ export function isHelperMesh(mesh: AbstractMesh): boolean {
 }
 
 /** Which meshes a ray may answer with. See `rayTargets`. */
-export interface RayFilter {
+interface RayFilter {
   /** Require `isPickable`. Default true — pass false for a set resolved ONCE
    *  at load time, where liveness is the caller's own business. */
   pickable?: boolean;

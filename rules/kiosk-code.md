@@ -124,4 +124,5 @@ not on the kinds the change touched; a time comes from `beganAt` or the record, 
 words only, and the time existed on faults alone, so "consistent everywhere" was claimed over a field nobody had asked.
 
 **How to apply:** `tests/oracles/every_card_row.mjs` draws the real row of each kind through the real path and fails when
-a kind of line is not in its table; add a new field there, and prove it red on one kind.
+a kind of line is not in its table; add a new field there, and prove it red on one kind. A row and its opened card draw
+one `CardPillLine`: the first line keeps the name and the next check, never a second copy of the pills.

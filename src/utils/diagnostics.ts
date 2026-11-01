@@ -30,7 +30,7 @@ const DIAG_KEY = "villa-kiosk:diag";
 const CRASH_LOOP_THRESHOLD = 2;
 const CRASH_LOOP_WINDOW_MS = 90_000;
 
-export type LoadPhase =
+type LoadPhase =
   | "engine-init"
   | "fetch-config"
   | "fetch-model"

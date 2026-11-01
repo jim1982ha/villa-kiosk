@@ -36,9 +36,9 @@ export const CARD_VALUE_MARGIN_OF_ICON_PAD = 1.5;
 export const RING_DASH: readonly [number, number] = [1.1, 0.9];
 
 /** What a surface says about its ring (EntityCategories.categorySurface). */
-export interface RingSurface { ring?: string | null; ringHairline?: boolean; ringDashed?: boolean }
+interface RingSurface { ring?: string | null; ringHairline?: boolean; ringDashed?: boolean }
 
-export interface BadgeRing {
+interface BadgeRing {
   /** Stroke weight in CSS px; 0 for no ring. */
   px: number;
   /** [on, off] in CSS px for a dashed ring; null for a solid one. */
@@ -68,7 +68,7 @@ export const NO_RING: BadgeRing = { px: 0, dash: null, color: "transparent" };
 
 /** A control a badge frame is applied to: a Babylon Rectangle, or a
  *  DashableRectangle, which also takes the dash. */
-export interface FrameTarget { thickness: number; color: string; cornerRadius: number; dash?: number[] | null }
+interface FrameTarget { thickness: number; color: string; cornerRadius: number; dash?: number[] | null }
 
 /**
  * Put a frame on a control `sizePx` tall: its ring's weight, dash and colour,
@@ -101,7 +101,7 @@ export function badgeBakePx(drawnPx: number, userScale: number, cssToGui: number
  * symbol white and bold, each ringed in the badge's own ground so it stands clear of the face, and centred so its edge
  * stands 6 px (of 56) outside the square's corner.
  */
-export const PILL_DIAMETER = 28 / 56;   // of the square's side
+const PILL_DIAMETER = 28 / 56;   // of the square's side
 const PILL_OUT = 6 / 56;                // how far the pill's edge stands outside the square
 const PILL_RING = 2 / 56;               // the ground-coloured ring round each pill
 const PILL_HOLLOW_RING = 3 / 56;        // a hollow pill's ring, in the badge's colour

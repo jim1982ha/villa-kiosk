@@ -47,12 +47,12 @@ export function overviewKeyAction(code: string, key: string, shift: boolean): Ov
 }
 
 /** Drag pixels per second a held pan key is worth. */
-export const KEY_PAN_PX_PER_S = 700;
+const KEY_PAN_PX_PER_S = 700;
 /** Radians per second, rotate and tilt. */
-export const KEY_ROTATE_RAD_PER_S = 1.2;
-export const KEY_TILT_RAD_PER_S = 0.7;
+const KEY_ROTATE_RAD_PER_S = 1.2;
+const KEY_TILT_RAD_PER_S = 0.7;
 /** How much a held zoom key scales the distance per second (in: ×1/1.9). */
-export const KEY_ZOOM_PER_S = 1.9;
+const KEY_ZOOM_PER_S = 1.9;
 
 /**
  * One step of held keys, in the gestures' own units: `dragX/dragY` are a

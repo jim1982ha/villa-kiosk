@@ -123,7 +123,7 @@ export async function saveFmData(
 // The collections are the shared table's (fmTypes.FM_COLLECTIONS, read from
 // fm-records.json — the same list the add-on judges writes by).
 
-export type FmDataDiff = Record<FmCollection, KeyedDiff<{ id: string }>>;
+type FmDataDiff = Record<FmCollection, KeyedDiff<{ id: string }>>;
 
 const keyFm = (d: FmData, k: FmCollection) =>
   keyBy(d[k] as { id: string }[], (r) => r.id);

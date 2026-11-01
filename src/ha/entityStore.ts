@@ -106,7 +106,7 @@ interface StateChangedEvent {
   data: { entity_id: string; new_state: HassEntity | null; old_state: HassEntity | null };
 }
 
-export interface EntityStoreOptions {
+interface EntityStoreOptions {
   /** How long React may lag the socket. Four drains a second is faster than
    *  anyone reads a panel; the badges do not wait at all (notify). */
   pushWindowMs?: number;

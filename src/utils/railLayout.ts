@@ -30,7 +30,7 @@ import { useEffect, useState } from "react";
  *  inside the block — see `--cam-rail-layout` in styles.css. */
 const RAIL_PROPERTY = "--cam-rail-layout";
 
-export function railLayoutActive(): boolean {
+function railLayoutActive(): boolean {
   if (typeof window === "undefined") return false;
   const raw = getComputedStyle(document.documentElement)
     .getPropertyValue(RAIL_PROPERTY).trim();

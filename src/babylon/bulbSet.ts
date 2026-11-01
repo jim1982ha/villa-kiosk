@@ -103,7 +103,7 @@ const SHADOW_MAP_SIZE = 256;
 export interface BulbReading { meshes: readonly AbstractMesh[]; reading: LightReading }
 
 /** What the bulbs need from the floor: one downward probe. FloorProbe. */
-export type BulbFloorProbe = PoolFloorProbe;
+type BulbFloorProbe = PoolFloorProbe;
 
 interface StripShape { strip: boolean; horizontal: boolean }
 

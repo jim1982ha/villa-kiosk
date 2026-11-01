@@ -8,7 +8,7 @@ const GAP = 4;       // between the button and the list
 const MARGIN = 8;    // the list never touches the screen's edge
 const MIN_WIDTH = 180;
 
-export interface DropdownPlacement {
+interface DropdownPlacement {
   left: number;
   width: number;
   /** Set when the list opens downwards (`top`) or upwards (`bottom`, from the

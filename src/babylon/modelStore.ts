@@ -35,7 +35,7 @@ import { readJson, writeJson, removeStoredWhere } from "@/utils/storedJson";
  *  is correct when the MEANING of a key changes (see FloorProbe's `vk.probe2.`,
  *  bumped because reading a grid-keyed entry as room-keyed would have
  *  reinstated a real bug) and pure waste otherwise. */
-export type StorePrefix = string;
+type StorePrefix = string;
 
 export class ModelKeyedStore<T> {
   private storeKey: string | null = null;

@@ -29,7 +29,7 @@ export type RecordedState = StateRow;
  * before it (dropped: the run goes on); one before any report is dropped too — the chart starts at its first report,
  * never on an outage that was only sleep. Rows of a device not asleep by design are the caller's to leave alone.
  */
-export function heldRows<R extends { state: string | null }>(rows: readonly R[]): R[] {
+function heldRows<R extends { state: string | null }>(rows: readonly R[]): R[] {
   return rows.filter((r) => r.state !== "unavailable");
 }
 

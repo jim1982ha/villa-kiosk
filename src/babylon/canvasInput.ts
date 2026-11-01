@@ -9,7 +9,7 @@
 // while switching to another app kept the walker walking until W was pressed
 // and released again. Both now release on blur.
 
-export interface CanvasInputHandlers {
+interface CanvasInputHandlers {
   onPointerDown: (e: PointerEvent) => void;
   onPointerMove: (e: PointerEvent) => void;
   /** Up, cancel AND leave: the gesture is over however it ended. */

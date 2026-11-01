@@ -11,7 +11,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
 /** What the list has open: nothing, a new record's form, or the form of the record `id`. */
-export type ListEditorState = { open: "none" } | { open: "add" } | { open: "edit"; id: string };
+type ListEditorState = { open: "none" } | { open: "add" } | { open: "edit"; id: string };
 
 export const NOTHING_OPEN: ListEditorState = { open: "none" };
 

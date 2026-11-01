@@ -36,7 +36,7 @@ export function inVillaZone<T extends Intl.DateTimeFormatOptions>(opts: T): T {
 }
 
 /** A moment's wall clock at the villa: month 1 to 12, weekday 0 (Sunday) to 6. */
-export interface WallClock {
+interface WallClock {
   year: number; month: number; day: number; hour: number; minute: number; second: number; weekday: number;
 }
 

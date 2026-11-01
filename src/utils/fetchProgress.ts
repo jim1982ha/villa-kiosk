@@ -76,7 +76,7 @@ const MODEL_FETCH_RETRY_BUDGET_MS = 120_000;
 // Generous enough that an ordinarily slow link — which delivers chunks steadily,
 // just not quickly — can never trip it: this measures the GAP between chunks,
 // not the total duration.
-export const MODEL_FETCH_STALL_MS = 20_000;
+const MODEL_FETCH_STALL_MS = 20_000;
 // Separate, shorter budget for the request itself: headers should arrive
 // promptly even when the body then takes a while. Nothing had ever bounded
 // this, so an add-on that accepted the connection and then went quiet left the

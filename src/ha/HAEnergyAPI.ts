@@ -44,7 +44,7 @@ export async function fetchEnergySetup(
 }
 
 /** Every statistic the window reads, energy and cost. */
-export function energyStatIds(s: EnergyWindowSetup): string[] {
+function energyStatIds(s: EnergyWindowSetup): string[] {
   const ids = new Set<string>([...s.gridIn, ...s.gridOut, ...s.solar, ...s.devices.map((d) => d.id)]);
   for (const id of s.gridIn) if (s.costOf[id]) ids.add(s.costOf[id]);
   return [...ids];

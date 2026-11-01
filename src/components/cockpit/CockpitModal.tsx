@@ -29,7 +29,7 @@ import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import Tip from "@/components/common/Tip";
 import { countOf } from "@/utils/countOf";
 
-export interface CockpitModalProps {
+interface CockpitModalProps {
   onClose: () => void;
   onOpenEntity: (entityId: string) => void;
   /** What this profile may see and do (auth/doors): the updates count only with `doors.updates`. */

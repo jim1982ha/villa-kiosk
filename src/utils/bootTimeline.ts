@@ -29,7 +29,7 @@ import { report } from "./telemetry";
 import { attributeFreeze, resetSpans, spanCensus, type FreezeAttribution } from "./perfSpans";
 
 /** Milestones, in the order they happen. */
-export type BootMark =
+type BootMark =
   | "js"      // the main bundle's module body ran (bundle is downloaded+compiled)
   | "react"   // React reached <App> for the first time
   | "gate"    // a sign-in screen became visible (profile select)
@@ -456,7 +456,7 @@ interface NotRestoredLike {
 
 /** Everything a load record is built from — what the browser and the marks
  *  said, as plain values. */
-export interface LoadInputs {
+interface LoadInputs {
   /** BabylonCanvas's own navigation-start → villa-visible span. */
   total: number;
   loadSeq: number;

@@ -42,7 +42,7 @@ const PALETTE = 12;
 
 /** The colour of what no device accounts for, and of a folded "Other". */
 export const UNTRACKED_CLS = "e-untracked";
-export const OTHER_CLS = "e-other";
+const OTHER_CLS = "e-other";
 
 /**
  * EVERY DEVICE'S COLOUR, ONCE, for the whole Energy window: the flow, the
@@ -100,9 +100,9 @@ export function flowTree(split: EnergySplit, house: string, colourOf: (id: strin
   return { id: "_house", label: house, kwh: total, kind: "house", cls: "e-house", rateId: null, members: children.map((c) => ({ label: c.label, kwh: c.kwh })), children };
 }
 
-export interface FlowBox { node: FlowNode; depth: number; x: number; y: number; h: number }
-export interface FlowLink { from: FlowBox; to: FlowBox; sy: number; dy: number; w: number }
-export interface FlowLayout { W: number; H: number; boxes: FlowBox[]; links: FlowLink[]; nodeW: number }
+interface FlowBox { node: FlowNode; depth: number; x: number; y: number; h: number }
+interface FlowLink { from: FlowBox; to: FlowBox; sy: number; dy: number; w: number }
+interface FlowLayout { W: number; H: number; boxes: FlowBox[]; links: FlowLink[]; nodeW: number }
 
 /**
  * Columns by depth, each node a bar sized by its kWh (at least `slot` of
@@ -185,7 +185,7 @@ export function ringPoint(f: number, r: number, c: number): [number, number] {
 }
 
 /** One row of the history chart's legend, and the key of its segment. */
-export interface DeviceSeries { id: string; label: string; cls: string }
+interface DeviceSeries { id: string; label: string; cls: string }
 
 /** The history chart's series: each top-level device that used something
  *  worth showing over the period, in HA's order, then what none accounts for. */

@@ -12,7 +12,7 @@
 // light levels — inline in a method that also wrote Babylon lights — are a
 // value here: tests/oracles/sun_state.mjs.
 
-export type Rgb = readonly [number, number, number];
+type Rgb = readonly [number, number, number];
 
 /**
  * A night value between its MILD setting (night dimming 0, the long-standing
@@ -68,7 +68,7 @@ export function sunGeometry(altitude: number, azimuth: number): SunGeometry {
   };
 }
 
-export interface SunLights {
+interface SunLights {
   sunIntensity: number;
   sunColor: Rgb;
   ambient: Rgb;

@@ -72,7 +72,7 @@ export const CAPABILITIES = [
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
-export interface RolePermissions {
+interface RolePermissions {
   /** Device categories this profile sees on the map. "all" = every category. */
   allowedCategories: Category[] | "all";
   /** Device types hidden even inside an allowed category. */
@@ -145,7 +145,7 @@ export function isTypeAllowed(role: Role, type: EntityType): boolean {
  *  the beams, each with its own test of "binary_sensor"; the presence window (2.496.415) asked neither and told a
  *  guest "Latest movement · Living room motion · moving now". These are UI rules: the proxy enforces only what its
  *  readDomains say (a person's whereabouts, the cameras). No role: nothing. */
-export interface ProfileView {
+interface ProfileView {
   /** Motion and presence detectors: the toast, a beam, "Latest movement". */
   motion: boolean;
   /** A person's whereabouts (the `seePeople` capability: the proxy never relays a person to the others). */

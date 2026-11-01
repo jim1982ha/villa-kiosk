@@ -36,7 +36,7 @@ export function eyeHeightOf(configured: number | undefined): number {
  * answers a different question — what the collision capsule may climb WHILE
  * WALKING, rather than what a spawn may be placed on top of.
  */
-export const STAND_STEP_MAX = 0.70;
+const STAND_STEP_MAX = 0.70;
 /** The collision capsule's radius — the headroom test samples its width. */
 const BODY_RADIUS = 0.3;
 
@@ -61,7 +61,7 @@ export interface SpawnWorld {
   castDownStair?(x: number, fromY: number, z: number, len: number): number | null;
 }
 
-export type Stand = { ok: true; y: number } | { ok: false; why: string };
+type Stand = { ok: true; y: number } | { ok: false; why: string };
 
 /**
  * Can a PERSON STAND HERE — and on which surface?
@@ -152,7 +152,7 @@ export function flightBottom(loEnd: number, hiEnd: number, loY: number, hiY: num
 }
 
 /** Where the stairs are, as the villa can say it — most trusted first. */
-export interface StairSigns {
+interface StairSigns {
   /** A room the plan names as a staircase (its centroid is mid-flight). */
   namedRoom?: { x: number; z: number } | null;
   /** A stair-NAMED mesh's plan centre (an entity like camera.staircase_2f_cam). */

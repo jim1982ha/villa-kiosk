@@ -1,3 +1,16 @@
+## 2.496.649
+
+What you will see:
+- An opened card now has the refresh time alone on its first line. Its second line is the same as in the list: the
+  room on the left, the state pills on the right. This holds on every Cockpit card, Tickets and Schedule included.
+- Unused code removed; nothing else changes on screen.
+
+## 2.496.648
+
+What you will see:
+- A card with a ticket in progress now always says `Edit Ticket`. It said `Open Ticket` when a second fault had joined
+  the same device; `Done` still closes everything on the card.
+
 ## 2.496.647
 
 What you will see:

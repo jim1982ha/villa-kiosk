@@ -37,7 +37,7 @@ export function markFirstRunTipsSeen(): void {
 
 const OVERVIEW_VIEW_KEY = "villa-kiosk:overview-view";
 
-export interface OverviewViewSnapshot {
+interface OverviewViewSnapshot {
   alpha: number;
   beta: number;
   radius: number;

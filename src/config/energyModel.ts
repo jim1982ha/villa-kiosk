@@ -21,7 +21,7 @@ import { formatUnitValue, kwhNumber } from "@/utils/entityValue";
 import { labelOf } from "./EntityMap";
 
 /** One `energy/get_prefs` device-consumption entry. */
-export interface EnergyDevicePref {
+interface EnergyDevicePref {
   stat_consumption: string;
   stat_rate?: string | null;
   included_in_stat?: string | null;
@@ -29,7 +29,7 @@ export interface EnergyDevicePref {
 }
 
 /** The parts of `energy/get_prefs` the window reads. */
-export interface EnergySetupPrefs {
+interface EnergySetupPrefs {
   energy_sources: {
     type: string;
     stat_energy_from?: string | null;
@@ -168,8 +168,8 @@ export function typicalDay(days: readonly (number | undefined)[]): number | unde
 
 /** How today compares, so far: against a typical day's share of the hours
  *  gone. Below 80% quiet, above 120% busy — a fifth either way. */
-export const QUIET_BELOW = 0.8;
-export const BUSY_ABOVE = 1.2;
+const QUIET_BELOW = 0.8;
+const BUSY_ABOVE = 1.2;
 export function todayHeadline(soFar: number, typical: number | undefined, dayFraction: number, clock: string): string {
   if (typical === undefined || !(typical > 0)) return `${fmtKwh(soFar)} kWh so far today.`;
   const pct = Math.round((soFar / typical) * 100);
@@ -179,7 +179,7 @@ export function todayHeadline(soFar: number, typical: number | undefined, dayFra
 }
 
 /** A day that stood out: at least this many times a typical one. */
-export const STANDOUT_RATIO = 1.5;
+const STANDOUT_RATIO = 1.5;
 
 /** The last complete day that stood out, if any: its index and ratio. */
 export function standoutDay(days: readonly (number | undefined)[], typical: number | undefined): { index: number; ratio: number } | null {
@@ -228,7 +228,7 @@ export function costUnitOf(setup: EnergyCostSetup, unitOf: (entityId: string) =>
 
 /** A statistic's per-bucket values: what the recorder returned (the
  *  HistorySeries shape — only `points` is read here). */
-export interface EnergySeries { points: readonly { t: number; v: number }[] }
+interface EnergySeries { points: readonly { t: number; v: number }[] }
 
 export type EnergyBucketState = "ready" | "pending" | "missing";
 

@@ -33,7 +33,7 @@ import { SourceIcons } from "@/components/fm/sourceIcons";
 import InfoTip from "@/components/common/InfoTip";
 import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent, PageLink, RecordButtons } from "@/components/messages/AnnouncementContent";
-import RecordCard, { RoomPill, StatusPill } from "@/components/fm/RecordCard";
+import RecordCard, { CardPillLine } from "@/components/fm/RecordCard";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
 import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
@@ -61,15 +61,7 @@ export function MessageRow({ item, selected, onSelect, hold }: {
           <b>{row.title}</b>
           {row.time && <span className="messages-row-time">{row.time}</span>}
         </span>
-        {(row.room || row.status.length > 0) && (
-          <span className="messages-row-room">
-            {row.room && <RoomPill room={row.room} />}
-            {/* every pill on the right; the room's alone on the left (owner, 2026-11-01), as in the opened card */}
-            {row.status.length > 0 && (
-              <span className="messages-row-status">{row.status.map((s) => <StatusPill key={s.text} {...s} />)}</span>
-            )}
-          </span>
-        )}
+        <CardPillLine room={row.room} status={row.status} />
         {row.sub && <span className="messages-row-sub">{row.sub}</span>}
       </span>
       {hold && <span className="fm-erasable-dot" aria-hidden="true" />}

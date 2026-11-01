@@ -54,7 +54,7 @@ export function AttentionCard({ card, onOpenEntity, actions, focused }: {
   return (
     <RecordCard
       title={card.title}
-      // its room as a pill right after its name, on one line (owner, 2026-10-22): the card's room pill (RoomPill)
+      // the card's room pill, on the line under its name (CardPillLine)
       room={card.room}
       // its device's own state ("Missing"): the status pill every card has
       status={card.status}

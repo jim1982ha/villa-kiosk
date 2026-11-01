@@ -28,7 +28,7 @@ import type { LabelControls } from "./EntityVisuals";
 type Box = { halfW: number; halfH: number; cy: number };
 
 /** What one pass drew, for the check: every shown badge, every surviving card, every chip. */
-export interface SnapshotInput {
+interface SnapshotInput {
   shown: readonly ShownLabel[];
   boxes: readonly Box[];
   /** The cards that SURVIVED placement (a dropped one still leaves its members marked covered). */
@@ -178,7 +178,7 @@ export function placementReport(a: {
 }
 
 /** What a replay changes: another focus (room keys; [] for none) and whether the other rooms are held at chips. */
-export interface ReplayOptions { focus?: readonly string[]; suppressOthers?: boolean }
+interface ReplayOptions { focus?: readonly string[]; suppressOthers?: boolean }
 
 /** Run a report's pass again through the REAL PlacementPass and PlacementCheck, at the pose it was captured at. */
 export function replayPlacement(rep: PlacementReport, opt: ReplayOptions = {}):
@@ -217,7 +217,7 @@ export const PLACEMENT_TELEMETRY_MS = 60_000;
 export const PLACEMENT_TELEMETRY_BYTES = 60_000;
 
 /** One telemetry event: the report, whole when it fits (replayable), else its findings only. */
-export interface PlacementEvent { placement: PlacementReport; whole: boolean }
+interface PlacementEvent { placement: PlacementReport; whole: boolean }
 
 /**
  * Sends a FAILING pass's report to the telemetry ring: at most once a PLACEMENT_TELEMETRY_MS, and only when what

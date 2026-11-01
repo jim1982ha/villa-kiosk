@@ -55,7 +55,7 @@ export async function keptModel(url: string): Promise<ArrayBuffer | null> {
  *  Assistant one always is: Home Assistant's own (/service_worker.js), which
  *  knows nothing of the model. So the copy was never kept there — the phone's
  *  next open still downloaded it (field, 2.496.256: modelKept false, swMs 190). */
-export function ownWorkerControls(): boolean {
+function ownWorkerControls(): boolean {
   try {
     const script = globalThis.navigator?.serviceWorker?.controller?.scriptURL;
     if (!script || !globalThis.location) return false;

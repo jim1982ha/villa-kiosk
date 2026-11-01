@@ -10,13 +10,13 @@
 // room's floor against that stale copy and skipped the floor switch. One
 // reader, every mirrored field; tests/oracles/scene_mirror.mjs.
 
-export interface SceneMirror {
+interface SceneMirror {
   viewMode: "first-person" | "overview";
   hasOverviewDefault: boolean;
   floor: number;
 }
 
-export interface MirroredScene {
+interface MirroredScene {
   getViewMode(): "first-person" | "overview";
   hasOverviewDefault(): boolean;
   floors: { getCurrentFloor(): number };

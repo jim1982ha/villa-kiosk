@@ -129,7 +129,7 @@ function timesSaid(item: AttentionItem): string {
 }
 
 /** Does `title` already say `word` ("Laundry Room door unlocked" says "Unlocked"), as a whole word, whatever its case? */
-export function saysWord(title: string, word: string): boolean {
+function saysWord(title: string, word: string): boolean {
   const w = word.trim().toLowerCase();
   if (!w) return false;
   return new RegExp(`(^|[^\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}])`, "u")

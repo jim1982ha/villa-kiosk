@@ -121,7 +121,7 @@ function claimPrefetch(url: string): PrefetchEntry | null {
   return e.url === url ? e : null;
 }
 
-export type ModelBytes =
+type ModelBytes =
   /** `kept`: read from the copy this device kept, not downloaded. */
   | { ok: true; data: ArrayBuffer; prefetched: boolean; kept: boolean }
   | { ok: false; status: number };

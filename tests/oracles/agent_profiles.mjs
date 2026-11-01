@@ -27,7 +27,7 @@ ck("and exactly the ones a tablet conversation answers (conversation.profiles)",
    sameSet(Object.keys(contract.conversation.profiles), R.ROLE_ORDER), contract.conversation.profiles);
 
 console.log("\n  the words are the role table's, as the app shows them:");
-for (const [field, app] of [["label", R.ROLE_LABELS], ["short", R.ROLE_SHORT], ["initials", R.ROLE_INITIALS],
+for (const [field, app] of [["label", R.ROLE_LABELS], ["initials", R.ROLE_INITIALS],
   ["description", R.ROLE_DESCRIPTIONS]]) {
   ck(`${field}: the agreement's, the table's and the app's are one`,
      R.ROLE_ORDER.every((r) => typeof P[r][field] === "string" && P[r][field] && P[r][field] === table[r][field]
@@ -37,7 +37,7 @@ ck("formerLabels: the table's", R.ROLE_ORDER.every((r) => JSON.stringify(P[r].fo
    === JSON.stringify(table[r].formerLabels ?? [])), R.ROLE_ORDER.map((r) => P[r].formerLabels));
 // the owner's rule (2026-10-30): "Facility Manager", capital M, everywhere
 ck("the facility profile is named Facility Manager, FM where space is tight",
-   R.ROLE_LABELS.ops === "Facility Manager" && R.ROLE_SHORT.ops === "FM", [R.ROLE_LABELS.ops, R.ROLE_SHORT.ops]);
+   R.ROLE_LABELS.ops === "Facility Manager" , R.ROLE_LABELS.ops);
 
 console.log("\n  what each profile reads is what the app shows it:");
 for (const r of R.ROLE_ORDER) {

@@ -35,7 +35,7 @@ function token(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-export interface ChipProportions {
+interface ChipProportions {
   /** Glyph size as a fraction of the chip. */
   glyph: number;
   /** Gap from the chip to its label/value, as a fraction of the chip. */

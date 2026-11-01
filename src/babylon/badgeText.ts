@@ -69,7 +69,7 @@ import { bakeSizeFor, inkNudge } from "./badgeIcons";
  */
 const GUI_FONT_FAMILY = "\"Public Sans\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
 
-export interface BadgeTextOptions {
+interface BadgeTextOptions {
   /** In the GUI layer's own pixels — the caller has already scaled it. */
   fontPx: number;
   color: string;
@@ -164,7 +164,7 @@ export function badgeText(name: string, opts: BadgeTextOptions): TextBlock {
 // device that draws it.
 
 /** A room chip's count pill, as the picture to draw. */
-export interface CountBadgeSpec {
+interface CountBadgeSpec {
   /** The count as displayed (utils/countBadge.formatCountBadge). */
   text: string;
   /** Circle fill — the room's health colour (colors.healthPill). */

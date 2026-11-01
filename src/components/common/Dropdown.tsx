@@ -23,7 +23,7 @@ import { useBackToClose } from "@/hooks/useBackToClose";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import { dropdownPlacement } from "./dropdownPlacement";
 
-export interface DropdownOption<T extends string> {
+interface DropdownOption<T extends string> {
   value: T;
   label: ReactNode;
   /** Plain words for the button's accessible name and type-ahead, when the

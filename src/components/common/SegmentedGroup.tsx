@@ -7,7 +7,7 @@
 
 import type { ReactNode } from "react";
 
-export interface SegmentedOption<K extends string> {
+interface SegmentedOption<K extends string> {
   key: K;
   /** What the button shows — text, an icon, or both. */
   label: ReactNode;

@@ -22,7 +22,7 @@ import { binaryWord } from "./binarySensorWords";
 import { binaryStatus, STATUS_COLOR, STATUS_PILL_CLASS, type StatusKey } from "@/utils/stateColors";
 import { prettyState } from "@/utils/entityValue";
 
-export interface BinaryLook {
+interface BinaryLook {
   /** The state that is this sensor's PROBLEM (an alert), if it has one —
    *  what the badge, the alerts and the reading's level read. */
   problem: string | undefined;

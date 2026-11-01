@@ -25,7 +25,7 @@ export interface BarSeg { key: string; label: string; v: number; cls: string }
  *  hour still running); `null` NO READING — the recorder has nothing for it. */
 export interface BarBucket { t: number; segs: BarSeg[] | null }
 
-export interface BarLayout {
+interface BarLayout {
   /** The scale's round top, and the axis ticks: `y` down from the top of
    *  the plot, as a fraction of its height (ChartAxis' frame of 1). */
   top: number;
@@ -36,7 +36,7 @@ export interface BarLayout {
 }
 
 /** A bucket's stacked total (0 for no reading). */
-export const bucketTotal = (b: BarBucket) => (b.segs ?? []).reduce((a, s) => a + s.v, 0);
+const bucketTotal = (b: BarBucket) => (b.segs ?? []).reduce((a, s) => a + s.v, 0);
 
 export function barLayout(buckets: readonly BarBucket[], typical?: number): BarLayout {
   // ⚠️ NOTHING ABOVE ZERO SCALES TO ONE UNIT. A dry day's rain chart scaled
@@ -65,7 +65,7 @@ export function barLayout(buckets: readonly BarBucket[], typical?: number): BarL
  * centre (`y` down from the top, 0–1); none where the value is missing, so
  * the line breaks there rather than dropping to 0.
  */
-export interface LineLayout {
+interface LineLayout {
   top: number;
   ticks: { v: number; y: number }[];
   /** Runs of consecutive points: a missing value breaks the line. */
@@ -101,7 +101,7 @@ export function barTick(i: number, n: number): { at: number; align: "start" | "m
   return { at: barCentre(i, n), align: "middle" };
 }
 
-export interface BarTipRow { key: string; cls?: string; text: string }
+interface BarTipRow { key: string; cls?: string; text: string }
 
 /**
  * What a bucket's tooltip says, every value in the chart's own unit (`fmt`):

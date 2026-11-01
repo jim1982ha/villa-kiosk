@@ -29,7 +29,7 @@ export type Registration = {
   addEventListener(type: "updatefound", listener: () => void): void;
 };
 /** The one call that asks the server for a newer worker (ServiceWorkerRegistration.update). */
-export type Checkable = { update(): Promise<unknown> };
+type Checkable = { update(): Promise<unknown> };
 
 /** How often an OPEN app asks whether a new build was published. */
 export const CHECK_EVERY_MS = 10 * 60_000;

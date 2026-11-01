@@ -66,7 +66,7 @@ export function poolStrength(intensityFrac: number, intensityScale: number): num
   return Math.min(2, Math.max(0.15, intensityFrac) * intensityScale);
 }
 
-export function poolAlphaAt(normalisedDist: number): number {
+function poolAlphaAt(normalisedDist: number): number {
   for (let i = 0; i < POOL_ALPHA_STOPS.length - 1; i++) {
     const [t0, a0] = POOL_ALPHA_STOPS[i];
     const [t1, a1] = POOL_ALPHA_STOPS[i + 1];

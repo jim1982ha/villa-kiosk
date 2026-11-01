@@ -29,7 +29,7 @@ import type { StatisticsPeriod } from "./statisticsSeries";
 export interface ValueRange { lo: number; hi: number }
 
 /** Where a step's finer values come from: the readings themselves, or the recorder's figures of a finer period. */
-export type FinerSource = "readings" | StatisticsPeriod;
+type FinerSource = "readings" | StatisticsPeriod;
 
 /** The finer values of each chart step (historyRanges `period`): five minutes from the readings, an hour from the
  *  five-minute figures, a day from the hourly ones, a week (and a month) from the daily ones. */
@@ -55,7 +55,7 @@ const inside = (v: number, r: ValueRange) => v >= r.lo && v <= r.hi;
  * Each step between `edges` (the chart's own step edges, timelineCells.cellEdges): the average of its finer values
  * inside `range`, or null when none is. `window` clips the readings' spans to the chart's own window.
  */
-export function stepsInRange(finer: Pick<FinerSeries, "series" | "stepMs">, edges: readonly number[], range: ValueRange,
+function stepsInRange(finer: Pick<FinerSeries, "series" | "stepMs">, edges: readonly number[], range: ValueRange,
   window?: { from: number; to: number }): (number | null)[] {
   const n = Math.max(0, edges.length - 1);
   const w = new Array<number>(n).fill(0), sum = new Array<number>(n).fill(0);
@@ -141,7 +141,7 @@ export function keptChart(base: HistorySeries, finer: Pick<FinerSeries, "series"
 
 /** What a one-line chart draws for its range: the line, its x window, the closed-up chart, and where its detail
  *  stands. */
-export interface RangeChart {
+interface RangeChart {
   points: HistoryPoint[];
   gaps: HistoryGap[];
   /** The kept steps' own window; the period's when unfiltered, still loading, or nothing is kept (the frame and the
@@ -194,10 +194,10 @@ export function handleValues(range: ValueRange | null | undefined, axis: SliderA
 }
 
 /** How close the two handles may come, as a fraction of the axis: they never cross, nor sit on each other. */
-export const HANDLE_GAP_OF_AXIS = 1 / 40;
+const HANDLE_GAP_OF_AXIS = 1 / 40;
 
 /** A pointer this close (drawing px) to an end of the axis puts the handle AT that end: no limit on that side. */
-export const END_PX = 4;
+const END_PX = 4;
 
 /** The arrow keys move a handle a tenth of the axis' tick step. */
 export function handleGrain(step: number): number {

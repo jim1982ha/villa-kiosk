@@ -22,7 +22,7 @@
 
 import { useEffect, useState, type RefObject } from "react";
 
-export interface BarRoom {
+interface BarRoom {
   /** The bar's two side tracks together, as its grid laid them out (px). */
   sides: number;
   /** The app icon's side (px). */
