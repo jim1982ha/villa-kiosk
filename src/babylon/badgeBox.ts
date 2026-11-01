@@ -19,10 +19,10 @@ import { valueAdvanceEm } from "./valueAdvance";
 import { VALUE_CAPABLE_TYPES } from "@/utils/entityValue";
 
 /** A badge's collision box in screen px, relative to its anchor point. */
-export interface BadgeBox { halfW: number; halfH: number; cy: number }
+interface BadgeBox { halfW: number; halfH: number; cy: number }
 
 /** What a badge's size depends on. */
-export interface BadgeBoxInput {
+interface BadgeBoxInput {
   /** The card style (one horizontal card) rather than the classic round badge. */
   card: boolean;
   /** The mapping type — whether a classic badge can EVER carry a value pill. */

@@ -31,7 +31,7 @@ export interface HitPickers {
   clusterAt(x: number, y: number): { room: string; entityIds: string[]; roomNames: string[] } | null;
 }
 
-export type Hit =
+type Hit =
   /** One device: a card's cell, or a badge. */
   | { kind: "device"; entityId: string }
   /** A group card, at a point that names no device of its own. */

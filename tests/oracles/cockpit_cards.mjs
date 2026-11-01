@@ -22,8 +22,10 @@ const ticket = draw(h(RecordCard, { title: "#33 · Test lock unavailable",
   erase: { title: "Erase", detail: "x", run: async () => {} }, onOpen: () => {},
   actions: h(React.Fragment, null, btn("Mark resolved"), btn("Close")) }));
 const head = inside(ticket, "fm-record-head"), body = inside(ticket, "fm-record-body");
-ck("its pill on the title line, in its tone's class (a filled pill: .fm-badge.tone-warn, 07-facility.css)",
-   /#33 · Test lock unavailable[\s\S]*In progress/.test(head) && /fm-badge tone-warn/.test(head) && !/due-soon/.test(head), head);
+const pillLine = (html) => inside(html, "card-pill-line");
+ck("its pill on the line under its title, in its tone's class (a filled pill: .fm-badge.tone-warn, 07-facility.css)",
+   head.includes("#33 · Test lock unavailable") && !head.includes("In progress") && /In progress/.test(pillLine(ticket))
+   && /fm-badge tone-warn/.test(pillLine(ticket)) && !/due-soon/.test(ticket), ticket);
 ck("  ...its buttons INSIDE the card, on the right of its text (owner, 2026-10-14)",
    /fm-record-actions[\s\S]*Mark resolved[\s\S]*Close/.test(body) && /fm-row-main[\s\S]*fm-record-actions/.test(body)
    && inside(ticket, "fm-record-card").includes("Mark resolved"), body);
@@ -44,9 +46,9 @@ const issue = draw(h(AttentionCard, { card: cockpitCard(group, CADENCE), onOpenE
   actions: h(React.Fragment, null, btn("Open Ticket"), btn("Close")) }));
 // owner, 2026-10-22: "show the area right after the device name, as the Spend tab's pills … to save one line"; "remove
 // the chevron, it's redundant"
-ck("it IS the Cockpit card: its source icons, then its name and its room as a pill on ONE line — no chevron",
+ck("it IS the Cockpit card: its source icons, then its name; its room as a pill on the line under — no chevron",
    /class="fm-record-card"/.test(issue) && /fm-record-lead[\s\S]*<svg/.test(inside(issue, "fm-record-head"))
-   && /<strong>Test lock<\/strong><span class="fm-entity-chip fm-chip-static">Hall<\/span>/.test(issue)
+   && /<strong>Test lock<\/strong><\/div>/.test(issue) && /fm-entity-chip fm-chip-static">Hall</.test(pillLine(issue))
    && !/lucide-chevron-right/.test(issue) && !/fm-record-subtitle/.test(issue), issue.slice(0, 400));
 ck("  ...its problem's line on the left, Open Ticket and Close inside on the right of it",
    /fm-row-main[\s\S]*#33 · Test lock unavailable[\s\S]*fm-record-actions[\s\S]*Open Ticket[\s\S]*Close/.test(inside(issue, "fm-record-body")));
@@ -203,7 +205,7 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
     { id: "fault:f2", kind: "fault", title: "#55 · Door unlocked", detail: "Fault", entityId: "lock.door", ticketId: "f2", stage: "fault", source: "alert", device: dev }]);
   const lines = inside(draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {} })), "fm-record-body")
     .split('<li class="cockpit-attention-sub">').slice(1);
-  const gutter = (css.match(/\.fm-record-head:has\(> \.fm-record-lead\) \+ \.fm-record-body \{ padding-left: (\d+)px/) ?? [])[1];
+  const gutter = (css.match(/\.fm-record-head:has\(> \.fm-record-lead\) ~ :is\(\.fm-record-body, \.card-pill-line\) \{ padding-left: (\d+)px/) ?? [])[1];
   const hung = (css.match(/\.fm-record-gutter > \.fm-record-gutter-icon \{[^}]*position: absolute; left: -(\d+)px/) ?? [])[1];
   ck("  ...a line with its own icon starts its text where a line without one does: the icon hangs in the card's icon column",
      // two sources on the card: each line draws its own (config/cockpitCard.cardIcons), both in the icon column
@@ -241,8 +243,8 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
 console.log("\n  a scheduled task — the same card:");
 const task = draw(h(RecordCard, { title: "Pool filter clean", tone: "state-due-soon", status: { text: "Due soon", tone: "due-soon" },
   when: "due in 3 days · every 30 days", actions: h(React.Fragment, null, btn("Log"), h("button", { className: "icon-btn", "aria-label": "Remove" })) }));
-ck("its state pill on the title line, Log and the bin inside on the right, its tint on the card",
-   /Pool filter clean[\s\S]*Due soon/.test(inside(task, "fm-record-head")) && /fm-record-actions[\s\S]*Log[\s\S]*aria-label="Remove"/.test(task)
+ck("its state pill on the line under its title, Log and the bin inside on the right, its tint on the card",
+   /Pool filter clean/.test(inside(task, "fm-record-head")) && /Due soon/.test(pillLine(task)) && /fm-record-actions[\s\S]*Log[\s\S]*aria-label="Remove"/.test(task)
    && /class="fm-record-card state-due-soon"/.test(task), task.slice(0, 300));
 ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase on it", !/fm-erasable/.test(task));
 
@@ -328,12 +330,12 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   const pill = draw(h(RoomPill, { room: "Kitchen" }));
   const card = draw(h(RecordCard, { title: "Pump", room: "Kitchen", titlePills: h("span", { className: "fm-entity-chip" }, "DEVICE"),
     pills: h("span", { className: "fm-clause" }, "Cl. 3") }));
-  ck("a card's room is the room pill, on its title's line after its other pills; the tags keep the clause only",
-     inside(card, "fm-row-title").includes(pill) && inside(card, "fm-row-title").indexOf("DEVICE") < inside(card, "fm-row-title").indexOf(pill)
+  ck("a card's room is the room pill, on the line under its title; its other pills stay on the title's line; the tags keep the clause only",
+     pillLine(card).includes(pill) && inside(card, "fm-row-title").includes("DEVICE")
      && !inside(card, "fm-record-body").includes("Kitchen") && pill.includes("fm-entity-chip"), card);
   const issue = draw(h(AttentionCard, { card: { key: "k", title: "Pump", room: "Kitchen", lead: null, nextCheck: null, actions: [],
     lines: [{ key: "l", text: "Stopped", story: [], closing: null, openedAt: null }] }, onOpenEntity() {} }));
-  ck("  ...the Inbox's opened card draws the same pill", inside(issue, "fm-row-title").includes(pill), issue);
+  ck("  ...the Inbox's opened card draws the same pill", pillLine(issue).includes(pill), issue);
   const roomed = { "fm/TicketsTab.tsx": "roomOf(t) || undefined", "fm/ScheduleEditor.tsx": "s.room || undefined",
     "fm/TodayTab.tsx": "s.schedule.room || undefined", "fm/SpendTab.tsx": "roomOf(c) || undefined", "cockpit/IssueCard.tsx": "card.room" };
   const given = Object.fromEntries(Object.keys(roomed).map((f) => [f, elements(parseTsx(`components/${f}`), "RecordCard")
@@ -364,7 +366,7 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
   const sched = readFileSync(new URL("../../src/components/fm/ScheduleEditor.tsx", import.meta.url), "utf8");
   ck("  ...a paused task too: the status pill, no grey tag", /text: "Paused", tone: pillClass/.test(sched) && !/fm-clause">Paused/.test(sched));
   const row = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
-  ck("  ...and the Inbox's row draws the card's own pills", /status: card\.status \?\? \[\]/.test(row) && /row\.status\.map\(\(s\) => <StatusPill/.test(row));
+  ck("  ...and the Inbox's row draws the card's own pills", /status: card\.status \?\? \[\]/.test(row) && /<CardPillLine room=\{row\.room\} status=\{row\.status\} \/>/.test(row));
 }
 
 done("✅ every Cockpit list is one card, checked as it is drawn");

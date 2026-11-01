@@ -15,7 +15,7 @@
 import type { HistoryGap, HistorySeries } from "@/types/ha.types";
 import { cellEdges, cellIndex } from "@/utils/timelineCells";
 
-export const TREND_INTERVAL_MIN = 5;
+const TREND_INTERVAL_MIN = 5;
 export const TREND_INTERVAL_MS = TREND_INTERVAL_MIN * 60_000;
 
 /**

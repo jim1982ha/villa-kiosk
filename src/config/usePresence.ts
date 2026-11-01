@@ -15,7 +15,7 @@ import { presenceOf, presenceSince, presenceWatched, presenceWhy, recapPresenceT
 /** "since" in words, as every presence line says it ("19 Oct, 14:20", "before 10 Oct", "…" while read). */
 export const sinceWords = (s: Since): string => sinceText(s, dayTime, dayMonth);
 
-export interface VillaPresence {
+interface VillaPresence {
   presence: Presence;
   /** The sensor picked in Settings › Villa (its band in the window). */
   sensorId: string;

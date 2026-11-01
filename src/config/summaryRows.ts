@@ -83,7 +83,7 @@ export function offersGrouping<T>(items: readonly T[], idOf: (t: T) => string, r
   return bucketByRoom(items, idOf, roomOf).length > 1;
 }
 
-export interface SummaryRows {
+interface SummaryRows {
   /** In Home Assistant and drawn on the map. */
   onMap: HassEntity[];
   /** In Home Assistant, not on the map — empty for a profile that may not

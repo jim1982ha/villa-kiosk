@@ -53,7 +53,7 @@ export function isCeilingFan(entityId: string): boolean {
 }
 
 /** One mesh of a fan, reparented under a pivot at its true axle. */
-export interface FanRig { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }
+interface FanRig { mesh: AbstractMesh; pivot: TransformNode; axisLocal: Vector3 }
 
 export class FanRigs {
   private readonly scene: Scene;

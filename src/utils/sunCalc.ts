@@ -4,7 +4,7 @@
 
 import { DAY_MS } from "./localDay";
 
-export interface SunPosition {
+interface SunPosition {
   /** radians, 0 = south, measured clockwise (Babylon-friendly). */
   azimuth: number;
   /** radians above the horizon (negative = below). */
@@ -74,7 +74,7 @@ export function getSunPosition(date: Date, lat: number, lng: number): SunPositio
 // also keeps the moon working on an install that never added the integration,
 // and offline, which the add-on requires anyway.
 
-export interface MoonPosition extends SunPosition {
+interface MoonPosition extends SunPosition {
   /** km, centre to centre — varies ~356k–406k over a month. */
   distance: number;
   /** radians; tilt of the lit limb, for orienting a rendered crescent. */
@@ -115,7 +115,7 @@ export function getMoonPosition(date: Date, lat: number, lng: number): MoonPosit
   return { azimuth, altitude, distance: c.dist, parallacticAngle };
 }
 
-export interface MoonIllumination {
+interface MoonIllumination {
   /** 0 = new, 1 = full — the lit FRACTION of the disc. */
   fraction: number;
   /** 0 → 1 around the cycle: 0 new, 0.25 first quarter, 0.5 full, 0.75 last. */

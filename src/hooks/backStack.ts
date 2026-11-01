@@ -58,7 +58,7 @@ export interface HistoryPort {
   task(fn: () => void): void;
 }
 
-export interface BackStack {
+interface BackStack {
   /** Register a surface; returns its unregister. Order = nesting. */
   register(close: () => void): () => void;
   dismissTop(): boolean;

@@ -69,7 +69,7 @@ const PAIRABLE_SUFFIXES: readonly [string, string][] = [
   ["_temperature", "_humidity"],
 ];
 
-export interface DeviceGroupSuggestion {
+interface DeviceGroupSuggestion {
   primaryEntityId: string;
   memberEntityId: string;
 }
@@ -297,7 +297,7 @@ export function deviceFolding(
  * genuinely dropped on the path the fault picker, the offline count and
  * readiness all take — see primaryByMember.
  */
-export interface VillaDeviceInput {
+interface VillaDeviceInput {
   entityMap: Record<string, EntityMapping>;
   deviceGroups: readonly DeviceGroup[];
   /** The dismissed devices, as the villa model computed them ONCE (dismissedEntities.dismissedEntitySet — never an

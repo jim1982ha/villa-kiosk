@@ -23,7 +23,7 @@ export interface FloorPlan { readonly count: number; levelAt(y: number): number 
 
 /** A storey the MODEL's own structure shows: its 1-based floor and the height
  *  of its slab (the lowest point of its structure). */
-export interface StructureFloor { floor: number; y: number }
+interface StructureFloor { floor: number; y: number }
 
 /** How far above a slab a thing must stand to be ON that storey — the plan's
  *  own clearance (storeys.STOREY_MIN_MOUNT), restated here only because this
@@ -103,7 +103,7 @@ export function stairTarget(floors: readonly number[], current: number, up: bool
 }
 
 /** Anything that can carry the stamp: a mesh, an anchor node. */
-export interface FloorNode { metadata?: unknown; parent?: FloorNode | null }
+interface FloorNode { metadata?: unknown; parent?: FloorNode | null }
 
 const stampOf = (n: FloorNode | null | undefined): number | undefined => {
   const f = (n?.metadata as { floorIndex?: unknown } | null | undefined)?.floorIndex;

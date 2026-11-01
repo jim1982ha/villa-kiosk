@@ -48,9 +48,9 @@ export const WHEEL_STEP_PX = 120;
 export const WHEEL_IDLE_MS = 320;
 
 /** -1 previous, 0 nothing, +1 next. */
-export type CameraStep = -1 | 0 | 1;
+type CameraStep = -1 | 0 | 1;
 
-export type WheelOwner = "zoom" | "camera";
+type WheelOwner = "zoom" | "camera";
 
 /**
  * Who does this wheel event belong to?

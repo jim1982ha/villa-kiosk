@@ -170,7 +170,7 @@ export function alarmText(id: string, entity: HassEntity): string {
 }
 
 /** A control window's state pill: its words and its `.status-pill` tone. */
-export interface StatePill {
+interface StatePill {
   text: string;
   /** The `.status-pill` modifier class ("on", "danger", "transitional"…). */
   tone: string;

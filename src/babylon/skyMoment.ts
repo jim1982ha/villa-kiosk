@@ -20,10 +20,10 @@ import { getSunPosition, getMoonPosition, getMoonIllumination } from "@/utils/su
 import { sunGeometry, towardBody, unit, type SunGeometry } from "./sunState";
 import type { Vec3 } from "./skyBodies";
 
-export type DayNightPreview = "day" | "auto" | "night";
+type DayNightPreview = "day" | "auto" | "night";
 
 /** Where the villa is on the Earth, and which way its model faces. */
-export interface SkyPlace { latitude: number; longitude: number; northOffsetDeg: number }
+interface SkyPlace { latitude: number; longitude: number; northOffsetDeg: number }
 
 /** The real moon: where it is, and how it is lit. */
 export interface MoonNow {

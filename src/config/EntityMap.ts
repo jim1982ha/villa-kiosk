@@ -107,7 +107,7 @@ function looksLikeRawSlug(s: string): boolean {
  *  friendly_name is available — instead of the all-lowercase, doubled-up
  *  raw slug ("master bedroom master bedroom light ceiling center") that
  *  used to be the permanent fallback. */
-export function prettifyEntitySlug(entityId: string): string {
+function prettifyEntitySlug(entityId: string): string {
   const raw = entityId.split(".")[1] ?? entityId;
   return prettifyRaw(raw);
 }

@@ -25,7 +25,7 @@ import { countOf } from "@/utils/countOf";
 
 
 /** One service call of a bulk switch. */
-export interface BulkCall { domain: string; service: "turn_on" | "turn_off" | "lock" | "unlock"; entityIds: string[] }
+interface BulkCall { domain: string; service: "turn_on" | "turn_off" | "lock" | "unlock"; entityIds: string[] }
 
 /**
  * Switch a mixed list all on or all off: ONE call PER DOMAIN, each with its

@@ -32,7 +32,7 @@ import { ROLE_LABELS } from "@/auth/roles";
  *  moment passed (fm/faultConfirm.confirmParts: it was written there a second time, architecture review, 2026-10-26). */
 export const withinLook = (c: Pick<AgentCadence, "checkMinutes">): string => `within ${fmtDuration(c.checkMinutes * 60_000)}`;
 
-export interface SourceRow {
+interface SourceRow {
   source: IssueSource;
   /** What it is, in a few words. */
   what: string;
@@ -101,7 +101,7 @@ function nightGoes(c: AgentCadence | null): string {
 }
 
 /** The table's two groups (owner, 2026-10-15): what the Kiosk and its people produce, then what the VESTA Agent does. */
-export interface SourceGroup { title: string; rows: readonly SourceRow[] }
+interface SourceGroup { title: string; rows: readonly SourceRow[] }
 
 /** What the pill at the right of a card's name says happens at its time (RecordCard CheckPill draws each kind's icon):
  *  "next", VESTA looks again then (an open card's refresh icon); "closes", VESTA closes it then if all is still well (a
@@ -113,7 +113,7 @@ export type CheckPillKind = "next" | "closes";
  *  (validated ones)"): the last row of the VESTA Agent's group — a cleared fault on the Watch list (fm/faultConfirm), no
  *  source of its own; its pill's words in the Agent's own numbers when its heartbeat said them. Its words follow the
  *  owner's life of a problem, Open › Cleared (on the Watch list) › Closed (2026-10-31): it said "Being confirmed". */
-export interface ConfirmingRow { words: string; what: string; opens: string; goes: string }
+interface ConfirmingRow { words: string; what: string; opens: string; goes: string }
 export function confirmingRow(c: AgentCadence | null): ConfirmingRow {
   const look = c ? withinLook(c) : "at its next look";
   return {
@@ -145,7 +145,7 @@ export function faultTiming(agent: boolean, cadence: AgentCadence | null = null)
 
 /** One problem of a card, as nextCheck reads it: where it comes from, how the VESTA Agent reads it again (its fault's
  *  `check`), and the fault merged onto it (attention.mergeFaults). */
-export interface CheckedProblem { source?: IssueSource; check?: FmTicketCheck; fault?: CheckedProblem }
+interface CheckedProblem { source?: IssueSource; check?: FmTicketCheck; fault?: CheckedProblem }
 
 type Clock = FmTicketCheck | "hand";
 

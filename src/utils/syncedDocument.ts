@@ -58,7 +58,7 @@ export function unsentWorkHeld(): boolean {
   return false;
 }
 
-export interface SyncedDocumentSpec<D, Diff extends KeyedParts, F extends StoreFetch<D> = StoreFetch<D>> {
+interface SyncedDocumentSpec<D, Diff extends KeyedParts, F extends StoreFetch<D> = StoreFetch<D>> {
   /** The server's copy, in baseline form; null when it cannot be reached. `signal`: a push that ran out of time
    *  aborts the request it was waiting on. */
   fetch: (signal?: AbortSignal) => Promise<F | null>;
@@ -102,7 +102,7 @@ export interface SyncedDocumentSpec<D, Diff extends KeyedParts, F extends StoreF
   deadlineMs?: number;
 }
 
-export type PullResult<F> =
+type PullResult<F> =
   | { action: "wait" | "unreachable" | "repush"; fetched?: undefined }
   | { action: "seed" | "noop" | "apply"; fetched: F };
 
@@ -111,7 +111,7 @@ export type PullResult<F> =
  *  device's own writes coming back (keyedSync withoutOwnWrites). Each store lays `others` under its own edits
  *  (keyedSync mineWins). ⚠️ NOT THE STORE'S COPY ITSELF (`base`, to 2.496.500): against `synced`, a write of this
  *  device's that landed after its push gave up on it read as another device's change. */
-export type PushResult<D, Diff> =
+type PushResult<D, Diff> =
   | (Omit<Extract<PushOutcome<D>, { ok: true }>, "base"> & { synced: D; others: Diff })
   | Exclude<Extract<PushOutcome<D>, { ok: false }>, { reason: "refused" }>
   /** `takeBack`: what puts every item this push SENT back as the store holds it, for the adapter to lay on its local
@@ -125,11 +125,11 @@ export type PushResult<D, Diff> =
 /** What a push's answer made of a screen's change (landPush): it landed; there was nothing to send (or this profile
  *  may not, or the store was never read); the add-on said no (taken back); it is kept on this device and sent again;
  *  it could not be sent again and was taken back (`once`). */
-export type SaveVerdict = "saved" | "unchanged" | "refused" | "unsent" | "undone";
+type SaveVerdict = "saved" | "unchanged" | "refused" | "unsent" | "undone";
 
 /** A store's own way of laying a push's answer on its screen copy as it is NOW (each store's copy and its merge are
  *  its own: the device setup's mergeRemote, the Facility record's foldOthers). */
-export interface ScreenCopy<D, Diff> {
+interface ScreenCopy<D, Diff> {
   /** The push landed: other tablets' changes (`others`, against `synced`) laid under this device's own edits. Returns
    *  what the screen says of them (a record both changed, one removed elsewhere), or null. */
   landed: (o: Extract<PushResult<D, Diff>, { ok: true }>) => string | null;

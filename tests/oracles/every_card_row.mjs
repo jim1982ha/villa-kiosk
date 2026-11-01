@@ -45,21 +45,26 @@ const watched = confirmingCards([{ ticket: ticket("w1", "lock.asked"), word: "Cl
 const table = { offline: issue("unavailable:camera.offline"), missing: issue("unavailable:camera.gone"), alarm: issue("alarm:binary_sensor.leak"),
   "task never done": issue("schedule:s1"), fault: issue("fault:f1"), ticket: issue("fault:f2"), watched: { kind: "issue", key: "w", card: watched } };
 
+const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 console.log("\n  each field of the row, on each kind:");
 for (const [name, item] of Object.entries(table)) {
   const row = draw(h(MessageRow, { item, selected: false, onSelect() {} }));
   ck(`${name}: its name on the first line, the time beside it`, /<b>[^<]+<\/b>/.test(inside(row, "messages-row-head"))
      && text(inside(row, "messages-row-time")).includes(momentText(began)), row);
+  const opened = draw(h(AttentionCard, { card: item.card, onOpenEntity() {} }));
+  ck("  ...the opened card's second line is the row's own, the first keeps only its name and its next check",
+     (inside(row, "card-pill-line") ?? "") === (inside(opened, "card-pill-line") ?? "")
+     && !/fm-badge/.test(inside(opened, "fm-record-head")), opened);
   ck("  ...no frame: every row one look", /class="messages-row"/.test(row), row);
-  const pills = row.indexOf("messages-row-status"), room = row.indexOf("fm-entity-chip");
+  const pills = row.indexOf("card-pill-status"), room = row.indexOf("fm-entity-chip");
   ck("  ...its room left, its state pills in the group pushed right, nothing of its state in the words",
      (pills >= 0) === ((item.card.status ?? []).length > 0) && (pills < 0 || room < 0 || room < pills) && !row.slice(0, pills < 0 ? 0 : pills).includes("fm-badge")
      && (pills < 0 || !/Missing|Unavailable|In progress/.test(text(inside(row, "messages-row-sub") || ""))), row);
 }
 ck("each kind that has a state shows it as a pill", ["offline", "missing", "alarm", "task never done", "ticket"]
    .every((k) => (table[k].card.status ?? []).length > 0), Object.entries(table).map(([k, v]) => [k, v.card.status]));
-const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
-ck("the pills' group is pushed right; no rule frames a row", /\.messages-row-status \{[^}]*margin-left: auto/.test(css)
+const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
+ck("the pills' group is pushed right; no rule frames a row", /\.card-pill-status \{[^}]*margin-left: auto/.test(css)
    && !/\.messages-row\.ticket/.test(css));
 
 console.log("\n  what the corner says, and where the moment comes from:");

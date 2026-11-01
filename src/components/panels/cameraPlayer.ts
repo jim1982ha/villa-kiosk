@@ -53,7 +53,7 @@ export interface CameraPlayerState {
   frameReady: boolean;
 }
 
-export interface Timers {
+interface Timers {
   setTimeout(fn: () => void, ms: number): unknown;
   clearTimeout(id: unknown): void;
 }

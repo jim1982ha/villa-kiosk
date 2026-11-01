@@ -293,7 +293,7 @@ const VALUE_MARGIN_OF_ICON_PAD = CARD_VALUE_MARGIN_OF_ICON_PAD;
 const INK_INSET_FRACTION = BADGE_INSET_CARD;
 
 /** The six struts a card badge's row is built from, in order, and their sum. */
-export interface CardStruts {
+interface CardStruts {
   /** A BARE icon's left margin, shown INSTEAD of `padl` when there is no
    *  value: the very same number as `padr`, so the chip is centred (2.496.130). */
   barepad: number;

@@ -56,7 +56,7 @@
 /* what stands before its title (an issue's source icons), the line under the title (its room); its text then starts
    under the title, not under the icons */
 .fm-record-lead { flex: 0 0 18px; display: inline-flex; justify-content: center; margin-top: 2px; }
-.fm-record-head:has(> .fm-record-lead) + .fm-record-body { padding-left: 30px; }
+.fm-record-head:has(> .fm-record-lead) ~ :is(.fm-record-body, .card-pill-line) { padding-left: 30px; }
 /* a line's own icon hangs in that column, under the card's, so every line's text starts at the same place, with or
    without an icon (owner, 2026-10-18: "#55" sat further right than "#41" above it) */
 .fm-record-body .fm-record-gutter { position: relative; }
@@ -75,11 +75,13 @@
 .fm-record-head { display: flex; align-items: flex-start; gap: 12px; padding-right: 10px; flex: 1 1 100%; }
 .fm-record-head .fm-row-title { flex: 1 1 auto; min-width: 0; }
 .fm-record-head .fm-row-title strong { font-weight: 600; font-size: var(--text-md); line-height: 1.35; overflow-wrap: anywhere; }
-.fm-record-head .fm-badge { flex: 0 0 auto; margin-top: 2px; }
+/* a card's line of pills, in the Inbox's list and on the opened card alike (CardPillLine) */
+.card-pill-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 100%; min-width: 0; }
+.card-pill-status { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
+.fm-record > .card-pill-line { padding-right: 10px; }
 /* its text starts right under the room, level with the top of its buttons — centred on them, it left a blank line
    (owner, 2026-10-15: "don't skip a line between the device name and the next section") */
 .fm-record-body { flex: 1 1 100%; min-width: 0; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; }
-/* the chevron and, under it on the room's line, a short word ("Next check: 02:00") */
 /* the next check: a pill at the right of the title's line, its refresh icon before when (RecordCard `check`) */
 .fm-record-check { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; margin-top: 2px; }
 /* ⚠️ THE CARD'S WIDTH, NEVER ITS LONGEST LINE (owner, 2026-10-14: a "VESTA reads: …" note ran past a Closed card's
@@ -180,7 +182,7 @@
    still they wrap together, never cut. */
 .fm-work-row { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .fm-work-row > .btn { padding: 0 12px; white-space: nowrap; }
-.fm-record-head:has(> .fm-record-lead) + .fm-record-body .fm-work-row { margin-left: -30px; }
+.fm-record-head:has(> .fm-record-lead) ~ .fm-record-body .fm-work-row { margin-left: -30px; }
 /* A card's Need help that nothing has answered yet ("🆘 Need help asked …", WorkButtons): a line of its own above the
    buttons, on the Inbox and the Tickets tab alike (architecture review round 6). */
 .fm-work-asked { flex: 1 1 100%; min-width: 0; font-size: var(--text-xs); color: var(--text-dim); }

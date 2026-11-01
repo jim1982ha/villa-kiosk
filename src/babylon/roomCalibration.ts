@@ -7,14 +7,14 @@
 import { fitAffine, affineResidual, spanArea, type PlanWorldPair } from "@/utils/affineFit";
 import { polygonCentroid } from "@/config/Sh3dCalibration";
 
-export type PlanToWorld = (px: number, py: number) => { x: number; z: number };
+type PlanToWorld = (px: number, py: number) => { x: number; z: number };
 
-export interface RoomPlan {
+interface RoomPlan {
   name: string;
   points: { x: number; y: number }[];
 }
 
-export interface CalibrationContext {
+interface CalibrationContext {
   /** Plan-position ↔ observed world-position pairs from entity-named meshes. */
   pairs: PlanWorldPair[];
   /** Room polygons in plan space (cm). */
@@ -27,7 +27,7 @@ export interface CalibrationContext {
   hitsFloorAt: (wx: number, wz: number) => boolean;
 }
 
-export interface CalibrationSolution {
+interface CalibrationSolution {
   planToWorld: PlanToWorld;
   /** Human-readable summary of which strategy ran (for the dev log). */
   strategy: string;

@@ -27,7 +27,7 @@ import { fmtDuration } from "@/components/panels/chartUtils";
 // "Generated:" (owner's decision, 2026-10-19): a saved recap or statement is read years later, on any device; its rows were written in the generating
 // phone's locale ("05 Sept 2026" / "Sep 5, 2026") beside a fixed stamp. Screens keep the reader's locale (shortDate).
 
-export interface RecapInput {
+interface RecapInput {
   fm: FmData;
   month: string;
   villaName: string;
@@ -126,7 +126,7 @@ export function readinessTable(readiness: Pick<ReadinessResult, "checks">): stri
 
 /** Shared `# title` / Period / Generated / Scope preamble every document opens with — kept in one place so the
  *  financial-reporting disclaimer can't drift between them. */
-export function documentHeader(titleSuffix: string, villaName: string, month: string, scopeDescription: string): string[] {
+function documentHeader(titleSuffix: string, villaName: string, month: string, scopeDescription: string): string[] {
   return [
     `# ${villaName}: ${titleSuffix}`,
     `**Period:** ${monthLabel(month)}  `,

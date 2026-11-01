@@ -55,7 +55,7 @@ export const MIN_ROOM_FIT_RADIUS = 1.5;
  *  the destination's scale). Every eligible badge in the villa, not just the
  *  room's: a pile can span rooms, and a neighbour touching the room's badge
  *  sends it back to a chip. */
-export interface ZoomBadge {
+interface ZoomBadge {
   /** Its anchor, world space. */
   wx: number; wy: number; wz: number;
   /** Whether it is one of the tapped room's — only those must be in frame. */
@@ -64,7 +64,7 @@ export interface ZoomBadge {
   halfW: number; halfH: number; cy: number;
 }
 
-export interface ZoomView {
+interface ZoomView {
   /** Render-target height and width, px — the frame test's unit. */
   vpH: number; vpW: number;
   /** The viewport's CSS height and render px per CSS px — the rung's unit (badgeScale.rungPx). */
@@ -82,7 +82,7 @@ export interface ZoomView {
 }
 
 /** The separation rules the renderer will apply at the destination. */
-export interface ZoomSpacing {
+interface ZoomSpacing {
   /** Minimum gap between boxes, GUI px. */
   gapPx: number;
   /** Fraction of a box's half-extent that counts as reach (1 − overlap allowed). */

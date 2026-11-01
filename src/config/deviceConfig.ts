@@ -518,7 +518,7 @@ export function baselineFromServer(server: Partial<SharedDeviceConfig>): SharedD
 /** One shared-config fetch: the parsed slice plus the revision it was read
  *  at, so a subsequent write can detect whether someone else wrote in
  *  between (see saveSharedConfig). */
-export interface SharedConfigFetch {
+interface SharedConfigFetch {
   config: Partial<SharedDeviceConfig>;
   rev: string;
   /** The server document EXACTLY as stored, unparsed. Carried back into the

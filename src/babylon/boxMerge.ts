@@ -25,7 +25,7 @@
 // The tie-break is now the boxes' own geometry, so a caller cannot change the
 // answer by handing the same boxes in a different order.
 
-export interface MergeBox {
+interface MergeBox {
   x: number;
   y: number;
   halfW: number;
@@ -39,7 +39,7 @@ export interface MergeBox {
  *  their drawn boxes, inflated by ONE gap, intersect. A second dial here is
  *  what once made room chips merge at three times the clear space two badges
  *  need — reported as "aggregating together too soon". */
-export function overlapSeverity(a: MergeBox, b: MergeBox, gap: number): number {
+function overlapSeverity(a: MergeBox, b: MergeBox, gap: number): number {
   const ox = a.halfW + b.halfW + gap - Math.abs(b.x - a.x);
   const oy = a.halfH + b.halfH + gap - Math.abs(b.y - a.y);
   if (ox <= 0 || oy <= 0) return 0;       // clear on at least one axis

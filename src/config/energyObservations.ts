@@ -21,9 +21,9 @@ import { formatMoney } from "@/utils/money";
 
 /** Devices adding up to more than this share OVER what was used: some are set
  *  up beside the meter they belong to. */
-export const OVERLAP_SHOWS = 0.05;
+const OVERLAP_SHOWS = 0.05;
 /** More than this share of the day with no device meter is worth saying. */
-export const UNTRACKED_SHOWS = 0.25;
+const UNTRACKED_SHOWS = 0.25;
 /** The cards share one row. */
 export const MAX_CARDS = 3;
 
@@ -39,7 +39,7 @@ export const overlapShows = (s: EnergySplit) => s.used > 0 && s.overlap > s.used
 /** An Energy card is an observation card (config/observation). */
 export type EnergyCard = Observation;
 
-export interface EnergyToday {
+interface EnergyToday {
   split: EnergySplit;
   cost: number | undefined;
   /** The last seven complete days' use, oldest first; undefined: no reading. */

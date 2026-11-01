@@ -12,7 +12,7 @@ import { backendFetch } from "@/auth/sessionLost";
 import { heldWindow, opensAsleep } from "./unavailableByDesign";
 
 /** Anything that can read the recorder's statistics — the HA websocket. */
-export type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod">;
+type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod">;
 
 /** `asleep`: the devices asleep by design (the entity store's list) — their sleep is no change on a chart
  *  (unavailableByDesign.heldWindow). */

@@ -32,7 +32,7 @@ import { Camera } from "@babylonjs/core/Cameras/camera";
  *  than fallbacks. */
 const FALLBACK_FOV = 0.8;
 
-export interface CameraFrame {
+interface CameraFrame {
   /** Half the VERTICAL field of view, in radians. */
   vHalf: number;
   /** Half the HORIZONTAL field of view, in radians. */

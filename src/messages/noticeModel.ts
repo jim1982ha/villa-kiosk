@@ -15,7 +15,7 @@ import { idOf, supersedes } from "./messagesModel";
 /** The most notices on screen at once: the newest (a burst of sensors never covers the map). */
 export const NOTICES_SHOWN = 3;
 
-export interface NoticeState {
+interface NoticeState {
   /** The one holding the whole screen, for `ms`. */
   full: { announcement: Announcement; ms: number } | null;
   /** The notices showing, oldest first, each for its own `ms` (noticeFor: one time for all). */
@@ -26,7 +26,7 @@ export interface NoticeState {
 
 export const NO_NOTICE: NoticeState = { full: null, shown: [], steps: [] };
 
-export type NoticeEvent =
+type NoticeEvent =
   /** One announcement arrived (each of a read, oldest first); `rewrite`: it rewrites one the page held. */
   | { type: "arrived"; announcement: Announcement; rewrite: boolean; settings: ShowSettings }
   /** The full screen's time ran out, Close, or this tablet's switch turned off. */

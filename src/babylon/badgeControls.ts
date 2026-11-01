@@ -19,7 +19,7 @@ import { BADGE_CORNER_FRACTION, PICTURE_SCALE } from "./badgeLook";
 
 /** A card badge's controls. The caller paints them (background, frame,
  *  shadow), mounts the badge and puts the value's text in `valueWrap`. */
-export interface CardControls {
+interface CardControls {
   badge: DashableRectangle;
   row: StackPanel;
   /** The left margin of a bare icon, and the one beside a value — one shown at
@@ -228,7 +228,7 @@ export function buildCardBadge(name: string, m: BadgeMetrics, glyphPx: number, g
 
 /** A group card's pooled controls: its host, one sub-card per card of the
  *  arrangement, one chip and one tap zone per cell. */
-export interface GroupCardControls {
+interface GroupCardControls {
   container: Rectangle;
   cards: Rectangle[];
   chips: Image[];

@@ -133,7 +133,7 @@ export function categoryColor(category: Category): string {
 const TINT_ALPHA = 0.14;
 
 export type DeviceSurfaceState = "off" | "active" | "alert" | "unavailable";
-export interface CategorySurface {
+interface CategorySurface {
   fill: string;
   /**
    * The PICTOGRAM's colour — the camera, the bulb, the lock.
@@ -391,7 +391,7 @@ function categoryForEntity(entityId: string, type: EntityType, deviceClass?: str
  * makes; omitting an argument is an accident that looks identical to it and
  * that neither `tsc` nor review can see.
  */
-export interface CategorySubject {
+interface CategorySubject {
   entityId: string;
   type: EntityType;
   /** The stored pick from the entityMap, if any. */

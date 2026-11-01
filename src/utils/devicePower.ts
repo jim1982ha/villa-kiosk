@@ -24,7 +24,7 @@ import { isUnavailable } from "@/utils/stateColors";
 import { switchPosition, type SwitchPosition } from "@/utils/entityState";
 import { domainOf } from "./entityDomain";
 
-export interface DevicePower {
+interface DevicePower {
   /** "unknown": not observed (unavailable, a lock in motion) — no switch. */
   position: SwitchPosition;
   /** The service that throws it the other way; null when it cannot be thrown. */
@@ -82,7 +82,7 @@ export interface SwitchAsk {
 }
 
 /** What the owner's device settings say about asking (EntityMapping). */
-export interface AskPolicy {
+interface AskPolicy {
   label?: string;
   /** EntityMapping.requireConfirm — "ask before switching". */
   requireConfirm?: boolean;
@@ -109,7 +109,7 @@ export function switchAsk(action: { domain: string; service: string } | null, po
   return { question: verb ? `${verb} ${name}?` : `Switch ${name}?`, confirmLabel: "Confirm" };
 }
 
-export interface DeviceSwitch extends DevicePower {
+interface DeviceSwitch extends DevicePower {
   /** Ask before throwing it the other way; null = a tap acts at once. */
   ask: SwitchAsk | null;
 }

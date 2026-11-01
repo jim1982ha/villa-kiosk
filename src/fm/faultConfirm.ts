@@ -31,7 +31,7 @@ import { authorWords } from "@/auth/roles";
 
 /** How many of the Agent's looks (cadence.checkMinutes) a fault past its confirms-by moment is still shown for: its
  *  verdict lands at its next look, the second covers a look that ran long. */
-export const CONFIRM_GRACE_LOOKS = 2;
+const CONFIRM_GRACE_LOOKS = 2;
 
 export interface ConfirmingFault {
   ticket: FmTicket;
@@ -60,7 +60,7 @@ export function shownUntil(at: number, cadence: AgentCadence | null): number {
 }
 
 /** The fault `t` as being confirmed now, or null: resolved, its confirmsBy a moment, and not shown past shownUntil. */
-export function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: number = Date.now()): ConfirmingFault | null {
+function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: number = Date.now()): ConfirmingFault | null {
   if (!isTicketResolved(t) || !t.confirmsBy) return null;
   const at = Date.parse(t.confirmsBy);
   if (Number.isNaN(at) || now > shownUntil(at, cadence)) return null;
@@ -80,14 +80,6 @@ export function confirmingOf(t: FmTicket, cadence: AgentCadence | null, now: num
 /** Every fault being confirmed now, the soonest verdict first. */
 export function confirmingFaults(d: FmData, cadence: AgentCadence | null, now: number = Date.now()): ConfirmingFault[] {
   return d.tickets.flatMap((t) => confirmingOf(t, cadence, now) ?? []).sort((a, b) => a.at - b.at || a.ticket.id.localeCompare(b.ticket.id));
-}
-
-/** Its line in words: "Done on 25/10/2026 14:10 (JM) · VESTA closes this at 15:06 if all is still well; …" — the moment
- *  past, "· VESTA closes this at its next look if all is still well". The time is the villa's clock (the tablet's, as
- *  every other time on the card: dateText.clockTime). */
-export function confirmLine(c: ConfirmingFault): string {
-  const { did, tip } = confirmParts(c);
-  return `${did} · ${tip}`;
 }
 
 /** The row's parts: how it was cleared and when, as the Agent's Telegram lines say it ("Done on 25/10/2026 14:10 (JM)",

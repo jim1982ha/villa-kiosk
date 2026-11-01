@@ -22,7 +22,7 @@ import { Color4 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 import { nightLerp } from "./sunState";
 
-export interface LookInputs {
+interface LookInputs {
   /** Settings' exposure, as the render pass applies it (device-adjusted). */
   exposure: number;
   /** Whether the IBL cube is in use (the render pass owns the texture). */

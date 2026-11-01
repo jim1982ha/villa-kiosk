@@ -45,7 +45,7 @@ import type { EntityMapping } from "@/types/scene.types";
 /** Which drawn room of the floor plan this entity's 3D anchor sits in, or null (outside every room,
  *  or not on the model). Injected: only a browser with the scene loaded can answer it — Dashboard
  *  passes SceneManager.roomForEntity (EntityVisuals.roomForEntity), an oracle passes a table. */
-export type DrawnRoomOf = (entityId: string) => string | null;
+type DrawnRoomOf = (entityId: string) => string | null;
 
 /**
  * Every entity id as ONE string, sorted — what Dashboard memoises over the live store, so a state

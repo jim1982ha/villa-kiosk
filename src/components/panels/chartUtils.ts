@@ -59,7 +59,7 @@ export function fmtStepStamp(t: number, stepMs: number, spanHours: number): stri
 /** How a chart's values were made from the readings, said beside its title (owner, 2026-10-20: "show the aggregation
  *  used … avg or sum"): its step ("5-min", "hourly", "daily", "weekly", "monthly") and, for a measured value, "avg" (the
  *  mean over the step), for a total "sum"; an on/off band has neither — its step alone. */
-export type Aggregation = "avg" | "sum" | null;
+type Aggregation = "avg" | "sum" | null;
 export function stepWords(stepMs: number): string {
   if (stepMs >= 28 * DAY_MS) return "monthly";
   if (stepMs >= 7 * DAY_MS) return "weekly";

@@ -26,11 +26,11 @@
  *  device's top (buildLabelAnchors), and a camera mounted under a ceiling has it ABOVE the wall's top (2.51 m on the
  *  villa's ground floor, ceilings not tested): the ray passed over the wall (owner, 2026-10-08, cameras outside seen
  *  from the kitchen; measured on the villa: 93 hidden devices drawn → 1 when aimed at the device's centre). */
-export interface OcclusionTarget { id: string; wx: number; wy: number; wz: number; ty?: number; occluded?: boolean }
+interface OcclusionTarget { id: string; wx: number; wy: number; wz: number; ty?: number; occluded?: boolean }
 
 /** Is the segment from `o` along unit `d` for `len` metres blocked? The
  *  blocker's name, or null. Must skip occluders that are not visible. */
-export type RayCast = (
+type RayCast = (
   ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, len: number,
 ) => string | null;
 

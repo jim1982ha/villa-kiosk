@@ -21,9 +21,6 @@ const words = (field: "label" | "short" | "initials" | "description"): Record<Ro
 /** Each profile's name: the sign-in card, "Signed in as", a fault's source and the author of its steps ("by Guest"). */
 export const ROLE_LABELS: Record<Role, string> = words("label");
 
-/** Each profile's name where space is tight (an alert card's "To: FM"). */
-export const ROLE_SHORT: Record<Role, string> = words("short");
-
 /** The letter(s) in the top bar's round signed-in badge (HUD.tsx's .hud-role-badge) and a fault's source icon: short
  *  enough for a 40px circle, and "FM" rather than "O" for ops so it can never read as the Owner's. */
 export const ROLE_INITIALS: Record<Role, string> = words("initials");

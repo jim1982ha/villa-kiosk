@@ -44,7 +44,7 @@ export interface ResolutionPort {
   isSharp(): boolean;
 }
 
-export interface FrameDecision {
+interface FrameDecision {
   /** Call scene.render() this tick. */
   render: boolean;
   /** Time this frame for the `frames` telemetry and the resolution valve. */

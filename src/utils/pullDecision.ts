@@ -25,7 +25,7 @@
 
 export type PullAction = "wait" | "unreachable" | "seed" | "repush" | "noop" | "apply";
 
-export interface PullFacts {
+interface PullFacts {
   /** A write from this device is still waiting for its answer. */
   writeInFlight: boolean;
   /** The fetch returned a copy. */

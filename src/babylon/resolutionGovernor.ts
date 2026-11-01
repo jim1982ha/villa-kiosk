@@ -57,7 +57,7 @@ const HW_START_CAP = 2;
  *  level and tells the badge layer (its geometry is authored in CSS px and
  *  converted through this value); `loud` also asks for a frame — the valve's
  *  steps do, the sharp frame's do not (their caller is about to render). */
-export interface ScalingPort {
+interface ScalingPort {
   get(): number;
   set(level: number, loud: boolean): void;
   /** The panel's device pixel ratio, read when needed (it can change). */
@@ -65,7 +65,7 @@ export interface ScalingPort {
 }
 
 /** One burst of interactive frames, sorted, for the `frames` telemetry. */
-export interface FrameBurst {
+interface FrameBurst {
   /** Gaps between frames, ms, ascending. */
   gaps: number[];
   /** Cost of scene.render() itself, ms, ascending. */

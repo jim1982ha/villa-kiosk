@@ -12,7 +12,7 @@
 
 interface TrackLike { muted: boolean; readyState: string }
 interface StreamLike { getAudioTracks(): TrackLike[] }
-export interface FeedLike {
+interface FeedLike {
   srcObject: unknown;
   audioTracks?: { length: number };
   mozHasAudio?: boolean;

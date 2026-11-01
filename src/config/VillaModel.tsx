@@ -34,7 +34,7 @@ export type { VillaProblems };
 
 /** The sets the villa model is built on — from useVillaSets, which the
  *  Dashboard calls (it also reads them itself, above the provider it renders). */
-export interface VillaSets {
+interface VillaSets {
   /** Entities the 3D model carries, plus every mapping's linked and motion
    *  entity — dismissed ones excluded (villaVisibility.effectiveMapped). */
   mappedEntityIds: Set<string>;

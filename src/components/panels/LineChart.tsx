@@ -27,7 +27,7 @@ import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
 import YAxis, { ChartUnitLine, FitMark, useChartFit, type AxisTick } from "./ChartAxis";
 
-export interface LineSpec {
+interface LineSpec {
   pts: readonly HistoryPoint[];
   gaps?: readonly HistoryGap[];
   /** In the tooltip; and the right axis' caption when it has no unit. */

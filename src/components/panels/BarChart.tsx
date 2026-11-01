@@ -11,7 +11,7 @@ import { STATUS_COLOR } from "@/utils/stateColors";
 import { barLayout, lineLayout, barAt, barCentre, barTick, barTipRows, type BarBucket } from "@/utils/barChart";
 
 /** A second measure plotted over the bars, on its own right-hand axis. */
-export interface BarChartLine {
+interface BarChartLine {
   values: (number | undefined)[];
   label: string;
   /** Its colour (a `.key` class), for the line, its dots and its tooltip row. */

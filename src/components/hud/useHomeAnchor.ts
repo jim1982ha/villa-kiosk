@@ -21,9 +21,9 @@ import { useLongPress, HOLD_MS_HUD } from "@/hooks/useLongPress";
 
 const FLASH_MS = 1800;
 
-export type HomeAnchorFlash = "applied" | "none" | "saved" | "unavailable";
+type HomeAnchorFlash = "applied" | "none" | "saved" | "unavailable";
 
-export interface HomeAnchorButtonProps {
+interface HomeAnchorButtonProps {
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerUp: () => void;
   onPointerLeave: () => void;

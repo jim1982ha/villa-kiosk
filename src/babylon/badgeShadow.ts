@@ -53,7 +53,7 @@ const TIERS = {
   surface: { color: "rgba(0,0,0,0.4)", blur: 6 },
 } as const;
 
-export type BadgeShadowTier = keyof typeof TIERS;
+type BadgeShadowTier = keyof typeof TIERS;
 
 /**
  * Apply the badge layer's shadow to a control.

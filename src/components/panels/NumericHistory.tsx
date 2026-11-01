@@ -29,7 +29,7 @@ import {
   activeRange, filterOf, filterScope, rangeChart, NO_FILTERS, withFilter, type FilterState,
 } from "@/utils/rangeFilter";
 
-export interface NumericSeries {
+interface NumericSeries {
   id: string;
   label: string;
   /** The reading's unit, without a leading space. */

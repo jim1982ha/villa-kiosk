@@ -14,7 +14,7 @@ import type {
   HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntityRegistryEntry, HassFloorRegistryEntry,
 } from "@/types/ha.types";
 
-export interface EntityRegistryFacts {
+interface EntityRegistryFacts {
   /** Kept out of every auto-built list, as HA's own dashboards do: hidden by
    *  the user, or filed by HA under entity_category config/diagnostic. */
   suppressed: Set<string>;
@@ -112,7 +112,7 @@ export function partOf(child: HassDeviceRegistryEntry, parent: HassDeviceRegistr
 
 /** The three registries a refresh asks for — `null` for one whose request
  *  FAILED (as opposed to answering with nothing). */
-export interface RegistryAnswers {
+interface RegistryAnswers {
   devices: readonly HassDeviceRegistryEntry[] | null;
   areas: readonly HassAreaRegistryEntry[] | null;
   floors: readonly HassFloorRegistryEntry[] | null;

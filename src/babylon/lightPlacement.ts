@@ -28,13 +28,13 @@ export const POOL_MIN_RADIUS = 0.4;
 /** Closer than this to its own fixture, a pool is not on a floor — it is on the
  *  ceiling the fixture hangs from. Below any real mounting height, far above
  *  the few centimetres a ceiling lamp clears its slab by. */
-export const POOL_AIRBORNE_M = 0.5;
+const POOL_AIRBORNE_M = 0.5;
 /** How far a pool sits above the floor it was probed onto — clear of
  *  z-fighting, and still reading as lying ON it. */
 export const POOL_FLOOR_LIFT = 0.02;
 /** A pool whose floor answer stands this far above its room's own floor is put
  *  ON the room's floor. Above a stair tread's rise; below any table or counter. */
-export const POOL_RAISED_M = 0.3;
+const POOL_RAISED_M = 0.3;
 
 /** Sides of the pool's own footprint when it is not clipped to a room. Eight
  *  bounds a disc far more tightly than a square while staying convex — which
@@ -61,7 +61,7 @@ export function poolFootprint(cx: number, cz: number, radius: number): Pt2[] {
 }
 
 /** What placement needs from the floor below. FloorProbe is the adapter. */
-export interface PlacementProbe {
+interface PlacementProbe {
   /** The floor under (x, z) seen from height y. Cached. */
   below(x: number, y: number, z: number): number | null;
   /** The same question, never answered from the cache. */

@@ -42,7 +42,7 @@ export type FmCommand =
 /** Who and when: the clock and ids (FmStamp), and the signed-in profile that did it, stamped on every step of a fault
  *  and every completion with its id and its label (roles.authorStamp) — the card's "by …" and the VESTA Agent's notes
  *  read it. */
-export type FmActor = FmStamp & { by?: Role };
+type FmActor = FmStamp & { by?: Role };
 
 /** A person's Done: resolved as work done, with nothing more said (the completion names who recorded it). */
 export const DONE_STEP: TicketStep = Object.freeze({ photoIds: [] }) as TicketStep;

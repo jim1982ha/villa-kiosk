@@ -2,7 +2,7 @@
 // Colour helpers (HS -> RGB for Hue-style lights), adapted from the 3Dash pattern.
 
 import { clamp } from "./geometry";
-export interface RGB {
+interface RGB {
   r: number; // 0-1
   g: number;
   b: number;

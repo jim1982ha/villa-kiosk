@@ -111,7 +111,7 @@ export function offeredButtons(buttons: readonly AnnouncementButton[], mayAct: b
 }
 
 /** Where a problem is: raised, still open, cleared. null: the announcement says none (a weekly test, a digest). */
-export type Stage = "new" | "existing" | "closed";
+type Stage = "new" | "existing" | "closed";
 
 /** The mark the layout writes before a stage's status, READ FROM THE AGREEMENT (agent-contract.json `stageMarks`, the
  *  one list the VESTA Agent writes them from and generates the villa's template with; review Q 3, 2026-10-28: this
@@ -131,7 +131,7 @@ export function stageOf(status: string): Stage | null {
 /** An alert's stage as every screen reads it — ⚠️ ONE READER (owner, 2026-10-28: "the same code … consistently"): VESTA's
  *  card says it (its title's word: new, existing, watch, closed); the villa's own message by its bottom line's mark
  *  (stageOf: both ends read "closed"). null: no stage (a weekly test, a ring not answered). */
-export type AlertStage = keyof typeof AGENT_CONTRACT.stageMarks;
+type AlertStage = keyof typeof AGENT_CONTRACT.stageMarks;
 const STAGES = Object.keys(AGENT_CONTRACT.stageMarks) as AlertStage[];
 
 export function alertStage(a: Announcement): AlertStage | null {
@@ -140,7 +140,7 @@ export function alertStage(a: Announcement): AlertStage | null {
 }
 
 /** An alert that is over: watched after it cleared, or closed — parked in Watch or Closed, never unread. */
-export const isOver = (a: Announcement): boolean => {
+const isOver = (a: Announcement): boolean => {
   const s = alertStage(a);
   return s === "watch" || s === "closed";
 };
@@ -170,7 +170,7 @@ export interface ShowSettings {
 
 /** How an announcement shows: full screen first for `fullScreenMs` (null: not full screen), else a notice for
  *  `noticeMs`. */
-export interface HowShown { fullScreenMs: number | null; noticeMs: number }
+interface HowShown { fullScreenMs: number | null; noticeMs: number }
 
 /**
  * How a new announcement shows (ticket 16 of "One inbox", owner 2026-10-28). ⚠️ EVERY NOTICE GOES BY ITSELF AFTER
@@ -387,15 +387,6 @@ export function pressedRow<B extends { command: string; label: string }>(buttons
   return { buttons, said: answer || (failed ? PRESS_SAID.failed : null) };
 }
 
-/** Press a button an announcement offers: the add-on fires the villa's one press event with this key and command,
- *  only while it still offers the button (supervisor-proxy.py /announcement-press). `send` is backendFetch (a check
- *  passes its own). */
-export async function pressButton(
-  key: string, command: string, send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status">>,
-): Promise<PressOutcome> {
-  return (await pressAt("announcement-press", key, command, send)).outcome;
-}
-
 /** What a press came to: its outcome, and — one of VESTA's buttons — its number, which VESTA's short answer names. */
 export interface PressResult { outcome: PressOutcome; press?: number }
 
@@ -404,7 +395,7 @@ export interface PressResult { outcome: PressOutcome; press?: number }
  *  question is). Every screen presses through this. `send` is backendFetch (a check passes its own). */
 /** Where each kind of record's presses go: one row per kind, so a kind added to Pressable without its door fails the
  *  type check, never goes to VESTA by default (architecture review, 2026-10-30). */
-export const PRESS_DOORS: Record<NonNullable<Pressable["feed"]> | "villa", string> = {
+const PRESS_DOORS: Record<NonNullable<Pressable["feed"]> | "villa", string> = {
   villa: "announcement-press", vesta: "vesta-press", turn: "vesta-press",
 };
 

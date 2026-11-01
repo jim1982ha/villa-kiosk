@@ -51,7 +51,7 @@ export interface PageView<T> {
 
 /** The last page index for a list of this length. Never negative: an empty
  *  list has one page, not minus one. */
-export function lastPageOf(total: number, size: number): number {
+function lastPageOf(total: number, size: number): number {
   return Math.max(0, Math.ceil(Math.max(0, total) / Math.max(1, size)) - 1);
 }
 

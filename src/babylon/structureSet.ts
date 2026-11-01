@@ -170,10 +170,10 @@ function forceOpaque(m: AbstractMesh): void {
 }
 
 
-export type ViewMode = "first-person" | "overview";
+type ViewMode = "first-person" | "overview";
 
 /** What the structure pass needs from the scene it serves. */
-export interface StructureDeps {
+interface StructureDeps {
   requestRender(): void;
   /** The loaded model's world extents — for the ceiling-geometry report. */
   worldExtents(): { min: Vector3; max: Vector3 };

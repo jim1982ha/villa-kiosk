@@ -7,7 +7,7 @@
 
 import { Map, PersonStanding } from "lucide-react";
 
-export interface ViewControlsProps {
+interface ViewControlsProps {
   viewMode: "first-person" | "overview";
   onToggleViewMode: () => void;
   /** Extra classes for the button — its place in the HUD. */

@@ -94,7 +94,7 @@ const SEAM_NUDGE_M = 0.12;
  *  entry is never read, and is evicted by `save()`'s one-model-at-a-time sweep. */
 const STORE_PREFIX = "vk.probe3.";
 
-export interface FloorProbeStats {
+interface FloorProbeStats {
   probeMs: number;
   probeRays: number;
   probeHits: number;

@@ -15,7 +15,7 @@ import { onFailure } from "@/ha/serviceOutcome";
 /** How long the keyboard must be quiet before its value is sent. */
 const KEY_SETTLE_MS = 400;
 
-export interface LiveDraft<T> {
+interface LiveDraft<T> {
   value: T;
   /** Spread onto an <input type="range">. */
   rangeProps: {

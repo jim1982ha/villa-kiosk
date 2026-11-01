@@ -36,7 +36,7 @@ export function summaryFrame(ring: { ringRed: boolean; ringOn: boolean }): Summa
 }
 
 /** One device a group card stands for, as the map holds it. */
-export interface CardMember {
+interface CardMember {
   id: string;
   /** Its look — painted from a phantom (unavailable) when Home Assistant has
    *  never reported it, so its cell is never blank. */
@@ -48,7 +48,7 @@ export interface CardMember {
   occluded: boolean;
 }
 
-export interface GroupCardModel {
+interface GroupCardModel {
   /** Every member is behind a wall while walking: the card is behind it too. */
   hidden: boolean;
   entityIds: string[];

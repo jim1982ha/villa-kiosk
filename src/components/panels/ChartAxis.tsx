@@ -32,7 +32,7 @@ export function FitMark() {
 }
 
 /** A unit on the line above a line chart, in its line's colour (its class, or its CSS colour). */
-export interface UnitCap { unit?: string; cls?: string; color?: string }
+interface UnitCap { unit?: string; cls?: string; color?: string }
 
 const capClass = (c: UnitCap, side: string) => `chart-unit ${side}${c.cls ? ` tint-${c.cls}` : ""}`;
 

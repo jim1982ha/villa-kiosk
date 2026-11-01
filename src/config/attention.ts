@@ -209,7 +209,7 @@ const SEVERITY_RANK: Record<AttentionSeverity, number> = { danger: 0, warn: 1, l
 
 /** A line's severity WITH the fault it carries (mergeFaults: an offline sensor's "Unavailable" line holding the night
  *  check's fault about it): the worse of the two — the card draws both icons, the line's grey and the fault's amber. */
-export function itemSeverity(item: AttentionItem): AttentionSeverity {
+function itemSeverity(item: AttentionItem): AttentionSeverity {
   const own = attentionSeverity(item);
   if (!item.fault) return own;
   const carried = attentionSeverity(item.fault);
@@ -284,7 +284,7 @@ export function cardFocused(cardEntityId: string | undefined, focus: readonly st
 
 /** What a problem IS: its kind — and a CRITICAL offline device its own, where any other offline device is just
  *  offline (owner, 2026-10-18: "critical" = red and told at once). */
-export type AttentionTone = AttentionKind | "critical";
+type AttentionTone = AttentionKind | "critical";
 export function attentionTone(item: AttentionItem): AttentionTone {
   return item.kind === "unavailable" && item.critical ? "critical" : item.kind;
 }

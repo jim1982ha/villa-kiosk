@@ -23,7 +23,7 @@
 // eligible — if `setPointerCapture` threw, absent capture proves nothing, and
 // pruning on it would turn a live two-finger gesture into a pan mid-stroke.
 
-export interface TrackedPointer {
+interface TrackedPointer {
   x: number;
   y: number;
   /** PointerEvent.pointerType: "mouse" | "touch" | "pen". */
@@ -33,7 +33,7 @@ export interface TrackedPointer {
 }
 
 /** The surface pointers are captured on — an HTMLCanvasElement, or a stub. */
-export interface CaptureSurface {
+interface CaptureSurface {
   setPointerCapture(id: number): void;
   releasePointerCapture(id: number): void;
   hasPointerCapture(id: number): boolean;

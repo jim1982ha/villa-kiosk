@@ -28,7 +28,7 @@ import { effectiveSensorClass, toBaseUnit } from "./SensorClasses";
 import { domainOf, isDomain } from "@/utils/entityDomain";
 
 /** Only `.has` is called — villaDevices(...) satisfies it, and so does a Set. */
-export type Allowed = { has(entityId: string): boolean };
+type Allowed = { has(entityId: string): boolean };
 
 /** Every lock, in exactly ONE of the five lists after `ids` — the bolt as stateColors.lockBolt reads it, and lost
  *  contact as contactOf says it. ⚠️ `unknown` HELD FOUR FACTS (architecture review, 2026-10-19): jammed, moving,
@@ -54,7 +54,7 @@ export const LOCK_FACT_WORDS: Record<"jammed" | "moving" | "lost" | "unknown", s
   jammed: "Jammed", moving: "Moving", lost: "Unavailable", unknown: "Unknown",
 };
 export interface OnOffFacts { ids: string[]; on: string[] }
-export interface ClimateFacts {
+interface ClimateFacts {
   ids: string[];
   /** Running (not off, not unavailable). */
   active: string[];
@@ -64,13 +64,13 @@ export interface ClimateFacts {
    *  units aimed at 26° and 18° do not average to a 22° that means anything. */
   avgCurrentTemp: number | null;
 }
-export interface PowerFacts {
+interface PowerFacts {
   ids: string[];
   /** Total draw, normalised to watts BEFORE summing (a 3.2 kW mains meter
    *  once contributed 3.2). A member whose unit cannot be scaled adds 0. */
   totalW: number;
 }
-export interface VillaSummary {
+interface VillaSummary {
   locks: LockFacts | null;
   lights: OnOffFacts | null;
   climate: ClimateFacts | null;
@@ -79,7 +79,7 @@ export interface VillaSummary {
 
 /** Every entity, by domain — ONE pass over the store. The four fact
  *  functions each scanned every entity for their own domain (2.496.197). */
-export type DomainIndex = ReadonlyMap<string, readonly HassEntity[]>;
+type DomainIndex = ReadonlyMap<string, readonly HassEntity[]>;
 export function domainIndex(entities: Record<string, HassEntity>): DomainIndex {
   const out = new Map<string, HassEntity[]>();
   for (const e of Object.values(entities)) {

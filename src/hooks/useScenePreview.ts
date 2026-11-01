@@ -14,12 +14,12 @@ import { eyeHeightOf } from "@/babylon/walkerSpawn";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 
 /** What the preview drives (SceneManager). */
-export interface PreviewTarget {
+interface PreviewTarget {
   setRenderConfig: (render: RenderConfig) => void;
   camera: { setEyeHeight: (h: number) => void; setWalkSpeed: (v: number) => void };
 }
 
-export type PreviewedValues = Pick<AppConfig, "render" | "eyeHeight" | "walkSpeed">;
+type PreviewedValues = Pick<AppConfig, "render" | "eyeHeight" | "walkSpeed">;
 
 /** Each value the dialog shows that changed since the last one is applied to the scene. Nothing on opening: the
  *  scene already shows the stored config. */

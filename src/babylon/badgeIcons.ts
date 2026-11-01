@@ -281,7 +281,7 @@ function evictOldest(): void {
  * way, with `undefined` placeholders to reach the later ones and a boolean
  * and a fraction both deciding the ring.
  */
-export interface BakeSpec {
+interface BakeSpec {
   category: Category;
   iconKey: string;
   /** The face's state (deviceActivity.badgeFace). */

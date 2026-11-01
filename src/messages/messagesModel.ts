@@ -30,7 +30,7 @@ export type MessageItem =
   | { kind: "notification"; key: string; announcement: Announcement }
   | { kind: "report"; key: string; announcement: Announcement };
 
-export interface MessagesView {
+interface MessagesView {
   /** Each filter with its count (Open issues: the open issues; the others none). */
   filters: { id: MessagesFilter; label: string; short?: string; count: number | null }[];
   /** The open issues, in their order; then the watched faults and VESTA's cards of alerts that cleared (placeOf

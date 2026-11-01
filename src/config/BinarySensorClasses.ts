@@ -23,7 +23,7 @@ import { isDomain } from "@/utils/entityDomain";
 
 /** A class's icon and default problem state. Its WORDS are not here: they
  *  live once in config/binarySensorWords (binaryWord), which every surface reads. */
-export interface BinarySensorClassInfo {
+interface BinarySensorClassInfo {
   icon: LucideIcon;
   /** Which state (if any) counts as this class's default "problem" state.
    *  "none" = purely informational, never auto-flagged as an alert. */
@@ -179,7 +179,7 @@ export function cameraMotionId(
  *  is already a no-op for any entity nobody authored alternate poses for.
  *  A property of the device_class itself, so it lives here rather than
  *  being duplicated in EntityVisuals. */
-export const OPENING_DEVICE_CLASSES: ReadonlySet<string> = new Set([
+const OPENING_DEVICE_CLASSES: ReadonlySet<string> = new Set([
   "door", "garage_door", "window", "opening",
 ]);
 

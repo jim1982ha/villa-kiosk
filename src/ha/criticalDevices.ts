@@ -9,7 +9,7 @@ import { backendFetch } from "@/auth/sessionLost";
 import { useStoreRefresh } from "@/hooks/useStoreRefresh";
 
 /** The rule changes when the owner edits it: read again every 5 minutes, the proxy's own cache. */
-export const CRITICAL_POLL_MS = 5 * 60 * 1000;
+const CRITICAL_POLL_MS = 5 * 60 * 1000;
 
 /** The entity ids of GET /critical-devices, or null for an answer that is not one. Pure. */
 export function parseCriticalDevices(body: unknown): string[] | null {
@@ -18,7 +18,7 @@ export function parseCriticalDevices(body: unknown): string[] | null {
 }
 
 /** null = not reached (the last answer stays). */
-export async function fetchCriticalDevices(): Promise<string[] | null> {
+async function fetchCriticalDevices(): Promise<string[] | null> {
   try {
     const r = await backendFetch(ingressPath("critical-devices"), { credentials: "same-origin" });
     return r.ok ? parseCriticalDevices(await r.json()) : null;

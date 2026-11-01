@@ -14,7 +14,7 @@
 // read straight out of the GLB's embedded vk_rooms_json (pipeline >= 2.14.0)
 // — see SceneManager's entityCalibration() / calibrateRooms().
 
-export interface PlanXY {
+interface PlanXY {
   x: number;
   y: number;
 }
@@ -23,7 +23,7 @@ export interface PlanXY {
  *  via config.sh3dEntities; see the file header. */
 export const ENTITY_CALIBRATION_CM: Record<string, PlanXY> = {};
 
-export interface RoomPolygon {
+interface RoomPolygon {
   name: string;
   points: PlanXY[]; // plan polygon (cm)
   /** 1-based storey (ground floor = 1). An uploaded .sh3d's parsed rooms

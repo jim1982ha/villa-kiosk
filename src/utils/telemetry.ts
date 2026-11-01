@@ -100,7 +100,7 @@ export const RESERVED_TELEMETRY_FIELDS = [
   "v", "vw", "vh", "scrw", "scrh", "shellH", "dpr", "standalone", "mem",
 ] as const;
 type Reserved = (typeof RESERVED_TELEMETRY_FIELDS)[number];
-export type TelemetryData = Record<string, unknown> & { [K in Reserved]?: never };
+type TelemetryData = Record<string, unknown> & { [K in Reserved]?: never };
 
 let disabled = false;
 

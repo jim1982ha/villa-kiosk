@@ -20,7 +20,7 @@ import type { RangeKey } from "@/utils/historyRanges";
 // bar. A year stays a bar a MONTH (12 bars, as the villa's own Energy dashboard and its bills), not 52 weekly ones.
 export type EnergyRangeKey = Exclude<RangeKey, "1h">;
 
-export interface EnergyRange {
+interface EnergyRange {
   key: EnergyRangeKey;
   /** The picker's word. */
   label: string;

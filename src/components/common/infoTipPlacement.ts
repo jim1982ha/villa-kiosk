@@ -7,7 +7,7 @@ const MARGIN = 12;   // the card never touches the screen's edge
 export const INFO_TIP_WIDTH = 510;
 const MIN_HEIGHT = 120;
 
-export interface InfoTipPlacement {
+interface InfoTipPlacement {
   left: number;
   width: number;
   /** `top` when it opens below the (i), `bottom` (from the screen's bottom edge) when above. */

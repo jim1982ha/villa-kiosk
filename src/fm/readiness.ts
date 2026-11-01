@@ -84,7 +84,7 @@ export const AVAILABILITY_CHECK_LABEL = "All devices reporting";
  *  those it may open, with the villa's fold and critical list) and its problems (the alarms; the faults it is shown).
  *  ⚠️ IT TOOK THE ROLE-BLIND DEVICE LIST BESIDE THE PROFILE'S ALARMS (architecture review, 2026-10-19): the Recap counted
  *  devices offline Open issues did not list for the same person, and every fault record, seen or not. */
-export type ReadinessView = Pick<VillaAttention, "devices" | "attentionItems">;
+type ReadinessView = Pick<VillaAttention, "devices" | "attentionItems">;
 
 export interface ReadinessResult {
   checks: ReadinessCheck[];

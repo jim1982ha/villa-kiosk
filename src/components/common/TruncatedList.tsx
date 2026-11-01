@@ -35,7 +35,7 @@ import { PAGE_ROWS, pageOf, type PageView } from "./paging";
 const TRUNCATED_ROWS = 3;
 
 /** What a truncated list shows. Pure. */
-export interface TruncatedView<T> {
+interface TruncatedView<T> {
   visible: T[];
   /** How many the first few leave out (the button's count); 0: nothing to show more of. */
   hidden: number;
@@ -53,7 +53,7 @@ export function truncatedView<T>(items: readonly T[], expanded: boolean, page: n
   return { visible: paged.page, hidden, expanded: true, paged };
 }
 
-export interface Truncated<T> extends TruncatedView<T> {
+interface Truncated<T> extends TruncatedView<T> {
   toggle: () => void;
   go: (page: number) => void;
 }

@@ -13,7 +13,7 @@ import { clamp } from "@/utils/geometry";
 const MIN_SCALE = 1;
 const MAX_SCALE = 6;
 
-export interface MediaZoom<T extends HTMLElement> {
+interface MediaZoom<T extends HTMLElement> {
   ref: React.RefObject<T>;
   /** transform to spread on the media wrapper. */
   style: React.CSSProperties;

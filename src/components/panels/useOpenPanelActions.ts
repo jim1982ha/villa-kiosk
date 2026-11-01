@@ -31,7 +31,7 @@ import type { ReadingRow } from "@/config/readingRows";
 import type { PanelActions } from "./PanelActionsContext";
 import { panelHeader } from "./panelHeader";
 
-export interface OpenPanelInput {
+interface OpenPanelInput {
   screen: Screen;
   /** The open device as it is set now (openDevice), null when none is open. */
   open: OpenDevice | null;

@@ -137,7 +137,7 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
 
 /** A check's line — with the open faults' source icons after "Check the", as the Overview shows them (owner,
  *  2026-10-14). */
-export function CheckDetail({ check }: { check: ReadinessCheck }) {
+function CheckDetail({ check }: { check: ReadinessCheck }) {
   const lead = "Check the faults";
   if (!check.sources?.length || !check.detail.startsWith(lead)) return <>{check.detail}</>;
   return <>Check the <SourceIconRow sources={check.sources} severity={check.state === "fail" ? "danger" : "warn"} /> faults{check.detail.slice(lead.length)}</>;

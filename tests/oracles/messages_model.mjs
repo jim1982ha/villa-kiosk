@@ -134,9 +134,9 @@ const { RoomPill } = await import("@/components/fm/RecordCard");
 const pill = draw(h(RoomPill, { room: "Kitchen" }));
 ck("an open issue: its device; its room, the opened card's own pill, on the line under; then its first problem; chosen, marked",
    /class="messages-row on"/.test(issueLine) && issueLine.includes("<b>Device a</b>")
-   && issueLine.includes(`<span class="messages-row-room">${pill}</span>`) && pill.includes("fm-entity-chip")
+   && issueLine.includes(`<span class="card-pill-line">${pill}</span>`) && pill.includes("fm-entity-chip")
    && issueLine.includes('<span class="messages-row-sub">Too warm</span>')
-   && issueLine.indexOf("messages-row-room") < issueLine.indexOf("messages-row-sub"), issueLine);
+   && issueLine.indexOf("card-pill-line") < issueLine.indexOf("messages-row-sub"), issueLine);
 {
   const { AttentionCard } = await import("@/components/cockpit/IssueCard");
   const opened = draw(h(AttentionCard, { card: card("a", { room: "Kitchen", lines: [{ key: "l", text: "Too warm", story: [], closing: null }] }),
@@ -146,7 +146,7 @@ ck("an open issue: its device; its room, the opened card's own pill, on the line
 const noteLine = draw(h(MessageRow, { item: { kind: "notification", key: "n1", announcement: ann(1, { title: "🔔 Visitor",
   text: "Someone is at the door.\nGate A", at: "2026-10-28T10:00:00+08:00" }) }, selected: false, onSelect() {} }));
 ck("  ...a notification: its title, its first words, when it came; not chosen, not marked",
-   /class="messages-row"/.test(noteLine) && noteLine.includes("<b>🔔 Visitor</b>") && !noteLine.includes("messages-row-room") && noteLine.includes('<span class="messages-row-sub">Someone is at the door.</span>')
+   /class="messages-row"/.test(noteLine) && noteLine.includes("<b>🔔 Visitor</b>") && !noteLine.includes("card-pill-line") && noteLine.includes('<span class="messages-row-sub">Someone is at the door.</span>')
    && !noteLine.includes("Gate A") && /messages-row-time">28\/10\/2026 \d\d:00</.test(noteLine), noteLine);
 
 {

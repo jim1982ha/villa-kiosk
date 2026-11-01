@@ -20,7 +20,7 @@ import {
 } from "@/utils/rangeFilter";
 
 /** A limit as the chip says it: to the axis' grain, in whole digits of it (a 2.5 grain reads whole numbers). */
-export function fmtLimit(v: number, step: number): string {
+function fmtLimit(v: number, step: number): string {
   return fmtAxis(v, 10 ** Math.floor(Math.log10(handleGrain(step))));
 }
 

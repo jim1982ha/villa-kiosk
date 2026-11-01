@@ -27,9 +27,9 @@ const TONE: Record<NoticeTone, string> = {
 };
 
 /** The id of the one column every notice of the villa view is drawn into (NoticeStack). */
-export const NOTICE_STACK_ID = "vesta-notices";
+const NOTICE_STACK_ID = "vesta-notices";
 
-export interface NoticeProps {
+interface NoticeProps {
   tone: NoticeTone;
   icon: ReactNode;
   children: ReactNode;

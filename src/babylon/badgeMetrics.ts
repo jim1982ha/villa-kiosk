@@ -488,7 +488,7 @@ export { CARD_VALUE_MARGIN_OF_ICON_PAD } from "./badgeLook";
  */
 export const SUMMARY_TEXT_OF_HEIGHT = 0.464;
 
-export const VALUE_FONT_OF_CHIP = 0.4;
+const VALUE_FONT_OF_CHIP = 0.4;
 /**
  * The same question for the classic style's pill, whose value is measured
  * against the PILL it sits inside rather than a chip beside it — a different

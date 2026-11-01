@@ -248,7 +248,7 @@ export function projectedSpend(
 /** The figures that are PER RECORD — a repair's time, the closed ones. What is OPEN is counted per DEVICE card, as
  *  the Overview and the Tickets tab draw it (deviceWork.openCounts) — the recap's "Open" line read this per record
  *  while its own readiness section and the Tickets tab counted cards (architecture review, 2026-10-19). */
-export interface TicketStats {
+interface TicketStats {
   resolved: number;
   /** Mean hours from opening to resolution across resolved tickets, or null
    *  when nothing has been resolved yet. This is the number that evidences
@@ -444,7 +444,7 @@ export function stepsInTimeOrder(t: Pick<FmTicket, "updates">): FmTicketUpdate[]
  * (review 31: reopened in October, a fault vanished from September's recap). Its steps up to then, its status the
  * last of them (none by then: open); a record with no steps at all keeps its stored status. Pure.
  */
-export interface RecordLife {
+interface RecordLife {
   /** Where it stood (now, or at `upTo`): a fault, a ticket, closed. */
   stage: FmStage;
   status: FmTicket["status"];
@@ -535,7 +535,7 @@ export function recordLife(t: FmTicket, upTo?: number): RecordLife {
 }
 
 /** A period the figures are about: [start, end) in ms. */
-export interface TicketWindow { start: number; end: number }
+interface TicketWindow { start: number; end: number }
 
 /** How long the server keeps a closed fault (GET /fm-data's `retention`, supervisor-proxy _fm_retention): a close with
  *  no work done, and a repair (the evidence window); and the completions and costs (`recordsDays`, owner 2026-10-20:

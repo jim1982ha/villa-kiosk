@@ -376,7 +376,7 @@ export const RECORDS_KEPT_DAYS_MAX = 3650;
 /** How long a full-screen announcement holds the screen by default, in seconds (owner, 2026-10-28: 60s). */
 export const RING_SHOWN_FOR_S_DEFAULT = 60;
 /** The longest the "Ring shown for" field accepts, in seconds. */
-export const RING_SHOWN_FOR_S_MAX = 600;
+const RING_SHOWN_FOR_S_MAX = 600;
 /** A "Ring shown for" the villa may hold: whole seconds from 1 to RING_SHOWN_FOR_S_MAX. The one rule, for the field
  *  and for what the store holds. */
 export const ringShownForOk = (v: unknown): v is number =>
