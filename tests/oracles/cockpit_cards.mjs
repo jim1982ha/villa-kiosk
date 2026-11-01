@@ -214,7 +214,7 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
     { id: "fault:f2", kind: "fault", title: "#55 · Door unlocked", detail: "Fault", entityId: "lock.door", ticketId: "f2", stage: "fault", source: "alert", device: dev }]);
   const lines = inside(draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {} })), "fm-record-body")
     .split('<li class="cockpit-attention-sub">').slice(1);
-  const gutter = (css.match(/\.fm-record-head:has\(> \.fm-record-lead\) ~ :is\(\.fm-record-body, \.card-pill-line\) \{ padding-left: (\d+)px/) ?? [])[1];
+  const gutter = (css.match(/\.fm-record-head:has\(> \.fm-record-lead\), \.fm-record-head:has\(> \.fm-record-lead\) ~ :is\(\.fm-record-body, \.card-pill-line\) \{ padding-left: (\d+)px/) ?? [])[1];
   const hung = (css.match(/\.fm-record-gutter > \.fm-record-gutter-icon \{[^}]*position: absolute; left: -(\d+)px/) ?? [])[1];
   ck("  ...a line with its own icon starts its text where a line without one does: the icon hangs in the card's icon column",
      // two sources on the card: each line draws its own (config/cockpitCard.cardIcons), both in the icon column
@@ -293,6 +293,9 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   ck("  ...and the Inbox is one column of one card: no pane, no row, no Back, InboxCard alone draws them",
      !pane.test(shared.replace(/\/\*[\s\S]*?\*\//g, "")) && elements(tab, "InboxCard").length === 1
      && elements(tab, "CockpitAttentionRow").every((e) => { for (let n = e.parent; n; n = n.parent) if (n.name?.getText?.() === "InboxCard") return true; return false; }));
+    // owner, 2026-11-01: two or three stacked icons made the name's line that tall, an empty line above the room
+  ck("a card's icons take no line of their own: out of the flow, in their column beside the head",
+     /\.fm-record-lead \{ position: absolute;/.test(fac) && /\.fm-record:has\(> \.fm-record-head > \.fm-record-lead\) \{ position: relative;/.test(fac));
   ck("every button lights under the mouse, and the card does not light while the mouse is on any of its buttons",
      /@media \(hover: hover\) \{\s*\.btn:hover:not\(:disabled\) \{/.test(base)
      && /\.fm-record-card:has\(> \.fm-openable\):hover:not\(:has\(\.fm-record-actions:hover\)\):not\(:has\(button:hover\)\)/.test(fac));
