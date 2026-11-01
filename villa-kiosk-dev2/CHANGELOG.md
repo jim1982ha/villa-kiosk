@@ -1,3 +1,10 @@
+## 2.496.660
+
+What you will see:
+- After `Done`, a card no longer comes back for a few seconds as a new card, so a second press
+  can't create a second one. It reaches `Watch` as soon as VESTA answers.
+- A card raised from a device with no fault no longer repeats the device's name as its line under `Watch` and `Closed`.
+
 ## 2.496.659
 
 What you will see:
