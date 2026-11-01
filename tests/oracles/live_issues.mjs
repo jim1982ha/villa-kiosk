@@ -39,8 +39,8 @@ const [pump] = groupAttention([
 ]);
 const acts = cardActions(pump);
 ck("a device's live state and its faults are ONE card", pump.items.length >= 2 && cardRecords(pump).length === 2, pump.items.map((i) => i.id));
-ck("  ...Done and Need help act on both, the fault AND the ticket; Open Ticket takes on its fault (adding it to the ticket)",
-   said(acts).join(" | ") === `Done → a,b ${OV_DONE} | Need help → a,b | Open Ticket → a (in_progress)`, said(acts));
+ck("  ...Done and Need help act on both, the fault AND the ticket; a ticket is open, so the button is Edit Ticket, never Open Ticket (owner, 2026-11-01)",
+   said(acts).join(" | ") === `Done → a,b ${OV_DONE} | Need help → a,b | Edit Ticket → b`, said(acts));
 const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" }),
   item("fault:c", "fault", "sensor.pump_energy", { ticketId: "c", stage: "ticket" })]);
 ck("  ...once every fault is a ticket, the button is Edit Ticket, on its first record",
@@ -119,8 +119,8 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
   const tickets = W.ticketCards(records, fold);
   const counts = W.openCounts(records, fold);
   const has = (g, kind) => cardActions(g).some((a) => a.kind === kind);
-  ck("the counts are the cards: devices to take on = issue cards with Open Ticket; in progress = Tickets cards; open = issue cards with a Done",
-     counts.faults === overview.filter((g) => has(g, "openTicket")).length && counts.tickets === tickets.length
+  ck("the counts are the cards: devices with a fault nobody took on; in progress = Tickets cards; open = issue cards with a Done",
+     counts.faults === overview.filter((g) => cardRecords(g).some((r) => E.stageOf(records.find((x) => x.id === r)) === "fault")).length && counts.tickets === tickets.length
      && counts.total === overview.filter((g) => has(g, "done")).length
      && JSON.stringify(counts) === JSON.stringify({ faults: 3, tickets: 3, total: 5 }), { counts, overview: overview.map((g) => g.key), tickets: tickets.map((t) => t.key) });
   ck("  ...each record's card is the same device in both: a Tickets card holds exactly its Overview card's tickets",
@@ -133,7 +133,7 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
      said(W.ticketActions(tickets.find((t) => t.key === "device:sensor.pump_power").records.map(W.workRecord))).join(" | ")
        === `Done → p2 (resolved) | Need help → p2 | No action needed → p2 ${TK_CLOSE}`
      && said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))).join(" | ")
-       === `Done → p1,p2 ${OV_DONE} | Need help → p1,p2 | Open Ticket → p1 (in_progress)`);
+       === `Done → p1,p2 ${OV_DONE} | Need help → p1,p2 | Edit Ticket → p2`);
   ck("  ...Tickets lists the device whose ticket was opened last first, never an open fault or a closed record",
      tickets.map((t) => t.key).join() === "item:fault:n2,device:lock.back,device:sensor.pump_power", tickets.map((t) => t.key));
 }
@@ -527,7 +527,7 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     cancel: () => {}, close: async () => {}, run: () => {}, staging: null, endStaging: () => {} });
   const drawButtons = (actions, asking = null, extra = {}) => draw(h(WorkButtons,
     { actions, cardKey: "device:x", work: work(asking, extra.problem ?? null), ...extra }));
-  const ovActs = cardActions(pump), tkActs = W.ticketActions([{ id: "a", stage: "ticket" }]);
+  const ovActs = W.overviewActions([{ id: "a", stage: "fault" }]), tkActs = W.ticketActions([{ id: "a", stage: "ticket" }]);
   ck("an issue card: Done, Need help, then Open Ticket with its wrench, in their row, Done named for a screen reader",
      /^<div class="fm-work-row">/.test(drawButtons(ovActs, null, { name: "Pump" }))
      && text(drawButtons(ovActs, null, { name: "Pump" })) === "|Done|Need help|[icon] Open Ticket|"
