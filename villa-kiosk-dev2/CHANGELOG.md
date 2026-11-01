@@ -1,3 +1,13 @@
+## 2.496.655
+
+What you will see:
+- A state pill no longer repeats the card's words: `Missing` goes when a line of the card already says the device is
+  missing. It stays where nothing else says it, like `Unavailable` on a device with no fault.
+- The next check pill shows only a real time. `live` and `by hand` are gone: nothing is checked then.
+- An opened Inbox card no longer repeats its name in a pill: the name itself, underlined, opens the device.
+- A ticket has the same icon on its left as its Inbox card, so its text lines up the same way.
+- The ticket form no longer shows the device's technical id.
+
 ## 2.496.654
 
 What you will see:
