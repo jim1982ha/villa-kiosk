@@ -31,13 +31,6 @@ import { labelOf } from "./EntityMap";
 import { recordEntity, type VillaDevices } from "./deviceGroups";
 import { attentionSeverity, cardDevice, cardHead, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
 
-/** What a card's buttons do (owner, 2026-10-14; one set on every card, 2026-10-30) — on its records (its own fault
- *  lines and those folded onto a live state's line by mergeFaults), or its device when it holds none:
- *  fm/deviceWork.overviewActions' answer, in the order drawn. Empty for a card with neither. */
-function cardActions(group: AttentionGroup): WorkAction[] {
-  return overviewActions(cardRecords(group), group.entityId);
-}
-
 /** The records of one line — its fault, or the fault folded onto its live state, with their copies. A copy shares its
  *  line's standing Need help: one press on the card asks about every record of it, the copies included. */
 function itemRecords(i: AttentionItem): WorkRecord[] {
@@ -46,10 +39,11 @@ function itemRecords(i: AttentionItem): WorkRecord[] {
     ? [{ id, stage: f.stage ?? "fault", ...(f.help ? { help: f.help } : {}) }] : [])) : [];
 }
 
-/** The records on a card — its faults and tickets, each with its stage. */
-function cardRecords(group: AttentionGroup): WorkRecord[] {
-  return group.items.flatMap(itemRecords);
-}
+/** ⚠️ EACH PROBLEM HAS ITS OWN BUTTONS (owner, 2026-11-01: "for each issue of a potential merged cards", Edit Ticket on
+ *  the fault with a ticket, Open Ticket on the one without; it was one row for the card, its Done closing all of it):
+ *  on the records of its line, or its device when it holds none (deviceWork.overviewActions). */
+const lineWork = (records: WorkRecord[], device: string | undefined): Pick<CardLine, "records" | "actions" | "asked"> =>
+  ({ records, actions: overviewActions(records, device), asked: helpAsked(records) });
 
 /** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");
  *  in a row that is the problem itself (no device), only a status the row does not show already ("In progress"; an
@@ -183,6 +177,12 @@ export interface CardLine {
   key: string;
   /** Its words ("Unlocked", "In progress: Back door stiff"); whole on hover. */
   text: string;
+  /** The records it stands for, each with its stage; what its buttons act on. */
+  records: WorkRecord[];
+  /** Done · Need help · Open Ticket (or Edit Ticket) on them, or the device when it holds none (lineWork). */
+  actions: WorkAction[];
+  /** The Need help pressed on it that nothing has answered yet (deviceWork.helpAsked): its buttons say so. */
+  asked: HelpAsked | null;
   /** Its own source icons (where they are drawn: cardIcons); absent for a line that has none to say. */
   own?: LineSources;
   /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
@@ -226,10 +226,6 @@ export interface CardView {
   /** "Next check: 02:00", and its moment ("20/10/2026 02:00") (faultTiming.checkPill); `when`: the pill's words beside
    *  its refresh icon ("02:00", "Closes 02:00"); `tip`: what hovering the pill says. null: nothing checks it again at a time. */
   nextCheck: { text: string; at: string | null; when: string; tip: string } | null;
-  /** Done · Need help · Open Ticket (or Edit Ticket) — on its records, or its device when it holds none (deviceWork). */
-  actions: WorkAction[];
-  /** The Need help pressed on it that nothing has answered yet (deviceWork.helpAsked): its buttons say so. */
-  asked?: HelpAsked | null;
   lines: CardLine[];
   /** Its state, as pills (cardStatuses); absent on a card with none of its own (the Watch list's). */
   status?: RecordStatus[];
@@ -273,11 +269,12 @@ export function othersFirst(card: CardView, hasMessage: (line: CardLine) => bool
   const alerts = card.lines.filter(hasMessage), others = card.lines.filter((l) => !hasMessage(l));
   if (alerts.length === 0 || others.length === 0) return card;
   // ⚠️ A PROBLEM AN ALERT TELLS ALREADY IS NO "ALSO" (owner, 2026-11-01: the night check's "… is missing from the villa's
-  // system" under #103's same words): its line goes, its icon stays on the alert that tells it
+  // system" under #103's same words): its line goes, its icon and its records stay on the alert that tells it
   const tells = (alert: CardLine, other: CardLine) => !!other.text && norm(alert.told?.text ?? "").includes(norm(other.text));
   return { ...card, lines: [
     ...others.filter((l) => l.text && !alerts.some((a) => tells(a, l))).map((l) => ({ ...l, text: ALSO + l.text })),
-    ...alerts.map((a) => others.filter((l) => tells(a, l)).reduce((line, l) => ({ ...line, own: mergedSources(line.own, l.own) }), a)),
+    ...alerts.map((a) => others.filter((l) => tells(a, l)).reduce((line, l) => ({ ...line, own: mergedSources(line.own, l.own),
+      ...lineWork([...line.records, ...l.records], card.entityId) }), a)),
   ] };
 }
 
@@ -295,6 +292,7 @@ function mergedSources(a: LineSources | undefined, b: LineSources | undefined): 
 export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null, now: Date = new Date()): CardView {
   const line = (item: AttentionItem): CardLine => ({
     key: item.id,
+    ...lineWork(itemRecords(item), group.entityId),
     text: attentionLineIn(group, item),
     own: lineSources(item),
     story: item.story ?? item.fault?.story ?? [],
@@ -309,8 +307,6 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     key: group.key, title: group.title, room: group.room, entityId: group.entityId,
     lead: cardSources(group.items),
     nextCheck: checkPill(group.items, cadence, now),
-    actions: cardActions(group),
-    asked: helpAsked(cardRecords(group)),
     lines: group.items.map(line),
     status: cardStatuses(group.items),
   };
@@ -363,8 +359,8 @@ function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardVi
     ...own,
     ...cardHead(device, title, t.room),
     entityId: device?.key,
-    lead: null, actions: [],
-    lines: [{ key: `fault:${t.id}`, text: device ? title : "", story: [], openedAt: faultBegan(t),
+    lead: null,
+    lines: [{ key: `fault:${t.id}`, records: [], actions: [], asked: null, text: device ? title : "", story: [], openedAt: faultBegan(t),
       closing: did,
       ...alertNumberIn(alertNumberOf(t)) }],
   }];

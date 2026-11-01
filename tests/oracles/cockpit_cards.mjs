@@ -43,26 +43,19 @@ const [group] = groupAttention([
     stage: "fault", source: "alert", device: { key: "lock.example", label: "Test lock", room: "Hall" } }]);
 const CADENCE = { checkMinutes: 5, nightlyAt: "02:00" };
 const issue = draw(h(AttentionCard, { card: cockpitCard(group, CADENCE), onOpenEntity: () => {},
-  actions: h(React.Fragment, null, btn("Open Ticket"), btn("Close")) }));
+  buttons: () => h(React.Fragment, null, btn("Open Ticket"), btn("Close")) }));
 // owner, 2026-10-22: "show the area right after the device name, as the Spend tab's pills … to save one line"; "remove
 // the chevron, it's redundant"
 ck("it IS the Cockpit card: its source icons, then its name; its room as a pill on the line under — no chevron",
    /class="fm-record-card"/.test(issue) && /fm-record-lead[\s\S]*<svg/.test(inside(issue, "fm-record-head"))
    && /<strong><button[^>]*fm-title-link[^>]*>Test lock<\/button><\/strong><\/div>/.test(issue) && /fm-entity-chip fm-chip-static">Hall</.test(pillLine(issue))
    && !/lucide-chevron-right/.test(issue) && !/fm-record-subtitle/.test(issue), issue.slice(0, 400));
-ck("  ...its problem's line on the left, Open Ticket and Close inside on the right of it",
-   /fm-row-main[\s\S]*#33 · Test lock unavailable[\s\S]*fm-record-actions[\s\S]*Open Ticket[\s\S]*Close/.test(inside(issue, "fm-record-body")));
-ck("  ...opened, its name opens the device, no pill says it again, and its buttons stop their own presses",
-   /fm-title-link/.test(issue) && !/fm-meta/.test(issue) && /class="fm-record-actions"/.test(issue), issue);
-{
-  // owner, 2026-11-01: "a click on a card shall expand it", on the same card (RecordCard's one fold)
-  const { AttentionCard: Card } = await import("@/components/cockpit/IssueCard");
-  const folded = draw(h(Card, { card: cockpitCard(group, CADENCE), onOpenEntity() {}, onToggle() {}, folded: ["One line", "Another"],
-    actions: btn("Done") }));
-  ck("  ...folded: its name, time, pills, a line per problem and its buttons, as a Tickets card; a tap on it is the card's",
-     /role="button"/.test(folded) && /class="fm-card-folded">One line</.test(folded) && /class="fm-card-folded">Another</.test(folded)
-     && /fm-record-actions[\s\S]*Done/.test(folded) && /fm-record-check" aria-label/.test(inside(folded, "card-pill-line")) && !/cockpit-attention-sub/.test(folded), folded);
-}
+ck("  ...its problem, then that problem's own buttons, in the same section",
+   /cockpit-attention-sub"[\s\S]*#33 · Test lock unavailable[\s\S]*fm-record-actions[\s\S]*Open Ticket[\s\S]*Close/.test(inside(issue, "fm-record-body")));
+// owner, 2026-11-01: "the card themselves shall not be clickable", "next to the description of each issues" on wide screens
+ck("  ...the card is not pressed; on a wide card each problem's buttons stand on the right of its words",
+   !/role="button"|fm-openable/.test(issue) && /@container \(min-width: 640px\) \{\s*\.cockpit-attention-sub \{ flex-direction: row;/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8")));
+ck("  ...its name opens the device, no pill says it again", /fm-title-link/.test(issue) && !/fm-meta/.test(issue), issue);
 // owner, 2026-10-22: "instead of `Next check:` show a refresh icon, as a pill, on this same first line, on the right"
 // owner, 2026-11-01: "right after the room area pill"
 ck("  ...its next check a pill right after its room: a refresh icon, then when",

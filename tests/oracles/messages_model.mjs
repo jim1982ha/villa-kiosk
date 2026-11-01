@@ -45,8 +45,6 @@ ck("  ...one the filter does not list is not kept: every card folded",
    messagesView({ ...base, filter: "notifications", selected: "a" }).selected === null);
 ck("  ...one gone (an issue that cleared) leaves no other open in its place",
    messagesView({ ...base, filter: "issues", selected: "gone" }).selected === null);
-ck("a device window's warning: its issue open, when nothing else was asked",
-   messagesView({ ...base, filter: "issues", selected: null, focus: (c) => c.key === "b" }).selected?.key === "b");
 ck("which parts each filter shows (the tab draws those, never its own rule)",
    J(issues.shows) === J({ issues: true, notifications: false, reports: false })
    && J(notes.shows) === J({ issues: false, notifications: true, reports: false }));
@@ -121,24 +119,25 @@ ck("  ...opened for something else, never on Notifications, so nothing is read u
 
 console.log("\n  one line per item, drawn:");
 const { InboxCard } = await import("@/components/cockpit/MessagesTab");
-const foldedCard = (item) => draw(h(InboxCard, { item, opened: false, onToggle() {}, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
-const issueLine = foldedCard({ kind: "issue", key: "a", card: card("a", { room: "Kitchen",
+// an issue whole, a notification or a report folded until tapped (owner, 2026-11-01)
+const listed = (item) => draw(h(InboxCard, { item, opened: item.kind === "issue", onToggle: item.kind === "issue" ? undefined : () => {}, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
+const issueLine = listed({ kind: "issue", key: "a", card: card("a", { room: "Kitchen",
   lines: [{ key: "l", text: "Too warm", icons: null, story: [], closing: null, actions: [] }] }) });
 // owner, 2026-11-01: the room the opened card's pill (RecordCard Pill), on its own line; then its first problem
 const { Pill } = await import("@/components/fm/RecordCard");
 const pill = draw(h(Pill, { text: "Kitchen" }));
-ck("an open issue, folded: its device; its room, the opened card's own pill, on the line under; then its first problem",
-   /class="fm-record-card/.test(issueLine) && issueLine.includes("<strong>Device a</strong>")
+ck("an open issue: its device; its room, the opened card's own pill, on the line under; then its first problem",
+   /class="fm-record-card/.test(issueLine) && issueLine.includes("<strong>Device a</strong>") && !/role="button"/.test(issueLine)
    && issueLine.includes(`<span class="card-pill-line">${pill}</span>`) && pill.includes("fm-entity-chip")
-   && issueLine.includes('<span class="fm-card-folded">Too warm</span>')
-   && issueLine.indexOf("card-pill-line") < issueLine.indexOf("fm-card-folded"), issueLine);
+   && issueLine.includes('<span class="cockpit-attention-sub-title">Too warm</span>')
+   && issueLine.indexOf("card-pill-line") < issueLine.indexOf("cockpit-attention-sub-title"), issueLine);
 {
   const { AttentionCard } = await import("@/components/cockpit/IssueCard");
   const opened = draw(h(AttentionCard, { card: card("a", { room: "Kitchen", lines: [{ key: "l", text: "Too warm", story: [], closing: null }] }),
     onOpenEntity() {} }));
   ck("  ...the opened card draws its room with the same pill", opened.includes(pill), opened);
 }
-const noteLine = foldedCard({ kind: "notification", key: "n1", announcement: ann(1, { title: "🔔 Visitor",
+const noteLine = listed({ kind: "notification", key: "n1", announcement: ann(1, { title: "🔔 Visitor",
   text: "Someone is at the door.\nGate A", at: "2026-10-28T10:00:00+08:00" }) });
 ck("  ...a notification, folded: the same card: its title, its first words, when it came, as a pill",
    /class="fm-record-card/.test(noteLine) && noteLine.includes("<strong>🔔 Visitor</strong>") && !noteLine.includes("card-pill-line") && noteLine.includes('<span class="fm-card-folded">Someone is at the door.</span>')
@@ -165,7 +164,7 @@ ck("a guest (one tab, Messages) gets no tab strip: the strip is drawn only with 
    !!strip && guardsOf(strip).some((g) => /tabs\.length > 1/.test(g)), strip && guardsOf(strip));
 const tab = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
 ck("  ...the tab lists, counts and opens what messagesView says, from the open issues and the page's announcements",
-   /const \{ kept, unread, unreadReports \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, closed, announcements: kept, filter, selected,/.test(tab)
+   /const \{ kept, unread, unreadReports \} = useAnnouncements\(\);/.test(tab) && /messagesView\(\{\s*open, watched, closed, announcements: kept, filter, selected \}/.test(tab)
    && /view\.filters\.map\(/.test(tab) && /const item = view\.selected;/.test(tab)
    && /const \{ issues: showsIssues, notifications: showsNotes, reports: showsReports \} = view\.shows;/.test(tab));
 
@@ -178,6 +177,15 @@ ck("  ...the tab lists, counts and opens what messagesView says, from the open i
   const w = messagesView({ ...base, announcements: [msg], closed: [gone, told], filter: "issues", selected: null });
   ck("a fault that left Watch is in Closed, a card of its own", v.closed.map((i) => i.key).join() === "closed:f,closed:g", v.closed);
   ck("  ...one VESTA holds a message for is listed once, by that message", !w.closed.some((i) => i.key === "closed:g"), w.closed);
+}
+
+{
+  // owner, 2026-11-01: "shall not have a collapsed version", "the header … shall always be visible"
+  const propsOf = elements(parseTsx("components/cockpit/MessagesTab.tsx"), "InboxCard")[0];
+  const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  ck("under Issues every card is whole and not pressed; a notification or a report folds",
+     propText(propsOf, "opened") === "showsIssues || item?.key === i.key" && /^showsIssues \? undefined : /.test(propText(propsOf, "onToggle")), propText(propsOf, "onToggle"));
+  ck("  ...and the filters' line stays in view, over what scrolls", /\.messages-toolbar \{[^}]*position: sticky; top: 0;[^}]*background: var\(--bg-modal\);/.test(css));
 }
 
 console.log("\n  opening the Cockpit clears the unread mark (owner, 2026-10-31):");
@@ -314,8 +322,8 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   // owner, 2026-10-30: "a unique configuration … Done / Need Help / Open Ticket consistently for all of them" — the alert's
   // card drew VESTA's own Done · Need help, a fault's Open Ticket · Close
   const ic = parseTsx("components/cockpit/IssueCard.tsx");
-  ck("  ...its buttons the row of every issue card (CardActions, the card's Done · Need help · Open Ticket), never VESTA's own",
-     elements(ic, "CardActionRow").length === 1 && elements(ic, "RecordButtons").length === 0);
+  ck("  ...its buttons the row of every issue card (LineActions, each problem's Done · Need help · Open Ticket), never VESTA's own",
+     elements(ic, "LineActions").length === 1 && elements(ic, "RecordButtons").length === 0);
   const tab = parseTsx("components/cockpit/MessagesTab.tsx");
   ck("  ...the Inbox draws every issue, alert or not, watched or not, as THE issue card (a watched one has no buttons to draw)",
      elements(tab, "CockpitAttentionRow").length === 1 && elements(tab, "AttentionCard").length === 0
@@ -337,43 +345,33 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   const words = (html, cls) => (html.match(new RegExp(`class="${cls}">([^<]*)<`)) ?? [])[1];
   const lines = (html) => [...html.matchAll(/class="cockpit-attention-sub-title">([^<]*)</g)].map((m) => m[1]);
   for (const [what, item, Card] of [["an open issue", v.issues[0], CockpitAttentionRow], ["a watched one", v.watched[0], AttentionCard]]) {
-    const row = foldedCard(item);
+    const row = listed(item);
     const opened = draw(h(Card, { card: item.card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
-    const named = words(row, "fm-card-folded"), alertName = lines(opened).find((l) => l.includes("#"));
-    ck(`${what}: its row and its opened card name the alert as Telegram does, in the same words`,
-       !!named && !!alertName && named.startsWith(`${alertName}, `) && /^#(100-P1|92-P2) \(/.test(named), { row: named, card: lines(opened) });
-    ck("  ...its row: that name, then the alert's first words", named.endsWith(item.card.lines.find((l) => l.told).told.text.split("\n")[0]), named);
+    const alertName = lines(opened).find((l) => l.includes("#"));
+    ck(`${what}: listed and drawn alone it names the alert as Telegram does, in the same words`,
+       !!alertName && lines(row).includes(alertName) && /^#(100-P1|92-P2) \(/.test(alertName), { row: lines(row), card: lines(opened) });
   }
-  {
-    // owner, 2026-11-01: "both lines appears in the collapsed version": two alerts on one device, a line each
-    const two = card("two", { lines: [{ key: "a", text: "x", story: [], alertNumber: 100, closing: null }, { key: "b", text: "y", story: [], alertNumber: 92, closing: null },
-      { key: "c", text: "Battery low", story: [], closing: null }] });
-    const folded = foldedCard(messagesView({ open: [two], watched: [], announcements: [msg100, msg92], filter: "issues", selected: null }).issues[0]);
-    const shown = [...folded.matchAll(/class="fm-card-folded">([^<]*)</g)].map((m) => m[1]);
-    ck("a card of several problems, folded: a line for each, its alerts first", shown.length === 3 && shown[0].startsWith("#100-P1 (existing), ")
-       && shown[1].startsWith("#92-P2 (cleared), ") && shown[2] === "Also: Battery low", shown);
-  }
-  const opened = draw(h(CockpitAttentionRow, { card: v.issues[0].card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
-  // owner, 2026-11-01: a device's state is the status pill of every card, on the opened card and its row alike
-  const pill = /class="fm-badge tone-warn">Missing</;
   {
     // owner, 2026-11-01: "isn't it already covered by the 2 above lines ?"
     const same = card("same", { lines: [
-      { key: "a", text: "x", story: [], alertNumber: 100, closing: null, own: { sources: ["alert"], severities: ["warn"] } },
-      { key: "n", text: "the outdoor entrance lock is missing", story: [], closing: null, own: { sources: ["night"], severities: ["warn"] } },
+      { key: "a", text: "x", story: [], alertNumber: 100, closing: null, own: { sources: ["alert"], severities: ["warn"] }, records: [{ id: "r1", stage: "fault" }] },
+      { key: "n", text: "the outdoor entrance lock is missing", story: [], closing: null, own: { sources: ["night"], severities: ["warn"] }, records: [{ id: "r2", stage: "fault" }] },
       { key: "o", text: "Battery low", story: [], closing: null, own: { sources: ["night"], severities: ["warn"] } }] });
     const told = messagesView({ open: [same], watched: [], announcements: [msg100], filter: "issues", selected: null }).issues[0].card;
     ck("a problem an alert tells already is no \"Also\": its words go, its icon stays on the alert; another stays",
        told.lines.map((l) => l.text).join("|") === "Also: Battery low|#100-P1 (existing)" && told.lines[1].own.sources.join() === "alert,night", told.lines);
+    ck("  ...and its record: the alert's Done closes both", told.lines[1].actions.find((x) => x.kind === "done")?.ids.join() === "r1,r2", told.lines[1]);
   }
+  const opened = draw(h(CockpitAttentionRow, { card: v.issues[0].card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
   // owner, 2026-11-01: "Missing" beside words saying it was clutter; a state nothing says stays
+  const stated = /class="fm-badge tone-warn">Missing</;
   const quiet = card("q", { lines: [{ key: "q", text: "Battery low", story: [], closing: null }], status: [{ text: "Missing", tone: "tone-warn" }] });
-  ck("  ...a state its words say is no pill, on the card and folded alike; a state nothing says stays one",
-     !pill.test(opened) && !pill.test(foldedCard(v.issues[0])) && pill.test(foldedCard(messagesView({ open: [quiet], watched: [], announcements: [], filter: "issues", selected: null }).issues[0])));
+  ck("  ...a state its words say is no pill, on the card; a state nothing says stays one",
+     !stated.test(opened) && !stated.test(listed(v.issues[0])) && stated.test(listed(messagesView({ open: [quiet], watched: [], announcements: [], filter: "issues", selected: null }).issues[0])));
   ck("  ...the open one: the alert named alone, the other problem as \"Also\", VESTA's words in it",
      JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low", "#100-P1 (existing)"])
      && opened.includes("The outdoor entrance lock is missing."), lines(opened));
-  const rowTimeShown = words(foldedCard(v.issues[0]), "fm-entity-chip fm-chip-static fm-record-check");
+  const rowTimeShown = words(listed(v.issues[0]), "fm-entity-chip fm-chip-static fm-record-check");
   ck("  ...and its time pill is its alert's, not the other problem's", !!rowTimeShown && rowTimeShown.length > 0, rowTimeShown);
 }
 ck("its words, then its page opened in the document viewer (the add-on's sandboxed page)",
@@ -381,7 +379,7 @@ ck("its words, then its page opened in the document viewer (the add-on's sandbox
 ck("  ...no page link for a profile the add-on serves no page to, nor for a report without a page",
    !draw(h(ReportDetail, { announcement: weekly, canOpenPage: false })).includes("Open the page")
    && !draw(h(ReportDetail, { announcement: digest, canOpenPage: true })).includes("Open the page"));
-const reportLine = foldedCard(onReports.reports[0]);
+const reportLine = listed(onReports.reports[0]);
 ck("  ...folded: its title and first words", reportLine.includes("<strong>Rapport</strong>") && reportLine.includes('<span class="fm-card-folded">Trois choses</span>'), reportLine);
 const sections = elements(parseTsx("components/cockpit/MessagesTab.tsx"), "MessagesSection").map((e) => propText(e, "title"));
 ck("the tab draws a Reports section, its lines from the model's reports",
