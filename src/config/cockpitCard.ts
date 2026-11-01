@@ -360,7 +360,7 @@ function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardVi
     ...cardHead(device, title, t.room),
     entityId: device?.key,
     lead: null,
-    lines: [{ key: `fault:${t.id}`, records: [], actions: [], asked: null, text: device ? title : "", story: [], openedAt: faultBegan(t),
+    lines: [{ key: `fault:${t.id}`, records: [], actions: [], asked: null, text: device && title !== device.label ? title : "", story: [], openedAt: faultBegan(t),
       closing: did,
       ...alertNumberIn(alertNumberOf(t)) }],
   }];

@@ -82,7 +82,8 @@ function closedOf(t: FmTicket): ClosedFault {
  *  until the nightly check after its close, the time being the Agent's own: with no Agent, nothing watches. */
 function watchedUntil(t: FmTicket, cadence: AgentCadence | null): number {
   if (t.confirmsBy) return Date.parse(t.confirmsBy);
-  if (agentOwned(t) || !t.resolvedAt || !cadence) return NaN;
+  if (!t.resolvedAt || !cadence) return NaN;
+  if (agentOwned(t)) return NaN;
   return nextAt(cadence.nightlyAt, new Date(t.resolvedAt))?.getTime() ?? NaN;
 }
 
@@ -110,6 +111,15 @@ export function confirmingFaults(d: FmData, cadence: AgentCadence | null, now: n
 export function closedFaults(d: FmData, cadence: AgentCadence | null, now: number = Date.now()): ClosedFault[] {
   return d.tickets.filter((t) => isTicketResolved(t) && !confirmingOf(t, cadence, now)).map(closedOf)
     .sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0));
+}
+
+/** The records whose device's live state is no open issue: those on Watch, and ⚠️ THOSE ABOUT TO BE (owner, 2026-11-02:
+ *  closed at 02:49:25, the Agent's confirmsBy written at 02:49:33; in between the card came back as a live state with its
+ *  own Done, and that second press raised a second fault): a fault of the Agent's just closed, until it answers
+ *  (shownUntil: two of its looks). */
+export function watchedRecords(d: FmData, cadence: AgentCadence | null, now: number = Date.now()): FmTicket[] {
+  return d.tickets.filter((t) => isTicketResolved(t) && (confirmingOf(t, cadence, now)
+    || (agentOwned(t) && !!t.resolvedAt && now <= shownUntil(Date.parse(t.resolvedAt), cadence))));
 }
 
 /** How it was closed, as the Agent's Telegram lines say it: what, when, then who. */

@@ -219,6 +219,11 @@ console.log("\n  a hidden device: no card in any section (config/cockpitIssues, 
   const shown = (c) => confirmingFaults({ ...EMPTY_FM_DATA, tickets: [mine, agents] }, c, NOW).map((x) => x.ticket.id).join();
   ck("a person's fault Done stays on Watch until the nightly check after it, the Agent's own time; the Agent's says for itself; no Agent, no watch",
      shown(CADENCE) === "p1" && shown(null) === "", [shown(CADENCE), shown(null)]);
+  // the eight seconds at 02:49: its Done closed, its confirmsBy not written yet
+  const { watchedRecords } = await import("@/fm/faultConfirm");
+  const answering = (t) => watchedRecords({ ...EMPTY_FM_DATA, tickets: [t] }, CADENCE, NOW).length;
+  ck("  ...the Agent's own, until it answers: its device's live state does not come back as a card with a Done; after two looks, it may",
+     answering(agents) === 1 && answering({ ...agents, resolvedAt: at(-11) }) === 0);
 }
 
 console.log("\n  gone or back as the Agent says:");
