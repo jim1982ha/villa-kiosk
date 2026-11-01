@@ -34,7 +34,7 @@ import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
 import { useRecordPlace } from "./useRecordPlace";
-import { useRecordRoom } from "@/config/VillaModel";
+import { useCardRoom } from "@/config/VillaModel";
 import FormActions from "./FormActions";
 import { TONE_OF, toneClass } from "@/fm/tone";
 import FmForm from "./FmForm";
@@ -54,7 +54,7 @@ export default function SpendTab(
   // how long spend is kept (owner, 2026-10-20: the record's retention, said beside the list it shortens)
   const kept = recordsKeptNote(retention, "Spend");
   const place = useRecordPlace();
-  const roomOf = useRecordRoom();
+  const roomOf = useCardRoom();
   const { role } = useProfile();
   const terms = useFmTerms();
   const money = (n: number) => formatMoney(n, terms.currency);
@@ -230,7 +230,7 @@ export default function SpendTab(
               <span className="fm-entity-chip fm-chip-static">{c.deviceLabel}</span>
             ) : undefined}
             // its room, the pill of every Cockpit card (RoomPill): its device's room now, else the one it was saved with
-            room={roomOf(c) || undefined}
+            room={roomOf(c)}
             pills={<>
               <span className="fm-clause">{COST_CATEGORY_NAMES[c.category]}</span>
               <AgentMark record={c} />

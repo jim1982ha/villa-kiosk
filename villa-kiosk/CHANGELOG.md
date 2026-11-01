@@ -1,3 +1,12 @@
+## 2.496.650
+
+What you will see:
+- Every Cockpit card has the same two first lines: the name and its time on the right, then the room on the left and
+  its state pills on the right. A card with no room says "Other", so the line is always there.
+- A Missing device's ticket now shows the same room as its Inbox card.
+- The time of a card is a pill on its first line: "Opened …" on a ticket, and likewise on Schedule, Spend and Recent
+  work. "in progress since …" stays beside the tags.
+
 ## 2.496.649
 
 What you will see:

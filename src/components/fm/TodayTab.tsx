@@ -11,7 +11,7 @@ import InfoTip from "@/components/common/InfoTip";
 import { Fragment, useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { useDeviceIdentity } from "@/config/VillaModel";
+import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
 import { openCounts } from "@/fm/deviceWork";
 import { pillClass, toneClass } from "@/fm/tone";
 import { budgetStatus, dueLine, DUE_WORDS, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
@@ -41,6 +41,7 @@ function dueText(s: ScheduleStatus): string {
 
 export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
   const { data, logCompletion, removeSchedule, removeAllSchedules } = useFmData();
+  const roomOf = useCardRoom();
   const { deviceOfRecord } = useDeviceIdentity();
   const terms = useFmTerms();
   const board = scheduleBoard(data);
@@ -128,7 +129,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
             status={{ text: DUE_WORDS[s.state].word, tone: pillClass(DUE_WORDS[s.state].tone) }}
             when={`${dueText(s)} · every ${s.schedule.everyDays} days`
               + (s.last ? ` · last ${momentText(s.last.at)} by ${workedBy(s.last)}` : "")}
-            room={s.schedule.room || undefined}
+            room={roomOf(s.schedule)}
             pills={<>
               {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
               <AgentMark record={s.schedule} />

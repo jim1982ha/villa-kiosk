@@ -126,3 +126,8 @@ words only, and the time existed on faults alone, so "consistent everywhere" was
 **How to apply:** `tests/oracles/every_card_row.mjs` draws the real row of each kind through the real path and fails when
 a kind of line is not in its table; add a new field there, and prove it red on one kind. A row and its opened card draw
 one `CardPillLine`: the first line keeps the name and the next check, never a second copy of the pills.
+
+Every `RecordCard` in the tree counts, not only the Inbox's: first line the name and its time pills, second line the room
+(`useCardRoom`, "Other" with none) on the left and the state on the right. The check derives the cards from the source
+tree, so a card on another tab cannot be skipped; a card with no place is listed there with why. Before saying "every
+card", name the tabs that were checked; never accept a gap by describing it.

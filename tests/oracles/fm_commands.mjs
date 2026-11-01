@@ -6,7 +6,8 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { applyFmCommand } = await import("@/fm/fmCommands");
-const { faultWhen } = await import("@/fm/faultNotes");
+const { faultOpened, faultSince } = await import("@/fm/faultNotes");
+const faultWhen = (t, s) => [faultOpened(t, s), faultSince(t, s)].filter(Boolean).join(" · ");
 const { ROLE_LABELS } = await import("@/auth/roles");
 const { faultSource } = await import("@/fm/issueSource");
 

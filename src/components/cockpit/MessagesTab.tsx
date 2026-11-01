@@ -337,7 +337,7 @@ export function ReportDetail({ announcement: a, canOpenPage }: { announcement: A
 export function NoteDetail({ announcement: a, children }: { announcement: Announcement; children?: ReactNode }) {
   return (
     <RecordCard title={a.title}
-      stamp={a.at ? momentText(a.at) : undefined}
+      when={a.at ? momentText(a.at) : undefined}
       body={<div className="messages-card-body"><AnnouncementContent announcement={a} />{children}</div>}
       actions={a.buttons.length > 0 ? <RecordButtons record={a} /> : undefined} />
   );

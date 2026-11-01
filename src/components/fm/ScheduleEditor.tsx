@@ -13,6 +13,7 @@ import Dropdown from "@/components/common/Dropdown";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
+import { useCardRoom } from "@/config/VillaModel";
 import { scheduleStatus, shortDate } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
 import AgentMark from "./AgentMark";
@@ -39,6 +40,7 @@ const PRESETS: { label: string; days: number }[] = [
 
 export default function ScheduleEditor() {
   const { data, addSchedule, updateSchedule, removeSchedule } = useFmData();
+  const roomOf = useCardRoom();
   const { config } = useConfig();
   const [draft, setDraft] = useState<Draft>(EMPTY);
   /** Why the last save was refused — the draft is kept (2.496.252). */
@@ -146,7 +148,7 @@ export default function ScheduleEditor() {
               // its state, the status pill every card has (owner, 2026-11-01), never a grey tag
               status={s.enabled ? undefined : { text: "Paused", tone: pillClass("warn") }}
               when={`Every ${s.everyDays} days · due by ${due.dueAt ? shortDate(due.dueAt) : "—"}`}
-              room={s.room || undefined}
+              room={roomOf(s)}
               pills={<>
                 {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
                 <AgentMark record={s} />
