@@ -189,6 +189,8 @@ export interface CardLine {
   story: { note: string; at: string }[];
   /** When its fault was opened (ISO); null for a live state with no fault. */
   openedAt: string | null;
+  /** Who last moved its fault and when (faultNotes.faultLatest), said by the card's pill; "" or absent: nobody yet. */
+  latest?: string;
   /** `openedAt` is only as far back as the villa keeps. */
   openedBefore?: true;
   /** The alert number of its fault ("#91"), whose VESTA card the open issue shows; absent without one. */
@@ -237,26 +239,23 @@ function nextCheckView(group: AttentionGroup, cadence: AgentCadence | null, now:
   return { kind: "next", text, at: moment, when: nextCheckWhen(group.items, cadence, now), tip: moment ? `${text} (${moment})` : text };
 }
 
-/** ⚠️ EVERY ROW SAYS WHEN (owner, 2026-10-29: "why I don't see the time in the VESTA card, as any other notification?"):
- *  an issue's row in Messages shows when its first problem was last told of (its story's last step), else when it was
- *  opened: a new alert has no step yet, and its row showed no time at all. Every line has a moment (attention openedAt), a live state too; null only for a
- *  device gone longer than the villa keeps. Pure. */
+/** ⚠️ EVERY CARD SAYS WHEN, AND A PROBLEM HAS ONE TIME (owner, 2026-11-01: an issue's row said 01:07, its escalation, its
+ *  ticket said 00:19, the opening, of the same alert: "it shall be the same time"): when its lead problem was opened,
+ *  on every screen. What was told of it since is its Status. A new alert had no time before this (2026-10-29); every
+ *  line has a moment (attention openedAt), a live state too; null only for a device gone longer than the villa keeps.
+ *  Pure. */
 export function rowTime(card: Pick<CardView, "lines">): string | null {
-  const first = leadLine(card);
-  if (!first) return null;
-  return first.story.length ? first.story[first.story.length - 1].at : first.openedAt;
+  return leadLine(card)?.openedAt ?? null;
 }
 
-/** What the corner of a card's row says: its moment (rowTime), "Before" one past what the villa keeps, and never an
- *  empty corner. Pure. */
+/** The time pill of a card: its moment (rowTime), "Before" one past what the villa keeps, and never an empty pill. Pure. */
 export function rowWhen(card: Pick<CardView, "lines">): string {
   const at = rowTime(card);
   if (!at) return TIME_UNKNOWN;
-  const first = leadLine(card);
-  return first?.openedBefore && !first.story.length ? `Before ${momentText(at)}` : momentText(at);
+  return leadLine(card)?.openedBefore ? `Before ${momentText(at)}` : momentText(at);
 }
 
-/** A row's corner when nothing says when its problem began. */
+/** A card's time pill when nothing says when its problem began. */
 export const TIME_UNKNOWN = "Time unknown";
 
 /** The line a card's row in the Inbox names: its alert's (the first line VESTA holds a message for: issueAsTold puts
@@ -293,6 +292,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     story: item.story ?? item.fault?.story ?? [],
     // the fault's moment first: what is told of a device's problem counts from it, not from its state
     openedAt: item.fault?.openedAt ?? item.openedAt ?? null,
+    latest: item.latest ?? item.fault?.latest,
     ...(!item.fault && item.openedBefore ? { openedBefore: true as const } : {}),
     ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
     closing: closingText(item.closing ?? item.fault?.closing, now),

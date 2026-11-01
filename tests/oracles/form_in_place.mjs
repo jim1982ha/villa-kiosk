@@ -27,8 +27,8 @@ ck("  ...the ticket, spend, task, log and spend-settings forms all are",
    ["FaultForm.tsx", "SpendTab.tsx", "ScheduleEditor.tsx", "TodayTab.tsx", "ContractTermsEditor.tsx"].every((f) => framed.includes(f)), framed);
 const frame = rd("components/fm/FmForm.tsx");
 ck("  ...which brings itself into view as it opens, its heading at the top",
-   /useEffect\(\(\) => \{[\s\S]*?scrollIntoView\?\.\(\{ block: "start"/.test(frame) && /\}, \[\]\);/.test(frame)
-   && /<div ref=\{ref\} className="fm-form">/.test(frame));
+   /useInView<HTMLDivElement>\(\)/.test(frame) && /<div ref=\{ref\} className="fm-form">/.test(frame)
+   && /active = true, block: ScrollLogicalPosition = "start"/.test(rd("hooks/useInView.ts")));
 
 console.log("\n  which record is open, by value (ListEditor.listEditorView):");
 const { listEditorView, NOTHING_OPEN, useListEditor } = await import("@/components/fm/ListEditor");

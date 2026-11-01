@@ -35,8 +35,8 @@ ck("configured: shown, online or offline", agentVisible(online) && agentVisible(
      agentSourcesShown(online, false) && agentSourcesShown(off, true) && agentSourcesShown(null, true)
      && !agentSourcesShown(off, false) && !agentSourcesShown(null, false));
   ck("  ...and \"the Agent's\" is one test of a record's stamp", agentOwned({ source: "vesta_agent" }) !== agentOwned({ source: "kiosk" }));
-  ck("  ...which the (i), the mark and the fault's \"Opened by\" all ask",
-     ["components/fm/FaultTiming.tsx", "components/fm/AgentMark.tsx", "fm/faultNotes.ts"].every((f) => /agentOwned\(/.test(src(f)) && !/AGENT_SOURCE/.test(src(f))));
+  ck("  ...which the (i) and the mark ask",
+     ["components/fm/FaultTiming.tsx", "components/fm/AgentMark.tsx"].every((f) => /agentOwned\(/.test(src(f)) && !/AGENT_SOURCE/.test(src(f))));
 }
 
 console.log("\n  what the add-on sends is narrowed:");
@@ -101,15 +101,18 @@ ck("  ...and never an empty list", roomsToShare({ "sensor.x": null }, null) === 
 const share = src("agent/RoomShare.tsx");
 ck("RoomShare remembers what it sent in the device's storage, and asks roomsToShare",
    share.includes("roomsToShare(resolvedRooms, readString(LAST_SENT_KEY) ?? sentThisLoad, views)") && share.includes("writeString(LAST_SENT_KEY, share.key)"));
-const marks = ["TicketsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
+const marks = ["RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
   .filter((f) => !/<AgentMark record=\{/.test(src(`components/fm/${f}.tsx`)));
 ck("every Facility list shows the 'by VESTA Agent' mark", marks.length === 0, marks);
+// owner, 2026-11-01: on a ticket it was "confusing and redundant": the pill says who last moved it
+ck("  ...but a ticket: the pill of who last moved it, in its place",
+   !/AgentMark/.test(src("components/fm/TicketsTab.tsx")) && /<Pill text=\{latest\} \/>/.test(src("components/fm/TicketsTab.tsx")));
 // owner, 2026-10-11: the pills and when on ONE line right under the title, the same on every card — the mark, the
 // room, the device are inside RecordMeta, never in the title row; a fault's history shows its notes, not
 // "Open · date · VESTA Agent" lines that repeat that line
 // the shared card (RecordCard, 2026-10-14) puts the `pills` it is given in RecordMeta: a card handing it its pills is fine
-const cardPutsPillsInMeta = /<RecordMeta detail=\{detail\}>\{pills\}<\/RecordMeta>/.test(src("components/fm/RecordCard.tsx"));
-const loose = ["TicketsTab", "RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
+const cardPutsPillsInMeta = /<RecordMeta>\{pills\}<\/RecordMeta>/.test(src("components/fm/RecordCard.tsx"));
+const loose = ["RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
   .filter((f) => { const s = src(`components/fm/${f}.tsx`), m = s.indexOf("<AgentMark");
     if (cardPutsPillsInMeta && /pills=\{/.test(s) && s.lastIndexOf("pills={", m) > -1 && s.indexOf("<RecordCard") > -1) return false;
     return !(s.indexOf("<RecordMeta") > -1 && s.indexOf("<RecordMeta") < m && m < s.indexOf("</RecordMeta>")); });
@@ -117,8 +120,7 @@ ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0,
 {
   // review 26: a step says what it is (agent-contract.json ticketUpdate) — the card read the agent's title changes by
   // their first words and took them for status steps. Driven through the functions, with a fixed clock.
-  const { faultNoteLines, faultOpened, faultSince } = await import("../../src/fm/faultNotes.ts");
-  const faultWhen = (t, s) => [faultOpened(t, s), faultSince(t, s)].filter(Boolean).join(" · ");
+  const { faultNoteLines, faultLatest: faultWhen } = await import("../../src/fm/faultNotes.ts");
   const at = (h) => `2026-10-10T${String(h).padStart(2, "0")}:00:00Z`;
   const stamp = (s) => s.slice(5, 13).replace("T", " ");
   const t = { id: "t", status: "in_progress", openedAt: at(1), title: "Motion battery at 7%", note: "Check: Replace the battery.",
@@ -133,7 +135,7 @@ ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0,
      JSON.stringify(lines) === JSON.stringify(["Check: Replace the battery.", "Battery ordered (10-10 02)", "Was: Motion battery at 8% (renamed by VESTA Agent, 10-10 04)"]), lines);
   ck("  ...the title it has now is never repeated under it", !lines.some((l) => l.includes(t.title)), lines);
   const when = faultWhen(t, stamp);
-  ck("\"in progress since\" is the person's, never the agent's title change", when === "Opened 10-10 01 by VESTA Agent · in progress since 10-10 02 by Fabien", when);
+  ck("the pill's latest status is the person's, never the agent's title change", when === "Opened by Fabien, on 10-10 02", when);
   const reading = { ...t, title: "Front door — part ordered", updates: [...t.updates,
     { at: at(5), status: "in_progress", by: "VESTA Agent", kind: "reading", title: "Front door unavailable", photoIds: [] }] };
   const renamedByHand = { ...t, title: "Motion battery — ordered", updates: [...t.updates,
@@ -159,11 +161,11 @@ ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0,
     { at: at(4), status: "in_progress", note: "Now: Motion battery at 7%", photoIds: [] }] };
   ck("a history written before the kinds: its last \"Now: …\" is read as a title change, never as a status step",
      JSON.stringify(faultNoteLines(old, stamp).slice(1)) === JSON.stringify(["Battery ordered (10-10 02)", "Was: Motion battery at 8% (10-10 04)"])
-     && faultWhen(old, stamp).endsWith("since 10-10 02 by Fabien"), [faultNoteLines(old, stamp), faultWhen(old, stamp)]);
+     && faultWhen(old, stamp) === "Opened by Fabien, on 10-10 02", [faultNoteLines(old, stamp), faultWhen(old, stamp)]);
   const reopened = { ...t, status: "open", updates: [...t.updates,
     { at: at(6), status: "resolved", by: "Facility manager", photoIds: [] },
     { at: at(7), status: "open", by: "Owner", kind: "reopened", note: "Still beeping", photoIds: [] }] };
-  ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Opened 10-10 01 by VESTA Agent · reopened 10-10 07 by Owner", faultWhen(reopened, stamp));
+  ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Reopened by Owner, on 10-10 07", faultWhen(reopened, stamp));
   const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
   const kinds = /export type FmTicketUpdateKind = ([^;]+);/.exec(src("fm/fmTypes.ts"))?.[1].match(/"[^"]+"/g)?.map((k) => k.slice(1, -1));
   ck("the step kinds are the agreement's, the one list both sides read",
@@ -172,7 +174,7 @@ ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0,
 const faults = src("components/fm/TicketsTab.tsx");
 ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",
    !/fm-timeline-head|fm-timeline-dot/.test(faults) && /notes=\{faultNoteLines\(t, momentText\)\}/.test(faults)
-   && /when=\{faultOpened\(t, momentText\)\} detail=\{faultSince\(t, momentText\)\}/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
+   && /when=\{momentText\(t\.openedAt\)\}/.test(faults) && /faultLatest\(t, momentText\)/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
 {
   // what the button is: fm/deviceWork's, by value; that the Closed list draws it: the one wiring line
   const { closedActions, workRecord } = await import("@/fm/deviceWork");

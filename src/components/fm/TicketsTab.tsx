@@ -18,17 +18,15 @@ import { closedTickets, closedTicketStats, faultTitle, keptDays, STAGE_WORDS, st
 import { pillClass } from "@/fm/tone";
 import { closedActions, helpAsked, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
-import RecordCard, { type RecordCardProps } from "./RecordCard";
+import RecordCard, { DeviceChip, Pill, type RecordCardProps } from "./RecordCard";
 import FaultForm from "./FaultForm";
 import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
-import AgentMark from "./AgentMark";
-import { faultNoteLines, faultOpened, faultSince } from "@/fm/faultNotes";
+import { faultLatest, faultNoteLines } from "@/fm/faultNotes";
 import WorkButtons, { useCardWork } from "./WorkButtons";
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { formatMoney } from "@/utils/money";
-import Tip from "@/components/common/Tip";
 import { DAY_MS } from "@/utils/localDay";
 import { fmtDuration } from "@/components/panels/chartUtils";
 
@@ -81,9 +79,10 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const card = (t: FmTicket, status?: RecordCardProps["status"], actions?: ReactNode, framed = true) => {
     const work = data.completions.find((c) => c.ticketId === t.id && c.costId);
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
+    const latest = faultLatest(t, momentText);
     return (
       <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={status} actions={actions}
-        when={faultOpened(t, momentText)} detail={faultSince(t, momentText)} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
+        when={momentText(t.openedAt)} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
         documentIds={t.documentIds} amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
         erase={{ title: "Erase this ticket", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => editor.edit(t.id)}
@@ -92,15 +91,9 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         pills={<>
           {/* a guest reports a symptom from inside the villa, not a diagnosis */}
           {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
-          <AgentMark record={t} />
-          {t.entityId ? (
-            <Tip text={t.entityId}>
-              <button className="fm-entity-chip"
-                onClick={(e) => { e.stopPropagation(); onOpenEntity(t.entityId!); }}>
-                {t.deviceLabel ?? label(t.entityId)}
-              </button>
-            </Tip>
-          ) : t.deviceLabel ? <span className="fm-entity-chip" style={{ cursor: "default" }}>{t.deviceLabel}</span> : null}
+          <DeviceChip entityId={t.entityId} label={t.deviceLabel ?? (t.entityId ? label(t.entityId) : undefined)}
+            onOpenEntity={onOpenEntity} />
+          {latest && <Pill text={latest} />}
         </>} />
     );
   };

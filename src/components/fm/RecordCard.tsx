@@ -15,6 +15,10 @@
 // the title (CardPillLine); `check`: a pill at the right of that line, its kind's icon and when (an open issue's next check: a refresh icon; a card on the
 // Watch list, when VESTA closes it: a clock); `tone`: the card's own tint.
 //
+// ⚠️ ONE FOLD (owner, 2026-11-01: the Inbox's list of rows and its pane on the right replaced by its cards, tapped open):
+// `folded` is the whole of a folded card: every caller hands its card whole and this one place leaves out all but the
+// name, the time, the pill line and that one cut line, so no kind of card can fold its own way.
+//
 // ⚠️ THE NAME AND ITS NEXT CHECK, THEN ITS PILLS (owner, 2026-11-01: "only keep the refresh interval on the first line"):
 // opened or as a line in the Inbox, a card's second line is the same CardPillLine, the room left, the pills right.
 
@@ -37,19 +41,19 @@ export interface RecordCardProps {
   lead?: ReactNode;
   /** Pills right after the title, on its line (a spend's device). */
   titlePills?: ReactNode;
-  /** Its room, as THE room pill (RoomPill), on the title's line after its pills: every card that shows a room. */
+  /** Its room, as THE room pill (Pill), on the title's line after its pills: every card that shows a room. */
   room?: string;
   /** The pill at the right of the title's line: its kind's icon, `when` beside it, `tip` on hover (CheckPill). */
   check?: { kind: CheckPillKind; when: string; tip: string };
-  /** The pills before `when` (room, device chip, "by VESTA Agent"…). */
+  /** The line of tags above its text (the device, who last moved it, "by VESTA Agent" on a task or a spend line…). */
   pills?: ReactNode;
   /** When, as a pill at the right of the title's line, on every card (owner, 2026-11-01). */
   when?: string;
-  /** What came after it, in words after its tags (a ticket's "in progress since …"). */
-  detail?: ReactNode;
   notes?: (string | undefined | null)[];
-  /** Lines of its own, in place of the tags and notes block (an open issue's problems). */
+  /** Lines of its own, in place of the notes (an open issue's problems). */
   body?: ReactNode;
+  /** Folded: this one line, cut with "…", stands for everything under the pill line; undefined: the card whole. */
+  folded?: string;
   photoIds?: string[];
   documentIds?: string[];
   /** A cost, formatted, at the right of the text. */
@@ -79,27 +83,39 @@ export function CheckPill({ kind, when, tip }: { kind: CheckPillKind; when: stri
   );
 }
 
-/** ⚠️ A ROOM IS ONE PILL ON EVERY COCKPIT CARD (architecture review round 13, 2026-11-01: the Inbox drew the room as a
- *  framed pill, Tickets, Schedule and Today as plain grey text among the other tags): its card's `room`, and the Inbox
- *  line's (MessagesTab MessageRow). The Spend tab's device pill's look (owner, 2026-11-01: "the area pill … reusing
- *  existing code"). */
-export function RoomPill({ room }: { room: string }) {
-  return <span className="fm-entity-chip fm-chip-static">{room}</span>;
+/** ⚠️ ONE PILL FOR WHAT A CARD SAYS OF ITSELF (architecture review round 13, 2026-11-01: the Inbox drew the room as a
+ *  framed pill, Tickets, Schedule and Today as plain grey text among the other tags; owner, 2026-11-01: the time and who
+ *  last moved it too): the Spend tab's device pill's look (owner, 2026-11-01: "the area pill … reusing existing code"). */
+export function Pill({ text, className = "" }: { text: string; className?: string }) {
+  return <span className={`fm-entity-chip fm-chip-static${className ? ` ${className}` : ""}`}>{text}</span>;
 }
 
-/** ⚠️ A STATE IS ONE PILL ON EVERY COCKPIT CARD AND ITS ROW (owner, 2026-11-01): a ticket's stage, a task's due state, an
- *  issue's device state ("Missing"): its card's `status`, and the Inbox line's (MessagesTab MessageRow). */
+/** ⚠️ THE DEVICE'S PILL OPENS ITS WINDOW, on a ticket and on an opened issue alike (owner, 2026-11-01: a tap on a card
+ *  now opens and folds it, so this is the way to its device); a device no longer known, its name alone. */
+export function DeviceChip({ entityId, label, onOpenEntity }: {
+  entityId?: string; label?: string; onOpenEntity: (id: string) => void;
+}) {
+  if (!entityId) return label ? <Pill text={label} /> : null;
+  return (
+    <Tip text={entityId}>
+      <button className="fm-entity-chip" onClick={(e) => { e.stopPropagation(); onOpenEntity(entityId); }}>{label}</button>
+    </Tip>
+  );
+}
+
+/** ⚠️ A STATE IS ONE PILL ON EVERY COCKPIT CARD (owner, 2026-11-01): a ticket's stage, a task's due state, an issue's
+ *  device state ("Missing"): its card's `status`. */
 export function StatusPill({ text, tone }: RecordStatus) {
   return <span className={`fm-badge ${tone}`}>{text}</span>;
 }
 
-/** A card's line of pills, in the Inbox's list and on the opened card alike: its room on the left, its state on the
- *  right (owner, 2026-11-01); nothing with neither. */
-export function CardPillLine({ room, status }: { room?: string; status: readonly RecordStatus[] }) {
+/** A card's line of pills, folded or whole: its room on the left, its state on the right (owner, 2026-11-01); nothing
+ *  with neither. */
+function CardPillLine({ room, status }: { room?: string; status: readonly RecordStatus[] }) {
   if (!room && status.length === 0) return null;
   return (
     <span className="card-pill-line">
-      {room && <RoomPill room={room} />}
+      {room && <Pill text={room} />}
       {status.length > 0 && (
         <span className="card-pill-status">{status.map((s) => <StatusPill key={s.text} {...s} />)}</span>
       )}
@@ -107,8 +123,9 @@ export function CardPillLine({ room, status }: { room?: string; status: readonly
   );
 }
 
-export default function RecordCard({ title, status, lead, titlePills, room, when, check, pills, detail, notes, body, photoIds,
+export default function RecordCard({ title, status, lead, titlePills, room, when, check, pills, notes, body, folded, photoIds,
   documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
+  const whole = folded === undefined;
   const inside = (
     <>
       <div className="fm-record-head">
@@ -117,19 +134,16 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
           <strong>{title}</strong>
           {titlePills}
         </div>
-        {when && <span className="fm-entity-chip fm-chip-static fm-record-check">{when}</span>}
-        {check && <CheckPill kind={check.kind} when={check.when} tip={check.tip} />}
+        {when && <Pill text={when} className="fm-record-check" />}
+        {whole && check && <CheckPill kind={check.kind} when={check.when} tip={check.tip} />}
       </div>
       <CardPillLine room={room} status={[status ?? []].flat()} />
       {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}
-      <div className="fm-record-body">
+      {!whole && <div className="fm-record-body"><div className="fm-row-main"><span className="fm-card-folded">{folded}</span></div></div>}
+      {whole && <div className="fm-record-body">
         <div className="fm-row-main">
-          {body ?? (
-            <>
-              <RecordMeta detail={detail}>{pills}</RecordMeta>
-              <RecordNotes notes={notes ?? []} />
-            </>
-          )}
+          {pills && <RecordMeta>{pills}</RecordMeta>}
+          {body ?? <RecordNotes notes={notes ?? []} />}
           {(photoIds?.length ?? 0) > 0 && <EvidenceRow photoIds={photoIds!} disabled />}
           {/* a report kept with it (the VESTA Agent's investigation): opens on the iPad, offline */}
           {(documentIds?.length ?? 0) > 0 && (
@@ -151,7 +165,7 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
             {actions}
           </div>
         )}
-      </div>
+      </div>}
     </>
   );
   const record = erase ? (

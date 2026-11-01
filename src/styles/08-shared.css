@@ -131,16 +131,11 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 }
 
 /* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
-/* The Cockpit's Messages (cockpit/MessagesTab, ticket 17 of "One inbox", owner 2026-10-28; proposal B): the list on
-   the left, 420px, its filters on ONE line; the item chosen on the right. Each pane scrolls on its own. Narrower than
-   the two panes, the list and the item take the window in turn (.reading: an item chosen; its Back returns). */
+/* The Cockpit's Messages (cockpit/MessagesTab): one column of cards, as Tickets (owner, 2026-11-01). */
 .cockpit-modal { max-width: 1080px; }
-.cockpit-modal .modal-body:has(> .messages) { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
-.messages { flex: 1 1 auto; min-height: 0; display: flex; }
-.messages-list { flex: 0 0 420px; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--hairline); }
 /* the filters and, at the right of the same line, the Issues' "Open Ticket" (owner, 2026-10-31): two groups that wrap
    whole, so a line too narrow for both puts the button under the filters and never squeezes or cuts them */
-.messages-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 12px 10px 0; flex: none;
+.messages-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 4px;
   container-type: inline-size; }
 /* a filter's full word where the four buttons still fit one line, its short word below that width (owner, 2026-11-01:
    "Notifications if it fits"); the short one is the default, so a browser without container queries keeps one line */
@@ -166,25 +161,6 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 }
 .messages-filter.on { background: var(--accent); border-color: transparent; color: var(--bg-base); font-weight: 600; }
 .messages-filter-count { font-weight: 700; }
-.messages-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 12px 12px 0; }
-.messages-row {
-  display: flex; align-items: flex-start; gap: 12px; width: 100%; min-height: 62px; padding: 10px 8px; text-align: left;
-  border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text-primary); font: inherit;
-  cursor: pointer; border-radius: 8px;
-}
-.messages-row.on { background: var(--accent-soft); }
-.messages-row-icon { flex: none; width: 24px; display: flex; justify-content: center; padding-top: 2px; color: var(--text-secondary); }
-.messages-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-/* its title and its time on the first line; an issue's room pill on the second; its first words on ONE line over the
-   row's whole width, cut with "…" (owner, 2026-11-01) */
-.messages-row-head { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
-.messages-row-head b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.messages-row-sub { font-size: var(--text-xs); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* a line's title at the size of every other menu's rows (owner, 2026-10-28: the HUD menu's Settings / Logout) */
-.messages-row-head b { font-size: var(--text-base); }
-.messages-row-time { flex: none; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.messages-detail { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 0 0 12px 16px; }
-.messages-back { display: none; }
 .messages-empty { padding: 8px 0; }
 /* an open notification or report is the Cockpit's one card (RecordCard, owner 2026-10-29): its words as an issue's
    lines, its "To:" and Status as an issue's story; the full-screen ring keeps its large text (.announcement-full-text) */
@@ -193,17 +169,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-card-body .announcement-full-to, .messages-card-body .announcement-full-status {
   font-size: var(--text-2xs); color: var(--text-dim); }
 .messages-card-body .announcement-full-photo { max-height: 320px; align-self: center; }
-.messages-detail > .fm-record-card + .fm-record-card { margin-top: 10px; }
-@media (max-width: 860px) {
-  .messages-list { flex: 1 1 auto; border-right: 0; }
-  .messages-scroll { padding-right: 0; }
-  .messages-toolbar { padding-right: 0; }
-  .messages-filters { overflow-x: auto; }
-  .messages-detail { display: none; padding-left: 0; }
-  .messages.reading .messages-list { display: none; }
-  .messages.reading .messages-detail { display: block; }
-  .messages-back { display: inline-flex; margin-bottom: 8px; }
-}
+@media (max-width: 860px) { .messages-filters { overflow-x: auto; } }
 /* a fault the VESTA Agent is confirming: its check in the status green; its card is an open issue's (owner, 2026-10-23) */
 .fault-watched-icon { color: var(--status-on); }
 /* An open issue is THE Cockpit card (RecordCard, architecture review 2026-10-15): its own rules went with it — the
@@ -241,8 +207,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* ⚠️ A CARD'S WORDS ARE WHOLE; ONLY THE INBOX'S LIST ROW IS CUT (owner, 2026-10-31: an opened card cut "In progress:
    … against a normal 0.07 kWh/da…" while VESTA's message under the next line showed in full). The cut ("use truncation
    for the description text", 2026-10-18) belonged to the Overview's list of cards; since that list became one line
-   per device (.messages-row-head b and .messages-row-sub, the one place a message is cut), an issue's card is only ever drawn opened, so a
-   line of it wraps over as many lines as its words need, like every other text of the card. */
+   per device (RecordCard `folded`, .fm-card-folded, the one place a message is cut), an opened card's line wraps over as many lines as its words need, like every other text of the card. */
 .cockpit-attention-sub-title { display: block; }
 .cockpit-attention-latest { display: block; margin-top: 2px; font-size: var(--text-2xs); color: var(--text-dim); }
 /* a problem's short story on Telegram, one line each under it (ticket 19 of "One inbox") */
@@ -517,7 +482,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* a section's name in Messages, its chevron folding it (MessagesTab MessagesSection): the eyebrow title, as a button */
 .messages-section-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0;
   font-family: inherit; cursor: pointer; min-height: var(--touch-min); }
-.messages-section .cockpit-issues-head { margin-top: 12px; }
+.messages-section .fm-list { margin-top: 8px; }
 .messages-section .cockpit-issues-head .settings-section-title { margin: 0; }
 /* VESTA's conversation, its own window (ticket 21 of "One inbox"; owner, 2026-10-29: beside the robot, the windows' own
    frame): its lines scroll above the box to ask, the person's own lines set apart, as in any chat */

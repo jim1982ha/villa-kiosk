@@ -9,7 +9,7 @@ import { ck, done } from "../consistency/check.mjs";
 const { devicesOf } = await import("../consistency/devices.mjs");
 const { buildAttentionItems, groupAttention, sinceEntities } = await import("@/config/attention");
 const { cockpitCard, confirmingCards, rowWhen, TIME_UNKNOWN } = await import("@/config/cockpitCard");
-const { MessageRow } = await import("@/components/cockpit/MessagesTab");
+const { InboxCard } = await import("@/components/cockpit/MessagesTab");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { momentText } = await import("@/utils/dateText");
 const { loadHistory, stateSinceAnswer, stateSinceRequests } = await import("@/ha/historySource");
@@ -48,24 +48,25 @@ const table = { offline: issue("unavailable:camera.offline"), missing: issue("un
 const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 console.log("\n  each field of the row, on each kind:");
 for (const [name, item] of Object.entries(table)) {
-  const row = draw(h(MessageRow, { item, selected: false, onSelect() {} }));
-  ck(`${name}: its name on the first line, the time beside it`, /<b>[^<]+<\/b>/.test(inside(row, "messages-row-head"))
-     && text(inside(row, "messages-row-time")).includes(momentText(began)), row);
+  const row = draw(h(InboxCard, { item, opened: false, onToggle() {}, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
+  ck(`${name}: its name on the first line, the time beside it, as a pill`, /<strong>[^<]+<\/strong>/.test(inside(row, "fm-record-head"))
+     && text(inside(row, "fm-record-head")).includes(momentText(began)) && /fm-chip-static fm-record-check"/.test(row), row);
   const opened = draw(h(AttentionCard, { card: item.card, onOpenEntity() {} }));
   ck("  ...the opened card's second line is the row's own, the first keeps only its name and its next check",
      (inside(row, "card-pill-line") ?? "") === (inside(opened, "card-pill-line") ?? "")
      && !/fm-badge/.test(inside(opened, "fm-record-head")), opened);
-  ck("  ...no frame: every row one look", /class="messages-row"/.test(row), row);
+  ck("  ...the one card, folded, the same frame opened", /fm-record-card/.test(row) && /fm-record-card/.test(opened)
+     && /fm-record-check[^>]*>[^<]*</.test(inside(opened, "fm-record-head")), row);
   const pills = row.indexOf("card-pill-status"), room = row.indexOf("fm-entity-chip");
   ck("  ...its room left, its state pills in the group pushed right, nothing of its state in the words",
      (pills >= 0) === ((item.card.status ?? []).length > 0) && (pills < 0 || room < 0 || room < pills) && !row.slice(0, pills < 0 ? 0 : pills).includes("fm-badge")
-     && (pills < 0 || !/Missing|Unavailable|In progress/.test(text(inside(row, "messages-row-sub") || ""))), row);
+     && (pills < 0 || !/Missing|Unavailable|In progress/.test(text(inside(row, "fm-card-folded") || ""))), row);
 }
 ck("each kind that has a state shows it as a pill", ["offline", "missing", "alarm", "task never done", "ticket"]
    .every((k) => (table[k].card.status ?? []).length > 0), Object.entries(table).map(([k, v]) => [k, v.card.status]));
 const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
 ck("the pills' group is pushed right; no rule frames a row", /\.card-pill-status \{[^}]*margin-left: auto/.test(css)
-   && !/\.messages-row\.ticket/.test(css));
+   && !/\.fm-record-card\.ticket/.test(css));
 
 console.log("\n  every card of the app, wherever it is drawn:");
 {
@@ -75,7 +76,7 @@ console.log("\n  every card of the app, wherever it is drawn:");
   const files = readdirSync(root, { recursive: true }).filter((f) => f.endsWith(".tsx") && f !== "fm/RecordCard.tsx")
     .filter((f) => readFileSync(new URL(f, root), "utf8").includes("<RecordCard"));
   // a card that belongs to no place: every other card has its room line. A new one fails here until it is decided.
-  const NO_ROOM = { "cockpit/MessagesTab.tsx": 1 /* an opened notification or report */, "fm/ReadinessTab.tsx": 1 /* a villa-wide check */,
+  const NO_ROOM = { "cockpit/MessagesTab.tsx": 1 /* a notification or a report */, "fm/ReadinessTab.tsx": 1 /* a villa-wide check */,
     "fm/SavedDocumentsList.tsx": 1 /* a saved document */, "fm/TicketsTab.tsx": 1 /* "No ticket in progress" */, "fm/TodayTab.tsx": 1 /* "Nothing due" */ };
   const cards = files.map((f) => { const all = elements(parseTsx(`components/${f}`), "RecordCard");
     return { f, all, roomless: all.filter((e) => propText(e, "room") === undefined || propText(e, "room") === null).length,
@@ -83,11 +84,11 @@ console.log("\n  every card of the app, wherever it is drawn:");
   ck("every card has its room line, derived from the tree: only the listed ones go without",
      cards.every((c) => c.roomless === (NO_ROOM[c.f] ?? 0) && c.perCaller === 0), cards.map((c) => [c.f, c.all.length, c.roomless, c.perCaller]));
   const { default: RecordCard } = await import("@/components/fm/RecordCard");
-  const drawn = draw(h(RecordCard, { title: "T", room: "Hall", when: "Opened 01/01/2026 10:00", detail: "in progress since 11:00",
+  const drawn = draw(h(RecordCard, { title: "T", room: "Hall", when: "01/01/2026 10:00",
     pills: h("span", { className: "fm-clause" }, "tag") }));
-  ck("  ...its time a pill on the first line, what came after it in words among the tags, its room on the second",
-     /fm-record-check">Opened/.test(inside(drawn, "fm-record-head")) && !inside(drawn, "fm-record-body").includes("Opened")
-     && inside(drawn, "fm-meta").includes("in progress since") && inside(drawn, "card-pill-line").includes("Hall"), drawn);
+  ck("  ...its time a pill on the first line, its tags under it, its room on the second",
+     /fm-record-check">01\/01/.test(inside(drawn, "fm-record-head")) && !inside(drawn, "fm-record-body").includes("01/01/2026")
+     && inside(drawn, "fm-meta").includes("tag") && inside(drawn, "card-pill-line").includes("Hall"), drawn);
 }
 
 console.log("\n  the same device, the same room, in the Inbox and on its ticket:");
@@ -118,6 +119,14 @@ ck("  ...a device gone longer than the villa keeps says so", corner(one("unavail
 const told = groupAttention([of("unavailable:camera.offline"), { ...of("fault:f1"), id: "fault:f3", entityId: "camera.offline",
   openedAt: new Date(now - 9 * HOUR).toISOString(), device: of("unavailable:camera.offline").device }])[0];
 ck("  ...a fault on that device: the fault's moment", rowWhen(cockpitCard(told, null, new Date(now))) === momentText(now - 9 * HOUR), told);
+
+{
+  // owner, 2026-11-01: the Inbox said 01:07, its last escalation, the ticket 00:19, its opening: "it shall be the same time"
+  const taken = fmData.tickets.find((t) => t.id === "f2");
+  const told = { ...of("fault:f2"), story: [{ at: new Date(now - HOUR).toISOString(), note: "Escalation sent (to: Owner)" }] };
+  ck("  ...a ticket and its Inbox card say one time, whatever was told of it since",
+     rowWhen(cockpitCard(groupAttention([told])[0], null, new Date(now))) === momentText(taken.openedAt));
+}
 
 console.log("\n  the wiring: every moment is actually read:");
 const asked = sinceEntities({ fmData, devices, entities, entityMap });

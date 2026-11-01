@@ -52,11 +52,19 @@ ck("it IS the Cockpit card: its source icons, then its name; its room as a pill 
    && !/lucide-chevron-right/.test(issue) && !/fm-record-subtitle/.test(issue), issue.slice(0, 400));
 ck("  ...its problem's line on the left, Open Ticket and Close inside on the right of it",
    /fm-row-main[\s\S]*#33 · Test lock unavailable[\s\S]*fm-record-actions[\s\S]*Open Ticket[\s\S]*Close/.test(inside(issue, "fm-record-body")));
-ck("  ...it opens the device when tapped (a button), and its buttons stop their own presses",
-   /role="button"/.test(issue) && /class="fm-record-actions"/.test(issue));
+ck("  ...its device's pill opens the device, and its buttons stop their own presses",
+   /<button class="fm-entity-chip">Test lock<\/button>/.test(issue) && /class="fm-record-actions"/.test(issue), issue);
+{
+  // owner, 2026-11-01: "a click on a card shall expand it", on the same card (RecordCard's one fold)
+  const { AttentionCard: Card } = await import("@/components/cockpit/IssueCard");
+  const folded = draw(h(Card, { card: cockpitCard(group, CADENCE), onOpenEntity() {}, onToggle() {}, folded: "One line" }));
+  ck("  ...folded, only its name, time, pills and one line; a tap on it is the card's",
+     /role="button"/.test(folded) && /class="fm-card-folded">One line</.test(folded) && !/fm-record-actions|fm-record-check" aria-label|<button/.test(folded)
+     && !/cockpit-attention-sub/.test(folded), folded);
+}
 // owner, 2026-10-22: "instead of `Next check:` show a refresh icon, as a pill, on this same first line, on the right"
 ck("  ...its next check a pill at the right of that line: a refresh icon, then when",
-   /<\/div><span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>within 5min<\/span><\/div>$/.test(inside(issue, "fm-record-head")),
+   /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>within 5min<\/span><\/div>$/.test(inside(issue, "fm-record-head")),
    inside(issue, "fm-record-head"));
 const { nextCheck } = await import("@/fm/faultTiming");
 // at a fixed noon: the soonest of the 02:00 night and the 5-minute look is the night's from 01:55 to 02:00, and this
@@ -178,8 +186,9 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const opened = items.find((i) => i.ticketId === "c1");
   const fresh = cockpitCard({ ...fault(waiting), items: [opened] }, CADENCE, t1445);
   const toldCard = cockpitCard({ ...fault(waiting), items: [{ ...opened, story }] }, CADENCE, t1445);
-  ck("  ...its row says when: the last step told of it, else when it was opened, never nothing",
-     rowTime(fresh) === "2026-10-21T06:00:00Z" && rowTime(toldCard) === story[1].at, [rowTime(fresh), rowTime(toldCard)]);
+  // owner, 2026-11-01: the Inbox said its escalation's 01:07, the ticket its opening's 00:19, for one alert
+  ck("  ...it says when it was opened, as its ticket does, whatever was told of it since",
+     rowTime(fresh) === "2026-10-21T06:00:00Z" && rowTime(toldCard) === "2026-10-21T06:00:00Z", [rowTime(fresh), rowTime(toldCard)]);
 }
 ck("  ...said whole, with its moment, by the pill's tooltip (the Kiosk's own: common/Tip)",
    /aria-label="Next check: within 5min \(\d\d\/\d\d\/\d{4} \d\d:\d\d\)"/.test(issue)
@@ -274,19 +283,16 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
       .filter((m) => /text-overflow:\s*ellipsis|line-clamp/.test(m[2])).map((m) => m[1].trim().replace(/\s+/g, " ")));
   const CARD = /fm-record|fm-row|cockpit-attention|messages-card|messages-detail|announcement/;
   // owner, 2026-11-01: the line under a title was cut at the time's column; it spans the row, on one line, cut with "…"
-  ck("the Inbox's list: a line's title and its first words are each one line cut with \"…\", the words over the row's width",
-     cuts.includes(".messages-row-head b") && cuts.includes(".messages-row-sub")
-     && /\.messages-row-text \{[^}]*flex: 1 1 auto;[^}]*min-width: 0;/.test(shared), cuts);
-  ck("  ...an opened card: no text of it is ever cut, whatever its line (no rule cuts a card's text)",
-     cuts.every((sel) => !CARD.test(sel)) && /\.cockpit-attention-sub-text \{[^}]*overflow-wrap: anywhere;/.test(shared),
+  ck("a folded card's first words are one line cut with \"…\", over the card's width", cuts.includes(".fm-card-folded"), cuts);
+  ck("  ...an opened card: no text of it is ever cut, whatever its line (no other rule cuts a card's text)",
+     cuts.filter((sel) => sel !== ".fm-card-folded").every((sel) => !CARD.test(sel)) && /\.cockpit-attention-sub-text \{[^}]*overflow-wrap: anywhere;/.test(shared),
      cuts.filter((sel) => CARD.test(sel)));
-  // a card is only ever drawn opened: every issue card the Inbox draws sits in its opened pane, none in its list
+  // owner, 2026-11-01: one column, a tap opening a card in its place: no pane is left, and every section draws InboxCard
   const tab = parseTsx("components/cockpit/MessagesTab.tsx");
-  const inPane = (el) => { for (let n = el.parent; n; n = n.parent) if (n.openingElement && propText(n, "className") === '"messages-detail"') return true; return false; };
-  const cards = ["AttentionCard", "CockpitAttentionRow", "NoteDetail", "ReportDetail"].flatMap((t) => elements(tab, t))
-    .filter((el) => { for (let n = el.parent; n; n = n.parent) if (n.name?.getText?.() === "ReportDetail") return false; return true; });  // a report is a note: drawn by its own card
-  ck("  ...and a card is only drawn opened: every card the Inbox draws is in its opened pane (\"← Inbox\")",
-     cards.length >= 4 && cards.every(inPane), cards.filter((c) => !inPane(c)).map((c) => c.getText().slice(0, 60)));
+  const pane = /\.messages-(list|detail|scroll|back|row)\b|\.reading\b/;
+  ck("  ...and the Inbox is one column of one card: no pane, no row, no Back, InboxCard alone draws them",
+     !pane.test(shared.replace(/\/\*[\s\S]*?\*\//g, "")) && elements(tab, "InboxCard").length === 1
+     && elements(tab, "CockpitAttentionRow").every((e) => { for (let n = e.parent; n; n = n.parent) if (n.name?.getText?.() === "InboxCard") return true; return false; }));
   ck("every button lights under the mouse, and the card does not light while the mouse is on any of its buttons",
      /@media \(hover: hover\) \{\s*\.btn:hover:not\(:disabled\) \{/.test(base)
      && /\.fm-record-card:has\(> \.fm-openable\):hover:not\(:has\(\.fm-record-actions:hover\)\):not\(:has\(button:hover\)\)/.test(fac));
@@ -324,10 +330,10 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
      inlinePills.length === 0, inlinePills);
 }
 // architecture review round 13 (2026-11-01): the Inbox drew the room as a framed pill, Tickets, Schedule and Today as plain
-// grey text among the tags. ONE pill, the card's own `room` input (RecordCard RoomPill), on every list that shows a room.
+// grey text among the tags. ONE pill, the card's own `room` input (RecordCard Pill), on every list that shows a room.
 {
-  const { RoomPill } = await import("@/components/fm/RecordCard");
-  const pill = draw(h(RoomPill, { room: "Kitchen" }));
+  const { Pill } = await import("@/components/fm/RecordCard");
+  const pill = draw(h(Pill, { text: "Kitchen" }));
   const card = draw(h(RecordCard, { title: "Pump", room: "Kitchen", titlePills: h("span", { className: "fm-entity-chip" }, "DEVICE"),
     pills: h("span", { className: "fm-clause" }, "Cl. 3") }));
   ck("a card's room is the room pill, on the line under its title; its other pills stay on the title's line; the tags keep the clause only",
@@ -366,7 +372,7 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
   const sched = readFileSync(new URL("../../src/components/fm/ScheduleEditor.tsx", import.meta.url), "utf8");
   ck("  ...a paused task too: the status pill, no grey tag", /text: "Paused", tone: pillClass/.test(sched) && !/fm-clause">Paused/.test(sched));
   const row = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
-  ck("  ...and the Inbox's row draws the card's own pills", /status: card\.status \?\? \[\]/.test(row) && /<CardPillLine room=\{row\.room\} status=\{row\.status\} \/>/.test(row));
+  ck("  ...and the Inbox draws no pill of its own: its cards are RecordCard's", !/CardPillLine|fm-badge/.test(row));
 }
 
 done("✅ every Cockpit list is one card, checked as it is drawn");

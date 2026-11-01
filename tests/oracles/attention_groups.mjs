@@ -242,9 +242,9 @@ ck("the villa model hands buildAttentionItems its device list (the fold and the 
        .every((n) => !(n in att2)), Object.keys(att2));
   // ⚠️ THE CARDS ARE config/cockpitIssues' (architecture review, 2026-10-26): one card per group, made there, drawn here
   ck("  ...and the Cockpit draws the cards cockpitIssues made, one per group, asking attention for no part of a card",
-     // Messages since ticket 17: one line per card, in the model's order, the card itself open on the right
-     /messagesView\(\{\s*open, watched, /.test(cockpit) && /view\.issues\.map\(\(i\) => <MessageRow key=\{i\.key\} item=\{i\}/.test(cockpit)
-     && /<CockpitAttentionRow key=\{item\.key\} card=\{item\.card\}/.test(cockpit)
+     // Messages since ticket 17: one card per group, in the model's order, folded until tapped
+     /messagesView\(\{\s*open, watched, /.test(cockpit) && /view\.issues\.map\(card\)/.test(cockpit)
+     && /<CockpitAttentionRow card=\{item\.card\}/.test(cockpit)
      && !/cockpitCard\(/.test(cockpit) && /cockpitIssues\(view, /.test(src("components/cockpit/useVillaAttention.ts"))
      && !/(cardActions|itemActions|attentionLineIn|lineIcon|lineSources|nextCheck)\(/.test(cockpit)
      && /actions=\{card\.actions\}/.test(cockpit));

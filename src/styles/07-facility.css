@@ -85,6 +85,9 @@
 .fm-record-body { flex: 1 1 100%; min-width: 0; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; }
 /* the next check: a pill at the right of the title's line, its refresh icon before when (RecordCard `check`) */
 .fm-record-check { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; margin-top: 2px; margin-left: auto; }
+.fm-record-check + .fm-record-check { margin-left: 0; }
+/* a folded card's one line, cut with "…" (RecordCard `folded`): the one place a card's words are cut */
+.fm-card-folded { display: block; font-size: var(--text-xs); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* ⚠️ THE CARD'S WIDTH, NEVER ITS LONGEST LINE (owner, 2026-10-14: a "VESTA reads: …" note ran past a Closed card's
    right edge): a line of its own that may shrink wraps every note inside the card. */
 .fm-record-body > .fm-row-main { flex: 1 1 260px; min-width: 0; }
@@ -168,13 +171,9 @@
 .fm-row-confirm { flex: 1 1 100%; }
 .fm-row-confirm .modal-actions { flex-wrap: wrap; align-items: center; }
 .fm-row-sub { font-size: var(--text-xs); }
-/* The line right under a card's title: its pills, then when (RecordMeta.tsx, owner 2026-10-11).
+/* The line of a card's tags (RecordMeta.tsx, owner 2026-10-11).
    A device chip there is a pill like the others — the same height, still a button. */
 .fm-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-/* ⚠️ ON THE PILLS' LINE, WRAPPING THERE (owner, 2026-10-15): "Opened … · in progress since … by …" was a flex item
-   as wide as its whole text, so a long one dropped below the pills as a block. A zero basis keeps it on their line
-   (when 14em fit there) and its words wrap inside it. */
-.fm-meta-when { font-size: var(--text-xs); flex: 1 1 0; min-width: 14em; }
 /* a card's pills, the same size on its title's line (its room, a spend's device, its next check) and the meta line */
 :is(.fm-meta, .fm-record-head) .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
 /* ⚠️ A CARD'S BUTTONS ON ONE LINE ON A PHONE (owner, 2026-10-31, iPhone: Open Ticket wrapped under Done · Need help):

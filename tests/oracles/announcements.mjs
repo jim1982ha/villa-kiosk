@@ -114,10 +114,9 @@ ck("  ...the notice sends each to the notice model and keeps no memory of its ow
        ["/message-erase", "POST", JSON.stringify({ feed: "vesta", seq: 7, elevation: "tok" })],
        ["/message-erase", "POST", JSON.stringify({ feed: "villa", seq: 5, elevation: "tok2" })]]), sent);
   const tab = src("components/cockpit/MessagesTab.tsx");
-  ck("  ...a notification's and a report's line are held to erase them, the code asked first (never a button)",
-     /paged\.page\.map\(\(n\) => <ErasableMessageRow /.test(tab) && /reportsPaged\.page\.map\(\(r\) => <ErasableMessageRow /.test(tab)
-     && /useSuperadminDelete\(\{ title: "Delete message"/.test(tab) && /eraseMessage\(a, token, backendFetch\)/.test(tab)
-     && /if \(!consumeClick\(\)\) onSelect\(item\.key\)/.test(tab));
+  ck("  ...a notification's and a report's card are held to erase them, as every record (RecordCard `erase`), the code asked first (never a button)",
+     /erase=\{\{ title: "Delete message", detail: a\.title, run: \(token\) => eraseMessage\(a, token, backendFetch\) \}\}/.test(tab)
+     && !/useSuperadminDelete/.test(tab));
   const ctx = src("messages/AnnouncementsContext.tsx");
   ck("  ...and the page's watch hands what is kept to the merge", /\(items, full, first, kept\) =>/.test(ctx)
      && /afterRead\(s\.kept, items, full, first, kept\)/.test(ctx));

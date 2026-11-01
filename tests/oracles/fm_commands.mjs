@@ -6,8 +6,7 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { applyFmCommand } = await import("@/fm/fmCommands");
-const { faultOpened, faultSince } = await import("@/fm/faultNotes");
-const faultWhen = (t, s) => [faultOpened(t, s), faultSince(t, s)].filter(Boolean).join(" · ");
+const { faultLatest: faultWhen } = await import("@/fm/faultNotes");
 const { ROLE_LABELS } = await import("@/auth/roles");
 const { faultSource } = await import("@/fm/issueSource");
 
@@ -22,9 +21,9 @@ const t = raised.tickets[0];
 ck("a new fault: open, stamped now, its first step the raising — by the profile that raised it",
    t.status === "open" && t.openedAt === "2026-10-14T06:20:00.000Z" && t.updates?.length === 1
    && t.updates[0].status === "open" && t.updates[0].by === "Owner" && t.updates[0].role === "owner" && !t.updates[0].kind, t);
-ck("  ...and its card says so", faultWhen(t, stamp) === "Opened 06:20 by Owner", faultWhen(t, stamp));
+ck("  ...a fault nobody moved has no pill of who last moved it", faultWhen(t, stamp) === "", faultWhen(t, stamp));
 const guest = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "Noisy AC", photoIds: [], reportedBy: "guest" } }, k("guest"));
-ck("a guest's report: by Guest", faultWhen(guest.tickets[0], stamp) === "Opened 06:20 by Guest");
+ck("a guest's report: by Guest", guest.tickets[0].updates[0].by === "Guest");
 // The stamp is the profile's id and the role table's label (roles.json profiles.<role> — ONE table for the app and the
 // proxy). The words STORED on every step until 2.496.622 were "Guest", "Owner", "Facility manager": the facility
 // profile's became "Facility Manager" (owner, 2026-10-30), and its old steps are read as its own (formerLabels), so
@@ -35,16 +34,30 @@ ck("the stamp is the profile's id and the role table's label",
 ck("  ...and a card reads it back through the same table (its source icon: the Owner's badge), old words included",
    faultSource(t) === "owner" && faultSource({ ...t, updates: [{ ...t.updates[0], by: "x", role: "ops" }] }) === "fm"
    && faultSource({ ...t, updates: [{ at: t.openedAt, status: "open", photoIds: [], by: "Facility manager" }] }) === "fm"
-   && faultWhen({ ...t, updates: [{ at: t.openedAt, status: "open", photoIds: [], by: "Facility manager" }] }, stamp)
-     === "Opened 06:20 by Facility Manager");
-const agent = { ...t, source: "vesta_agent", updates: [{ ...t.updates[0], by: "VESTA Agent" }] };
-ck("the VESTA Agent's own fault does not repeat its mark on this line", faultWhen(agent, stamp) === "Opened 06:20");
+   && faultWhen({ ...t, status: "in_progress", updates: [{ at: t.openedAt, status: "in_progress", photoIds: [], by: "Facility manager" }] }, stamp)
+     === "Opened by Facility Manager, on 06:20");
 
 const opened = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "Pump capacitor", photoIds: [] }, asTicket: true }, k("owner"));
 const tk = opened.tickets[0];
 ck("\"Open a ticket\" (owner, 2026-10-14): a TICKET at once — in progress, taken on by whoever opened it",
    tk.status === "in_progress" && tk.updates.length === 1 && tk.updates[0].status === "in_progress" && tk.updates[0].by === "Owner");
-ck("  ...its card says when and by whom", faultWhen(tk, stamp) === "Opened 06:20 · in progress since 06:20 by Owner", faultWhen(tk, stamp));
+ck("  ...its card says when and by whom", faultWhen(tk, stamp) === "Opened by Owner, on 06:20", faultWhen(tk, stamp));
+// owner, 2026-11-01: "Opened by Wayan, on 31/10/2026 09:55" tracks "the latest status updated for this ticket"
+{
+  const step = (x) => ({ at: "2026-10-14T07:00:00.000Z", photoIds: [], ...x });
+  const later = (x) => step({ at: "2026-10-14T08:00:00.000Z", ...x });
+  const taken = step({ status: "in_progress", who: "Wayan", by: "Owner" });
+  ck("the pill: the name typed for who does the work, before the profile",
+     faultWhen({ ...tk, updates: [taken] }, stamp) === "Opened by Wayan, on 07:00", faultWhen({ ...tk, updates: [taken] }, stamp));
+  ck("  ...follows the latest status: done", faultWhen({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", who: "Made" })] }, stamp)
+     === "Done by Made, on 08:00");
+  ck("  ...closed with nothing done", faultWhen({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", kind: "cleared", by: "Owner" })] }, stamp)
+     === "Closed by Owner, on 08:00");
+  ck("  ...reopened, and help asked", faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "reopened", by: "Owner" })] }, stamp) === "Reopened by Owner, on 08:00"
+     && faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "help", by: "Owner" })] }, stamp) === "Need help asked by Owner, on 08:00");
+  ck("  ...a note from Telegram or a new title is no status: it stays", faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "noted", note: "Reminder sent" }),
+     later({ status: "in_progress", kind: "retitled", title: "x", by: "VESTA Agent" })] }, stamp) === "Opened by Wayan, on 07:00");
+}
 
 console.log("\n  every write, one way:");
 const closed = applyFmCommand(raised, { type: "closeTickets", ids: [t.id] }, k("ops"));

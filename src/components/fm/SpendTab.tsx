@@ -229,7 +229,7 @@ export default function SpendTab(
             ) : c.deviceLabel ? (
               <span className="fm-entity-chip fm-chip-static">{c.deviceLabel}</span>
             ) : undefined}
-            // its room, the pill of every Cockpit card (RoomPill): its device's room now, else the one it was saved with
+            // its room, the pill of every Cockpit card (Pill): its device's room now, else the one it was saved with
             room={roomOf(c)}
             pills={<>
               <span className="fm-clause">{COST_CATEGORY_NAMES[c.category]}</span>
