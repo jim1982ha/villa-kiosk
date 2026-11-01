@@ -1,3 +1,9 @@
+## 2.496.656
+
+What you will see:
+- A card no longer says the same problem twice: an `Also:` line goes when one of the card's alerts already says it, folded
+  or opened. Its icon stays on the alert.
+
 ## 2.496.655
 
 What you will see:
