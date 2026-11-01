@@ -55,8 +55,12 @@
 .fm-record-card .fm-record { border: none; background: none; padding: 0; border-radius: 0; row-gap: 4px; }
 /* what stands before its title (an issue's source icons), the line under the title (its room); its text then starts
    under the title, not under the icons */
-.fm-record-lead { flex: 0 0 18px; display: inline-flex; justify-content: center; margin-top: 2px; }
-.fm-record-head:has(> .fm-record-lead) ~ :is(.fm-record-body, .card-pill-line) { padding-left: 30px; }
+/* ⚠️ THE ICONS HANG IN THEIR COLUMN (owner, 2026-11-01: "a redundant line below the title"): stacked in the head, two or
+   three of them made the name's line as tall as they are, an empty line above the room. Out of the flow, they run down
+   beside the name, the room and the words, and no line is taller for them. */
+.fm-record:has(> .fm-record-head > .fm-record-lead) { position: relative; }
+.fm-record-lead { position: absolute; left: 0; top: 2px; width: 18px; display: inline-flex; justify-content: center; }
+.fm-record-head:has(> .fm-record-lead), .fm-record-head:has(> .fm-record-lead) ~ :is(.fm-record-body, .card-pill-line) { padding-left: 30px; }
 /* a line's own icon hangs in that column, under the card's, so every line's text starts at the same place, with or
    without an icon (owner, 2026-10-18: "#55" sat further right than "#41" above it) */
 .fm-record-body .fm-record-gutter { position: relative; }

@@ -541,7 +541,7 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     const pad = num(/\.fm-work-row > \.btn \{[^}]*padding: 0 (\d+)px/, fac);
     const gap = num(/\.fm-work-row \{[^}]*gap: (\d+)px/, fac);
     const lent = num(/\.fm-record-body \.fm-work-row \{ margin-left: -(\d+)px/, fac) || 0;
-    const gutter = num(/\.fm-record-head:has\(> \.fm-record-lead\) ~ :is\(\.fm-record-body, \.card-pill-line\) \{ padding-left: (\d+)px/, fac);
+    const gutter = num(/\.fm-record-head:has\(> \.fm-record-lead\), \.fm-record-head:has\(> \.fm-record-lead\) ~ :is\(\.fm-record-body, \.card-pill-line\) \{ padding-left: (\d+)px/, fac);
     const cardPad = num(/--card-pad: \d+px (\d+)px/, base);
     const needed = [34, 68, 101].reduce((w, label) => w + label + 2 * pad + 2, 0) + 2 * gap;
     const room = 354 - 2 * cardPad - gutter + lent;

@@ -1,3 +1,9 @@
+## 2.496.652
+
+What you will see:
+- A card with several icons on its left no longer has an empty line under its name: the room comes right below it, the
+  icons running down beside the name, the room and the text. This holds on every Cockpit card.
+
 ## 2.496.651
 
 What you will see:
