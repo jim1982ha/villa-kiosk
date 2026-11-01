@@ -181,7 +181,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
    row's whole width, cut with "…" (owner, 2026-11-01) */
 .messages-row-head { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
 .messages-row-head b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.messages-row-room { display: flex; }
+.messages-row-room { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .messages-row-sub { font-size: var(--text-xs); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* a line's title at the size of every other menu's rows (owner, 2026-10-28: the HUD menu's Settings / Logout) */
 .messages-row-head b { font-size: var(--text-base); }

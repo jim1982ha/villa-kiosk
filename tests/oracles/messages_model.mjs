@@ -333,9 +333,9 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   console.log("\n  the row, the opened card and the Watch card say an alert alike (architecture review round 13):");
   // the review's case: the lock missing from the villa's system, its alert taken on, another problem of the device
   const lock = card("lock", { lines: [
-    { key: "fault:t1", text: "Missing, in progress: #100-P1 · Outdoor entrance lock is missing", state: "Missing",
+    { key: "fault:t1", text: "In progress: #100-P1 · Outdoor entrance lock is missing",
       story: [{ at: "2026-11-01T08:00:00+08:00", note: "Ticket opened in the Cockpit" }], alertNumber: 100, closing: null },
-    { key: "night:x", text: "Battery low", story: [], closing: null }] });
+    { key: "night:x", text: "Battery low", story: [], closing: null }], status: [{ text: "Missing", tone: "tone-warn" }, { text: "In progress", tone: "tone-warn" }] });
   const msg100 = parseVestaMessage({ seq: 40, key: "incident:100", title: "#100-P1 (existing)", to: "To: Owner",
     body: "The outdoor entrance lock is missing.", status: ["⚠️ New alert"], buttons: [] });
   const msg92 = parseVestaMessage({ seq: 41, key: "incident:92", title: "#92-P2 (cleared)", to: "To: Owner",
@@ -348,13 +348,17 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   for (const [what, item, Card] of [["an open issue", v.issues[0], CockpitAttentionRow], ["a watched one", v.watched[0], AttentionCard]]) {
     const row = draw(h(MessageRow, { item, selected: false, onSelect() {} }));
     const opened = draw(h(Card, { card: item.card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
-    const named = words(row, "messages-row-sub"), alertLine = lines(opened).find((l) => l.includes("#"));
+    const named = words(row, "messages-row-sub"), alertName = lines(opened).find((l) => l.includes("#"));
     ck(`${what}: its row and its opened card name the alert as Telegram does, in the same words`,
-       !!named && named === alertLine && /#(100-P1|92-P2) \(/.test(named), { row: named, card: lines(opened) });
+       !!named && !!alertName && named.startsWith(`${alertName}, `) && /^#(100-P1|92-P2) \(/.test(named), { row: named, card: lines(opened) });
+    ck("  ...its row: that name, then the alert's first words", named.endsWith(item.card.lines.find((l) => l.told).told.text.split("\n")[0]), named);
   }
   const opened = draw(h(CockpitAttentionRow, { card: v.issues[0].card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
-  ck("  ...the open one: its device's own state first (\"Missing, #100-P1 (existing)\"), the other problem first as \"Also\", VESTA's words in it",
-     JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low", "Missing, #100-P1 (existing)"])
+  // owner, 2026-11-01: a device's state is the status pill of every card, on the opened card and its row alike
+  const pill = /class="fm-badge tone-warn">Missing</;
+  ck("  ...the open one: its device's state in the card's status pill, on the card and on its row alike, the alert named alone, the other problem as \"Also\", VESTA's words in it",
+     JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low", "#100-P1 (existing)"]) && pill.test(opened)
+     && pill.test(draw(h(MessageRow, { item: v.issues[0], selected: false, onSelect() {} })))
      && opened.includes("The outdoor entrance lock is missing."), lines(opened));
   const rowTimeShown = words(draw(h(MessageRow, { item: v.issues[0], selected: false, onSelect() {} })), "messages-row-time");
   ck("  ...and its row's time is its alert's last step, not the other problem's", !!rowTimeShown && rowTimeShown.length > 0, rowTimeShown);

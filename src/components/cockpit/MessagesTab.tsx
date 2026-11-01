@@ -18,13 +18,13 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
-import { leadLine, rowTime, type CardView } from "@/config/cockpitCard";
+import { rowTime, type CardView } from "@/config/cockpitCard";
 
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { useSuperadminDelete } from "@/hooks/useSuperadminDelete";
 import type { LongPressHandlers } from "@/hooks/useLongPress";
-import { announcementWords, messagesView, followingFilter, openingFilter, type MessageItem,
+import { announcementWords, issueRowWords, messagesView, followingFilter, openingFilter, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -33,7 +33,7 @@ import { SourceIcons } from "@/components/fm/sourceIcons";
 import InfoTip from "@/components/common/InfoTip";
 import { Pager, usePaged } from "@/components/common/Paged";
 import { AnnouncementContent, PageLink, RecordButtons } from "@/components/messages/AnnouncementContent";
-import RecordCard, { RoomPill } from "@/components/fm/RecordCard";
+import RecordCard, { RoomPill, StatusPill } from "@/components/fm/RecordCard";
 import { eraseMessage, type Announcement } from "@/messages/announcements";
 import { AttentionCard, CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
@@ -64,7 +64,12 @@ export function MessageRow({ item, selected, onSelect, hold }: {
           <b>{row.title}</b>
           {row.time && <span className="messages-row-time">{row.time}</span>}
         </span>
-        {row.room && <span className="messages-row-room"><RoomPill room={row.room} /></span>}
+        {(row.room || row.status.length > 0) && (
+          <span className="messages-row-room">
+            {row.room && <RoomPill room={row.room} />}
+            {row.status.map((s) => <StatusPill key={s.text} {...s} />)}
+          </span>
+        )}
         {row.sub && <span className="messages-row-sub">{row.sub}</span>}
       </span>
       {hold && <span className="fm-erasable-dot" aria-hidden="true" />}
@@ -130,7 +135,6 @@ function FoldedRows({ rows, unit, selected, onSelect, empty, tip, ...section }: 
 function rowOf(item: MessageItem) {
   if (item.kind === "issue") {
     const { card } = item;
-    const first = leadLine(card);
     const when = rowTime(card);
     return {
       icon: card.look === "watched"
@@ -138,7 +142,8 @@ function rowOf(item: MessageItem) {
         : card.lead ? <SourceIcons {...card.lead} /> : null,
       title: card.title,
       room: card.room,
-      sub: first?.text ?? "",
+      status: card.status ?? [],
+      sub: issueRowWords(card),
       time: when ? momentText(when) : "",
     };
   }
@@ -148,6 +153,7 @@ function rowOf(item: MessageItem) {
     icon: item.kind === "report" ? <FileText size={18} aria-hidden="true" /> : <Bell size={18} aria-hidden="true" />,
     title: w.title,
     room: undefined,
+    status: [],
     sub: w.line,
     time: w.at ? momentText(w.at) : "",
   };

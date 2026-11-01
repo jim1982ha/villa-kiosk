@@ -30,10 +30,13 @@ import RecordMeta, { RecordNotes } from "./RecordMeta";
 import { documentUrl } from "@/fm/fmApi";
 import type { CheckPillKind } from "@/fm/faultTiming";
 
+/** A card's status pill: `tone` is the badge's colour class (fm/tone pillClass). */
+export interface RecordStatus { text: string; tone: string }
+
 export interface RecordCardProps {
   title: ReactNode;
-  /** Its status pill: `tone` is the badge's colour class (ok, due-soon, overdue, never…). */
-  status?: { text: string; tone: string };
+  /** Its status pill, or several (StatusPill). */
+  status?: RecordStatus | RecordStatus[];
   lead?: ReactNode;
   /** Pills right after the title, on its line (a spend's device). */
   titlePills?: ReactNode;
@@ -84,6 +87,12 @@ export function RoomPill({ room }: { room: string }) {
   return <span className="fm-entity-chip fm-chip-static">{room}</span>;
 }
 
+/** ⚠️ A STATE IS ONE PILL ON EVERY COCKPIT CARD AND ITS ROW (owner, 2026-11-01): a ticket's stage, a task's due state, an
+ *  issue's device state ("Missing"): its card's `status`, and the Inbox line's (MessagesTab MessageRow). */
+export function StatusPill({ text, tone }: RecordStatus) {
+  return <span className={`fm-badge ${tone}`}>{text}</span>;
+}
+
 export default function RecordCard({ title, status, lead, titlePills, room, check, pills, when, notes, body, photoIds,
   documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const inside = (
@@ -95,7 +104,7 @@ export default function RecordCard({ title, status, lead, titlePills, room, chec
           {titlePills}
           {room && <RoomPill room={room} />}
         </div>
-        {status && <span className={`fm-badge ${status.tone}`}>{status.text}</span>}
+        {[status ?? []].flat().map((s) => <StatusPill key={s.text} {...s} />)}
         {check && <CheckPill kind={check.kind} when={check.when} tip={check.tip} />}
       </div>
       {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}

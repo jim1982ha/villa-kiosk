@@ -101,3 +101,15 @@ replay it with `node tools/placement-probe.mjs <report.json>`: the real pass and
 
 **Why:** validation steps written for a case the villa barely had could not be done; a probe showed nothing changed.
 Two overlap fixes (2.496.552-553) were made without the phone's pose, the second cause still an inference.
+
+## A card's state is one pill
+
+Every Cockpit card and its row show a state only through RecordCard's `StatusPill` (`status`), and every room through
+`RoomPill`. A line of text says what is wrong, never the state. Never add a case to a shared format that makes one kind
+of card read differently.
+
+**Why:** owner, 2026-11-01: "Missing, #100-P1" was a special case inside the shared code, so one kind of card had its own
+format; the same code path does not mean the same format.
+
+**How to apply:** before adding a condition to anything every card goes through, ask whether it creates a second format;
+if so, ask the owner first. `tests/oracles/cockpit_cards.mjs` fails on a second pill or a state in a line's words.

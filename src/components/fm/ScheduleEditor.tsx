@@ -21,6 +21,7 @@ import FormActions from "./FormActions";
 import Tip from "@/components/common/Tip";
 import RecordCard from "./RecordCard";
 import FmForm from "./FmForm";
+import { pillClass } from "@/fm/tone";
 import { useListEditor } from "./ListEditor";
 
 /** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
@@ -142,11 +143,12 @@ export default function ScheduleEditor() {
           return editor.inPlace(s.id, (
             // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22: "wherever there is a card, the same style")
             <RecordCard key={s.id} title={s.title}
+              // its state, the status pill every card has (owner, 2026-11-01), never a grey tag
+              status={s.enabled ? undefined : { text: "Paused", tone: pillClass("warn") }}
               when={`Every ${s.everyDays} days · due by ${due.dueAt ? shortDate(due.dueAt) : "—"}`}
               room={s.room || undefined}
               pills={<>
                 {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
-                {!s.enabled && <span className="fm-clause">Paused</span>}
                 <AgentMark record={s} />
               </>}
               actions={<>

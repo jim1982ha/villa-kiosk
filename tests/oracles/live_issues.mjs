@@ -204,13 +204,18 @@ const attentionLine = ({ fault, ...state }) => {
 const f = { id: "fault:x", kind: "fault", title: "Pump has been offline for 9 h.", detail: "", ticketId: "x" };
 ck("  ...\"Unavailable — \" is not said before it (the fault says offline); a ticket still says it is in progress",
    attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: f }) === "Pump has been offline for 9 h."
-   && attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: { ...f, stage: "ticket" } }) === "In progress: Pump has been offline for 9 h.");
-ck("  ...what the fault does not say stays: Not in Home Assistant, a live reading",
-   attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Not in Home Assistant", fault: f }) === "Not in Home Assistant, Pump has been offline for 9 h."
-   && attentionLine({ id: "a", kind: "alarm", title: "", detail: "92 %", fault: { ...f, title: "Humidity high" } }) === "92 %, Humidity high");
-ck("  ...a state word the fault's title already says is not said before it (owner, 2026-10-18, #41); a word only inside another stays",
+   && attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: { ...f, stage: "ticket" } }) === "Pump has been offline for 9 h."
+   && cockpitCard({ key: "device:u", title: "D", items: [{ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: { ...f, stage: "ticket" } }] }, null)
+     .status.map((s) => s.text).join() === "In progress");
+// owner, 2026-11-01: "follow how all other cards are style": a state is the card's status pill, never the line's words
+const stated = (item) => { const c = cockpitCard({ key: `device:${item.id}`, title: "D", items: [item] }, null); return [c.lines[0].text, c.status?.map((s) => s.text).join() || undefined]; };
+ck("  ...what the fault does not say stays, in the card's status pill: Missing, a live reading",
+   JSON.stringify(stated({ id: "u", kind: "unavailable", title: "", detail: "Missing", fault: f })) === JSON.stringify(["Pump has been offline for 9 h.", "Missing"])
+   && JSON.stringify(stated({ id: "a", kind: "alarm", title: "", detail: "92 %", fault: { ...f, title: "Humidity high" } })) === JSON.stringify(["Humidity high", "92 %"]));
+ck("  ...a state word the fault's title already says is not said again (owner, 2026-10-18, #41); a word only inside another stays",
    attentionLine({ id: "a", kind: "alarm", title: "", detail: "Unlocked", fault: { ...f, title: "Laundry Room door unlocked" } }) === "Laundry Room door unlocked"
-   && attentionLine({ id: "a", kind: "alarm", title: "", detail: "Open", fault: { ...f, title: "Door opened twice" } }) === "Open, Door opened twice");
+   && !stated({ id: "a", kind: "alarm", title: "", detail: "Unlocked", fault: { ...f, title: "Laundry Room door unlocked" } })[1]
+   && JSON.stringify(stated({ id: "a", kind: "alarm", title: "", detail: "Open", fault: { ...f, title: "Door opened twice" } })) === JSON.stringify(["Door opened twice", "Open"]));
 const [two] = offlineDevice("42");
 ck("  ...a fault on an entity that still reports (a battery reading 42 %) stays its own line", two.items.length === 2, two.items.map((i) => i.id));
 const [unknownValue] = offlineDevice("unknown");

@@ -343,4 +343,28 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
      && Object.keys(roomed).every((f) => !/className="fm-clause">\{[^}]*room/.test(readFileSync(new URL(`../../src/components/${f}`, import.meta.url), "utf8"))),
      given);
 }
+console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, option A):");
+{
+  const { readdirSync, statSync } = await import("node:fs");
+  const walk = (d) => readdirSync(d).flatMap((f) => { const p = `${d}/${f}`; return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(f) ? [p] : []; });
+  const root = new URL("../../src", import.meta.url).pathname;
+  const badges = walk(root).filter((p) => /fm-badge/.test(readFileSync(p, "utf8")) && !p.endsWith("fm/tone.ts"));
+  ck("the status pill is drawn in one place (RecordCard StatusPill)", badges.length === 1 && badges[0].endsWith("components/fm/RecordCard.tsx"), badges);
+  const { cockpitCard } = await import("@/config/cockpitCard");
+  const said = (item) => { const c = cockpitCard({ key: "device:d", title: "D", items: [item] }, null); return { text: c.lines.map((l) => l.text).join("|"), pills: c.status.map((s) => s.text) }; };
+  const f = { id: "fault:x", kind: "fault", title: "Door stuck", detail: "", ticketId: "x" };
+  const cases = [["Missing", { id: "u", kind: "unavailable", title: "", detail: "Missing", fault: f }],
+    ["Unavailable", { id: "u", kind: "unavailable", title: "", detail: "Unavailable" }],
+    ["Overdue", { id: "s", kind: "schedule", title: "Filter", detail: "Overdue" }],
+    ["In progress", { ...f, stage: "ticket" }]];
+  for (const [word, item] of cases) {
+    const got = said(item);
+    ck(`  ..."${word}": in a pill, not in the line's words`, got.pills.includes(word) && !got.text.toLowerCase().includes(word.toLowerCase()), got);
+  }
+  const sched = readFileSync(new URL("../../src/components/fm/ScheduleEditor.tsx", import.meta.url), "utf8");
+  ck("  ...a paused task too: the status pill, no grey tag", /text: "Paused", tone: pillClass/.test(sched) && !/fm-clause">Paused/.test(sched));
+  const row = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
+  ck("  ...and the Inbox's row draws the card's own pills", /status: card\.status \?\? \[\]/.test(row) && /row\.status\.map\(\(s\) => <StatusPill/.test(row));
+}
+
 done("✅ every Cockpit list is one card, checked as it is drawn");

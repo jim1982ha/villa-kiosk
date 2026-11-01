@@ -5,7 +5,7 @@
 // Messages screen reads; the later tickets add the reports and VESTA's conversation to it. Pure:
 // tests/oracles/messages_model.mjs.
 
-import { othersFirst, type CardView } from "@/config/cockpitCard";
+import { leadLine, othersFirst, type CardView } from "@/config/cockpitCard";
 import { alertStage, incidentKey, versionOf, type Announcement } from "./announcements";
 import { byTime, stillKept } from "./feed";
 
@@ -111,17 +111,26 @@ export function messageOfLine(line: CardView["lines"][number], kept: readonly An
  * "icons say every problem", "an alert leads its row").
  *
  * Each line VESTA holds a message for is named as Telegram names the alert: the message's title ("#100-P1 (existing)"),
- * after its device's own state the alert does not say ("Missing, …": CardLine.state); the message is the line's
- * (`told`: its words in place of its short story) and, on the Watch list, its Status says how it closed (no closing
- * line of the card's own: said once, owner 2026-10-29). The card's other problems come first as "Also: …" (othersFirst,
- * owner 2026-10-30). The Inbox's row (leadLine), the opened card and the Watch card all read THIS card. Pure.
+ * and nothing else, whatever the device (owner, 2026-11-01: "Missing, #100-P1" was one kind of card with its own format:
+ * a device's state is the card's status pill, CardView.status). The message is the line's (`told`: its words in place of its short story) and, on the Watch list, its Status says how it closed (no
+ * closing line of the card's own: said once, owner 2026-10-29). The card's other problems come first as "Also: …"
+ * (othersFirst, owner 2026-10-30). The Inbox's row (issueRowWords), the opened card and the Watch card all read THIS
+ * card. Pure.
  */
 export function issueAsTold(card: CardView, kept: readonly Announcement[]): CardView {
   const lines = card.lines.map((l) => {
     const a = messageOfLine(l, kept);
-    return a ? { ...l, text: l.state ? `${l.state}, ${a.title}` : a.title, closing: card.look === "watched" ? null : l.closing, told: a } : l;
+    return a ? { ...l, text: a.title, closing: card.look === "watched" ? null : l.closing, told: a } : l;
   });
   return othersFirst({ ...card, lines }, (l) => l.told !== undefined);
+}
+
+/** ⚠️ ONE LINE PER ALERT, ON EVERY ROW (owner, 2026-11-01: "#102-P2 (existing), 🔓 Laundry Room door unlocked",
+ *  "everywhere"; cut by the row): what an issue's collapsed row says under its name: its alert's title then its first
+ *  words, else its lead line's words. Pure. */
+export function issueRowWords(card: CardView): string {
+  const lead = leadLine(card);
+  return lead?.told ? [lead.text, announcementWords(lead.told).line].filter(Boolean).join(", ") : lead?.text ?? "";
 }
 
 // the list's one order (feed.byTime): two feeds' numbers do not compare

@@ -40,25 +40,29 @@ function cockpit(entities, tickets = []) {
 }
 const cardOf = (cards, id) => cards.find((c) => c.entityId === id);
 const words = (card) => card?.lines.map((l) => l.text) ?? [];
+const pills = (card) => card?.status?.map((s) => s.text) ?? [];
 
 console.log("  a device the villa's system no longer has:");
 {
   const { cards, view } = cockpit(live);
-  ck(`its card carries the "${NOT_IN_HA}" line`, words(cardOf(cards, LOCK)).join("|") === NOT_IN_HA, words(cardOf(cards, LOCK)));
-  ck("  ...beside the strip's \"Unavailable\", unchanged", words(cardOf(cards, STRIP)).join("|") === "Unavailable",
-     words(cardOf(cards, STRIP)));
+  ck(`its card carries the "${NOT_IN_HA}" pill`, pills(cardOf(cards, LOCK)).join("|") === NOT_IN_HA, pills(cardOf(cards, LOCK)));
+  ck("  ...beside the strip's \"Unavailable\", in the same pill", pills(cardOf(cards, STRIP)).join("|") === "Unavailable",
+     pills(cardOf(cards, STRIP)));
   ck("  ...and the counts count it: two things need attention", view.health.summary === "2 things need attention.",
      view.health.summary);
 }
 {
   const { cards } = cockpit(live, [alertTicket]);
   const card = cardOf(cards, LOCK);
-  ck("  ...its alert rides on that line (one problem, one line), which still says it", card?.lines.length === 1
-     && card.lines[0].text.startsWith(`${NOT_IN_HA}, `), words(card));
+  ck("  ...its alert rides on that line (one problem, one line), and the card's status pill says it", card?.lines.length === 1
+     && pills(card).join() === NOT_IN_HA && !card.lines[0].text.includes(NOT_IN_HA), [words(card), card?.status]);
   const drawn = draw(h(CockpitAttentionRow, { card: issueAsTold(card, [alert]), onOpenEntity() {},
     canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
-  ck(`  ...and the Inbox's alert card says "${NOT_IN_HA}" before VESTA's title, VESTA's message under it`,
-     drawn.includes(`${NOT_IN_HA}, #7-P1 (new)`) && drawn.includes("The door was unlocked while the villa was vacant."), drawn);
+  // owner, 2026-11-01: never before the alert's name: one format for every card
+  // owner, 2026-11-01: a state is every card's status pill, never the words of a line
+  ck(`  ...and the Inbox's alert card says "${NOT_IN_HA}" in the status pill every card has, VESTA's title alone on its line, its message under it`,
+     /class="fm-badge tone-warn">Missing</.test(drawn) && drawn.includes(">#7-P1 (new)<") && !drawn.includes(`${NOT_IN_HA}, #7`)
+     && drawn.includes("The door was unlocked while the villa was vacant."), drawn);
   const strip = cockpit(live, [{ ...alertTicket, id: "t-2", entityId: STRIP, alertNumber: 8, title: "Strip offline" }]).cards;
   const alert8 = { ...alert, key: "incident:8", title: "#8-P2 (new)" };
   const stripDrawn = draw(h(CockpitAttentionRow, { card: issueAsTold(cardOf(strip, STRIP), [alert8]),

@@ -13,6 +13,8 @@
 // checks read them one by one — a line's words could be right in a check and wrong on the card. attention groups the
 // problems; how a card SAYS them lives here only, and a check reads what cockpitCard returns.
 
+import { pillClass } from "@/fm/tone";
+import type { RecordStatus } from "@/components/fm/RecordCard";
 import type { AgentCadence } from "@/agent/agentApi";
 import { nextCheck, nextCheckAt, nextCheckWhen, type CheckPillKind } from "@/fm/faultTiming";
 import { helpAsked, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
@@ -53,7 +55,7 @@ function cardRecords(group: AttentionGroup): WorkRecord[] {
  *  open fault's line is empty — its title is the row's). Every row shows its problems this way,
  *  one or several. */
 function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
-  return group.key.startsWith("device:") ? attentionLine(item) : faultStatus(item) ?? item.detail ?? "";
+  return group.key.startsWith("device:") ? attentionLine(item) : "";
 }
 
 /** The word of a device's own state that a line says BESIDE the fault folded onto it, the fault not saying it already
@@ -127,7 +129,7 @@ function timesSaid(item: AttentionItem): string {
 }
 
 /** Does `title` already say `word` ("Laundry Room door unlocked" says "Unlocked"), as a whole word, whatever its case? */
-function saysWord(title: string, word: string): boolean {
+export function saysWord(title: string, word: string): boolean {
   const w = word.trim().toLowerCase();
   if (!w) return false;
   return new RegExp(`(^|[^\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}])`, "u")
@@ -139,19 +141,27 @@ function saysWord(title: string, word: string): boolean {
  *  its title is what is wrong, not the device ("Entrance door unlocked"; "In
  *  progress: …" once someone took it, faultStatus). */
 function attentionLine(item: AttentionItem): string {
-  const titled = (i: AttentionItem) => { const st = faultStatus(i); return `${st ? `${st}: ${i.title}` : i.title}${timesSaid(i)}`; };
   if (item.fault) {
-    const st = faultStatus(item.fault);
-    const fault = `${st ? `${st.toLowerCase()}: ` : ""}${item.fault.title}${timesSaid(item.fault)}`;
-    // ⚠️ "UNAVAILABLE — … OFFLINE FOR 9 H" SAID IT TWICE (owner, 2026-10-14): the fault on an unavailable line says the
-    // device is offline already. ⚠️ SO DID "UNLOCKED — #41 · LAUNDRY ROOM DOOR UNLOCKED" (owner, 2026-10-18): a state
-    // word the fault's title already says is not said before it. A word the fault does not say stays: "Not in Home
-    // Assistant", a live reading ("92 %").
-    const word = stateBesideFault(item);
-    return word === undefined ? fault.charAt(0).toUpperCase() + fault.slice(1) : `${word}, ${fault}`;
+    const fault = `${item.fault.title}${timesSaid(item.fault)}`;
+    return fault.charAt(0).toUpperCase() + fault.slice(1);
   }
-  if (item.kind === "fault") return titled(item);
-  return item.kind === "schedule" ? `${item.detail}: ${item.title}` : item.detail ?? "";
+  return item.kind === "fault" || item.kind === "schedule" ? `${item.title}${timesSaid(item)}` : "";
+}
+
+/** ⚠️ A CARD'S STATE IS ITS PILLS, NEVER ITS WORDS (owner, 2026-11-01, option A): the Inbox wrote it three ways, "In
+ *  progress: …", "Missing, #100-P1", "Unavailable", while Tickets and Schedule draw a status pill. Each distinct state
+ *  of its problems, once: its device's own word its fault does not say (stateBesideFault: "Missing"), a state with no
+ *  fault ("Unavailable", "Unlocked", a task's "Overdue"), then its stage once someone took it (STAGE_WORDS). The line
+ *  under them only ever says what is wrong (attentionLine, issueAsTold). Drawn by RecordCard's StatusPill on the opened
+ *  card and on its row. Pure. */
+function cardStatuses(items: readonly AttentionItem[]): RecordStatus[] {
+  const out = new Map<string, RecordStatus>();
+  for (const i of items) {
+    const word = i.fault ? stateBesideFault(i) : i.kind === "fault" ? undefined : i.detail;
+    if (word) out.set(word, { text: word, tone: pillClass(attentionSeverity(i) === "danger" ? "danger" : "warn") });
+    if (faultStatus(i.fault ?? i)) out.set(STAGE_WORDS.ticket.word, { text: STAGE_WORDS.ticket.word, tone: pillClass(STAGE_WORDS.ticket.tone) });
+  }
+  return [...out.values()];
 }
 
 /** ⚠️ A FAULT WAITING TO CLOSE SAYS SO (owner, 2026-10-21): a door locked at 14:38:50 was still a fault at 14:45 under
@@ -174,11 +184,6 @@ export interface CardLine {
   text: string;
   /** Its own source icons (where they are drawn: cardIcons); absent for a line that has none to say. */
   own?: LineSources;
-  /** The word of its device's own state it says before the fault it holds ("Missing"): what a line named by VESTA's
-   *  title still says first (messagesModel issueAsTold). Absent when its words hold none (stateBesideFault).
-   *  ⚠️ THE DEVICE'S OWN STATE WENT WITH THE ALERT'S TITLE (owner, 2026-10-31): a lock the villa's system had dropped
-   *  at night held its unlocked-door alert on its "Missing" line, and the Inbox named the line by the alert alone. */
-  state?: string;
   /** What happened about it on Telegram, in time order — the alert sent, a reminder, an escalation, a button pressed
    *  (ticket 19 of "One inbox"); [] when nothing was told. */
   story: { note: string; at: string }[];
@@ -220,6 +225,8 @@ export interface CardView {
   /** The Need help pressed on it that nothing has answered yet (deviceWork.helpAsked): its buttons say so. */
   asked?: HelpAsked | null;
   lines: CardLine[];
+  /** Its state, as pills (cardStatuses); absent on a card with none of its own (the Watch list's). */
+  status?: RecordStatus[];
   /** A ticket is open on it (one of its records taken on): its line in the Inbox is framed (owner, 2026-11-01). */
   ticket?: true;
 }
@@ -258,7 +265,7 @@ export function othersFirst(card: CardView, hasMessage: (line: CardLine) => bool
   const alerts = card.lines.filter(hasMessage), others = card.lines.filter((l) => !hasMessage(l));
   if (alerts.length === 0 || others.length === 0) return card;
   return { ...card, lines: [
-    ...others.map((l) => ({ ...l, text: ALSO + l.text })),
+    ...others.filter((l) => l.text).map((l) => ({ ...l, text: ALSO + l.text })),
     ...alerts,
   ] };
 }
@@ -270,7 +277,6 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     key: item.id,
     text: attentionLineIn(group, item),
     own: lineSources(item),
-    ...(stateBesideFault(item) !== undefined ? { state: stateBesideFault(item) } : {}),
     story: item.story ?? item.fault?.story ?? [],
     openedAt: item.openedAt ?? item.fault?.openedAt ?? null,
     ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
@@ -284,6 +290,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     asked: helpAsked(cardRecords(group)),
     lines: group.items.map(line),
     ...(cardRecords(group).some((r) => r.stage === "ticket") ? { ticket: true as const } : {}),
+    status: cardStatuses(group.items),
   };
 }
 
