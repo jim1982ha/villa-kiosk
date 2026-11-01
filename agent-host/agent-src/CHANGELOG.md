@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.418 (1 November 2026)
+
+- `vesta_shared.occupancy.siren_now`: the villa as the siren's request reads it, MOVEMENT for "not empty" while every
+  person of the sensor's `people` attribute is away. alert-desk's gate and `Actions.villa_now` read it. Who cannot be
+  told is someone home. tests/test_siren_request.py: the ultimate rule, no press no siren, whatever becomes of the
+  request (rules: The siren needs a human, always).
+
 ## 0.6.417 (1 November 2026)
 
 - `vesta_shared.offline`: held_since/offline_since name the entities that gave no real reading in the read (`blind`);

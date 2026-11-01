@@ -172,8 +172,8 @@ class Vesta:
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of,
                                related=lambda ids: related_entities(self.pack(), self.reader, ids),
                                executed=lambda *a: self.siren.executed(*a), tablet_keeps=lambda: self.kiosk.enabled,
-                               # the villa empty or not, read live from the Kiosk's pick (the siren's request, at the press)
-                               villa_now=lambda: occupancy.now(self.reader, self.s.pack_path))
+                               # who is in the villa, read live from the Kiosk's pick (the siren's request, at the press)
+                               villa_now=lambda: occupancy.siren_now(self.reader, self.s.pack_path))
         self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_siren)
         # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history

@@ -71,8 +71,8 @@ STATES: dict[str, tuple[str, str, str]] = {
     "expired": ("expired: nobody answered in time", "Expired. Ask again.", acted("Expired", "{time}") + ": nothing was done."),
     # asked only while the villa was empty (the siren's gate), someone in it before anyone approved (owner's Telegram,
     # 2026-10-31: the owner coming home was asked to sound the siren on themselves)
-    "withdrawn": ("withdrawn: the villa was no longer empty, nothing was done", "Withdrawn: the villa is no longer empty.",
-                  acted("Withdrawn", "{time}") + ": the villa is no longer empty. Nothing was done."),
+    "withdrawn": ("withdrawn: someone came home, nothing was done", "Withdrawn: someone came home.",
+                  acted("Withdrawn", "{time}") + ": someone came home. Nothing was done."),
     "unknown": ("approved; the agent restarted before it could see the result", "Already approved.", _APPROVED),
     # nobody received it (architecture review 21): never "waiting" — no chat had its buttons
     "undelivered": ("never delivered: no chat received it, nothing is waiting", "Never delivered.", ""),

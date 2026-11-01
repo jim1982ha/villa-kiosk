@@ -33,6 +33,8 @@ from .limits import limit
 from .stats import med
 
 OCCUPIED, EMPTY, UNKNOWN = "occupied", "empty", "unknown"
+#: Not empty, by movement alone: no known phone is home (siren_now). Only the siren's request reads this.
+MOVEMENT = "movement"
 #: ⚠️ ON MEANS EMPTY, WRITTEN ONCE (architecture review round 10, card 2): what each reading of the Kiosk's sensor says —
 #: state_of, day_states and the reports' "electricity while empty" (reports playbook.py) read this one table; the
 #: starter's reports.yaml said `empty: ["on"]` a third time.
@@ -72,6 +74,30 @@ def now(client, pack_path: str | None = None) -> str:
         return state_of((client.states([eid]).get(eid) or {}).get("state"))
     except Exception:  # noqa: BLE001 — unread is "cannot tell"
         return UNKNOWN
+
+
+def siren_now(client, pack_path: str | None = None) -> str:
+    """The villa as the siren's REQUEST reads it: now(), with MOVEMENT for a villa "not empty" while every person its
+    sensor lists (its `people` attribute) is away.
+
+    ⚠️ AN INTRUDER MOVES TOO (owner, 2026-11-01: "yes, i want to see the button"): "not empty" is any indoor movement, so
+    a burglar past a motion sensor took the Approve button away. The request now stops only for a known phone at home.
+    Not every person read as away (none listed, one home, one not readable), or nothing read: OCCUPIED, as before.
+    ⚠️ THIS ONLY DECIDES WHETHER VESTA ASKS (rules: The siren needs a human, always): a request is a question, and an
+    unanswered one sounds nothing."""
+    said = now(client, pack_path)
+    if said != OCCUPIED:
+        return said
+    try:
+        eid = sensor(pack_path)
+        people = (client.states([eid]).get(eid, {}).get("attributes") or {}).get("people")
+        if not isinstance(people, list) or not people:
+            return OCCUPIED
+        states = client.states([str(p) for p in people])
+        away = all((states.get(str(p)) or {}).get("state") == "not_home" for p in people)
+    except Exception:  # noqa: BLE001 — unread is someone who may be home
+        return OCCUPIED
+    return MOVEMENT if away else OCCUPIED
 
 
 def entity(skill_dir: str | None = None) -> str | None:

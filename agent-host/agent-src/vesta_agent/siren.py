@@ -86,9 +86,9 @@ class Request:
         if await asyncio.to_thread(self.actions.occupied):
             # ⚠️ READ AGAIN JUST BEFORE ASKING (owner's Telegram, 2026-10-31 00:19): the desk read the villa empty at the
             # alert; someone in it now, the siren is not asked — the alerts themselves went as usual
-            self.state.log("siren_not_asked", {"reason": "villa no longer empty"})
-            log.info("The siren was not asked: the villa is no longer empty")
-            out["why"] = "the villa is no longer empty"
+            self.state.log("siren_not_asked", {"reason": "someone came home"})
+            log.info("The siren was not asked: someone is home")
+            out["why"] = "someone is home"
             return out
         # its own domain's turn_on (a switch or a siren entity: policy.SIREN_DOMAINS), never run here: only ASKED, of the
         # owner (always_owners), and only while the villa is empty (WHILE_EMPTY: withdrawn once someone is in it)

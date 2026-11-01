@@ -362,6 +362,10 @@ def normalise(ev: dict) -> dict:
 
 #: What occupancy answers: the villa empty, someone in it, or it cannot be told (vesta_shared.occupancy's words).
 EMPTY, OCCUPIED, UNKNOWN = occupancy_now.EMPTY, occupancy_now.OCCUPIED, occupancy_now.UNKNOWN
+#: Movement indoors while no known phone is home: an intruder moves too (occupancy.siren_now), the siren is still asked
+MOVEMENT = occupancy_now.MOVEMENT
+#: The words of what the villa read when the siren is asked
+ASKED_WHILE = {EMPTY: "the villa is empty", MOVEMENT: "no known phone is home, with movement indoors"}
 
 
 def occupancy(client=None) -> str:
@@ -377,7 +381,7 @@ def occupancy(client=None) -> str:
             client = McpClient()
     except Exception:  # noqa: BLE001
         return UNKNOWN
-    return occupancy_now.now(client)
+    return occupancy_now.siren_now(client)
 
 
 def _find_by_ha_incident(store: Store, ha_incident: str | None, closed_within: timedelta | None = None,
@@ -1111,7 +1115,7 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
               and datetime.fromisoformat(i.get("last_seen_at") or i["opened_at"]) >= window]
     signals = {i["entity_id"] for i in recent}
     mode = (ev.get("occupancy") or UNKNOWN).lower()
-    armed = len(signals) >= cfg["min_signals"] and mode == EMPTY
+    armed = len(signals) >= cfg["min_signals"] and mode in ASKED_WHILE
     prompt, cameras = "", []
     if armed:
         # The engine turns this into an Approve / Refuse request to the owner (outcome.carry_out). Its durations as
@@ -1122,12 +1126,12 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
         # cameras that can show the place go to the engine, which sends their pictures first and adds `seen` only then
         names = sorted({signal_name(i) for i in recent})
         prompt = (f"Intrusion suspected: {len(signals)} independent sensors in {lasting(cfg['window_min'] * 60)} while "
-                  f"the villa is {mode}: {', '.join(names)}. Approving sounds the siren for "
+                  f"{ASKED_WHILE[mode]}: {', '.join(names)}. Approving sounds the siren for "
                   f"{lasting(siren_minutes() * 60)}.")
         cameras = cameras_near(recent)
     return R.siren(armed, prompt, ("owner", "fm"), signals=sorted(signals), occupancy=mode, cameras=cameras,
                    seen="Look at the camera picture above first." if cameras else "",
-                   reason=None if armed else ("villa not empty" if mode != EMPTY else "single signal"))
+                   reason=None if armed else ("villa not empty" if mode not in ASKED_WHILE else "single signal"))
 
 
 def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, params: VillaParams | None = None,

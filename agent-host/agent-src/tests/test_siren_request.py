@@ -168,7 +168,7 @@ def test_a_waiting_request_is_withdrawn_once_someone_is_home_and_every_copy_says
     assert run(v.approvals.expire()) == 1
     assert v.state.approval(ap["id"])["status"] == "withdrawn"
     edited = [t for _, _, t in v.tg.edits][-1]
-    assert "Withdrawn on " in edited and "the villa is no longer empty. Nothing was done." in edited
+    assert "Withdrawn on " in edited and "someone came home. Nothing was done." in edited
 
 
 def test_a_request_a_person_asked_is_never_withdrawn(tmp_path):
@@ -288,7 +288,7 @@ def test_the_siren_is_only_ever_asked_for_never_turned_on():
 def test_never_asked_while_someone_is_home():
     req, acts, seen = _request(home=True)
     out = run(req.gate(gate()))
-    assert out == {"asked": False, "why": "the villa is no longer empty", "warned": set()}
+    assert out == {"asked": False, "why": "someone is home", "warned": set()}
     assert [c[0] for c in acts.calls] == ["occupied"] and seen == []
 
 
@@ -347,3 +347,78 @@ def test_the_engine_hands_the_gate_to_the_siren_and_nothing_else_asks_for_it():
     assert "self.siren.gate(" in src
     for word in ("siren_entity", "occupied", "turn_on", "cannot be requested", "_pictures"):
         assert word not in src, word
+
+
+# ---------------------------------------------------------------------- an intruder moves too (owner, 2026-11-01)
+PERSON = "person.example_owner"
+
+
+def moving(tmp_path, phone="not_home"):
+    """A villa read "not empty" for indoor movement, its sensor listing one person, `phone` where their phone is."""
+    v = villa(tmp_path, empty="off")
+    v.reader._states[EMPTY_SENSOR]["attributes"] = {"people": [PERSON]}
+    v.reader._states[PERSON] = {"entity_id": PERSON, "state": phone}
+    return v
+
+
+def test_movement_indoors_with_no_known_phone_home_keeps_the_button(tmp_path):
+    v = moving(tmp_path)
+    run(v.outcome.carry_out({"siren_gate": gate(())}, "alert-desk"))
+    assert len(requests(v)) == 1
+    (ap,) = v.state.approvals_in("pending")
+    assert run(v.approvals.expire()) == 0                     # still only movement: it waits
+    assert v.state.approval(ap["id"])["status"] == "pending"
+
+
+def test_a_known_phone_home_takes_the_button_away_even_with_the_villa_read_by_movement(tmp_path):
+    v = moving(tmp_path, phone="home")
+    run(v.outcome.carry_out({"siren_gate": gate(())}, "alert-desk"))
+    assert requests(v) == []
+    v = moving(tmp_path / "2")
+    ap = _asked(v)
+    v.reader._states[PERSON]["state"] = "home"                # their phone came home
+    assert run(v.approvals.expire()) == 1 and v.state.approval(ap["id"])["status"] == "withdrawn"
+
+
+@pytest.mark.parametrize("attributes", [{}, {"people": []}, {"people": ["person.example_unread"]}])
+def test_who_cannot_be_told_is_someone_home(tmp_path, attributes):
+    v = moving(tmp_path)
+    v.reader._states[EMPTY_SENSOR]["attributes"] = attributes
+    run(v.outcome.carry_out({"siren_gate": gate(())}, "alert-desk"))
+    assert requests(v) == []
+
+
+def test_the_desk_asks_on_movement_and_says_so(tmp_path, pack):
+    store = Store(str(tmp_path / "s.sqlite"))
+    desk.intake(store, event("binary_sensor.example_drive_motion", 1), T0, occupancy_reader=lambda: "movement")
+    gate_ = desk.intake(store, event("lock.example_entrance", 2), T0 + timedelta(minutes=1),
+                        occupancy_reader=lambda: "movement")["siren_gate"]
+    assert gate_["armed"] is True and "no known phone is home, with movement indoors" in gate_["prompt"]
+
+
+@pytest.mark.parametrize("read", [lambda tmp: villa(tmp), lambda tmp: moving(tmp)], ids=["empty", "movement"])
+def test_the_ultimate_rule_no_press_no_siren_whatever_becomes_of_the_request(tmp_path, read):
+    # rules: The siren needs a human, always (owner, 2026-11-01). Asked, left unanswered until it expires, refused, or
+    # pressed by someone who may not: the siren is never called and no stop is ever due. Only the owner's Approve sounds it
+    v = read(tmp_path)
+    calls = []
+
+    class Spy(Writer):
+        def call_service(self, *a):
+            calls.append(a)
+
+    v.actions.writer_factory = Spy
+    ap = _asked(v)
+    assert run(v.approvals.expire()) == 0 and calls == []     # waiting
+    later = datetime.now(timezone.utc) + timedelta(days=2)
+    run(v.approvals.expire(later))                            # unanswered past its time: expired, silent
+    assert v.state.approval(ap["id"])["status"] != "pending" and calls == [] and v.state.siren_stop() is None
+    out = v.actions.decide(ap["id"], OWNER, True, chat=OWNER)  # a press after that does nothing
+    assert out["executed"] is False and calls == [] and v.state.siren_stop() is None
+    # a request refused sounds nothing; a stranger's Approve sounds nothing; the owner's own Approve does
+    ap2 = _asked(v)
+    assert v.actions.decide(ap2["id"], 999, True, chat=999)["executed"] is False and calls == []
+    assert v.actions.decide(ap2["id"], OWNER, False, chat=OWNER)["executed"] is False and calls == []
+    ap3 = _asked(v)
+    assert v.actions.decide(ap3["id"], OWNER, True, chat=OWNER)["executed"] is True
+    assert [c[:2] for c in calls] == [("switch", "turn_on")]

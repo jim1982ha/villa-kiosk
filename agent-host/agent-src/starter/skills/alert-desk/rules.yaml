@@ -69,8 +69,8 @@ unrouted:
 
 siren:
   # The siren never fires on a single signal. Two independent signals inside
-  # the window, the villa empty, and one explicit human approval.
-  window_min: 5  # How close together two independent signals must come for the siren to be proposed (the villa empty, and the owner approving).
+  # the window, no known phone home, and one explicit human approval.
+  window_min: 5  # How close together two independent signals must come for the siren to be proposed (no known phone home, and the owner approving).
   min_signals: 2  # How many independent signals inside the siren's window are needed; the siren never fires on a single one.
   # The villa's one "is it empty?" is the VESTA Kiosk's pick (Settings › Villa: on = empty, the sensor its presence
   # tile follows), handed to the agent at every heartbeat (vesta_shared.occupancy). No pick: never empty, no siren.

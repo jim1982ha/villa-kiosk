@@ -3,6 +3,23 @@
 Standing rules the owner set for how work is done and shipped. They apply to every contributor and every agent working
 in this repository. Dates are when the owner said it.
 
+## The siren needs a human, always
+
+THE ULTIMATE RULE, above every other, until the owner changes it himself: no siren ever sounds without a human
+validating it, in any case. No script, skill, automation, AI answer, schedule, timer, restart or default may sound one.
+
+**Why:** owner, 2026-11-01: "in a ULTIMATE rule (unless it's changed in the future): the siren shall never be triggered
+in anycase, without a human intervention (ie: validation)".
+
+**How to apply:**
+- A human validation is a person's own press made for that sounding: the owner's Approve on VESTA's request, the
+  tablet's "Sound the siren?" confirmation, a person pressing the villa's own siren control.
+- An expired, unanswered, refused or withdrawn request sounds nothing. Silence is never a yes.
+- Stopping a siren needs no one: a stop is always allowed.
+- Anything that could reach a siren counts, by whatever way: a plug or a group holding it, a scene, an automation, a
+  toggle. A change touching one proves by a check that went red that it still cannot sound without that press.
+- Changing when VESTA ASKS never changes this rule: a request is still only a question.
+
 ## Branches and backport
 
 Kiosk work is committed and shipped on `dev2`; Agent work on `agent-dev`. `main` changes only by a backport the owner

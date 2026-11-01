@@ -203,7 +203,7 @@ class Actions:
         self.villa_now = villa_now
 
     def occupied(self) -> bool:
-        """Someone is in the villa now, by its "empty" sensor. Only a reading that says so: unknown is not occupied."""
+        """A known person is in the villa now (occupancy.siren_now). Only a reading that says so: unknown is not."""
         try:
             return self.villa_now() == OCCUPIED
         except Exception:  # noqa: BLE001 — unread is "cannot tell"
@@ -319,7 +319,7 @@ class Actions:
         if approve and withdrawn_now(act, self.occupied):
             # never on an Approve pressed after someone came home (siren.withdrawn_now: the siren's rule, one place)
             if self.state.withdraw_approval(aid):
-                self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "villa no longer empty"})
+                self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "someone came home"})
                 return {"toast": toast("withdrawn"), "state": "withdrawn", "executed": False}
             return {"toast": "Already decided.", "state": None, "executed": False}
         if not approve:

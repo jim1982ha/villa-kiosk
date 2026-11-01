@@ -106,8 +106,10 @@ answer (after a restart), the automation alerts anyway.
 
 `rules.yaml` section `siren`. The gate arms only when all three hold:
 1. At least `siren.min_signals` independent intrusion signals (different entities) inside `siren.window_min`.
-2. The villa is empty: the "empty" sensor picked in the VESTA Kiosk's Settings › Villa reads on (the one its presence
-   tile follows). None picked, missing or unreadable: not empty, the siren is not offered.
+2. No known phone is home: the "empty" sensor picked in the VESTA Kiosk's Settings › Villa reads on (the one its
+   presence tile follows), or it reads off for movement alone, every person it lists being away: an intruder moves
+   too, so the owner keeps the button and looks at the camera first. None picked, missing or unreadable, or a known
+   phone home: the siren is not offered, and a request waiting is withdrawn.
 3. The owner approves the siren request with the Approve button (it expires after policy.yaml's
    `approval_ttl_minutes`). It sounds for policy.yaml's `siren_auto_off_min`, then stops.
 
@@ -117,7 +119,7 @@ devices as the villa's system names them. When a camera can show the place (one 
 one the villa's system places in the same area as a sensor that tripped), its picture is sent just before the
 question, and only then does the question say to look at it; with no picture, none is mentioned. The villa is read
 again just before asking and at every check while the request waits: someone in it, it is not asked, or it is
-withdrawn ("the villa is no longer empty"), and an Approve pressed after that sounds nothing.
+withdrawn ("someone came home"), and an Approve pressed after that sounds nothing.
 
 ## What you may do
 
