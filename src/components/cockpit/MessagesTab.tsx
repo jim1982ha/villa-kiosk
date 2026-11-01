@@ -25,7 +25,7 @@ import type { CardView } from "@/config/cockpitCard";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { backendFetch } from "@/auth/sessionLost";
 import { useInView } from "@/hooks/useInView";
-import { announcementWords, isReport, issueRowWords, messagesView, followingFilter, openingFilter, type MessageItem,
+import { announcementWords, isReport, issueRowLines, messagesView, followingFilter, openingFilter, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
 import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
 import FaultForm from "@/components/fm/FaultForm";
@@ -77,10 +77,10 @@ function FoldedRows({ rows, unit, card, empty, tip, ...section }: {
   );
 }
 
-/** What stands under a folded card's pills: an issue's lead problem (in the words its opened card says it: the issue as
- *  told, messagesModel issueAsTold), a notification's first words. */
-export function foldedLine(item: MessageItem): string {
-  return item.kind === "issue" ? issueRowWords(item.card) : announcementWords(item.announcement).line;
+/** What stands under a folded card's pills: each of an issue's problems (in the words its opened card says it: the
+ *  issue as told, messagesModel issueAsTold), a notification's first words. */
+export function foldedLines(item: MessageItem): string[] {
+  return item.kind === "issue" ? issueRowLines(item.card) : [announcementWords(item.announcement).line];
 }
 
 /** ⚠️ ONE CARD OF THE INBOX, WHATEVER IT HOLDS (owner, 2026-11-01: "NEVER add dedicated lines of code for specific
@@ -98,7 +98,7 @@ export function InboxCard({ item, opened, onToggle, canManage, onOpenEntity, onE
   focused?: boolean;
 }) {
   const ref = useInView<HTMLDivElement>(opened, "start");
-  const shown = { folded: opened ? undefined : foldedLine(item), onToggle };
+  const shown = { folded: opened ? undefined : foldedLines(item), onToggle };
   return (
     <div ref={ref}>
       {item.kind === "issue"

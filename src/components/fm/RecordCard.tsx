@@ -16,8 +16,8 @@
 // Watch list, when VESTA closes it: a clock); `tone`: the card's own tint.
 //
 // ⚠️ ONE FOLD (owner, 2026-11-01: the Inbox's list of rows and its pane on the right replaced by its cards, tapped open):
-// `folded` is the whole of a folded card: every caller hands its card whole and this one place leaves out all but the
-// name, the time, the pill line and that one cut line, so no kind of card can fold its own way.
+// `folded` is the whole of a folded card: every caller hands its card whole and this one place swaps its text for those
+// cut lines, its buttons staying as on a Tickets card, so no kind of card can fold its own way.
 //
 // ⚠️ THE NAME AND ITS NEXT CHECK, THEN ITS PILLS (owner, 2026-11-01: "only keep the refresh interval on the first line"):
 // opened or as a line in the Inbox, a card's second line is the same CardPillLine, the room left, the pills right.
@@ -52,8 +52,8 @@ export interface RecordCardProps {
   notes?: (string | undefined | null)[];
   /** Lines of its own, in place of the notes (an open issue's problems). */
   body?: ReactNode;
-  /** Folded: this one line, cut with "…", stands for everything under the pill line; undefined: the card whole. */
-  folded?: string;
+  /** Folded: these lines, one per problem, each cut with "…", stand for its text; undefined: the card whole. */
+  folded?: string[];
   photoIds?: string[];
   documentIds?: string[];
   /** A cost, formatted, at the right of the text. */
@@ -139,14 +139,14 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
       </div>
       <CardPillLine room={room} status={[status ?? []].flat()} />
       {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}
-      {!whole && <div className="fm-record-body"><div className="fm-row-main"><span className="fm-card-folded">{folded}</span></div></div>}
-      {whole && <div className="fm-record-body">
+      <div className="fm-record-body">
         <div className="fm-row-main">
-          {pills && <RecordMeta>{pills}</RecordMeta>}
-          {body ?? <RecordNotes notes={notes ?? []} />}
-          {(photoIds?.length ?? 0) > 0 && <EvidenceRow photoIds={photoIds!} disabled />}
+          {folded?.map((line, i) => <span key={i} className="fm-card-folded">{line}</span>)}
+          {whole && pills && <RecordMeta>{pills}</RecordMeta>}
+          {whole && (body ?? <RecordNotes notes={notes ?? []} />)}
+          {whole && (photoIds?.length ?? 0) > 0 && <EvidenceRow photoIds={photoIds!} disabled />}
           {/* a report kept with it (the VESTA Agent's investigation): opens on the iPad, offline */}
-          {(documentIds?.length ?? 0) > 0 && (
+          {whole && (documentIds?.length ?? 0) > 0 && (
             <div className="fm-documents">
               {documentIds!.map((id, i) => (
                 <a key={id} className="fm-document-link" href={documentUrl(id)} target="_blank" rel="noopener noreferrer"
@@ -165,7 +165,7 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
             {actions}
           </div>
         )}
-      </div>}
+      </div>
     </>
   );
   const record = erase ? (

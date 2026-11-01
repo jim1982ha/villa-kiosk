@@ -333,6 +333,15 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
        !!named && !!alertName && named.startsWith(`${alertName}, `) && /^#(100-P1|92-P2) \(/.test(named), { row: named, card: lines(opened) });
     ck("  ...its row: that name, then the alert's first words", named.endsWith(item.card.lines.find((l) => l.told).told.text.split("\n")[0]), named);
   }
+  {
+    // owner, 2026-11-01: "both lines appears in the collapsed version": two alerts on one device, a line each
+    const two = card("two", { lines: [{ key: "a", text: "x", story: [], alertNumber: 100, closing: null }, { key: "b", text: "y", story: [], alertNumber: 92, closing: null },
+      { key: "c", text: "Battery low", story: [], closing: null }] });
+    const folded = foldedCard(messagesView({ open: [two], watched: [], announcements: [msg100, msg92], filter: "issues", selected: null }).issues[0]);
+    const shown = [...folded.matchAll(/class="fm-card-folded">([^<]*)</g)].map((m) => m[1]);
+    ck("a card of several problems, folded: a line for each, its alerts first", shown.length === 3 && shown[0].startsWith("#100-P1 (existing), ")
+       && shown[1].startsWith("#92-P2 (cleared), ") && shown[2] === "Also: Battery low", shown);
+  }
   const opened = draw(h(CockpitAttentionRow, { card: v.issues[0].card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
   // owner, 2026-11-01: a device's state is the status pill of every card, on the opened card and its row alike
   const pill = /class="fm-badge tone-warn">Missing</;

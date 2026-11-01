@@ -31,7 +31,7 @@ export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicke
   onRaiseTicket: (entityId: string) => void;
   /** The device a window's warning opened the Cockpit for: its card marked. */
   focused?: boolean;
-  folded?: string;
+  folded?: string[];
   onToggle?: () => void;
 }) {
   // a profile that does not manage Facility work, or a card with nothing to do (a watched one): no row of buttons
@@ -51,8 +51,8 @@ export function AttentionCard({ card, onOpenEntity, actions, focused, folded, on
   actions?: ReactNode;
   /** Marked, as the card a device window's warning asked for (owner, 2026-10-24). */
   focused?: boolean;
-  /** Folded: its one line (RecordCard `folded`). */
-  folded?: string;
+  /** Folded: its lines (RecordCard `folded`). */
+  folded?: string[];
   /** A tap on the card opens or folds it. */
   onToggle?: () => void;
 }) {

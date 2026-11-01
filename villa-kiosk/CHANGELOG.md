@@ -1,3 +1,11 @@
+## 2.496.653
+
+What you will see:
+- A folded Inbox card keeps its buttons, as a card in Tickets: Done, Need help, Open Ticket or Edit Ticket, and a message's
+  own buttons.
+- A card holding several problems shows one line for each when folded: each alert with its number and first words, then
+  its other problems.
+
 ## 2.496.652
 
 What you will see:

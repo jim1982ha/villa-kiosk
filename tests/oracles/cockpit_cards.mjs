@@ -57,10 +57,11 @@ ck("  ...its device's pill opens the device, and its buttons stop their own pres
 {
   // owner, 2026-11-01: "a click on a card shall expand it", on the same card (RecordCard's one fold)
   const { AttentionCard: Card } = await import("@/components/cockpit/IssueCard");
-  const folded = draw(h(Card, { card: cockpitCard(group, CADENCE), onOpenEntity() {}, onToggle() {}, folded: "One line" }));
-  ck("  ...folded, only its name, time, pills and one line; a tap on it is the card's",
-     /role="button"/.test(folded) && /class="fm-card-folded">One line</.test(folded) && !/fm-record-actions|fm-record-check" aria-label|<button/.test(folded)
-     && !/cockpit-attention-sub/.test(folded), folded);
+  const folded = draw(h(Card, { card: cockpitCard(group, CADENCE), onOpenEntity() {}, onToggle() {}, folded: ["One line", "Another"],
+    actions: btn("Done") }));
+  ck("  ...folded: its name, time, pills, a line per problem and its buttons, as a Tickets card; a tap on it is the card's",
+     /role="button"/.test(folded) && /class="fm-card-folded">One line</.test(folded) && /class="fm-card-folded">Another</.test(folded)
+     && /fm-record-actions[\s\S]*Done/.test(folded) && !/fm-record-check" aria-label/.test(folded) && !/cockpit-attention-sub/.test(folded), folded);
 }
 // owner, 2026-10-22: "instead of `Next check:` show a refresh icon, as a pill, on this same first line, on the right"
 ck("  ...its next check a pill at the right of that line: a refresh icon, then when",
