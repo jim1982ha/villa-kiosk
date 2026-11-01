@@ -133,6 +133,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Animations own their clock](kiosk-code.md#animations-own-their-clock) — never `engine.getDeltaTime()`; per-second rates
 - [Node green, browser dead](kiosk-code.md#node-green-browser-dead) — never store `setTimeout`/`fetch` as a field or default
 - [Debug text can crash](kiosk-code.md#debug-text-can-crash) — no `!` on a value a debug line formats
+- [A card's state is one pill](kiosk-code.md#a-cards-state-is-one-pill) — StatusPill and RoomPill on every card and row; text says what is wrong; a condition in a shared format that makes a second format goes to the owner first
 - [One status vocabulary](kiosk-code.md#one-status-vocabulary) — status colours only from STATUS_COLOR; red means needs attention
 - [A badge on a chip is an unresolved room](kiosk-code.md#a-badge-on-a-chip-is-an-unresolved-room) — check the room resolver's id set before placement
 - [Rename a key when its default changes](kiosk-code.md#rename-a-key-when-its-default-changes) — saveConfig writes the whole config

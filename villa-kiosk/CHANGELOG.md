@@ -1,3 +1,12 @@
+## 2.496.645
+
+What you will see:
+- A card's state is now one pill, the same pill as on Tickets: on every Inbox card and its line in the list, "Missing",
+  "Unavailable", "In progress", "Unlocked" or "Overdue" sits beside the room, no longer in the text. A paused task on
+  Schedule has the same pill, no longer a grey tag.
+- The line under it only says what is wrong. An alert's line gives its number and what happened: "#102-P2 (existing),
+  🔓 Laundry Room door unlocked", cut with "…" if it does not fit, in Open issues and Watch.
+
 ## 2.496.644
 
 What you will see:

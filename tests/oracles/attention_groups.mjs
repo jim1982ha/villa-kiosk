@@ -89,7 +89,8 @@ ck("an entity the fold does not know is its own device: a row of its own, as bef
    ghostRow?.key === "device:sensor.renamed_away" && ghostRow.items.length === 1);
 const lone = groupAttention(before).find((g) => g.entityId === "light.lamp");
 ck("a device with ONE problem: its row is the device, the problem its line",
-   lone?.title === "Hall lamp" && lone.room === "Hall" && lone.items.length === 1 && lineText(lone) === "Unavailable");
+   lone?.title === "Hall lamp" && lone.room === "Hall" && lone.items.length === 1 && lineText(lone) === ""
+   && cockpitCard(lone, null).status?.map((s) => s.text).join() === "Unavailable");
 const loneFault = groupAttention(build([ticket("va-4", "Back door stiff", "lock.back")])).find((g) => g.entityId === "lock.back");
 // ⚠️ ONE SHAPE (owner, 2026-10-10): a lone fault titled its row with its own text ("Back door stiff") where the same
 // device with two problems was titled "Back door" — the Cockpit showed three shapes of row
@@ -99,8 +100,9 @@ ck("  ...and a lone ticket is titled by its DEVICE, the fault its line, the devi
 // ⚠️ NO "Open fault:" (owner, 2026-10-14: "providing no value") — but a fault someone took still says so
 const taken = groupAttention(build([{ ...ticket("va-5", "Back door stiff", "lock.back"), status: "in_progress" }]))
   .find((g) => g.entityId === "lock.back");
-ck("  ...an open fault's line is its text alone, one taken in hand still reads \"In progress: …\"",
-   taken && lineText(taken) === "In progress: Back door stiff", taken?.items);
+ck("  ...an open fault's line is its text alone; one taken in hand too, its \"In progress\" the card's status pill (owner, 2026-11-01)",
+   taken && lineText(taken) === "Back door stiff" && cockpitCard(taken, null).status?.map((s) => s.text).join() === "In progress"
+   && !cockpitCard(loneFault, null).status?.length, taken?.items);
 // ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon
 ck("  ...and its line shows no icon of its own: the row's says it already",
    lineIcon(loneFault) === null && lineIcon(lone) === null);

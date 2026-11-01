@@ -56,6 +56,8 @@ export function AttentionCard({ card, onOpenEntity, actions, focused }: {
       title={card.title}
       // its room as a pill right after its name, on one line (owner, 2026-10-22): the card's room pill (RoomPill)
       room={card.room}
+      // its device's own state ("Missing"): the status pill every card has
+      status={card.status}
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look === "watched"
