@@ -22,7 +22,8 @@ ck("the proxy stamps the agreement's words, never its own copy",
 // 2026-10-20) reads as its source's usual clock (never a time from nowhere)
 {
   const { AGENT_CHECKS } = await import("@/fm/fmTypes");
-  const { nextCheck } = await import("@/fm/faultTiming");
+  const { checkPill } = await import("@/fm/faultTiming");
+const nextCheck = (...a) => checkPill(...a)?.text ?? null;
   ck("the app reads the agreement's checks — every look and the nightly check, no \"day\" any more; a Kiosk without the list was told the same two",
      JSON.stringify(AGENT_CHECKS) === JSON.stringify(T.checks) && JSON.stringify(T.checks) === JSON.stringify(["minutes", "nightly"])
      && JSON.stringify(T.checksBeforeList) === JSON.stringify(["minutes", "nightly"]) && T.checksBeforeList.every((c) => T.checks.includes(c)));

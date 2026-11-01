@@ -356,9 +356,12 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
   const opened = draw(h(CockpitAttentionRow, { card: v.issues[0].card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
   // owner, 2026-11-01: a device's state is the status pill of every card, on the opened card and its row alike
   const pill = /class="fm-badge tone-warn">Missing</;
-  ck("  ...the open one: its device's state in the card's status pill, on the card and on its row alike, the alert named alone, the other problem as \"Also\", VESTA's words in it",
-     JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low", "#100-P1 (existing)"]) && pill.test(opened)
-     && pill.test(foldedCard(v.issues[0]))
+  // owner, 2026-11-01: "Missing" beside words saying it was clutter; a state nothing says stays
+  const quiet = card("q", { lines: [{ key: "q", text: "Battery low", story: [], closing: null }], status: [{ text: "Missing", tone: "tone-warn" }] });
+  ck("  ...a state its words say is no pill, on the card and folded alike; a state nothing says stays one",
+     !pill.test(opened) && !pill.test(foldedCard(v.issues[0])) && pill.test(foldedCard(messagesView({ open: [quiet], watched: [], announcements: [], filter: "issues", selected: null }).issues[0])));
+  ck("  ...the open one: the alert named alone, the other problem as \"Also\", VESTA's words in it",
+     JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low", "#100-P1 (existing)"])
      && opened.includes("The outdoor entrance lock is missing."), lines(opened));
   const rowTimeShown = words(foldedCard(v.issues[0]), "fm-entity-chip fm-chip-static fm-record-check");
   ck("  ...and its time pill is its alert's, not the other problem's", !!rowTimeShown && rowTimeShown.length > 0, rowTimeShown);

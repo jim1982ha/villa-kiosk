@@ -84,8 +84,7 @@ export function Pill({ text, className = "" }: { text: string; className?: strin
   return <span className={`fm-entity-chip fm-chip-static${className ? ` ${className}` : ""}`}>{text}</span>;
 }
 
-/** ⚠️ THE DEVICE'S PILL OPENS ITS WINDOW, on a ticket and on an opened issue alike (owner, 2026-11-01: a tap on a card
- *  now opens and folds it, so this is the way to its device); a device no longer known, its name alone. */
+/** The device's pill on a ticket opens its window; a device no longer known, its name alone. */
 export function DeviceChip({ entityId, label, onOpenEntity }: {
   entityId?: string; label?: string; onOpenEntity: (id: string) => void;
 }) {

@@ -5,7 +5,7 @@
 // Messages screen reads; the later tickets add the reports and VESTA's conversation to it. Pure:
 // tests/oracles/messages_model.mjs.
 
-import { othersFirst, type CardView } from "@/config/cockpitCard";
+import { othersFirst, saysWord, type CardView } from "@/config/cockpitCard";
 import { alertStage, incidentKey, versionOf, type Announcement } from "./announcements";
 import { byTime, stillKept } from "./feed";
 
@@ -119,7 +119,11 @@ export function issueAsTold(card: CardView, kept: readonly Announcement[]): Card
     const a = messageOfLine(l, kept);
     return a ? { ...l, text: a.title, closing: card.look === "watched" ? null : l.closing, told: a } : l;
   });
-  return othersFirst({ ...card, lines }, (l) => l.told !== undefined);
+  // ⚠️ A PILL NEVER REPEATS THE CARD'S WORDS (owner, 2026-11-01: "Missing" beside "… is missing from the villa's system"):
+  // a state its lines say already is no pill; a state nothing says stays one (a device with no fault: "Unavailable")
+  const said = lines.flatMap((l) => [l.text, l.told?.title ?? "", l.told?.text ?? ""]);
+  const status = card.status?.filter((s) => !said.some((words) => saysWord(words, s.text)));
+  return othersFirst({ ...card, lines, ...(status ? { status } : {}) }, (l) => l.told !== undefined);
 }
 
 /** ⚠️ ONE LINE PER PROBLEM, ON EVERY CARD (owner, 2026-11-01: "#102-P2 (existing), 🔓 Laundry Room door unlocked",

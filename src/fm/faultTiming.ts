@@ -190,57 +190,33 @@ function nextOf(clock: FmTicketCheck, c: AgentCadence, now: Date): { at: Date; w
 }
 
 /** ⚠️ THE SOONEST BY MOMENT, NOT BY RANK (owner, 2026-10-19): a card can hold an alert's fault and a night check's
- *  ("Alert and Night check"), each read at its own clock — the next look or the nightly 02:00. Each fault's next moment is computed and the
- *  card says the soonest. `undefined`: the card is only what the map shows now; `hand`: only a person closes it;
- *  `agent`: the Agent does but did not say when. */
-function soonest(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date):
-  { at: Date; words: string } | "hand" | "agent" | undefined {
-  const clocks = clocksOf(problems);
-  if (!clocks.length) return undefined;
-  const agent = clocks.filter((k): k is FmTicketCheck => k !== "hand");
-  if (!agent.length) return "hand";
-  if (!cadence) return "agent";
+ *  ("Alert and Night check"), each read at its own clock — the next look or the nightly 02:00. Each fault's next moment
+ *  is computed and the card says the soonest. null: nothing has a time: the card is only what the map shows now, only a
+ *  person closes it, or the Agent did not say its cadence. */
+function soonest(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date): { at: Date; words: string } | null {
+  if (!cadence) return null;
   let best: { at: Date; words: string } | null = null;
-  for (const k of new Set(agent)) {
+  for (const k of new Set(clocksOf(problems).filter((c): c is FmTicketCheck => c !== "hand"))) {
     const next = nextOf(k, cadence, now);
     if (next && (!best || next.at < best.at)) best = next;
   }
-  return best ?? "agent";
+  return best;
 }
 
-/** WHEN the card's "Next check" happens, as a moment (owner, 2026-10-19: hovering it shows "20/10/2026 02:00"): the
- *  soonest of its faults' next reads — `now` plus the Agent's `checkMinutes`, or its next `nightlyAt`;
- *  null when it has no time (live, by hand, or an Agent that did not say its cadence) — the same moment nextCheck words. */
+/** WHEN the card's next check happens, as a moment (owner, 2026-10-19: hovering it shows "20/10/2026 02:00"): the
+ *  soonest of its faults' next reads; null when it has none. */
 export function nextCheckAt(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): Date | null {
-  const next = soonest(problems, cadence, now);
-  return typeof next === "object" ? next.at : null;
-}
-
-/** A card's "Next check" (owner, 2026-10-15: "when the next test for this card will be done"), beside its room: the
- *  soonest of its faults' next reads — the VESTA Agent's next look ("within 5 min") or its nightly
- *  check ("02:00"), or "by hand" when only a person closes it; a card that is only what the map shows now:
- *  "live". The Agent's numbers are the ones it says (its heartbeat's `cadence`) — never a copy: one that does not say
- *  gets none. */
-export function nextCheck(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): string {
-  return `Next check: ${nextCheckWhen(problems, cadence, now)}`;
+  return soonest(problems, cadence, now)?.at ?? null;
 }
 
 /** ⚠️ ONE ANSWER FOR THE NEXT-CHECK PILL (owner, 2026-11-01: "the time each fault ticket will be rechecked", on every
- *  fault card): an Inbox card's and a ticket's, from their problems: its words, its moment, what hovering it says. */
+ *  fault card): an Inbox card's and a ticket's, from their problems: its words ("within 5min", "02:00", the Agent's own
+ *  numbers, never a copy), what hovering it says. ⚠️ A PILL ONLY WITH A TIME (owner, 2026-11-01, the audit: "simple,
+ *  comprehensible, logical"): a refresh icon beside "live" or "by hand" announced a check no one will make. */
 export function checkPill(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()):
-  { text: string; at: string | null; when: string; tip: string } {
-  const text = nextCheck(problems, cadence, now);
-  const moment = nextCheckAt(problems, cadence, now);
-  const at = moment ? momentText(moment) : null;
-  return { text, at, when: nextCheckWhen(problems, cadence, now), tip: at ? `${text} (${at})` : text };
-}
-
-/** nextCheck's answer alone, without its "Next check:" — what the card's pill says beside its refresh icon (owner,
- *  2026-10-22: "instead of `Next check:` show a refresh icon"): "within 5 min", "02:00", "live", "by hand". */
-export function nextCheckWhen(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): string {
+  { text: string; at: string; when: string; tip: string } | null {
   const next = soonest(problems, cadence, now);
-  if (next === undefined) return "live";
-  if (next === "hand") return "by hand";
-  if (next === "agent") return "by the VESTA Agent";
-  return next.words;
+  if (!next) return null;
+  const text = `Next check: ${next.words}`, at = momentText(next.at);
+  return { text, at, when: next.words, tip: `${text} (${at})` };
 }

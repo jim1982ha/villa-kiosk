@@ -130,7 +130,7 @@ function timesSaid(item: AttentionItem): string {
 }
 
 /** Does `title` already say `word` ("Laundry Room door unlocked" says "Unlocked"), as a whole word, whatever its case? */
-function saysWord(title: string, word: string): boolean {
+export function saysWord(title: string, word: string): boolean {
   const w = word.trim().toLowerCase();
   if (!w) return false;
   return new RegExp(`(^|[^\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}])`, "u")
@@ -224,7 +224,7 @@ export interface CardView {
   /** The icons before its name: where each of its problems comes from (cardSources). */
   lead: LineSources | null;
   /** "Next check: 02:00", and its moment ("20/10/2026 02:00") (faultTiming.checkPill); `when`: the pill's words beside
-   *  its refresh icon ("02:00", "Closes 02:00"); `tip`: what hovering the pill says. null: no next check, it is closed. */
+   *  its refresh icon ("02:00", "Closes 02:00"); `tip`: what hovering the pill says. null: nothing checks it again at a time. */
   nextCheck: { text: string; at: string | null; when: string; tip: string } | null;
   /** Done · Need help · Open Ticket (or Edit Ticket) — on its records, or its device when it holds none (deviceWork). */
   actions: WorkAction[];

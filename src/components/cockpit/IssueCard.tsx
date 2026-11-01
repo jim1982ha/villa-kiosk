@@ -11,7 +11,7 @@ import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
 import { cardIcons, rowWhen, type CardLine, type CardView, type LineSources } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
-import RecordCard, { DeviceChip, Pill } from "@/components/fm/RecordCard";
+import RecordCard, { Pill } from "@/components/fm/RecordCard";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
@@ -42,7 +42,7 @@ export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicke
 
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
  *  source icons before the device's name, its time, the room under it, its problems' lines, its buttons under them.
- *  Tapping it opens or folds it; its device's pill opens the device, its buttons take their own presses. Draws `card`
+ *  Tapping it opens or folds it; opened, its name opens the device, its buttons take their own presses. Draws `card`
  *  (config/cockpitCard) and nothing else: what it says is decided there, by value. Pure: a check draws it. */
 export function AttentionCard({ card, onOpenEntity, actions, focused, folded, onToggle }: {
   /** The issue as told (messagesModel issueAsTold): a line holding VESTA's message of its alert draws it. */
@@ -60,7 +60,9 @@ export function AttentionCard({ card, onOpenEntity, actions, focused, folded, on
   const latest = [...new Set(card.lines.map((l) => l.latest).filter((w): w is string => !!w))];
   return (
     <RecordCard
-      title={card.title}
+      // ⚠️ OPENED, ITS NAME OPENS THE DEVICE (owner, 2026-11-01, the audit: a device pill said the name again under it)
+      title={folded === undefined && card.entityId
+        ? <button type="button" className="fm-title-link" onClick={() => onOpenEntity(card.entityId!)}>{card.title}</button> : card.title}
       // the time of its problem, the same as its ticket's (rowWhen)
       when={card.lines.length ? rowWhen(card) : undefined}
       folded={folded}
@@ -82,10 +84,7 @@ export function AttentionCard({ card, onOpenEntity, actions, focused, folded, on
       // the button.
       check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
       onOpen={onToggle}
-      pills={card.entityId || latest.length ? <>
-        {card.entityId && <DeviceChip entityId={card.entityId} label={card.title} onOpenEntity={onOpenEntity} />}
-        {latest.map((w) => <Pill key={w} text={w} />)}
-      </> : undefined}
+      pills={latest.length ? latest.map((w) => <Pill key={w} text={w} />) : undefined}
       body={(
         <ul className="cockpit-attention-subs">
           {card.lines.map((line, i) => <CockpitAttentionSub key={line.key} line={line} icons={icons.lines[i] ?? null} />)}

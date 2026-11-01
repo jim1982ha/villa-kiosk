@@ -30,7 +30,8 @@ for (const c of cases ?? []) {
 // ⚠️ THE OTHER PLACES (architecture review K, 2026-10-24): the Agent's look, the list's refresh, a confirming fault's
 // pill and the mean resolution were worded by hand ("every 90 minutes", "1.5 hours", "2h" for 1h 30min)
 console.log("\n  every other place a duration is said:");
-const { faultTiming, confirmingRow, nextCheckWhen } = await import("@/fm/faultTiming");
+const { faultTiming, confirmingRow, checkPill } = await import("@/fm/faultTiming");
+const nextCheckWhen = (...a) => checkPill(...a)?.when;
 const { confirmParts } = await import("@/fm/faultConfirm");
 const { buildMonthlyRecap } = await import("@/fm/fmDocuments");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");

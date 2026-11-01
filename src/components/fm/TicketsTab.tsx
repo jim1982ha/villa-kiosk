@@ -25,6 +25,7 @@ import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
 import { faultLatest, faultNoteLines } from "@/fm/faultNotes";
 import { checkPill } from "@/fm/faultTiming";
+import { SourceIcons } from "./sourceIcons";
 import { faultSource } from "@/fm/issueSource";
 import { useAgent } from "@/agent/AgentContext";
 import { useNow } from "@/hooks/useInterval";
@@ -90,8 +91,10 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     const latest = faultLatest(t, momentText);
     return (
       <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={status} actions={actions}
+        // where it comes from, the icon its Inbox card leads with (owner, 2026-11-01, the audit)
+        lead={<SourceIcons sources={[faultSource(t)]} severities={["warn"]} />}
         // a ticket in progress is read again as its Inbox card is; a closed one is not
-        check={stageOf(t) === "ticket" ? checkPill([{ source: faultSource(t), check: t.check }], cadence, new Date(now)) : undefined}
+        check={stageOf(t) === "ticket" ? checkPill([{ source: faultSource(t), check: t.check }], cadence, new Date(now)) ?? undefined : undefined}
         when={momentText(faultBegan(t))} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
         documentIds={t.documentIds} amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
         erase={{ title: "Erase this ticket", detail: t.title, run: (token) => removeTicket(t.id, token) }}
