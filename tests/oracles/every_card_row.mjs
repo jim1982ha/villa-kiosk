@@ -62,8 +62,9 @@ for (const [name, item] of Object.entries(table)) {
      (pills >= 0) === ((item.card.status ?? []).length > 0) && (pills < 0 || room < 0 || room < pills) && !row.slice(0, pills < 0 ? 0 : pills).includes("fm-badge")
      && (pills < 0 || !/Missing|Unavailable|In progress/.test(text(inside(row, "cockpit-attention-sub-title") || ""))), row);
 }
-ck("each kind that has a state shows it as a pill", ["offline", "missing", "alarm", "task never done", "ticket"]
-   .every((k) => (table[k].card.status ?? []).length > 0), Object.entries(table).map(([k, v]) => [k, v.card.status]));
+ck("each kind that has a state shows it as a pill; a ticket's, the pill of who took it (owner, 2026-11-02)", ["offline", "missing", "alarm", "task never done"]
+   .every((k) => (table[k].card.status ?? []).length > 0) && / · In progress$/.test(table.ticket.card.lines[0].latest?.text ?? "")
+   && !(table.ticket.card.status ?? []).length, Object.entries(table).map(([k, v]) => [k, v.card.status]));
 const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
 ck("the pills' group is pushed right; no rule frames a row", /\.card-pill-status \{[^}]*margin-left: auto/.test(css)
    && !/\.fm-record-card\.ticket/.test(css));

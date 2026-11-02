@@ -107,9 +107,16 @@ ck("one card per fault, titled by its device, its fault's title its line, the co
    cards.length === 3 && cards.every((c) => c.look === "watched" && c.lines.every((l) => l.actions.length === 0) && c.nextCheck?.when)
    && cards[1].title === "door" && cards[1].room === "Hall" && cards[1].lines[0].text === "#65 · Door unlocked"
    && cards[1].lines[0].closing === `Done${on(-2)} (JM)` && cards[1].nextCheck.tip === line("w1").split(" · ")[1], cards[1]);
+{
+  // owner, 2026-11-02: two LED Strip cards on Watch, "the same issue being reported in 2 distinct cards"
+  const twice = confirmingFaults({ ...EMPTY_FM_DATA, tickets: [watched, doneOn("w6", "lock.door", at(20))] }, CADENCE, NOW);
+  const one = confirmingCards(twice, { devices, entities, entityMap: {}, resolvedRooms: { "lock.door": "Hall" }, may: () => true });
+  ck("one card per device on Watch, as in Open issues: its watched faults are its lines, its pill the last to close",
+     one.length === 1 && one[0].lines.length === 2 && one[0].nextCheck.when === `Closes ${clockTime(NOW + 20 * 60_000)}`, one.map((c) => [c.key, c.lines.length]));
+}
 ck("  ...only the faults whose device the profile may open (as the open issues)",
    confirmingCards(conf, { devices, entities, entityMap: {}, resolvedRooms: {}, may: (id) => id !== "lock.door" })
-     .map((c) => c.key).join() === "watched:w3,watched:w2");
+     .map((c) => c.key).join() === "watched:device:lock.back,watched:device:switch.pump");
 const drawn = draw(h(AttentionCard, { card: cards[1], onOpenEntity: () => {} }));
 // ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … same style and same card layout"):
 // RecordCard's frame (marked), its title and room pill, the open issues' next-check pill, the check as its lead
@@ -180,7 +187,7 @@ console.log("\n  a hidden device: no card in any section (config/cockpitIssues, 
   const about = (cards) => cards.filter((c) => c.entityId === "lock.door").map((c) => c.key);
   const seen = issuesWith(new Set()), quiet = issuesWith(new Set(["lock.door"]));
   ck("not hidden: the door has its open card and its watched card",
-     about(seen.open).join() === "device:lock.door" && about(seen.watched).join() === "watched:w1",
+     about(seen.open).join() === "device:lock.door" && about(seen.watched).join() === "watched:device:lock.door",
      { open: about(seen.open), watched: about(seen.watched) });
   const numbered = (() => {
     const devs = devicesOf({ ids, hidden: new Set() });
@@ -190,10 +197,10 @@ console.log("\n  a hidden device: no card in any section (config/cockpitIssues, 
     return cockpitIssues(view, { fmData: d2, cadence: CADENCE, now: new Date(NOW), entities, entityMap: {}, resolvedRooms: {} });
   })();
   ck("a watched card carries its alert's number, so VESTA's card of it is found there (and leaves Notifications)",
-     numbered.watched.find((c) => c.key === "watched:w1")?.lines[0].alertNumber === 90, numbered.watched.map((c) => c.lines));
+     numbered.watched.find((c) => c.key === "watched:device:lock.door")?.lines[0].alertNumber === 90, numbered.watched.map((c) => c.lines));
   ck("  ...hidden in the villa's system: no card about it, open or watched; every other card kept",
      about(quiet.open).length === 0 && about(quiet.watched).length === 0
-     && quiet.watched.map((c) => c.key).join() === "watched:w3,watched:w2" && quiet.open.length === seen.open.length - 1,
+     && quiet.watched.map((c) => c.key).join() === "watched:device:lock.back,watched:device:switch.pump" && quiet.open.length === seen.open.length - 1,
      { open: quiet.open.map((c) => c.key), watched: quiet.watched.map((c) => c.key) });
   ck("  ...and Messages draws exactly these, its open issues and its Watched rows from useCockpitIssues (the profile's view)",
      /const \{ open, watched, closed \} = useCockpitIssues\(\);/.test(readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8"))

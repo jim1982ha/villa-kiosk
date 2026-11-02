@@ -100,8 +100,10 @@ ck("  ...and a lone ticket is titled by its DEVICE, the fault its line, the devi
 // ⚠️ NO "Open fault:" (owner, 2026-10-14: "providing no value") — but a fault someone took still says so
 const taken = groupAttention(build([{ ...ticket("va-5", "Back door stiff", "lock.back"), status: "in_progress" }]))
   .find((g) => g.entityId === "lock.back");
-ck("  ...an open fault's line is its text alone; one taken in hand too, its \"In progress\" the card's status pill (owner, 2026-11-01)",
-   taken && lineText(taken) === "Back door stiff" && cockpitCard(taken, null).status?.map((s) => s.text).join() === "In progress"
+// owner, 2026-11-02: its stage said in the pill of who took it, "Ticket opened … · In progress", no pill of its own
+ck("  ...an open fault's line is its text alone; one taken in hand too, its \"In progress\" in its line's pill, in that colour",
+   taken && lineText(taken) === "Back door stiff" && !cockpitCard(taken, null).status?.length
+   && /^Ticket opened, on .* · In progress$/.test(cockpitCard(taken, null).lines[0].latest?.text ?? "") && cockpitCard(taken, null).lines[0].latest?.tone === "tone-warn"
    && !cockpitCard(loneFault, null).status?.length, taken?.items);
 // ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon
 ck("  ...and its line shows no icon of its own: the row's says it already",

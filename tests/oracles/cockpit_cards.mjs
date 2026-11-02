@@ -362,12 +362,12 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
   const f = { id: "fault:x", kind: "fault", title: "Door stuck", detail: "", ticketId: "x" };
   const cases = [["Missing", { id: "u", kind: "unavailable", title: "", detail: "Missing", fault: f }],
     ["Unavailable", { id: "u", kind: "unavailable", title: "", detail: "Unavailable" }],
-    ["Overdue", { id: "s", kind: "schedule", title: "Filter", detail: "Overdue" }],
-    ["In progress", { ...f, stage: "ticket" }]];
+    ["Overdue", { id: "s", kind: "schedule", title: "Filter", detail: "Overdue" }]];
   for (const [word, item] of cases) {
     const got = said(item);
     ck(`  ..."${word}": in a pill, not in the line's words`, got.pills.includes(word) && !got.text.toLowerCase().includes(word.toLowerCase()), got);
   }
+  ck("  ...but a ticket's stage is no pill of its own: its line's pill says it (owner, 2026-11-02)", said({ ...f, stage: "ticket" }).pills.length === 0);
   const sched = readFileSync(new URL("../../src/components/fm/ScheduleEditor.tsx", import.meta.url), "utf8");
   ck("  ...a paused task too: the status pill, no grey tag", /text: "Paused", tone: pillClass/.test(sched) && !/fm-clause">Paused/.test(sched));
   const row = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");

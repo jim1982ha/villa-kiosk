@@ -204,11 +204,11 @@ const attentionLine = ({ fault, ...state }) => {
   return g.items.length === 1 ? lineText(g) : `NOT ONE LINE: ${cockpitCard(g, null).lines.map((l) => l.text).join(" | ")}`;
 };
 const f = { id: "fault:x", kind: "fault", title: "Pump has been offline for 9 h.", detail: "", ticketId: "x" };
-ck("  ...\"Unavailable — \" is not said before it (the fault says offline); a ticket still says it is in progress",
+ck("  ...\"Unavailable — \" is not said before it (the fault says offline); a ticket's stage is its line's pill, not one of the card's",
    attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: f }) === "Pump has been offline for 9 h."
    && attentionLine({ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: { ...f, stage: "ticket" } }) === "Pump has been offline for 9 h."
    && cockpitCard({ key: "device:u", title: "D", items: [{ id: "u", kind: "unavailable", title: "", detail: "Unavailable", fault: { ...f, stage: "ticket" } }] }, null)
-     .status.map((s) => s.text).join() === "In progress");
+     .status.length === 0);
 // owner, 2026-11-01: "follow how all other cards are style": a state is the card's status pill, never the line's words
 const stated = (item) => { const c = cockpitCard({ key: `device:${item.id}`, title: "D", items: [item] }, null); return [c.lines[0].text, c.status?.map((s) => s.text).join() || undefined]; };
 ck("  ...what the fault does not say stays, in the card's status pill: Missing, a live reading",
@@ -412,7 +412,7 @@ ck("  ...a fault the Agent told nothing about has none (no line drawn)",
    buildAttentionItems({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([{ ...told, updates: [told.updates[0]] }]) })[0]
      .story.length === 0);
 ck("  ...a noted line is never a status change: \"Reopened by Owner\" still read under it",
-   N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /^Reopened by Owner, on /.test(N.faultLatest(reopenedThenTold, (a) => a.slice(11, 16))),
+   N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /^Reopened by Owner, on /.test(N.faultLatest(reopenedThenTold, (a) => a.slice(11, 16))?.text),
    N.faultLatest(reopenedThenTold, (a) => a.slice(11, 16)));
 ck("  ...and each one is a note in the Tickets tab, with its time",
    N.faultNoteLines(told, (a) => a.slice(11, 16)).join("|") === "Escalation sent to Owner (08:49)|🆘 Need help pressed by Fabien (09:10)",

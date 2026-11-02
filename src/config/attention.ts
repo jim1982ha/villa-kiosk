@@ -78,8 +78,8 @@ export interface AttentionItem {
   openedBefore?: true;
   /** Set on a fault: its short story on Telegram, in time order (faultNotes.notedStory — "Escalation sent to Owner"). */
   story?: { note: string; at: string }[];
-  /** Set on a fault: who last moved it and when (faultNotes.faultLatest), its ticket card's pill. */
-  latest?: string;
+  /** Set on a fault: who last moved it, when, and its stage (faultNotes.faultLatest), its pill. */
+  latest?: { text: string; tone: string } | null;
   /** Set on a fault: the Need help pressed on it that nothing has answered yet (fmEngine.standingHelp). */
   help?: HelpAsked;
   /** Set on a fault an alert raised: the number its Telegram messages carry ("#91"), which names VESTA's card of it

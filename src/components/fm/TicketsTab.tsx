@@ -19,7 +19,7 @@ import { closedTickets, closedTicketStats, faultBegan, faultTitle, keptDays, STA
 import { pillClass } from "@/fm/tone";
 import { closedActions, helpAsked, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
-import RecordCard, { DeviceChip, Pill, type RecordCardProps } from "./RecordCard";
+import RecordCard, { DeviceChip, StatusPill, type RecordCardProps } from "./RecordCard";
 import FaultForm from "./FaultForm";
 import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
@@ -90,7 +90,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
     const latest = faultLatest(t, momentText);
     return (
-      <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={status} actions={actions}
+      // its stage is said in the pill of who last moved it (owner, 2026-11-02), else its own pill
+      <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={latest ? undefined : status} actions={actions}
         // where it comes from, the icon its Inbox card leads with (owner, 2026-11-01, the audit)
         lead={<SourceIcons sources={[faultSource(t)]} severities={["warn"]} />}
         // a ticket in progress is read again as its Inbox card is; a closed one is not
@@ -107,7 +108,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
           {/* its device's name as its Inbox card says it (attention.cardDevice), the stored one with no device there */}
           <DeviceChip entityId={t.entityId} onOpenEntity={onOpenEntity}
             label={t.entityId && t.entityId in entities ? label(deviceOfRecord(t.entityId)) : t.deviceLabel ?? (t.entityId ? label(t.entityId) : undefined)} />
-          {latest && <Pill text={latest} />}
+          {latest && <StatusPill {...latest} />}
         </>} />
     );
   };
