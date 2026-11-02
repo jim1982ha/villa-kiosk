@@ -86,7 +86,9 @@ unique place, and all of the consumers can see it".
 The model bake pipeline (on the owner's machine, not in the repository) keeps its jobs in its own `_BAKE_JOBS` table:
 the single source of truth, the owner's tuned configuration. Never reset it, never move it to a sidecar file.
 
-## Automation descriptions stay as written
+## Automation descriptions are short too
 
-Blueprint descriptions are short; the long descriptions of the automations built on them stay as they are (owner,
-2026-10-20: "no need to change them").
+An automation's description says in one or two plain sentences what it does now; its history (dates, changes, how to
+undo, traces) goes in the HISTORY file beside the blueprints, as a blueprint's does (owner, 2026-11-02: "there should
+never be visible here: isn't it why we explicitly created the HISTORY.md file?", replacing 2026-10-20's "no need to
+change them").

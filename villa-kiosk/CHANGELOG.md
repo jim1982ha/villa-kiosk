@@ -1,3 +1,9 @@
+## 2.496.666
+
+What you will see:
+- Nothing changes on the tablet. This release carries a rule for whoever works on VESTA: an automation's description
+  says in one or two plain sentences what it does; its history goes in the HISTORY file beside the blueprints.
+
 ## 2.496.665
 
 What you will see:
