@@ -18,7 +18,7 @@ import type { RecordStatus } from "@/components/fm/RecordCard";
 import type { AgentCadence } from "@/agent/agentApi";
 import { checkPill } from "@/fm/faultTiming";
 import { helpAsked, overviewActions, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
-import { STAGE_WORDS, type HelpAsked } from "@/fm/fmEngine";
+import type { HelpAsked } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, dayMonth, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
@@ -46,9 +46,8 @@ const lineWork = (records: WorkRecord[], device: string | undefined): Pick<CardL
   ({ records, actions: overviewActions(records, device), asked: helpAsked(records) });
 
 /** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");
- *  in a row that is the problem itself (no device), only a status the row does not show already ("In progress"; an
- *  open fault's line is empty — its title is the row's). Every row shows its problems this way,
- *  one or several. */
+ *  in a row that is the problem itself (no device), nothing: its title is the row's (its stage is its pill,
+ *  faultNotes.faultLatest). Every row shows its problems this way, one or several. */
 function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
   return group.key.startsWith("device:") ? attentionLine(item) : "";
 }
@@ -61,16 +60,6 @@ function stateBesideFault(item: AttentionItem): string | undefined {
   const word = item.detail ?? "";
   const said = !word || (item.kind === "unavailable" && word === "Unavailable") || saysWord(item.fault.title, word);
   return said ? undefined : word;
-}
-
-/** What a fault's line must say of its status: nothing while it is open, its stage's word (fmEngine.STAGE_WORDS:
- *  "In progress") once someone took it.
- *  ⚠️ "OPEN FAULT:" BEFORE EVERY FAULT SAID NOTHING (owner, 2026-10-14: "this seems providing no value"): the row's
- *  icon says it is a fault and its Done that it is open — the words only pushed the text to a second line.
- *  undefined for anything that is not a fault. */
-function faultStatus(item: AttentionItem): string | undefined {
-  if (item.kind !== "fault") return undefined;
-  return item.stage === "ticket" ? STAGE_WORDS.ticket.word : "";
 }
 
 /** ⚠️ A CARD'S ICONS SAY EVERY KIND OF PROBLEM IT HOLDS (owner, 2026-10-30: the onsen pump's row showed only #96's
@@ -133,8 +122,7 @@ export function saysWord(title: string, word: string): boolean {
 
 /** One problem's line inside a device's row. A state needs no more than its
  *  word ("Unlocked", "Unavailable"); a fault or a schedule names itself, since
- *  its title is what is wrong, not the device ("Entrance door unlocked"; "In
- *  progress: …" once someone took it, faultStatus). */
+ *  its title is what is wrong, not the device ("Entrance door unlocked"). */
 function attentionLine(item: AttentionItem): string {
   if (item.fault) {
     const fault = `${item.fault.title}${timesSaid(item.fault)}`;
@@ -146,7 +134,8 @@ function attentionLine(item: AttentionItem): string {
 /** ⚠️ A CARD'S STATE IS ITS PILLS, NEVER ITS WORDS (owner, 2026-11-01, option A): the Inbox wrote it three ways, "In
  *  progress: …", "Missing, #100-P1", "Unavailable", while Tickets and Schedule draw a status pill. Each distinct state
  *  of its problems, once: its device's own word its fault does not say (stateBesideFault: "Missing"), a state with no
- *  fault ("Unavailable", "Unlocked", a task's "Overdue"), then its stage once someone took it (STAGE_WORDS). The line
+ *  fault ("Unavailable", "Unlocked", a task's "Overdue"). A ticket's stage is no pill of its own: it is said in the
+ *  pill of who last moved it (owner, 2026-11-02: faultNotes.faultLatest, "Ticket opened by … · In progress"). The line
  *  under them only ever says what is wrong (attentionLine, issueAsTold). Drawn by RecordCard's StatusPill on the opened
  *  card and on its row. Pure. */
 function cardStatuses(items: readonly AttentionItem[]): RecordStatus[] {
@@ -154,7 +143,6 @@ function cardStatuses(items: readonly AttentionItem[]): RecordStatus[] {
   for (const i of items) {
     const word = i.fault ? stateBesideFault(i) : i.kind === "fault" ? undefined : i.detail;
     if (word) out.set(word, { text: word, tone: pillClass(attentionSeverity(i) === "danger" ? "danger" : "warn") });
-    if (faultStatus(i.fault ?? i)) out.set(STAGE_WORDS.ticket.word, { text: STAGE_WORDS.ticket.word, tone: pillClass(STAGE_WORDS.ticket.tone) });
   }
   return [...out.values()];
 }
@@ -190,8 +178,8 @@ export interface CardLine {
   story: { note: string; at: string }[];
   /** When its fault began (fmEngine.faultBegan, ISO); null for a live state with no fault. */
   openedAt: string | null;
-  /** Who last moved its fault and when (faultNotes.faultLatest), said by the card's pill; "" or absent: nobody yet. */
-  latest?: string;
+  /** Who last moved its fault, when, and its stage (faultNotes.faultLatest): its pill; absent or null: nobody yet. */
+  latest?: { text: string; tone: string } | null;
   /** `openedAt` is only as far back as the villa keeps. */
   openedBefore?: true;
   /** The alert number of its fault ("#91"), whose VESTA card the open issue shows; absent without one. */
@@ -319,7 +307,7 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
  *  profile's own predicate (VillaAttention.shows, hidden devices out), passed by config/cockpitIssues, the one caller;
  *  `confirming` from fm/faultConfirm.confirmingFaults. */
 export function confirmingCards(confirming: readonly ConfirmingFault[], opts: CardsOpts): CardView[] {
-  return confirming.flatMap((c): CardView[] => {
+  return oneCardPerDevice(confirming.flatMap((c): CardView[] => {
     const said = confirmParts(c);
     // ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … the same style and the same
     // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
@@ -327,7 +315,22 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: Ca
     // cleared it the line under its fault
     return clearedCard(c.ticket, said.did, opts, { key: `watched:${c.ticket.id}`, look: "watched", watched: said,
       nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip } });
-  });
+  }));
+}
+
+/** ⚠️ ONE CARD PER DEVICE ON WATCH, AS IN OPEN ISSUES (owner, 2026-11-02: two LED Strip cards on Watch, "the same issue
+ *  being reported in 2 distinct cards"; rules: One line per problem): Open issues groups a device's problems in one card
+ *  (attention.groupAttention), Watch drew one card per watched fault. A device's watched faults are now the lines of
+ *  its one card, which stays on Watch until the last of them closes: its pill the latest close (`watched` comes soonest
+ *  first, confirmingFaults). A fault with no device keeps its own card. Pure. */
+function oneCardPerDevice(cards: readonly CardView[]): CardView[] {
+  const byKey = new Map<string, CardView>();
+  for (const c of cards) {
+    const key = c.entityId ? `${c.look}:device:${c.entityId}` : c.key;
+    const had = byKey.get(key);
+    byKey.set(key, had ? { ...had, lines: [...had.lines, ...c.lines], nextCheck: c.nextCheck, watched: c.watched } : { ...c, key });
+  }
+  return [...byKey.values()];
 }
 
 /** Every closed fault as its card, for the Closed section (owner, 2026-11-01): a watched card's, with nothing left to
@@ -360,7 +363,7 @@ function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardVi
     ...cardHead(device, title, t.room),
     entityId: device?.key,
     lead: null,
-    lines: [{ key: `fault:${t.id}`, records: [], actions: [], asked: null, text: device ? title : "", story: [], openedAt: faultBegan(t),
+    lines: [{ key: `fault:${t.id}`, records: [], actions: [], asked: null, text: device && title !== device.label ? title : "", story: [], openedAt: faultBegan(t),
       closing: did,
       ...alertNumberIn(alertNumberOf(t)) }],
   }];

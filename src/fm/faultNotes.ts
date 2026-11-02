@@ -8,7 +8,8 @@
 // title word for word. Each step now carries its kind (FmTicketUpdate.kind, agent-contract.json `ticketUpdate`).
 
 import { NEED_HELP } from "./deviceWork";
-import { isClearedStep, isTicketResolved, stageOf, standingHelp, statusChanges, stepsInTimeOrder } from "./fmEngine";
+import { pillClass } from "./tone";
+import { STAGE_WORDS, isClearedStep, isTicketResolved, stageOf, standingHelp, statusChanges, stepsInTimeOrder } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
 import { authorWords } from "@/auth/roles";
 
@@ -42,24 +43,27 @@ export function notedStory(t: Pick<FmTicket, "updates">): { note: string; at: st
 /**
  * ⚠️ WHO LAST MOVED IT, AND WHEN, IN ONE PILL (owner, 2026-11-01: "Opened by Wayan, on 31/10/2026 09:55", in place of
  * "by VESTA Agent", confusing and redundant, and of the words "in progress since … by Wayan"): the
- * latest of its status steps said in one form, so the pill follows it: opened, help asked, reopened, done, closed.
- * Who: the name typed for who does the work, else the profile that recorded it. "" while it is only a fault nobody
- * moved. Pure.
+ * latest of its status steps said in one form, so the pill follows it: ticket opened, help asked, reopened, done, closed.
+ * Who: the name typed for who does the work, else the profile that recorded it. null while it is only a fault nobody
+ * moved. ⚠️ ITS STAGE IN IT, IN ITS COLOUR (owner, 2026-11-02: "Ticket opened by … -- In Progress", the separate "In
+ * progress" pill then redundant): its stage's word and tone (fmEngine.STAGE_WORDS), the card's only stage pill. Pure.
  */
-export function faultLatest(t: FmTicket, stamp: (at: string) => string): string {
-  const said = (word: string, at: string, who?: string) => `${word}${who ? ` by ${who}` : ""}, on ${stamp(at)}`;
+export function faultLatest(t: FmTicket, stamp: (at: string) => string): { text: string; tone: string } | null {
+  const stage = STAGE_WORDS[stageOf(t)];
+  const said = (word: string, at: string, who?: string) =>
+    ({ text: `${word}${who ? ` by ${who}` : ""}, on ${stamp(at)} · ${stage.word}`, tone: pillClass(stage.tone) });
   const steps = statusSteps(t);
   const last = steps[steps.length - 1];
   const help = standingHelp(t);
   if (help && (!last || Date.parse(help.at) >= Date.parse(last.at))) return said(`${NEED_HELP} asked`, help.at, help.by);
   if (!last) {
     if (t.resolvedAt && isTicketResolved(t)) return said("Done", t.resolvedAt);
-    return stageOf(t) === "ticket" ? said("Opened", t.openedAt) : "";
+    return stageOf(t) === "ticket" ? said("Ticket opened", t.openedAt) : null;
   }
   const who = last.who || authorWords(last);
   if (isTicketResolved(last)) return said(isClearedStep(last) ? "Closed" : "Done", last.at, who);
   if (last.kind === "reopened") return said("Reopened", last.at, who);
-  return last.status === "in_progress" ? said("Opened", last.at, who) : "";
+  return last.status === "in_progress" ? said("Ticket opened", last.at, who) : null;
 }
 
 /** The card's notes, in order, each with its date: the fault's own note ("Check: …"), every step's note, and of its

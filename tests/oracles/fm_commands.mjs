@@ -6,7 +6,9 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { applyFmCommand } = await import("@/fm/fmCommands");
-const { faultLatest: faultWhen } = await import("@/fm/faultNotes");
+const { faultLatest } = await import("@/fm/faultNotes");
+// the pill's words; its tone is its stage's (owner, 2026-11-02: "Ticket opened by … -- In Progress")
+const faultWhen = (t, s) => faultLatest(t, s)?.text ?? "";
 const { ROLE_LABELS } = await import("@/auth/roles");
 const { faultSource } = await import("@/fm/issueSource");
 
@@ -35,28 +37,31 @@ ck("  ...and a card reads it back through the same table (its source icon: the O
    faultSource(t) === "owner" && faultSource({ ...t, updates: [{ ...t.updates[0], by: "x", role: "ops" }] }) === "fm"
    && faultSource({ ...t, updates: [{ at: t.openedAt, status: "open", photoIds: [], by: "Facility manager" }] }) === "fm"
    && faultWhen({ ...t, status: "in_progress", updates: [{ at: t.openedAt, status: "in_progress", photoIds: [], by: "Facility manager" }] }, stamp)
-     === "Opened by Facility Manager, on 06:20");
+     === "Ticket opened by Facility Manager, on 06:20 · In progress");
 
 const opened = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "Pump capacitor", photoIds: [] }, asTicket: true }, k("owner"));
 const tk = opened.tickets[0];
 ck("\"Open a ticket\" (owner, 2026-10-14): a TICKET at once — in progress, taken on by whoever opened it",
    tk.status === "in_progress" && tk.updates.length === 1 && tk.updates[0].status === "in_progress" && tk.updates[0].by === "Owner");
-ck("  ...its card says when and by whom", faultWhen(tk, stamp) === "Opened by Owner, on 06:20", faultWhen(tk, stamp));
+ck("  ...its card says when and by whom", faultWhen(tk, stamp) === "Ticket opened by Owner, on 06:20 · In progress", faultWhen(tk, stamp));
 // owner, 2026-11-01: "Opened by Wayan, on 31/10/2026 09:55" tracks "the latest status updated for this ticket"
 {
   const step = (x) => ({ at: "2026-10-14T07:00:00.000Z", photoIds: [], ...x });
   const later = (x) => step({ at: "2026-10-14T08:00:00.000Z", ...x });
   const taken = step({ status: "in_progress", who: "Wayan", by: "Owner" });
   ck("the pill: the name typed for who does the work, before the profile",
-     faultWhen({ ...tk, updates: [taken] }, stamp) === "Opened by Wayan, on 07:00", faultWhen({ ...tk, updates: [taken] }, stamp));
+     faultWhen({ ...tk, updates: [taken] }, stamp) === "Ticket opened by Wayan, on 07:00 · In progress", faultWhen({ ...tk, updates: [taken] }, stamp));
   ck("  ...follows the latest status: done", faultWhen({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", who: "Made" })] }, stamp)
-     === "Done by Made, on 08:00");
+     === "Done by Made, on 08:00 · Resolved");
   ck("  ...closed with nothing done", faultWhen({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", kind: "cleared", by: "Owner" })] }, stamp)
-     === "Closed by Owner, on 08:00");
-  ck("  ...reopened, and help asked", faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "reopened", by: "Owner" })] }, stamp) === "Reopened by Owner, on 08:00"
-     && faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "help", by: "Owner" })] }, stamp) === "Need help asked by Owner, on 08:00");
+     === "Closed by Owner, on 08:00 · Resolved");
+  // the stage in the pill, in its colour: a ticket's the In progress tone
+ck("  ...its stage's colour, a closed one's too", faultLatest({ ...tk, updates: [taken] }, stamp)?.tone === "tone-warn"
+   && faultLatest({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", who: "Made" })] }, stamp)?.tone === "tone-ok");
+ck("  ...reopened, and help asked", faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "reopened", by: "Owner" })] }, stamp) === "Reopened by Owner, on 08:00 · In progress"
+     && faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "help", by: "Owner" })] }, stamp) === "Need help asked by Owner, on 08:00 · In progress");
   ck("  ...a note from Telegram or a new title is no status: it stays", faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "noted", note: "Reminder sent" }),
-     later({ status: "in_progress", kind: "retitled", title: "x", by: "VESTA Agent" })] }, stamp) === "Opened by Wayan, on 07:00");
+     later({ status: "in_progress", kind: "retitled", title: "x", by: "VESTA Agent" })] }, stamp) === "Ticket opened by Wayan, on 07:00 · In progress");
 }
 
 console.log("\n  every write, one way:");

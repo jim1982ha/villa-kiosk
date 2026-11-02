@@ -17,7 +17,7 @@ import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } f
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
 import { alertNumberOf, DUE_WORDS, faultBegan, faultTitle, fmAttention, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import type { AgentCadence } from "@/agent/agentApi";
-import { confirmingFaults } from "@/fm/faultConfirm";
+import { watchedRecords } from "@/fm/faultConfirm";
 import { faultLatest, notedStory } from "@/fm/faultNotes";
 import { momentText } from "@/utils/dateText";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
@@ -78,8 +78,8 @@ export interface AttentionItem {
   openedBefore?: true;
   /** Set on a fault: its short story on Telegram, in time order (faultNotes.notedStory — "Escalation sent to Owner"). */
   story?: { note: string; at: string }[];
-  /** Set on a fault: who last moved it and when (faultNotes.faultLatest), its ticket card's pill. */
-  latest?: string;
+  /** Set on a fault: who last moved it, when, and its stage (faultNotes.faultLatest), its pill. */
+  latest?: { text: string; tone: string } | null;
   /** Set on a fault: the Need help pressed on it that nothing has answered yet (fmEngine.standingHelp). */
   help?: HelpAsked;
   /** Set on a fault an alert raised: the number its Telegram messages carry ("#91"), which names VESTA's card of it
@@ -520,8 +520,8 @@ export function buildAttentionItems(opts: {
   // ⚠️ DONE MOVES THE CARD TO WATCH (owner, 2026-11-02: an offline device's Done closed its fault, and the device's live
   // state stayed as an open issue with nothing left to press): a device whose fault VESTA is watching has its live line
   // on Watch only, until VESTA's verdict; any other fault of the device stays. VESTA reopens it if it is still wrong.
-  const watched = new Set(confirmingFaults(fmData, opts.cadence ?? null).flatMap((c) => {
-    const id = recordEntity(c.ticket.entityId, (x) => x in entities) ?? c.ticket.entityId;
+  const watched = new Set(watchedRecords(fmData, opts.cadence ?? null).flatMap((t) => {
+    const id = recordEntity(t.entityId, (x) => x in entities) ?? t.entityId;
     return id ? [devices.deviceOf(id)] : [];
   }));
   return items.filter((i) => (!i.entityId || !devices.isHidden(i.entityId))

@@ -1,3 +1,20 @@
+## 2.496.661
+
+What you will see:
+- Under Inbox › Issues, a card's name is no longer underlined. Clicking it still opens the device.
+- A ticket's pill now says what it is and where it stands, in the stage's colour: "Ticket opened by Wayan, on 31/10/2026
+  09:55 · In progress", "Need help asked by … · In progress", "Done by … · Resolved". The separate "In progress" pill is
+  gone, in the Inbox and on Tickets alike.
+- Watch shows one card per device, as Open issues does: a device whose problems are watched has one card, a line for
+  each problem. It stays on Watch until the last of them closes.
+
+## 2.496.660
+
+What you will see:
+- After `Done`, a card no longer comes back for a few seconds as a new card, so a second press
+  can't create a second one. It reaches `Watch` as soon as VESTA answers.
+- A card raised from a device with no fault no longer repeats the device's name as its line under `Watch` and `Closed`.
+
 ## 2.496.659
 
 What you will see:
