@@ -83,30 +83,27 @@ def test_the_styles_are_the_ones_the_agent_finds_in_the_same_text():
         assert (_styled(piece, kind) if TELEGRAM[kind] else html.escape(piece, quote=False)) in _render(*CASES[0])
 
 
-def test_to_is_a_role_the_rules_own_else_the_villa_wide_audience_as_an_alert_card_says_it():
-    # owner, 2026-10-12: "To:" is set in ONE place for every alert (input_text.vesta_alert_audience); a rule that names
-    # its own audience keeps it. Owner, 2026-10-13: a role — never a name. Architecture review, 2026-10-17: said as the
-    # agent's alert card says it ("Owner & FM"), however the rule or the helper wrote it — the villa's helper reads
-    # "Owner, Facility Manager", which drew "Owner & Facility Manager", then the agent's edit "Owner & FM"
+def test_to_is_a_role_the_rule_names_else_every_role_as_an_alert_card_says_it():
+    # owner, 2026-10-13: a role — never a name. Architecture review, 2026-10-17: said as the agent's alert card says it
+    # ("Owner & FM"), however the rule wrote it. Owner, 2026-11-03: the villa-wide "VESTA alert audience" helper is
+    # gone (who each role IS is the villa's two lists, read by the blueprints): a rule naming nobody is for every role,
+    # whatever the villa holds
     from vesta_shared.message_format import ROLE_SHORT, ROLE_WORDS, audience
     src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', r, 'x', '' -%}"
            "{% include 'vesta_message.jinja' ignore missing %}")
     t = _env().from_string(src)
     to = lambda roles: f"\nTo: {html.escape(audience(roles, short=True))}\n"
-    fm = audience({"fm"})
-    helper = lambda e: fm if e == "input_text.vesta_alert_audience" else "unknown"
+    old_helper = lambda e: audience({"fm"}) if e == "input_text.vesta_alert_audience" else "unknown"
     for roles in ({"owner"}, {"fm"}, {"owner", "fm"}):
         for words in (ROLE_WORDS, ROLE_SHORT):
             for joined in (" & ", ", ", ","):
                 written = joined.join(w for r, w in words.items() if r in roles)
-                assert to(roles) in t.render(r=written, states=helper), written
-                assert to(roles) in t.render(r=written.upper(), states=helper), written
-                assert to(roles) in t.render(r="", states=lambda e: written), written      # the villa-wide helper
+                assert to(roles) in t.render(r=written, states=old_helper), written
+                assert to(roles) in t.render(r=written.upper()), written
     every = to({"owner", "fm"})
-    assert to({"fm"}) in t.render(r="", states=helper)
-    assert every in t.render(r="JM, Fabien", states=helper)                     # a name is never written
-    assert every in t.render(r="", states=lambda e: "unknown")
-    assert every in t.render(r="")                                              # no states() at all (not HA)
+    assert every in t.render(r="", states=old_helper)                           # the retired helper is not read
+    assert every in t.render(r="JM, Fabien")                                    # a name is never written
+    assert every in t.render(r="")
 
 
 def test_the_templates_words_are_written_from_the_agents_never_by_hand():
@@ -206,7 +203,7 @@ def test_to_follows_the_priority_by_the_alert_desks_own_table():
     src = ("{%- set vm_title, vm_to, vm_text, vm_status = 'T', r, 'x', '' -%}{%- set vm_priority = p -%}"
            "{% include 'vesta_message.jinja' ignore missing %}")
     t = _env().from_string(src)
-    helper = lambda e: "Owner, Facility Manager" if e == "input_text.vesta_alert_audience" else "unknown"
+    helper = lambda e: "Owner" if e == "input_text.vesta_alert_audience" else "unknown"
     for p in PRIORITIES:
         reached = desk.reaches(p)
         roles = [r for r in reached if r in ("owner", "fm")]
@@ -215,9 +212,9 @@ def test_to_follows_the_priority_by_the_alert_desks_own_table():
             assert t.render(r="", p=given, states=helper).split("\n")[1] == f"To: {html.escape(said)}", (p, given)
     assert [t.render(r="", p=p).split("\n")[1] for p in PRIORITIES] == \
         ["To: Owner &amp; FM", "To: FM", "To: digest", "To: log"]
-    # no priority ("Follow Vesta Agent Setting" for the priority, or a rule that names its own "To:"): as before
-    assert t.render(r="", p="agent", states=helper).split("\n")[1] == "To: Owner &amp; FM"     # the villa-wide helper
-    assert t.render(r="", p="", states=lambda e: "Facility Manager").split("\n")[1] == "To: FM"
+    # no priority (a notice names its own "To:", or names nobody: every role)
+    assert t.render(r="", p="agent", states=helper).split("\n")[1] == "To: Owner &amp; FM"
+    assert t.render(r="FM", p="").split("\n")[1] == "To: FM"
     assert t.render(r="Owner", p="").split("\n")[1] == "To: Owner"
     assert _env().from_string("{%- set vm_title, vm_to, vm_text, vm_status = 'T', 'Owner', 'x', '' -%}"
                               "{% include 'vesta_message.jinja' ignore missing %}").render().split("\n")[1] == "To: Owner"

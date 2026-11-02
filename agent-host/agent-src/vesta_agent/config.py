@@ -135,13 +135,18 @@ class Settings:
         """policy.yaml, read again whenever the file changes — the ONE cache of it (the engine and these
         settings each kept their own until 0.6.42). A value it does not understand falls back to its default
         (not an error: a typo in a hand-edited file must not stop the agent; the UI refuses it before it is saved)."""
-        try:
-            m = os.path.getmtime(self.policy_path)
-        except OSError:
-            m = None
+        from vesta_shared import villa_recipients
+
+        def mtime(path):
+            try:
+                return os.path.getmtime(path)
+            except (OSError, TypeError):
+                return None
+        # read again when policy.yaml OR the villa's lists of who gets the messages (kept beside the pack) change
+        m = (mtime(self.policy_path), mtime(villa_recipients.path(self.pack_path)))
         if self._policy_cache.get("mtime") != m or "value" not in self._policy_cache:
             try:
-                v = Policy.load(self.policy_path)       # a file that is not there is no rules: Policy({})
+                v = Policy.load(self.policy_path, villa_recipients.get(self.pack_path))  # no file: Policy({})
             except Exception as e:  # noqa: BLE001 — unreadable: the last good rules, never a stop
                 # ⚠️ ANY READING THAT FAILS KEEPS THE LAST GOOD RULES (architecture review 17, then 18): any other error
                 # stopped every message, alert and press; a YAML slip by hand (one quote left open) gave EMPTY rules —

@@ -35,7 +35,7 @@ class FakeHA:
     def __init__(self, tools=(), images: dict[str, str] | None = None, answers: dict[str, str] | None = None,
                  states: dict[str, dict] | None = None, version: str = "8.6.0", pipeline: dict | None = None,
                  rules: list[dict] | None = None, traces: dict[str, list[dict]] | None = None,
-                 history: dict[str, list[dict]] | None = None):
+                 history: dict[str, list[dict]] | None = None, entries: dict[str, dict] | None = None):
         self.tools, self.images, self.answers = list(tools), dict(images or {}), dict(answers or {})
         self._states, self.version, self.calls = dict(states or {}), version, []
         self.mcp = _Session(self)
@@ -44,9 +44,14 @@ class FakeHA:
         self.rules, self.traces = list(rules or []), dict(traces or {})
         # each entity's recorded rows with their attributes, as ha_get_history gives them (minimal_response false)
         self.history = dict(history or {})
+        # the registry rows ha_get_entity gives ({entity_id: {platform, unique_id, ...}})
+        self.entries = dict(entries or {})
 
     def states(self, entity_ids=None) -> dict[str, dict]:
         return {e: s for e, s in self._states.items() if entity_ids is None or e in entity_ids}
+
+    def entity_entries(self, entity_ids) -> list[dict]:
+        return [{"entity_id": e, **self.entries[e]} for e in entity_ids if e in self.entries]
 
     def not_found(self, entity_ids) -> set[str]:
         """The ids the villa does not have: every one this stand-in holds no state for."""

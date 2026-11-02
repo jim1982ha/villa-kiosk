@@ -247,6 +247,7 @@ class Vesta:
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
         self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
+        self._recipients_read = 0.0       # when the villa's lists of who gets the messages were last read
         self._records = None              # the wake's read of the Kiosk's faults: running, and pressed again since
         self.scheduler: Scheduler | None = None
         self._pack = None
@@ -503,6 +504,14 @@ class Vesta:
         from vesta_shared import kiosk_told
         for words in kiosk_told.keep(self.s.pack_path, answer):
             log.info("%s", words)
+
+    def read_recipients(self) -> None:
+        """The villa's lists of who gets the messages (vesta_shared.villa_recipients), kept beside the knowledge pack
+        when they changed — policy() reads them again. Unreadable: what was kept stays."""
+        from vesta_shared import villa_recipients
+        got = villa_recipients.read(self.reader)
+        if got is not None and villa_recipients.save(self.s.pack_path, got):
+            log.info("%s", villa_recipients.says(got))
 
     def devices_changed(self, settle: float | None = None) -> None:
         """The villa's devices changed (ha_events.REGISTRY_EVENTS): read them again once they have been still for
@@ -1077,6 +1086,11 @@ class Vesta:
         if self.kiosk.enabled and time.monotonic() - self._kiosk_read >= KIOSK_EVERY_S:
             self._kiosk_read = time.monotonic()
             await self._safe(self.tickets.repair())
+        # the villa's lists of who gets the messages, read as often as the Kiosk's faults: a change in Settings reaches
+        # the agent's next alert within 5 minutes (villa_recipients)
+        if time.monotonic() - self._recipients_read >= KIOSK_EVERY_S:
+            self._recipients_read = time.monotonic()
+            await self._safe(asyncio.to_thread(self.read_recipients))
         # a request for approval nobody answered says so, in every chat, and loses its buttons (approvals.py)
         await self._safe(self.approvals.expire())
         # a copy Telegram did not take the last change of (a network blip): tried again (incident_thread.py)

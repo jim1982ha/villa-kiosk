@@ -15,8 +15,9 @@
 
     "To:" follows the rule's priority when it passes one (vm_priority 'P1'…'P4': whom the VESTA Agent's alert desk
     reaches with it, its own table written below — "To: FM", "To: digest"; owner, 2026-10-19: the rules wrote that
-    table by hand); else it is vm_to when a rule names who it is for; empty, it is the villa-wide
-    input_text.vesta_alert_audience (one place for every alert, owner 2026-10-12). It names ROLES, as an alert card says them (message_format.audience,
+    table by hand); else it is vm_to when a rule names who it is for (a notice: "Who gets the message"). Who each role
+    IS is the villa's two lists, input_text.vesta_owner_targets / vesta_fm_targets, read by the blueprints themselves
+    (owner, 2026-11-03; the villa-wide "VESTA alert audience" helper they replace is gone). It names ROLES, as an alert card says them (message_format.audience,
     short; owner, 2026-10-16: "To: Owner", "To: FM" or "To: Owner & FM", never a name). Each role is read in any of
     its words, apart by ",": "Owner, Facility Manager" is "Owner & FM". A value naming no single role — a name, two
     joined by "&", the helper missing — is every role.
@@ -51,7 +52,6 @@
 {#- END WORDS -#}
 {%- set vm_by = vm_priority_to.get(vm_priority | default('', true) | string | trim | upper) -%}
 {%- set vm_r = vm_to | default('', true) | string | trim -%}
-{%- if not vm_r and states is defined -%}{%- set vm_r = states('input_text.vesta_alert_audience') | trim -%}{%- endif -%}
 {%- set vm_named = namespace(roles=[], words=[]) -%}
 {%- for vm_w in (vm_r | lower).split(',') -%}
 {%- set vm_k = vm_role_of.get(vm_w | trim) -%}

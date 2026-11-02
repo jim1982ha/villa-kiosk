@@ -1,3 +1,11 @@
+## 0.12.436
+
+What you will see:
+- VESTA sends its alerts, reminders and reports to the chats of the villa's lists of who gets the messages (the VESTA
+  Kiosk: Advanced Settings › Messages › Who gets the messages), the same chats the villa's own alerts go to. A change
+  there reaches VESTA within 5 minutes. A role with no Telegram chat in its list still goes to the chats your People
+  list gives that role. Who may approve, and each chat's language, are still set in People.
+
 ## 0.12.435
 
 What you will see:

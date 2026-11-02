@@ -148,12 +148,13 @@ class Notices:
 
     def roles_for(self, chat: int, to=None) -> set[str]:
         """The roles a notice to `chat` is for: `to` (a role, or every role the copy went there for: outcome merges
-        them), else the roles the chat is listed with — for a private chat listed with none, its person's role."""
+        them), else the roles whose messages go to the chat (policy.delivered_roles: the villa's lists, else People) —
+        for a private chat that gets none, its person's role."""
         roles = self._wanted(to)
         if roles:
             return roles
         pol = self.policy()
-        roles = pol.roles_in(chat)
+        roles = pol.delivered_roles(chat)
         if not roles and int(chat) > 0 and pol.person(chat) is not None:
             roles = {pol.person(chat).role}
         return roles & set(ROLE_WORDS)

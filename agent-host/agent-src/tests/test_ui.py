@@ -69,7 +69,7 @@ def test_the_forms_save_keeps_the_files_comments_and_the_agent_reads_it(ui):
     assert no_fm == 400 and any("at least one Facility Manager" in p for p in why["problems"])
     assert status == 200, body
     text = open(ui.policy_path).read()
-    assert "# People, and where the agent posts" in text                 # a comment of the example, kept
+    assert "# People: who may approve, who is a member" in text          # a comment of the example, kept
     raw = yaml.safe_load(text)
     assert raw["act_enabled"] is True and raw["allowed_services"]["light.turn_on"] == "direct"
     assert raw["people"][0]["telegram_id"] == 111

@@ -3,16 +3,24 @@
 # file) and it sends its plain text, as before. Rendered every minute and at start, so a file removed or edited badly
 # switches the blueprints back to plain text within a minute. Nothing else depends on it.
 #
-# The villa-wide "To:" (owner, 2026-10-18: every helper is defined in a package file, never from the screens):
-# a rule whose "Who the message is for" names nobody uses this. Roles, apart by ",": "Owner, Facility Manager".
-# No `initial:`, so the value set in Settings > Helpers is kept across restarts.
+# Who gets the villa's messages, by role (owner, 2026-11-03: one place for every VESTA blueprint and the VESTA Agent):
+# each a list of the villa's notify entities, apart by ",". Set from the VESTA Kiosk (Settings > Villa > Who gets the
+# messages); read by every VESTA blueprint (P1: both lists, P2: the facility manager's; a notice: its "Who gets the
+# message") and by the VESTA Agent (vesta_shared.villa_recipients). Helpers live in this package file, never made from
+# the screens (owner, 2026-10-18). No `initial:`, so the value set is kept across restarts.
 input_text:
-  vesta_alert_audience:
-    name: VESTA alert audience
+  vesta_owner_targets:
+    name: VESTA owner targets
     min: 0
-    max: 120
+    max: 255
     mode: text
-    icon: mdi:account-group
+    icon: mdi:account-tie
+  vesta_fm_targets:
+    name: VESTA facility manager targets
+    min: 0
+    max: 255
+    mode: text
+    icon: mdi:account-wrench
 
 template:
   - triggers:

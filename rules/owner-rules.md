@@ -274,6 +274,9 @@ Dark look. Long names never overflow their field.
 
 **Why:** owner, 2026-10-01, as general rules ("always", "everywhere it's relevant").
 
+**Not a known set:** who does the work ("Done by", "Who's handling it") is typed every time, never offered from earlier
+records nor from the browser's memory (owner, 2026-11-02: "it shall be a value the user has to manually enter").
+
 ## Fill, don't paint
 
 When the owner shows an empty band, make the app use that space; never recolour the band.

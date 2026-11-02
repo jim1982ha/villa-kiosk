@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.421 (3 November 2026)
+
+- Who gets the messages is the villa's (owner, 2026-11-03): `vesta_shared.villa_recipients` reads the villa's two
+  lists (input_text.vesta_owner_targets / vesta_fm_targets, packages/vesta_message.yaml), turns each Telegram notify
+  entity into its chat (registry unique_id "<bot>_<chat>"), and keeps them beside the pack (`villa_recipients.json`),
+  read every 5 minutes by `housekeeping` (`Vesta.read_recipients`). `Policy(raw, villa)`: `chats_for` sends a role to
+  its villa list when it names a chat, else People's rows; `delivered_roles` (notice.roles_for). Rights (roles_in,
+  group_role, may_approve_in, language_of) stay People's. `Settings.policy` re-reads on either file's change.
+  `HABase.entity_entries` (the registry rows; `registry()` uses it). tests/test_villa_recipients.py.
+- vesta_message.jinja: an empty "To:" is every role; the villa-wide input_text.vesta_alert_audience is gone (the
+  blueprints give a priority or, for a notice, "Who gets the message"). The package defines the two lists instead.
+
 ## 0.6.420 (2 November 2026)
 
 - Architecture review round 14, card 2: the tablet's card of an incident or a request is kept in the state

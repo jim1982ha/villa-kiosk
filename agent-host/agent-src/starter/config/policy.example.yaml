@@ -34,9 +34,11 @@ settings:
 act_enabled: false            # informs only. true switches the act path on (every action still needs a button press).
 approval_ttl_minutes: 15      # an Approve button older than this does nothing
 
-# People, and where the agent posts: a message for a role goes to EVERY chat listed
-# with that role — a person's private chat (their Telegram user id) or a group (a
-# negative id). /whoami, sent to the bot in a chat, shows its id. A person listed in
+# People: who may approve, who is a member, each chat's language. Where a role's messages
+# go is the villa's own list of the role (the VESTA Kiosk: Advanced Settings > Messages >
+# Who gets the messages), read by the villa's alerts and the agent alike; a role with no
+# Telegram chat there goes to EVERY chat listed here with that role — a person's private
+# chat (their Telegram user id) or a group (a negative id). /whoami, sent to the bot in a chat, shows its id. A person listed in
 # both roles is two entries with the same id. role: owner | fm. language: en, fr, id...
 # ⚠️ A GROUP NOT LISTED HERE IS IGNORED, NEVER LEFT: the bot is Home Assistant's too.
 people: []

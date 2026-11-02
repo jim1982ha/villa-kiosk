@@ -104,6 +104,11 @@ class HABase:
         """{'entities': [...], 'devices': [...], 'areas': [...]}"""
         raise NotImplementedError
 
+    def entity_entries(self, entity_ids: Iterable[str]) -> list[dict]:
+        """The villa's registry rows of `entity_ids` (platform, unique_id, name, area…), one per id it has; a client
+        that cannot read the registry says none."""
+        return []
+
     def logbook(self, start: datetime, end: datetime, entity_id: str | None = None) -> list[dict]:
         raise NotImplementedError
 
@@ -699,25 +704,23 @@ class McpClient(HABase):
                                           "device_area": d.get("area_id")}
         states = self.states(ids)
         entities = []
-        for i in range(0, len(ids), 50):
-            body = self.tool("ha_get_entity", {"entity_id": ids[i:i + 50]})
-            for e in body.get("entity_entries") or []:
-                eid = e["entity_id"]
-                attrs = (states.get(eid) or {}).get("attributes") or {}
-                dv = dev_of.get(eid, {})
-                entities.append({
-                    "entity_id": eid,
-                    "name": e.get("name") or attrs.get("friendly_name") or e.get("original_name"),
-                    "area_id": e.get("area_id") or dv.get("device_area"),
-                    "unit_of_measurement": attrs.get("unit_of_measurement"),
-                    "device_class": e.get("device_class") or e.get("original_device_class") or attrs.get("device_class"),
-                    "state_class": attrs.get("state_class"),
-                    "platform": dv.get("platform"),
-                    "device_id": dv.get("device_id"),
-                    "state": (states.get(eid) or {}).get("state"),
-                    "disabled_by": e.get("disabled_by"),
-                    "hidden_by": e.get("hidden_by"),
-                })
+        for e in self.entity_entries(ids):
+            eid = e["entity_id"]
+            attrs = (states.get(eid) or {}).get("attributes") or {}
+            dv = dev_of.get(eid, {})
+            entities.append({
+                "entity_id": eid,
+                "name": e.get("name") or attrs.get("friendly_name") or e.get("original_name"),
+                "area_id": e.get("area_id") or dv.get("device_area"),
+                "unit_of_measurement": attrs.get("unit_of_measurement"),
+                "device_class": e.get("device_class") or e.get("original_device_class") or attrs.get("device_class"),
+                "state_class": attrs.get("state_class"),
+                "platform": dv.get("platform"),
+                "device_id": dv.get("device_id"),
+                "state": (states.get(eid) or {}).get("state"),
+                "disabled_by": e.get("disabled_by"),
+                "hidden_by": e.get("hidden_by"),
+            })
         fa = self.tool("ha_list_floors_areas", {})
         areas = [a for f in fa.get("floors") or [] for a in f.get("areas") or []] + list(fa.get("unassigned_areas") or [])
         home = (states.get("zone.home") or {}).get("attributes") or {}
@@ -725,6 +728,13 @@ class McpClient(HABase):
                 "areas": [{"area_id": a.get("area_id"), "name": a.get("name"), "aliases": a.get("aliases") or []}
                           for a in areas],
                 "config": {"time_zone": self.zone, "location_name": home.get("friendly_name")}}
+
+    def entity_entries(self, entity_ids):
+        ids, out = list(entity_ids), []
+        for i in range(0, len(ids), 50):
+            body = self.tool("ha_get_entity", {"entity_id": ids[i:i + 50]})
+            out += [e for e in (body.get("entity_entries") or []) if isinstance(e, dict) and e.get("entity_id")]
+        return out
 
     def logbook(self, start, end, entity_id=None):
         """Every logbook row in [start, end), oldest first (one entity's, or the whole villa's).

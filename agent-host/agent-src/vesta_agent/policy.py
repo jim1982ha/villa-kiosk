@@ -311,9 +311,12 @@ def _int_in(v: Any, lo: int, hi: int, default: int) -> int:
 
 
 class Policy:
-    def __init__(self, raw: dict):
-        """The file's values as the agent uses them: read_policy's, the default where it names a problem."""
+    def __init__(self, raw: dict, villa: dict[str, list[int]] | None = None):
+        """The file's values as the agent uses them: read_policy's, the default where it names a problem. `villa`: the
+        villa's own lists of who gets the messages ({role: Telegram chats}, vesta_shared.villa_recipients), which
+        decide where a role's messages GO (chats_for) — never who may do what."""
         self.raw = raw if isinstance(raw, dict) else {}
+        self.villa: dict[str, list[int]] = {r: list(c) for r, c in (villa or {}).items() if c}
         v, self.problems = read_policy(self.raw)
         self.act_enabled: bool = v["act_enabled"]
         self.approval_ttl_minutes: int = v["approval_ttl_minutes"]
@@ -352,12 +355,12 @@ class Policy:
         (siren.always_owners: the siren's rule, one place)."""
         return always_owners(self.owner_only, self.siren_entity)
     @classmethod
-    def load(cls, path: str) -> "Policy":
+    def load(cls, path: str, villa: dict[str, list[int]] | None = None) -> "Policy":
         if not path or not os.path.exists(path):
-            return cls({})
+            return cls({}, villa)
         with open(path, encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
-        return cls(raw if isinstance(raw, dict) else {})
+        return cls(raw if isinstance(raw, dict) else {}, villa)
 
     # ------------------------------------------------------------------ the AI jobs
     def skill_brain(self, skill: str | None, job_names) -> str | None:
@@ -459,10 +462,19 @@ class Policy:
         return bool(self.roles_in(chat_id)) or int(chat_id) in self.people
 
     def chats_for(self, role: str, language: str | None = None) -> list[int]:
-        """Every chat a message for `role` goes to: each id listed with that role, once, in the list's order — only
-        those whose row reads `language` (a code) when one is given."""
-        return list(dict.fromkeys(c for c, r in self.destinations
-                                  if r == role and (language is None or self.language_of(c, role) == language)))
+        """Every chat a message for `role` goes to: the villa's list of the role (`villa`) when it names a Telegram
+        chat, else each id the People list names with that role — once, in the list's order, only those that read
+        `language` (a code) when one is given.
+
+        ⚠️ WHERE IS THE VILLA'S, WHO MAY IS PEOPLE'S (owner, 2026-11-03: one place for which chat belongs to which
+        role, the villa's own alerts and the agent alike). Only delivery follows the villa's lists: approving, being a
+        member and each chat's language stay with the People list (may_approve_in, roles_in, language_of)."""
+        chats = self.villa.get(role) or [c for c, r in self.destinations if r == role]
+        return list(dict.fromkeys(c for c in chats if language is None or self.language_of(c, role) == language))
+
+    def delivered_roles(self, chat_id: int) -> set[str]:
+        """The roles whose messages go to `chat_id` (chats_for): what a copy sent there is for."""
+        return {r for r in ROLES if int(chat_id) in self.chats_for(r)}
 
     def language_of(self, chat_id: int, role: str | None) -> str:
         """The language a chat reads its `role`'s messages in: its row's (an older file's `chats:` has none: en). No

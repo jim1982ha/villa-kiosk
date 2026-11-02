@@ -30,7 +30,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [The owner verifies by screenshots](owner-rules.md#the-owner-verifies-by-screenshots) — no browser testing; say what to check on which device
 - [iPhone and Android alike](owner-rules.md#iphone-and-android-alike) — every change works on iPhone too; fallbacks for late Safari APIs; group controls that wrap
 - [One line per problem](owner-rules.md#one-line-per-problem) — a repeated problem is one line with a count, on every surface
-- [Forms, charts and lists](owner-rules.md#forms-charts-and-lists) — Y axis with grid, pickers not free text, 10-row pages, Light/Auto/Dark
+- [Forms, charts and lists](owner-rules.md#forms-charts-and-lists) — Y axis with grid, pickers not free text (who does the work: typed), 10-row pages, Light/Auto/Dark
 - [Fill, don't paint](owner-rules.md#fill-dont-paint) — use the empty band; never recolour it
 - [Private stays private](owner-rules.md#private-stays-private) — docs/, villa data and the security suite never reach the repository
 
@@ -61,7 +61,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Agent sub-agents parked](decided.md#agent-sub-agents-parked) — no SDK sub-agents without new cost figures
 - [Asleep devices: one list, the Kiosk's](decided.md#asleep-devices-one-list-the-kiosks) — the Kiosk owns the unavailable-by-design list; the Agent reads it
 - [The bake's job table is the owner's](decided.md#the-bakes-job-table-is-the-owners) — never reset or move the bake pipeline's job table
-- [Automation descriptions stay as written](decided.md#automation-descriptions-stay-as-written) — short blueprint texts; automations' long descriptions kept
+- [Automation descriptions are short too](decided.md#automation-descriptions-are-short-too) — one or two plain sentences; history in the HISTORY file
 
 ## Verifying a claim
 
