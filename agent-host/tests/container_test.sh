@@ -229,7 +229,9 @@ hasf "HA MCP: 2 tools on the server" && ok "HA MCP read through the client" || b
 hasf "Telegram: off" && ok "Telegram off: nothing sent" || bad "Telegram not off"
 docker exec vesta-ct test -f /tmp/agent-config/policy.yaml && docker exec vesta-ct test -f /tmp/skills/.seeded \
   && ok "policy.yaml and the seed marker written" || bad "config not seeded"
-docker exec vesta-ct sh -c 'grep -q "people: \[\]" /tmp/agent-config/policy.yaml' && ok "the example policy ships empty" || bad "policy not empty"
+# who is who is the VESTA Kiosk's lists (0.12.439): the example names no chat, only an empty language map
+docker exec vesta-ct sh -c 'grep -q "^languages: {}" /tmp/agent-config/policy.yaml && ! grep -q "^people:" /tmp/agent-config/policy.yaml' \
+  && ok "the example policy ships empty" || bad "policy not empty"
 no_secret "agent"
 start=$(date +%s); docker stop -t 30 vesta-ct >/dev/null; took=$(( $(date +%s) - start ))
 hasf "Stopped" && [ "$took" -lt 20 ] && ok "the agent stopped cleanly on SIGTERM (${took} s)" || bad "agent stop (${took} s)"

@@ -1,3 +1,9 @@
+## 0.12.440
+
+What you will see:
+- The same as 0.12.439, which was never offered: its build check still expected the old People rows in a new
+  install's settings file.
+
 ## 0.12.439
 
 What you will see:
