@@ -1,3 +1,10 @@
+## 2.496.668
+
+What you will see:
+- Cockpit › Tickets: a ticket card that holds two problems of the same device (VESTA's alert and the night check's
+  finding about it) says "Ticket opened by … In progress" once, at its top, instead of once per problem. The count
+  in the tab's name and "in progress" stay one per device.
+
 ## 2.496.667
 
 What you will see:
