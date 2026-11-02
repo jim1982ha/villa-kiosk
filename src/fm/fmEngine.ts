@@ -18,7 +18,7 @@ import { villaTime, wallClock } from "@/utils/villaClock";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import type { Tone } from "./tone";
 import { countOf } from "@/utils/countOf";
-import { authorStamp, authorWords, roleOfStamp, type Role } from "@/auth/roles";
+import { authorStamp, authorWords, type Role } from "@/auth/roles";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 export type DueState = "never" | "overdue" | "due-soon" | "ok";
@@ -355,47 +355,6 @@ export function faultTitle(t: Pick<FmTicket, "title" | "alertNumber" | "alertPri
  *  Telegram), else who recorded it. One reading for every list and report. */
 export function workedBy(c: Pick<FmCompletion, "by" | "who" | "role">): string {
   return c.who || authorWords(c) || "—";
-}
-
-/** A name as it is compared: spaces trimmed and joined, case ignored ("wayan " and "Wayan" are one person). */
-const workerKey = (name: string) => name.trim().replace(/\s+/g, " ").toLocaleLowerCase();
-
-/**
- * The names already given for who does the work — "Done by" and "Who's handling it" offer them (WorkerPicker) —
- * from every completion and every fault step: the typed `who`, and the typed name an older completion kept in `by`
- * (fmTypes FmCompletion) when it is no profile's words and not the VESTA Agent's stamp. Case and spaces ignored, each
- * person once, spelled as most records spell them (the latest of equals), sorted by name.
- *
- * ⚠️ EACH FORM HAD ITS OWN BLANK BOX (architecture review round 8, 2026-10-30): "Wayan", "wayan" and "Wayan / AC
- * contractor" were one person, typed three ways, and Recent work counted three. The name already given is now picked,
- * not typed again.
- */
-export function knownWorkers(d: Pick<FmData, "completions" | "tickets">): string[] {
-  const named: { name: string; at: string }[] = [];
-  const add = (name: unknown, at: string) => {
-    if (typeof name === "string" && name.trim()) named.push({ name: name.trim().replace(/\s+/g, " "), at });
-  };
-  for (const c of d.completions) {
-    add(c.who, c.at);
-    if (!c.who && !roleOfStamp(c) && c.by !== AGENT_CONTRACT.ticket.agentStamp && c.by !== "—") add(c.by, c.at);
-  }
-  for (const t of d.tickets) for (const u of t.updates ?? []) add(u.who, u.at);
-  const byKey = new Map<string, Map<string, { n: number; at: string }>>();
-  for (const { name, at } of named) {
-    const spellings = byKey.get(workerKey(name)) ?? new Map<string, { n: number; at: string }>();
-    const s = spellings.get(name) ?? { n: 0, at: "" };
-    spellings.set(name, { n: s.n + 1, at: at > s.at ? at : s.at });
-    byKey.set(workerKey(name), spellings);
-  }
-  return [...byKey.values()]
-    .map((spellings) => [...spellings].sort(([, a], [, b]) => b.n - a.n || (b.at > a.at ? 1 : b.at < a.at ? -1 : 0))[0][0])
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-}
-
-/** Whether `name` is one of `known`, case and spaces ignored: a picker offers "Use …" only for a name not there yet. */
-export function isKnownWorker(known: readonly string[], name: string): boolean {
-  const k = workerKey(name);
-  return known.some((n) => workerKey(n) === k);
 }
 
 /** A step that resolved a fault with no work done: the Kiosk's "No action needed" (nothing done), the VESTA Agent's own
