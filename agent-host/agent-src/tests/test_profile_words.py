@@ -37,5 +37,6 @@ def test_a_fault_taken_on_closed_and_reopened_reads_who_in_the_profiles_words():
         {"at": "2026-10-30T09:00:00Z", "kind": "reopened", "status": "open", "role": "owner", "by": "Owner"},
         {"at": "2026-10-30T10:00:00Z", "status": "resolved", "role": "ops", "by": old}]}
     f = fault_of(t)
-    assert f["by"] == PROFILES["ops"]["label"] and f["reopened_by"] == PROFILES["owner"]["label"]
-    assert f["taken_by"] == PROFILES["ops"]["label"]
+    assert f["by"] == PROFILES["ops"]["label"]
+    assert [(g["kind"], g["by"]) for g in f["gestures"]] == [
+        ("take", PROFILES["ops"]["label"]), ("reopen", PROFILES["owner"]["label"]), ("close", PROFILES["ops"]["label"])]

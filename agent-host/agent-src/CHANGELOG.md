@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.420 (2 November 2026)
+
+- Architecture review round 14, card 2: the tablet's card of an incident or a request is kept in the state
+  (`state.incident_card`, family `inccard:`), read by `IncidentThread.taken`, `_tell_alone` and `tell_open` (the
+  in-memory `_told` is gone; an alert told before this version is drawn once from its newest copy). `incruns:` gets a
+  lifetime (RECORDS), both kept while their alert is open. `kiosk_messages.note` builds every note's record
+  (Poster.post, Poster.rewrite). tests: test_kiosk_messages (restart cases), test_state_records.
+- Card 3: `kiosk.gestures` reads each press of a person on a Kiosk fault (close, reopen, take, help), in order;
+  `Tickets._take_in` takes each in once (`tickets.PRESSES` in the skills' store) through `_press`. `fault_of` drops
+  `reopened_*`, `taken_*`, `help_*`, `closed_mine`, `lasting` for `gestures`. tests/test_cockpit_presses.py.
+- Card 4: `skills.kiosk_jobs` / `KIOSK_JOBS_ENV`: a skill script is handed the times of its skill's Kiosk-named jobs
+  (`script_env(settings, skill)`); preventive-maintenance `nightly.night_clock` reads it instead of its skill.yaml.
+
 ## 0.6.419 (2 November 2026)
 
 - preventive-maintenance `nightly.schedule_unused`: a schedule whose only users are automations, all switched off, sets

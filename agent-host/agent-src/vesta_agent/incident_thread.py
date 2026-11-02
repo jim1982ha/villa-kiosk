@@ -99,7 +99,6 @@ class IncidentThread:
         self._translations = translations or (lambda: None)
         self._wanted: dict[tuple[str, int], tuple] = {}  # (incident, chat) → its words still to translate, once recorded
         self.mirror = mirror
-        self._told: dict[str, tuple] = {}       # incident → the last copy told (parts, keyboard, photo): `taken` tells it again
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock(self, iid: int | str) -> asyncio.Lock:
@@ -116,14 +115,20 @@ class IncidentThread:
     def taken(self, iid: int | str, run: str) -> None:
         """The villa's automation run `run` (its context id) is incident `iid`'s: its announcement on the tablet gives way
         to the incident's card. Told again at once when the card was already told without it."""
-        if run and self.state.add_incident_run(iid, run) and str(iid) in self._told:
-            self.tell(iid, *self._told[str(iid)])
+        if run and self.state.add_incident_run(iid, run) and (card := self.state.incident_card(iid)):
+            self.tell(iid, card["parts"], card.get("keyboard"))
 
     def tell(self, iid: int | str, parts: dict, keyboard: dict | None = None, photo=None) -> None:
-        """Keep the copy as it stands for the tablet (`mirror`): one record per incident, replaced at each step."""
+        """Keep the copy as it stands for the tablet (`mirror`): one record per incident, replaced at each step.
+
+        ⚠️ THE CARD IS KEPT HERE, NOT REBUILT FROM THE CHATS (architecture review round 14, card 2): it was held in memory
+        only, so after a restart a request only the tablet holds kept its Approve button once decided or expired
+        (`_tell_alone` had nothing to change), and every open alert's card was guessed back from the Telegram copies
+        (`tell_open`). It is the thread's own record now (state.incident_card): its picture is not, the Kiosk keeps
+        one a later copy does not carry (agent-contract.json vestaMessage.keptOnRewrite)."""
         if self.mirror is None:
             return
-        self._told[str(iid)] = (parts, keyboard, photo)
+        self.state.set_incident_card(iid, {"parts": parts, "keyboard": keyboard})
         # ⚠️ WHO IT WENT TO IS EVERY CHAT'S, NOT THE LAST DRAWN'S: each chat's copy says its own "To:" (owner and FM, one
         # group each); the tablet's one record names them all, in the words a "To:" line uses (message_format.audience)
         # ⚠️ AND THIS COPY'S OWN (architecture review 2026-10-29, round 2): a copy Telegram refused is in no chat, and its
@@ -138,14 +143,19 @@ class IncidentThread:
                                             takes=self.state.incident_runs(iid)))
 
     def tell_open(self, open_incidents) -> int:
-        """At start: each open incident's card kept for the tablet, as its newest copy stands — how many. ⚠️ ALERT #83
-        (owner, 2026-10-29): the tablet keeps a card from the incident's next step on (since engine 0.6.359), and an
-        incident with no step since (its one "still not fixed" sent) had none: the tablet showed its short list
-        while Telegram showed the card. The newest copy is the one whose Status, told for everyone, holds the most steps
-        before its bottom line; its Status told for everyone (the tablet is everyone's), as every step's card is now."""
+        """At start: each open incident's card told to the tablet again, as it was kept (`tell`) — a copy the Kiosk had not
+        kept when the Agent stopped is owed no longer (kiosk_messages.py keeps what is owed in memory) — how many.
+        ⚠️ ALERT #83 (owner, 2026-10-29): an incident with no card kept had none on the tablet, which showed its short list
+        while Telegram showed the card. One told before its card was kept (engine 0.6.419 and earlier) gets it from its
+        newest copy: the one whose Status, told for everyone, holds the most steps before its bottom line, told for
+        everyone (the tablet is everyone's) — read once, kept from then on."""
         told = 0
         for iid in open_incidents:
-            if self.mirror is None or str(iid) in self._told:
+            if self.mirror is None:
+                continue
+            if card := self.state.incident_card(iid):
+                self.tell(iid, card["parts"], card.get("keyboard"))
+                told += 1
                 continue
             best = None
             for chat, rec in self.state.incident_chats(iid):
@@ -284,11 +294,10 @@ class IncidentThread:
     def _tell_alone(self, iid: int | str, **change) -> None:
         """A thread no chat holds — a request only the tablet keeps (no Telegram chat may approve it: approvals.ask) —
         changes on the tablet itself: its record is the only copy, settled there (its buttons gone)."""
-        told = self._told.get(str(iid))
-        if told is None or self.state.incident_chats(iid):
+        card = self.state.incident_card(iid)
+        if card is None or self.state.incident_chats(iid):
             return
-        parts, _keyboard, photo = told
-        self.tell(iid, layout.changed(parts, **{k: v for k, v in change.items() if v is not None}), None, photo)
+        self.tell(iid, layout.changed(card["parts"], **{k: v for k, v in change.items() if v is not None}), None)
 
     async def _finish(self, iid: int | str, note: str, note_in: dict | None) -> int:
         """`close` with `final`: the incident's last word (see there). Returns how many chats show it now."""

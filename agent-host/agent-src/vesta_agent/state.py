@@ -94,6 +94,8 @@ KV_FAMILIES: dict[str, str] = {
     "inc:": RECORDS,                # which skill answers an alert's buttons in a chat
     "incthread:": RECORDS,          # what a chat shows of an incident (incident_thread.py)
     "inchist:": RECORDS,            # when each notice of an incident was sent, of what kind, to whom (notice.py)
+    "incruns:": RECORDS,            # the villa's automation runs an incident took over (incident_thread.taken)
+    "inccard:": RECORDS,            # an incident's or a request's card as the tablet keeps it (incident_thread.tell)
     "hasent:": RECORDS,             # Home Assistant's own messages (also cleared after 24 hours as they are written)
     "saved_by_model:": RECORDS,     # a file the AI saved (its run folder is deleted with the out folder's files)
     "owner_told:": RECORDS,         # when the owner was last told of a problem (a 12-hour pause)
@@ -461,6 +463,14 @@ class State:
     def set_incident_message(self, incident: int | str, chat: int | str, record: dict) -> None:
         self.put(f"incthread:{incident}:{chat}", json.dumps(record))
 
+    def incident_card(self, thread: int | str) -> dict | None:
+        """The card of a thread (an incident, an approval request) as the tablet was last told it: {parts, keyboard}."""
+        v = self.get(f"inccard:{thread}")
+        return json.loads(v) if v else None
+
+    def set_incident_card(self, thread: int | str, card: dict) -> None:
+        self.put(f"inccard:{thread}", json.dumps(card))
+
     def incident_runs(self, incident: int | str) -> list[str]:
         """The villa's automation runs incident `incident` took over (their context ids), oldest first."""
         v = self.get(f"incruns:{incident}")
@@ -714,7 +724,7 @@ class State:
         with self._lock:
             kept_keys, kept_msgs = set(), set()
             for iid in open_incidents:
-                kept_keys |= set(self.kv_prefix(f"inc:{iid}:")) | {f"inchist:{iid}"}
+                kept_keys |= set(self.kv_prefix(f"inc:{iid}:")) | {f"inchist:{iid}", f"incruns:{iid}", f"inccard:{iid}"}
                 for k, v in self.kv_prefix(f"incthread:{iid}:").items():
                     kept_keys.add(k)
                     kept_msgs.add((int(k.rsplit(":", 1)[1]), int(json.loads(v).get("mid") or 0)))

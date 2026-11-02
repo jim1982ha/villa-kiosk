@@ -175,6 +175,15 @@ VILLA_CHOICES = "villa.skill.yaml"
 # A schedule entry's `kiosk`: what the Kiosk calls that job, so it can say its time (the heartbeat's cadence,
 # agent-contract.json `heartbeat`) — the skill names it, the engine never guesses which job is "the nightly check".
 KIOSK_JOBS = {"nightly_check"}
+#: The environment variable a skill's scripts read their own Kiosk-named jobs' times from (kiosk_jobs, as json).
+KIOSK_JOBS_ENV = "VESTA_KIOSK_JOBS"
+
+
+def kiosk_jobs(skill: "Skill") -> dict[str, str]:
+    """{the Kiosk's name of a job: when it runs} of `skill`'s schedule ({"nightly_check": "02:00"}). ⚠️ ONE READER
+    (architecture review round 14, card 4): the night check's script read its own skill.yaml for its time while the
+    engine read the same entry here: the script is handed it now (script_env), the engine reads it from this too."""
+    return {str(j["kiosk"]): str(j["when"]) for j in skill.schedule if j.get("kiosk")}
 TRASH = ".trash"              # skills deleted or replaced: kept to undo, trimmed by housekeeping (settings.keep.files_days)
 TOOL = re.compile(r"^[a-z][a-z0-9_]{1,60}$")
 BUTTON_OPTION = re.compile(r"^[a-z][a-z_]{0,15}$")
@@ -1022,8 +1031,9 @@ def validate_script_args(skill: Skill | None, skill_name: str, script: str, args
     return final
 
 
-def script_env(settings) -> dict:
-    """What a skill script gets: the read-only HA MCP client's address, the store, the zone. Nothing else."""
+def script_env(settings, skill: "Skill | None" = None) -> dict:
+    """What a skill script gets: the read-only HA MCP client's address, the store, the zone — and, run for a skill, the
+    times of its jobs the Kiosk names (kiosk_jobs). Nothing else."""
     return {
         "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
         "HOME": settings.work_dir,
@@ -1045,6 +1055,7 @@ def script_env(settings) -> dict:
         "VESTA_WEB_SEARCHES": getattr(settings, "web_searches", "") or "",
         "VESTA_WEB_SEARCH_ON": getattr(settings, "web_search_on", "") or "",
         "VESTA_ASKER": getattr(settings, "asker", "") or "",
+        **({KIOSK_JOBS_ENV: json.dumps(kiosk_jobs(skill))} if skill is not None else {}),
     }
 
 
@@ -1151,7 +1162,7 @@ def run_script(settings, skill: Skill, script: str, args: list[str], timeout: in
         return 127, "", f"{script} is not a script of {skill.name}"
     cmd = [sys.executable, skill.script_path(script)] + list(args) + injected(settings, skill, script)
     try:
-        p = subprocess.run(cmd, cwd=settings.out_dir, env=script_env(settings), capture_output=True, text=True,
+        p = subprocess.run(cmd, cwd=settings.out_dir, env=script_env(settings, skill), capture_output=True, text=True,
                            timeout=timeout or script_timeout_s())
     except subprocess.TimeoutExpired:
         return 124, "", "The script took too long and was stopped."

@@ -75,8 +75,10 @@ def test_a_reopening_in_the_kiosk_is_read_from_its_step_and_an_old_now_note_stil
         {"id": "va-2", "title": "Pump at 2 %", "status": "in_progress", "updates": [
             {"at": "2026-10-09T09:00:00Z", "status": "in_progress", "note": "Now: Pump at 2 %", "photoIds": []}]})
     held = run(k.held_tickets())
-    assert held["va-1"]["reopened_by"] == "Owner" and held["va-1"]["reopened_at"] == "2026-10-10T10:00:00Z"
-    assert "reopened_at" not in held["va-2"]                                          # picked up is not reopened
+    assert [(g["kind"], g["at"], g["by"]) for g in held["va-1"]["gestures"]] == [
+        ("close", "2026-10-10T09:00:00Z", "Facility Manager"), ("reopen", "2026-10-10T10:00:00Z", "Owner"),
+        ("take", "2026-10-10T11:00:00Z", "Facility Manager")], held["va-1"]["gestures"]
+    assert held["va-2"]["gestures"] == []                                       # the agent's own step is no press
     assert held["va-2"]["agent_title"] == "Pump at 2 %"
 
 
@@ -596,10 +598,12 @@ def test_what_a_person_did_to_a_fault_is_read_from_its_steps_alone():
         step("2026-10-19T00:25Z", "in_progress", by="VESTA Agent"),
         step("2026-10-19T00:30Z", "in_progress", by="Facility manager", who="Wayan")]}
     f = fault_of(t)
-    assert f["cleared"] and (f["reopened_at"], f["reopened_by"]) == ("2026-10-19T00:20Z", "Jim")
-    assert (f["taken_at"], f["taken_by"]) == ("2026-10-19T00:30Z", "Wayan") and f["by"] == "Wayan"
+    # each press, in order (architecture review round 14, card 3): the agent's clearing and its own step are none
+    assert f["cleared"] and f["by"] == "Wayan"
+    assert [(g["kind"], g["at"], g["by"]) for g in f["gestures"]] == [("reopen", "2026-10-19T00:20Z", "Jim"),
+                                                                      ("take", "2026-10-19T00:30Z", "Wayan")]
     t["updates"] = t["updates"][:4]
-    assert "taken_at" not in fault_of(t)                       # the agent's own step is never a person taking it on
+    assert [g["kind"] for g in fault_of(t)["gestures"]] == ["reopen"]   # the agent's own step is never a person taking it on
 
 
 # ---------------------------------------------------------------------- 7 · what to do follows its problem's words

@@ -77,7 +77,8 @@ def test_the_sample_reads_as_the_agreement_says():
             and u.get("by") != T["agentStamp"]][-1]
     assert held["alert_number"] == T["sample"]["alertNumber"] and held["origin"] == T["sample"]["origin"]
     assert held["check"] == T["sample"]["check"]
-    assert (held["taken_by"], held["taken_at"]) == (step["who"], step["at"])             # the take-on the chase stops on
+    took = [g for g in held["gestures"] if g["kind"] == "take"]
+    assert (took[-1]["by"], took[-1]["at"]) == (step["who"], step["at"])                 # the take-on the chase stops on
     assert held["agent_title"] == T["sample"]["title"]                                   # its own title, by the stamp
     assert [n for _at, n in held["noted"]] == ["Reminder sent to Facility Manager"]
 

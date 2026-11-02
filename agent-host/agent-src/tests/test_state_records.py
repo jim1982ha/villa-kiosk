@@ -121,6 +121,8 @@ def test_every_record_family_has_a_declared_lifetime(tmp_path):
     s = _state(tmp_path)
     s.set_alert_skill(1, -100, "alert-desk")
     s.set_incident_message(1, -100, {"mid": 5, "text": "x", "buttons": True, "settled": False})
+    s.add_incident_run(1, "ctx-run")
+    s.set_incident_card(1, {"parts": {"body": "x"}, "keyboard": None})
     s.note_ha_sent("ctx", -100, 9)
     s.mark_saved_by_model("runs/fm-weekly-1/notes.json")
     s.mark_owner_told("credit", "2026-10-01T00:00:00+00:00")
@@ -138,7 +140,8 @@ def test_every_record_family_has_a_declared_lifetime(tmp_path):
     assert not any(k.startswith(p) for k in left for p, life in KV_FAMILIES.items() if life == RECORDS)
     assert s.get("listening_since") and s.jobs_run()                               # what is current stays
     # the ones that piled up: an alert's records, Home Assistant's messages, every file the AI saved, the owner's pauses
-    assert not any(k.startswith(("inc:", "incthread:", "hasent:", "saved_by_model:", "owner_told:")) for k in left)
+    assert not any(k.startswith(("inc:", "incthread:", "incruns:", "inccard:", "hasent:", "saved_by_model:",
+                                 "owner_told:")) for k in left)
 
 
 def test_when_the_agent_started_listening_does_not_move_with_housekeeping(tmp_path):
@@ -154,3 +157,17 @@ def test_when_the_agent_started_listening_does_not_move_with_housekeeping(tmp_pa
     s.db.execute("delete from calls")                                             # housekeeping, months later
     s.db.commit()
     assert agent_records.listening_since(path).isoformat() == "2026-01-01T00:00:00+00:00"
+
+
+def test_an_open_alert_keeps_its_tablet_card_and_its_runs_past_the_records_days(tmp_path):
+    # architecture review round 14, card 2: the tablet's card (inccard:) and the villa's runs it took over (incruns:,
+    # never pruned until then) live as the alert's other records: pruned with them, kept while it is open
+    from datetime import datetime, timedelta, timezone
+    s = _state(tmp_path)
+    for iid in (1, 2):
+        s.set_incident_card(iid, {"parts": {"body": "x"}, "keyboard": None})
+        s.add_incident_run(iid, f"run-{iid}")
+    soon = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+    s.prune(runs_before="1970", records_before=soon, open_incidents=[2])
+    assert s.incident_card(1) is None and s.incident_runs(1) == []
+    assert s.incident_card(2) == {"parts": {"body": "x"}, "keyboard": None} and s.incident_runs(2) == ["run-2"]

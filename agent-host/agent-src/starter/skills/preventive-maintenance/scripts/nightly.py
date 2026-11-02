@@ -992,14 +992,13 @@ def one_edit_per_message(edits: list[dict]) -> list[dict]:
 
 def night_clock() -> str | None:
     """When this skill's night check runs ("02:00", skill.yaml: its job marked `kiosk: nightly_check`): how long a fault
-    it closed is watched (Problems.confirms_by reads the same job through the engine). None without one."""
-    import yaml
+    it closed is watched. ⚠️ HANDED BY THE ENGINE (architecture review round 14, card 4): the time the Cockpit's "VESTA
+    confirms by" counts from (Problems.confirms_by) is the engine's reading of that entry (skills.kiosk_jobs), given to
+    this script as VESTA_KIOSK_JOBS — this read the file a second way. None without one."""
     try:
-        with open(os.path.join(os.path.dirname(HERE), "skill.yaml"), encoding="utf-8") as fh:
-            spec = yaml.safe_load(fh) or {}
-    except (OSError, yaml.YAMLError):
+        return json.loads(os.environ.get("VESTA_KIOSK_JOBS") or "{}").get("nightly_check")
+    except (ValueError, AttributeError):
         return None
-    return next((str(j["when"]) for j in spec.get("schedule") or [] if j.get("kiosk") == "nightly_check"), None)
 
 
 def told_cleared(store, closed_ids, at: datetime, zone: str, settings: dict,

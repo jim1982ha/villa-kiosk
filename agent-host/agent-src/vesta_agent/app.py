@@ -1124,8 +1124,8 @@ class Vesta:
     def nightly_at(self) -> str | None:
         """When the job a skill marks `kiosk: nightly_check` runs ("02:00"), None without one: the Kiosk's Next check
         (kiosk_cadence) and how long a fault the night check closed is watched (Tickets._next_night)."""
-        return next((j["when"] for sk in self.skills.all().values() for j in sk.schedule
-                     if j.get("kiosk") == "nightly_check"), None)
+        from .skills import kiosk_jobs
+        return next((at for sk in self.skills.all().values() if (at := kiosk_jobs(sk).get("nightly_check"))), None)
 
     def kiosk_cadence(self) -> dict | None:
         """This agent's timing for the Kiosk's heartbeat (agent-contract.json `heartbeat.cadence`): how often its code

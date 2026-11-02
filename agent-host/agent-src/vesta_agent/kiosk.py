@@ -245,12 +245,48 @@ def cleared_step(step: dict) -> bool:
     return note in (table.get("clearedNotes") or ()) or note.startswith(tuple(table.get("clearedNotePrefixes") or ()))
 
 
+#: What a person did on a fault's card (gestures): closed it (Done, Close, "No action needed"), reopened it, took it on
+#: ("Open Ticket"), asked for help.
+CLOSE, REOPEN, TAKE, ASK_HELP = "close", "reopen", "take", "help"
+
+
+def gestures(ups: list[dict]) -> list[dict]:
+    """A person's presses on a fault's card, oldest first: {kind (CLOSE, REOPEN, TAKE, ASK_HELP), at, by, lasting} — a
+    close is a person's step that RESOLVED it (the agreement's status changes: never a rename or a Telegram line written
+    after), a reopening their "Reopen fault", a take-on the agreement's takenStep, a help their Need help. The agent's
+    own steps are never a person's press. Pure.
+
+    ⚠️ EACH PRESS, NOT THE LAST OF EACH KIND (architecture review round 14, card 3): the card was read as the latest
+    close, take-on, reopening and help, and what was new was worked out by comparing their times with the task's — four
+    fixes recorded where that guess went wrong (a flapping alert's own clearing read as a person's close, a person's
+    Close read as the agent's clearing, a close before the problem came back, a reopening of an old fault). A close and
+    a reopening between two reads were neither."""
+    closes = {id(u) for u in status_changes(ups) if u.get("status") == "resolved" and not _mine(u)}
+    out = []
+    for i, u in enumerate(ups):
+        if id(u) in closes:
+            kind = CLOSE
+        elif u.get("kind") == REOPENED and not _mine(u):
+            kind = REOPEN
+        elif taken_step(u):
+            kind = TAKE
+        elif u.get("kind") == HELP and not _mine(u):
+            kind = ASK_HELP
+        else:
+            continue
+        # who: the name typed on the step, else its profile in today's words (profiles.step_by); a help names the profile
+        by = str((profiles.step_by(u) or u.get("who")) if kind == ASK_HELP else (u.get("who") or profiles.step_by(u)) or "")
+        out.append((_epoch(u.get("at")) or 0.0, i, {"kind": kind, "at": str(u.get("at") or ""), "by": by,
+                                                    "lasting": bool(u.get("lasting")) and kind == CLOSE}))
+    return [g for *_, g in sorted(out, key=lambda x: (x[0], x[1]))]
+
+
 def fault_of(t: dict) -> dict:
-    """One Facility fault as the agent reads it: {status, title, agent_title, resolved_at, by, cleared, reopened_at,
-    reopened_by, taken_at, taken_by, help_at, help_by, noted, note, …} — `by` who closed it, on a closed fault ("Facility manager"; its last
+    """One Facility fault as the agent reads it: {status, title, agent_title, resolved_at, by, cleared, gestures, noted,
+    note, …} — `by` who closed it, on a closed fault ("Facility manager"; its last
     close's step), on an open one who last moved it (its last step), `agent_title` the title the agent last gave it (None: never said),
     `cleared` whether its last close was one with no work done — the agent's own clearing — (None: no step closed it),
-    `reopened_*` / `taken_*` / `help_*` a PERSON's last reopening / "Open Ticket" / Need help, from its steps. Pure: what a person did is
+    `gestures` every press of a PERSON on it, oldest first (gestures). Pure: what a person did is
     read from the Kiosk's steps here and nowhere else (architecture review scan 2, 2026-10-19: the reading sat in
     closures inside the network call — testable only through a fake Kiosk).
 
@@ -268,11 +304,7 @@ def fault_of(t: dict) -> dict:
     def last(key: str) -> str:
         return str(ups[-1].get(key) or "") if ups else ""
 
-    # the step a PERSON took it on with ("Open Ticket": in progress), its who and when — never an agent's step
-    took = [u for u in ups if taken_step(u)]
     close = last_close(ups)
-    reopens = [u for u in ups if u.get("kind") == REOPENED]
-    helps = [u for u in ups if u.get("kind") == HELP]
     return {"status": str(t.get("status") or ""), "title": str(t.get("title") or ""),
             "agent_title": agent_title(t), "resolved_at": str(t.get("resolvedAt") or ""),
             # who: on a closed fault, the person of its last close; on an open one, of its last step (taken on, moved)
@@ -284,19 +316,9 @@ def fault_of(t: dict) -> dict:
             "closes_at": t.get("closesAt"), "confirms_by": t.get("confirmsBy"),
             "note": str(t.get("note") or ""),                     # what to do on site (the agreement's ticket.fields)
             "person_titled": person_titled(t), "cleared": cleared_step(close) if close else None,
-            # whose its last close was: the agent's own (stamped, or not yet), or a person's — a person's Close in the
-            # Cockpit is kind "cleared" too ("no action needed", by the profile)
-            "closed_mine": _mine(close) if close else None,
-            # closed as "Not a problem while it lasts" (the agreement's ticketUpdate `lasting`, owner 2026-11-02)
-            "lasting": bool(close and close.get("lasting")) and t.get("status") == "resolved",
             "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
-            **({"reopened_at": str(reopens[-1].get("at") or ""),
-                "reopened_by": str(reopens[-1].get("who") or profiles.step_by(reopens[-1]))} if reopens else {}),
-            **({"taken_at": str(took[-1].get("at") or ""),
-                "taken_by": str(took[-1].get("who") or profiles.step_by(took[-1]))} if took else {}),
-            # a person's last Need help on its card (owner, 2026-10-30): the owner is asked to act
-            **({"help_at": str(helps[-1].get("at") or ""),
-                "help_by": str(profiles.step_by(helps[-1]) or helps[-1].get("who") or "")} if helps else {})}
+            # what a person did on it, each press (owner, 2026-10-30: Done · Need help · Open Ticket on every card)
+            "gestures": gestures(ups)}
 
 
 #: One change the agent makes to an open fault: the ticket as it stands → the ticket changed, None when it has nothing

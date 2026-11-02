@@ -82,10 +82,8 @@ class Poster:
             title = title or UNTITLED
             if not (status or lead or thread is not None):
                 mid = await self._pages(chat, title, to, text, keyboard, document, photo, origin, reply_to)
-                self._keep(keep, kiosk_messages.reported(
-                    kiosk_messages.of_note(kiosk_messages.note_key(keep if isinstance(keep, str) else None, title, text),
-                                           title, to, text, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)),
-                    own_key=isinstance(keep, str), document=document, language=language))
+                self._keep(keep, kiosk_messages.note(keep, title, to, text, keyboard=keyboard, photo=photo,
+                                                     document=document, language=language))
                 return mid
             head = layout.head(title, to or "this chat")
         elif incident is not None and self.notices and not plain and not answering:
@@ -123,10 +121,8 @@ class Poster:
             # stands for — the villa's own alert came back beside it on the tablet
             self.thread.tell(thread, p, keyboard, photo)
         elif keep:
-            self._keep(keep, kiosk_messages.reported(kiosk_messages.of_parts(
-                kiosk_messages.note_key(keep if isinstance(keep, str) else None, str((p.get("head") or {}).get("title") or ""),
-                                        text), p, keyboard=keyboard, photo=kiosk_messages.photo_b64(photo)),
-                own_key=isinstance(keep, str), document=document, language=language))
+            self._keep(keep, kiosk_messages.note(keep, str((p.get("head") or {}).get("title") or ""), to, text, parts=p,
+                                                 keyboard=keyboard, photo=photo, document=document, language=language))
         return mid
 
     def _keep(self, keep, record: dict) -> None:
@@ -147,8 +143,7 @@ class Poster:
         the tablet: its record is replaced by these words whatever Telegram said."""
         if key:
             mine = text if kept is None else kept          # the tablet's own words (`kept`): the English as written
-            self._keep(True, kiosk_messages.of_note(
-                kiosk_messages.note_key(key if isinstance(key, str) else None, title, mine), title, to, mine))
+            self._keep(True, kiosk_messages.note(key, title, to, mine, report=False))
         docs = laid_out(lambda: pages(title, to, text, telegram_message_chars()), [text])
         if self.edit is None or len(docs) != 1:
             return False

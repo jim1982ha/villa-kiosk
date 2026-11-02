@@ -140,6 +140,24 @@ def reported(rec: dict, *, own_key: bool, document: str | None = None, language:
     return out
 
 
+def note(keep, title: str, to: str, text: str, *, parts: dict | None = None, keyboard: dict | None = None,
+         photo=None, document: str | None = None, language: str | None = None, report: bool = True) -> dict:
+    """THE record of a message sent on its own (Poster.post, Poster.rewrite): its thread — the skill's own `keep` key
+    when it gave one, else its words (note_key) —, drawn from its layout `parts` when it has some (a heading, a Status),
+    else from its words as sent (of_note), as a report when a scheduled run sends it (`report`: a rewrite keeps the one
+    it rewrites, agent-contract.json keptOnRewrite).
+
+    ⚠️ ONE RECORD, ASSEMBLED HERE (architecture review round 14, card 2): the poster put each one together from four of
+    this module's helpers, three ways — its pages, its laid-out note and its rewrite each chose the key, the drawing and
+    the report on their own."""
+    own = isinstance(keep, str)
+    key = note_key(keep if own else None, title, text)
+    pic = photo_b64(photo)
+    rec = of_parts(key, parts, keyboard=keyboard, photo=pic) if parts is not None \
+        else of_note(key, title, to, text, keyboard=keyboard, photo=pic)
+    return reported(rec, own_key=own, document=document, language=language) if report else rec
+
+
 def page_id(html: bytes) -> str:
     """A page's id at the Kiosk: its content's, so the same page sent to two chats or again later is the same file,
     written again (its age starts again) — never an id remembered here for a file the Kiosk may have tidied away."""

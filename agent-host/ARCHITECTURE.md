@@ -1079,3 +1079,23 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   manager, each chat once). `withdrawn_now` is the withdrawal at the press (actions.decide) and at every pass
   (approvals.expire); `always_owners` is policy.owners_alone; `Siren` keeps the automatic stop. Outcome.carry_out only
   hands it the gate. tests/test_siren_request.py proves each guarantee on the module with stand-ins.
+
+## The tablet's card, a Cockpit press, the night check's time: one owner each (architecture review round 14, 2026-11-02)
+
+- **The tablet's card of an incident or a request: `IncidentThread.tell`, kept in `state.incident_card`** (card 2).
+  It was held in memory (`_told`): after a restart a request only the tablet holds kept its Approve once decided or
+  expired (`_tell_alone` had nothing), and every open alert's card was guessed back from the chats' copies
+  (`tell_open`). Now `taken`, `_tell_alone` and `tell_open` read the kept card (no picture: the Kiosk keeps the one a
+  later copy does not carry, `vestaMessage.keptOnRewrite`); only an alert told before 0.6.420 is drawn once from its
+  newest copy. `inccard:` and `incruns:` (never pruned before) are RECORDS, kept while their alert is open. A note's
+  record is built by `kiosk_messages.note` alone (Poster.post's pages and laid-out note, Poster.rewrite).
+- **A person's press on a Kiosk fault: `kiosk.gestures`, taken in by `Tickets._take_in` / `_press`** (card 3). Each
+  press (close, reopen, take, help) once, in order, after the last one read (`tickets.PRESSES` in the skills' store:
+  [at, how many of that moment]); a fault never read here, after its task last closed or reopened. The semantic guards
+  stay (a close older than the task's reopening, a reopening older than its close). The card no longer carries the
+  latest of each kind (`reopened_*`, `taken_*`, `help_*`, `closed_mine`, `lasting`).
+- **The night check's time: `skills.kiosk_jobs`, handed to the skill's scripts as `VESTA_KIOSK_JOBS`** (card 4).
+  `nightly.night_clock` reads it; `app.nightly_at` reads the same function. The alert desk's `clear_minutes` stays read
+  from its rules.yaml by the night check (round 11, card 1: defined once).
+- Card 1 (the night check's messages told by the engine as an alert's are) waits for the owner: one message per night,
+  edited in place, is the owner's decision of 2026-10-20 and 2026-10-27.

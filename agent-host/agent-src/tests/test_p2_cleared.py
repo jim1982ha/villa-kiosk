@@ -6,6 +6,7 @@ the same layout (Outcome.rewrite → Poster.rewrite → Delivery.edit), or says 
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -19,6 +20,9 @@ from vesta_shared.message_format import telegram_entities, titled
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "starter", "skills", "preventive-maintenance", "scripts"))
 import nightly  # noqa: E402
+
+PM = os.path.join(HERE, "..", "starter", "skills", "preventive-maintenance")
+
 
 WORDS = {"told_cleared": {"tell": True, "all_title": "{title} All back to normal."}}
 AT = datetime(2026, 10, 20, 4, 30, tzinfo=timezone.utc)          # 12:30 in the villa (Asia/Makassar, UTC+8)
@@ -267,7 +271,7 @@ def _real(tmp_path):
 
 def test_a_cleared_p2_says_it_is_watched_until_the_night_check_never_a_bare_back_to_normal(tmp_path):
     store, (a, b), m, words = _real(tmp_path)
-    assert nightly.night_clock() == "02:00"                     # the skill's own night job (skill.yaml)
+    assert nightly.night_clock() == "02:00"                     # the skill's own night job, as the engine read it
     (e,) = nightly.told_cleared(store, [a], AT, "Asia/Makassar", words)
     assert e["key"] == m["key"] and e["title"] == m["title"]
     assert e["text"] == ("New:\n- Relay a offline\n- Relay b offline\n"
@@ -391,3 +395,28 @@ def test_each_chat_reads_the_night_checks_story_in_its_own_language_as_the_alert
     # the tablet's copy as written, whichever chat was rewritten last
     assert "Reopened in the Cockpit on 20/10/2026 13:00 (Owner)" in str(tablet[-1])
     assert not any("Rouvert" in str(r) for r in tablet), tablet
+
+
+def test_the_night_check_is_handed_its_time_by_the_engine_never_reads_it_again(tmp_path, monkeypatch):
+    # architecture review round 14, card 4: the time Telegram's "watched until" says is the one the Cockpit's "VESTA
+    # confirms by" counts from — the engine's reading of the skill's job (skills.kiosk_jobs), handed to the script
+    from vesta_agent import skills
+    sk = skills.parse_skill("preventive-maintenance", PM)
+    env = skills.script_env(settings(tmp_path), sk)
+    assert json.loads(env[skills.KIOSK_JOBS_ENV]) == {"nightly_check": "02:00"}
+    monkeypatch.setenv(skills.KIOSK_JOBS_ENV, json.dumps({"nightly_check": "03:15"}))
+    assert nightly.night_clock() == "03:15"                      # what it was handed, never the file read again
+    monkeypatch.delenv(skills.KIOSK_JOBS_ENV)
+    assert nightly.night_clock() is None                         # not handed: said as "the night check", never guessed
+    # the caller: a script the engine runs gets it (run_script)
+    seen = {}
+
+    def fake_run(cmd, **k):
+        seen.update(k["env"])
+
+        class P:
+            returncode, stdout, stderr = 0, "", ""
+        return P()
+    monkeypatch.setattr(skills.subprocess, "run", fake_run)
+    skills.run_script(settings(tmp_path), sk, "nightly.py", [])
+    assert json.loads(seen[skills.KIOSK_JOBS_ENV]) == {"nightly_check": "02:00"}

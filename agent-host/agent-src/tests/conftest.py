@@ -68,3 +68,14 @@ def _wording_of_every_message(monkeypatch, request):
 def pytest_configure(config):
     config.addinivalue_line("markers", "wording_unchecked(why): a test whose messages are not held to tests/wording.py "
                                        "(it feeds a broken wording on purpose, to see it rewritten or refused)")
+
+
+# What the engine hands every skill script it runs (skills.script_env): the times of its skill's jobs the Kiosk names
+# (architecture review round 14, card 4). A test that runs a script's functions in this process gets them as the
+# engine gives them, read by the engine's own reader from the shipped skill.
+@pytest.fixture(autouse=True)
+def _kiosk_jobs_as_the_engine_hands_them(monkeypatch):
+    import json as _json
+    from vesta_agent import skills
+    pm = os.path.join(ROOT, "starter", "skills", "preventive-maintenance")
+    monkeypatch.setenv(skills.KIOSK_JOBS_ENV, _json.dumps(skills.kiosk_jobs(skills.parse_skill("preventive-maintenance", pm))))

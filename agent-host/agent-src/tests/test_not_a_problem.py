@@ -105,4 +105,4 @@ def test_the_kiosk_close_says_it_lasts():
     held = kiosk.fault_of({"id": "va-1", "title": "x", "status": "resolved", "resolvedAt": step["at"], "updates": [step]})
     plain = kiosk.fault_of({"id": "va-2", "title": "x", "status": "resolved", "resolvedAt": step["at"],
                             "updates": [{**step, "lasting": None}]})
-    assert held["lasting"] is True and plain["lasting"] is False
+    assert [g["lasting"] for g in held["gestures"]] == [True] and [g["lasting"] for g in plain["gestures"]] == [False]

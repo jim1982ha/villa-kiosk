@@ -520,6 +520,7 @@ def test_an_open_alert_with_no_step_since_the_tablet_kept_cards_gets_its_card_at
     Status told for everyone; its "To:" names everyone it went to."""
     scenario(agent, alert, lambda v: tick(v, 20), lambda v: tick(v, 50))
     kiosk.messages.clear()
+    agent.state.drop("inccard:1")       # an alert told before its card was kept (engine 0.6.419 and earlier)
     for chat, rec in agent.state.incident_chats(1):       # copies drawn before their heading held every step
         head = dict(rec["parts"]["head"])
         head.pop("story", None)
@@ -540,6 +541,55 @@ def test_an_open_alert_with_no_step_since_the_tablet_kept_cards_gets_its_card_at
     assert any("Alert sent" in line for line in rec["status"]) and any("Reminder sent" in line for line in rec["status"])
     assert sum("Escalation sent" in line for line in rec["status"]) == 1, rec["status"]
     assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Need help"], rec
+
+
+def test_at_start_an_open_alerts_card_is_told_again_as_it_was_kept_never_guessed_from_the_chats(agent, kiosk):
+    """Architecture review round 14, card 2: the tablet's card is the thread's own record, kept across a restart. Told
+    again at start as it was kept (a copy the Kiosk had not kept when the Agent stopped), whatever the chats' copies say."""
+    scenario(agent, alert, lambda v: tick(v, 20), lambda v: tick(v, 50))
+    before = {k: v for k, v in kiosk.messages["incident:1"].items() if k != "at"}
+    kiosk.messages.clear()
+    for chat, rec in agent.state.incident_chats(1):       # the chats' copies, unreadable: nothing to guess from
+        agent.state.set_incident_message(1, chat, {**rec, "parts": {"body": "garbled"}})
+    agent.state.db.close()
+    again = Vesta(agent.s, telegram=agent.tg, reader=agent.reader, kiosk=agent.kiosk)
+
+    async def start(v):
+        await v.start()
+        await v.messages.settle()
+    asyncio.run(start(again))
+    assert {k: v for k, v in kiosk.messages["incident:1"].items() if k != "at"} == before
+
+
+def test_a_request_only_the_tablet_holds_is_settled_there_after_a_restart(tmp_path):
+    """Architecture review round 14, card 2: the card a request only the tablet holds (no Telegram chat may approve it)
+    was held in memory: after a restart its Approve stayed on the tablet once the request was decided or expired."""
+    from vesta_agent import button_data, layout
+    from vesta_agent.incident_thread import IncidentThread
+    from vesta_agent.state import State
+    told = []
+    kb = {"inline_keyboard": [[{"text": "Approve", "callback_data": button_data.make(button_data.APPROVAL, "x1", "y")}]]}
+    parts = layout.parts(body="Open the gate?", head=layout.head("Approval request", "Owner"), status="Waiting for approval")
+    IncidentThread(State(str(tmp_path / "s.db")), "UTC", mirror=told.append).tell("approval-x1", parts, kb)
+    assert [b["label"] for b in told[-1]["buttons"]] == ["Approve"]
+    again = IncidentThread(State(str(tmp_path / "s.db")), "UTC", mirror=told.append)       # the Agent started again
+    asyncio.run(again.close("approval-x1", "Approved by Owner."))
+    assert "buttons" not in told[-1] and told[-1]["status"][-1].endswith("Approved by Owner."), told[-1]
+    assert told[-1]["body"] == "Open the gate?" and told[-1]["key"] == told[0]["key"]
+
+
+def test_a_villa_run_taken_over_after_a_restart_is_named_on_the_card(tmp_path):
+    """Architecture review round 14, card 2: a run of the villa's taken over after a restart re-tells the kept card with
+    it, so the villa's own message of that run gives way on the tablet."""
+    from vesta_agent import layout
+    from vesta_agent.incident_thread import IncidentThread
+    from vesta_agent.state import State
+    told = []
+    IncidentThread(State(str(tmp_path / "s.db")), "UTC", mirror=told.append).tell(
+        5, layout.parts(body="Pump off", head=layout.head("#5-P2 (new)", "FM"), status="New alert"))
+    again = IncidentThread(State(str(tmp_path / "s.db")), "UTC", mirror=told.append)
+    again.taken(5, "RUN-9")
+    assert told[-1]["takes"] == ["RUN-9"] and told[-1]["body"] == "Pump off", told[-1]
 
 
 def test_a_step_posted_on_an_alert_keeps_whose_it_is_for_its_redraw(agent, kiosk):

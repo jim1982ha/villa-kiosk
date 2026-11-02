@@ -18,7 +18,7 @@ from vesta_shared import kiosk_words, result
 from vesta_shared.problems import Problems
 from vesta_shared.when import Spec
 
-from .kiosk import MINE, KioskError, closing, confirming, noted, retitled, tagged, todo
+from .kiosk import ASK_HELP, CLOSE, MINE, REOPEN, TAKE, KioskError, closing, confirming, noted, retitled, tagged, todo
 from .kiosk import fault_title_chars
 from vesta_shared.messaging import headline, incident_tag
 from vesta_shared.message_format import IN_COCKPIT, STEPS
@@ -233,96 +233,105 @@ class Tickets:
         return closed
 
     async def _take_in(self, problems: Problems, held: dict[str, dict]) -> int:
-        """Step 1: what a PERSON did to a fault in the Kiosk reaches its task. Only their gestures — every other
-        difference is the agent's to put right (_converge). How many Need helps it handed to the desk (_helps)."""
-        closed = 0
-        for t in problems.open_tasks():
-            uid = t.get("todo_uid")
-            card = held.get(uid) if uid else None
-            # ⚠️ RESOLVED BEFORE IT CAME BACK (architecture review 24): the task reopened after that resolution — it is not
-            # a person closing it now (_converge reopens the fault)
-            # ⚠️ AND NEVER THE AGENT'S OWN CLEARING (architecture review, 2026-10-18): an alert flapping within seconds had
-            # its close's clearing land just after its return reopened the task, and the times said "a person closed it" —
-            # "Closed in the Cockpit by VESTA Agent", the alert no longer chased. The Kiosk's step says who; times are
-            # only the fallback for a record without one.
-            # ⚠️ A PERSON'S CLOSE IN THE COCKPIT IS "CLEARED" TOO (owner, 2026-10-23): its Close writes kind "cleared" ("no
-            # action needed", by the profile) — read as the agent's own clearing, it never closed its task, and the next
-            # step reopened the fault the person had just closed. Only the agent's OWN cleared close is skipped.
-            if card and card["status"] == "resolved" and not (card.get("cleared") and card.get("closed_mine")) \
-                    and not _before(card.get("resolved_at"), t.get("reopened_at")):
-                iid = problems.closed_in_kiosk(t["id"], kiosk_words.closed(card.get("by") or "", card.get("resolved_at"),
-                                                                           self.timezone), at=card.get("resolved_at"),
-                                               who=card.get("by") or None, lasting=bool(card.get("lasting")))
-                if iid:
-                    # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close,
-                    # each chat's copy in its language (architecture review O)
-                    note = kiosk_close_note(card, self.timezone)
-                    await self.settle_alert(iid, note, note_in=note.langs or None)
-                closed += 1
-        # ⚠️ A PERSON'S REOPENING IS THEIRS (architecture review 25), WHATEVER THE FAULT'S AGE (review 29): read from the
-        # Kiosk's "Reopen fault" step, never guessed from timings (review 26): its task opens again and someone is told
-        # — an alert's by the desk (Problems.reopened_in_kiosk), a night check's by its skill's recheck, from the task's
-        # untold mark (round 2, 2026-10-19: this engine sent it itself, to a role and under a title of its own)
-        for t in problems.store.tasks(None):
-            uid = t.get("todo_uid")
-            card = held.get(uid) if uid else None
-            if t["status"] == "open" or not card or card["status"] == "resolved":
-                continue
-            if _before(t.get("done_at"), card.get("reopened_at")):
-                by, at = card.get("reopened_by") or "", card.get("reopened_at")
-                problems.reopened_in_kiosk(t["id"], by, kiosk_words.reopened(by, at, self.timezone), at=at)
-                log.info("Kiosk fault %s reopened by a person: its task is open again", uid)
-        if closed:
-            log.info("Kiosk faults closed by a person: %d task(s) closed with them", closed)
-        helped = await self._helps(problems, held)
-        # ⚠️ AN ALERT TAKEN ON IN THE KIOSK IS NO LONGER CHASED (owner, 2026-10-15): "Open Ticket" on its card, and
-        # Telegram kept reminding the facility manager, then escalating to the owner — of a job someone had taken
-        for t in problems.open_tasks():
-            card = held.get(t.get("todo_uid") or "")
-            if not card or card["status"] != "in_progress" or not card.get("taken_at"):
-                continue
-            said = kiosk_words.taken(card.get("taken_by") or "", card.get("taken_at"), self.timezone)
-            iid = problems.taken_in_kiosk(t["id"], str(said))
-            if iid and self.restate_alert:
-                await self.restate_alert(iid, said)
-            if iid:
-                log.info("Incident #%s taken on in the Kiosk: no longer chased", iid)
-        return helped
+        """Step 1: what a PERSON did to a fault in the Kiosk reaches its task — each press once, in the order it was made
+        (kiosk.gestures). Only their presses: every other difference is the agent's to put right (_converge). How many
+        Need helps it handed to the desk.
 
-    async def _helps(self, problems: Problems, held: dict[str, dict]) -> int:
-        """A person's Need help on a card in the Kiosk (owner, 2026-10-30: every card offers Done · Need help · Open
-        Ticket) reaches the owner: an alert's through its desk, any other fault's through an alert the desk opens already
-        escalated (vesta_shared.help_link). A person's ticket whose standing alert closed (a Done on Telegram) is resolved
-        here; one a person closed in the Kiosk closes its standing alert, as their Done in the Cockpit. How many presses
-        it handed to the desk (the wake starts the desk at once: app.Vesta.records_changed)."""
-        link = problems.help
+        ⚠️ READ AS PRESSES, NEVER GUESSED FROM A SNAPSHOT (architecture review round 14, card 3): the card was reduced to
+        its latest close, take-on, reopening and help, and what was new worked out by comparing their times with the
+        task's — a close and a reopening between two reads were neither, and a Done on a person's ticket was handed to
+        its standing alert at every read. A fault's presses are taken in after the last one read (PRESSES, kept with the
+        tasks, one line per fault the Kiosk still holds); on a fault never read here (read before this) after its task
+        last moved, so nothing is taken in twice."""
+        read = {uid: at for uid, at in (problems.store.cache_get(PRESSES) or {}).items() if uid in held}
+        tasks: dict[str, dict] = {}
+        for t in problems.store.tasks(None):                # oldest first: the latest task of a fault wins
+            if t.get("todo_uid"):
+                tasks[t["todo_uid"]] = t
         handed = 0
-        tasks = {t.get("todo_uid"): t for t in problems.open_tasks() if t.get("todo_uid")}
         for uid, card in held.items():
-            if not card.get("help_at") or card["status"] == "resolved":
-                continue
             task = tasks.get(uid)
-            if task is None and uid.startswith(MINE):
-                continue                                 # the agent's fault of no open task: nothing stands for it
-            said = kiosk_words.helped(card.get("help_by") or "", card["help_at"], self.timezone)
-            subject = link.of_task(task["id"]) if task else link.of_ticket(uid)
-            handed += link.new(subject, card["help_at"])
-            iid = link.asked(subject, said, card["help_at"], task=task, title=card.get("title") or "",
-                             entity_id=card.get("entity_id") or "")
-            log.info("Need help pressed in the Kiosk on %s: %s", uid,
-                     f"incident #{iid} escalated" if iid else "the owner is asked by the alert desk")
+            # the last press read: its moment, and how many presses of that very moment were read (two can share one)
+            mark = read.get(uid) if isinstance(read.get(uid), list) and len(read[uid]) == 2 else None
+            after, seen = (_moment(mark[0]), int(mark[1])) if mark else (_last_moved(task), 0)
+            same = 0
+            for g in card.get("gestures") or ():
+                at = _moment(g["at"])
+                if after is not None and at is not None and at == after:
+                    same += 1
+                    if same <= seen:
+                        continue
+                elif after is not None and (at is None or at < after):
+                    continue
+                task = problems.store.task(task["id"]) if task else None   # as the press before left it
+                handed += await self._press(problems, uid, card, task, g)
+                if at != after:
+                    after, same = at, 1
+                read[uid] = [g["at"], same]
+                problems.store.cache_put(PRESSES, read)
+        # a person's ticket whose standing alert closed (a Done on Telegram) is resolved here
+        link = problems.help
         for uid, r in link.resolves().items():
             if (held.get(uid) or {}).get("status") not in (None, "resolved"):
                 await self.kiosk.resolve_ticket(uid, note=r.get("note") or None, who=r.get("who") or None)
-        for uid, card in held.items():
-            if card["status"] != "resolved" or uid.startswith(MINE):
-                continue
-            if iid := link.standing(link.of_ticket(uid)):
-                said = kiosk_words.closed(card.get("by") or "", card.get("resolved_at"), self.timezone)
-                problems.person_done(iid, IN_COCKPIT, who=card.get("by") or None, at=card.get("resolved_at"), said=said)
-                note = kiosk_close_note(card, self.timezone)
-                await self.settle_alert(iid, note, note_in=note.langs or None)
         return handed
+
+    async def _press(self, problems: Problems, uid: str, card: dict, task: dict | None, g: dict) -> int:
+        """One press `g` of a person on Kiosk fault `uid` (kiosk.gestures), carried out on its task (`task`, as it stands
+        now; None: a person's ticket, or a fault no task holds). How many Need helps it handed to the desk (0 or 1)."""
+        kind, at, by = g["kind"], g["at"], g["by"]
+        link = problems.help
+        if kind == CLOSE:
+            # ⚠️ A CLOSE BEFORE ITS PROBLEM CAME BACK IS NOT THIS RUN'S (architecture review 24): the task reopened after it
+            if task and task["status"] == "open" and not _before(at, task.get("reopened_at")):
+                said = {"by": by, "resolved_at": at}
+                iid = problems.closed_in_kiosk(task["id"], kiosk_words.closed(by, at, self.timezone), at=at,
+                                               who=by or None, lasting=g["lasting"])
+                if iid:
+                    # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the
+                    # close, each chat's copy in its language (architecture review O)
+                    note = kiosk_close_note(said, self.timezone)
+                    await self.settle_alert(iid, note, note_in=note.langs or None)
+                log.info("Kiosk fault %s closed by a person: its task closed with it", uid)
+            elif not uid.startswith(MINE) and (iid := link.standing(link.of_ticket(uid))):
+                # a person closed their own ticket in the Kiosk: the alert standing for its Need help closes, as their
+                # Done in the Cockpit
+                problems.person_done(iid, IN_COCKPIT, who=by or None, at=at,
+                                     said=kiosk_words.closed(by, at, self.timezone))
+                note = kiosk_close_note({"by": by, "resolved_at": at}, self.timezone)
+                await self.settle_alert(iid, note, note_in=note.langs or None)
+        elif kind == REOPEN:
+            # ⚠️ A PERSON'S REOPENING IS THEIRS (architecture review 25), WHATEVER THE FAULT'S AGE (review 29): its task
+            # opens again and someone is told — an alert's by the desk (Problems.reopened_in_kiosk), a night check's by
+            # its skill's recheck, from the task's untold mark (round 2, 2026-10-19)
+            if task and task["status"] != "open" and _before(task.get("done_at"), at):
+                problems.reopened_in_kiosk(task["id"], by, kiosk_words.reopened(by, at, self.timezone), at=at)
+                log.info("Kiosk fault %s reopened by a person: its task is open again", uid)
+        elif kind == TAKE:
+            # ⚠️ AN ALERT TAKEN ON IN THE KIOSK IS NO LONGER CHASED (owner, 2026-10-15): "Open Ticket" on its card
+            if task and task["status"] == "open":
+                said = kiosk_words.taken(by, at, self.timezone)
+                iid = problems.taken_in_kiosk(task["id"], str(said))
+                if iid and self.restate_alert:
+                    await self.restate_alert(iid, said)
+                if iid:
+                    log.info("Incident #%s taken on in the Kiosk: no longer chased", iid)
+        elif kind == ASK_HELP:
+            # a person's Need help on a card in the Kiosk (owner, 2026-10-30: every card offers Done · Need help · Open
+            # Ticket) reaches the owner: an alert's through its desk, any other fault's through an alert the desk opens
+            # already escalated (vesta_shared.help_link)
+            live = task if task and task["status"] == "open" else None
+            if live is None and uid.startswith(MINE):
+                return 0                                 # the agent's fault of no open task: nothing stands for it
+            said = kiosk_words.helped(by, at, self.timezone)
+            subject = link.of_task(live["id"]) if live else link.of_ticket(uid)
+            handed = int(link.new(subject, at))
+            iid = link.asked(subject, said, at, task=live, title=card.get("title") or "",
+                             entity_id=card.get("entity_id") or "")
+            log.info("Need help pressed in the Kiosk on %s: %s", uid,
+                     f"incident #{iid} escalated" if iid else "the owner is asked by the alert desk")
+            return handed
+        return 0
 
     async def _converge(self, problems: Problems, held: dict[str, dict]) -> dict[str, int]:
         """Step 3: each fault says what its task says (Problems.card). A close is redone for two days (a resolve that did
@@ -421,6 +430,18 @@ def _moment(iso: str | None) -> datetime | None:
         return datetime.fromisoformat(str(iso).replace("Z", "+00:00")) if iso else None
     except ValueError:
         return None
+
+
+#: The skills' store's line of the last press taken in on each Kiosk fault ({fault id: [its `at`, how many presses of
+#: that moment were taken in]}): Tickets._take_in.
+PRESSES = "cockpit:presses"
+
+
+def _last_moved(task: dict | None) -> datetime | None:
+    """When a task was last closed or reopened: a press before it is already in it (its making is not: a fault's
+    presses all come after it). None without a task, or one never moved since it was made."""
+    moments = [m for m in (_moment((task or {}).get(k)) for k in ("done_at", "reopened_at")) if m]
+    return max(moments) if moments else None
 
 
 def _before(resolved_at: str | None, reopened_at: str | None) -> bool:
