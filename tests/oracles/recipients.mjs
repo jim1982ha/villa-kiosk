@@ -24,7 +24,11 @@ ck("each role picks among the villa's notify entities, never typed",
    /ROLE_LISTS\.map\(/.test(view) && /<EntityPicker[^>]*domains=\{\["notify"\]\}/.test(view) && !/allowCustom/.test(view));
 ck("a change is saved to that role's list, as the text textOf makes",
    /HAServices\.setText\(ws, list\.entityId, text\)/.test(view) && /const text = textOf\(/.test(view));
-const modal = readFileSync(new URL("../../src/components/settings/ConfigEditorModal.tsx", import.meta.url), "utf8");
-ck("it is on the owner's Messages tab", /tab === "messages" && roleCan\(role, "editConfig"\)[\s\S]*<WhoGetsMessages \/>/.test(modal));
+// owner, 2026-11-03: in Settings › Messages itself (Advanced Settings' Messages tab is gone), for the profiles that edit
+// the villa's setup: tests/oracles/messages_settings.mjs reads where, through the compiler's tree
+const { elements, guardsOf, parseTsx } = await import("../consistency/jsx.mjs");
+const who = elements(parseTsx("components/settings/SettingsModal.tsx"), "WhoGetsMessages");
+ck("it is in Settings › Messages, only for a profile that edits the villa's setup",
+   who.length === 1 && guardsOf(who[0]).includes('can("editConfig")'), who.map(guardsOf));
 
 done("✅ who gets the messages is the villa's two lists, picked per role on this tablet");

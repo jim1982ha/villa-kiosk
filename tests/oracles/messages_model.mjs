@@ -465,7 +465,7 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
     status: later.story.concat(later.status) }))], false, 0);
   ck("  ...a quiet rewrite (its bottom line unchanged: a title retouched) replaces it and is no news, as a quiet edit",
      quiet.kept[0].title === "#90-P2 (closed)" && quiet.arrived.length === 0, quiet);
-  const settings = { fullScreenFor: [], ringShownForS: 60, ringsFullScreen: true };
+  const settings = { fullScreen: [], ringsFullScreen: true };
   // the villa's alarm offering a button (it stays on screen), then VESTA's card of it
   const staying = { ...villa[0], key: "k1", buttons: [{ label: "Silence", command: "/silence" }] };
   let n = noticeStep(NO_NOTICE, { type: "arrived", announcement: staying, rewrite: false, settings });

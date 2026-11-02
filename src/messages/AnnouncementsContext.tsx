@@ -25,7 +25,7 @@ interface Announcements {
   /** What the tablet lists (messagesModel.shownTogether): VESTA's cards and the villa's announcements none of them
    *  took over, a ring and its rewrite one, oldest first. */
   kept: Announcement[];
-  /** The villa's own announcements only, everything the add-on keeps ("Full screen for" offers their titles). */
+  /** The villa's own announcements only, everything the add-on keeps ("Full-screen announcements" offers their titles). */
   villa: Announcement[];
   /** Whether the add-on has answered once: until then `kept` is empty because nothing was read yet. */
   loaded: boolean;

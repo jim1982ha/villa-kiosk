@@ -5,7 +5,7 @@
 // Each list is one of the villa's text helpers, holding the villa's notify entities (Telegram chats, phone apps) apart
 // by ",". Every VESTA blueprint sends to them by priority (P1 both, P2 the facility manager; a notice, its "Who gets
 // the message") with no VESTA Agent at all, and the Agent reads the same two (vesta_shared/villa_recipients.py). This
-// tablet only edits them: Advanced Settings › Messages › Who gets the messages (components/settings/WhoGetsMessages).
+// tablet only edits them: Settings › Messages › Who gets the messages (components/settings/WhoGetsMessages).
 // The helpers are defined in the Agent's message package (agent-src/homeassistant/packages/vesta_message.yaml).
 
 /** Each role's list on the villa: the helper's entity id, and the profile whose words name it on screen (the

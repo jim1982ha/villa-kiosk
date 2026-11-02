@@ -6,7 +6,7 @@
 
 import { Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import SegmentedGroup from "@/components/common/SegmentedGroup";
+import OnOffToggle from "@/components/common/OnOffToggle";
 import { ROLE_LABELS } from "@/auth/roles";
 
 /** What maintenance mode does, in the owner's words: the (i) of the switch and of the top bar's mark. */
@@ -33,12 +33,8 @@ export default function MaintenanceMode() {
   const { config, update } = useConfig();
   const on = config.maintenanceMode;
   return (
-    <div className="settings-field-row">
-      <span className="muted body-text">Only urgent (P1) alerts are sent while it's on.</span>
-      <SegmentedGroup ariaLabel="Maintenance mode" active={on ? "on" : null}
-        onChange={() => update({ maintenanceMode: !on })}
-        options={[{ key: "on", title: "Maintenance mode, on every tablet",
-          label: <><Wrench size={16} /><span>{on ? "On" : "Off"}</span></> }]} />
-    </div>
+    <OnOffToggle ariaLabel="Maintenance mode" title="Maintenance mode, on every tablet" on={on}
+      onChange={(maintenanceMode) => update({ maintenanceMode })}
+      icon={<Wrench size={16} />} label={<span className="muted body-text">Only urgent (P1) alerts are sent while it's on.</span>} />
   );
 }

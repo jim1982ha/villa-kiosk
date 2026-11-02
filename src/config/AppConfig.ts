@@ -178,17 +178,18 @@ export interface AppConfig {
    */
   maintenanceMode: boolean;
   /**
-   * The announcements that take the whole screen when they arrive, by their title (messages/announcements noticeFor):
-   * picked by the owner in Advanced Settings › Messages from what the villa has announced, never named in code. The
-   * villa's (owner, 2026-10-28, ticket 16 of "One inbox"). Empty by default: nothing takes the screen until picked.
+   * The announcements that take the whole screen when they arrive, each with how long it holds it (messages/announcements
+   * noticeFor), in the order picked: picked by the owner in Settings › Messages › "Full-screen announcements" from what
+   * the villa has announced, never named in code. The villa's (owner, 2026-10-28, ticket 16 of "One inbox"; its own
+   * seconds per announcement, owner 2026-11-03). Empty by default: nothing takes the screen until picked.
+   * ⚠️ IT REPLACED `fullScreenFor` (the titles) AND `ringShownForS` (one time for all): a config stored with those reads
+   * as each title with that time (fullScreenFromRetired).
    */
-  fullScreenFor: string[];
-  /** How long one of them holds the screen, in seconds ("Ring shown for"); the villa's, RING_SHOWN_FOR_S_DEFAULT. */
-  ringShownForS: number;
+  fullScreen: FullScreenAnnouncement[];
   /**
-   * Whether THIS tablet lets an announcement take the whole screen (Settings › Messages, "Rings full screen on this
-   * tablet"): per tablet, so the bedroom's can refuse at night (owner, 2026-10-28). On by default: "Full screen for"
-   * is empty until the owner picks, so nothing changes before then.
+   * Whether THIS tablet lets an announcement take the whole screen (Settings › Messages, "Full screen on this
+   * tablet"): per tablet, so the bedroom's can refuse at night (owner, 2026-10-28). On by default: "Full-screen
+   * announcements" is empty until the owner picks, so nothing changes before then.
    */
   ringsFullScreen: boolean;
   /**
@@ -373,14 +374,52 @@ export const RECORDS_KEPT_DAYS_DEFAULT = 365;
 /** The longest window the field accepts — ten years, the server's clamp. */
 export const RECORDS_KEPT_DAYS_MAX = 3650;
 
-/** How long a full-screen announcement holds the screen by default, in seconds (owner, 2026-10-28: 60s). */
-export const RING_SHOWN_FOR_S_DEFAULT = 60;
-/** The longest the "Ring shown for" field accepts, in seconds. */
-const RING_SHOWN_FOR_S_MAX = 600;
-/** A "Ring shown for" the villa may hold: whole seconds from 1 to RING_SHOWN_FOR_S_MAX. The one rule, for the field
- *  and for what the store holds. */
-export const ringShownForOk = (v: unknown): v is number =>
-  Number.isInteger(v) && (v as number) >= 1 && (v as number) <= RING_SHOWN_FOR_S_MAX;
+/** One announcement that takes the whole screen (AppConfig.fullScreen): its title, as the villa writes it, and how long
+ *  it holds the screen, in seconds. */
+export interface FullScreenAnnouncement { title: string; seconds: number }
+
+/** How long a newly picked full-screen announcement holds the screen, in seconds (owner, 2026-10-28: 60s). */
+export const FULL_SCREEN_S_DEFAULT = 60;
+/** The longest a full-screen announcement's seconds field accepts. */
+const FULL_SCREEN_S_MAX = 600;
+/** A full-screen time the villa may hold: whole seconds from 1 to FULL_SCREEN_S_MAX. The one rule, for the field and
+ *  for what the store holds. */
+export const fullScreenSecondsOk = (v: unknown): v is number =>
+  Number.isInteger(v) && (v as number) >= 1 && (v as number) <= FULL_SCREEN_S_MAX;
+
+/** A stored "full-screen announcements" list: each item with a title and an accepted time, each title once; anything
+ *  else left out. undefined when it is not a list. Pure: tests/oracles/messages_settings.mjs. */
+export function parseFullScreen(raw: unknown): FullScreenAnnouncement[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  return raw.flatMap((f): FullScreenAnnouncement[] => {
+    const r = f && typeof f === "object" ? (f as Record<string, unknown>) : {};
+    if (typeof r.title !== "string" || !r.title || seen.has(r.title) || !fullScreenSecondsOk(r.seconds)) return [];
+    seen.add(r.title);
+    return [{ title: r.title, seconds: r.seconds }];
+  });
+}
+
+/**
+ * ⚠️ A CONFIG STORED BEFORE 2.496.670 (formats outlive their writer): the picked titles (`fullScreenFor`) and one time
+ * for all (`ringShownForS`). Read as each title with that time, or FULL_SCREEN_S_DEFAULT when it was not a time the
+ * field accepted, so nothing the owner set is lost; undefined when it holds no such list. Both read paths take it: this
+ * tablet's own stored config (loadConfig) and the villa's (deviceConfig parseSharedConfig); the old keys are never
+ * written again (RETIRED_KEYS, deviceConfig saveSharedConfig). Pure: tests/oracles/messages_settings.mjs.
+ */
+export function fullScreenFromRetired(stored: Record<string, unknown>): FullScreenAnnouncement[] | undefined {
+  if (!Array.isArray(stored.fullScreenFor)) return undefined;
+  const seconds = fullScreenSecondsOk(stored.ringShownForS) ? stored.ringShownForS : FULL_SCREEN_S_DEFAULT;
+  return parseFullScreen(stored.fullScreenFor.map((title) => ({ title, seconds })));
+}
+
+/** A stored config (this tablet's, or the villa's) with its full-screen announcements in today's shape: `fullScreen`
+ *  as stored, else read from the retired keys (fullScreenFromRetired); the retired keys dropped either way. */
+export function withFullScreen<T extends Record<string, unknown>>(stored: T): T {
+  const { fullScreenFor: _titles, ringShownForS: _seconds, ...rest } = stored;
+  const migrated = stored.fullScreen === undefined ? fullScreenFromRetired(stored) : undefined;
+  return (migrated ? { ...rest, fullScreen: migrated } : rest) as unknown as T;
+}
 
 export const DEFAULT_CONFIG: AppConfig = {
   siteTitle: "",
@@ -391,8 +430,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   recordsKeptDays: RECORDS_KEPT_DAYS_DEFAULT,
   roomGlowAndCones: true,
   maintenanceMode: false,
-  fullScreenFor: [],
-  ringShownForS: RING_SHOWN_FOR_S_DEFAULT,
+  fullScreen: [],
   ringsFullScreen: true,
   tabletLanguage: "en",
   theme: "auto",
@@ -516,8 +554,8 @@ export function upgradeStaleTypes(config: AppConfig): AppConfig {
 
 /** Keys an older version stored and nothing reads any more — dropped where every config enters memory, so a device
  *  that still holds one stops carrying it. `alertThresholds`: per-sensor min/max limits no screen ever set (removed
- *  2.496.450). */
-export const RETIRED_KEYS: readonly string[] = ["alertThresholds"];
+ *  2.496.450). `fullScreenFor`, `ringShownForS`: read into `fullScreen` first (withFullScreen, 2.496.670). */
+export const RETIRED_KEYS: readonly string[] = ["alertThresholds", "fullScreenFor", "ringShownForS"];
 
 /**
  * Every setting present and valid — the ONE place a default or a bound is
@@ -540,8 +578,10 @@ function completeConfig(config: AppConfig): AppConfig {
 export function loadConfig(): AppConfig {
   try {
     // Absent, unparsable or storage disabled all read as "nothing stored".
-    const stored = readJson<Partial<AppConfig>>(CONFIG_KEY, (v): v is Partial<AppConfig> => !!v && typeof v === "object");
-    if (!stored) return { ...DEFAULT_CONFIG };
+    const kept = readJson<Partial<AppConfig>>(CONFIG_KEY, (v): v is Partial<AppConfig> => !!v && typeof v === "object");
+    if (!kept) return { ...DEFAULT_CONFIG };
+    // what an older version stored, in today's shape, before the defaults are laid under it (they would hide it)
+    const stored = withFullScreen(kept as Record<string, unknown>) as Partial<AppConfig>;
     return normaliseConfig({
       ...DEFAULT_CONFIG,
       ...stored,

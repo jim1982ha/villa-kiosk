@@ -11,8 +11,7 @@ import { roleCan } from "@/auth/permissions";
 import { useState, type ReactNode } from "react";
 import { FIELD_COMMIT_MS, PendingFields, usePendingField, type PendingField } from "@/hooks/usePendingField";
 import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
-import { Boxes, Home, LogOut, MessageSquare, Upload, Wrench } from "lucide-react";
-import { fmtDuration } from "@/components/panels/chartUtils";
+import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
 import InfoTip, { TipTitle } from "@/components/common/InfoTip";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { DialogEdits, useConfig } from "@/config/ConfigContext";
@@ -25,9 +24,6 @@ import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 import UnavailableByDesign from "./UnavailableByDesign";
-import WhoGetsMessages from "./WhoGetsMessages";
-import { ROLE_LABELS } from "@/auth/roles";
-import { FullScreenFor, RingShownFor } from "./MessagesSettings";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
 import MaintenanceMode, { MaintenanceModeExplained } from "./MaintenanceMode";
@@ -36,7 +32,6 @@ import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
-import { ANNOUNCEMENT_NOTICE_MS } from "@/messages/announcements";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -52,13 +47,13 @@ import { ANNOUNCEMENT_NOTICE_MS } from "@/messages/announcements";
  *  ⚠️ AND THE NON-OWNER VIEW WAS SIZED TOO. Every System panel is owner-only,
  *  so that whole tab is filtered out rather than rendered empty — a non-owner
  *  gets two tabs holding two panels apiece, which is the same shape. */
-type SettingsTab = "villa" | "devices" | "messages" | "system";
+type SettingsTab = "villa" | "devices" | "system";
 
 const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
   { id: "villa", label: "Villa", icon: Home },
   { id: "devices", label: "Devices", icon: Boxes },
-  // how the villa's announcements show, on every tablet (ticket 16 of "One inbox", owner 2026-10-28: owner only)
-  { id: "messages", label: "Messages", icon: MessageSquare, owner: true },
+  // ⚠️ NO MESSAGES TAB (owner, 2026-11-03: its settings "shall appear directly in the main Settings page"): they are in
+  // Settings › Messages, for the same profiles.
   { id: "system", label: "System", icon: Wrench, owner: true },
 ];
 
@@ -131,22 +126,17 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
   const { config, update } = useConfig();
   const deg = config.northOffsetDeg;
   return (
-    <div className="villa-location-north">
-      <label className="with-tip">Model north offset · {deg}°
+    // ⚠️ ONE LABELLED GROUP, Set North THEN ITS SLIDER (owner, 2026-11-03: the title "shall be associated to both", the
+    // slider half as wide so the coordinates are no longer cut): the title names the group, the slider keeps its own
+    <div className="villa-location-north" role="group" aria-labelledby="villa-north-title">
+      <label id="villa-north-title" className="with-tip">Model north offset · {deg}°
         <InfoTip label="About the model north offset">
           Face the villa's real north side and press Set North, or drag the slider until the shadows match. Only fixes
           which wall the light comes from: sunrise and sunset times are already right.
         </InfoTip>
       </label>
-      {/* One control in two forms on one row: the slider sets the offset by
-          hand, the button measures it from the view. */}
+      {/* One control in two forms: the button measures it from the view, the slider sets it by hand. */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <input
-          type="range" min={0} max={359} step={1} value={deg}
-          aria-label="Model north offset"
-          style={{ flex: "1 1 auto", minWidth: 0 }}
-          onChange={(e) => update({ northOffsetDeg: Number(e.target.value) })}
-        />
         <button
           className="btn"
           // keeps its 44px target: flex would otherwise squeeze the padding out on a phone
@@ -159,6 +149,12 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
         >
           Set North
         </button>
+        <input
+          type="range" min={0} max={359} step={1} value={deg}
+          aria-label="Model north offset"
+          style={{ flex: "1 1 auto", minWidth: 0 }}
+          onChange={(e) => update({ northOffsetDeg: Number(e.target.value) })}
+        />
       </div>
     </div>
   );
@@ -290,7 +286,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
   // one's: Save keeps, Cancel (and Escape, and the backdrop) puts them back — the passing notices of every other dialog.
   const own = useDraftedSlice(ADVANCED_SETTINGS_KEYS);
   // why the last device-setup save did not reach the other tablets (DeviceConfigSync), said above the footer
-  const { config, saveProblem, setSaveProblem } = useConfig();
+  const { saveProblem, setSaveProblem } = useConfig();
   const notice = useAppNotice();
   const commit = withinSettings ? undefined : { dirty: own.dirty, save: own.save, discard: () => { own.discard(); } };
   // Over Settings, closing back writes what is still being typed here (as this dialog's): Settings' Save / Cancel then
@@ -414,26 +410,6 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
               shows what each one last reported, never "Unavailable", and raises no fault for it; the VESTA Agent skips
               its offline checks for them too.
             </>} />} />
-          </>
-        )}
-
-        {tab === "messages" && roleCan(role, "editConfig") && (
-          <>
-            <TipTitle title="Full screen for" tip={<>
-              The announcements that take the whole screen of every tablet when the villa makes them, such as a ring at
-              the gate, for {fmtDuration(config.ringShownForS * 1000)} ("Ring shown for"). Picked from what the villa has
-              announced. A tablet can refuse it in its own Settings › Messages. Every other announcement shows under the
-              category bar for {fmtDuration(ANNOUNCEMENT_NOTICE_MS)}, its buttons too, then stays in the Cockpit's Inbox.
-            </>} />
-            <FullScreenFor />
-            <RingShownFor />
-            <TipTitle title="Who gets the messages" tip={<>
-              The chats and phones that get the villa's messages, for the {ROLE_LABELS.owner} and for the{" "}
-              {ROLE_LABELS.ops}. An urgent (P1) alert goes to both lists, a P2 alert to the {ROLE_LABELS.ops}'s; a notice
-              goes to the list its automation names. VESTA sends its reminders to the same chats. An urgent or P2 alert
-              with nobody listed goes to every Telegram chat of the villa, so it is never lost.
-            </>} />
-            <WhoGetsMessages />
           </>
         )}
 

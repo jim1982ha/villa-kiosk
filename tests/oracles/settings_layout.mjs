@@ -18,7 +18,8 @@ ck("Settings no longer carries the north offset", !/northOffsetDeg|Set North/.te
 const villa = advanced.slice(advanced.indexOf('tab === "villa"'));
 ck("Advanced Settings shows it right under the villa's coordinates",
    /<VillaCoordinates \/>[\s\S]{0,400}<NorthOffset /.test(villa));
-ck("  ...with its slider and its Set North button", /function NorthOffset[\s\S]*type="range"[\s\S]*Set North/.test(advanced)
+// owner, 2026-11-03: Set North BEFORE the slider, both under the one title that names their group
+ck("  ...Set North, then its slider", /function NorthOffset[\s\S]*Set North[\s\S]*type="range"/.test(advanced)
    && /update\(\{ northOffsetDeg:/.test(advanced));
 ck("  ...and the Dashboard hands it the view's heading", /viewHeadingDeg=\{manager \? \(\) => manager\.viewHeadingDeg\(\) : undefined\}/.test(src("pages/Dashboard.tsx")));
 
@@ -47,7 +48,23 @@ console.log("\n  Villa location on one line where there is room:");
   ck("  ...the three in that one row, each label above its field",
      /<div className="villa-location-row">\s*<VillaCoordinates \/>\s*<NorthOffset viewHeadingDeg=\{viewHeadingDeg\} \/>\s*<\/div>/.test(advanced)
      && /<div className="villa-location-coord">\s*<label htmlFor=\{id\}>/.test(advanced)
-     && /<div className="villa-location-north">\s*<label className="with-tip">Model north offset/.test(advanced));
+     && /<div className="villa-location-north" role="group" aria-labelledby="villa-north-title">\s*<label id="villa-north-title" className="with-tip">Model north offset/.test(advanced));
+  // owner, 2026-11-03: the slider half as wide, the width it gave up to the coordinates (their values were cut)
+  ck("  ...the offset's group takes no more of the line than the two coordinates together",
+     north <= 2 * coord && /\.villa-location-north \{ flex: 1 1/.test(modals), { coord, north });
+}
+
+console.log("\n  Brightness, Night dimming and Villa lighting, a third of the line each (owner, 2026-11-03):");
+{
+  const modals = src("styles/04-modals.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
+  const tree = parseTsx("components/settings/SettingsModal.tsx");
+  const thirds = elements(tree, "div").filter((d) => propText(d, "className") === '"settings-third"');
+  const names = thirds.map((d) => /with-tip">([A-Z][a-z]+(?: [a-z]+)?)/.exec(d.getText())?.[1]);
+  ck("the three sit in equal thirds", JSON.stringify(names) === JSON.stringify(["Brightness", "Night dimming", "Villa lighting"])
+     && /\.settings-third \{ flex: 1 1 0; min-width: \d+px; \}/.test(modals), names);
+  ck("  ...Villa lighting's icons fill its third in equal segments", /\.daynight-segmented button \{ min-height: 24px; flex: 1 1 0; width: auto; \}/.test(modals)
+     && !/\.daynight-segmented \{[^}]*flex: 0 0 auto/.test(modals));
 }
 
 console.log("\n  every field's text, one size:");

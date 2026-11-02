@@ -92,7 +92,7 @@ ck("one door per kind of record: VESTA's messages and turns to VESTA, the villa'
 const { noticeStep, NO_NOTICE } = await import("@/messages/noticeModel");
 const { announcementWords } = await import("@/messages/messagesModel");
 const { AnnouncementNoticeView } = await import("@/components/hud/AnnouncementNotice");
-const SHOW = { fullScreenFor: [], ringsFullScreen: false, ringShownForS: 60 };
+const SHOW = { fullScreen: [], ringsFullScreen: false };
 const motion = { seq: 50, at: "2026-10-29T10:00:00Z", title: "Motion detected", to: "", text: "Outdoor 2F", status: "",
   photo: null, key: null, buttons: [] };
 const refused = { ...approval, seq: 5, buttons: [], status: "Refused on 29/10/2026 13:50 (JM). Nothing was done." };

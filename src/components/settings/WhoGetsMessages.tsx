@@ -1,5 +1,5 @@
 // src/components/settings/WhoGetsMessages.tsx
-// Advanced Settings › Messages › "Who gets the messages" (owner, 2026-11-03): the villa's two lists, the owner's and
+// Settings › Messages › "Who gets the messages" (owner, 2026-11-03): the villa's two lists, the owner's and
 // the facility manager's, each picked among the villa's notify entities (its Telegram chats and phone apps), never
 // typed. Saved on the villa itself (messages/recipients), where every VESTA alert and the VESTA Agent read them: a
 // change reaches the next alert at once, the Agent's within 5 minutes.

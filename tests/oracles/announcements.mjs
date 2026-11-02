@@ -122,13 +122,13 @@ ck("  ...the notice sends each to the notice model and keeps no memory of its ow
      && /afterRead\(s\.kept, items, full, first, kept\)/.test(ctx));
 }
 const settingsSrc = src("components/settings/MessagesSettings.tsx");
-ck("\"Full screen for\" offers the titles of the villa's own announcements the page holds (never VESTA's cards), never a read of its own",
+ck("\"Full-screen announcements\" offers the titles of the villa's own announcements the page holds (never VESTA's cards), never a read of its own",
    /const \{ villa: kept, loaded \} = useAnnouncements\(\);/.test(settingsSrc) && !/fetchAnnouncements/.test(settingsSrc));
 
 console.log("\n  what is on screen, announcement by announcement (owner, 2026-10-29: every notice its few seconds, none replacing another):");
 {
   const { noticeStep, NO_NOTICE, NOTICES_SHOWN } = await import("@/messages/noticeModel");
-  const S = { fullScreenFor: ["🔔 Visitor at Gate A"], ringShownForS: 60, ringsFullScreen: true };
+  const S = { fullScreen: [{ title: "🔔 Visitor at Gate A", seconds: 60 }], ringsFullScreen: true };
   const go = (state, ...events) => events.reduce(noticeStep, state);
   const arrive = (x, rewrite = false, settings = S) => ({ type: "arrived", announcement: x, rewrite, settings });
   const seqs = (st) => st.shown.map((x) => x.announcement.seq).join();
@@ -144,7 +144,7 @@ console.log("\n  what is on screen, announcement by announcement (owner, 2026-10
   ck("  ...a rewrite (answered) takes its place, for its own time", seqs(st) === "42" && st.steps.includes("42"), st);
   const ringA = { ...a(50), key: "ring-a", title: "🔔 Visitor at Gate A", buttons: [{ label: "Unlock", command: "/u" }] };
   st = go(NO_NOTICE, arrive(ringA), arrive(power));
-  ck("a picked ring takes the whole screen for \"Ring shown for\"; another arriving shows its notice, the screen stays the ring's",
+  ck("a picked ring takes the whole screen for its own seconds; another arriving shows its notice, the screen stays the ring's",
      st.full?.announcement.seq === 50 && st.full.ms === 60_000 && seqs(st) === "41", st);
   st = go(st, { type: "fullEnded" });
   ck("  ...its time over (or Close, or this tablet's switch off), it goes: no notice after it", st.full === null && seqs(st) === "41", st);
@@ -227,8 +227,8 @@ ck("  ...a photo name that is not one of the add-on's ids is not drawn", sly?.ph
 ck("  ...in the column, before the passing notice (a motion notice never replaces a ring)",
    /<ServiceErrorToast \/>\s*<AnnouncementNotice \/>\s*<AppNotice /.test(src("pages/Dashboard.tsx")));
 
-// the shared settings' empty defaults ("Full screen for" empty), a tablet that allows full screen
-const NONE_FULL = { fullScreenFor: [], ringShownForS: 60, ringsFullScreen: true };
+// the shared settings' empty defaults ("Full-screen announcements" empty), a tablet that allows full screen
+const NONE_FULL = { fullScreen: [], ringsFullScreen: true };
 
 console.log("\n  a button the announcement offers (ticket 15: the doorbell's Unlock, pressed on the tablet):");
 const offered = parseAnnouncement({ seq: 6, message: ring, key: "run-1", buttons: [[["🔓 Unlock", "/unlock"], ["Later", "/later"]]] });
@@ -308,16 +308,17 @@ ck("  ...none without a mark (the weekly test, a ring not opened) or without a b
    && stageOf("") === null, ["Test message", "🔕", ""].map(stageOf));
 
 const said = (title, status, extra = {}) => ({ ...a(1), title, status, ...extra });
-const picked = { fullScreenFor: ["🔔 Visitor at Gate A"], ringShownForS: 45, ringsFullScreen: true };
+const picked = { fullScreen: [{ title: "🔥 Overload", seconds: 300 }, { title: "🔔 Visitor at Gate A", seconds: 45 }], ringsFullScreen: true };
 // owner, 2026-10-28 (2.496.562): "the notification disappears after 10sec, as the user shall not have to press the X"
 ck("every announcement's notice goes by itself after 10s: a problem (raised, still open), cleared, a test, a digest",
    [said("🔥 Overload", "⚠️ New alert"), said("🔥 Overload", "⚠️ ⚙️ Still open"), said("🔥 Overload", "✅ Cleared on 28/10/2026 14:05."),
     said("Weekly test", "Test message: no action needed."), said("Digest", "")]
      .every((x) => JSON.stringify(noticeFor(x, NONE_FULL)) === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 })),
    noticeFor(said("Digest", ""), NONE_FULL));
-ck("a title the owner picked takes the whole screen for \"Ring shown for\" (its own number), then is gone",
-   JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", ""), picked)) === JSON.stringify({ fullScreenMs: 45_000, noticeMs: 0 }),
-   noticeFor(said("🔔 Visitor at Gate A", ""), picked));
+ck("a title the owner picked takes the whole screen for ITS OWN seconds, then is gone (owner, 2026-11-03: per announcement)",
+   JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", ""), picked)) === JSON.stringify({ fullScreenMs: 45_000, noticeMs: 0 })
+   && JSON.stringify(noticeFor(said("🔥 Overload", "⚠️ New alert"), picked)) === JSON.stringify({ fullScreenMs: 300_000, noticeMs: 0 }),
+   [noticeFor(said("🔔 Visitor at Gate A", ""), picked), noticeFor(said("🔥 Overload", "⚠️ New alert"), picked)]);
 ck("  ...a problem too: no notice once the full screen ends",
    JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "⚠️ New alert"), picked)) === JSON.stringify({ fullScreenMs: 45_000, noticeMs: 0 }),
    noticeFor(said("🔔 Visitor at Gate A", "⚠️ New alert"), picked));
@@ -357,7 +358,7 @@ ck("a ring's rewrite (its answer, its time out) never takes the screen again: it
    && JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "⚠️ ⚙️ Still open"), picked, { rewrite: true }))
      === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 }));
 
-console.log("\n  Advanced Settings › Messages › \"Full screen for\": what the villa has announced, never named in code:");
+console.log("\n  Settings › Messages › \"Full-screen announcements\": what the villa has announced, never named in code:");
 const { announcedTitles } = await import("@/messages/announcements");
 const kept = [said("🔔 Visitor at Gate A", ""), said("🔥 Overload", "⚠️ New alert"), said("🔔 Visitor at Gate A", "✅ Opened"),
   said("Weekly test", "")];
@@ -407,7 +408,7 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
   ck("  ...no screen picks a version itself", pickers.length === 0, pickers);
   const settings = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
   ck("the tablet's own setting, in Settings › Messages, in this dialog's draft (Save / Cancel)",
-     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="VESTA's language on this tablet"/.test(settings)
+     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="VESTA's messages on this tablet, in"/.test(settings)
      && /languagesOf\(kept\)/.test(settings));
 }
 

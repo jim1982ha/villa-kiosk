@@ -37,8 +37,8 @@
 //     maintenanceMode the villa's maintenance mode: only urgent (P1) alerts
 //                    while it is on; the VESTA Agent reads it from the stored
 //                    document (the heartbeat's answer, owner 2026-10-29)
-//     fullScreenFor, ringShownForS  which announcements take the whole screen
-//                    and for how long: the owner's choice for every tablet
+//     fullScreen     which announcements take the whole screen, each for
+//                    its own time: the owner's choice for every tablet
 //                    (ticket 16 of "One inbox"); each tablet may still refuse
 //                    (ringsFullScreen, per device)
 //
@@ -55,7 +55,8 @@
 
 import { ingressPath } from "@/ha/ingress";
 import {
-  RECORDS_KEPT_DAYS_DEFAULT, RECORDS_KEPT_DAYS_MAX, RING_SHOWN_FOR_S_DEFAULT, ringShownForOk, type AppConfig, type DeviceGroup } from "./AppConfig";
+  RECORDS_KEPT_DAYS_DEFAULT, RECORDS_KEPT_DAYS_MAX, RETIRED_KEYS, parseFullScreen, withFullScreen,
+  type AppConfig, type DeviceGroup, type FullScreenAnnouncement } from "./AppConfig";
 import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { backendFetch } from "@/auth/sessionLost";
@@ -95,8 +96,7 @@ interface SharedItems {
   recordsKeptDays: number;
   roomGlowAndCones: boolean;
   maintenanceMode: boolean;
-  fullScreenFor: true;
-  ringShownForS: number;
+  fullScreen: FullScreenAnnouncement;
 }
 
 export type SharedConfigKey = keyof SharedItems;
@@ -155,15 +155,16 @@ const recordsKept: SharedKeyRow<number, number> = {
   empty: RECORDS_KEPT_DAYS_DEFAULT,
 };
 
-/** How long a full-screen announcement holds the screen (AppConfig.ringShownForOk). Its empty is the app's default, so a device on the default proposes nothing. */
-const ringShownFor: SharedKeyRow<number, number> = {
-  index: (v) => ({ value: v }),
-  fromIndex: (items) => items.value ?? RING_SHOWN_FOR_S_DEFAULT,
-  parse: (raw) => (ringShownForOk(raw) ? raw : undefined),
-  empty: RING_SHOWN_FOR_S_DEFAULT,
+/** The full-screen announcements, each by its title with its own seconds (AppConfig.parseFullScreen): one tablet adding
+ *  one and another changing a different one's seconds both stand, as for any list here. */
+const fullScreenList: SharedKeyRow<FullScreenAnnouncement[], FullScreenAnnouncement> = {
+  index: (arr) => keyBy(arr, (f) => f.title),
+  fromIndex: Object.values,
+  parse: parseFullScreen,
+  empty: [],
 };
 
-/** A plain list of entity ids (or of announcement titles): its own index — adding one on one device and removing a DIFFERENT one on another must
+/** A plain list of entity ids: its own index — adding one on one device and removing a DIFFERENT one on another must
  *  not cancel each other out, which is exactly what comparing the two lists wholesale would do. */
 const idList: SharedKeyRow<string[], true> = {
   index: (arr) => Object.fromEntries(arr.map((id) => [id, true as const])),
@@ -218,8 +219,7 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
   recordsKeptDays: recordsKept,
   roomGlowAndCones: villaSwitchOn,
   maintenanceMode: villaSwitchOff,
-  fullScreenFor: idList,
-  ringShownForS: ringShownFor,
+  fullScreen: fullScreenList,
 };
 
 /** The AppConfig fields stored centrally, in the one order every document is
@@ -286,9 +286,11 @@ export function mergeSharedConfig(
  *  fields are simply omitted, letting the caller keep its current value. */
 export function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
   if (!isRecord(raw)) return {};
+  // ⚠️ THE VILLA'S CONFIG MAY STILL HOLD THE RETIRED SHAPE (fullScreenFor + ringShownForS, to 2.496.669): read as today's
+  const now = withFullScreen(raw);
   const out: Record<string, unknown> = {};
   for (const key of SHARED_CONFIG_KEYS) {
-    const value = row(key).parse(raw[key]);
+    const value = row(key).parse(now[key]);
     if (value !== undefined) out[key] = value;
   }
   return out as Partial<SharedDeviceConfig>;
@@ -574,7 +576,9 @@ export async function saveSharedConfig(
   signal?: AbortSignal,
 ): Promise<StoreSaveResult> {
   try {
-    const merged = { ...carryOver, ...config };
+    // a retired key is not carried (AppConfig RETIRED_KEYS): the old full-screen keys stop being written here
+    const kept = Object.fromEntries(Object.entries(carryOver).filter(([k]) => !RETIRED_KEYS.includes(k)));
+    const merged = { ...kept, ...config };
     const resp = await backendFetch(ingressPath("device-config"), {
       method: "PUT",
       signal,

@@ -302,83 +302,39 @@
   font-size: var(--text-xs); font-weight: 600;
 }
 
-/* Day/Auto/Night control (SettingsModal, next to Brightness/Night dimming):
-   shorter than the ordinary .segmented-icons sizing above so it matches the
-   sliders' TRACK/THUMB, not their full label-plus-track height — the thumb
-   is 28px (see input[type=range]::-webkit-slider-thumb), so 2px padding +
-   a 24px button lands right on it. A scoped override, not a change to the
-   shared rule above, which the Theme selector in the header still uses at
-   its normal 34px. Compact (flex: 0 0 auto) on a roomy screen, where it
-   sits snug beside the sliders — but once the row's own wrap drops it onto
-   a line by itself on a phone, sitting there as a small icon-only cluster
-   with dead space to its right (the sliders above it fill their own lines
-   edge to edge) reads as unfinished, so it fills that line instead, its
-   3 buttons switching from fixed-width icon squares to the ordinary
-   .segmented button's equal-grow behaviour to actually use the width. */
-.daynight-segmented { padding: 2px; flex: 0 0 auto; align-self: flex-end; }
-.daynight-segmented button { min-height: 24px; }
+/* Day/Auto/Night control (SettingsModal, beside Brightness/Night dimming): shorter than the ordinary .segmented-icons
+   sizing above so it matches the sliders' TRACK/THUMB (the thumb is 28px: 2px padding + a 24px button lands on it). */
+.daynight-segmented { padding: 2px; }
+/* ⚠️ IT FILLS ITS THIRD OF THE LINE (owner, 2026-11-03: Brightness, Night dimming and Villa lighting "equally balanced
+   … a third each"), its three icons in equal centred segments, at every width. */
+.daynight-segmented button { min-height: 24px; flex: 1 1 0; width: auto; }
+
+/* A line of three settings sharing the modal's width equally (SettingsModal: Brightness, Night dimming, Villa
+   lighting), titles first; once a third would fall under its min-width they wrap, each line still filled. */
+.settings-third { flex: 1 1 0; min-width: 180px; }
+
+/* ⚠️ A CHOICE STANDING AS ITS SECTION'S OWN LINE FILLS IT (owner, 2026-11-03: "using the whole width of the modal and
+   the values inside it are well centred"): the group spans the line, its segments share it equally, each centred. On
+   a phone, segments that no longer fit wrap onto another line of the group, which still fills the width (iPhone and
+   Android alike: grouped, never stripped of their words). A group beside other controls on its line keeps its own
+   sizing (.settings-row-half, .daynight-segmented). tests/oracles/ui_dry.mjs. */
+.settings-modal .row > .segmented:only-child { flex: 1 1 100%; flex-wrap: wrap; }
+.settings-modal .row > .segmented:only-child button { flex: 1 1 0; min-width: 88px; justify-content: center; }
+
+/* THE on/off setting (common/OnOffToggle): its name at the left, then On | Off — the plain .segmented look and size,
+   Map look's Icon | Card — filling the rest of the line in equal halves, never narrower than a thumb's two targets.
+   In a pair of halves (.settings-row-half) each takes a whole line on a phone, so the name keeps its words. */
+.on-off { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 100%; }
+.on-off-name { display: inline-flex; align-items: center; gap: 7px; flex: 0 1 auto; min-width: 0; color: var(--text-secondary); }
+.segmented.on-off-switch { flex: 1 1 0; min-width: 150px; }
 @media (max-width: 560px) {
-  .daynight-segmented { flex: 1 1 100%; }
-  .daynight-segmented button { flex: 1 1 0; width: auto; }
+  .on-off.settings-row-half { flex: 1 1 100%; }
 }
 
-/* A row of 2 segmented groups of roughly EQUAL content weight sharing one
-   line (SettingsModal): Clickable Glow/Natural Scroll. flex-basis lives in
-   this class, not an inline style, specifically so the narrow-screen rule
-   below can shrink it — a media query cannot win against an inline style's
-   specificity. Desktop already fits both groups on one line at the plain
-   200px basis; the override below is what keeps them together on a phone
-   too instead of one wrapping onto its own row. NOT used by the Floating
-   badge style row below, whose two groups are lopsided in size — see
-   .badge-style-row instead. */
-.settings-row-half { flex: 1 1 200px; }
-@media (max-width: 560px) {
-  .settings-row-half { flex: 1 1 calc(50% - 5px); }
-}
-
-/* Badge & bottom bar style row (SettingsModal): Default+Card vs. a single
-   Dock button is a lopsided pair, unlike .settings-row-half's roughly-equal
-   groups above — an even 50/50 split would starve the wider group while
-   leaving Dock's half mostly empty. Weighted 2:1 instead (first group gets
-   twice the share), and BOTH groups grow to fill the row edge-to-edge like
-   every other settings row, rather than sizing to their own content and
-   leaving the rest of the line blank (reported from a screenshot: the row
-   visibly stopped partway across the modal). Buttons inside revert to
-   .segmented button's own default flex: 1 1 0 (no override needed here) —
-   the nested-flex quirk that previously made a zero flex-basis button
-   truncate its own label ("Def…") only bites when the button's parent is
-   itself shrink-to-fit (flex: 0 1 auto, which this row used before this
-   rewrite); once the parent has an assigned share of the row to grow into
-   instead of auto-sizing to content, that quirk doesn't apply. */
-.badge-style-row { flex-wrap: nowrap; }
-.badge-style-row .settings-row-half { min-width: 0; }
-.badge-style-row .settings-row-half:first-of-type { flex: 2 1 0; }
-.badge-style-row .settings-row-half:not(:first-of-type) { flex: 1 1 0; }
-/* Safety net, not the primary fix above: on an extremely narrow screen or a
-   long translated label, the buttons can still run out of room even while
-   growing to fill the row. The ellipsis has to land on the TEXT
-   specifically, not the button — a flex container (which .segmented button
-   is, for its icon+label children) doesn't apply text-overflow across its
-   children as a group, it only clips them. Needs its own min-width: 0 too —
-   it's a flex item of the button just like the icon is, so it inherits the
-   same content-floored min-width by default. */
-.badge-style-row .settings-row-half button .badge-btn-label,
-.badge-style-row .settings-row-half button .settings-label-full,
-.badge-style-row .settings-row-half button .settings-label-short {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-/* Responsive label swap (Summary bar's toggle, SettingsModal): the full name
-   normally, a shorter one once the modal narrows enough that it'd otherwise
-   wrap onto its own line instead of sitting beside Classic/Card. No existing
-   JS matchMedia pattern in this codebase for a text swap — CSS show/hide of
-   two spans keeps it consistent with how every other breakpoint-driven label
-   change here works (e.g. .hud-title's own media queries). */
-.settings-label-short { display: none; }
-@media (max-width: 560px) {
-  .settings-label-full { display: none; }
-  .settings-label-short { display: inline; }
-}
+/* Two on/off settings sharing one line (SettingsModal: Clickable Glow / Natural Scroll, Summary bar / Room glow), each
+   half its name and its On | Off; on a phone each takes a whole line (.on-off.settings-row-half above), so a name is
+   never cut. flex-basis lives in this class, not an inline style, so that rule can win. */
+.settings-row-half { flex: 1 1 280px; }
 
 
 /* Villa Latitude/Longitude pair in the Config Editor — full modal width,
@@ -387,8 +343,10 @@
    line where the dialog is wide enough; on a phone the two coordinates share a line and the offset wraps onto the
    next (owner, 2026-10-22). Each field keeps its label above it; the fields line up on their bottom edge. */
 .villa-location-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
-.villa-location-coord { flex: 1 1 120px; min-width: 0; }
-.villa-location-north { flex: 2 1 320px; min-width: 0; }
+/* The three share the line equally (owner, 2026-11-03: the offset's slider half as wide, Set North before it, so the
+   coordinates are no longer cut); on a phone the coordinates keep a line and the offset takes the next. */
+.villa-location-coord { flex: 1 1 140px; min-width: 0; }
+.villa-location-north { flex: 1 1 260px; min-width: 0; }
 /* A short number field (days, a percentage): its own width, never a stretched bar. */
 .field-narrow { max-width: 140px; }
 .villa-location-row label { margin-top: 0; }
@@ -716,8 +674,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
 /* "Confirm" on a device card's own line, beside the pencil: the Settings toggle buttons' look, at the icon buttons'
    height (owner, 2026-10-22). */
-.segmented.config-confirm { padding: 2px; flex: 0 0 auto; }
-.segmented.config-confirm button { min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--text-xs); gap: 6px; }
+/* "Confirm before toggling" on a device's line (MappingFields ConfirmToggle): the on/off toggle at the line's own
+   compact height, beside the device's name. */
+.on-off.config-confirm { flex: 0 0 auto; font-size: var(--text-xs); }
+.on-off.config-confirm .on-off-switch { flex: 0 0 auto; min-width: 110px; padding: 2px; }
+.on-off.config-confirm .on-off-switch button { min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--text-xs); }
 /* a picker in a device card takes the card's width, like the fields above it (owner, 2026-10-22) */
 .config-table td > .picker { flex: 1 1 auto; min-width: 0; }
 

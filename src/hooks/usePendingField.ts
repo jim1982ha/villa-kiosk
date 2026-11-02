@@ -32,7 +32,9 @@ export const FIELD_COMMIT_MS = 1500;
 export function usePendingField<T>(key: string, delayMs: number): PendingField<T> {
   const pending = useContext(PendingContext);
   if (!pending) throw new Error("usePendingField must be used inside PendingFields");
-  const shown = useSyncExternalStore(pending.subscribe, () => pending.shown(key)) as T | undefined;
+  const read = () => pending.shown(key);
+  // the same read on a server render (the oracles draw a dialog's fields to a string)
+  const shown = useSyncExternalStore(pending.subscribe, read, read) as T | undefined;
   const draft = useCallback((value: T, write: PendingWrite | null) => pending.stage(key, value, write, delayMs),
     [pending, key, delayMs]);
   const flush = useCallback(() => pending.commit(key), [pending, key]);
