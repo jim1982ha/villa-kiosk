@@ -598,6 +598,15 @@ async def main() -> None:
     status, body = await jget("/vesta-messages", cookie("owner"))
     ck("  ...the owner still sees it, and two keys are two lines", len(body["messages"]) == 2
        and body["messages"][0].get("photo"), body)
+    # owner, 2026-11-02: #107's card had no photo on the tablet while the villa's own message it took over carried one
+    await proxy.ANNOUNCED.add(lambda seq: {"seq": seq, "at": proxy._now_iso(), "message": "Motion", "run": "RUN-P",
+                                           "photo": "taken.jpg"}, proxy._announcements_with)
+    await post("/agent/v1/vesta-message", headers=bearer(), json={**sent, "key": "incident:91", "takes": ["RUN-P"]})
+    await post("/agent/v1/vesta-message", headers=bearer(), json={**sent, "key": "incident:92", "takes": ["RUN-Q"]})
+    status, body = await jget("/vesta-messages", cookie("owner"))
+    by_key = {m["key"]: m for m in body["messages"]}
+    ck("a card with no photo of its own shows the photo of the villa message it took over (its `takes`); none without one",
+       by_key["incident:91"].get("photo") == "taken.jpg" and "photo" not in by_key["incident:92"], by_key)
     for bad in ({"title": "no key"}, {"key": "k"}, {"key": "k", "buttons": "x"}, [1], "text"):
         r = await post("/agent/v1/vesta-message", headers=bearer(), json=bad)
         ck(f"a push of {str(bad)[:28]!r} is refused (400), nothing kept", r.status == 400, r.status)

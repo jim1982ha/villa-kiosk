@@ -1,3 +1,9 @@
+## 2.496.664
+
+What you will see:
+- An alert's card on the tablet now shows the camera photo the villa's own message carried (Parking motion's live
+  picture, #107): the card took that message's place, and its picture was lost with it.
+
 ## 2.496.663
 
 What you will see:

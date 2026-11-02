@@ -443,6 +443,15 @@ fresh = proxy._announcements_with([], {"seq": 1, "key": "Q", "message": "Ask", "
 ck("  ...never on a record that never asked, and never taken from the writer",
    "asked" not in note[-1] and "asked" not in fresh[-1], (note, fresh))
 
+# ── VESTA's card shows the picture of the villa's message it took over (owner, 2026-11-02: #107 on the tablet) ──────
+print("\n  a card that took a villa message over:")
+kept = [{"seq": 1, "run": "R-OLD", "photo": "a.jpg"}, {"seq": 2, "run": "R-1", "message": "no photo"},
+        {"seq": 3, "run": "R-1", "photo": "b.jpg"}, {"seq": 4, "run": "R-2", "photo": "c.jpg"}]
+ck("the newest photo of a run it took over; none when no run of it carried one",
+   proxy._taken_photo(kept, ["R-1"]) == "b.jpg" and proxy._taken_photo(kept, ["R-1", "R-2"]) == "c.jpg"
+   and proxy._taken_photo(kept, ["R-3"]) is None and proxy._taken_photo(kept, []) is None,
+   [proxy._taken_photo(kept, t) for t in (["R-1"], ["R-1", "R-2"], ["R-3"])])
+
 # ── how a closed fault was closed: the agreement's histories (architecture review, 2026-10-15) ───────────────────
 # agent-contract.json `ticketUpdate.histories`: the cases tests/oracles/fault_close.mjs drives through the app's
 # fmEngine.lastResolution / isClearedStep — the same ones, through the proxy's reading, so neither side is tested on
