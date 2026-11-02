@@ -1,3 +1,15 @@
+## 0.12.435
+
+What you will see:
+- An approval request shown only on the tablet loses its Approve button once it is decided or expired, even when VESTA
+  restarted while it waited. Before, a restart left the button on the tablet.
+- After a restart, each open alert's card on the tablet is sent again exactly as VESTA last told it.
+- In the Cockpit, every press reaches VESTA once, in the order it was made. A Done followed by Reopen before VESTA's
+  next read now counts as both: the alert is closed, then opened again and the Facility Manager asked. Before, neither
+  was seen.
+- A Done on your own ticket in the Cockpit closes its Need help alert once, instead of being handed over again at every
+  read.
+
 ## 0.12.434
 
 What you will see:
