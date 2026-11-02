@@ -1,3 +1,27 @@
+## 2.496.670
+
+What you will see:
+- Settings › Messages now holds the villa's message settings, and Advanced Settings no longer has a Messages tab.
+  Its first section, "Full-screen announcements", starts with this tablet's "Full screen on this tablet" (On | Off,
+  for everyone who opens Settings). Under it, for the Owner only, "For every tablet": one line per announcement you
+  picked, its title, how many seconds it fills the screen, and its ✕. Each announcement has its own time now (from 1s
+  to 600s), and one you add starts at 60s. Announcements already picked keep the time they had: nothing is lost. The separate "Ring
+  shown for" field is gone. Then "VESTA's messages on this tablet, in", and, for the Owner, "Who gets the messages".
+- Changes to the full-screen list are kept with Save and undone with Cancel, like every other setting in Settings.
+  "Who gets the messages" is still saved on the villa at once.
+- "VESTA's messages on this tablet, in" says what it does: VESTA writes each message in the language of every chat
+  that receives it, and this picks which of those this tablet shows. It translates nothing. While English is the only
+  one, a line says so instead of a single button.
+- Every on/off setting is now an On | Off pair in the Map look's style, its name at the left: Maintenance mode,
+  Confirm before toggling, Full screen on this tablet, Clickable Glow, Natural Scroll, Summary bar and Room glow.
+  The Summary bar and Room glow have their own line under the Map look.
+- A choice standing alone on its line (the Map look, the languages) fills the whole width of the window, its options
+  in equal parts with their words centred; on a phone they wrap onto another line rather than run off the screen.
+- Advanced Settings › Villa: "Set North" now comes before its slider, both under the "Model north offset" title, and
+  the slider is about half as wide, so Latitude and Longitude show their whole values.
+- Settings: Brightness, Night dimming and Villa lighting each take a third of their line; Villa lighting's three
+  buttons fill their third.
+
 ## 2.496.669
 
 What you will see:
