@@ -1,3 +1,11 @@
+## 0.12.434
+
+What you will see:
+- The night check no longer says a scheduled device "ran shorter than expected" when every automation that uses its
+  schedule is switched off. Switch one back on and the check starts again.
+- When you answer a fault with "Not a problem while it lasts" on the tablet, VESTA does not raise it again for as long
+  as the problem lasts. If the problem ends and comes back later, VESTA raises it as new.
+
 ## 0.12.433
 
 What you will see:
