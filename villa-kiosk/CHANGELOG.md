@@ -1,3 +1,9 @@
+## 2.496.665
+
+What you will see:
+- "Who's handling it" (Open a ticket) and "Done by" (Schedule › Today) are now a plain box you type the name into.
+  No list of names given before is offered, and the browser does not suggest earlier entries either.
+
 ## 2.496.664
 
 What you will see:

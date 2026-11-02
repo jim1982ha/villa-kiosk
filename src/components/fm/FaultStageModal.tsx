@@ -31,7 +31,7 @@ import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
 import CostFields from "./CostFields";
-import WorkerPicker from "./WorkerPicker";
+import WorkerName from "./WorkerName";
 import { useWorkFields } from "./useWorkFields";
 
 // A fault becomes a TICKET when someone takes it on (owner, 2026-10-14): the dialog speaks of the ticket.
@@ -108,10 +108,10 @@ export default function FaultStageModal({
       <div className="modal-body fm-stack">
         {/* the fault as its card names it (fmEngine.faultTitle: "#5 · …", a duration worded now) — not the stored title */}
         {tickets.map((t) => <div key={t.id} className="fm-banner">{faultTitle(t)}</div>)}
-        {/* the names already given, picked (WorkerPicker) */}
+        {/* the name typed, never offered (WorkerName) */}
         <div className="fm-field">
           <span>Who{asksCost ? " did the work" : "'s handling it"} (optional)</span>
-          <WorkerPicker value={who} onChange={setWho} placeholder="Name or company" />
+          <WorkerName value={who} onChange={setWho} placeholder="Name or company" />
         </div>
         <NotesField
           label={copy.note}

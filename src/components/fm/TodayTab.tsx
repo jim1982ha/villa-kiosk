@@ -26,7 +26,7 @@ import RecordCard from "./RecordCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import FormActions from "./FormActions";
-import WorkerPicker from "./WorkerPicker";
+import WorkerName from "./WorkerName";
 import { useWorkFields } from "./useWorkFields";
 import Tip from "@/components/common/Tip";
 import FmForm from "./FmForm";
@@ -201,10 +201,10 @@ function LogCompletion({
     <FmForm>
       <h3>Log: {schedule?.title}</h3>
 
-      {/* the names already given, picked (WorkerPicker); `by` is the signed-in profile, stamped by the store */}
+      {/* the name typed, never offered (WorkerName); `by` is the signed-in profile, stamped by the store */}
       <div className="fm-field">
         <span>Done by</span>
-        <WorkerPicker value={who} onChange={setWho} placeholder="Name or company" />
+        <WorkerName value={who} onChange={setWho} placeholder="Name or company" />
       </div>
 
       <NotesField
