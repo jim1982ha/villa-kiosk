@@ -287,6 +287,8 @@ def fault_of(t: dict) -> dict:
             # whose its last close was: the agent's own (stamped, or not yet), or a person's — a person's Close in the
             # Cockpit is kind "cleared" too ("no action needed", by the profile)
             "closed_mine": _mine(close) if close else None,
+            # closed as "Not a problem while it lasts" (the agreement's ticketUpdate `lasting`, owner 2026-11-02)
+            "lasting": bool(close and close.get("lasting")) and t.get("status") == "resolved",
             "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
             **({"reopened_at": str(reopens[-1].get("at") or ""),
                 "reopened_by": str(reopens[-1].get("who") or profiles.step_by(reopens[-1]))} if reopens else {}),

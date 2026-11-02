@@ -188,6 +188,18 @@ sources if it's redundant; simplify to the most efficient configuration". Owner,
 being planned for faults that clear themselves while the "being confirmed" card already watched a person's close:
 "centrally define this by not adding new code for this, since the feature already exists".
 
+## One card, every case
+
+Every Cockpit card says the same things at the same place, folded or opened, in the Inbox or on Tickets: first line its
+name and when the problem began, second line its room, its next check and its state, then its words and its buttons
+(a ticket's stage is said in the pill of who last moved it, in the stage's colour). One card per device in Open issues
+and Watch alike. A
+pill never repeats the card's words; a pill says something real (no next check without a time). A change to a card is
+checked across every kind of card and every screen before it ships, so the owner never has to find the next mismatch.
+
+**Why:** owner, 2026-11-01: "always shows consistent and relevant information always at the same positions and in every
+possible cases", without having "to manually check each of them".
+
 ## Defined once
 
 Everything is defined in one place: a list, a value, a rule, a text. Never accept a second copy with a note to keep

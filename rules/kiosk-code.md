@@ -101,3 +101,33 @@ replay it with `node tools/placement-probe.mjs <report.json>`: the real pass and
 
 **Why:** validation steps written for a case the villa barely had could not be done; a probe showed nothing changed.
 Two overlap fixes (2.496.552-553) were made without the phone's pose, the second cause still an inference.
+
+## A card's state is one pill
+
+Every Cockpit card and its row show a state only through RecordCard's `StatusPill` (`status`), and every room through
+`RoomPill`. A line of text says what is wrong, never the state. Never add a case to a shared format that makes one kind
+of card read differently.
+
+**Why:** owner, 2026-11-01: "Missing, #100-P1" was a special case inside the shared code, so one kind of card had its own
+format; the same code path does not mean the same format.
+
+**How to apply:** before adding a condition to anything every card goes through, ask whether it creates a second format;
+if so, ask the owner first. `tests/oracles/cockpit_cards.mjs` fails on a second pill or a state in a line's words.
+
+## A row's every field, on every kind of card
+
+A card's row has a name, a time, a room on the left and its state pills on the right, whatever kind of problem it is. A
+new field, or a change to one, is proven on EVERY kind (offline, Missing, red device, late task, fault, ticket, Watch),
+not on the kinds the change touched; a time comes from `beganAt` or the record, never a per-kind blank.
+
+**Why:** owner, 2026-11-01: an offline camera's row had no time. The review after the one-pill change compared state and
+words only, and the time existed on faults alone, so "consistent everywhere" was claimed over a field nobody had asked.
+
+**How to apply:** `tests/oracles/every_card_row.mjs` draws the real row of each kind through the real path and fails when
+a kind of line is not in its table; add a new field there, and prove it red on one kind. A row and its opened card draw
+one `CardPillLine`: the first line keeps the name and the next check, never a second copy of the pills.
+
+Every `RecordCard` in the tree counts, not only the Inbox's: first line the name and its time pills, second line the room
+(`useCardRoom`, "Other" with none) on the left and the state on the right. The check derives the cards from the source
+tree, so a card on another tab cannot be skipped; a card with no place is listed there with why. Before saying "every
+card", name the tabs that were checked; never accept a gap by describing it.

@@ -252,7 +252,7 @@ class Tickets:
                     and not _before(card.get("resolved_at"), t.get("reopened_at")):
                 iid = problems.closed_in_kiosk(t["id"], kiosk_words.closed(card.get("by") or "", card.get("resolved_at"),
                                                                            self.timezone), at=card.get("resolved_at"),
-                                               who=card.get("by") or None)
+                                               who=card.get("by") or None, lasting=bool(card.get("lasting")))
                 if iid:
                     # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close,
                     # each chat's copy in its language (architecture review O)

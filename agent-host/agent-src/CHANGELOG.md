@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.419 (2 November 2026)
+
+- preventive-maintenance `nightly.schedule_unused`: a schedule whose only users are automations, all switched off, sets
+  no expected run hours (PM-RUNHOURS not judged; the night check's note says why). A script user, no user, an unread
+  state keep the check.
+- `Problems.closed_in_kiosk(lasting=True)`: a Kiosk close marked `lasting` (the agreement's ticketUpdate, Kiosk
+  2.496.662) is `not_a_problem`: never read again still there, its alert not read again, no confirmsBy. A plain close
+  is unchanged. tests/test_not_a_problem.py.
+
 ## 0.6.418 (1 November 2026)
 
 - `vesta_shared.occupancy.siren_now`: the villa as the siren's request reads it, MOVEMENT for "not empty" while every

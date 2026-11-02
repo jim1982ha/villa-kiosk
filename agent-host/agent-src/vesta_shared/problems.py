@@ -35,9 +35,13 @@ from .help_link import HelpLink
 DONE = "done"                          # a person answered Done (a button, or "#N done")
 CLEARED = "cleared"                    # its source is gone: the night check no longer sees it, HA cleared it
 CLOSED_IN_KIOSK = "closed_in_kiosk"    # a person closed the fault in the VESTA Kiosk
+#: A person closed the fault in the Kiosk as "Not a problem while it lasts" (owner, 2026-11-02: the Onsen pump stopped on
+#: purpose, flagged every night): its close holds while the problem lasts, never read again; back after it ended, it is
+#: a new occurrence and opens as usual (closed_by_person reads the problem's latest return).
+NOT_A_PROBLEM = "not_a_problem"
 #: The severities whose finding earns a task, hence a Kiosk fault.
 TASK_SEVERITIES = ("P2", "P3")
-STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK)
+STATUSES = (DONE, CLEARED, CLOSED_IN_KIOSK, NOT_A_PROBLEM)
 
 
 _ORDER = result.PRIORITY_ORDER
@@ -229,13 +233,14 @@ class Problems:
         return HelpLink(self)
 
     def person_done(self, iid: int, place: str, *, who: str | None = None, at: str | None = None, said=None,
-                    person: str | None = None, terms: dict | None = None) -> list[dict]:
+                    person: str | None = None, terms: dict | None = None, read_again: bool = True) -> list[dict]:
         """A person's Done on alert `iid`, wherever it was given (`place`: message_format ON_TELEGRAM, ON_TABLET — the
         tablet's notice — or IN_COCKPIT, the card; `at`: when, now when not said): the one close of an alert by a
         person, read again by the desk (alert_watch.close: `person`, `said` the line it says again — Words for the
         Cockpit's), its reply and its fault's close note the place's words (message_format.done_in: "Done on Telegram
         (JM)"). From Telegram or the tablet its task closes as a Done (close_incident); in the Cockpit the task closed
-        already (closed_in_kiosk). Returns a script's `actions` (result.moved).
+        already (closed_in_kiosk). `read_again` False: "Not a problem while it lasts", the desk does not read it again
+        (its watch for the alert coming back stays). Returns a script's `actions` (result.moved).
 
         ⚠️ ONE DONE, ONE ENTRY (architecture review, 2026-10-30 evening: three closes of an alert each wrote their own
         words — the reports read "Done", "Done (Closed in the Cockpit)" and "Done (Done in the Cockpit)" for one press)."""
@@ -243,8 +248,8 @@ class Problems:
         when = _moment(at)
         now_iso = when.isoformat() if when else self.store.now()
         if place == mf.IN_COCKPIT:
-            alert_watch.close(self.store, iid, Incident.DONE, now_iso, person=kiosk_words.stored(said or words),
-                              reply=words)
+            alert_watch.close(self.store, iid, Incident.DONE, now_iso,
+                              person=kiosk_words.stored(said or words) if read_again else None, reply=words)
             return []
         return self.close_incident(iid, Incident.DONE, now_iso, f"{words}.", who=who, reply=words,
                                    person=person or words, terms=terms)
@@ -448,16 +453,18 @@ class Problems:
         self.store.reopen_finding(last["id"], f.severity, f.summary, f.detail, day, seen)
         return last["id"]
 
-    def closed_in_kiosk(self, task_id: int, said=None, at: str | None = None, who: str | None = None) -> int | None:
+    def closed_in_kiosk(self, task_id: int, said=None, at: str | None = None, who: str | None = None,
+                        lasting: bool = False) -> int | None:
         """A person closed the task's fault in the VESTA Kiosk: the task closes, and so does the incident
         it came from (the alert desk stops chasing it). Returns that incident's id, for its messages. `said`: who and
         when, as kiosk_words.closed writes it — the desk's check after it says it again (review 29: "Closed in the
         Kiosk, but …" had lost the person). `at`: when the Kiosk recorded the close (its resolvedAt) — the incident
         closes then, so the desk's watch counts from the person's close, not from when the agent read it (up to a
         Kiosk read later; owner 2026-10-23: the card says "VESTA confirms by …" counted from the close). `who`: the
-        person (the alert's reply, message_format.done_in)."""
+        person (the alert's reply, message_format.done_in). `lasting`: closed as "Not a problem while it lasts" — the
+        close holds while the problem lasts: no read again of the alert, no "still there" of a finding (NOT_A_PROBLEM)."""
         task = self.store.task(task_id)
-        self.close(task_id, CLOSED_IN_KIOSK)
+        self.close(task_id, NOT_A_PROBLEM if lasting else CLOSED_IN_KIOSK)
         kind, sid = self._source(task)
         # a Done in the Kiosk on a fault whose Need help the owner was asked about: the alert standing for it closes too
         if kind != "incident" and (standing := self.help.standing(HelpLink.of_task(task_id))):
@@ -470,7 +477,7 @@ class Problems:
                 # desk reads it again once (quiet_after_done), when its rule names its states
                 # `said` kept in every language it knows (kiosk_words.stored, in person_done): the desk's check after
                 # it says it in each chat's (architecture review O); its watch from the person's close
-                self.person_done(sid, mf.IN_COCKPIT, who=who, at=at, said=said)
+                self.person_done(sid, mf.IN_COCKPIT, who=who, at=at, said=said, read_again=not lasting)
                 return sid
         return None
 
@@ -531,7 +538,8 @@ class Problems:
         (its problem's latest return): the problem is quiet while its condition lasts. ONE reading for every list
         (open_problems, unseen); a close from before the problem came back is not this occurrence's."""
         last = self.store.last_task(source)
-        return bool(last) and last.get("status") in (DONE, CLOSED_IN_KIOSK) and (last.get("done_at") or "") > (since or "")
+        return bool(last) and last.get("status") in (DONE, CLOSED_IN_KIOSK, NOT_A_PROBLEM) \
+            and (last.get("done_at") or "") > (since or "")
 
     def source_gone(self, task: dict) -> bool:
         """True when the finding or incident a task is about is closed — the task outlived it."""
@@ -597,6 +605,7 @@ class Problems:
         kind, sid = self._source({"source": source})
         row = self.store.finding(sid) if kind == "finding" else None
         last = self.store.last_task(source)
+        # "Not a problem while it lasts" is never read again (NOT_A_PROBLEM): only a Done or a plain close
         if not (row and last and last.get("status") in (DONE, CLOSED_IN_KIOSK)):
             return False
         seen, done, wait = _moment(row.get("seen_at")), _moment(last.get("done_at")), row.get("settle_minutes")
@@ -745,6 +754,8 @@ class Problems:
                 return None
             pending = alert_watch.awaiting_read(inc)
         elif kind == "finding":
+            if task.get("status") == NOT_A_PROBLEM:
+                return None                      # known to last: nothing is watched, the card goes to Closed
             closed = _moment(task.get("done_at"))
             until = next_night(closed) if closed and next_night else None
             if until is None:

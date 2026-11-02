@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Callable
@@ -48,6 +49,7 @@ from vesta_shared import result  # noqa: E402  (what the engine is asked to do: 
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
 from vesta_shared import battery  # noqa: E402  (a battery's ids and its rested level: one owner)
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
+from vesta_shared.ha_client import HAError  # noqa: E402
 import features as F  # noqa: E402
 import rules as R  # noqa: E402
 import endings as E  # noqa: E402  (how a fault ends: one table, the 5-minute recheck's too)
@@ -283,6 +285,10 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
             if not any(expected.values()):
                 notes.append(f"{asset['name']}: schedule {asset['schedule']} has no time blocks, run-hours check off.")
                 expected = None
+    if expected and (off := schedule_unused(cli, asset["schedule"])):
+        notes.append(f"{asset['name']}: schedule {asset['schedule']} is used only by {', '.join(off)}, switched off: "
+                     "run-hours check off.")
+        expected = None
     prior = {}
     for eid in (p_eid, e_eid):
         for rid in ("PM-POWER-CHANGE", "PM-ENERGY-CHANGE"):
@@ -296,6 +302,29 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
     elif e_eid and expected:
         findings += R.power_rules(asset, e_eid, {}, today, params, expected, e_series, prior, occupied)
     return findings, features_written
+
+
+def schedule_unused(cli, schedule_eid: str) -> list[str] | None:
+    """⚠️ A SCHEDULE NOBODY USES SETS NO EXPECTATION (owner, 2026-11-02: a pump's automation switched off on
+    purpose, "ran shorter than expected" every night: "if the automation is off, then the helper has no
+    consumer anymore, right?"): the automations whose configuration names `schedule_eid`, when every one of them is
+    switched off — the run-hours, energy and expected-run checks then have no schedule to judge by. None when one is on,
+    when a script names it (it runs whenever it is called), when nothing names it (a device on its own timer: the schedule
+    says what it does), or when the read failed or there is no villa to read: judged against the schedule, as before."""
+    if cli is None:
+        return None
+    try:
+        rules = cli.rules_mentioning([schedule_eid])
+        named = re.compile(rf"(?<![\w.]){re.escape(schedule_eid)}(?![\w])")
+        users = [r for r in rules if named.search(json.dumps(r.get("config") or {}))]
+        if not users or any(r.get("kind") != "automation" for r in users):
+            return None
+        states = cli.states([r["entity_id"] for r in users])
+    except HAError:
+        return None
+    if any((states.get(r["entity_id"]) or {}).get("state") != "off" for r in users):
+        return None
+    return [r["entity_id"] for r in users]
 
 
 def shared_spans(cli, shared: tuple[list[str], list[str]], rows: list[dict], day_end: datetime, now_ref: datetime):
