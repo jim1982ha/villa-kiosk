@@ -113,7 +113,7 @@ export interface FmDataContextValue {
   /** Close a fault in ONE step, nothing done ("Close": no action needed):
    *  resolved now, with a "Closed without action" update, and no completion
    *  or cost (the "closeTickets" command). The same write as every other. */
-  closeTickets: (ids: readonly string[]) => Promise<FmSaveOutcome>;
+  closeTickets: (ids: readonly string[], lasting?: boolean) => Promise<FmSaveOutcome>;
   /** Need help on a card: a "help" step on each record, its status unchanged (the "helpTickets" command); the VESTA
    *  Agent asks the owner to act. */
   helpTickets: (ids: readonly string[]) => Promise<FmSaveOutcome>;
@@ -372,7 +372,8 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const advanceTickets = useCallback((ids: readonly string[], to: FmTicketStatus,
     step: { who?: string; note?: string; photoIds: string[] }, cost?: Omit<FmCost, "id" | "at" | "photoIds">) =>
     run({ type: "advanceTickets", ids, to, step, cost }), [run]);
-  const closeTickets = useCallback((ids: readonly string[]) => run({ type: "closeTickets", ids }), [run]);
+  const closeTickets = useCallback((ids: readonly string[], lasting?: boolean) =>
+    run({ type: "closeTickets", ids, ...(lasting ? { lasting } : {}) }), [run]);
   const helpTickets = useCallback((ids: readonly string[]) => run({ type: "helpTickets", ids }), [run]);
   const saveDocument = useCallback((doc: Omit<FmSavedDocument, "id" | "generatedAt">) => run({ type: "saveDocument", doc }), [run]);
   const removeDocument = useCallback((id: string) => run({ type: "removeDocument", id }), [run]);

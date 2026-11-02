@@ -61,7 +61,7 @@ export function faultLatest(t: FmTicket, stamp: (at: string) => string): { text:
     return stageOf(t) === "ticket" ? said("Ticket opened", t.openedAt) : null;
   }
   const who = last.who || authorWords(last);
-  if (isTicketResolved(last)) return said(isClearedStep(last) ? "Closed" : "Done", last.at, who);
+  if (isTicketResolved(last)) return said(last.lasting ? "Not a problem" : isClearedStep(last) ? "Closed" : "Done", last.at, who);
   if (last.kind === "reopened") return said("Reopened", last.at, who);
   return last.status === "in_progress" ? said("Ticket opened", last.at, who) : null;
 }

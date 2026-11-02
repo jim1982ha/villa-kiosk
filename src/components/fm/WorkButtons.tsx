@@ -34,8 +34,9 @@ interface CardWork {
   problemFor: (cardKey: string) => string | null;
   ask: (cardKey: string) => void;
   cancel: () => void;
-  /** `work`: resolved as work done (a completion), else closed with no action. */
-  close: (cardKey: string, ids: readonly string[], work?: boolean) => Promise<void>;
+  /** `work`: resolved as work done (a completion), else closed with no action; `lasting`: closed with no action as
+   *  "Not a problem while it lasts" (FmTicketUpdate.lasting), work or not. */
+  close: (cardKey: string, ids: readonly string[], work?: boolean, lasting?: boolean) => Promise<void>;
   /** A step that stays on the card: a stage change (its form), Need help, or a raise with Done or Need help
    *  (`raised`: the fault to raise for the device the action names). */
   run: (cardKey: string, action: WorkAction, raised?: (entityId: string) => RaisedFault) => void;
@@ -73,9 +74,10 @@ export function useCardWork(): CardWork {
     problemFor: (key) => (problem?.key === key ? problem.text : null),
     ask: (key) => { setProblem(null); setAsking(key); },
     cancel: () => setAsking(null),
-    close: async (key, ids, work) => {
+    close: async (key, ids, work, lasting) => {
       setProblem(null);
-      const { done, note: why } = await (work ? advanceTickets(ids, "resolved", DONE_STEP) : closeTickets(ids));
+      const { done, note: why } = await (lasting ? closeTickets(ids, true)
+        : work ? advanceTickets(ids, "resolved", DONE_STEP) : closeTickets(ids));
       setAsking(null);
       if (!done && why) setProblem({ key, text: why });
     },
@@ -138,9 +140,10 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
   if (actions.length === 0) return after || null;
   const confirming = work.asking === cardKey ? actions.find((a) => a.step.kind === "close") : undefined;
   if (confirming && confirming.step.kind === "close") {
-    const { question, confirmLabel, work: asWork } = confirming.step;
+    const { question, confirmLabel, work: asWork, lasting } = confirming.step;
     return <InlineConfirm question={question} confirmLabel={confirmLabel}
-      onConfirm={() => work.close(cardKey, confirming.ids, asWork)} onCancel={work.cancel} />;
+      onConfirm={() => work.close(cardKey, confirming.ids, asWork)} onCancel={work.cancel}
+      alternative={lasting ? { label: lasting, onConfirm: () => work.close(cardKey, confirming.ids, false, true) } : undefined} />;
   }
   const buttons = actions.map((a) => (
     <button key={a.kind} type="button" className={CARD_BUTTON}

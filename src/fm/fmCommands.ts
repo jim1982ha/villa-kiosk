@@ -32,7 +32,7 @@ export type FmCommand =
   | { type: "addTicket"; ticket: Omit<FmTicket, "id" | "openedAt" | "status">; asTicket?: boolean; then?: "done" | "help" }
   | { type: "updateTicket"; id: string; patch: Partial<FmTicket> }
   | { type: "advanceTickets"; ids: readonly string[]; to: FmTicketStatus; step: TicketStep; cost?: TicketCost }
-  | { type: "closeTickets"; ids: readonly string[] }
+  | { type: "closeTickets"; ids: readonly string[]; lasting?: boolean }
   | { type: "helpTickets"; ids: readonly string[] }
   | { type: "removeTicket"; id: string }
   | { type: "removeCompletion"; id: string }
@@ -85,7 +85,7 @@ export function applyFmCommand(d: FmData, c: FmCommand, k: FmActor): FmData {
     case "advanceTickets":
       return withTicketsAdvanced(d, c.ids, c.to, c.step, c.cost, k, by);
     case "closeTickets":
-      return withTicketsClosed(d, c.ids, k, by);
+      return withTicketsClosed(d, c.ids, k, by, !!c.lasting);
     case "helpTickets":
       return withTicketsHelped(d, c.ids, k, by);
     case "removeTicket":

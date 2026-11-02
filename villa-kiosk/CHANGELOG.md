@@ -1,3 +1,11 @@
+## 2.496.662
+
+What you will see:
+- When you press `Done` on an Inbox card, or `No action needed` on a ticket, the question now offers "Not a problem while
+  it lasts". It closes the fault with nothing done, and VESTA does not raise it again for as long as the same problem
+  lasts. If the problem ends and comes back later, it is new and shows as usual. Its pill reads "Not a problem by …".
+- A device closed that way stays off Open issues while its problem lasts.
+
 ## 2.496.661
 
 What you will see:
