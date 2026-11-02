@@ -7,17 +7,16 @@
 // folded until tapped. All are ONE card (InboxCard → RecordCard): the row and the opened card were two drawings of the
 // same thing, kept alike by hand.
 //
-// Open issues keep the Overview's order: one card per device, "Open Ticket" on the filters' line, Watch folded at the
-// end, a device window's warning opening on its issue.
+// Open issues keep the Overview's order: one card per device, Watch folded at the end, a device window's warning
+// opening on its issue. ⚠️ OPENING A TICKET IS THE TICKETS TAB'S (owner, 2026-11-02: "it makes no sense to see the
+// dedicated button in the Inbox page"): the filters' line keeps only a guest's "Report a problem"; a card's own Open
+// Ticket for a device with no record opens the Tickets tab's form pointed at it.
 
 import { momentText } from "@/utils/dateText";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Bell, ChevronDown, ChevronRight, FileText, Plus } from "lucide-react";
-import { CARD_BUTTON, WorkLabel } from "@/components/fm/WorkButtons";
 import type { ReactNode } from "react";
 import type { Doors } from "@/auth/doors";
-import { useHA } from "@/ha/HAStateStore";
-import { useConfig } from "@/config/ConfigContext";
 import { useVillaModel } from "@/config/VillaModel";
 import { cardFocused } from "@/config/attention";
 import type { CardView } from "@/config/cockpitCard";
@@ -27,8 +26,6 @@ import { backendFetch } from "@/auth/sessionLost";
 import { useInView } from "@/hooks/useInView";
 import { announcementWords, isReport, messagesView, followingFilter, openingFilter, type MessageItem,
   type MessagesFilter } from "@/messages/messagesModel";
-import { buildDeviceOptions } from "@/components/fm/DeviceSearchPicker";
-import FaultForm from "@/components/fm/FaultForm";
 import FaultTiming from "@/components/fm/FaultTiming";
 import InfoTip from "@/components/common/InfoTip";
 import { Pager, usePaged } from "@/components/common/Paged";
@@ -40,7 +37,7 @@ import { useCockpitIssues } from "./useVillaAttention";
 
 /** One section of the list — Open issues, Notifications, Watch — its name and count, its (i) right after them (`tip`,
  *  owner 2026-10-31: next to the words, not at the far end), folded or open by its chevron (owner, 2026-10-28: the
- *  three at one level, each collapsible). Its buttons are the filters' line's (the Inbox's "Open Ticket"). */
+ *  three at one level, each collapsible). Its buttons are the filters' line's (a guest's "Report a problem"). */
 export function MessagesSection({ title, count, open, onToggle, tip, children }: {
   title: string; count?: number; open: boolean; onToggle: () => void; tip?: ReactNode;
   children: ReactNode;
@@ -109,15 +106,13 @@ function AnnouncementCard({ item, canManage, ...shown }: CardShown & { item: Exc
     : <NoteDetail announcement={item.announcement} {...shown} />;
 }
 
-export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFaultFormOpened, onEditTicket,
-  onReportProblem, focusFaults }: {
+export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEditTicket, onReportProblem, focusFaults }: {
   onOpenEntity: (entityId: string) => void;
   /** What this profile may do (auth/doors): `facility` takes faults on and opens tickets, `reportFault` reports a
    *  problem. */
   doors: Doors;
-  /** "Open a ticket" opens pointed at this device (a device panel's wrench); dropped once the form has it. */
-  reportFaultFor?: string;
-  onFaultFormOpened?: () => void;
+  /** A card's "Open Ticket" for a device with no record: the Tickets tab, its "Open a ticket" form pointed at it. */
+  onRaiseTicket: (entityId: string) => void;
   /** A card's "Edit ticket": the Tickets tab, that record's form open. */
   onEditTicket: (ticketId: string) => void;
   /** A guest's "Report a problem". */
@@ -125,19 +120,14 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   /** The devices whose issue opens (a device window's warning, screen "openFaults"). */
   focusFaults?: readonly string[];
 }) {
-  const { entities } = useHA();
-  const { config, resolvedRooms } = useConfig();
   const { devices } = useVillaModel();
   const canManage = doors.facility;
   const canReport = doors.reportFault;
-  const deviceOptions = useMemo(
-    () => (canManage ? buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms) : []),
-    [canManage, devices, config.entityMap, entities, resolvedRooms]);
 
   const { open, watched, closed } = useCockpitIssues();
   const { kept, unread, unreadReports } = useAnnouncements();
-  // something unread: opened on Notifications (ticket 18 of "One inbox"); a warning or the wrench first
-  const opening = { warning: !!focusFaults?.length, form: !!reportFaultFor && canManage };
+  // something unread: opened on Notifications (ticket 18 of "One inbox"); a warning first
+  const opening = { warning: !!focusFaults?.length };
   const [filter, setFilter] = useState<MessagesFilter>(() => openingFilter(unread, opening, unreadReports));
   // ⚠️ UNTIL ONE IS CHOSEN, IT FOLLOWS WHAT IS UNREAD (architecture review, 2026-10-30): VESTA's feed may be read a moment
   // after the Cockpit opened (a reload), and the Inbox stayed on Issues over unread notifications
@@ -147,14 +137,6 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
     if (!chosen) setFilter((f) => followingFilter(f, unread, opening, unreadReports));
   }, [chosen, unread, unreadReports]);     // `opening`: the Cockpit's, fixed while the tab is open
   const [selected, setSelected] = useState<string | null>(null);
-  /** The "Open a ticket" form, above the cards: closed, or open (pointed at a device when it came from a wrench). */
-  const [raising, setRaising] = useState<{ entity?: string } | null>(null);
-  useEffect(() => {
-    if (!reportFaultFor || !canManage) return;
-    setRaising({ entity: reportFaultFor });
-    onFaultFormOpened?.();
-    // once per request: the form keeps what was typed while the rest re-renders
-  }, [reportFaultFor]);
   // a device window's warning: the list on Open issues, its issue in view
   const focusKey = (focusFaults ?? []).join("|");
   useEffect(() => {
@@ -172,21 +154,20 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
   // 2026-10-28)
   const [folds, setFolds] = useState({ issues: true, notes: true, reports: true, watch: false, closed: false });
   const fold = (k: keyof typeof folds) => setFolds((f) => ({ ...f, [k]: !f[k] }));
-  const raise = () => setRaising({});
   const { issues: showsIssues, notifications: showsNotes, reports: showsReports } = view.shows;
   const item = view.selected;
   // ⚠️ UNDER ISSUES EVERY CARD IS WHOLE AND NOT PRESSED (owner, 2026-11-01); elsewhere a tap opens one, or folds the one open
   const card = (i: MessageItem) => (
     <InboxCard key={i.key} item={i} opened={showsIssues || item?.key === i.key} canManage={canManage}
       onToggle={showsIssues ? undefined : () => setSelected(item?.key === i.key ? null : i.key)}
-      onOpenEntity={onOpenEntity} onEditTicket={onEditTicket} onRaiseTicket={(entity) => setRaising({ entity })}
+      onOpenEntity={onOpenEntity} onEditTicket={onEditTicket} onRaiseTicket={onRaiseTicket}
       focused={i.kind === "issue" && !!isFocus?.(i.card)} />
   );
 
   return (
     <div className="fm-stack">
-      {/* always in view while the cards scroll (owner, 2026-11-01): the filters, always on one line, and on the same line at its right the
-          Issues' own button (owner, 2026-10-31: "Open Ticket", the card's own words and wrench): two groups, so a
+      {/* always in view while the cards scroll (owner, 2026-11-01): the filters, always on one line, and on the same line at
+          its right a guest's "Report a problem" (Open Ticket is the Tickets tab's, owner 2026-11-02): two groups, so a
           narrow phone wraps the button whole under the filters, never squeezing them */}
       <div className="messages-toolbar">
         <div className="messages-filters" role="group" aria-label="Show">
@@ -201,18 +182,12 @@ export default function MessagesTab({ onOpenEntity, doors, reportFaultFor, onFau
           ))}
         </div>
         {/* only while the issues are listed, as when it sat over Open issues */}
-        {showsIssues && (canManage || canReport) && (
+        {showsIssues && !canManage && canReport && (
           <div className="messages-toolbar-actions">
-            {canManage
-              ? <button type="button" className={CARD_BUTTON} onClick={raise}><WorkLabel kind="raiseTicket" /></button>
-              : <button type="button" className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>}
+            <button type="button" className="btn ghost" onClick={onReportProblem}><Plus size={16} /> Report a problem</button>
           </div>
         )}
       </div>
-      {raising && (
-        <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
-          onDone={() => setRaising(null)} />
-      )}
       {showsIssues && (
         <MessagesSection title="Open issues" count={open.length} open={folds.issues} onToggle={() => fold("issues")}
           tip={canManage ? <FaultTiming /> : undefined}>

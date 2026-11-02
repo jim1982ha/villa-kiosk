@@ -56,6 +56,15 @@ for (const [rel, prop] of [["components/fm/TodayTab.tsx", "who"], ["components/f
      pickers.length === 1 && propText(pickers[0], "value") === prop && elements(tree, "input").length === 0,
      pickers.map((p) => propText(p, "value")));
 }
+// owner, 2026-11-02: "Open a ticket" showed Who's handling it's list open, never tapped — a window puts the focus in its
+// first field (useModalA11y), and the shared search box opened its list on the focus
+{
+  const [box] = elements(parseTsx("components/common/SearchPicker.tsx"), "input");
+  ck("the shared search list opens on a tap, typing or the down arrow, never on the focus a window gives its first field",
+     !!box && propText(box, "onFocus") === null && propText(box, "onClick") === "() => setOpen(true)"
+     && /setOpen\(true\)/.test(propText(box, "onChange") ?? "") && /ArrowDown/.test(propText(box, "onKeyDown") ?? ""),
+     box && ["onFocus", "onClick", "onKeyDown"].map((k) => `${k}: ${propText(box, k)}`));
+}
 // the Today tab's name is who DID it; `by` is the signed-in profile, stamped by the one command (fmCommands)
 const logged = applyFmCommand({ schedules: [], completions: [], costs: [], tickets: [], savedDocuments: [] },
   { type: "logCompletion", completion: { scheduleId: "s", at: at(9), by: "", who: "Ketut", photoIds: [] } },

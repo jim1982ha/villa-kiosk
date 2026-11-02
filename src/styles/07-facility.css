@@ -582,3 +582,6 @@
   border: 1px solid color-mix(in srgb, var(--status-danger) 35%, transparent);
 }
 .config-stale-notice .btn { flex: 0 0 auto; }
+
+/* The Tickets tab's Open Ticket (owner, 2026-11-02: moved from the Inbox's filters' line), at the right of its first line */
+.tickets-toolbar { display: flex; justify-content: flex-end; }

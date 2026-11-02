@@ -12,7 +12,7 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { readFileSync, readdirSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
-import { parseTsx, elements, guardsOf } from "../consistency/jsx.mjs";
+import { parseTsx, elements, guardsOf, propText } from "../consistency/jsx.mjs";
 import { mountRoot } from "../consistency/fakedom.mjs";
 const rd = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const J = JSON.stringify;
@@ -87,8 +87,16 @@ ck("  ...none keeps its own note of the record being edited",
 ck("  ...Tickets': the records it draws (the tickets in progress and the closed ones)",
    /const listed = useMemo\(\(\) => \[\.\.\.tickets\.flatMap\(\(g\) => g\.records\), \.\.\.closed\]\.map\(\(t\) => t\.id\)/
      .test(rd("components/fm/TicketsTab.tsx")));
-ck("Tickets: the record being edited is its form, in its place (the editor's inPlace); no form above the list",
-   calls("TicketsTab.tsx", "editor.inPlace").length === 1 && elements(tree("TicketsTab.tsx"), "FaultForm").length === 1);
+// owner, 2026-11-02: Open Ticket moved to the Tickets tab, its NEW ticket's form at the top (as Spend's Record spend);
+// an edit stays in its card's place
+{
+  const forms = elements(tree("TicketsTab.tsx"), "FaultForm");
+  const edits = forms.filter((f) => propText(f, "editing") !== null);
+  const fresh = forms.filter((f) => propText(f, "editing") === null);
+  ck("Tickets: the record being edited is its form, in its place (the editor's inPlace); the form at the top is a new ticket's only",
+     calls("TicketsTab.tsx", "editor.inPlace").length === 1 && edits.length === 1 && propText(edits[0], "editing") === "t"
+     && fresh.length === 1 && propText(fresh[0], "presetEntity") === "raising.entity", forms.map((f) => f.getText().slice(0, 80)));
+}
 const button = (f, words) => elements(tree(f), "button").find((b) => b.getText().includes(words));
 ck("Spend: Record spend shows while no form is open; the form at the top is a new entry's only; an edit in its place",
    J(guardsOf(button("SpendTab.tsx", "Record spend"))) === J(["editor.addButton"])

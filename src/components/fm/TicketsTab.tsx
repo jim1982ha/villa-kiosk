@@ -1,15 +1,18 @@
 // src/components/fm/TicketsTab.tsx
 // The TICKETS: the work someone took on (owner, 2026-10-14). A fault — opened by the VESTA Agent or raised by a
 // person — waits in Messages' Open issues; "Open ticket" there makes it a ticket, and the ticket lives here until
-// it is resolved or closed. So this tab holds the tickets in progress (one per device) and the Closed section; raising
-// a fault moved to the Overview, beside the problems it is raised about. It was the Faults tab, a second list of the
-// same open faults the Overview already showed.
+// it is resolved or closed. So this tab holds the tickets in progress (one per device) and the Closed section. It was
+// the Faults tab, a second list of the same open faults the Overview already showed.
+//
+// ⚠️ A NEW TICKET IS OPENED HERE (owner, 2026-11-02: "it makes no sense to see the dedicated button in the Inbox page";
+// it sat on the Inbox's filters' line from 2026-10-31): the tab's own Open Ticket, a device window's wrench and an Inbox
+// card's Open Ticket for a device with no record all open this one form (FaultForm), which saves a ticket in progress.
 //
 // Time-to-resolution is what evidences supervision, so the app stamps the resolution time itself.
 
 import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
@@ -29,20 +32,24 @@ import { SourceIcons } from "./sourceIcons";
 import { faultSource } from "@/fm/issueSource";
 import { useAgent } from "@/agent/AgentContext";
 import { useNow } from "@/hooks/useInterval";
-import WorkButtons, { useCardWork } from "./WorkButtons";
+import WorkButtons, { CARD_BUTTON, WorkLabel, useCardWork } from "./WorkButtons";
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { formatMoney } from "@/utils/money";
 import { DAY_MS } from "@/utils/localDay";
 import { fmtDuration } from "@/components/panels/chartUtils";
 
-export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, onEditOpened }: {
+export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, onEditOpened, raiseFor, onRaiseOpened }: {
   onOpenEntity: (id: string) => void;
   /** The villa's real devices, built once by FacilitySections (the edit form's picker). */
   deviceOptions: DeviceOption[];
   /** Open this record's edit form (an open issue's "Edit ticket"); dropped once the form has it. */
   editTicket?: string;
   onEditOpened?: () => void;
+  /** Open "Open a ticket" pointed at this device (a device's wrench, an Inbox card's Open Ticket); dropped once the form
+   *  has it. */
+  raiseFor?: string;
+  onRaiseOpened?: () => void;
 }) {
   const { data, retention, removeTicket } = useFmData();
   const roomOf = useCardRoom();
@@ -74,6 +81,15 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     onEditOpened?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editTicket]);
+  /** The "Open a ticket" form, above the tickets: closed, or open (pointed at a device when one was named). */
+  const [raising, setRaising] = useState<{ entity?: string } | null>(null);
+  useEffect(() => {
+    if (!raiseFor) return;
+    setRaising({ entity: raiseFor });
+    onRaiseOpened?.();
+    // once per request: the form keeps what was typed while the rest re-renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raiseFor]);
 
   /** One record, as every Facility card is drawn (RecordCard): its title, when/where/who, its notes, photos and
    *  reports, the cost of the work that resolved it. Tapping it edits it. */
@@ -137,6 +153,14 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
   return (
     <div className="fm-stack">
+      {/* the tab's own button, at the right of its first line, in the cards' words and wrench (WorkLabel) */}
+      <div className="tickets-toolbar">
+        <button type="button" className={CARD_BUTTON} onClick={() => setRaising({})}><WorkLabel kind="raiseTicket" /></button>
+      </div>
+      {raising && (
+        <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
+          onDone={() => setRaising(null)} />
+      )}
       <TicketFigures tickets={data.tickets} inProgress={inProgress} retention={retention} />
 
       {tickets.length === 0 && (

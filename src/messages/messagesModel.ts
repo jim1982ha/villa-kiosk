@@ -223,14 +223,12 @@ export function readAtOpening(read: readonly string[], kept: readonly Announceme
   return [...new Set([...read, ...still])].filter((id) => still.has(id));
 }
 
-/** The filter Messages opens on: a device window's warning on Issues, its issue open; the wrench's "Open a ticket" on
- *  Issues; else Notifications while something is unread (the robot opens on what was not seen) — Reports when the
+/** The filter Messages opens on: a device window's warning on Issues, its issue open; else Notifications while something is unread (the robot opens on what was not seen) — Reports when the
  *  unread are reports only (`unreadReports` of `unread`) —, else Issues (owner, 2026-10-30: the default). Decided from what was unread BEFORE the opening marked it all
  *  read (readAtOpening): after it, nothing is. */
-export function openingFilter(unread: number, opening: { warning?: boolean; form?: boolean } = {}, unreadReports = 0):
+export function openingFilter(unread: number, opening: { warning?: boolean } = {}, unreadReports = 0):
   MessagesFilter {
-  if (opening.warning) return "issues";
-  if (opening.form || unread <= 0) return "issues";
+  if (opening.warning || unread <= 0) return "issues";
   return unread > unreadReports ? "notifications" : "reports";
 }
 
@@ -238,7 +236,7 @@ export function openingFilter(unread: number, opening: { warning?: boolean; form
  *  feed read a moment after the Cockpit opened); nothing unread leaves it, so the opening's own mark (readAtOpening)
  *  never sends the Inbox off the Notifications it opened on. */
 export function followingFilter(current: MessagesFilter, unread: number,
-  opening: { warning?: boolean; form?: boolean } = {}, unreadReports = 0): MessagesFilter {
+  opening: { warning?: boolean } = {}, unreadReports = 0): MessagesFilter {
   return unread > 0 ? openingFilter(unread, opening, unreadReports) : current;
 }
 

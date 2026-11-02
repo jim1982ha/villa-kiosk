@@ -39,10 +39,12 @@ interface CockpitModalProps {
    *  Tickets and Back from a device returns to the tab it left. */
   tab: CockpitTab;
   onTab: (tab: CockpitTab) => void;
-  /** Messages opens "Open a ticket" pointed at this device (a device
-   *  panel's wrench); the request is dropped once the form has it. */
+  /** Tickets opens "Open a ticket" pointed at this device (a device
+   *  panel's wrench, an Inbox card's Open Ticket); the request is dropped once the form has it. */
   reportFaultFor?: string;
   onFaultFormOpened?: () => void;
+  /** An Inbox card's Open Ticket for a device with no record. */
+  onRaiseTicket: (entityId: string) => void;
   /** The Tickets tab opens this record's form (an open issue's "Edit ticket"). */
   editTicket?: string;
   onEditTicket: (ticketId: string) => void;
@@ -62,7 +64,7 @@ export type CockpitTab = "messages" | FacilityTab;
 const MESSAGES_TAB: ModalTab<CockpitTab> = { id: "messages", label: "Inbox", icon: Inbox };
 
 export default function CockpitModal({
-  onClose, onOpenEntity, doors, tab, onTab, reportFaultFor, onFaultFormOpened,
+  onClose, onOpenEntity, doors, tab, onTab, reportFaultFor, onFaultFormOpened, onRaiseTicket,
   editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults,
 }: CockpitModalProps) {
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
@@ -125,11 +127,10 @@ export default function CockpitModal({
         {held && <p className="muted body-text">{held}</p>}
         {shownTab !== "messages" ? (
           <FacilitySections tab={shownTab} onOpenEntity={onOpenEntity} editTicket={editTicket}
-            onTicketEditOpened={onTicketEditOpened} />
+            onTicketEditOpened={onTicketEditOpened} reportFaultFor={reportFaultFor} onFaultFormOpened={onFaultFormOpened} />
         ) : (
-          <MessagesTab onOpenEntity={onOpenEntity} doors={doors} reportFaultFor={reportFaultFor}
-            onFaultFormOpened={onFaultFormOpened} onEditTicket={onEditTicket} onReportProblem={onReportProblem}
-            focusFaults={focusFaults} />
+          <MessagesTab onOpenEntity={onOpenEntity} doors={doors} onRaiseTicket={onRaiseTicket}
+            onEditTicket={onEditTicket} onReportProblem={onReportProblem} focusFaults={focusFaults} />
         )}
       </div>
 

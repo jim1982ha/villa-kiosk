@@ -31,8 +31,8 @@ export interface Screen {
   cockpitTab: CockpitTab;
   /** Settings' tab: General from the profile button, Messages from the Cockpit's gear (ticket 16 of "One inbox"). */
   settingsTab: SettingsTab;
-  /** The device Messages' "Open a ticket" form should start with (a
-   *  device panel's wrench); cleared once the form has opened. */
+  /** The device the Tickets tab's "Open a ticket" form should start with (a
+   *  device panel's wrench, an Inbox card's Open Ticket); cleared once the form has opened. */
   faultFor: string | null;
   /** The record whose ticket the Tickets tab should open for editing (an
    *  open issue's "Edit ticket"); cleared once the form has it. */
@@ -83,10 +83,12 @@ export type ScreenAction =
   | { type: "back" }
   /** The open device's row in Advanced Settings. */
   | { type: "editDevice" }
-  /** The open device's fault: Messages' "Open a ticket" with the device
+  /** The open device's fault: the Tickets tab's "Open a ticket" with the device
    *  filled in for a profile that manages faults, the guest's one-screen report for
    *  any other. */
   | { type: "reportFault" }
+  /** An Inbox card's Open Ticket for a device with no record: the Tickets tab's "Open a ticket", the device filled in. */
+  | { type: "raiseTicket"; id: string }
   | { type: "faultFormOpened" }
   /** A device window's warning: the Cockpit's Messages with the open issue of `ids` (the device, its linked entity)
    *  marked; closing it gives the device back. */
@@ -160,11 +162,13 @@ export function screenReducer(s: Screen, a: ScreenAction, doors: Doors): Screen 
     case "reportFault": {
       const id = s.nav.panel?.entityId;
       if (!id) return s;
-      // raising a fault is beside the open issues (owner, 2026-10-14; Messages since ticket 17): its form opens there, pointed at the device
-      if (doors.facility) return { ...s, nav: NO_PANEL, faultFor: id, cockpitTab: "messages", windows: win(s.windows, "cockpit", true),
+      // ⚠️ OPENING A TICKET IS THE TICKETS TAB'S (owner, 2026-11-02; beside the open issues from 2026-10-14): its form opens
+      // there, pointed at the device
+      if (doors.facility) return { ...s, nav: NO_PANEL, faultFor: id, cockpitTab: "tickets", windows: win(s.windows, "cockpit", true),
         panelReturn: { to: "cockpit", nav: s.nav } };
       return { ...s, nav: NO_PANEL, guestReportFor: id, panelReturn: { to: "guestReport", nav: s.nav } };
     }
+    case "raiseTicket": return doors.facility ? { ...s, faultFor: a.id, cockpitTab: "tickets" } : s;
     case "faultFormOpened": return s.faultFor === null ? s : { ...s, faultFor: null };
     case "openFaults":
       // Messages, where a device's faults are its open issue (owner, 2026-10-24); the device comes back on close

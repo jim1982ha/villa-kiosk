@@ -1,3 +1,12 @@
+## 2.496.663
+
+What you will see:
+- `Open Ticket` has moved from the Inbox to the Tickets tab, at the right of its first line. The device window's wrench
+  and a card's own `Open Ticket` for a device with no fault yet open the same form there, the device filled in. A
+  guest still sees `Report a problem` in the Inbox.
+- In "Open a ticket" and every other window, the "Who's handling it" list (and every search list like it) no longer
+  opens on its own: it opens when you tap the box or start typing.
+
 ## 2.496.662
 
 What you will see:
