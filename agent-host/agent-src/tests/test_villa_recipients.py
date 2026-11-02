@@ -50,6 +50,13 @@ def test_a_role_goes_to_the_villa_list_and_back_to_people_when_it_names_no_chat(
     # where is the villa's, who may is People's: the villa's chat is sent to, in English, and approves nothing
     assert pol.language_of(OTHER_GROUP, "fm") == "en" and pol.chats_for("fm", "en") == [OTHER_GROUP]
     assert not pol.may_approve_in(OTHER_GROUP, "fm") and pol.roles_in(OTHER_GROUP) == set()
+    # ⚠️ an approval always has a chat where it can be pressed: the villa's list names none People knows, so the
+    # People rows of the role (architecture review round 15)
+    from vesta_agent.routing import Routing
+    assert Routing(pol).approver_chats("fm", None) == Routing(pol).approver_chats("owner", None) == [JM]
+    owner_elsewhere = Policy({"people": PEOPLE}, {"owner": [OTHER_GROUP]})
+    assert Routing(owner_elsewhere).approver_chats("owner", None) == [JM]
+    assert Routing(Policy({"people": PEOPLE}, {"owner": [JM, OTHER_GROUP]})).approver_chats("owner", None) == [JM]
     people_only = Policy({"people": PEOPLE})
     for chat in (JM, FABIEN, GROUP, OTHER_GROUP):
         assert [pol.may_approve_in(chat, r) for r in (None, "fm", "owner")] == \
@@ -57,9 +64,12 @@ def test_a_role_goes_to_the_villa_list_and_back_to_people_when_it_names_no_chat(
         assert pol.roles_in(chat) == people_only.roles_in(chat) and pol.group_role(chat) == people_only.group_role(chat)
 
 
-def test_the_agent_reads_the_villa_lists_and_its_next_message_follows_them(tmp_path):
+def test_the_agent_reads_the_villa_lists_and_its_next_message_follows_them(tmp_path, monkeypatch):
+    import vesta_agent.app as app_module
     v = make_agent(tmp_path, {"people": PEOPLE}, reader=_villa("notify.tg_jm", "notify.tg_other"))
-    asyncio.run(v.housekeeping())                                 # the agent's own minute: it reads them
+    # the agent's own minute reads them at once, on a machine up for 10 seconds too (CI: its clock starts at boot)
+    monkeypatch.setattr(app_module.time, "monotonic", lambda: 10.0)
+    asyncio.run(v.housekeeping())
     assert villa_recipients.get(v.s.pack_path) == {"owner": [JM], "fm": [OTHER_GROUP]}
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Pool pump offline."}]}))
     assert [c for c, _, _ in v.tg.sent] == [OTHER_GROUP]
@@ -76,8 +86,13 @@ def test_the_agent_reads_the_villa_lists_and_its_next_message_follows_them(tmp_p
     assert villa_recipients.get(v.s.pack_path) == {"owner": [JM], "fm": []}
 
 
-def test_a_kept_file_that_cannot_be_read_is_no_list(tmp_path):
+def test_a_kept_file_that_cannot_be_read_is_no_list(tmp_path, monkeypatch):
     pack = str(tmp_path / "pack.json")
+    # a skill reads them beside VESTA_PACK, as the Kiosk's settings
+    villa_recipients.save(pack, {"owner": [7], "fm": []})
+    monkeypatch.setenv("VESTA_PACK", pack)
+    assert villa_recipients.get() == {"owner": [7], "fm": []}
+    (tmp_path / villa_recipients.FILE).unlink()
     assert villa_recipients.get(pack) == {}
     (tmp_path / villa_recipients.FILE).write_text("{not json")
     assert villa_recipients.get(pack) == {}

@@ -1,3 +1,11 @@
+## 0.12.437
+
+What you will see:
+- Everything 0.12.436 says (it was not published: a check failed), and:
+- An approval request always reaches a chat where it can be approved, even when the villa's list of who gets the
+  messages names only chats your People list does not give that right.
+- VESTA reads the villa's lists as soon as it starts, not 5 minutes later.
+
 ## 0.12.436
 
 What you will see:

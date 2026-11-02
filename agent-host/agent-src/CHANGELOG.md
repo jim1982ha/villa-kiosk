@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.422 (3 November 2026)
+
+- 0.6.421 was not published (CI: the lists were first read 5 minutes after the start of a machine up for less;
+  `Vesta._recipients_read` starts at None, read at the first housekeeping).
+- Architecture review round 15, card 1: `Routing._may_approve` (approver_chats): the role's delivered chats where the
+  request can be pressed, else People's (`Policy.people_chats`): a villa list naming no chat People knows sent the
+  buttons nowhere. `villa_recipients.path/get` fall back to VESTA_PACK, as kiosk_told's settings.
+
 ## 0.6.421 (3 November 2026)
 
 - Who gets the messages is the villa's (owner, 2026-11-03): `vesta_shared.villa_recipients` reads the villa's two

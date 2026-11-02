@@ -164,7 +164,7 @@ class Routing:
     def approver_chats(self, required_role: str | None, origin_chat: int | None) -> list[int]:
         """Rule 3: where an Approve / Refuse request is sent — never where nobody can press it (Policy.may_approve_in): a
         group listed for both roles acts as the facility manager's, so an owner's request is not sent there."""
-        owners = [c for c in self.policy.chats_for("owner") if self.policy.may_approve_in(c, "owner")]
+        owners = self._may_approve("owner", "owner")
         if required_role == "owner" or origin_chat is None:
             return owners
         if tablet_profile(origin_chat) is not None:
@@ -172,9 +172,17 @@ class Routing:
             # Owner, I don't see any notification on the FM Telegram chat"): the tablet's conversation is no chat the
             # request can wait in yet (its buttons: ticket 22 of "One inbox"), so "the owner or the facility manager"
             # means both roles' chats, the owner's first — not the owner's alone, as for a request with no asker
-            fms = [c for c in self.policy.chats_for("fm") if self.policy.may_approve_in(c, required_role)]
+            fms = self._may_approve("fm", required_role)
             return list(dict.fromkeys([*owners, *fms]))
         return [int(origin_chat)] if self.policy.knows_chat(origin_chat) else owners
+
+    def _may_approve(self, role: str, required_role: str | None) -> list[int]:
+        """The chats of `role` where `required_role`'s request can be pressed: those its messages go to (the villa's
+        list), else every chat People lists with the role. ⚠️ NEVER NONE BECAUSE OF THE VILLA'S LIST (architecture
+        review round 15): a list naming only chats People does not (who may approve is People's) sent the buttons
+        nowhere."""
+        sent = [c for c in self.policy.chats_for(role) if self.policy.may_approve_in(c, required_role)]
+        return sent or [c for c in self.policy.people_chats(role) if self.policy.may_approve_in(c, required_role)]
 
     def label(self, chat_id: int) -> str:
         """For the log: which chat this is, never who is in it."""

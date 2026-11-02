@@ -247,7 +247,9 @@ class Vesta:
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
         self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
-        self._recipients_read = 0.0       # when the villa's lists of who gets the messages were last read
+        # when the villa's lists of who gets the messages were last read; None: never, read at the first housekeeping
+        # (a 0.0 start waited 5 minutes on a machine up for less: the monotonic clock starts at its boot)
+        self._recipients_read: float | None = None
         self._records = None              # the wake's read of the Kiosk's faults: running, and pressed again since
         self.scheduler: Scheduler | None = None
         self._pack = None
@@ -1088,7 +1090,7 @@ class Vesta:
             await self._safe(self.tickets.repair())
         # the villa's lists of who gets the messages, read as often as the Kiosk's faults: a change in Settings reaches
         # the agent's next alert within 5 minutes (villa_recipients)
-        if time.monotonic() - self._recipients_read >= KIOSK_EVERY_S:
+        if self._recipients_read is None or time.monotonic() - self._recipients_read >= KIOSK_EVERY_S:
             self._recipients_read = time.monotonic()
             await self._safe(asyncio.to_thread(self.read_recipients))
         # a request for approval nobody answered says so, in every chat, and loses its buttons (approvals.py)

@@ -469,8 +469,13 @@ class Policy:
         ⚠️ WHERE IS THE VILLA'S, WHO MAY IS PEOPLE'S (owner, 2026-11-03: one place for which chat belongs to which
         role, the villa's own alerts and the agent alike). Only delivery follows the villa's lists: approving, being a
         member and each chat's language stay with the People list (may_approve_in, roles_in, language_of)."""
-        chats = self.villa.get(role) or [c for c, r in self.destinations if r == role]
+        chats = self.villa.get(role) or self.people_chats(role)
         return list(dict.fromkeys(c for c in chats if language is None or self.language_of(c, role) == language))
+
+    def people_chats(self, role: str) -> list[int]:
+        """Every chat the People list names with `role`, in its order: where the role's messages go when the villa's list
+        names no chat, and where its approvals can always be pressed (routing.approver_chats)."""
+        return list(dict.fromkeys(c for c, r in self.destinations if r == role))
 
     def delivered_roles(self, chat_id: int) -> set[str]:
         """The roles whose messages go to `chat_id` (chats_for): what a copy sent there is for."""

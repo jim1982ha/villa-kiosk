@@ -68,16 +68,19 @@ def read(ha) -> dict[str, list[int]] | None:
     return out
 
 
-def path(pack_path: str | None) -> str | None:
+def path(pack_path: str | None = None) -> str | None:
+    """Where the lists are kept: beside the knowledge pack at `pack_path` (else VESTA_PACK, a skill's environment, as
+    kiosk_told's settings); None when there is no pack to sit beside."""
+    pack_path = pack_path if pack_path is not None else os.environ.get("VESTA_PACK", "")
     return os.path.join(os.path.dirname(pack_path), FILE) if pack_path else None
 
 
-def get(pack_path: str | None) -> dict[str, list[int]]:
+def get(pack_path: str | None = None) -> dict[str, list[int]]:
     """{role: chats} as last read; {} when never read or the file cannot be read."""
     try:
         with open(path(pack_path) or "", encoding="utf-8") as f:
             raw = json.load(f)
-    except (OSError, ValueError):
+    except (OSError, ValueError, TypeError):
         return {}
     if not isinstance(raw, dict):
         return {}
