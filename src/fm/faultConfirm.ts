@@ -26,7 +26,7 @@ import { AGENT_STAMP, type AgentCadence } from "@/agent/agentApi";
 import { clockTime, momentText } from "@/utils/dateText";
 import { nextAt, withinLook } from "./faultTiming";
 import { agentOwned } from "./issueSource";
-import { isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
+import { closedAsLasting, isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
 import type { FmData, FmTicket } from "./fmTypes";
 import { authorWords } from "@/auth/roles";
 
@@ -40,7 +40,7 @@ interface ClosedFault {
   /** How it was cleared: "Done" (a Done on Telegram, a repair recorded), "Cleared" (the Cockpit's No action needed, nothing done,
    *  with who pressed it; or the VESTA Agent's own clearing, no name: what it reported is over). Never "Closed": it is
    *  not closed until VESTA lets it go (owner, 2026-10-31). */
-  word: "Done" | "Cleared";
+  word: "Done" | "Cleared" | "Not a problem";
   /** Who did it — the person named on its close (`who`), else the profile that recorded it (`by`); "" when unsaid or
    *  the Agent's own clearing. */
   who: string;
@@ -70,7 +70,7 @@ function closedOf(t: FmTicket): ClosedFault {
   const agents = !!close && isClearedStep(close) && !close.who && close.by === AGENT_STAMP;
   return {
     ticket: t,
-    word: close && isClearedStep(close) ? "Cleared" : "Done",
+    word: close?.lasting ? "Not a problem" : close && isClearedStep(close) ? "Cleared" : "Done",
     who: agents ? "" : close?.who || authorWords(close),
     closedAt: Date.parse(close?.at ?? t.resolvedAt ?? ""),
   };
@@ -81,6 +81,8 @@ function closedOf(t: FmTicket): ClosedFault {
  *  one a person raised has no task of its, so nothing wrote it and it left at once. Its watch is a night-check finding's,
  *  until the nightly check after its close, the time being the Agent's own: with no Agent, nothing watches. */
 function watchedUntil(t: FmTicket, cadence: AgentCadence | null): number {
+  // "Not a problem while it lasts": nothing is watched, it is closed (FmTicketUpdate.lasting)
+  if (closedAsLasting(t)) return NaN;
   if (t.confirmsBy) return Date.parse(t.confirmsBy);
   if (!t.resolvedAt || !cadence) return NaN;
   if (agentOwned(t)) return NaN;

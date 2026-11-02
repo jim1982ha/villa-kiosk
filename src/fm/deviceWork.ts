@@ -80,13 +80,17 @@ type WorkStep =
   | { kind: "raiseThen"; then: "done" | "help" }
   /** `work`: the records are resolved as work done (a completion with who did it, in Recent work, as a Done on Telegram
    *  records it: the Agent's resolve_ticket); without, closed with no action (no completion, no cost). */
-  | { kind: "close"; question: string; confirmLabel: string; work?: true };
+  | { kind: "close"; question: string; confirmLabel: string; work?: true; lasting?: string };
 
 interface WorkActionSpec { label: string; step: WorkStep }
 
 /** The words Done and Need help say on every card, the Inbox's and the Tickets tab's alike. */
 const DONE = "Done";
 export const NEED_HELP = "Need help";
+/** ⚠️ WHAT THE OWNER KNOWS BETTER THAN THE CHECKS (owner, 2026-11-02: a pump stopped on purpose, flagged every night):
+ *  the second answer to a Done or a No action needed — closed with nothing done, and never raised again while the
+ *  problem lasts (FmTicketUpdate.lasting); back after it ended, it is new. */
+export const NOT_A_PROBLEM = "Not a problem while it lasts";
 
 /** ONE wording per action. */
 export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
@@ -94,7 +98,8 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // shall do the same thing"): an alert's card had VESTA's Done · Need help, a fault's Open Ticket · Close
   // ⚠️ A DONE IS WORK DONE, WHEREVER IT IS PRESSED (owner, 2026-10-30, review round 4: Done on Telegram filed a
   // completion in Recent work, the same Done on the Cockpit card a "Closed without action" gone after 90 days)
-  done: { label: DONE, step: { kind: "close", question: "Done? VESTA checks it again before it closes.", confirmLabel: DONE, work: true } },
+  done: { label: DONE, step: { kind: "close", question: "Done? VESTA checks it again before it closes.", confirmLabel: DONE, work: true,
+    lasting: NOT_A_PROBLEM } },
   needHelp: { label: NEED_HELP, step: { kind: "help" } },
   doneNew: { label: DONE, step: { kind: "raiseThen", then: "done" } },
   helpNew: { label: NEED_HELP, step: { kind: "raiseThen", then: "help" } },
@@ -106,7 +111,8 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // the same work done as the Inbox's Done, in other words; it keeps its form (what was done, cost, photos)
   ticketDone: { label: DONE, step: { kind: "stage", to: "resolved" } },
   // what it records in its words (owner, 2026-11-01): "Close" read as the normal end of a ticket, beside Done
-  closeTicket: { label: "No action needed", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "No action needed" } },
+  closeTicket: { label: "No action needed", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "No action needed",
+    lasting: NOT_A_PROBLEM } },
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
 };
 

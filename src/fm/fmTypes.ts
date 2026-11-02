@@ -164,6 +164,10 @@ export interface FmTicketUpdate {
   title?: string;
   /** retitled: the title before. */
   was?: string;
+  /** A person's close (kind "cleared") as "Not a problem while it lasts" (owner, 2026-11-02; the agreement's
+   *  ticketUpdate): the VESTA Agent never reads it again while the problem lasts, and the device's live state of it is no
+   *  open issue (attention.buildAttentionItems). Back after it ended, the problem is new. */
+  lasting?: true;
 }
 
 export type FmTicketUpdateKind = "reopened" | "retitled" | "reading" | "noted" | "cleared" | "help";

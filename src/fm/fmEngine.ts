@@ -825,7 +825,7 @@ export const CLOSED_WITHOUT_ACTION = "Closed without action";
  */
 /** `by`: the profile that closed it (stamped with its id and its label: roles.authorStamp) — the VESTA Agent's note on the alert's Telegram
  *  messages says who and when (owner, 2026-10-10). */
-export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">, by?: Role): FmData {
+export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">, by?: Role, lasting = false): FmData {
   const t = d.tickets.find((x) => x.id === id);
   if (!t || isTicketResolved(t)) return d;
   const at = k.now;
@@ -835,15 +835,22 @@ export function withTicketClosed(d: FmData, id: string, k: Pick<FmStamp, "now">,
       ...withoutClose(x),
       status: "resolved",
       resolvedAt: at,
-      updates: [...(x.updates ?? []), { at, status: "resolved", kind: "cleared" as const, note: CLOSED_WITHOUT_ACTION, photoIds: [], ...(by ? authorStamp(by) : {}) }],
+      updates: [...(x.updates ?? []), { at, status: "resolved", kind: "cleared" as const, note: CLOSED_WITHOUT_ACTION, photoIds: [],
+        ...(by ? authorStamp(by) : {}), ...(lasting ? { lasting: true as const } : {}) }],
     })),
   };
 }
 
+/** Closed as "Not a problem while it lasts" (FmTicketUpdate.lasting): its last close says so. */
+export function closedAsLasting(t: Pick<FmTicket, "status" | "updates">): boolean {
+  return isTicketResolved(t) && lastResolution(t)?.lasting === true;
+}
+
 
 /** One device's faults closed together, in ONE edit ("no action needed"). */
-export function withTicketsClosed(d: FmData, ids: readonly string[], k: Pick<FmStamp, "now">, by?: Role): FmData {
-  return ids.reduce((acc, id) => withTicketClosed(acc, id, k, by), d);
+export function withTicketsClosed(d: FmData, ids: readonly string[], k: Pick<FmStamp, "now">, by?: Role,
+  lasting = false): FmData {
+  return ids.reduce((acc, id) => withTicketClosed(acc, id, k, by, lasting), d);
 }
 
 /** ⚠️ NEED HELP ON EVERY CARD (owner, 2026-10-30: Done · Need help · Open Ticket on every issue card): Need help pressed

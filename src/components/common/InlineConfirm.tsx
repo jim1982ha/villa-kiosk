@@ -10,13 +10,15 @@
 
 import type { ReactNode } from "react";
 
-export default function InlineConfirm({ question, confirmLabel, onConfirm, onCancel, flush = true }: {
+export default function InlineConfirm({ question, confirmLabel, onConfirm, onCancel, alternative, flush = true }: {
   /** Shown before the buttons (left-aligned), when the confirm label alone
    *  does not say what is being asked. */
   question?: ReactNode;
   confirmLabel: ReactNode;
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
+  /** A second way to say yes, before the main one (a Done's "Not a problem while it lasts"). */
+  alternative?: { label: ReactNode; onConfirm: () => void | Promise<void> };
   /** No outer margin — sitting in a header or a row. */
   flush?: boolean;
 }) {
@@ -26,6 +28,7 @@ export default function InlineConfirm({ question, confirmLabel, onConfirm, onCan
         <span className="body-text" style={{ marginRight: "auto" }}>{question}</span>
       )}
       <button className="btn ghost" onClick={onCancel}>Cancel</button>
+      {alternative && <button className="btn ghost" onClick={() => { void alternative.onConfirm(); }}>{alternative.label}</button>}
       <button className="btn danger" onClick={() => { void onConfirm(); }}>{confirmLabel}</button>
     </div>
   );

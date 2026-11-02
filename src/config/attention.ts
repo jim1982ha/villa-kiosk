@@ -15,7 +15,7 @@ import { alarmText, rowText } from "@/config/reading";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
-import { alertNumberOf, DUE_WORDS, faultBegan, faultTitle, fmAttention, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
+import { alertNumberOf, closedAsLasting, DUE_WORDS, faultBegan, faultTitle, fmAttention, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import type { AgentCadence } from "@/agent/agentApi";
 import { watchedRecords } from "@/fm/faultConfirm";
 import { faultLatest, notedStory } from "@/fm/faultNotes";
@@ -524,8 +524,19 @@ export function buildAttentionItems(opts: {
     const id = recordEntity(t.entityId, (x) => x in entities) ?? t.entityId;
     return id ? [devices.deviceOf(id)] : [];
   }));
+  // ⚠️ "NOT A PROBLEM WHILE IT LASTS" HOLDS ON THE DEVICE TOO (owner, 2026-11-02): a device whose fault a person closed so
+  // has its live state, begun before that close, out of the open issues; a state begun after it is a new problem
+  const lasting = new Map<string, number>();
+  for (const t of fmData.tickets) {
+    if (!closedAsLasting(t)) continue;
+    const id = recordEntity(t.entityId, (x) => x in entities) ?? t.entityId;
+    const at = Date.parse(t.resolvedAt ?? "");
+    if (id && Number.isFinite(at)) lasting.set(devices.deviceOf(id), Math.max(at, lasting.get(devices.deviceOf(id)) ?? 0));
+  }
+  const live = (i: AttentionItem) => (i.kind === "unavailable" || i.kind === "alarm") && !!i.entityId;
   return items.filter((i) => (!i.entityId || !devices.isHidden(i.entityId))
-    && !((i.kind === "unavailable" || i.kind === "alarm") && i.entityId && watched.has(devices.deviceOf(i.entityId))));
+    && !(live(i) && watched.has(devices.deviceOf(i.entityId!)))
+    && !(live(i) && (Date.parse(i.openedAt ?? "") || 0) <= (lasting.get(devices.deviceOf(i.entityId!)) ?? -1)));
 }
 
 /** The villa's problems, role-blind — what the villa model holds. Nothing

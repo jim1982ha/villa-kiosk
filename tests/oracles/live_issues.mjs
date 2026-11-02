@@ -552,9 +552,10 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   }
   ck("  ...a ticket: Done, Need help and Close, no icon; a closed record: Reopen",
      text(drawButtons(tkActs)) === "|Done|Need help|No action needed|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
+  // its second yes, "Not a problem while it lasts" (owner, 2026-11-02; tests/oracles/not_a_problem.mjs)
   ck("  ...its Done asks ITS question in place of the buttons — the issue card's for the device, the ticket's Close for the ticket",
-     text(drawButtons(ovActs, "device:x")) === "|Done? VESTA checks it again before it closes.|Cancel|Done|"
-     && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|No action needed|",
+     text(drawButtons(ovActs, "device:x")) === "|Done? VESTA checks it again before it closes.|Cancel|Not a problem while it lasts|Done|"
+     && text(drawButtons(tkActs, "device:x")) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|Not a problem while it lasts|No action needed|",
      [text(drawButtons(ovActs, "device:x")), text(drawButtons(tkActs, "device:x"))]);
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
      text(drawButtons(tkActs, "device:y")) === "|Done|Need help|No action needed|" && drawButtons([]) === "");
