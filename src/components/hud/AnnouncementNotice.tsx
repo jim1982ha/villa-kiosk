@@ -44,8 +44,8 @@ export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step 
   );
 }
 
-/** An announcement the owner picked for the whole screen (Advanced Settings › Messages › "Full screen for"), drawn
- *  over everything for "Ring shown for", in the one window frame (its "screen" kind): its title in the header; its
+/** An announcement the owner picked for the whole screen (Settings › Messages › "Full-screen announcements"), drawn
+ *  over everything for its own seconds, in the one window frame (its "screen" kind): its title in the header; its
  *  photo large, all it says and its buttons in the body; Close, which hands it back to its notice, in the footer. */
 export function AnnouncementFullScreenView({ announcement, onDismiss, buttons }: {
   announcement: Announcement;
@@ -81,7 +81,7 @@ function OneFullScreen({ announcement, onDismiss }: { announcement: Announcement
 
 export default function AnnouncementNotice() {
   const { config } = useConfig();
-  // read when an announcement arrives: "Ring shown for" changed meanwhile applies to the next one
+  // read when an announcement arrives: a full-screen time changed meanwhile applies to the next one
   const settings = useRef(config);
   settings.current = config;
   // what is on screen, as the notice model says (messages/noticeModel): a ring waiting for its answer stays whatever

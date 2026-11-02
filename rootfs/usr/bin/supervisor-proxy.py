@@ -3602,11 +3602,13 @@ NOT_STORED = object()
 class VillaSetting:
     """One of the villa's shared settings (device-config.json, the Kiosk's SHARED_KEYS) as this server reads it.
     `read(raw)`: the stored value, or NOT_STORED, to the value used. `unreadable`: what a file that exists and cannot
-    be read (or holds the wrong shape) means; None is "cannot tell", which the heartbeat leaves out of its answer."""
-    __slots__ = ("read", "unreadable")
+    be read (or holds the wrong shape) means; None is "cannot tell", which the heartbeat leaves out of its answer.
+    `retired(stored)`: the value an older Kiosk stored under other keys, read when the setting's own key is not stored
+    (formats outlive their writer), or NOT_STORED."""
+    __slots__ = ("read", "unreadable", "retired")
 
-    def __init__(self, read, unreadable):
-        self.read, self.unreadable = read, unreadable
+    def __init__(self, read, unreadable, retired=None):
+        self.read, self.unreadable, self.retired = read, unreadable, retired
 
 
 def _asleep_ids(raw) -> list[str]:
@@ -3619,10 +3621,27 @@ def _villa_empty_sensor(raw) -> str:
     return raw if isinstance(raw, str) and AGENT_ENTITY_RE.fullmatch(raw) else ""
 
 
-def _ring_shown_for(raw) -> int:
+def _seconds(raw) -> int:
     """A whole number of seconds over 0; anything else 0 (not set). Its range is the page's to keep
-    (AppConfig.ringShownForOk, on save)."""
+    (AppConfig.fullScreenSecondsOk, on save)."""
     return raw if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0 else 0
+
+
+def _full_screen_longest(raw) -> int:
+    """The longest any full-screen announcement holds the screen (device-config.json `fullScreen`: [{title, seconds}],
+    each its own, owner 2026-11-03), in seconds; none picked, not stored or another shape: 0."""
+    items = raw if isinstance(raw, list) else []
+    return max((_seconds(f.get("seconds")) for f in items if isinstance(f, dict)), default=0)
+
+
+def _full_screen_retired(stored: dict):
+    """A config an older Kiosk stored (to 2.496.669): its picked titles (`fullScreenFor`) and one time for all
+    (`ringShownForS`), as today's list; NOT_STORED without the titles. The page reads it the same way
+    (AppConfig.fullScreenFromRetired)."""
+    titles = stored.get("fullScreenFor")
+    if not isinstance(titles, list):
+        return NOT_STORED
+    return [{"title": t, "seconds": stored.get("ringShownForS")} for t in titles if isinstance(t, str) and t]
 
 
 #: ⚠️ ONE READER OF THE VILLA'S SETTINGS, AND WHAT "CANNOT READ" MEANS FOR EACH (architecture review, 2026-10-30).
@@ -3633,13 +3652,13 @@ def _ring_shown_for(raw) -> int:
 #:   maintenanceMode      only a stored true is on (Advanced Settings › System); unreadable: cannot tell
 #:   presenceSensor       the villa's "empty" sensor (Settings › Villa; on = empty); unreadable: cannot tell
 #:   recordsKeptDays      what the sweep deletes by; unreadable: 0, keep everything (_evidence_retention_days)
-#:   ringShownForS        how long a ring holds the screen; unreadable: not set (_ring_current_s)
+#:   fullScreen           the longest a full-screen announcement holds the screen; unreadable: not set (_ring_current_s)
 VILLA_SETTINGS: dict[str, VillaSetting] = {
     "unavailableByDesign": VillaSetting(_asleep_ids, None),
     "maintenanceMode": VillaSetting(lambda raw: raw is True, None),
     "presenceSensor": VillaSetting(_villa_empty_sensor, None),
     "recordsKeptDays": VillaSetting(_records_kept_days, 0),
-    "ringShownForS": VillaSetting(_ring_shown_for, 0),
+    "fullScreen": VillaSetting(_full_screen_longest, 0, _full_screen_retired),
 }
 
 
@@ -3649,7 +3668,10 @@ def _villa_setting(name: str):
     stored, readable = DEVICE_CONFIG.read_status()
     if not readable:
         return row.unreadable
-    return row.read(stored.get(name, NOT_STORED))
+    raw = stored.get(name, NOT_STORED) if isinstance(stored, dict) else NOT_STORED
+    if raw is NOT_STORED and row.retired and isinstance(stored, dict):
+        raw = row.retired(stored)
+    return row.read(raw)
 
 
 #: The villa's settings every heartbeat's answer carries (agent-contract.json `heartbeat.answer`): stored name → the
@@ -4026,10 +4048,12 @@ ANNOUNCEMENT_CURRENT_S = 60
 
 
 def _ring_current_s() -> int:
-    """How long a ring is the current notification: ANNOUNCEMENT_CURRENT_S, or the villa's "Ring shown for"
-    (device-config.json `ringShownForS`) when longer. ⚠️ AS LONG AS IT HOLDS THE SCREEN (architecture review,
-    2026-10-30): with "Ring shown for" at 120s, a guest's photo was refused after 60s, the ring still on screen."""
-    return max(ANNOUNCEMENT_CURRENT_S, _villa_setting("ringShownForS"))
+    """How long a ring is the current notification: ANNOUNCEMENT_CURRENT_S, or the longest time a full-screen
+    announcement holds the screen (device-config.json `fullScreen`) when longer. ⚠️ AS LONG AS IT HOLDS THE SCREEN
+    (architecture review, 2026-10-30): with 120s, a guest's photo was refused after 60s, the ring still on screen.
+    The LONGEST, not the newest announcement's own: its title is read from its text by the page alone
+    (messages/announcements readLayout), and a second reader here could disagree with it."""
+    return max(ANNOUNCEMENT_CURRENT_S, _villa_setting("fullScreen"))
 
 
 def _current_photo(items: list, now: float, current_s: int = ANNOUNCEMENT_CURRENT_S) -> str | None:

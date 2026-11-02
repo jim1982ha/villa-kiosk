@@ -13,6 +13,7 @@ import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
 import RemoteReplacedNote from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
+import OnOffToggle from "@/components/common/OnOffToggle";
 import {
   Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Radar,
   Settings2, MessageSquare, Maximize,
@@ -31,10 +32,15 @@ import type { SceneManager } from "@/babylon/SceneManager";
 import InfoTip from "@/components/common/InfoTip";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
-import { languageName, languagesOf } from "@/messages/announcements";
+import { ANNOUNCEMENT_NOTICE_MS, languageName, languagesOf } from "@/messages/announcements";
+import { PendingFields } from "@/hooks/usePendingField";
+import { FullScreenAnnouncements } from "./MessagesSettings";
+import WhoGetsMessages from "./WhoGetsMessages";
+import { ROLE_LABELS } from "@/auth/roles";
 
 /** Settings' tabs (ticket 16 of "One inbox", owner 2026-10-28): General, all it held before; Messages, how this
- *  tablet shows the villa's announcements. */
+ *  tablet shows the villa's announcements, and (owner, 2026-11-03) the villa's message settings, for a profile that may
+ *  edit the villa's setup. */
 export type SettingsTab = "general" | "messages";
 
 interface Props {
@@ -78,6 +84,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
     "badgeStyle", "eyeHeight", "highlightInteractive", "naturalScrolling",
     "render", "showSummaryBar", "siteTitle", "theme",
     "walkSpeed", "ringsFullScreen", "tabletLanguage",
+    // ⚠️ THE VILLA'S (owner, 2026-11-03: moved here from Advanced Settings' Messages tab): a shared key, through the same
+    // draft, Save keeping it and Cancel putting it back on every tablet.
+    "fullScreen",
     // ⚠️ THE VILLA'S, NOT THIS DEVICE'S (owner, 2026-10-22: moved here from Advanced Settings): a shared key
     // (deviceConfig), so writing it reaches every tablet — through the same draft as every other option here, Save
     // keeping it and Cancel putting it back.
@@ -91,6 +100,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
   const slice = useDraftedSlice(SETTINGS_KEYS);
   const v = slice.view;
   const { kept } = useAnnouncements();
+  const languages = [...new Set([...languagesOf(kept), v.tabletLanguage])];
   // The 3D view follows what this dialog shows (hooks/useScenePreview): a slider is felt while it is dragged, and
   // Cancel puts the view back by the same path. ⚠️ NO SLIDER MOVES THE SCENE ITSELF (to 2.496.499, Cancel within the
   // half-second the write waits left the camera at the cancelled eye height).
@@ -171,31 +181,60 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
       <div className="modal-body">
 
       {tab === "messages" && (
-        <>
-          <TipTitle title="Messages" tip={<>
-            When this tablet is allowed, an announcement the owner picked in Advanced Settings › Messages takes the whole
-            screen for {fmtDuration(config.ringShownForS * 1000)}. Off, it shows under the category bar like every other
-            announcement: useful for a bedroom tablet at night.
+        // ⚠️ ONE SECTION FOR FULL SCREEN (owner, 2026-11-03): this tablet's switch, then the villa's list, each picked
+        // announcement with its own seconds (moved here from Advanced Settings' Messages tab, which is gone). The list
+        // and "Who gets the messages" only for a profile that may edit the villa's setup. The list writes through this
+        // dialog's one draft like every option here (Save keeps it, Cancel puts it back; its seconds wait in the
+        // draft's pending store); "Who gets the messages" is saved on the villa at once, as before.
+        <PendingFields pending={slice.pending}>
+          <TipTitle title="Full-screen announcements" tip={<>
+            The announcements picked here fill the whole screen of every tablet where full screen is on, each for its
+            own time; then they go, and their card stays in the Cockpit's Inbox. Close ends one sooner. A tablet can
+            switch full screen off, a bedroom's at night for instance: there they show under the category bar like
+            every other announcement, for {fmtDuration(ANNOUNCEMENT_NOTICE_MS)}.
           </>} />
-          <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-            <SegmentedGroup ariaLabel="Rings full screen on this tablet"
-              active={v.ringsFullScreen ? "on" : null} onChange={() => slice.set({ ringsFullScreen: !v.ringsFullScreen }, { now: true })}
-              options={[{ key: "on", title: "Let a ring take the whole screen on this tablet", label: <><Maximize size={16} /> Rings full screen on this tablet</> }]} />
-          </div>
-          {/* ticket 28 of "One inbox" (owner, 2026-10-30): this tablet's language for VESTA's words, from the languages
-              VESTA holds them in (messages/announcements languagesOf), the current pick kept even if none holds it now */}
-          <TipTitle title="VESTA's language on this tablet" tip={<>
-            VESTA's messages, alerts and reports on this tablet, in the language picked, when VESTA wrote them in it
-            (as it does for each Telegram chat's language). Anything VESTA wrote only in one language, the villa's own
-            announcements and the tablet's buttons and menus stay as they are.
+          <OnOffToggle ariaLabel="Full screen on this tablet" title="Let a picked announcement fill the whole screen of this tablet"
+            on={v.ringsFullScreen} onChange={(ringsFullScreen) => slice.set({ ringsFullScreen }, { now: true })}
+            icon={<Maximize size={16} />} label="Full screen on this tablet" />
+          {can("editConfig") && (
+            <>
+              <div className="settings-inline-label" style={{ marginTop: 12 }}>For every tablet</div>
+              <FullScreenAnnouncements value={v.fullScreen} onChange={(fullScreen) => slice.set({ fullScreen }, { now: true })} />
+            </>
+          )}
+          {/* ticket 28 of "One inbox" (owner, 2026-10-30): which of the languages VESTA wrote its words in this tablet
+              shows (messages/announcements languagesOf), the current pick kept even if none holds it now; owner,
+              2026-11-03: "i don't understand what this does", said plainly, and no lone button while English is all */}
+          <TipTitle title="VESTA's messages on this tablet, in" tip={<>
+            VESTA writes each message in the language of every chat that receives it (each chat's language is set on
+            VESTA's page). Pick which of those languages this tablet shows. It translates nothing: a message written in
+            one language only, the villa's own announcements and this tablet's buttons and menus stay as they are.
           </>} />
-          <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-            <SegmentedGroup ariaLabel="VESTA's language on this tablet" active={v.tabletLanguage}
-              onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
-              options={[...new Set([...languagesOf(kept), v.tabletLanguage])].map((code) => (
-                { key: code, title: `VESTA's words in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
-          </div>
-        </>
+          {languages.length > 1 ? (
+            <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <SegmentedGroup ariaLabel="VESTA's messages on this tablet, in" active={v.tabletLanguage}
+                onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
+                options={languages.map((code) => (
+                  { key: code, title: `VESTA's messages in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
+            </div>
+          ) : (
+            <span className="muted body-text">
+              Only {languageName(languages[0])} so far: another language shows here once a chat receives VESTA's messages in it.
+            </span>
+          )}
+          {can("editConfig") && (
+            <>
+              <TipTitle title="Who gets the messages" tip={<>
+                The chats and phones that get the villa's messages, for the {ROLE_LABELS.owner} and for the{" "}
+                {ROLE_LABELS.ops}. An urgent (P1) alert goes to both lists, a P2 alert to the {ROLE_LABELS.ops}'s; a
+                notice goes to the list its automation names. VESTA sends its reminders to the same chats. An urgent or
+                P2 alert with nobody listed goes to every Telegram chat of the villa, so it is never lost. A change here
+                is saved on the villa at once.
+              </>} />
+              <WhoGetsMessages />
+            </>
+          )}
+        </PendingFields>
       )}
 
       {tab === "general" && (
@@ -237,12 +276,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           keeps them on that one line on a phone too, matching desktop,
           not just on a roomy screen. */}
       <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-        <SegmentedGroup ariaLabel="Blue glow for clickable devices" className="settings-row-half"
-          active={v.highlightInteractive ? "on" : null} onChange={() => slice.set({ highlightInteractive: !v.highlightInteractive }, { now: true })}
-          options={[{ key: "on", title: "Blue glow around clickable devices", label: <><MousePointerClick size={16} /> Clickable Glow</> }]} />
-        <SegmentedGroup ariaLabel="Natural scrolling" className="settings-row-half"
-          active={v.naturalScrolling ? "on" : null} onChange={() => slice.set({ naturalScrolling: !v.naturalScrolling }, { now: true })}
-          options={[{ key: "on", title: "Natural scrolling in the bird's-eye view", label: <><Move size={16} /> Natural Scroll</> }]} />
+        <OnOffToggle ariaLabel="Blue glow for clickable devices" className="settings-row-half" title="Blue glow around clickable devices"
+          on={v.highlightInteractive} onChange={(highlightInteractive) => slice.set({ highlightInteractive }, { now: true })}
+          icon={<MousePointerClick size={16} />} label="Clickable Glow" />
+        <OnOffToggle ariaLabel="Natural scrolling" className="settings-row-half" title="Natural scrolling in the bird's-eye view"
+          on={v.naturalScrolling} onChange={(naturalScrolling) => slice.set({ naturalScrolling }, { now: true })}
+          icon={<Move size={16} />} label="Natural Scroll" />
       </div>
 
       {/* Brightness/Night dimming apply to every villa; the day/night
@@ -252,13 +291,11 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           pre-rendered atlas crossfade worth previewing/overriding on
           demand rather than a plain lighting dim. .row + flex-wrap (not
           .slider-pair, which is a strict 2-col grid shared with the Eye
-          height/Walk speed pair below — a 3rd item would either squeeze
-          those or need its own copy of that class) so the segmented
-          control sits on the same line when there's room and drops to its
-          own line first on a narrow screen, same pattern as the Clickable
-          Glow/Natural Scroll row above. */}
+          height/Walk speed pair below): three equal thirds (owner,
+          2026-11-03: "equally balanced in the modal width"), wrapping on
+          a narrow screen. */}
       <div className="row" style={{ gap: 12, marginTop: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+        <div className="settings-third">
           <label className="with-tip">Brightness · {v.render.exposure.toFixed(2)}×
             <InfoTip label="About Brightness">The overall exposure of the 3D view. Updates live.</InfoTip></label>
           <input
@@ -266,7 +303,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
             onChange={(e) => applyRender({ exposure: Number(e.target.value) })}
           />
         </div>
-        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+        <div className="settings-third">
           <label className="with-tip">Night dimming · {v.render.nightDimming.toFixed(1)}×
             <InfoTip label="About Night dimming">How much extra dimming applies at night. Updates live.</InfoTip></label>
           <input
@@ -275,15 +312,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           />
         </div>
         {(manager?.lightingMode().structureUnlit ?? false) && (
-          // Sizing lives entirely in .daynight-segmented (styles.css), not
-          // an inline style — a narrow-screen media query needs to override
-          // it (full-width once it wraps onto its own line below the
-          // sliders), which can't win against an inline style's
-          // specificity. alignSelf: flex-end there lines the control's
-          // BOTTOM edge up with the bottom of its slider siblings (where
-          // the track/thumb sits), which is the part it should visually
-          // match — `stretch` was tried first and read badly, growing the
-          // control to the FULL label-plus-track height. Sunrise, not Sun,
+          // A third of the line, as its two sliders (owner, 2026-11-03: .settings-third), its icons filling it
+          // (.daynight-segmented). Sunrise, not Sun,
           // for "Day": the Theme selector above already uses Sun for its
           // Light option, and the two sat close enough on the same screen
           // to read as the same control.
@@ -293,7 +323,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           // in a labelled wrapper like its slider siblings, so the control
           // states what it does instead of relying on the reader decoding a
           // sun/moon glyph that the header control also uses.
-          <div style={{ flex: "0 0 auto", minWidth: 0 }}>
+          <div className="settings-third">
           <label className="with-tip">Villa lighting
             <InfoTip label="About Villa lighting">
               Forces this villa's baked day or night look, or follows the real cycle on Auto. It relights the 3D
@@ -331,36 +361,24 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           {can("editConfig") && " Room glow: light up the room in red and draw the camera's cone when presence is "
             + "detected or a sensor triggers (the devices themselves still glow). It applies to every tablet."}
         </InfoTip></label>
-      {/* "Floating badge style" only ever named the first of these two
-          controls (Default/Card, the on-map entity badge look) — the
-          second is a completely different feature (whether the bottom
-          Summary bar/Dock shows at all), so the old title undersold what
-          the row actually controls. Not an even 50/50 split (see
-          .badge-style-row in styles.css) — Default+Card is genuinely
-          wider content than a single "Dock" button, so forcing equal
-          halves would starve the pair while leaving Dock's half mostly
-          empty; both groups instead grow to fill the row, weighted 2:1. */}
-      <div className="row badge-style-row" style={{ gap: 10, marginTop: 6 }}>
-        <SegmentedGroup ariaLabel="Floating badge style" className="settings-row-half" active={v.badgeStyle} onChange={(badgeStyle) => slice.set({ badgeStyle }, { now: true })} options={[
+      {/* The on-map badge look (Icon / Card), on its own line; then (owner, 2026-11-03: every on/off setting is On | Off,
+          its name at the left) the Summary bar and, for a profile that may edit the villa's setup, the villa's room
+          glow and camera cones (AppConfig.roomGlowAndCones, every tablet's; on this line since 2026-10-22), two
+          halves that wrap together on a phone. */}
+      <div className="row" style={{ gap: 10, marginTop: 6 }}>
+        <SegmentedGroup ariaLabel="Floating badge style" active={v.badgeStyle} onChange={(badgeStyle) => slice.set({ badgeStyle }, { now: true })} options={[
           { key: "classic", title: "Icon badge style, the reading sits on a small pill under the icon", label: <><Circle size={16} /> <span className="badge-btn-label">Icon</span></> },
           { key: "card", title: "Card badge style, the reading sits inline beside the icon (default)", label: <><CreditCard size={16} /> <span className="badge-btn-label">Card</span></> },
         ]} />
-        {/* Single active/inactive button, its own one-item segmented group —
-            reuses the exact same pill styling as the badge-style pair above
-            rather than a checkbox row, at the user's request. Shares
-            .settings-row-half's sizing (styles.css) so the two sit on one
-            line even on a phone — this button's own label shortens further
-            there (.settings-label-short/-full) since "Dock" leaves the
-            Default/Card pair the most room. */}
-        <SegmentedGroup ariaLabel="Summary bar" className="settings-row-half"
-          active={v.showSummaryBar ? "on" : null} onChange={() => slice.set({ showSummaryBar: !v.showSummaryBar }, { now: true })}
-          options={[{ key: "on", label: <><PanelBottom size={16} /><span className="settings-label-full">Summary bar</span><span className="settings-label-short">Dock</span></> }]} />
-        {/* The villa's room glow and camera cones (AppConfig.roomGlowAndCones — every tablet's, so only for a
-            profile that may edit the villa's setup), on this row since 2026-10-22 (owner). */}
+      </div>
+      <div className="row" style={{ gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+        <OnOffToggle ariaLabel="Summary bar" className="settings-row-half" title="The summary bar at the bottom of the screen"
+          on={v.showSummaryBar} onChange={(showSummaryBar) => slice.set({ showSummaryBar }, { now: true })}
+          icon={<PanelBottom size={16} />} label="Summary bar" />
         {can("editConfig") && (
-          <SegmentedGroup ariaLabel="Room glow and camera cones" className="settings-row-half"
-            active={v.roomGlowAndCones ? "on" : null} onChange={() => slice.set({ roomGlowAndCones: !v.roomGlowAndCones }, { now: true })}
-            options={[{ key: "on", title: "Room glow and camera cones, on every tablet", label: <><Radar size={16} /><span className="settings-label-full">Room glow</span><span className="settings-label-short">Glow</span></> }]} />
+          <OnOffToggle ariaLabel="Room glow and camera cones" className="settings-row-half" title="Room glow and camera cones, on every tablet"
+            on={v.roomGlowAndCones} onChange={(roomGlowAndCones) => slice.set({ roomGlowAndCones }, { now: true })}
+            icon={<Radar size={16} />} label="Room glow" />
         )}
       </div>
 

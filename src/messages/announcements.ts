@@ -10,6 +10,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import { fetchFeed, type FeedRead } from "./feed";
+import type { FullScreenAnnouncement } from "@/config/AppConfig";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
 
 export interface Announcement {
@@ -149,7 +150,7 @@ const isOver = (a: Announcement): boolean => {
 export const incidentKey = (n: number): string =>
   String(AGENT_CONTRACT.vestaMessage.incidentKey).replace("{number}", String(n));
 
-/** What "Full screen for" offers (Advanced Settings › Messages): each title the add-on keeps, once, in order, without
+/** What "Full-screen announcements" offers (Settings › Messages): each title the add-on keeps, once, in order, without
  *  the ones already `picked`. The villa's own words, never named in code. Pure: tests/oracles/announcements.mjs. */
 export function announcedTitles(kept: readonly Announcement[], picked: readonly string[]): string[] {
   return [...new Set(kept.map((a) => a.title))].filter((t) => t && !picked.includes(t)).sort((x, y) => x.localeCompare(y));
@@ -157,14 +158,12 @@ export function announcedTitles(kept: readonly Announcement[], picked: readonly 
 
 /** How long a new announcement stays on screen as a notice. */
 export const ANNOUNCEMENT_NOTICE_MS = 10_000;
-/** The settings that decide how an announcement shows (AppConfig: the first two the villa's, Advanced Settings ›
- *  Messages; the third this tablet's, Settings › Messages). */
+/** The settings that decide how an announcement shows (AppConfig, Settings › Messages › "Full-screen announcements":
+ *  the first the villa's, the second this tablet's). */
 export interface ShowSettings {
-  /** The titles the owner picked to take the whole screen; empty by default. */
-  fullScreenFor: readonly string[];
-  /** How long one of them holds the screen, in seconds ("Ring shown for"). */
-  ringShownForS: number;
-  /** Whether this tablet lets one take the screen ("Rings full screen on this tablet"). */
+  /** The announcements the owner picked to take the whole screen, each with its own seconds; empty by default. */
+  fullScreen: readonly FullScreenAnnouncement[];
+  /** Whether this tablet lets one take the screen ("Full screen on this tablet"). */
   ringsFullScreen: boolean;
 }
 
@@ -177,14 +176,15 @@ interface HowShown { fullScreenMs: number | null; noticeMs: number }
  * ANNOUNCEMENT_NOTICE_MS, ONE TIME FOR ALL (owner, 2026-10-29: "this pill shall remain few seconds also, similarly to
  * other notification pills … consistently and centrally defined … once the timer expires the pill shall disappear and
  * the user will find the same card in the Cockpit"): one offering buttons (the doorbell's Unlock, an approval) too —
- * its card keeps them in the Inbox. A title the owner picked takes the whole screen instead, for "Ring shown for", on a
- * tablet that allows it, and then goes (no notice after it). A cleared one, or a `rewrite` of one already shown (a ring
- * answered, timed out), never takes the screen again: it would hold the screen a second "Ring shown for". Pure:
+ * its card keeps them in the Inbox. A title the owner picked takes the whole screen instead, for ITS OWN seconds (owner,
+ * 2026-11-03), on a tablet that allows it, and then goes (no notice after it). A cleared one, or a `rewrite` of one
+ * already shown (a ring answered, timed out), never takes the screen again: it would hold the screen a second time. Pure:
  * tests/oracles/announcements.mjs.
  */
 export function noticeFor(a: Announcement, s: ShowSettings, { rewrite = false } = {}): HowShown {
-  const full = s.ringsFullScreen && !rewrite && !isOver(a) && s.fullScreenFor.includes(a.title);
-  return full ? { fullScreenMs: s.ringShownForS * 1000, noticeMs: 0 } : { fullScreenMs: null, noticeMs: ANNOUNCEMENT_NOTICE_MS };
+  const picked = s.fullScreen.find((f) => f.title === a.title);
+  const full = picked && s.ringsFullScreen && !rewrite && !isOver(a);
+  return full ? { fullScreenMs: picked.seconds * 1000, noticeMs: 0 } : { fullScreenMs: null, noticeMs: ANNOUNCEMENT_NOTICE_MS };
 }
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };

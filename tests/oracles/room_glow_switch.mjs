@@ -168,11 +168,14 @@ console.log("\n  where it is set (owner, 2026-10-22: in Settings, on the Map loo
 {
   const st = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
   const adv = readFileSync(new URL("../../src/components/settings/ConfigEditorModal.tsx", import.meta.url), "utf8");
-  const row = /<div className="row badge-style-row"[\s\S]*?\n {8}<\/div>/.exec(st)?.[0] ?? "";
-  ck("one more toggle on the Map look row, through Settings' one draft (Save keeps it, Cancel writes it back)",
-     /"roomGlowAndCones",[^\]]*?\] as const;/.test(st) && /ariaLabel="Room glow and camera cones"/.test(row)
-     && /slice\.set\(\{ roomGlowAndCones: !v\.roomGlowAndCones \}, \{ now: true \}\)/.test(row)
-     && /\{can\("editConfig"\) && \(\s*<SegmentedGroup ariaLabel="Room glow and camera cones"/.test(row));
+  // owner, 2026-11-03: every on/off setting is On | Off (common/OnOffToggle), on the line under Map look's Icon | Card
+  const { elements, guardsOf, parseTsx, propText } = await import("../consistency/jsx.mjs");
+  const glow = elements(parseTsx("components/settings/SettingsModal.tsx"), "OnOffToggle")
+    .filter((e) => propText(e, "ariaLabel") === '"Room glow and camera cones"');
+  ck("an On | Off under the Map look, through Settings' one draft (Save keeps it, Cancel writes it back), editConfig only",
+     /"roomGlowAndCones",[^\]]*?\] as const;/.test(st) && glow.length === 1
+     && propText(glow[0], "onChange") === "(roomGlowAndCones) => slice.set({ roomGlowAndCones }, { now: true })"
+     && propText(glow[0], "on") === "v.roomGlowAndCones" && guardsOf(glow[0]).includes('can("editConfig")'), glow.map(guardsOf));
   ck("  ...its (i) says it applies to every tablet; Advanced Settings no longer has it",
      /It applies to every tablet\./.test(st) && !/roomGlowAndCones|Room glow/.test(adv));
 }

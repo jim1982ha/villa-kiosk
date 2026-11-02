@@ -571,16 +571,16 @@ async def main() -> None:
     r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
     ck("  ...a guest sees that photo while it is the current notification, as a ring's (owner, 2026-10-28)",
        gbody["messages"][0].get("photo") == one[0]["photo"] and r.status == 200, (r.status, gbody))
-    # architecture review, 2026-10-30: current as long as the ring holds the screen (the villa's "Ring shown for")
+    # architecture review, 2026-10-30: current as long as the ring holds the screen (the villa's longest full-screen time)
     held, read = proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read_status
     proxy.ANNOUNCEMENT_CURRENT_S = 0
     proxy.DEVICE_CONFIG.read_status = lambda: ({}, True)
     await asyncio.sleep(1.1)
     r_gone = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
-    proxy.DEVICE_CONFIG.read_status = lambda: ({"ringShownForS": 120}, True)
+    proxy.DEVICE_CONFIG.read_status = lambda: ({"fullScreen": [{"title": "T", "seconds": 120}]}, True)
     r_held = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
     proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read_status = held, read
-    ck("  ...current for as long as the villa's \"Ring shown for\" holds it on screen (403 past it, 200 within it)",
+    ck("  ...current for as long as the villa's longest full-screen time holds it on screen (403 past it, 200 within it)",
        r_gone.status == 403 and r_held.status == 200, (r_gone.status, r_held.status))
     proxy.ANNOUNCEMENT_PHOTO_GRACE_S = 0       # the sweep's grace for a copy not yet recorded: none here
     soon = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() + 5))

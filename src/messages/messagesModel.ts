@@ -160,7 +160,7 @@ export function mergeAnnouncements(held: readonly Announcement[], incoming: read
  *  ARRIVED for the notice — every one of a read that is not a baseline, oldest first, each saying whether it rewrites
  *  one the page already held (the ring answered, timed out: it never takes the screen again). ⚠️ DECIDED FROM WHAT THE
  *  PAGE HELD (review Q 1, 2026-10-28): the notice kept its own memory of the rings it had shown, empty after a reload or
- *  a wake-up, so the rewrite of a ring the page had read in its baseline took the whole screen for "Ring shown for".
+ *  a wake-up, so the rewrite of a ring the page had read in its baseline took the whole screen a second time.
  *  ⚠️ EVERY ONE, not the newest alone (review Q round 2): a ring arriving with another in one read was never shown. */
 export function afterRead(held: readonly Announcement[], items: readonly Announcement[], full: boolean, first = 0,
   kept: readonly number[] | null = null):

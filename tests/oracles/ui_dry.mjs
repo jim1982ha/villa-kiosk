@@ -76,5 +76,34 @@ console.log("\n  no copies left:");
   }
   ck(":hover only for a real pointer — every hover look inside @media (hover: hover), so none sticks after a tap", loose.length === 0, loose);
 }
-done("✅ one segmented group, one save button, one outside-close, one ticker");
+console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user can toggle either ON or OFF\", Map look's style):");
+{
+  const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
+  const SRC = new URL("../../src/", import.meta.url).pathname;
+  const files = tsFiles(SRC).filter((f) => f.endsWith(".tsx")).map((f) => f.slice(SRC.length));
+  const single = [], toggles = [];
+  for (const f of files) {
+    const tree = parseTsx(f);
+    for (const el of elements(tree, "SegmentedGroup")) {
+      const opts = propText(el, "options");
+      // an options list written out with one entry: an on/off drawn as one pressed button
+      if (typeof opts === "string" && opts.startsWith("[") && (opts.match(/\{ ?key: /g) ?? []).length === 1) single.push(`${f}: ${propText(el, "ariaLabel")}`);
+    }
+    for (const el of elements(tree, "OnOffToggle")) toggles.push(`${f}: ${propText(el, "ariaLabel")}`);
+  }
+  ck("no SegmentedGroup of one option is left anywhere in src (an on/off is On | Off)", single.length === 0, single);
+  ck("  ...every on/off setting draws the one OnOffToggle", ["Maintenance mode", "Confirm before toggling", "Full screen on this tablet",
+    "Blue glow for clickable devices", "Natural scrolling", "Summary bar", "Room glow and camera cones"]
+    .every((n) => toggles.some((t) => t.endsWith(`"${n}"`))), toggles);
+  const c = srcOf("components/common/OnOffToggle.tsx");
+  ck("  ...which IS a SegmentedGroup of two options, On and Off, nothing drawn of its own",
+     /<SegmentedGroup<OnOff>/.test(c) && /\{ key: "on", label: "On"/.test(c) && /\{ key: "off", label: "Off"/.test(c)
+     && /active=\{on \? "on" : "off"\}/.test(c) && !/className="segmented/.test(c));
+  // owner, 2026-11-03: a choice standing as its section's own line spans the modal, its segments equal and centred
+  const css = readFileSync(join(SRC, "styles/04-modals.css"), "utf8");
+  ck("a segmented choice alone on its line fills it, in equal centred segments that wrap on a phone",
+     /\.settings-modal \.row > \.segmented:only-child \{ flex: 1 1 100%; flex-wrap: wrap; \}/.test(css)
+     && /\.settings-modal \.row > \.segmented:only-child button \{ flex: 1 1 0; min-width: \d+px; justify-content: center; \}/.test(css));
+}
+done("✅ one segmented group, one on/off, one save button, one outside-close, one ticker");
 

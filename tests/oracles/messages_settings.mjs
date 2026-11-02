@@ -1,49 +1,126 @@
-// The Messages settings (ticket 16 of "One inbox", owner 2026-10-28): "Full screen for" and "Ring shown for" are the
-// villa's (every tablet, empty / 60s by default), "Rings full screen on this tablet" each tablet's; Advanced Settings
-// gains a Messages tab between Devices and System, owner only; Settings a strip General · Messages, reached
-// from the profile button's Settings (the Cockpit's gear that opened it there was removed, owner 2026-10-29).
-import { readFileSync } from "node:fs";
+// The Messages settings (ticket 16 of "One inbox", owner 2026-10-28; owner 2026-11-03: each full-screen announcement
+// its own seconds, the villa's message settings moved from Advanced Settings into Settings › Messages, one section
+// "Full-screen announcements"). The villa's list (`fullScreen`, every tablet, empty by default) and this tablet's
+// switch ("Full screen on this tablet") are read, migrated, drafted and drawn here, by value and through the
+// compiler's tree.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
+import { elements, guardsOf, parseTsx, propText } from "../consistency/jsx.mjs";
 const dc = await import("@/config/deviceConfig");
-const { DEFAULT_CONFIG, normaliseConfig } = await import("@/config/AppConfig");
+const { DEFAULT_CONFIG, FULL_SCREEN_S_DEFAULT, normaliseConfig, withFullScreen } = await import("@/config/AppConfig");
 const { ADVANCED_SETTINGS_KEYS } = await import("@/config/configSlice");
-const src = (f) => readFileSync(new URL(`../../src/${f}`, import.meta.url), "utf8");
+const J = JSON.stringify;
 
 console.log("  whose each setting is:");
-ck("\"Full screen for\" and \"Ring shown for\" are the villa's: shared with every tablet, in Advanced Settings' draft",
-   ["fullScreenFor", "ringShownForS"].every((k) => dc.SHARED_CONFIG_KEYS.includes(k) && ADVANCED_SETTINGS_KEYS.includes(k)));
-ck("  ...\"Rings full screen on this tablet\" this tablet's alone", !dc.SHARED_CONFIG_KEYS.includes("ringsFullScreen"));
-ck("an empty default: nothing takes the screen until the owner picks; 60s; a tablet allows it",
-   JSON.stringify(DEFAULT_CONFIG.fullScreenFor) === "[]" && DEFAULT_CONFIG.ringShownForS === 60 && DEFAULT_CONFIG.ringsFullScreen === true
-   && JSON.stringify(dc.baselineFromServer({}).fullScreenFor) === "[]" && dc.baselineFromServer({}).ringShownForS === 60);
-const cfg = normaliseConfig({ entityMap: {}, meshBindings: {} });
-ck("  ...a config stored before them reads the defaults", JSON.stringify(cfg.fullScreenFor) === "[]" && cfg.ringShownForS === 60
-   && cfg.ringsFullScreen === true, cfg);
-const parsed = dc.parseSharedConfig({ fullScreenFor: ["🔔 Visitor", 3], ringShownForS: 45 });
-ck("the villa's stored values are read: the titles (anything else dropped), the seconds",
-   JSON.stringify(parsed.fullScreenFor) === JSON.stringify(["🔔 Visitor"]) && parsed.ringShownForS === 45, parsed);
-ck("  ...a time that is not a whole number of seconds from 1 is not taken",
-   [0, -5, 1.5, "60", 100000].every((v) => dc.parseSharedConfig({ ringShownForS: v }).ringShownForS === undefined));
+ck("\"Full-screen announcements\" is the villa's: shared with every tablet; drafted by Settings, no longer Advanced Settings",
+   dc.SHARED_CONFIG_KEYS.includes("fullScreen") && !ADVANCED_SETTINGS_KEYS.includes("fullScreen"));
+ck("  ...the retired keys are gone from both", ["fullScreenFor", "ringShownForS"].every((k) => !dc.SHARED_CONFIG_KEYS.includes(k)
+   && !ADVANCED_SETTINGS_KEYS.includes(k) && !(k in DEFAULT_CONFIG)));
+ck("  ...\"Full screen on this tablet\" this tablet's alone", !dc.SHARED_CONFIG_KEYS.includes("ringsFullScreen"));
+ck("an empty default: nothing takes the screen until the owner picks; a tablet allows it; a new pick starts at 60s",
+   J(DEFAULT_CONFIG.fullScreen) === "[]" && DEFAULT_CONFIG.ringsFullScreen === true && FULL_SCREEN_S_DEFAULT === 60
+   && J(dc.baselineFromServer({}).fullScreen) === "[]");
+
+console.log("\n  what the villa stored before 2.496.670 (its titles and one time for all), nothing lost:");
+{
+  // the villa's stored config today: three titles, 10s
+  const old = { fullScreenFor: ["🔔 Visitor at Gate A", "🔥 Overload", "🧪 Weekly test"], ringShownForS: 10 };
+  const want = old.fullScreenFor.map((title) => ({ title, seconds: 10 }));
+  const parsed = dc.parseSharedConfig(old);
+  ck("the villa's copy reads as each title with that time, in the order picked",
+     J(parsed.fullScreen) === J(want) && !("fullScreenFor" in parsed) && !("ringShownForS" in parsed), parsed);
+  ck("  ...a time that was not one the field took (or none) reads the default",
+     [undefined, 0, "10", 1.5, 100000].every((v) => J(dc.parseSharedConfig({ fullScreenFor: ["A", 3], ringShownForS: v }).fullScreen)
+       === J([{ title: "A", seconds: 60 }])));
+  ck("  ...a config already in today's shape is read as it is (the retired keys beside it ignored)",
+     J(dc.parseSharedConfig({ fullScreen: [{ title: "A", seconds: 5 }], fullScreenFor: ["B"], ringShownForS: 9 }).fullScreen)
+       === J([{ title: "A", seconds: 5 }]));
+  const local = withFullScreen({ ...old, theme: "dark" });
+  ck("this tablet's own stored copy is read the same way (the defaults laid under it after)",
+     J(local) === J({ theme: "dark", fullScreen: want }), local);
+  const inMemory = normaliseConfig({ ...DEFAULT_CONFIG, ...old });
+  ck("  ...and once in memory no retired key is carried", !("fullScreenFor" in inMemory) && !("ringShownForS" in inMemory));
+  // the baseline this tablet last synced with migrates the same way: an unchanged list pushes nothing
+  ck("  ...the old copy on the villa and the old copy here read alike: nothing to push until the owner changes it",
+     dc.isSharedConfigDiffEmpty(dc.diffSharedConfig(dc.baselineFromServer(dc.parseSharedConfig(old)),
+       dc.pickSharedConfig(normaliseConfig({ ...DEFAULT_CONFIG, ...withFullScreen(old) })))));
+  // a save writes today's key and drops the retired ones from what it carries over
+  let sent = null;
+  globalThis.window ??= { location: { pathname: "/", origin: "http://kiosk" } };
+  globalThis.fetch = async (_url, init) => { sent = JSON.parse(init.body); return new Response("{}", { status: 200 }); };
+  await dc.saveSharedConfig(dc.pickSharedConfig({ ...DEFAULT_CONFIG, fullScreen: want }), "1", { ...old, fromANewerVersion: 1 });
+  ck("a save writes the new key, never the old ones (keys this version does not know are still carried)",
+     !!sent && J(sent.config.fullScreen) === J(want) && !("fullScreenFor" in sent.config) && !("ringShownForS" in sent.config)
+     && sent.config.fromANewerVersion === 1, sent);
+}
+
+console.log("\n  each announcement's own seconds:");
+{
+  const parsed = dc.parseSharedConfig({ fullScreen: [{ title: "A", seconds: 0 }, { title: "B", seconds: 601 }, { title: "C", seconds: 1.5 },
+    { title: "D", seconds: "60" }, { title: "", seconds: 30 }, { title: "E", seconds: 600 }, { title: "E", seconds: 5 }, 7, null, { title: "F", seconds: 1 }] });
+  ck("a time that is not whole seconds from 1 to 600 is refused (its item left out), each title once",
+     J(parsed.fullScreen) === J([{ title: "E", seconds: 600 }, { title: "F", seconds: 1 }]), parsed);
+  const { secondsWrite } = await import("@/components/settings/MessagesSettings");
+  const cfg = { ...DEFAULT_CONFIG, fullScreen: [{ title: "A", seconds: 10 }, { title: "B", seconds: 20 }] };
+  ck("the field: a time it takes writes that announcement's seconds only, the others as they are",
+     J(secondsWrite("B", "45")(cfg).fullScreen) === J([{ title: "A", seconds: 10 }, { title: "B", seconds: 45 }]));
+  ck("  ...out of range, empty or not a number writes nothing (the field falls back)",
+     ["0", "601", "", " ", "1.5", "abc", "-3"].every((t) => secondsWrite("A", t) === null));
+  const base = dc.pickSharedConfig(cfg);
+  const mine = dc.diffSharedConfig(base, { ...base, fullScreen: [{ title: "A", seconds: 99 }, { title: "B", seconds: 20 }] });
+  const theirs = { ...base, fullScreen: [...base.fullScreen, { title: "C", seconds: 60 }] };
+  ck("one tablet changing A's seconds while another adds C: both stand",
+     J(dc.applySharedConfigDiff(theirs, mine).fullScreen) === J([{ title: "A", seconds: 99 }, { title: "B", seconds: 20 }, { title: "C", seconds: 60 }]));
+}
+
+console.log("\n  the rows, drawn:");
+{
+  const { h, draw } = await import("../consistency/screen.mjs");
+  const { PendingFields } = await import("@/hooks/usePendingField");
+  const { PendingEdits } = await import("@/config/pendingEdits");
+  const { FullScreenAnnouncements } = await import("@/components/settings/MessagesSettings");
+  const value = [{ title: "🔔 Visitor", seconds: 15 }, { title: "🔥 Overload", seconds: 300 }];
+  const quiet = console.error; console.error = () => {}; // the tooltip's layout effect, said on every server render
+  const html = draw(h(PendingFields, { pending: new PendingEdits(() => {}) }, h(FullScreenAnnouncements, { value, onChange: () => {} })));
+  console.error = quiet;
+  const fields = [...html.matchAll(/<input[^>]*aria-label="Seconds ([^"]+) fills the screen"[^>]*>/g)]
+    .map((m) => [m[1], /value="(\d+)"/.exec(m[0])?.[1]]);
+  ck("one seconds field per picked announcement, named for it, holding its own time",
+     J(fields) === J([["🔔 Visitor", "15"], ["🔥 Overload", "300"]]), fields);
+  ck("  ...each with its ✕ to take it off, and the picker to add one", (html.match(/aria-label="Take [^"]+ off full screen"/g) ?? []).length === 2
+     && /placeholder="Add an announcement…"/.test(html));
+  ck("  ...no \"Ring shown for\" anywhere", !/Ring shown for/i.test(html));
+}
 
 console.log("\n  where they are:");
-const adv = src("components/settings/ConfigEditorModal.tsx");
-const order = [...adv.matchAll(/\{ id: "(\w+)", label: "(\w+)", icon: \w+(, owner: true)? \}/g)].map((m) => `${m[2]}${m[3] ? "*" : ""}`);
-ck("Advanced Settings: a Messages tab between Devices and System, owner only (*)",
-   JSON.stringify(order) === JSON.stringify(["Villa", "Devices", "Messages*", "System*"]), order);
-ck("  ...holding \"Full screen for\" and \"Ring shown for\"",
-   /tab === "messages" && roleCan\(role, "editConfig"\)[\s\S]*?<FullScreenFor \/>\s*<RingShownFor \/>/.test(adv));
-const set = src("components/settings/SettingsModal.tsx");
-ck("Settings: a strip General · Messages; Messages holds this tablet's switch, in the dialog's draft",
-   /\{ id: "general", label: "General"[^}]*\},\s*\{ id: "messages", label: "Messages"/.test(set)
-   && /tab === "messages"[\s\S]*?ariaLabel="Rings full screen on this tablet"/.test(set) && /"walkSpeed", "ringsFullScreen",/.test(set));
-const dash = src("pages/Dashboard.tsx");
-// ⚠️ NO GEAR IN THE COCKPIT (owner, 2026-10-29: "it doesn't make sense to see it here"): Settings › Messages is reached
-// from the profile button's Settings, its strip
-ck("the Cockpit's header has no Settings gear any more (the top bar's own Settings stays)",
-   !/onOpenSettings|Messages settings/.test(src("components/cockpit/CockpitModal.tsx"))
-   && !/<CockpitModal[^>]*onOpenSettings/.test(dash));
-ck("  ...and Settings opens on the tab the screen holds", /tab=\{screen\.settingsTab\}/.test(dash));
+{
+  const adv = parseTsx("components/settings/ConfigEditorModal.tsx");
+  const advText = adv.getText();
+  ck("Advanced Settings has no Messages tab any more (owner, 2026-11-03: in Settings itself)",
+     !/id: "messages"/.test(advText) && !/tab === "messages"/.test(advText)
+     && elements(adv, "WhoGetsMessages").length === 0 && elements(adv, "FullScreenAnnouncements").length === 0);
+  const set = parseTsx("components/settings/SettingsModal.tsx");
+  // every guard above an element, through the elements between (guardsOf stops at the nearest one)
+  const allGuards = (el) => { const out = []; for (let n = el; n; n = n.parent) out.push(...guardsOf(n)); return out; };
+  const fs = elements(set, "FullScreenAnnouncements"), who = elements(set, "WhoGetsMessages");
+  ck("Settings › Messages holds the villa's list and \"Who gets the messages\", each only where can(\"editConfig\")",
+     fs.length === 1 && who.length === 1
+     && [...fs, ...who].every((e) => guardsOf(e).includes('can("editConfig")') && allGuards(e).includes('tab === "messages"')),
+     [...fs, ...who].map(allGuards));
+  const sw = elements(set, "OnOffToggle").filter((e) => propText(e, "ariaLabel") === '"Full screen on this tablet"');
+  ck("  ...this tablet's switch for every profile that opens Settings, an On | Off, first in the section",
+     sw.length === 1 && !allGuards(sw[0]).includes('can("editConfig")') && allGuards(sw[0]).includes('tab === "messages"')
+     && fs.length === 1 && sw[0].getStart() < fs[0].getStart()
+     && /\(ringsFullScreen\) => slice\.set\(\{ ringsFullScreen \}/.test(propText(sw[0], "onChange")));
+  const tips = elements(set, "TipTitle").map((e) => propText(e, "title"));
+  const at = (t) => tips.indexOf(t);
+  ck("  ...one section \"Full-screen announcements\", the language's after it, \"Who gets the messages\" last",
+     at('"Full-screen announcements"') >= 0 && at('"Full-screen announcements"') < at('"VESTA\'s messages on this tablet, in"')
+     && at('"VESTA\'s messages on this tablet, in"') < at('"Who gets the messages"'), tips);
+  ck("  ...its list written through Settings' one draft, its seconds waiting in that draft's store",
+     fs.length === 1 && /slice\.set\(\{ fullScreen \}/.test(propText(fs[0], "onChange"))
+     && elements(set, "PendingFields").some((p) => propText(p, "pending") === "slice.pending"));
+}
 
-done("✅ the Messages settings: the villa's in Advanced Settings, each tablet's in Settings");
+done("✅ the Messages settings: each full-screen announcement its own time, in Settings › Messages, the old shape read");

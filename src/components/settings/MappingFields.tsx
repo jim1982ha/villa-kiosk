@@ -14,7 +14,7 @@
 
 import type { ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
-import SegmentedGroup from "@/components/common/SegmentedGroup";
+import OnOffToggle from "@/components/common/OnOffToggle";
 import Dropdown from "@/components/common/Dropdown";
 import EntityPicker from "./EntityPicker";
 import { usePendingField } from "@/hooks/usePendingField";
@@ -127,14 +127,14 @@ export default function MappingFields({ entryKey, entityId, mapping, entity, cel
 
 /**
  * "Confirm before toggling", on the device card's own line, at its right (owner, 2026-10-22: no checkbox among the
- * fields; one button, pressed while it is on). Only for the types where a tap can act at once (CONFIRM_GATE_TYPES).
+ * fields; owner, 2026-11-03: On | Off, as every on/off setting). Only for the types where a tap can act at once (CONFIRM_GATE_TYPES).
  */
 export function ConfirmToggle({ m, draftField }: { m: EntityMapping; draftField: (change: Partial<EntityMapping>) => void }) {
   if (!CONFIRM_GATE_TYPES.has(m.type)) return null;
   return (
-    <SegmentedGroup ariaLabel="Confirm before toggling" className="config-confirm"
-      active={m.requireConfirm ? "on" : null} onChange={() => draftField({ requireConfirm: !m.requireConfirm })}
-      options={[{ key: "on", title: "Confirm before toggling: a tap on its badge opens its window, and its on/off asks first",
-        label: <><ShieldCheck size={16} /> Confirm before toggling</> }]} />
+    <OnOffToggle ariaLabel="Confirm before toggling" className="config-confirm" on={!!m.requireConfirm}
+      onChange={(requireConfirm) => draftField({ requireConfirm })}
+      title="Confirm before toggling: a tap on its badge opens its window, and its on/off asks first"
+      icon={<ShieldCheck size={16} />} label="Confirm before toggling" />
   );
 }

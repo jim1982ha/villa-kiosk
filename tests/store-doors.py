@@ -303,14 +303,22 @@ async def main() -> None:
     ck("  ...nor once it is older than the current notification's time, even as the newest",
        proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + proxy.ANNOUNCEMENT_CURRENT_S + 1) is None
        and proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 1) == ring.get("photo"))
-    ck("  ...as long as the ring holds the screen: a longer \"Ring shown for\" keeps it current (architecture review 2026-10-30)",
+    ck("  ...as long as the ring holds the screen: a longer full-screen time keeps it current (architecture review 2026-10-30)",
        proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 90, 120) == ring.get("photo")
        and proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 121, 120) is None)
     was = proxy.DEVICE_CONFIG.read_status
-    for stored, want in ((({"ringShownForS": 120}, True), 120), (({"ringShownForS": 30}, True), 60),
-                         (({"ringShownForS": "x"}, True), 60), (({}, True), 60), (({}, False), 60)):
+    # each picked announcement its own seconds (owner, 2026-11-03): current for the LONGEST; a config an older Kiosk
+    # stored (the titles and one time for all) read the same way, as the page reads it (AppConfig.fullScreenFromRetired)
+    fs = lambda *secs: [{"title": f"T{i}", "seconds": s} for i, s in enumerate(secs)]
+    for stored, want in ((({"fullScreen": fs(10, 120, 30)}, True), 120), (({"fullScreen": fs(30)}, True), 60),
+                         (({"fullScreen": fs("x", True, -5)}, True), 60), (({"fullScreen": "x"}, True), 60),
+                         (({"fullScreen": []}, True), 60), (({}, True), 60), (({}, False), 60),
+                         (({"fullScreenFor": ["A", "B"], "ringShownForS": 120}, True), 120),
+                         (({"fullScreenFor": [], "ringShownForS": 120}, True), 60),
+                         (({"fullScreenFor": ["A"], "ringShownForS": "x"}, True), 60),
+                         (({"fullScreen": fs(90), "fullScreenFor": ["A"], "ringShownForS": 300}, True), 90)):
         proxy.DEVICE_CONFIG.read_status = lambda stored=stored: stored
-        ck(f"  ...the villa's \"Ring shown for\" read from its settings {stored}: current for {want}s",
+        ck(f"  ...the villa's full-screen times read from its settings {stored}: current for {want}s",
            proxy._ring_current_s() == want, proxy._ring_current_s())
     proxy.DEVICE_CONFIG.read_status = was
     await proxy._record_announcement(app, kev("<b>Opened at 09:03</b>", key="run-1"))

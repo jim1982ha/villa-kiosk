@@ -1,6 +1,6 @@
 // src/components/common/SearchPicker.tsx
 // THE searchable dropdown: a search box, and under it the rows that match what is typed, one picked by a tap. Each
-// picker says only WHICH rows match (EntityPicker: the villa's devices; Advanced Settings › Messages: what the villa
+// picker says only WHICH rows match (EntityPicker: the villa's devices; Settings › Messages: what the villa
 // has announced). Rule: "No free-text field where the value comes from a known set: choose from a searchable dropdown".
 //
 // ⚠️ ONE LIST FOR THE TICKET FORM TOO (architecture review 2026-10-31 round 12 #2): DeviceSearchPicker had built its
