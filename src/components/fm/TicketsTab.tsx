@@ -93,15 +93,16 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
   /** One record, as every Facility card is drawn (RecordCard): its title, when/where/who, its notes, photos and
    *  reports, the cost of the work that resolved it. Tapping it edits it. */
-  const record = (t: FmTicket, status?: RecordCardProps["status"], actions?: ReactNode, framed = true) => {
+  const record = (t: FmTicket, status?: RecordCardProps["status"], actions?: ReactNode, framed = true, stated = true) => {
     // ⚠️ AN EDIT TAKES ITS CARD'S PLACE (owner, 2026-11-01: tapping a ticket opened a second card, its form, at the
     // top of the tab, out of view); the form brings itself into view (FmForm), and closes when its record leaves the
     // list (ListEditor)
-    return editor.inPlace(t.id, card(t, status, actions, framed),
+    return editor.inPlace(t.id, card(t, status, actions, framed, stated),
       () => <FaultForm editing={t} deviceOptions={deviceOptions} onDone={editor.close} />);
   };
 
-  const card = (t: FmTicket, status?: RecordCardProps["status"], actions?: ReactNode, framed = true) => {
+  /** `stated`: the record says its state (its pill); false for a ticket's records after its first, whose card says it once. */
+  const card = (t: FmTicket, status?: RecordCardProps["status"], actions?: ReactNode, framed = true, stated = true) => {
     const work = data.completions.find((c) => c.ticketId === t.id && c.costId);
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
     const latest = faultLatest(t, momentText);
@@ -124,7 +125,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
           {/* its device's name as its Inbox card says it (attention.cardDevice), the stored one with no device there */}
           <DeviceChip entityId={t.entityId} onOpenEntity={onOpenEntity}
             label={t.entityId && t.entityId in entities ? label(deviceOfRecord(t.entityId)) : t.deviceLabel ?? (t.entityId ? label(t.entityId) : undefined)} />
-          {latest && <StatusPill {...latest} />}
+          {stated && latest && <StatusPill {...latest} />}
         </>} />
     );
   };
@@ -137,7 +138,11 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
   /** A ticket in progress: ONE card — every record taken on with it, its pill on the first, its buttons inside at the
    *  bottom (owner, 2026-10-14: the device's name above it said again what its chip says; the pill and the buttons sat
-   *  outside the card). */
+   *  outside the card).
+   *
+   *  ⚠️ ONE PILL PER CARD (owner, 2026-11-03, "A": the Outdoor Entrance Lock's card held VESTA's alert and the night
+   *  check's finding, opened as a ticket by one press, and both said "Ticket opened by Owner … In progress" while the
+   *  tab's count, one per device, said 1): the first record says the card's state, the others do not repeat it. */
   const ticket = (g: DeviceWork) => {
     const records = g.records.map(workRecord);
     return (
@@ -145,7 +150,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         <div className="fm-ticket-records">
           {g.records.map((t, i) => record(t, i === 0 ? stagePill(t) : undefined,
             i === 0 ? <WorkButtons actions={ticketActions(records)} cardKey={g.key} work={work}
-              asked={helpAsked(records)} /> : undefined, false))}
+              asked={helpAsked(records)} /> : undefined, false, i === 0))}
         </div>
       </div>
     );

@@ -433,6 +433,14 @@ const tt = src("components/fm/TicketsTab.tsx");
 // here, that the tab draws it — and counts it (openCounts: the same cards)
 ck("the Tickets tab draws ticketCards — the tickets in progress, by device — and Closed",
    /ticketCards\(data\.tickets, deviceOfRecord\)/.test(tt) && /openCounts\(data\.tickets, deviceOfRecord\)\.tickets/.test(tt) && !/Raise a fault/.test(tt));
+// owner, 2026-11-03 ("A"): a ticket's card says its state ONCE — its first record's pill; the records after it (the
+// night check's finding beside VESTA's alert on the same device) do not repeat "Ticket opened by … In progress"
+{
+  const tab = JSX.parseTsx("components/fm/TicketsTab.tsx");
+  const pill = JSX.elements(tab, "StatusPill");
+  ck("a ticket's card says its state once: the record's pill only where the record is `stated`, the first of its card",
+     pill.length === 1 && JSX.guardsOf(pill[0]).includes("stated") && /, false, i === 0\)\)\}/.test(tt));
+}
 // owner, 2026-11-02: "Move the Open Ticket button from the Inbox page to the Tickets page"
 {
   const tab = JSX.parseTsx("components/fm/TicketsTab.tsx");
