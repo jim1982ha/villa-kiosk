@@ -27,7 +27,7 @@ ck("the Facility window is gone, and nothing opens it",
    && !/FacilityModal|"facility"\)/.test(dash) && !/onOpenFacility|ClipboardList/.test(hud));
 // The moves themselves (Faults tab, device filled in, guest's report instead)
 // are pages/screen's, driven by value in screen.mjs; the page only sends them.
-ck("a device's 'report a fault' (shown by the profile's door, a value) opens Messages' Open a ticket, the device filled in",
+ck("a device's 'report a fault' (shown by the profile's door, a value) opens the Tickets tab's Open a ticket, the device filled in",
    /onReportFault: \(\) => go\(\{ type: "reportFault" \}\)/.test(rd("components/panels/useOpenPanelActions.ts"))
    && /may: \{ edit: doors\.editDevices, reportFault: doors\.reportFault \}/.test(rd("components/panels/useOpenPanelActions.ts"))
    && /if \(!may\.reportFault\) return null;/.test(rd("components/panels/DeviceWindowPieces.tsx")) && /<ReportFaultButton \/>/.test(rd("components/panels/BasePanel.tsx"))

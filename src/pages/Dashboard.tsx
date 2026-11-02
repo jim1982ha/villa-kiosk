@@ -875,6 +875,7 @@ export default function Dashboard() {
           onTab={(tab) => go({ type: "cockpitTab", tab })}
           reportFaultFor={screen.faultFor ?? undefined}
           onFaultFormOpened={() => go({ type: "faultFormOpened" })}
+          onRaiseTicket={(id) => go({ type: "raiseTicket", id })}
           editTicket={screen.ticketFor ?? undefined}
           onEditTicket={(id) => go({ type: "editTicket", id })}
           onTicketEditOpened={() => go({ type: "ticketEditOpened" })}

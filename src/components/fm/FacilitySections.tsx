@@ -63,7 +63,7 @@ export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
  * Cockpit window itself, whichever tab shows (useFacilityLiveView, registered by the window).
  */
 export default function FacilitySections({
-  tab, onOpenEntity, editTicket, onTicketEditOpened,
+  tab, onOpenEntity, editTicket, onTicketEditOpened, reportFaultFor, onFaultFormOpened,
 }: {
   tab: FacilityTab;
   /** Jump to a device's panel — a failing check or a fault opens the actual
@@ -73,6 +73,10 @@ export default function FacilitySections({
   editTicket?: string;
   /** Called once the form has it, so reopening the tab later does not spring it again. */
   onTicketEditOpened?: () => void;
+  /** Tickets opens "Open a ticket" pointed at this device (a device's wrench, an Inbox card's Open Ticket). */
+  reportFaultFor?: string;
+  /** Called once the form has it. */
+  onFaultFormOpened?: () => void;
 }) {
   const { entities, haConfig } = useHA();
   const { config, resolvedRooms } = useConfig();
@@ -123,7 +127,8 @@ export default function FacilitySections({
       )}
       {ready && tab === "tickets" && (
         <TicketsTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions}
-          editTicket={editTicket} onEditOpened={onTicketEditOpened} />
+          editTicket={editTicket} onEditOpened={onTicketEditOpened}
+          raiseFor={reportFaultFor} onRaiseOpened={onFaultFormOpened} />
       )}
       {ready && tab === "spend" && <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} inputs={inputs} />}
 

@@ -70,7 +70,11 @@ export default function SearchPicker({
         <input
           placeholder={placeholder}
           value={query}
-          onFocus={() => setOpen(true)}
+          // ⚠️ A TAP OPENS IT, NEVER THE FOCUS ALONE (owner, 2026-11-02: "Open a ticket" showed Who's handling it's list
+          // open, never tapped): a window puts the focus in its first field (useModalA11y), and the list opened on it.
+          // A tap, typing, or the down arrow opens it
+          onClick={() => setOpen(true)}
+          onKeyDown={(e) => { if (e.key === "ArrowDown") setOpen(true); }}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
         />
         {!open && trailing}

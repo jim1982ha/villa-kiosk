@@ -4370,6 +4370,17 @@ def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
 MESSAGES = JsonStore("vesta-messages.json", [], VESTA_MESSAGES_MAX_BYTES + 100_000)
 
 
+def _taken_photo(announcements: list, takes) -> str | None:
+    """The photo of the newest kept villa announcement of a run VESTA's card took over (its `takes`), or None. ⚠️ THE
+    CARD SHOWS THE VILLA'S PICTURE (owner, 2026-11-02: #107's card on the tablet had no photo while the villa's own
+    message, which it stands in place of, carried the camera's): the card replaces that message on the tablet
+    (messagesModel.supersedes), so the picture went with it. Pure — tests/store-doors.py drives it."""
+    runs = {t for t in takes or () if isinstance(t, str)}
+    hit = [a for a in announcements if isinstance(a, dict) and a.get("run") in runs and a.get("photo")]
+    return max(hit, key=lambda a: a.get("seq") or 0)["photo"] if hit else None
+
+
+
 def _vesta_messages_tidy(items) -> list:
     """The records still kept: the announcements' rule (the records-kept days, then the newest that fit the cap)."""
     return _announcements_kept(items if isinstance(items, list) else [], time.time(), _evidence_retention_days(),
@@ -4394,6 +4405,9 @@ async def agent_vesta_message_handler(request: web.Request) -> web.Response:
     if _vesta_message_record(body, 0, _now_iso()) is None:
         return web.json_response({"error": "a message names a key and says something"}, status=400)
     photo = await asyncio.to_thread(_keep_pushed_photo, body["photo"]) if body.get("photo") else None
+    # none of its own: the picture of the villa's message it took over (_taken_photo); a rewrite keeps it (KEPT_ON_REWRITE)
+    if photo is None and isinstance(body.get("takes"), list):
+        photo = _taken_photo(await asyncio.to_thread(ANNOUNCED.items), body["takes"])
 
     def record(seq: int) -> dict:
         rec = _vesta_message_record(body, seq, _now_iso())

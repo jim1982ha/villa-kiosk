@@ -113,8 +113,8 @@ ck("  ...the list keeps only what the add-on still keeps (it never grows past it
 
 ck("something unread: Messages opens on Notifications; nothing unread, on Issues (the default)",
    openingFilter(1) === "notifications" && openingFilter(0) === "issues");
-ck("  ...opened for something else, never on Notifications, so nothing is read unseen: a warning or the wrench's form on Issues",
-   openingFilter(1, { warning: true }) === "issues" && openingFilter(1, { form: true }) === "issues"
+ck("  ...opened for a device window's warning, never on Notifications, so nothing is read unseen: on Issues",
+   openingFilter(1, { warning: true }) === "issues"
    && openingFilter(0, { warning: true }) === "issues");
 
 console.log("\n  one line per item, drawn:");

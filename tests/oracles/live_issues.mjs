@@ -60,10 +60,10 @@ const MT = srcAt("components/cockpit/MessagesTab.tsx");
 const JSX = await import("../consistency/jsx.mjs");
 // the issue card's buttons, as IssueCard hands them to the one carrier of every step (WorkButtons)
 const [icButtons] = JSX.elements(JSX.parseTsx("components/cockpit/IssueCard.tsx"), "WorkButtons");
-ck("  ...pressed, Open Ticket opens Messages' ticket form pointed at the device (the one \"Open a ticket\" form); Done and Need help raise it in one write, at the device's place",
+ck("  ...pressed, Open Ticket opens the Tickets tab's ticket form pointed at the device (the one \"Open a ticket\" form, owner 2026-11-02); Done and Need help raise it in one write, at the device's place",
    /a\.step\.kind === "raise" \? onRaiseTicket\(a\.ids\[0\]\)/.test(JSX.propText(icButtons, "onOpen") || "")
    && JSX.propText(icButtons, "raised") === "(entityId) => raisedFor({ title: card.title, lines: [line] }, place(entityId, card.title))"
-   && /onRaiseTicket=\{\(entity\) => setRaising\(\{ entity \}\)\}/.test(MT));
+   && /onRaiseTicket=\{onRaiseTicket\}/.test(MT) && !/<FaultForm /.test(MT));
 // owner, 2026-10-30: the Tickets tab's "Mark resolved" is the Inbox's Done (work done, its form kept), with Need help
 ck("a ticket in progress (Tickets): Done (its resolve form), Need help, Close — each on every record of it, its own Close question",
    said(W.ticketActions([{ id: "a", stage: "ticket" }, { id: "b", stage: "ticket" }])).join(" | ")
@@ -165,7 +165,10 @@ console.log("\n  where things land:");
 const OWNER = { facility: true }, GUEST = { facility: false };
 const open = { ...START, nav: { ...START.nav, panel: { entityId: "light.a" } } };
 const raised = screenReducer(open, { type: "reportFault" }, OWNER);
-ck("a device's wrench (owner/facility): Messages, Open a ticket pointed at it", raised.cockpitTab === "messages" && raised.faultFor === "light.a");
+ck("a device's wrench (owner/facility): Tickets, Open a ticket pointed at it", raised.cockpitTab === "tickets" && raised.faultFor === "light.a");
+const carded = screenReducer(START, { type: "raiseTicket", id: "light.b" }, OWNER);
+ck("an Inbox card's Open Ticket for a device with no record: Tickets, Open a ticket pointed at it; a guest's, nothing",
+   carded.cockpitTab === "tickets" && carded.faultFor === "light.b" && screenReducer(START, { type: "raiseTicket", id: "light.b" }, GUEST) === START);
 const edit = screenReducer(START, { type: "editTicket", id: "b" }, OWNER);
 ck("an open issue's Edit ticket: the Tickets tab, that record's form", edit.cockpitTab === "tickets" && edit.ticketFor === "b");
 ck("  ...dropped once the form has it, and when the Cockpit closes",
@@ -428,9 +431,23 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
 const tt = src("components/fm/TicketsTab.tsx");
 // what ticketCards lists is checked by value above ("Tickets lists the device whose ticket was opened last first");
 // here, that the tab draws it — and counts it (openCounts: the same cards)
-ck("the Tickets tab draws ticketCards — the tickets in progress, by device — and Closed; never a raise form",
+ck("the Tickets tab draws ticketCards — the tickets in progress, by device — and Closed",
    /ticketCards\(data\.tickets, deviceOfRecord\)/.test(tt) && /openCounts\(data\.tickets, deviceOfRecord\)\.tickets/.test(tt) && !/Raise a fault/.test(tt));
-// owner, 2026-10-31: "Open Ticket" on the filters' line, at its right, in the card's own words; wrapping whole
+// owner, 2026-11-02: "Move the Open Ticket button from the Inbox page to the Tickets page"
+{
+  const tab = JSX.parseTsx("components/fm/TicketsTab.tsx");
+  const bar = JSX.elements(tab, "div").find((d) => JSX.propText(d, "className") === '"tickets-toolbar"');
+  const label = bar ? JSX.elements(bar, "WorkLabel") : [];
+  const form = JSX.elements(tab, "FaultForm").find((f) => JSX.propText(f, "presetEntity") !== null);
+  ck("  ...its first line: Open Ticket, in the cards' words and wrench, opening the one \"Open a ticket\" form above the tickets",
+     label.length === 1 && JSX.propText(label[0], "kind") === '"raiseTicket"' && JSX.propText(label[0].parent, "onClick") === "() => setRaising({})"
+     && !!form && JSX.propText(form, "presetEntity") === "raising.entity" && JSX.guardsOf(form).join() === "raising");
+  ck("  ...pointed at a device when asked (a device's wrench, an Inbox card): FacilitySections hands the Cockpit's request on",
+     /raiseFor=\{reportFaultFor\} onRaiseOpened=\{onFaultFormOpened\}/.test(readFileSync(new URL("../../src/components/fm/FacilitySections.tsx", import.meta.url), "utf8"))
+     && /setRaising\(\{ entity: raiseFor \}\)/.test(tt));
+}
+// owner, 2026-10-31: the Issues' button on the filters' line, at its right; wrapping whole. Open Ticket left it for the
+// Tickets tab (owner, 2026-11-02): a guest's "Report a problem" is the one left
 {
   const tab = JSX.parseTsx("components/cockpit/MessagesTab.tsx");
   const cls = (el) => JSX.propText(el, "className");
@@ -438,18 +455,17 @@ ck("the Tickets tab draws ticketCards — the tickets in progress, by device —
   const kids = bar ? bar.children.filter((c) => JSX.tagOf(c) || (c.expression && c.getText().trim())) : [];
   const actions = bar ? JSX.elements(bar, "div").find((d) => cls(d) === '"messages-toolbar-actions"') : undefined;
   const open = actions ? JSX.elements(actions, "WorkLabel") : [];
-  ck("the filters' line: the filters, then at its right the Issues' button (manage: Open Ticket; a guest: Report a problem)",
+  ck("the filters' line: the filters, then at its right a guest's Report a problem; never Open Ticket, nor its form",
      !!bar && JSX.tagOf(kids[0]) === "div" && cls(kids[0]) === '"messages-filters"' && !!actions
-     && open.length === 1 && JSX.propText(open[0], "kind") === '"raiseTicket"'
-     && JSX.propText(open[0].parent, "onClick") === "raise" && /Report a problem/.test(actions.getText())
-     && /const raise = \(\) => setRaising\(\{\}\);/.test(msg) && /<FaultForm /.test(msg), kids.map((k) => k.getText().slice(0, 50)));
-  ck("  ...only while the issues are listed, as when it sat over Open issues",
-     !!actions && JSX.guardsOf(actions).join() === "showsIssues,(canManage || canReport)", actions && JSX.guardsOf(actions));
+     && open.length === 0 && /Report a problem/.test(actions.getText()) && !/raiseTicket|<FaultForm /.test(msg),
+     kids.map((k) => k.getText().slice(0, 50)));
+  ck("  ...only while the issues are listed, for a profile that reports and does not manage",
+     !!actions && JSX.guardsOf(actions).join() === "showsIssues,!canManage,canReport", actions && JSX.guardsOf(actions));
   ck("  ...and nothing of it left on the section's title line", !/Open a ticket<\/button>/.test(msg)
      && !JSX.elements(tab, "MessagesSection").some((s) => JSX.propText(s, "actions") !== null));
   const { WORK_ACTIONS } = await import("@/fm/deviceWork");
   const wb = JSX.parseTsx("components/fm/WorkButtons.tsx");
-  ck("  ...its words and wrench are the card's Open Ticket, defined once (WorkLabel, the card's buttons draw it too)",
+  ck("  ...the Tickets tab's Open Ticket: the card's words and wrench, defined once (WorkLabel, the card's buttons draw it too)",
      WORK_ACTIONS.raiseTicket.label === "Open Ticket" && WORK_ACTIONS.openTicket.label === WORK_ACTIONS.raiseTicket.label
      && JSX.elements(wb, "WorkLabel").length === 1 && JSX.propText(JSX.elements(wb, "WorkLabel")[0], "kind") === "a.kind");
   const shared = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
