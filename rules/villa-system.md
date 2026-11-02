@@ -35,7 +35,7 @@ comes from its `get`: a config search does not look inside blueprint paths.
 
 ## Blueprint texts are short
 
-A blueprint's own description says what it is for in three lines at most, each field one meaningful sentence. History,
+A blueprint's own description, and an automation's, says what it is for in three lines at most, each field one meaningful sentence. History,
 dates and mechanics go in the one `HISTORY.md` beside the blueprints. Layout: an open "Common" section, then one
 collapsed section per mode named "<X> mode", the mode select's labels matching.
 

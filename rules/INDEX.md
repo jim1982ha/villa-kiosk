@@ -61,7 +61,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Agent sub-agents parked](decided.md#agent-sub-agents-parked) — no SDK sub-agents without new cost figures
 - [Asleep devices: one list, the Kiosk's](decided.md#asleep-devices-one-list-the-kiosks) — the Kiosk owns the unavailable-by-design list; the Agent reads it
 - [The bake's job table is the owner's](decided.md#the-bakes-job-table-is-the-owners) — never reset or move the bake pipeline's job table
-- [Automation descriptions stay as written](decided.md#automation-descriptions-stay-as-written) — short blueprint texts; automations' long descriptions kept
+- [Automation descriptions are short too](decided.md#automation-descriptions-are-short-too) — one or two plain sentences; history in the HISTORY file
 
 ## Verifying a claim
 
