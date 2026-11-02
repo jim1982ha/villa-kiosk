@@ -29,6 +29,11 @@ export const HAServices = {
   selectOption: (ws: WS, id: string, option: string) =>
     ws.callService("select", "select_option", { option }, t(id)),
 
+  /** A villa text helper's value: who gets the messages (messages/recipients), the owner's only (ha-commands.json
+   *  villaLists). */
+  setText: (ws: WS, id: string, value: string) =>
+    ws.callService("input_text", "set_value", { value }, t(id)),
+
   // --- Climate ---
   setTemperature: (ws: WS, id: string, temperature: number) =>
     ws.callService("climate", "set_temperature", { temperature }, t(id)),

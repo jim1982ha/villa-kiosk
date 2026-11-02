@@ -1,3 +1,12 @@
+## 2.496.667
+
+What you will see:
+- Advanced Settings › Messages has a new section, "Who gets the messages": the Owner's list and the Facility manager's
+  list of the villa's Telegram chats and phones. Add one with its picker, take one off with its ✕. Every alert of the
+  villa reads these two lists: an urgent (P1) alert goes to both, a P2 alert to the Facility manager's, and each notice
+  to the list its automation names. VESTA sends its reminders to the same chats. An urgent or P2 alert with nobody
+  listed still goes to every Telegram chat of the villa.
+
 ## 2.496.666
 
 What you will see:
