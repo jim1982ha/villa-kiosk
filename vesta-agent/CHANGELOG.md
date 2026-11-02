@@ -1,3 +1,12 @@
+## 0.12.438
+
+What you will see:
+- An answer VESTA gives on the tablet while the tablet's app is restarting is no longer lost: it appears within
+  about 5 minutes, even if VESTA restarts meanwhile. An earlier answer edited after a restart keeps its pictures.
+- After a power cut, a fault closed in the Cockpit reaches Telegram at VESTA's first round, not 5 minutes later.
+- Nothing else changes on screen: VESTA prepares each answer in one place, a guest's included, and records "taken" in
+  an alert's story where it records "cleared".
+
 ## 0.12.437
 
 What you will see:

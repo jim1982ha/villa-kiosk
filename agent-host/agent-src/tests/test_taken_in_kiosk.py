@@ -96,6 +96,13 @@ def test_every_copy_says_it_and_loses_its_buttons_without_being_settled(tmp_path
     assert keyboard is None and text.endswith("Ticket opened in the Cockpit by Owner on 15/10/2026 00:40.")
     rec = th.shown(7)[111]
     assert rec["buttons"] is False and rec["settled"] is False                      # still open: its close still shows
+    # the thread records the step itself, in every language it was said in (architecture review round 16: app glued it
+    # on after the call) — listed by every later Status, never beside the status saying it now
+    (step,) = th.state.incident_history(7)
+    assert step["stage"] == "taken" and step["note"] == "Ticket opened in the Cockpit by Owner on 15/10/2026 00:40"
+    from vesta_shared.kiosk_words import Words
+    run(th.restate(7, Words("Taken on.", {"fr": "Pris en charge."})))
+    assert th.state.incident_history(7)[-1]["note_in"] == {"fr": "Pris en charge"}
 
 
 def test_the_closed_message_tells_every_step_the_villa_saw_on_15_october(tmp_path):
@@ -113,7 +120,7 @@ def test_the_closed_message_tells_every_step_the_villa_saw_on_15_october(tmp_pat
     send("fm", "New alert", "new")
     send("fm", "Reminder: no answer after 15 min", "reminder")
     send("owner", "No answer from the facility manager after 45 min", "escalated")
-    asyncio.run(v._alert_taken(iid, "Ticket opened in the Cockpit by Wayan on 15/10/2026 01:09."))
+    asyncio.run(v.thread.restate(iid, "Ticket opened in the Cockpit by Wayan on 15/10/2026 01:09."))
     taken = v.thread.shown(iid)[owner]["text"]
     assert "- Escalation sent " in taken and taken.endswith("Ticket opened in the Cockpit by Wayan on 15/10/2026 01:09.")
     st.update_incident(iid, closed_at=st.now(), state=Incident.RESOLVED)

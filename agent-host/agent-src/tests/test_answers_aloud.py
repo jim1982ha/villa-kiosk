@@ -284,7 +284,7 @@ def test_the_status_check_runs_while_the_words_are_written_out(tmp_path, monkeyp
         order.append("check")
         return ""
     monkeypatch.setattr(v.voice, "transcribe", transcribe)
-    monkeypatch.setattr(v, "before_answer", before_answer)
+    monkeypatch.setattr(v.briefing, "status", before_answer)
     _answered(v, kiosk, monkeypatch)
     assert order == ["check", "words"], order
 

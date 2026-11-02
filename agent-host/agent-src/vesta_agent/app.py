@@ -38,6 +38,7 @@ from zoneinfo import ZoneInfo
 from . import button_data, intake, press, requests_box, script_run, tablet, tool_access
 from .press import Press
 from .ai_jobs import AiJobs
+from .briefing import Briefing, run_check, skill_checks
 from .chat_facts import ChatFacts
 from .chat_jobs import ChatJobs
 from .in_progress import FAILED, InProgress
@@ -56,8 +57,10 @@ from .villa_messages import VillaMessages
 from .incident_thread import IncidentThread
 
 from .housekeeping import open_incidents, tidy
+from .cadence import Every
 from .kiosk import Kiosk, KioskError, message_retry_s, message_timeout_s
 from .kiosk_messages import KioskMessages
+from .kiosk_owed import KioskOwed
 from .alert_buttons import AlertButtons
 from .outcome import Outcome
 from vesta_shared import occupancy
@@ -80,11 +83,10 @@ from .telegram import Telegram, TelegramError
 from .tools import Toolbox, scrub
 from .turn import Turns
 from .turn_reply import TurnReply
-from .notice import TAKEN_STAGE, Notices, note_step
+from .notice import Notices
 
 log = logging.getLogger("vesta")
 
-from .policy import Language  # noqa: E402 — one list, also the VESTA Agent page's menu
 #: Commands the agent answers. Any other command belongs to Home Assistant's automations.
 def _now_local(tz: str) -> datetime:
     return datetime.now(ZoneInfo(tz))
@@ -163,12 +165,17 @@ class Vesta:
         # what runs, for whom, what it promised, whether its result arrived — and what a stop cut (in_progress.py)
         self.work = InProgress(self.state, settings.timezone)
         # a tablet's conversation (tablet.py, ticket 21 of "One inbox"): Delivery's second sink, and the inbox it is asked in
-        self.tablet = tablet.Tablet(self.kiosk, self.state)
+        # what the Kiosk did not take — an alert card for the tablet, a conversation turn — owed and written again at the
+        # housekeeping pass, kept across a restart (kiosk_owed.py)
+        self.owed = KioskOwed(self.state, message_retry_s)
+        self.tablet = tablet.Tablet(self.kiosk, self.state, owed=self.owed)
         self.delivery = Delivery(self.tg, self.state, self.policy, self.work, tablet=self.tablet)
         self.delivery.on_unreachable = self._tell_unreachable
         # what is happening for a chat beyond its conversation, told to the AI with each message there (chat_facts.py)
-        named = Incidents(settings.store_path)
-        self.chat_facts = ChatFacts(self.state, self.work, settings.timezone, closed=named.closed, name=named.name)
+        # the alert desk's incidents, as the engine reads them: ONE reader handed to every module that asks (architecture
+        # review round 16: four were built, by app and by the alert buttons)
+        self.incidents = incidents = Incidents(settings.store_path)
+        self.chat_facts = ChatFacts(self.state, self.work, settings.timezone, closed=incidents.closed, name=incidents.name)
         self.actions = Actions(self.policy, self.state, self.writer_factory, names=self.name_of,
                                related=lambda ids: related_entities(self.pack(), self.reader, ids),
                                executed=lambda *a: self.siren.executed(*a), tablet_keeps=lambda: self.kiosk.enabled,
@@ -177,13 +184,12 @@ class Vesta:
         self.siren = Siren(self.policy, self.state, self.actions, self._tell_owner_siren)
         # a script's result carried out (outcome.py), with the alert buttons and the Kiosk's tickets as their own modules
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
-        incidents = Incidents(settings.store_path)        # the alert desk's incidents, as the engine reads them
         self.notices = Notices(self.state, self.policy, settings.timezone, name=incidents.name,
                                closed=incidents.closed, runs=incidents.runs, reaches=incidents.reaches,
                                watching=incidents.watching)
         # every message written on Telegram is also kept for the tablet, in the background (kiosk_messages.py): the thread
         # keeps an alert's, an approval's and a snapshot's, the poster a note sent on its own
-        self.messages = KioskMessages(self.kiosk, message_timeout_s, message_retry_s)
+        self.messages = KioskMessages(self.kiosk, message_timeout_s, self.owed)
         # what each chat shows of an incident (incident_thread.py), and an alert's buttons and their press: its words (each
         # chat's heading, Status and language) are the notices'; an alert card's own words are drawn by the translations,
         # which are built on the thread (hence the late lookup)
@@ -191,11 +197,11 @@ class Vesta:
                                      delete=(self.delivery.delete if self.tg else None), words=self.notices,
                                      name=incidents.name, mirror=self.messages.keep,
                                      translations=lambda: self.translations)
-        self.buttons = AlertButtons(state=self.state, skills=self.skills, store_path=settings.store_path,
+        self.buttons = AlertButtons(state=self.state, skills=self.skills, incidents=incidents,
                                     thread=self.thread, run_job=self.run_code_job, facts=self.chat_facts)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                settle_alert=self.thread.close, timezone=settings.timezone,
-                               story=lambda iid: self.notices.story(iid), restate_alert=self._alert_taken,
+                               story=lambda iid: self.notices.story(iid), restate_alert=self.thread.restate,
                                rechecked=lambda: {r for sk in self.skills.all().values() for r in sk.rechecks},
                                nightly_at=self.nightly_at)
         # a fault offered in a chat, start to end (fault_offers.py, review 32)
@@ -226,6 +232,12 @@ class Vesta:
         self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
                                    post=self.poster.post, timezone_name=settings.timezone, safe=self._safe,
                                    edit=self.delivery.edit, tablet_keeps=lambda: self.kiosk.enabled)
+        # what the AI is told before it answers (briefing.py): the skills' status checks, the chat's facts, the question;
+        # where it was written: a chat's label, else a tablet's conversation (tablet.WHERE), which chat_label says by
+        # naming none — one tablet test, not a second copy (architecture review round 10)
+        self.briefing = Briefing(checks=lambda: skill_checks(self.skills), run=run_check(self.s, self.state),
+                                 approvals=lambda: self.approvals.now() if self.policy().act_enabled else None,
+                                 facts=self.chat_facts, where=lambda cid: self.policy().chat_label(cid) or tablet.WHERE)
         # what follows every answer, in its order (answering.py)
         self.answering = answering.Answering(self.delivery, self.fault_offers, self.approvals, self.chat_jobs,
                                              self.tablet.later, self.aloud)
@@ -246,10 +258,9 @@ class Vesta:
                                     approvals=self.approvals, command_offers=self.command_offers)
         self.bot_username: str | None = None
         self._locks: dict[int, asyncio.Lock] = {}
-        self._kiosk_read = 0.0            # when the Kiosk's faults were last read (housekeeping)
-        # when the villa's lists of who gets the messages were last read; None: never, read at the first housekeeping
-        # (a 0.0 start waited 5 minutes on a machine up for less: the monotonic clock starts at its boot)
-        self._recipients_read: float | None = None
+        # how often housekeeping reads the Kiosk's faults and the villa's lists of who gets the messages: every
+        # KIOSK_EVERY_S, the first at once (cadence.Every: a 0.0 start waited 5 minutes on a machine up for less)
+        self.kiosk_faults_every, self.recipients_every = Every(KIOSK_EVERY_S), Every(KIOSK_EVERY_S)
         self._records = None              # the wake's read of the Kiosk's faults: running, and pressed again since
         self.scheduler: Scheduler | None = None
         self._pack = None
@@ -654,7 +665,7 @@ class Vesta:
                 return None
             p = press.from_telegram(q, int(cid), None, parts, silent)
             label = next((b.get("text") for row in p.rows for b in row if b.get("callback_data") == data), None) or "a button"
-            on = f" on {Incidents(self.s.store_path).name(parts[0])}" if kind == button_data.ALERT else ""
+            on = f" on {self.incidents.name(parts[0])}" if kind == button_data.ALERT else ""
             await self.delivery.send(p.chat, f"VESTA was restarting when you pressed {label}{on}; press it again.",
                                      reply_to=p.mid)
             return
@@ -776,8 +787,7 @@ class Vesta:
             if got.spoken:
                 # ⚠️ THE STATUS CHECK WHILE WHISPER WRITES IT OUT (owner, 2026-10-30: 2.4 s of every spoken question were
                 # the check, waiting for the words it does not need): started now, awaited by the turn (answering.Ask)
-                checking = asyncio.ensure_future(asyncio.to_thread(self.before_answer))
-                checking.add_done_callback(lambda t: t.cancelled() or t.exception())
+                checking = self.briefing.check_for(got.person)
                 heard = await self.voice.transcribe(got.chat, got.person,
                                                     got.audio or TelegramAudio(self.tg, got.voice_file or ""))
                 text = intake.without_mention(heard.text if heard else None, self.bot_username)
@@ -867,7 +877,7 @@ class Vesta:
 
     async def _converse(self, ask: "answering.Ask", answered):
         cid, person, text, request, resume = ask.chat, ask.person, ask.text, ask.request, ask.resume
-        is_continue, voice, image = ask.is_continue, ask.voice, ask.image
+        is_continue, image = ask.is_continue, ask.image
         async with self.lock(cid):
             self.chat_jobs.turn(cid)                         # a job started now belongs to this turn (chat_jobs.py)
             if resume == "auto":
@@ -875,37 +885,12 @@ class Vesta:
                 # that already held the morning's answer about the same pump was answered from it in 19 s — no reading
                 # at all, no page. With nothing earlier to lean on, the only way to answer is to do the skill's work.
                 resume = None if request and not is_continue else self._resume_for(cid)
-            lang = Language.of(person.language).name if person else "English"
-            if is_continue:
-                prompt = "Continue exactly where you stopped. Do not repeat what you already wrote."
             # a skill only its command starts (skills.Skill.command): this turn's request, or — for a Continue — the one
             # its button carries (state.new_continuation): its id, its offers, its web searches (command_request.py)
             sk = request.skill if request else None
-            if not is_continue:
-                # ⚠️ WHERE IT WAS WRITTEN, AND HOW THAT PLACE SHOWS THE ANSWER: a tablet's conversation (tablet.WHERE) is
-                # no Telegram chat (ticket 21 of "One inbox"), which chat_label says by naming none — one tablet test, not
-                # a second copy here (architecture review round 10); the words of the question: answering.question_words
-                where = self.policy().chat_label(cid) or tablet.WHERE
-                prompt = answering.question_words(
-                    text, image=bool(image), voice=bool(voice), spoken=ask.spoken, who=person.name if person else None,
-                    role=person.role if person else None, language=lang, where=where, skill=sk,
-                    command_by=person.name if person else None, about=ask.about)
-            told_at = None
-            if not is_continue:
-                checked = await (ask.checked if ask.checked is not None else asyncio.to_thread(self.before_answer))
-                if person is not None and person.role == tool_access.GUEST:
-                    # ⚠️ NOT THE VILLA'S STATUS FOR A GUEST (architecture review round 8): it names the offline devices,
-                    # the open alerts and the locks, which the guest's tablet does not show
-                    checked = None
-                if ask.timeline is not None:
-                    ask.timeline.mark("status check")       # what was left of it once the words came (it ran beside them)
-                # ⚠️ WHAT THIS CHAT HAS, AS FACTS, WITH EVERY MESSAGE (owner, 2026-10-23): the digest a job had sent at
-                # 14:40 was promised again at 14:50 as "on its way" — the AI read only its own transcript. What is being
-                # prepared here now (or that nothing is) and what reached this chat since the AI's last answer here
-                # (chat_facts.py: a report's end, an alert's step, a button pressed) head the message
-                told_at = datetime.now(timezone.utc)
-                here = self.chat_facts.now(cid)
-                prompt = "\n\n".join(p for p in (checked, here, prompt) if p)
+            # what the AI is told before it answers — the status check, the chat's facts, the question: briefing.py
+            told = await self.briefing.before(ask)
+            prompt, told_at = told.prompt, told.at
             pol = self.policy()
             # what this person may make the AI use here, the chat's brain and limit, its folder: turn.py decides
             asked = None if is_continue else (f"[photo] {text}".strip() if image else text)
@@ -940,27 +925,6 @@ class Vesta:
             await self.answering.deliver(cid, reply, res.photos, res.approvals, aloud=ask.aloud, timeline=ask.timeline,
                                          asked=answering.Asked(text or "", ask.spoken,
                                                                person.language if person else None))
-
-    def before_answer(self) -> str:
-        """What each skill's `before_answer` check says now (skills.Skill.before_answer: its script's "text"), for the
-        AI to have in front of it before it answers. A check that fails is said to have failed, never left out
-        silently: the AI must not answer as if it had seen it."""
-        out = []
-        for sk in self.skills.all().values():
-            if not sk.before_answer:
-                continue
-            ans = script_run.run_command(self.s, self.state, sk, sk.before_answer, timeout=limit(
-                "chat.status_check_timeout_s", 60, unit="seconds", group="run", lo=5, hi=600,
-                says="How long the skill check that reads the villa's status before each chat answer may take.",
-                reached="The AI is told the check could not run just now, and says so if asked.", told="ai"))
-            text = (ans.result() or {}).get("text") if ans.ok else None
-            if text:
-                out.append(f"[Checked just now by the {sk.name} skill; answer from this, never from memory]\n{text}")
-            else:
-                out.append(f"[The {sk.name} skill's check could not run just now: say so if asked about it]")
-        if self.policy().act_enabled:
-            out.append(self.approvals.now())
-        return "\n\n".join(out)
 
     # ------------------------------------------------------------------ button presses
     async def handle_callback(self, q: dict):
@@ -1035,14 +999,6 @@ class Vesta:
             await self.refresh_server_tools()
         return self.server_tools
 
-    async def _alert_taken(self, iid: int, note: str) -> int:
-        """Someone took incident `iid` on in the Kiosk: every copy says so, then the step joins its history — listed in
-        every later "Status:" (its close included), never twice beside the status saying it now."""
-        langs = getattr(note, "langs", None) or None    # kiosk_words.Words: each chat's copy in its language
-        shown = await self.thread.restate(iid, note, note_in=langs)
-        note_step(self.state, iid, TAKEN_STAGE, note, langs)
-        return shown
-
     async def _tell_owner_siren(self, text: str) -> None:
         await self.outcome.carry_out({"send": [{"to": "owner", "text": text, "title": SIREN_TITLE}]})
 
@@ -1085,20 +1041,19 @@ class Vesta:
         # ⚠️ A FAULT CLOSED IN THE KIOSK REACHES TELEGRAM WITHIN 5 MINUTES (owner, 2026-10-10: "will a Close in the cockpit
         # also act on the Telegram notifications?"): the Kiosk was read at start, at 01:30 and after the night check
         # only — an alert closed in the Cockpit kept its buttons in every chat for hours
-        if self.kiosk.enabled and time.monotonic() - self._kiosk_read >= KIOSK_EVERY_S:
-            self._kiosk_read = time.monotonic()
+        if self.kiosk.enabled and self.kiosk_faults_every.due():
             await self._safe(self.tickets.repair())
         # the villa's lists of who gets the messages, read as often as the Kiosk's faults: a change in Settings reaches
         # the agent's next alert within 5 minutes (villa_recipients)
-        if self._recipients_read is None or time.monotonic() - self._recipients_read >= KIOSK_EVERY_S:
-            self._recipients_read = time.monotonic()
+        if self.recipients_every.due():
             await self._safe(asyncio.to_thread(self.read_recipients))
         # a request for approval nobody answered says so, in every chat, and loses its buttons (approvals.py)
         await self._safe(self.approvals.expire())
         # a copy Telegram did not take the last change of (a network blip): tried again (incident_thread.py)
         await self._safe(self.thread.catch_up())
-        # ...and a copy the tablet did not get (the Kiosk down, restarting, refusing): sent again (kiosk_messages.py)
-        self.messages.retry()
+        # ...and a copy the tablet did not get (the Kiosk down, restarting, refusing): an alert card, an answer in a
+        # tablet's conversation — sent again (kiosk_owed.py)
+        await self._safe(self.owed.retry())
 
     # ------------------------------------------------------------------ the VESTA Agent page's requests
     async def on_request(self, req: dict) -> dict:

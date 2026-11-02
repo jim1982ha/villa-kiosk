@@ -102,6 +102,12 @@ KV_FAMILIES: dict[str, str] = {
     "request_searches:": RECORDS,   # a command skill's request's web searches, for its page (command_request.py)
     "command_offer:": RECORDS,      # a command skill a reply offered: its skill, the person's question (command_offers.py)
     "chatfacts:": RECORDS,          # what reached a chat outside its conversation since the AI last answered (chat_facts.py)
+    # a copy the Kiosk did not take, owed until it does (kiosk_owed.py): a message for the tablet, a conversation turn —
+    # also at most a set number (kiosk_owed.REMEMBERED), the oldest going first
+    "kowed:": RECORDS,
+    # a tablet conversation turn as last written (tablet.py): an edit after a restart keeps its pictures and page — also
+    # at most tablet.REMEMBERED, the oldest going first
+    "tabletturn:": RECORDS,
     # retired (0.12.300: the Investigate button follows only the answer's own readings): the rows 0.12.297-299 wrote
     # are pruned with the records
     "session_read:": RECORDS,
@@ -140,6 +146,14 @@ def _fp_of(v: str) -> str | None:
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def kiosk_copies_bytes() -> int:
+    """How much the tablet's kept turns, and the copies owed to it, may take each in the agent's store."""
+    return limit("state.kiosk_copies_mb", 30, unit="MB", group="run", lo=1, hi=1000,
+                 says="How much the tablet's answers kept for an edit, and the copies owed to the tablet, may take each in "
+                      "the agent's store (camera pictures included).",
+                 reached="The oldest go first: an older answer edited after a restart loses its pictures.") * 1_000_000
 
 
 class State:
@@ -361,6 +375,62 @@ class State:
             self.drop("tablet.inbox_after")
         else:
             self.put("tablet.inbox_after", str(int(seq)))
+
+    # ⚠️ WHAT THE KIOSK DID NOT TAKE SURVIVES A RESTART (architecture review round 16): the copies owed to the Kiosk and
+    # each tablet turn's last record were held in memory only — a restart lost an alert card's newest copy and the
+    # answer a tablet never got, and an edit after it dropped the turn's pictures.
+    def _capped(self, prefix: str, most: int, most_bytes: int | None = None) -> None:
+        """At most `most` records of `prefix`, and at most `most_bytes` of them together when given: the oldest written go.
+
+        ⚠️ A SIZE AS WELL AS A COUNT (architecture review round 16): a tablet turn carries up to four camera pictures of
+        up to 3 MB each (agent-contract.json conversation.limits), so 200 kept turns could have grown the store by
+        gigabytes; the newest always stays, whatever its size."""
+        with self._lock:
+            over = self.db.execute("select count(*) from kv where substr(k, 1, ?) = ?", (len(prefix), prefix)).fetchone()[0] - most
+            if over > 0:
+                self.db.execute("delete from kv where k in (select k from kv where substr(k, 1, ?) = ? order by at, rowid "
+                                "limit ?)", (len(prefix), prefix, over))
+            if most_bytes is not None:
+                rows = self.db.execute("select k, length(v) n from kv where substr(k, 1, ?) = ? order by at desc, rowid desc",
+                                       (len(prefix), prefix)).fetchall()
+                total, gone = 0, []
+                for i, r in enumerate(rows):
+                    total += r["n"] or 0
+                    if i and total > most_bytes:
+                        gone.append(r["k"])
+                for k in gone:
+                    self.db.execute("delete from kv where k = ?", (k,))
+            self.db.commit()
+
+    def kiosk_owed(self) -> list[tuple[str, str, dict]]:
+        """Every copy owed to the Kiosk (kiosk_owed.py), oldest first: (its kind, its key, the record)."""
+        rows = self.db.execute("select k, v from kv where substr(k, 1, 6) = 'kowed:' order by at, rowid")
+        out = []
+        for r in rows:
+            kind, _, key = r["k"][len("kowed:"):].partition(":")
+            try:
+                out.append((kind, key, json.loads(r["v"])))
+            except ValueError:
+                continue
+        return out
+
+    def set_kiosk_owed(self, kind: str, key: str, record: dict | None, most: int) -> None:
+        """`record` owed to the Kiosk under its `key` (one per key: the newest); None: no longer owed."""
+        if record is None:
+            self.drop(f"kowed:{kind}:{key}")
+            return
+        self.drop(f"kowed:{kind}:{key}")               # written again: the newest owed is the last of the order
+        self.put(f"kowed:{kind}:{key}", json.dumps(record))
+        self._capped("kowed:", most, kiosk_copies_bytes())
+
+    def tablet_turn(self, mid: int) -> dict | None:
+        """Turn `mid` of a tablet's conversation as last written (tablet.Tablet)."""
+        v = self.get(f"tabletturn:{int(mid)}")
+        return json.loads(v) if v else None
+
+    def set_tablet_turn(self, mid: int, record: dict, most: int) -> None:
+        self.put(f"tabletturn:{int(mid)}", json.dumps(record))
+        self._capped("tabletturn:", most, kiosk_copies_bytes())
 
     # When the siren must stop (siren.py): kept here so that a restart still stops it.
     def siren_stop(self) -> str | None:

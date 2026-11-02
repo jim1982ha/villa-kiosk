@@ -328,8 +328,16 @@ class IncidentThread:
         """Every copy of incident `iid` shows `note` as where it stands and loses its buttons, WITHOUT settling: the
         incident is open and ends as any does (its close still says how). For an alert someone took on in the VESTA
         Kiosk (owner, 2026-10-15). `note_in`: the same in other languages ({code: text}), each chat showing the one it
-        reads, kept as `close` keeps it so a copy another chat gets later says its own (architecture review O).
-        Returns how many chats show it now."""
+        reads, kept as `close` keeps it so a copy another chat gets later says its own (architecture review O); a
+        kiosk_words.Words `note` brings its own (`langs`). Returns how many chats show it now.
+
+        ⚠️ THE THREAD RECORDS ITS OWN "TAKEN" STEP (architecture review round 16): app glued it on after the call
+        (thread.restate, then note_step) while `_finish` records its CLEARED itself — two ways to put a step in the
+        story, and a second caller of restate would have left it out. It is recorded AFTER the copies are drawn: listed in
+        every later "Status:" (its close included), never twice beside the status saying it now."""
+        from .notice import TAKEN_STAGE, note_step
+        if note_in is None:
+            note_in = getattr(note, "langs", None) or None
         async with self._lock(iid):
             now = datetime.now(timezone.utc)
             n = 0
@@ -341,6 +349,8 @@ class IncidentThread:
                     p["said"] = layout.note_said(note, note_in, now, self.tz)
                 p = self._own_words(iid, chat, {**p, "head": self._head_now(iid, chat, p.get("head") or "")})
                 n += await self._show(iid, chat, {**rec, "buttons": False}, p)
+            if str(iid).isdigit():
+                note_step(self.state, int(iid), TAKEN_STAGE, str(note), note_in)
             return n
 
     def _own_words(self, iid: int | str, chat: int, p: dict) -> dict:

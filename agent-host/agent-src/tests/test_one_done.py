@@ -58,6 +58,7 @@ def test_a_done_names_where_it_was_pressed_and_the_report_says_it_once(tmp_path)
 
 def test_a_press_on_the_tablets_notice_is_handed_to_the_desk_as_the_tablets(tmp_path):
     from vesta_agent.alert_buttons import AlertButtons
+    from vesta_agent.incidents import Incidents
     from vesta_agent.incident_thread import IncidentThread
     from vesta_agent import layout
     from test_telegram_messages import GROUP, _delivery
@@ -70,7 +71,8 @@ def test_a_press_on_the_tablets_notice_is_handed_to_the_desk_as_the_tablets(tmp_
         handed.append(values)
 
     skill = SimpleNamespace(name="desk", on_reply="desk.py reply")
-    b = AlertButtons(state=d.state, skills=SimpleNamespace(get=lambda name: skill), store_path=str(tmp_path / "s.sqlite"),
+    b = AlertButtons(state=d.state, skills=SimpleNamespace(get=lambda name: skill),
+                     incidents=Incidents(str(tmp_path / "s.sqlite")),
                      thread=thread, run_job=run_job)
     d.state.set_alert_skill(5, GROUP, "desk")
 

@@ -605,7 +605,7 @@ def test_a_step_posted_on_an_alert_keeps_whose_it_is_for_its_redraw(agent, kiosk
 def _owed_now(v):
     """The housekeeping pass, with what is owed due now (kiosk.message_retry_s reached)."""
     async def go(_v):
-        v.messages._retry_s = lambda: 0
+        v.owed._retry_s = lambda: 0
         await v.housekeeping()
     return go
 
@@ -642,7 +642,7 @@ def test_an_alert_closed_while_owed_is_sent_closed_never_open(agent, kiosk):
     kiosk.pushed.clear()
     kiosk.unreachable = True
     scenario(agent, lambda v: alert(v, context="RUN-2", mid=600))
-    iid = max(int(k.split(":")[1]) for k, _r in agent.messages._owed.items())
+    iid = max(int(k.split(":")[1]) for k in agent.owed.keys("message"))
 
     async def closed2(v):
         await v.thread.close(iid, "Closed on {time}: cleared.")
@@ -670,3 +670,28 @@ def test_open_alerts_reach_a_kiosk_that_was_down_when_the_agent_started(agent, k
     rec = kiosk.messages.get("incident:1")
     assert rec and any("Reminder sent" in line for line in rec["status"]), rec
     assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Need help"], rec
+
+
+def test_an_owed_alert_card_survives_a_restart(agent, kiosk):
+    # ⚠️ architecture review round 16: what was owed was held in memory — an alert closed while the Kiosk was down, the
+    # agent restarted before it came back: the tablet kept the card open with Done and Need help (a closed alert is not
+    # told again at start: tell_open tells the open ones)
+    from helpers import restarted
+    from vesta_shared.store import Incident, Store
+
+    async def closed(v):
+        st = Store(v.s.store_path)
+        st.update_incident(1, closed_at=st.now(), state=Incident.RESOLVED)
+        await v.thread.close(1, "Closed on {time}: cleared.")
+    kiosk.unreachable = True
+    scenario(agent, alert, closed)
+    assert kiosk.messages == {} and agent.owed.keys("message") == ["incident:1"]
+    again = restarted(agent)
+    kiosk.unreachable = False
+
+    async def housekeeping(v):
+        await v.housekeeping()                             # the first pass after a start: at once
+    scenario(again, housekeeping)
+    rec = kiosk.messages["incident:1"]
+    assert "Closed on" in rec["status"][-1] and "buttons" not in rec, rec
+    assert again.owed.keys("message") == []

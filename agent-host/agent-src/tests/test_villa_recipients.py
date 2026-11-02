@@ -100,3 +100,29 @@ def test_a_kept_file_that_cannot_be_read_is_no_list(tmp_path, monkeypatch):
     assert villa_recipients.get(pack) == {"owner": [1]}
     assert villa_recipients.save(pack, {"owner": [1], "fm": []}) is True
     assert villa_recipients.save(pack, {"owner": [1], "fm": []}) is False
+
+
+def test_on_a_machine_just_started_both_reads_run_at_the_first_housekeeping(tmp_path, monkeypatch):
+    # ⚠️ ONE CLOCK FOR "EVERY N SECONDS" (architecture review round 16): the Kiosk's faults started at 0.0 against a clock
+    # that starts at the machine's boot — up for 10 seconds (a power cut), the first read waited 5 minutes
+    import vesta_agent.app as app_module
+    from kiosk_fake import FakeKiosk
+    clock = [10.0]
+    monkeypatch.setattr(app_module.time, "monotonic", lambda: clock[0])
+    v = make_agent(tmp_path, {"people": PEOPLE}, reader=_villa("notify.tg_jm", "notify.tg_other"), kiosk=FakeKiosk())
+    faults = []
+
+    async def repair():
+        faults.append(clock[0])
+        return {}
+    v.tickets.repair = repair
+    asyncio.run(v.housekeeping())
+    assert faults == [10.0] and villa_recipients.get(v.s.pack_path) == {"owner": [JM], "fm": [OTHER_GROUP]}
+    # then every 5 minutes, not at every pass
+    v.reader = _villa("notify.tg_jm", "")
+    clock[0] = 10.0 + 299
+    asyncio.run(v.housekeeping())
+    assert faults == [10.0] and villa_recipients.get(v.s.pack_path)["fm"] == [OTHER_GROUP]
+    clock[0] = 10.0 + 300
+    asyncio.run(v.housekeeping())
+    assert faults == [10.0, 310.0] and villa_recipients.get(v.s.pack_path)["fm"] == []

@@ -129,6 +129,8 @@ def test_every_record_family_has_a_declared_lifetime(tmp_path):
     # as the scheduler claims it: by the job itself, its day kept under its ident (review L: jobday: had no lifetime)
     s.claim_job_slot("reports:fm-weekly@Mon 08:00", "2026-10-05T08:00:00+08:00", "reports:fm-weekly")
     s.set_siren_stop("2026-10-05T08:00:00+00:00")
+    s.set_kiosk_owed("message", "incident:1", {"key": "incident:1", "title": "x"}, 500)
+    s.set_tablet_turn(9, {"key": "turn:9", "profile": "owner", "text": "x"}, 200)
     keys = [r[0] for r in s.db.execute("select k from kv")]
     undeclared = [k for k in keys if not any(k.startswith(p) for p in KV_FAMILIES)]
     assert undeclared == [], f"a record family with no declared lifetime: {undeclared}"
@@ -171,3 +173,32 @@ def test_an_open_alert_keeps_its_tablet_card_and_its_runs_past_the_records_days(
     s.prune(runs_before="1970", records_before=soon, open_incidents=[2])
     assert s.incident_card(1) is None and s.incident_runs(1) == []
     assert s.incident_card(2) == {"parts": {"body": "x"}, "keyboard": None} and s.incident_runs(2) == ["run-2"]
+
+
+def test_what_the_kiosk_did_not_take_is_kept_at_most_a_set_number(tmp_path):
+    # architecture review round 16: what is owed to the Kiosk and each tablet turn's last record are kept across a
+    # restart — at most a set number each, the oldest going first (a Kiosk gone for days)
+    s = _state(tmp_path)
+    for n in range(3):
+        s.set_kiosk_owed("turn", f"turn:{n}", {"key": f"turn:{n}"}, 2)
+        s.set_tablet_turn(n, {"key": f"turn:{n}"}, 2)
+    assert [k for _kind, k, _r in s.kiosk_owed()] == ["turn:1", "turn:2"]
+    assert s.tablet_turn(0) is None and s.tablet_turn(2) == {"key": "turn:2"}
+    s.set_kiosk_owed("turn", "turn:1", {"key": "turn:1", "text": "newer"}, 2)     # a newer copy: one per key, last
+    assert [(k, r.get("text")) for _kind, k, r in s.kiosk_owed()] == [("turn:2", None), ("turn:1", "newer")]
+    s.set_kiosk_owed("turn", "turn:2", None, 2)
+    assert [k for _kind, k, _r in s.kiosk_owed()] == ["turn:1"]
+
+
+def test_the_tablet_turns_kept_are_capped_by_size_too(tmp_path, monkeypatch):
+    # architecture review round 16: four camera pictures of up to 3 MB a turn; the store keeps the newest within its size
+    from vesta_agent import state as state_module
+    from vesta_agent.state import State
+    monkeypatch.setattr(state_module, "kiosk_copies_bytes", lambda: 2500)
+    st = State(str(tmp_path / "s.sqlite"))
+    for mid in range(1, 6):
+        st.set_tablet_turn(mid, {"key": f"t{mid}", "photos": ["x" * 1000]}, 200)
+    kept = [mid for mid in range(1, 6) if st.tablet_turn(mid)]
+    assert kept == [4, 5]
+    st.set_tablet_turn(6, {"key": "t6", "photos": ["x" * 5000]}, 200)          # bigger than the budget alone: still kept
+    assert [mid for mid in range(1, 7) if st.tablet_turn(mid)] == [6]

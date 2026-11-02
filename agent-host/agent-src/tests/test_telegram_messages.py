@@ -88,6 +88,7 @@ def test_a_double_tap_on_done_answers_once(tmp_path):
     # closed" replaced "Closed: done" in the chat
     from types import SimpleNamespace
     from vesta_agent.alert_buttons import AlertButtons
+    from vesta_agent.incidents import Incidents
     from vesta_agent.incident_thread import IncidentThread
     d, tg = _delivery(tmp_path)
     thread = IncidentThread(d.state, "UTC", edit=d.edit, delete=d.delete)
@@ -103,7 +104,8 @@ def test_a_double_tap_on_done_answers_once(tmp_path):
     class Skills:
         def get(self, name):
             return skill
-    b = AlertButtons(state=d.state, skills=Skills(), store_path=str(tmp_path / "s.sqlite"), thread=thread, run_job=run_job)
+    b = AlertButtons(state=d.state, skills=Skills(), incidents=Incidents(str(tmp_path / "s.sqlite")), thread=thread,
+                     run_job=run_job)
     d.state.set_alert_skill(5, GROUP, "desk")
     person = SimpleNamespace(telegram_id=1, name="Marie", role="fm")
 

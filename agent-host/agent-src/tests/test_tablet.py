@@ -381,3 +381,55 @@ def test_a_guest_is_not_given_the_villas_status(tmp_path, kiosk, monkeypatch):
     collect(v)
     by_role = {("guest" if "role guest" in r["prompt"] else "owner"): r["prompt"] for r in ai.runs}
     assert "villa-concierge skill" in by_role["owner"] and "villa-concierge skill" not in by_role["guest"]
+
+
+def test_an_answer_the_kiosk_did_not_take_arrives_after_a_restart(agent, kiosk):
+    # ⚠️ architecture review round 16: a turn was written once — a Kiosk restarting, and the answer never appeared; what
+    # was owed was held in memory, so a restart lost it too
+    from helpers import restarted
+    chat = tablet.chat_of("owner")
+    kiosk.unreachable = True
+    mid = asyncio.run(agent.delivery.reply(chat, "The pool pump is on."))
+    assert mid and kiosk.conversation("owner") == []
+    again = restarted(agent)                              # the Kiosk still down while the agent starts again
+    kiosk.unreachable = False
+    asyncio.run(again.housekeeping())                     # the first pass after a start sends what is owed
+    assert [t["text"] for t in kiosk.conversation("owner")] == ["The pool pump is on."]
+    pushed = len(kiosk.turns_pushed)
+    again.owed._retry_s = lambda: 0                       # the next pass due at once: nothing is owed any more
+    asyncio.run(again.housekeeping())
+    assert len(kiosk.turns_pushed) == pushed, "taken once: never written again"
+
+
+def test_the_newest_copy_of_an_owed_turn_wins(agent, kiosk):
+    chat = tablet.chat_of("owner")
+    kiosk.unreachable = True
+
+    async def go():
+        mid = await agent.delivery.send(chat, "VESTA is preparing the report.")
+        await agent.delivery.edit(chat, mid, "The report is ready.")
+        kiosk.unreachable = False
+        agent.owed._retry_s = lambda: 0
+        await agent.housekeeping()
+        # owed, then a newer copy taken: the one owed is never written over it
+        kiosk.unreachable = True
+        mid = await agent.delivery.send(chat, "Looking at the gate.")
+        kiosk.unreachable = False
+        await agent.delivery.edit(chat, mid, "The gate is closed.")
+        await agent.housekeeping()
+    asyncio.run(go())
+    assert [t["text"] for t in kiosk.conversation("owner")] == ["The report is ready.", "The gate is closed."]
+    assert [t.get("text") for t in kiosk.turns_pushed if t["key"].startswith("turn:")] == \
+        ["The report is ready.", "The gate is closed."]
+
+
+def test_an_edit_after_a_restart_keeps_the_turns_pictures(agent, kiosk):
+    # each turn's last record was held in memory: after a restart an edit rewrote it as words alone, its pictures gone
+    from helpers import restarted
+    chat = tablet.chat_of("owner")
+    jpeg = base64.b64encode(b"\xff\xd8\xff camera").decode()
+    mid = asyncio.run(agent.delivery.reply(chat, "The gate, looked at now.", photos=[(jpeg, "image/jpeg")]))
+    again = restarted(agent)
+    assert asyncio.run(again.delivery.edit(chat, mid, "The gate is closed."))
+    (turn,) = kiosk.conversation("owner")
+    assert turn["text"] == "The gate is closed." and turn["photos"] == [jpeg], turn

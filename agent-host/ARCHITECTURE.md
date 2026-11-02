@@ -1099,3 +1099,28 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   from its rules.yaml by the night check (round 11, card 1: defined once).
 - Card 1 (the night check's messages told by the engine as an alert's are) waits for the owner: one message per night,
   edited in place, is the owner's decision of 2026-10-20 and 2026-10-27.
+
+## What the Kiosk did not take, what the AI is told, one clock, the taken step: one owner each (architecture review round 16, 2026-11-03)
+
+- **What the Kiosk did not take: `vesta_agent/kiosk_owed.py`** (lead 3). `KioskOwed` owes the newest copy per key, of
+  two kinds — an alert card or note for the tablet (`kiosk_messages.KioskMessages`, which no longer holds `_owed`) and a
+  conversation turn (`tablet.Tablet._write`, written once before: a Kiosk restarting lost the answer). Kept in the state
+  (`kowed:`, RECORDS, at most `kiosk_owed.REMEMBERED`); `retry()` at housekeeping, every kiosk.message_retry_s and at the
+  first pass after a start, hands each copy back to its kind's writer. A tablet turn's last record is `tabletturn:`
+  (RECORDS, at most `tablet.REMEMBERED`): an edit after a restart keeps its pictures and page. One write per turn key at
+  a time (its lock), the retry writing the copy owed NOW, never an older one it read. A turn not taken returns its id
+  (it is owed). The dots and the words heard stay a courtesy, written once. Not done: one writer for both kinds (per-key
+  ordering, skip-identical, pages): the messages push in the background, the turns are awaited.
+- **What the AI is told before an answer: `vesta_agent/briefing.py`** (lead 6). `Briefing.before(ask)` → `Told(prompt,
+  at)`: the skills' `before_answer` checks (`status`), the chat's facts, the question words; `check_for(person)` starts the
+  check beside a spoken question's transcription. A guest is never told the status, and it is not run for one (it was run,
+  then dropped in app). What a guest's tools may read stays `tools.Toolbox._reads` (profiles.Reads.for_role). app keeps
+  the lock, the AI turn and the delivery.
+- **Every N seconds, at once on the first round: `vesta_agent/cadence.Every`** (lead 4). The Kiosk's faults read
+  started at 0.0 against a clock that starts at the machine's boot (a power cut: the first read waited 5 minutes); the
+  villa's lists had been fixed alone (0.6.422). housekeeping declares both (`kiosk_faults_every`, `recipients_every`),
+  and KioskOwed its retry. The wake's coalescing read (`_records`) and the devices' settle (`_devices_due`) are no
+  "every N" and stay as they are.
+- **The taken step: `IncidentThread.restate`** (lead 7) records its own TAKEN step after drawing the copies, as `_finish`
+  records CLEARED (app's `_alert_taken` glue gone; a `kiosk_words.Words` note brings its languages). `Incidents` is built
+  once in app and handed to ChatFacts, Notices, AlertButtons (`incidents=`), Outcome and the missed-press line.

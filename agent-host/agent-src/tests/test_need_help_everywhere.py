@@ -143,7 +143,7 @@ def test_need_help_pressed_on_the_tablet_reaches_the_owner_on_telegram_at_once(t
     st = Store(v.s.store_path)
     finding_task(st, k)
     k.person_helps("t-pump", by="JM")
-    v._kiosk_read = float("inf")                            # the 5-minute read never comes: only the wake can do it
+    v.kiosk_faults_every.due = lambda: False                # the 5-minute read never comes: only the wake can do it
     caplog.set_level("INFO")
     wake(v, k, monkeypatch)
     (inc,) = st.incidents()
@@ -159,7 +159,7 @@ def test_done_pressed_on_the_tablet_takes_the_buttons_off_the_telegram_alert_at_
     assert v.tg.sent and any(kb for _c, _t, kb in v.tg.sent)
     v.tg.edit_keyboards.clear()
     k.person_closes(uid, by="JM", cockpit=True)
-    v._kiosk_read = float("inf")
+    v.kiosk_faults_every.due = lambda: False
     wake(v, k, monkeypatch)
     assert Store(v.s.store_path).incident(1)["closed_at"] is not None
     assert v.tg.edit_keyboards and all(kb is None for kb in v.tg.edit_keyboards), v.tg.edit_keyboards

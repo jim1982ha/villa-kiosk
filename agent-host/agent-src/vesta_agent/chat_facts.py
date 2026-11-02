@@ -23,7 +23,7 @@ way" — each thing below reaches a chat outside the conversation, and the AI ta
                     fault offered (fault_offers.py)
   told            the AI answered here: what it was told until the message it answered is behind it
 
-Not here, because the AI already reads them live before every answer (app.before_answer): the approval requests,
+Not here, because the AI already reads them live before every answer (briefing.Briefing.status): the approval requests,
 waiting and decided (approvals.Approvals.now), and the villa's open alerts (the status skill's check). An "Investigate
 this" press is a conversation turn of its own (the AI answers it); its "No" leaves nothing the AI said untrue.
 """

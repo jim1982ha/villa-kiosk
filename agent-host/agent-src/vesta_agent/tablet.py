@@ -12,6 +12,13 @@ intake gate, so /investigate, /proposal and /new work as there; then converse), 
 52 significant bits). Delivery sends to it through this module instead of Telegram (`Tablet`, Delivery's second sink,
 chosen by conversation): a message is a turn, an edit replaces it (a "being prepared" answer becomes its result), a
 deletion withdraws it. Nobody is added to People.
+
+⚠️ AN ANSWER THE KIOSK DID NOT TAKE IS OWED, NOT LOST (architecture review round 16). A turn was written once: a Kiosk
+restarting or slow, and the person's answer never appeared; each turn's last record was held in memory, so after a
+restart an edit dropped the turn's pictures and page, and its sound, a note or its buttons could not be added. Now a
+turn the Kiosk did not take is owed (kiosk_owed.KioskOwed, as an alert card is) and written again at the housekeeping
+pass, the newest copy of each turn winning; what is owed and each turn's last record are kept in the agent's state.
+The dots ("VESTA is answering") and the words heard stay a courtesy, written once.
 """
 from __future__ import annotations
 
@@ -26,11 +33,13 @@ from vesta_shared import agreement
 from . import intake
 from .kiosk import KioskError, kiosk_timeout_s
 from .kiosk_messages import buttons_of
+from .kiosk_owed import TURN, KioskOwed
 from .policy import Person, tablet_chat, tablet_person, tablet_profile, tablet_profiles
 
 log = logging.getLogger("vesta.tablet")
 
-#: How many turns' last record are remembered, for an edit that changes only the words (its pictures kept).
+#: How many turns' last record are remembered (in the agent's state: a restart keeps them), for an edit that changes
+#: only the words (its pictures kept).
 REMEMBERED = 200
 #: Pause before reading the inbox again after the Kiosk could not be reached; after a Kiosk with no inbox (older).
 RETRY_S, NO_INBOX_S = 10.0, 600.0
@@ -110,12 +119,15 @@ class Tablet:
     """Delivery's second sink (one per agent): what is sent to a tablet's conversation, as turns the Kiosk keeps — and
     the inbox the questions come from."""
 
-    def __init__(self, kiosk, state, timeout_s: Callable[[], float] = kiosk_timeout_s):
+    def __init__(self, kiosk, state, timeout_s: Callable[[], float] = kiosk_timeout_s, owed: KioskOwed | None = None):
         self.kiosk = kiosk
         self.state = state
         self._timeout_s = timeout_s
         self._last_mid = 0
-        self._turns: dict[int, dict] = {}       # message id → the record last written for it (an edit keeps its pictures)
+        # what the Kiosk did not take, written again at the housekeeping pass (app's, shared with the alert cards)
+        self.owed = owed if owed is not None else KioskOwed(state)
+        self.owed.sends(TURN, self._again)
+        self._keys: dict[str, asyncio.Lock] = {}  # a turn's key → its lock: one write at a time, the newest last
         self._tasks: set[asyncio.Task] = set()
         self._working: dict[int, dict] = {}     # chat → its "VESTA is answering" loop and what holds it (hold)
         self._after: int | None = None          # the last question collected (kept in the state too: tablet_after)
@@ -134,24 +146,52 @@ class Tablet:
         self._last_mid = max(self._last_mid + 1, int(time.time() * 1000))
         return self._last_mid
 
-    async def _write(self, mid: int, record: dict) -> bool:
+    def _was(self, mid) -> dict | None:
+        """Turn `mid`'s record as last written (state.tablet_turn: a restart keeps it)."""
+        return self.state.tablet_turn(int(mid))
+
+    def _lock(self, key: str) -> asyncio.Lock:
+        lock = self._keys.pop(key, None) or asyncio.Lock()
+        self._keys[key] = lock                    # the last used last: the oldest idle ones go
+        while len(self._keys) > REMEMBERED and not next(iter(self._keys.values())).locked():
+            self._keys.pop(next(iter(self._keys)))
+        return lock
+
+    async def _put(self, record: dict) -> bool:
         try:
-            ok = await asyncio.wait_for(self.kiosk.add_turn(record), self._timeout_s())
+            return await asyncio.wait_for(self.kiosk.add_turn(record), self._timeout_s())
         except (KioskError, asyncio.TimeoutError) as e:
-            log.warning("An answer could not be written to the tablet (%s)", type(e).__name__)
+            log.warning("An answer could not be written to the tablet (%s): it is written again later", type(e).__name__)
             return False
-        if ok:
-            self._turns[mid] = record
-            while len(self._turns) > REMEMBERED:
-                self._turns.pop(next(iter(self._turns)))
-        return ok
+
+    async def _write(self, record: dict, mid: int | None = None) -> bool:
+        """`record` written as its turn stands now (`mid`'s, kept for a later change); one the Kiosk does not take is
+        owed (see the module's note). True: the tablet has it, or will at the housekeeping pass."""
+        key = record["key"]
+        async with self._lock(key):
+            if mid is not None:
+                self.state.set_tablet_turn(int(mid), record, REMEMBERED)
+            if await self._put(record):
+                self.owed.paid(TURN, key)
+            else:
+                self.owed.owe(TURN, key, record)
+        return True
+
+    async def _again(self, key: str, _record: dict) -> None:
+        """The housekeeping pass: the copy owed for `key` NOW written again — a newer one written meanwhile is not
+        overwritten by the older one this pass read."""
+        async with self._lock(key):
+            record = self.owed.owes(TURN, key)
+            if record is not None and await self._put(record):
+                self.owed.paid(TURN, key)
 
     # ⚠️ DELIVERY'S SECOND PLACE (delivery.TelegramChats is the first): the same five steps, each as the tablet shows it.
     # Buttons and "typing…" are ticket 22's (the keyboard is not drawn yet, a hold shows nothing).
     async def send(self, chat: int, text: str, *, keyboard: dict | None = None, document: str | None = None, photos=(),
                    reply_to: int | None = None) -> int | None:
         """One turn of VESTA's in `chat`'s conversation: its words, the camera pictures ((base64, mime)) and a page (an
-        HTML file of the out folder, uploaded first). Its message id, or None when the Kiosk did not keep it."""
+        HTML file of the out folder, uploaded first). Its message id: a turn the Kiosk did not take yet is owed, and arrives
+        at the housekeeping pass."""
         rec = {"profile": profile_of(chat), "text": text or ""}
         if buttons := buttons_of(keyboard):
             rec["buttons"] = buttons                 # VESTA's own kind and id (kiosk_messages.buttons_of), never a command
@@ -165,7 +205,7 @@ class Tablet:
             else:
                 rec["text"] = (rec["text"] + "\n\n" if rec["text"] else "") + "(A file came with this answer: the tablet cannot show it.)"
         mid = self._mid()
-        return mid if await self._write(mid, {"key": turn_key(mid), **rec}) else None
+        return mid if await self._write({"key": turn_key(mid), **rec}, mid) else None
 
     async def heard(self, chat: int, ask: int | None, words: str) -> bool:
         """The words heard in a spoken question, onto the person's own line (`ask:<seq>`, the Kiosk's): the one write the
@@ -186,8 +226,8 @@ class Tablet:
     async def speak(self, chat: int, mid: int, audio: bytes, mime: str) -> bool:
         """`mid`'s turn carries its sound (ticket 24 of "One inbox", VESTA answers aloud): uploaded first, then named on
         the turn (`speech`), its words, buttons and pictures kept. The tablet that asked plays it as it arrives. False:
-        the turn is not one of this run's, or the Kiosk did not keep the sound."""
-        was = self._turns.get(int(mid))
+        the turn is not known (older than the last REMEMBERED), or the Kiosk did not keep the sound."""
+        was = self._was(mid)
         if was is None:
             return False
         try:
@@ -195,22 +235,21 @@ class Tablet:
         except (KioskError, asyncio.TimeoutError) as e:
             log.warning("An answer's sound could not be kept for the tablet (%s)", type(e).__name__)
             return False
-        return bool(name) and await self._write(int(mid), {**was, "speech": name})
+        return bool(name) and await self._write({**was, "speech": name}, mid)
 
     async def note(self, chat: int, mid: int, line: str) -> bool:
         """`mid`'s turn with `line` under its words (an answer not spoken says why), all else kept."""
-        was = self._turns.get(int(mid))
+        was = self._was(mid)
         if was is None:
             return False
-        return await self._write(int(mid), {**was, "text": (f"{was['text']}\n\n" if was.get("text") else "") + line})
+        return await self._write({**was, "text": (f"{was['text']}\n\n" if was.get("text") else "") + line}, mid)
 
     async def answer(self, chat: int, press: int | None, text: str) -> bool:
         """A press's short answer (Telegram's toast), back to the tablet that pressed: a turn naming the press, shown
         under its button, never as a line of the conversation."""
         if not isinstance(press, int) or not text:
             return False
-        return await self._write(self._mid(), {"key": key("press", press), "profile": profile_of(chat), "text": text,
-                                               "answers": press})
+        return await self._write({"key": key("press", press), "profile": profile_of(chat), "text": text, "answers": press})
 
     async def reply(self, chat: int, text: str, *, keyboard: dict | None = None, photos=()) -> int | None:
         """A reply to a person: ONE turn, its words with the camera pictures."""
@@ -218,11 +257,11 @@ class Tablet:
 
     async def buttons(self, chat: int, mid: int, keyboard: dict | None) -> bool:
         """`mid`'s turn offers these buttons now (its words kept)."""
-        was = self._turns.get(int(mid))
+        was = self._was(mid)
         if was is None:
             return False
-        return await self._write(int(mid), {**{k: v for k, v in was.items() if k != "buttons"},
-                                            **({"buttons": b} if (b := buttons_of(keyboard)) else {})})
+        return await self._write({**{k: v for k, v in was.items() if k != "buttons"},
+                                  **({"buttons": b} if (b := buttons_of(keyboard)) else {})}, mid)
 
     # ⚠️ "VESTA IS ANSWERING" ON THE TABLET (owner, 2026-10-29: "a running indicator in the chat response bubble while
     # VESTA is thinking or waiting for an answer"): Telegram's "typing…" for the tablet — held as Delivery holds every
@@ -271,15 +310,15 @@ class Tablet:
     async def edit(self, chat: int, mid: int, text: str, keyboard: dict | None = None) -> bool:
         """`mid`'s turn says `text` now, its buttons gone or `keyboard`'s, its sound gone (its pictures and page kept): the
         Kiosk replaces it by its key."""
-        was = self._turns.get(int(mid)) or {"key": turn_key(mid), "profile": profile_of(chat)}
+        was = self._was(mid) or {"key": turn_key(mid), "profile": profile_of(chat)}
         # its sound goes too: it said the words being replaced
         rec = {k: v for k, v in was.items() if k not in ("buttons", "speech")}
-        return await self._write(int(mid), {**rec, "text": text, **({"buttons": b} if (b := buttons_of(keyboard)) else {})})
+        return await self._write({**rec, "text": text, **({"buttons": b} if (b := buttons_of(keyboard)) else {})}, mid)
 
     async def delete(self, chat: int, mid: int) -> bool:
         """`mid`'s turn withdrawn (a "being prepared" answer once its result came, as on Telegram): the Kiosk keeps it
         withdrawn, the tablet no longer shows it. The agent never removes a record."""
-        return await self._write(int(mid), {"key": turn_key(mid), "profile": profile_of(chat), "gone": True})
+        return await self._write({"key": turn_key(mid), "profile": profile_of(chat), "gone": True}, mid)
 
     async def _page(self, path: str) -> str | None:
         """A page sent with an answer, kept at the Kiosk (its id), as a report's is (kiosk_messages.page_id); None for any

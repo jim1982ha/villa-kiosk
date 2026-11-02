@@ -15,7 +15,8 @@ with Open Ticket and Close on the tablet while #98 showed VESTA's card with Done
 keep (unreachable, restarting, refused) was tried again only at the message's next change, and an alert with no step
 after it kept the tablet's short list for good. Now the newest copy of each such message is owed and sent again at the
 housekeeping pass (kiosk.message_retry_s) until the Kiosk keeps it, and a newer copy replaces the one owed: an alert
-closed meanwhile is sent closed, never as it stood before.
+closed meanwhile is sent closed, never as it stood before. What is owed is kiosk_owed.KioskOwed's (round 16): kept in
+the agent's state, a restart keeps it; the tablet's conversation turns are owed the same way.
 
 The record's shape is the agreement's (agent-contract.json `vestaMessage`): its limits are read from there.
 """
@@ -25,13 +26,13 @@ import asyncio
 import hashlib
 import json
 import logging
-import time
 from datetime import datetime, timezone
 
 from vesta_shared import agreement
 from vesta_shared.message_format import AND
 
 from . import button_data, layout
+from .kiosk_owed import MESSAGE, KioskOwed
 from .in_progress import scheduled_run
 from .scheduler import job_of
 
@@ -194,12 +195,12 @@ class KioskMessages:
     """Keeps records for the tablet, in the background (see the module's note). One push in flight per key, the newest
     waiting: a message changed twice in a row is pushed in order, never both at once."""
 
-    def __init__(self, kiosk, timeout_s, retry_s=lambda: 300.0):
+    def __init__(self, kiosk, timeout_s, owed: KioskOwed):
         self.kiosk = kiosk
         self._timeout_s = timeout_s            # kiosk.message_timeout_s: read at each push (the Limits tab applies at once)
-        self._retry_s = retry_s                # kiosk.message_retry_s: how often what is owed is sent again
-        self._owed: dict[str, dict] = {}       # key → its newest copy the Kiosk did not keep, as drawn (see the module's note)
-        self._tried = time.monotonic()
+        # key → its newest copy the Kiosk did not keep, as drawn (see the module's note), sent again by the owed's pass
+        self.owed = owed
+        owed.sends(MESSAGE, lambda _key, rec: self.keep(rec))
         self._pending: dict[str, dict] = {}
         self._running: dict[str, asyncio.Task] = {}
         self._last: dict[str, str] = {}        # key → what was last pushed, to skip an identical one
@@ -219,7 +220,7 @@ class KioskMessages:
             return
         self._last.pop(key, None)
         self._last[key] = same
-        self._owed.pop(key, None)              # this copy is newer than the one owed: it is the one to send
+        self.owed.paid(MESSAGE, key)           # this copy is newer than the one owed: it is the one to send
         while len(self._last) > REMEMBERED:
             self._last.pop(next(iter(self._last)))
         self._pending[key] = rec
@@ -294,21 +295,7 @@ class KioskMessages:
         self._last.pop(key, None)
         if key in self._pending:
             return
-        self._owed.pop(key, None)
-        self._owed[key] = drawn
-        while len(self._owed) > REMEMBERED:
-            self._owed.pop(next(iter(self._owed)))
-
-    def retry(self) -> int:
-        """The housekeeping pass: every copy owed sent again, at most once per kiosk.message_retry_s — how many."""
-        if not self._owed or time.monotonic() - self._tried < self._retry_s():
-            return 0
-        self._tried = time.monotonic()
-        owed, self._owed = self._owed, {}
-        for rec in owed.values():
-            self.keep(rec)
-        log.info("VESTA Kiosk: %s message(s) the tablet did not get sent again", len(owed))
-        return len(owed)
+        self.owed.owe(MESSAGE, key, drawn)
 
     async def settle(self) -> None:
         """Wait for every push started (the tests; a stop)."""

@@ -425,7 +425,7 @@ def test_the_ai_is_told_what_is_waiting_and_what_was_decided_never_left_to_its_m
     later = v.approvals.now(now=t0 + timedelta(minutes=22))
     assert "- nothing is waiting for approval" in later and " — approved, its result not recorded yet (by JM on " in later
     assert "never from memory" in later
-    assert "Requests for approval" in v.before_answer()                 # in front of every message, acting on
+    assert "Requests for approval" in v.briefing.status()               # in front of every message, acting on
 
 
 def _curtain_villa(tmp_path, reads, ttl=15):

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.423 (3 November 2026)
+
+- Architecture review round 16 (the agent's leads 3, 4, 6, 7).
+- Lead 3: `kiosk_owed.KioskOwed` owes and retries what the Kiosk did not take, for alert-card messages and tablet
+  turns alike (newest copy per key), kept in state (`kowed:`); `tablet.Tablet` keeps each turn's last record in state
+  (`tabletturn:`), so an edit after a restart keeps its pictures. Both capped by count and by size
+  (`state.kiosk_copies_mb`, 30 MB each: four pictures of up to 3 MB a turn). `KioskMessages._owed/retry` are gone.
+- Lead 4: `cadence.Every`, due on the first round then every N seconds: the Kiosk faults read (`_kiosk_read = 0.0`
+  waited 5 minutes on a machine up for less), the recipients read and the owed retry.
+- Lead 6: `briefing.Briefing` owns what the AI is told before it answers (status check, chat facts, question words);
+  a guest's status check is not run at all. `app.before_answer` is `Briefing.status`.
+- Lead 7: `IncidentThread.restate` records its own TAKEN step; `app._alert_taken` is gone; `Incidents` built once and
+  handed over (`AlertButtons(incidents=)`).
+- tests: test_briefing.py, test_tablet.py, test_kiosk_messages.py, test_state_records.py, test_taken_in_kiosk.py,
+  test_villa_recipients.py.
+
 ## 0.6.422 (3 November 2026)
 
 - 0.6.421 was not published (CI: the lists were first read 5 minutes after the start of a machine up for less;

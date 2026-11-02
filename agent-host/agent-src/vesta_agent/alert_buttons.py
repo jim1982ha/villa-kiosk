@@ -30,19 +30,19 @@ RETIRED = {"not_found", "mute"}
 
 
 class AlertButtons:
-    def __init__(self, *, state, skills, store_path: str, thread, run_job: Callable[..., Awaitable] | None = None,
+    def __init__(self, *, state, skills, incidents: Incidents, thread, run_job: Callable[..., Awaitable] | None = None,
                  facts=None):
         self.state = state
         self.facts = facts              # chat_facts.ChatFacts: the press is told to the AI with the chat's next message
         self.skills = skills
-        self.store_path = store_path
+        self.incidents = incidents      # the alert desk's incidents, as the engine reads them (built once, by app)
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident
         self.run_job = run_job          # (skill, command, timeout, values, origin) -> result: the on_reply hook
         self._pressing: set[str] = set()   # the incidents whose press is being handled now (one at a time, anywhere)
 
     def open(self, iid: int | str) -> bool:
         """Is incident `iid` still waiting for an answer (incidents.Incidents)? Its messages then carry the buttons."""
-        return Incidents(self.store_path).awaiting_answer(iid)
+        return self.incidents.awaiting_answer(iid)
 
     @staticmethod
     def of(skill) -> list[dict]:

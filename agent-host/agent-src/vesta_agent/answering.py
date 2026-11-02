@@ -40,7 +40,7 @@ class Ask:
     spoken: str | None = None
     about: str | None = None
     aloud: bool = False
-    #: the villa's status check (app.Vesta.before_answer) already started (a spoken question: while Whisper writes it
+    #: the villa's status check (briefing.Briefing.check_for) already started (a spoken question: while Whisper writes it
     #: out); None: run when the turn needs it
     checked: object = None
     #: a spoken question's steps, timed (Timeline); None: not timed
