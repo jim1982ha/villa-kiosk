@@ -892,7 +892,7 @@ class Toolbox:
         else:
             langs = {r: [lang.name for lang, _chats in Routing(self.policy).readers(r)] for r in ROLE_WORDS}
             desc = ("Send a message, with a file attached if needed. to=owner / to=fm: every chat of the owner or of "
-                    "the facility manager (the People list), for scheduled reports and digests. "
+                    "the facility manager (the villa's lists), for scheduled reports and digests. "
                     + " ".join(f"The {ROLE_WORDS[r].lower()}'s people read {' and '.join(ls)}"
                                + (": text is then one version per language, each sent to the people who read it."
                                   if len(ls) > 1 else ".") for r, ls in langs.items() if ls))
@@ -902,7 +902,7 @@ class Toolbox:
             route = Routing(self.policy)
             # a model that writes a destination it was not offered is held to the asker's chat by routing
             if not route.target(to, origin):
-                return _err(f"Nobody is listed as {to} in People: nothing was sent.")
+                return _err(f"No chat is listed as {to} in the villa's lists of who gets the messages: nothing was sent.")
             copies = route.versions(to, origin, args.get("text", ""), args.get("attachment"))
             if isinstance(copies, str):
                 return _err(copies)

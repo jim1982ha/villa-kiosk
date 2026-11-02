@@ -14,7 +14,7 @@ import yaml
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, RETIRED_SECTIONS, form_sections, legacy_rows
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, RETIRED_SECTIONS, _id, form_sections, read_policy
 from ..tool_access import CHOOSE, OWN, ROLE_GROUPS
 
 #: What the forms edit. Everything else (system_actions, notify_recipients...) is edited in the file itself and
@@ -54,16 +54,13 @@ def to_form(text: str) -> dict:
         # save of the Rules form would drop the villa's limits (0.6.41)
         if isinstance(raw["settings"].get("keep"), dict):
             settings["keep"] = raw["settings"]["keep"]
-    people = [p for p in (raw.get("people") or []) if isinstance(p, dict)] if isinstance(raw.get("people"), list) else []
-    # ⚠️ AN OLDER FILE'S CHATS BECOME ROWS OF PEOPLE (0.12.128: People is the one list of where messages go): shown
-    # here, and written there by the next save — never a private chat of someone People does not list, which a row
-    # would register (policy.legacy_rows; apply_form leaves it in `chats:`)
-    people += legacy_rows(raw)[0]
     return {
         "settings": settings,
         "act_enabled": raw.get("act_enabled", DEFAULTS["act_enabled"]),
         "approval_ttl_minutes": raw.get("approval_ttl_minutes", DEFAULTS["approval_ttl_minutes"]),
-        "people": people,
+        # each chat's language as the agent reads it, an older file's People rows' included (policy.read_policy): the
+        # People card's menus, written in `languages:` by the next save. Keys as text: the page's JSON has no numbers.
+        "languages": {str(k): v for k, v in read_policy(raw)[0]["languages"].items()},
         "allowed_services": dict(raw.get("allowed_services") or {}),
         "siren_entity": raw.get("siren_entity"),
         "siren_auto_off_min": raw.get("siren_auto_off_min", DEFAULTS["siren_auto_off_min"]),
@@ -121,6 +118,46 @@ def ai_moved(text: str, owners: dict[str, str], starters: dict[str, dict]) -> st
     for key, left in (("jobs", jobs), ("skill_brains", brains)):
         if key in settings and not left:
             del settings[key]
+    buf = io.StringIO()
+    y.dump(doc, buf)
+    return buf.getvalue()
+
+
+def languages_out(form_languages) -> dict[int, str]:
+    """The page's languages ({"<chat id>": code}, JSON's text keys) as the file keeps them: by chat id, a number."""
+    out: dict[int, str] = {}
+    for k, v in (form_languages or {}).items() if isinstance(form_languages, dict) else ():
+        cid = _id(k)
+        if cid:
+            out[cid] = v
+    return out
+
+
+def languages_moved(text: str) -> str:
+    """The file with an older shape's People rows (and its even older `chats:`) gone, each row's language written in
+    `languages:` first (owner, 2026-11-03: who is who is the VESTA Kiosk's lists; each chat's language stays the
+    agent's). Every save the page's forms make goes through it (changes.PageFiles.form_policy), so the Limits tab's
+    save moves them as the Rules form's does. A file in the new shape comes back unchanged, byte for byte."""
+    y = _yaml()
+    doc = y.load(text) if (text or "").strip() else None
+    if not isinstance(doc, CommentedMap) or not ({"people", "chats"} & set(doc)):
+        return text
+    langs = read_policy(yaml.safe_load(text) or {})[0]["languages"]    # the file's own `languages:` first, then rows'
+    if langs:
+        at = list(doc).index("people") if "people" in doc else len(doc)
+        cur = doc.get("languages")
+        if not isinstance(cur, CommentedMap):
+            if "languages" in doc:
+                del doc["languages"]
+            doc.insert(min(at, len(doc)), "languages", _node({}))
+            cur = doc["languages"]
+        for cid, code in langs.items():
+            if cid not in cur and str(cid) not in cur:
+                cur[cid] = code
+        cur.fa.set_block_style()
+    for gone in ("people", "chats"):
+        if gone in doc:
+            del doc[gone]
     buf = io.StringIO()
     y.dump(doc, buf)
     return buf.getvalue()
@@ -209,6 +246,8 @@ def apply_form(text: str, form: dict) -> str:
         doc = CommentedMap()
     web = form["agent_tools"].get("web_search") if isinstance(form.get("agent_tools"), dict) else None
     form, defaults = _switches_out(form), _switches_out(to_form(""))
+    if "languages" in form:
+        form = {**form, "languages": languages_out(form["languages"])}
     for key in FORM_KEYS:
         if key not in form:
             continue
@@ -217,12 +256,6 @@ def apply_form(text: str, form: dict) -> str:
         _set(doc, key, form[key])
     for gone in RETIRED_SECTIONS & set(doc):
         del doc[gone]                              # written by an older agent, read by none (policy.RETIRED_SECTIONS)
-    if "people" in form and "chats" in doc:
-        kept = legacy_rows(yaml.safe_load(text) if (text or "").strip() else {})[1]
-        if kept:
-            _set(doc, "chats", kept)               # private chats of nobody listed: still posted to, never a person
-        else:
-            del doc["chats"]                       # its chats are rows of People now (to_form)
     if web is not None:                            # web search's switch: written in settings, where the agent reads it
         settings = doc.get("settings")
         if (settings or {}).get("web_search", DEFAULT_BEHAVIOUR.get("web_search", False)) != web:

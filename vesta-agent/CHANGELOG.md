@@ -1,3 +1,16 @@
+## 0.12.439
+
+What you will see:
+- Who gets VESTA's messages, and who may press their buttons, is set in one place: the VESTA Kiosk (Settings ›
+  Messages › Who gets the messages). Each Telegram chat in the owner's list or the facility manager's list gets that
+  role's messages and may approve what that role may approve; everyone in a listed group acts with the group's role.
+- On the VESTA Agent page, Rules › People now shows those lists, read only: each chat's name, Telegram id and role. The
+  Language menu beside each chat is the one thing set there. Your languages are kept as they were.
+- A chat only in the old People list, and no longer in the Kiosk's lists, gets nothing from VESTA and cannot approve.
+- Until the Kiosk's lists name a Telegram chat, the People card says so, and VESTA answers nobody and sends nothing
+  (the villa's own alerts are not affected).
+- The next save on the Rules page tidies the file: the old People rows go, each chat's language stays.
+
 ## 0.12.438
 
 What you will see:

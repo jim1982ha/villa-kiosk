@@ -84,7 +84,8 @@ def test_a_refused_call_says_so_and_confirms_nothing(run, caplog):
 
 
 # ---------------------------------------------------------------------- the `direct` rule
-from vesta_agent.policy import Person, Policy  # noqa: E402
+from vesta_agent.policy import Person  # noqa: E402
+from helpers import listed_policy  # noqa: E402
 
 JM = Person(111, "Registered", "fm", "en")
 
@@ -93,7 +94,7 @@ JM = Person(111, "Registered", "fm", "en")
 def villa(tmp_path, monkeypatch):
     monkeypatch.delenv("VESTA_HA_READ_ONLY", raising=False)
     session = StrictSession()
-    pol = Policy({"act_enabled": True, "people": [{"telegram_id": 111, "name": "Registered", "role": "fm"}],
+    pol = listed_policy({"act_enabled": True, "people": [{"telegram_id": 111, "name": "Registered", "role": "fm"}],
                   "chats": {"fm": 111, "owner": -100},
                   "owner_only_entities": ["light.example_gate_lamp"],
                   "allowed_services": {"light.turn_on": "direct", "cover.open_cover": "any"}})
@@ -158,7 +159,7 @@ def test_a_group_whose_members_cannot_be_read_asks_the_owner(villa, tmp_path, mo
     # architecture review 17, 2026-10-10: a slow Home Assistant made a group look as if it held nothing, and a "direct"
     # rule switched an owner-only light on with no approval — what cannot be checked is the owner's to approve
     _, session = villa
-    pol = Policy({"act_enabled": True, "people": [{"telegram_id": 111, "name": "Registered", "role": "fm"}],
+    pol = listed_policy({"act_enabled": True, "people": [{"telegram_id": 111, "name": "Registered", "role": "fm"}],
                   "chats": {"fm": 111, "owner": -100}, "allowed_services": {"light.turn_on": "direct"}})
     blind = Actions(lambda: pol, State(str(tmp_path / "blind.db")),
                     lambda: Writer("http://unused", "UTC", write=True, session=session), related=lambda ids: None)

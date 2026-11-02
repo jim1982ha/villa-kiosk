@@ -148,7 +148,7 @@ class Notices:
 
     def roles_for(self, chat: int, to=None) -> set[str]:
         """The roles a notice to `chat` is for: `to` (a role, or every role the copy went there for: outcome merges
-        them), else the roles whose messages go to the chat (policy.delivered_roles: the villa's lists, else People) —
+        them), else the roles whose messages go to the chat (policy.delivered_roles: the villa's lists) —
         for a private chat that gets none, its person's role."""
         roles = self._wanted(to)
         if roles:

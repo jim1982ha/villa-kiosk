@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from vesta_shared.agent_records import run_cost   # what a run cost: one reading, shared with the skills
 from vesta_shared import agent_records
+from vesta_shared import villa_recipients
 from vesta_shared.limits import limit
 from vesta_shared.timeutil import lasting
 from .api_errors import cause, what_to_do, why_job_sentence
@@ -44,15 +45,15 @@ OUTCOME_WORDS = {ENDED: "done", FAILED: "not prepared", CUT: "stopped by a resta
 
 
 def unreachable(state, policy) -> list[str]:
-    """Each chat of the People list that Telegram refused the agent's last message to, in words: who, what Telegram
-    said, what to do. A chat no longer in People is not named (its row is gone at its next message anyway)."""
+    """Each chat of the villa's lists that Telegram refused the agent's last message to, in words: who, what Telegram
+    said, what to do. A chat no longer listed is not named (its record is gone at its next message anyway)."""
     out = []
     for chat, rec in sorted(state.unreachable().items()):
         names = [e.name for e in policy.entries if e.telegram_id == chat]
         if not names:
             continue
         fix = ("they must open a private chat with the bot and send it /start once" if chat > 0 else
-               "add the bot to the group again, or put the group's new id in People (/whoami in the group shows it)")
+               f"add the bot to the group again, and list the group's new chat in {villa_recipients.WHERE}")
         out.append(f"{' / '.join(dict.fromkeys(names))}: Telegram refused the last message ({rec.get('error')}). "
                    f"To fix: {fix}.")
     return out

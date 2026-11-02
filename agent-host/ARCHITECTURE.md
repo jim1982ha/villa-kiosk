@@ -1124,3 +1124,33 @@ still off; an investigation calling a sensor with no value "stopped reporting").
 - **The taken step: `IncidentThread.restate`** (lead 7) records its own TAKEN step after drawing the copies, as `_finish`
   records CLEARED (app's `_alert_taken` glue gone; a `kiosk_words.Words` note brings its languages). `Incidents` is built
   once in app and handed to ChatFacts, Notices, AlertButtons (`incidents=`), Outcome and the missed-press line.
+
+## Who is who: the VESTA Kiosk's lists only (owner, 2026-11-03, 0.12.439)
+
+The owner, on the Agent's People table: "isn't [it] redundant, since we are already defining the same in KIOSK
+settings? ... shouldn't the VESTA agent config be mapped to whatever KIOSK config is defining?", and chose "Yes, Kiosk
+only". 0.12.436 sent to the villa's lists (`input_text.vesta_owner_targets` / `vesta_fm_targets`, set in the Kiosk's
+Settings › Messages › Who gets the messages) and kept the rights in policy.yaml's `people:`, with a fallback to People
+where a list named no chat (and, round 15, for approvals): two lists of the same people.
+
+- **One source: `vesta_shared/villa_recipients.py`.** `read(ha)` → `{role: [{"chat", "name"}]}`, the name the notify
+  entity's friendly_name (the registry's name is null on a real villa), else its id's object part. `get`/`normal` still
+  read the older kept shape `{role: [ids]}` (named "<role> chat" until the next reading rewrites it). `WHERE` is the
+  Kiosk's place, in every text that sends someone there.
+- **`Policy(raw, villa)`**: `entries` (one per chat and role), `people`, `destinations` come from the lists only
+  (`policy.listed_entries`); being in a role's list gives its messages AND its rights (approving, writing, a group's
+  members acting with its role). Phones are not entries. `chats_for` is the lists'; `people_chats` and the "villa list
+  else People" fallback are gone (one mechanism), with `legacy_chats`/`legacy_rows`.
+- **Never read** (no file: a first start before the villa answered): nobody is listed. The agent logs it at start; a
+  role's message is `unrouted` (logged); an approval request is refused with its reason, or waits on the tablet
+  (`actions.Actions.request`). The villa's own alerts never depend on the agent.
+- **Each chat's language is the agent's**: policy.yaml `languages: {<chat id>: <code>}` (codes of `LANGUAGES`, named
+  otherwise). An older file's `people:` rows give their language by id (the file's own `languages:` first), nothing
+  named wrong; every page save (`changes.PageFiles.form_policy` → `policy_doc.languages_moved`) writes them in
+  `languages:` and drops `people:` and the even older `chats:`. In-chat "answer me in French" was never stored (the
+  instructions' rule 6 answers in the message's own language): nothing to move.
+- **The page**: the People card shows the lists read only, as Knowledge's "Asleep between reports" shows the Kiosk's
+  list (`server._people`, one row per chat, its roles as a chip), the Language menu its one control. `page_policy`
+  reads the lists as the agent does.
+- **The knowledge pack's people table** is the agent's entries (`app._build_pack` hands them as `--people`), refreshed
+  at each pack build.

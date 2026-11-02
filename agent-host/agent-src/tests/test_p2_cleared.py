@@ -11,9 +11,8 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from helpers import settings
+from helpers import listed_policy, settings
 from vesta_agent.outcome import Outcome
-from vesta_agent.policy import Policy
 from vesta_agent.state import State
 from vesta_shared.message_format import telegram_entities, titled
 
@@ -89,7 +88,7 @@ class Tele:
 
 def _outcome(tmp_path, tele):
     s = settings(str(tmp_path))
-    pol = Policy({"people": [{"telegram_id": -2, "name": "Managers", "role": "fm"}]})
+    pol = listed_policy({"people": [{"telegram_id": -2, "name": "Managers", "role": "fm"}]})
     return Outcome(policy=lambda: pol, state=State(s.state_path), send=tele.send, edit=tele.edit, actions=None,
                    reader=None, tickets=None, buttons=None, thread=None)
 
@@ -247,7 +246,7 @@ def test_the_reply_reaches_telegram_as_a_reply(tmp_path):
             self.calls.append(k)
             return [7]
     tg = Tg()
-    d = Delivery(tg, State(settings(str(tmp_path)).state_path), policy=lambda: Policy({}))
+    d = Delivery(tg, State(settings(str(tmp_path)).state_path), policy=lambda: listed_policy({}))
     assert asyncio.run(d.send(-2, "backup", reply_to=101)) == 7 and tg.calls[-1].get("reply_to") == 101
     asyncio.run(d.send(-2, "plain"))
     assert "reply_to" not in tg.calls[-1]
@@ -375,7 +374,7 @@ def test_each_chat_reads_the_night_checks_story_in_its_own_language_as_the_alert
     from vesta_agent.notice import Notices
     tele, store = Tele(), Cache()
     s = settings(str(tmp_path))
-    pol = Policy({"people": [{"telegram_id": -2, "name": "Managers", "role": "fm", "language": "fr"},
+    pol = listed_policy({"people": [{"telegram_id": -2, "name": "Managers", "role": "fm", "language": "fr"},
                              {"telegram_id": -3, "name": "Desk", "role": "fm"}]})
     state = State(s.state_path)
     from vesta_agent.posting import Poster

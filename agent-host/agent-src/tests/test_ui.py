@@ -10,7 +10,7 @@ import pytest
 import yaml
 from aiohttp.test_utils import TestClient, TestServer
 
-from helpers import copy_skill, settings, page_js, body_of
+from helpers import copy_skill, keep_lists, settings, page_js, body_of
 from vesta_agent.ui.server import UI
 from vesta_agent.policy import PROFILES
 
@@ -21,11 +21,9 @@ HDR = {"X-Vesta-UI": "1"}
 def ui(tmp_path):
     s = settings(str(tmp_path))                                  # seeds policy.yaml from the starter example
     copy_skill("reports", s.skills_dir)
-    # a villa set up: one Owner and one Facility manager in People (the page refuses a save without them)
-    text = open(s.policy_path, encoding="utf-8").read()
-    with open(s.policy_path, "w", encoding="utf-8") as f:
-        f.write(text.replace("people: []", "people:\n  - {telegram_id: -100, name: Villa group, role: owner}\n"
-                                            "  - {telegram_id: -100, name: Villa group FM, role: fm}", 1))
+    # a villa set up: its group in both of the VESTA Kiosk's lists of who gets the messages, as the agent read them
+    keep_lists(s, {"people": [{"telegram_id": -100, "name": "Villa group", "role": "owner"},
+                              {"telegram_id": -100, "name": "Villa group", "role": "fm"}]})
     return s
 
 
@@ -59,20 +57,20 @@ def test_the_forms_save_keeps_the_files_comments_and_the_agent_reads_it(ui):
         form = doc["form"]
         form["act_enabled"] = True
         form["allowed_services"]["light.turn_on"] = "direct"
-        # owner, 2026-10-10: People needs at least one Owner and one Facility manager — without the latter, refused
-        form["people"] = [{"telegram_id": 111, "name": "Owner A", "role": "owner", "language": "en"}]
-        refused = await c.put("/api/policy/form", json={"form": form, "rev": doc["rev"]}, headers=HDR)
-        form["people"].append({"telegram_id": -100, "name": "Villa group", "role": "fm", "language": "en"})
+        form["languages"]["-100"] = "fr"                         # the People card's one menu (JSON: a text key)
         r = await c.put("/api/policy/form", json={"form": form, "rev": doc["rev"]}, headers=HDR)
-        return refused.status, await refused.json(), r.status, await r.json()
-    no_fm, why, status, body = call(ui, fn)
-    assert no_fm == 400 and any("at least one Facility Manager" in p for p in why["problems"])
+        return r.status, await r.json()
+    status, body = call(ui, fn)
     assert status == 200, body
     text = open(ui.policy_path).read()
-    assert "# People: who may approve, who is a member" in text          # a comment of the example, kept
+    assert "# Who the agent answers, where it posts and who may approve" in text   # a comment of the example, kept
     raw = yaml.safe_load(text)
     assert raw["act_enabled"] is True and raw["allowed_services"]["light.turn_on"] == "direct"
-    assert raw["people"][0]["telegram_id"] == 111
+    assert raw["languages"] == {-100: "fr"} and "people" not in raw
+    from vesta_agent.policy import Policy
+    from vesta_shared import villa_recipients
+    pol = Policy.load(ui.policy_path, villa_recipients.get(ui.pack_path))
+    assert pol.languages_for("owner") == pol.languages_for("fm") == ["fr"]
 
 
 def test_a_save_the_agent_would_misread_is_refused_and_the_file_untouched(ui):
@@ -81,14 +79,14 @@ def test_a_save_the_agent_would_misread_is_refused_and_the_file_untouched(ui):
     async def fn(c):
         doc = await (await c.get("/api/policy")).json()
         form = doc["form"]
-        form["people"] = [{"telegram_id": 111, "name": "X", "role": "boss", "language": "en"}]
+        form["languages"] = {"111": "pt"}
         form["allowed_services"]["homeassistant.restart"] = "any"
         r = await c.put("/api/policy/form", json={"form": form, "rev": doc["rev"]}, headers=HDR)
         r2 = await c.put("/api/policy/text", json={"text": "people: [unclosed", "rev": doc["rev"]}, headers=HDR)
         return r.status, (await r.json())["problems"], r2.status
     status, problems, status2 = call(ui, fn)
     assert status == 400 and status2 == 400
-    assert any("role must be owner or fm" in p for p in problems)
+    assert any("languages.111 must be one of" in p for p in problems)
     assert any("homeassistant.restart is never allowed" in p for p in problems)
     assert open(ui.policy_path).read() == before
 
@@ -222,7 +220,7 @@ def test_editable_tables_keep_their_columns_on_a_phone():
     css = open(os.path.join(STATIC, "app.css"), encoding="utf-8").read()
     js = page_js()
     assert "table.rows.edit, table.rows.ai { table-layout: fixed; }" in css and "table.rows { table-layout" not in css   # never the data tables
-    assert js.count("...editTable(") == 2 and not re.search(r"rows\.(svc|people)", css)
+    assert js.count("...editTable(") == 1 and not re.search(r"rows\.(svc|people)", css)
     places = set(re.findall(r'phone: "(\w+)"', js))
     assert places and all(f"td.ph-{p_} {{ grid-area:" in css for p_ in places | {"x"}), places
 
@@ -262,12 +260,8 @@ def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
     import json
     from datetime import datetime, timedelta, timezone
     from vesta_agent.state import State
-    with open(ui.policy_path) as f:
-        raw = yaml.safe_load(f)
     owner = -100777
-    raw["chats"] = {**(raw.get("chats") or {}), "owner": owner}
-    with open(ui.policy_path, "w") as f:
-        yaml.safe_dump(raw, f)
+    keep_lists(ui, {"chats": {"owner": owner}})
     st = State(ui.state_path)
     now = datetime.now(timezone.utc)
     rows = [((now - timedelta(hours=1)), {"who": "job:fm-weekly", "cost_usd": 1.25, "profile": "auto", "model": "claude-sonnet-5",
@@ -309,6 +303,7 @@ def test_a_reply_at_the_tablet_names_no_chat_and_a_telegram_one_keeps_its_chat(u
     from datetime import datetime, timedelta, timezone
     from vesta_agent.policy import Policy, tablet_chat, tablet_person
     from vesta_agent.state import State
+    from vesta_shared import villa_recipients
     tab = tablet_chat("owner")
     assert tab is not None and tablet_person(tab).name == "Owner at the tablet"
     st = State(ui.state_path)
@@ -322,7 +317,7 @@ def test_a_reply_at_the_tablet_names_no_chat_and_a_telegram_one_keeps_its_chat(u
         return await (await c.get("/api/costs?days=7")).json()
     runs = {r["person"]: r["chat"] for r in call(ui, fn)["runs"]}
     assert runs == {"Owner at the tablet": None, "Villa group": "Owner and FM group"}, runs
-    pol = Policy.load(ui.policy_path)
+    pol = Policy.load(ui.policy_path, villa_recipients.get(ui.pack_path))
     assert pol.chat_label(tab) == "" and pol.chat_label(-100) == "Owner and FM group"
 
 
@@ -1204,3 +1199,65 @@ def test_a_phones_keyboard_opening_never_closes_a_floating_list_being_typed_in()
     assert 'window.addEventListener("resize", close)' not in fl
     # iPhone: the keyboard moves the visual viewport, often with no resize of the window; absent, the window's alone
     assert 'vv.addEventListener("resize", moved)' in fl and "window.visualViewport || null" in fl
+
+
+# ---------------------------------------------------------------- People: the VESTA Kiosk's lists, read only
+# owner, 2026-11-03 ("Yes, Kiosk only"): who gets the messages, and who may press their buttons, is set in the Kiosk;
+# the People card shows its lists and edits each chat's language only
+
+def test_the_people_card_shows_the_kiosks_lists_one_row_per_chat(ui):
+    keep_lists(ui, {"people": [{"telegram_id": 111, "name": "Ann", "role": "owner"},
+                               {"telegram_id": -100, "name": "Villa group", "role": "owner"},
+                               {"telegram_id": -100, "name": "Villa group", "role": "fm"}]})
+
+    async def fn(c):
+        return await (await c.get("/api/rules")).json()
+    doc = call(ui, fn)
+    assert doc["people"] == [{"telegram_id": 111, "name": "Ann", "role": "Owner"},
+                             {"telegram_id": -100, "name": "Villa group", "role": "Owner and Facility Manager"}]
+    assert doc["lists_read"] is True and "people" not in doc["form"] and doc["form"]["languages"] == {}
+    assert doc["lists_where"] == "the VESTA Kiosk (Settings › Messages › Who gets the messages)"
+
+
+def test_never_read_the_people_card_is_empty_and_says_so(tmp_path):
+    s = settings(str(tmp_path))
+
+    async def fn(c):
+        return await (await c.get("/api/rules")).json()
+    doc = call(s, fn)
+    assert doc["people"] == [] and doc["lists_read"] is False
+    forms = body_of(page_js(), "rulesForms")
+    assert '"None"' in forms and "`Empty until the lists are set in ${doc.lists_where}.`" in forms
+
+
+def test_the_people_card_is_read_only_but_each_chats_language(ui):
+    forms = body_of(page_js(), "rulesForms")
+    card = forms[forms.index("const people = card("):forms.index("// devices: chosen from the villa's own")]
+    # no row added, removed or typed: a table of the rows the agent read, its one control the language's menu
+    assert "editTable" not in card and "Add a person" not in page_js() and "input" not in card
+    assert "table([\"Name\", \"Telegram id\", \"Role\", \"Language\"], peopleRows" in card
+    rows = forms[forms.index("const peopleRows"):forms.index("const people = card(")]
+    assert rows.count("sel(") == 1 and 'h("span", { class: "chip" }, p.role)' in rows and "f.languages[String(p.telegram_id)] = v" in rows
+    # its help text opens as the Kiosk's other list does (knowledge.asleepCard): "Set in the VESTA Kiosk (…)."
+    assert 'card(W("people"), `Set in ${doc.lists_where}. ' in card
+    assert 'card(place("asleep"), "Set in the VESTA Kiosk (' in page_js()
+    assert " — " not in card and "Home Assistant" not in card
+
+
+def test_an_older_files_people_keep_their_language_and_the_pages_save_drops_them(ui):
+    # formats outlive their writer: a villa's file of 0.12.438 and before said who, which role and which language
+    with open(ui.policy_path, "a", encoding="utf-8") as f:
+        f.write("people:\n  - {telegram_id: -100, name: Old name, role: owner, language: fr}\n"
+                "  - {telegram_id: 111, name: Gone, role: fm, language: de}\nchats: {fm: 222}\n")
+
+    async def fn(c):
+        doc = await (await c.get("/api/rules")).json()
+        before = list(doc["problems"])
+        r = await c.put("/api/policy/form", json={"form": doc["form"], "rev": doc["rev"]}, headers=HDR)
+        return doc, before, r.status
+    doc, problems, status = call(ui, fn)
+    assert problems == [] and doc["form"]["languages"] == {"-100": "fr", "111": "de"}
+    assert [p["name"] for p in doc["people"]] == ["Villa group"]            # the Kiosk's names, never the rows'
+    assert status == 200
+    raw = yaml.safe_load(open(ui.policy_path))
+    assert raw["languages"] == {-100: "fr", 111: "de"} and "people" not in raw and "chats" not in raw

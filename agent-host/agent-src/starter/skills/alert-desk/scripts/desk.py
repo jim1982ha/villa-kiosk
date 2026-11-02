@@ -1136,9 +1136,9 @@ def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
 
 def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, params: VillaParams | None = None,
           name: str | None = None, place: str = mf.ON_TELEGRAM) -> dict:
-    """A person's answer to incident `iid`: the `option` of the button pressed (BUTTONS). `name`: the person, as the People list
-    names them — every line about the answer says it the way the button's own footer does ("Done pressed by Fabien on
-    …"): owner, 2026-10-11, the same press read "Done pressed by Fabien" on one message and "Done answered by the
+    """A person's answer to incident `iid`: the `option` of the button pressed (BUTTONS). `name`: the person, as the agent
+    names them (the VESTA Kiosk's lists of who gets the messages, shown on VESTA's People card) — every line about the
+    answer says it the way the button's own footer does ("Done pressed by Fabien on …"): owner, 2026-10-11, the same press read "Done pressed by Fabien" on one message and "Done answered by the
     facility manager" on the next. `place`: where it was pressed (message_format ON_TELEGRAM, or ON_TABLET: the tablet's
     notice), as its Done names it."""
     inc = store.incident(iid)

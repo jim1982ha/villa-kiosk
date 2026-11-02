@@ -165,8 +165,8 @@ def gate(q: Question, policy, bot_username: str | None, is_own_message: Callable
     invoked = skill_commands.get(cmd)
     if invoked is None:
         invoked, text = skill_called(text, skill_commands)
-    # ⚠️ /whoami IS HOW A GROUP GETS INTO PEOPLE (0.12.128): its id is read there before it is listed — by anyone while
-    # People is empty, by a listed person once it is not (a stranger in an unlisted group still gets nothing). A place
+    # ⚠️ /whoami SAYS A CHAT'S ID BEFORE IT IS LISTED (0.12.128): read there by anyone while the villa's lists name
+    # nobody, by a listed person once it is not (a stranger in an unlisted group still gets nothing). A place
     # that knows who asks (a tablet) says who that is: there is no Telegram id to tell.
     if cmd == "/whoami" and (q.person is not None or not group or not policy.destinations or policy.roles_in(cid)
                              or policy.person(q.user_id) is not None):
@@ -176,7 +176,7 @@ def gate(q: Question, policy, bot_username: str | None, is_own_message: Callable
         return Intake("whoami", cid, q.person, said, group=group)
     if group and not policy.roles_in(cid):
         # never leaveChat: the bot is Home Assistant's too
-        return Intake("drop", cid, group=True, why="group not listed in People" if policy.destinations else None)
+        return Intake("drop", cid, group=True, why="group not in the villa's lists" if policy.destinations else None)
     # a listed group's member has its role; a tablet's profile is the caller's (the Kiosk stamped it)
     person = q.person if q.person is not None else policy.member(q.user_id, cid, q.first_name)
     if group:

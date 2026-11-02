@@ -103,7 +103,7 @@ class UI:
         self.s = settings
         self.allowed = {INGRESS_GATEWAY} if deployment == "ha_app" else {"127.0.0.1", "::1"}
         self.skills = Skills(settings.skills_dir, os.path.join(STARTER_DIR, "skills"),
-                             off=lambda: page_policy(settings.policy_path).skills_off)
+                             off=lambda: page_policy(settings.policy_path, settings.pack_path).skills_off)
         self.history = History(settings.history_path)
         self.files = PageFiles(settings, self.history)     # every write, checked and recorded (changes.py)
         self.limits = LimitsTab(settings, self.files)      # the Limits tab: each value saved where it lives
@@ -205,7 +205,7 @@ class UI:
                 from ..scheduler import job_label
                 skills = self.skills.all()
                 st = State(self.s.state_path)
-                unreachable = status.unreachable(st, page_policy(self.s.policy_path))
+                unreachable = status.unreachable(st, page_policy(self.s.policy_path, self.s.pack_path))
                 report = status.report(st, self.s.store_path, last_day_hours(), label=lambda k: job_label(k, skills))
             except Exception as e:  # noqa: BLE001 — the overview shows what it can
                 log.warning("UI: the agent's records could not be read (%s)", type(e).__name__)
@@ -225,7 +225,7 @@ class UI:
         `skill_default`: what "Add them" gives the skill (its skill.yaml jobs_default)."""
         from ..skills import ai_jobs, job_owners, job_starters
         from vesta_shared.when import Spec
-        pol = page_policy(self.s.policy_path)
+        pol = page_policy(self.s.policy_path, self.s.pack_path)
         every = self.skills.all()
         owners, starters = job_owners(every), job_starters(every)
         listed = {t["name"]: t for t in (tool_access.read_list(self.s.data_dir) or {}).get("tools") or []}
@@ -302,7 +302,7 @@ class UI:
             zone = ZoneInfo(self.s.timezone)
         except Exception:  # noqa: BLE001 — an unknown zone: UTC days
             zone = None
-        route = Routing(page_policy(self.s.policy_path))
+        route = Routing(page_policy(self.s.policy_path, self.s.pack_path))
         from ..policy import profile_labels
         from vesta_shared.knowledge_pack import KnowledgePack
         pack = KnowledgePack.read(self.s.pack_path)        # a step names a device as the pack does; none yet: its id
@@ -370,7 +370,25 @@ class UI:
             form = None
         from ..policy import LANGUAGES, form_schema, profile_labels
         return {"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
-                "profiles": profile_labels(), "schema": form_schema()}
+                "profiles": profile_labels(), "schema": form_schema(), **self._people()}
+
+    def _people(self) -> dict:
+        """The People card's rows: the VESTA Kiosk's lists as the agent last read them, one row per chat with its roles
+        in their words. ⚠️ READ ONLY (owner, 2026-11-03: "Yes, Kiosk only"): who gets the messages and who may press
+        their buttons is set in the Kiosk; the page edits each chat's language only (the form's `languages`).
+        `lists_read`: False until the agent has read them once (the card then says they are empty until set)."""
+        from vesta_shared import villa_recipients
+        from vesta_shared.message_format import ROLE_WORDS
+        from ..policy import listed_entries
+        lists = villa_recipients.get(self.s.pack_path)
+        rows: dict[int, dict] = {}
+        for e in listed_entries(lists, {}):
+            row = rows.setdefault(e.telegram_id, {"telegram_id": e.telegram_id, "name": e.name, "roles": []})
+            row["roles"].append(ROLE_WORDS[e.role])
+        return {"people": [{"telegram_id": r["telegram_id"], "name": r["name"], "role": " and ".join(r["roles"])}
+                           for r in rows.values()],
+                "lists_read": os.path.exists(villa_recipients.path(self.s.pack_path) or ""),
+                "lists_where": villa_recipients.WHERE}
 
 
     # ------------------------------------------------------------------ device kinds
@@ -419,7 +437,7 @@ class UI:
     # ------------------------------------------------------------------ skills
     def _skill_rows(self) -> list[dict]:
         loaded = self.skills.all(include_off=True)
-        pol = page_policy(self.s.policy_path)
+        pol = page_policy(self.s.policy_path, self.s.pack_path)
         rows = []
         try:
             names = sorted(os.listdir(self.s.skills_dir))
@@ -570,7 +588,7 @@ class UI:
     def _tools(self) -> dict:
         """Rules › AI tools: Home Assistant's tools as the agent last read them, with this file's
         switches; the agent's own tools; the facility manager's groups."""
-        return {**tool_access.catalog(page_policy(self.s.policy_path), tool_access.read_list(self.s.data_dir), self._usage()),
+        return {**tool_access.catalog(page_policy(self.s.policy_path, self.s.pack_path), tool_access.read_list(self.s.data_dir), self._usage()),
                 "usage_days": tool_usage_days()}
 
     async def tools_refresh(self, _request):
@@ -597,7 +615,7 @@ class UI:
         from ..skills import when_it_runs
         name = request.match_info["name"]
         self.files.skill_dir(name)
-        pol = page_policy(self.s.policy_path)
+        pol = page_policy(self.s.policy_path, self.s.pack_path)
         sk = self.skills.all(include_off=True).get(name)
         rel = self.skills.release_state(name)
         h = tool_access.health(pol, self._server_tools(), sk, self.skills.problems().get(name))

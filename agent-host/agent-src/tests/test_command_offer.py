@@ -11,7 +11,7 @@ import pathlib
 
 import yaml
 
-from helpers import make_agent
+from helpers import keep_lists, make_agent
 from ha_fake import FakeHA, tool as ha_tool
 from kiosk_fake import FakeKiosk
 from telegram_fake import BOT
@@ -147,14 +147,12 @@ def test_the_press_is_judged_again_for_who_presses(tmp_path, monkeypatch):
     assert _investigations(ai) == [] and "not available" in v.tg.toasts[-1][1]
     with open(v.s.policy_path, "w") as f:
         yaml.safe_dump(pol, f)
-    # the group taken out of People since: Ana is still the villa's facility manager, but typing /investigate there
-    # would reach nobody — the press starts nothing either
-    with open(v.s.policy_path, "w") as f:
-        yaml.safe_dump({**pol, "people": [p for p in PEOPLE if p["telegram_id"] != GROUP]}, f)
+    # the group taken out of the Kiosk's lists since: Ana is still the villa's facility manager, but typing /investigate
+    # there would reach nobody — the press starts nothing either
+    keep_lists(v.s, {**pol, "people": [p for p in PEOPLE if p["telegram_id"] != GROUP]})
     _press(v, GROUP, button, message, who=FM, name="Ana")
     assert _investigations(ai) == [] and v.tg.toasts[-1][1] == "You cannot start /investigate here."
-    with open(v.s.policy_path, "w") as f:
-        yaml.safe_dump(pol, f)
+    keep_lists(v.s, pol)
     _press(v, GROUP, button, message, who=FM, name="Ana")               # the button still works once allowed again
     assert len(_investigations(ai)) == 1
 

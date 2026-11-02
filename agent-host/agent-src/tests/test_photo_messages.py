@@ -8,7 +8,7 @@ import asyncio
 import base64
 
 from ai_fake import FakeAI
-from helpers import make_agent
+from helpers import listed_policy, make_agent
 from telegram_fake import FakeTelegram
 from vesta_agent import intake, runner
 
@@ -27,8 +27,7 @@ def photo_event(chat, user, caption=None, mime="image/jpeg", reply_to=None):
 
 
 def _Policy():
-    from vesta_agent.policy import Policy
-    return Policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
+    return listed_policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
                               {"telegram_id": GROUP, "name": "Group", "role": "owner"}]})
 
 

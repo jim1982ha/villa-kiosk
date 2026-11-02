@@ -1,10 +1,10 @@
-# policy.yaml: the villa's people, lists and the agent's settings. Copied from
+# policy.yaml: the villa's chat languages, lists and the agent's settings. Copied from
 # this example at the first start into the agent's config folder
 # (/addon_configs/<app>/agent/policy.yaml, reachable from Studio Code Server or
 # Samba), then edited there. A change applies within seconds, no restart.
 # Anything absent from this file is refused.
 #
-# ⚠️ SHIPPED EMPTY ON PURPOSE. Every villa fills its own people, chats and
+# ⚠️ SHIPPED EMPTY ON PURPOSE. Every villa fills its own chats' languages and
 # devices; nothing here may name one villa's devices.
 #
 # The NEVER rules are in the code, not here: homeassistant.*, hassio.*,
@@ -34,22 +34,15 @@ settings:
 act_enabled: false            # informs only. true switches the act path on (every action still needs a button press).
 approval_ttl_minutes: 15      # an Approve button older than this does nothing
 
-# People: who may approve, who is a member, each chat's language. Where a role's messages
-# go is the villa's own list of the role (the VESTA Kiosk: Advanced Settings > Messages >
-# Who gets the messages), read by the villa's alerts and the agent alike; a role with no
-# Telegram chat there goes to EVERY chat listed here with that role — a person's private
-# chat (their Telegram user id) or a group (a negative id). /whoami, sent to the bot in a chat, shows its id. A person listed in
-# both roles is two entries with the same id. role: owner | fm. language: en, fr, id...
-# ⚠️ A GROUP NOT LISTED HERE IS IGNORED, NEVER LEFT: the bot is Home Assistant's too.
-people: []
-#  - telegram_id: 123456789
-#    name: Owner
-#    role: owner
-#    language: en
-#  - telegram_id: -1000000000000
-#    name: Villa group
-#    role: fm
-#    language: en
+# Who the agent answers, where it posts and who may approve is the villa's own two lists of who
+# gets the messages, set in the VESTA Kiosk (Settings > Messages > Who gets the messages)
+# and read by the villa's alerts and the agent alike: each Telegram chat in a role's list gets that
+# role's messages and its rights. The VESTA Agent page's People card shows them, read only.
+# Here: the language each chat is written to in, by chat id (/whoami, sent to the bot in a chat,
+# shows its id): en, fr, id, de, es, it, nl, zh, ja, ko. A chat not named here reads English.
+languages: {}
+#  123456789: fr
+#  -1000000000000: en
 
 # Only the owner can approve an action on these, whatever the service (locks, the gate, the siren...).
 owner_only_entities: []

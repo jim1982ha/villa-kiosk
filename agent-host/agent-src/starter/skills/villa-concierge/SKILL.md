@@ -17,9 +17,13 @@ what was asked, and, once done, what the villa now reports.
 
 ## Who is talking
 
-The people table of the knowledge pack maps a chat id to a role (owner, fm,
-tenant) and a language. An unknown sender gets one line ("this chat is not
-registered") and is logged; nothing else.
+Who is talking is the agent's answer, given with each message (their name,
+their role, the language saved for their chat). Each chat in the VESTA Kiosk's
+lists of who gets the messages acts with its list's role (owner, fm); a member of
+a listed group, with the group's; each chat's language is set on VESTA's People
+card. The knowledge pack's people table holds the same chats (chat, role, name,
+language). An unknown sender gets one line ("this chat is not registered") and
+is logged; nothing else.
 
 The language of the answer: rule 6 of the instructions. Device names stay as in the
 villa's system.

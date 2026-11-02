@@ -64,6 +64,40 @@ def body_of(js: str, name: str) -> str:
     return rest[:end.start()] if end else rest
 
 
+def villa_lists(raw: dict) -> dict:
+    """The VESTA Kiosk's lists of who gets the messages ({role: [{"chat", "name"}]}, vesta_shared.villa_recipients) a
+    test villa's rules in the older shape stand for: each `people:` row a chat of its role's list, named as the row,
+    then each chat of an even older `chats:`.
+
+    ⚠️ WHO IS WHO IS THE KIOSK'S LISTS ONLY (owner, 2026-11-03: "Yes, Kiosk only"): the tests keep the rows they
+    always wrote — one table of a test villa's people — and the rows' languages are read as a villa's older file's are
+    (policy.read_policy: `people:` rows into `languages:`)."""
+    from vesta_agent.policy import ROLES, _id
+    from vesta_shared.message_format import ROLE_WORDS
+    out: dict[str, list[dict]] = {r: [] for r in ROLES}
+    rows = [(p.get("telegram_id"), p.get("role"), str(p.get("name") or "").strip())
+            for p in raw.get("people") or [] if isinstance(p, dict)]
+    rows += [(c, r, f"{ROLE_WORDS.get(r, r)} chat") for r, c in (raw.get("chats") or {}).items()]
+    for tid, role, name in rows:
+        tid = _id(tid)
+        if tid and role in out and all(e["chat"] != tid for e in out[role]):
+            out[role].append({"chat": tid, "name": name or str(tid)})
+    return out
+
+
+def listed_policy(raw: dict):
+    """policy.Policy of a test villa's rules, with the Kiosk's lists its People rows stand for (villa_lists)."""
+    from vesta_agent.policy import Policy
+    return Policy(raw, villa_lists(raw))
+
+
+def keep_lists(s, raw: dict) -> None:
+    """The Kiosk's lists `raw`'s People rows stand for, kept beside the pack as the agent keeps what it read."""
+    from vesta_shared import villa_recipients
+    if "people" in raw or "chats" in raw:
+        villa_recipients.save(s.pack_path, villa_lists(raw))
+
+
 def make_agent(tmp_path, policy: dict, *, skills=(), telegram=None, reader=None, kiosk=None, telegram_on: bool = True):
     """An agent on a test villa: these rules (policy.yaml), these starter skills, the shared stand-ins.
 
@@ -80,6 +114,7 @@ def make_agent(tmp_path, policy: dict, *, skills=(), telegram=None, reader=None,
     s = settings(str(tmp_path), **env)
     with open(s.policy_path, "w") as f:
         yaml.safe_dump(policy, f)
+    keep_lists(s, policy)
     for name in skills:
         copy_skill(name, s.skills_dir)
     tg = telegram if telegram is not None else (FakeTelegram() if telegram_on else None)

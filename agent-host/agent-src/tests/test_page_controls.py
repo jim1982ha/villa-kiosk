@@ -231,7 +231,7 @@ def test_an_import_shows_every_change_and_what_does_not_fit_then_applies(ui, tmp
     assert any("switch.turn_on" in m and "list is empty" in m for m in prev["misfits"])
     assert bad == 409 and ok == 200
     assert os.path.isfile(os.path.join(other.skills_dir, "villa-concierge", "skill.yaml"))
-    assert Policy.load(other.policy_path).people[999].name == "Them"               # the villa's own, untouched
+    assert Policy.load(other.policy_path).languages == {999: "fr"}                 # the villa's own, untouched
     assert {h["place"] for h in hist} == {"Import"}
 
 
@@ -573,7 +573,7 @@ def test_a_skill_pages_tools_heading_is_the_agents_one_verdict(ui):
         return (await (await c.get("/api/skills/reports", headers=HDR)).json(),
                 (await (await c.get("/api/skills", headers=HDR)).json())["skills"])
     d, rows = call(ui, fn)
-    h = tool_access.health(page_policy(ui.policy_path), tool_access.saved_server_tools(ui.data_dir),
+    h = tool_access.health(page_policy(ui.policy_path, ui.pack_path), tool_access.saved_server_tools(ui.data_dir),
                            Skills(ui.skills_dir).get("reports"))
     assert (d["line"], d["tools"], d["where_tools"]) == (h["line"], h["tools"], h["where_tools"]) and "needs" not in d
     assert next(r for r in rows if r["name"] == "reports")["line"] == h["line"]

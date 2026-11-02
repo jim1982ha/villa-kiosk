@@ -1,21 +1,24 @@
-"""Who gets the villa's messages, by role: the villa's own two lists, read by the agent and kept beside the knowledge
-pack, so its alerts, chases and reports go where the villa's own alerts go.
+"""Who is who for the agent, by role: the villa's own two lists, read by the agent and kept beside the knowledge pack,
+so its alerts, chases and reports go where the villa's own alerts go, and each chat listed acts with its role.
 
 ⚠️ ONE PLACE FOR "WHICH CHAT IS WHOSE" (owner, 2026-11-03: "a single file on the villa, which VESTA also reads, so
 there's one place for both and alerts still work without VESTA"). The villa holds two lists of its notify entities,
 input_text.vesta_owner_targets and input_text.vesta_fm_targets (agent-src/homeassistant/packages/vesta_message.yaml),
-set from the VESTA Kiosk (Settings, Villa, Who gets the messages). Every VESTA blueprint sends to them by priority (P1
-both, P2 the facility manager) without the agent; the agent reads the same lists (`read`) and sends to the Telegram
-chats among them (a phone app is the villa's to reach). The People list stays the source of RIGHTS (who may approve,
-who is a member, each chat's language): a chat the villa lists and People does not name is sent to, in English, and
-can approve nothing.
+set from the VESTA Kiosk (Settings › Messages › Who gets the messages). Every VESTA blueprint sends to them by
+priority (P1 both, P2 the facility manager) without the agent; the agent reads the same lists (`read`) and sends to the
+Telegram chats among them (a phone app is the villa's to reach).
 
-A list that cannot be read keeps what was kept; a role whose list names no Telegram chat (empty, phone apps only, an
-entity since deleted) is no override: its People rows are used (policy.chats_for) — an alert always has somewhere to
-go.
+⚠️ THE KIOSK'S LISTS ARE ALSO WHO MAY (owner, 2026-11-03: "isn't [the Agent's People table] redundant, since we are
+already defining the same in KIOSK settings?", answered "Yes, Kiosk only"): being in a role's list gives that role's
+messages AND its rights (approving, writing to the agent, a group's members acting with its role). The agent's People
+card is a read-only copy of them; only each chat's language is the agent's (policy.yaml `languages:`).
+
+A list that cannot be read keeps what was kept; never read (no file): nobody is listed, the agent answers nobody and
+posts nowhere, and says so in its log (app.Vesta.start). A role whose list names no Telegram chat has none.
 
 The villa's Telegram notify entity is registered as "<bot id>_<chat id>" (its registry unique_id); its state and
-attributes carry no chat id.
+attributes carry no chat id. Its name is its state's friendly_name: the registry's name and original_name are null on
+a real villa.
 """
 from __future__ import annotations
 
@@ -28,6 +31,9 @@ from .message_format import ROLES
 #: role → the villa's list of it (an input_text of notify entity ids, apart by ",")
 HELPERS: dict[str, str] = {role: f"input_text.vesta_{role}_targets" for role in ROLES}
 FILE = "villa_recipients.json"
+#: Where a person sets the lists, in the words of the VESTA Kiosk's own page: every text that sends someone there (the
+#: agent's log, its answers, its page) says it with these words
+WHERE = "the VESTA Kiosk (Settings › Messages › Who gets the messages)"
 _CHAT = re.compile(r"^\d+_(-?\d+)$")
 
 
@@ -46,9 +52,17 @@ def chat_of(entry: dict) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def read(ha) -> dict[str, list[int]] | None:
-    """{role: its Telegram chats} as the villa's lists name them now (a role's [] when its list names none); None when
-    the lists cannot be read (the villa's system unreachable, the helpers not there)."""
+def name_of(entity_id: str, state: dict | None) -> str:
+    """A notify entity's name as the villa shows it: its friendly_name, else its id's object part ("tg_jm")."""
+    attrs = (state or {}).get("attributes") if isinstance(state, dict) else None
+    name = str((attrs or {}).get("friendly_name") or "").strip() if isinstance(attrs, dict) else ""
+    return name or entity_id.split(".", 1)[-1]
+
+
+def read(ha) -> dict[str, list[dict]] | None:
+    """{role: its Telegram chats, each {"chat": id, "name": its notify entity's name}} as the villa's lists name them
+    now (a role's [] when its list names none); None when the lists cannot be read (the villa's system unreachable, the
+    helpers not there)."""
     try:
         st = ha.states(list(HELPERS.values()))
     except Exception:  # noqa: BLE001 — unreachable: what was kept stays
@@ -59,12 +73,39 @@ def read(ha) -> dict[str, list[int]] | None:
     ids = list(dict.fromkeys(e for es in named.values() for e in es))
     try:
         rows = {r.get("entity_id"): r for r in ha.entity_entries(ids)} if ids else {}
+        states = ha.states(ids) if ids else {}
     except Exception:  # noqa: BLE001
         return None
     out = {}
     for role, es in named.items():
-        chats = [chat_of(rows.get(e) or {}) for e in es]
-        out[role] = list(dict.fromkeys(c for c in chats if c is not None))
+        chats: dict[int, str] = {}
+        for e in es:
+            c = chat_of(rows.get(e) or {})
+            if c is not None and c not in chats:
+                chats[c] = name_of(e, states.get(e))
+        out[role] = [{"chat": c, "name": n} for c, n in chats.items()]
+    return out
+
+
+def normal(raw) -> dict[str, list[dict]]:
+    """{role: [{"chat", "name"}]} from what was kept, in either shape.
+
+    ⚠️ AN OLDER FILE IS STILL READ (formats outlive their writer): 0.12.436 to 0.12.438 kept {role: [chat ids]}, with
+    no names. Its chats are named "<role> chat" until the next reading (at the start, then every 5 minutes) writes
+    the names."""
+    from .message_format import ROLE_WORDS
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, list[dict]] = {}
+    for r in ROLES:
+        if not isinstance(raw.get(r), list):
+            continue
+        rows: dict[int, str] = {}
+        for c in raw[r]:
+            chat, name = (c.get("chat"), c.get("name")) if isinstance(c, dict) else (c, None)
+            if isinstance(chat, int) and not isinstance(chat, bool) and chat not in rows:
+                rows[chat] = str(name).strip() if isinstance(name, str) and name.strip() else f"{ROLE_WORDS[r]} chat"
+        out[r] = [{"chat": c, "name": n} for c, n in rows.items()]
     return out
 
 
@@ -75,24 +116,28 @@ def path(pack_path: str | None = None) -> str | None:
     return os.path.join(os.path.dirname(pack_path), FILE) if pack_path else None
 
 
-def get(pack_path: str | None = None) -> dict[str, list[int]]:
-    """{role: chats} as last read; {} when never read or the file cannot be read."""
+def get(pack_path: str | None = None) -> dict[str, list[dict]]:
+    """{role: [{"chat", "name"}]} as last read (`normal`: an older file's shape too); {} when never read or the file
+    cannot be read."""
     try:
         with open(path(pack_path) or "", encoding="utf-8") as f:
             raw = json.load(f)
     except (OSError, ValueError, TypeError):
         return {}
-    if not isinstance(raw, dict):
-        return {}
-    return {r: [int(c) for c in raw[r] if isinstance(c, int) and not isinstance(c, bool)]
-            for r in ROLES if isinstance(raw.get(r), list)}
+    return normal(raw)
 
 
-def save(pack_path: str | None, value: dict[str, list[int]]) -> bool:
-    """Keep `value` beside the pack; True when it changed."""
+def save(pack_path: str | None, value: dict[str, list[dict]]) -> bool:
+    """Keep `value` beside the pack; True when it changed (an older file's shape is rewritten in the new one)."""
     p = path(pack_path)
-    if p is None or (os.path.exists(p) and get(pack_path) == value):
+    if p is None:
         return False
+    try:
+        with open(p, encoding="utf-8") as f:
+            if json.load(f) == value:
+                return False
+    except (OSError, ValueError):
+        pass
     tmp = p + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(value, f)
@@ -100,7 +145,7 @@ def save(pack_path: str | None, value: dict[str, list[int]]) -> bool:
     return True
 
 
-def says(value: dict[str, list[int]]) -> str:
+def says(value: dict[str, list[dict]]) -> str:
     """The app log's words for a new reading."""
     return "The villa's lists of who gets the messages: " + "; ".join(
         f"{role} {len(value.get(role) or [])} Telegram chat(s)" for role in ROLES)

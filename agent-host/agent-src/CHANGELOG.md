@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.424 (3 November 2026)
+
+- Who is who is the VESTA Kiosk's lists only (owner, 2026-11-03: "Yes, Kiosk only"). `villa_recipients.read` keeps
+  `{role: [{"chat", "name"}]}` (the notify entity's friendly_name); `get`/`normal` still read the older `{role: [ids]}`.
+  `Policy(raw, villa)`: entries, people and destinations from the lists (`listed_entries`); `people_chats`, the
+  "villa list else People" fallback and `legacy_chats`/`legacy_rows` are gone; `Routing._may_approve` is the lists'.
+- Each chat's language: policy.yaml `languages: {<chat id>: <code>}`; an older file's `people:` rows give theirs, and
+  every page save moves them (`policy_doc.languages_moved`, `people:` and `chats:` dropped).
+- The People card is read only (`server._people`, rows of the lists, the Language menu its one control; its help text
+  as Knowledge's "Asleep between reports"); `changes.page_policy` reads the lists. Never read: nobody, logged at start,
+  a request refused with its reason. The knowledge pack's people table is the agent's entries (`_build_pack --people`).
+- Starter skills reworded to the new truth (alert-desk skill.yaml, words.yaml, scripts/desk.py; villa-concierge
+  SKILL.md); policy.example.yaml's People section is `languages: {}`.
+- tests: helpers `villa_lists`/`listed_policy`/`keep_lists` (a test villa's People rows stand for the Kiosk's lists),
+  test_villa_recipients.py, test_ui.py, test_policy_agreement.py, test_people_routing.py and the tests built on rows.
+
 ## 0.6.423 (3 November 2026)
 
 - Architecture review round 16 (the agent's leads 3, 4, 6, 7).

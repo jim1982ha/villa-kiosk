@@ -7,14 +7,11 @@ import json
 import os
 
 import pytest
-import yaml
 
-from helpers import alert_desk, make_agent, make_skill, settings, body
-from telegram_fake import BOT, FakeTelegram
+from helpers import keep_lists, listed_policy, alert_desk, make_agent, make_skill, body
+from telegram_fake import BOT
 from ha_fake import FakeHA, tool
 from kiosk_fake import FakeKiosk
-from vesta_agent.app import Vesta
-from vesta_agent.policy import Policy
 from vesta_agent.routing import CONVERSATION, Origin, Routing
 from vesta_shared.store import Store
 
@@ -127,7 +124,7 @@ def test_one_occasion_answers_every_routing_question():
     # architecture review, 2026-10-01: "who is asking" read in one place — what the AI is offered, where
     # each message lands, whether it may start a job — as a table, without building any tool
     from vesta_agent.routing import JOB, PRESS
-    r = Routing(Policy({"people": [{"telegram_id": GROUP, "name": "Group", "role": "owner"},
+    r = Routing(listed_policy({"people": [{"telegram_id": GROUP, "name": "Group", "role": "owner"},
                                    {"telegram_id": FM_PRIVATE, "name": "FM", "role": "fm"}]}))
     scheduled, talk, job, press = None, Origin(ASKER, CONVERSATION), Origin(ASKER, JOB), Origin(ASKER, PRESS)
     assert [Routing.offered(o) for o in (scheduled, talk, job, press)] == [
@@ -140,7 +137,7 @@ def test_one_occasion_answers_every_routing_question():
 def test_the_routing_rule():
     # owner, 2026-10-10: a role's messages go to EVERY chat the People list names with it, a person's or a group's
     OWNER = 444
-    pol = Policy({"people": [{"telegram_id": ASKER, "name": "A", "role": "fm"},
+    pol = listed_policy({"people": [{"telegram_id": ASKER, "name": "A", "role": "fm"},
                              {"telegram_id": OWNER, "name": "O", "role": "owner"},
                              {"telegram_id": GROUP, "name": "Group_O", "role": "owner"},
                              {"telegram_id": FM_PRIVATE, "name": "F", "role": "fm"},
@@ -156,13 +153,12 @@ def test_the_routing_rule():
     assert r.approver_chats("owner", ASKER) == [OWNER]
     assert r.approver_chats("any", ASKER) == [ASKER]                       #    otherwise where it was asked
     assert r.approver_chats("any", -999) == [OWNER]                        #    an unknown chat: the owner chats
-    assert Routing(Policy({})).target("owner") == []                       #    nobody of the role: nowhere
+    assert Routing(listed_policy({})).target("owner") == []                       #    nobody of the role: nowhere
 
 
 def test_a_message_for_both_roles_sharing_one_chat_is_sent_once(agent):
     v, _ = agent
-    with open(v.s.policy_path, "w") as f:
-        yaml.safe_dump({"chats": {"owner": GROUP, "fm": GROUP}}, f)
+    keep_lists(v.s, {"chats": {"owner": GROUP, "fm": GROUP}})
     done = run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Siren off."}, {"to": "fm", "text": "Siren off."}]}))
     assert done["sent"] == 1 and [c for c, _, _ in v.tg.sent] == [GROUP]   # 4. one chat, one message
 

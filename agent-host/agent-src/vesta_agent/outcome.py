@@ -215,7 +215,7 @@ class Outcome:
         for item in unrouted:
             done["unrouted"] += 1
             self.state.log("send_unrouted", {"to": item.get("to"), "skill": skill_name})
-            log.info("A message for %r had nowhere to go (nobody of that role in People)", item.get("to"))
+            log.info("A message for %r had nowhere to go (no Telegram chat of that role in the villa's lists)", item.get("to"))
         for chat, item, roles in pairs:
             text = item.get("text") or ""
             kb = None

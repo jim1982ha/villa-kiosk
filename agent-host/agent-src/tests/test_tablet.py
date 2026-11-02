@@ -10,7 +10,7 @@ import base64
 import pytest
 
 from ai_fake import FakeAI
-from helpers import make_agent
+from helpers import listed_policy, make_agent
 from ha_fake import FakeHA, tool
 from kiosk_fake import FakeKiosk
 from vesta_agent import tablet, tool_access
@@ -185,11 +185,10 @@ def test_the_owner_at_the_tablet_is_the_owner_for_an_action_that_runs_at_once(tm
     # when a person asks ran from the owner's Telegram chat and became an approval request from the tablet
     from test_call_service_shape import StrictSession, Writer
     from vesta_agent.actions import Actions
-    from vesta_agent.policy import Policy
     from vesta_agent.state import State
     monkeypatch.delenv("VESTA_HA_READ_ONLY", raising=False)
     session = StrictSession()
-    pol = Policy({"act_enabled": True, "people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}],
+    pol = listed_policy({"act_enabled": True, "people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}],
                   "chats": {"owner": OWNER}, "allowed_services": {"light.turn_on": "direct"}})
     actions = Actions(lambda: pol, State(str(tmp_path / "s.db")),
                       lambda: Writer("http://unused", "UTC", write=True, session=session))
@@ -262,9 +261,8 @@ def test_the_tablet_answer_says_when_nobody_answered_the_request(tmp_path, monke
 
 def test_a_request_either_may_approve_asked_at_the_tablet_reaches_both_roles(tmp_path):
     # owner, 2026-10-29: "approval required by either FM or Owner, I don't see any notification on the FM Telegram chat"
-    from vesta_agent.policy import Policy
     from vesta_agent.routing import Routing
-    pol = Policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
+    pol = listed_policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
                              {"telegram_id": FM, "name": "Wayan", "role": "fm"}]})
     r, tab = Routing(pol), tablet.chat_of("owner")
     assert r.approver_chats("any", tab) == [OWNER, FM]                    # both roles' chats, the owner's first

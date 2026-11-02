@@ -64,11 +64,11 @@ from .kiosk_owed import KioskOwed
 from .alert_buttons import AlertButtons
 from .outcome import Outcome
 from vesta_shared import occupancy
+from vesta_shared import villa_recipients
 from .voice import TelegramAudio, Voice
 from .transcriber import villa_entity_ids
 from . import answering, missed_at_start, speech
 from .tickets import Tickets
-from .places import where
 from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
 from .routing import Origin, Routing
 from .scheduler import Scheduler, every as scheduler_every
@@ -391,10 +391,15 @@ class Vesta:
             # entity unhidden, a device deleted) waited for 01:30; read in the background, the start is not held up
             self.devices_changed(0)
         pol = self.policy()
-        # People rows with no person but a group still answer its members (policy.member): only an empty list is "nobody"
+        # a listed group with no person still answers its members (policy.member): only empty lists are "nobody".
+        # ⚠️ NOBODY UNTIL THE VILLA'S LISTS NAME SOMEONE (owner, 2026-11-03: they are the one list of who is who): never
+        # read yet (a first start before the villa answered), or naming no Telegram chat — said, never guessed around.
+        # The villa's own alerts are sent by the villa itself, whatever the agent knows.
         if not pol.destinations:
-            log.warning("People is empty: the agent answers nobody and posts nowhere. In each chat to use, send /whoami "
-                        "to the bot and add the ids in %s.", where("people"))
+            read = os.path.exists(villa_recipients.path(self.s.pack_path) or "")
+            log.warning("The villa's lists of who gets the messages %s: the agent answers nobody and posts nowhere "
+                        "until they name a Telegram chat, in %s.", "name no Telegram chat" if read else "are not read yet",
+                        villa_recipients.WHERE)
         log.info("Acting on the villa is %s", "ON" if pol.act_enabled else "OFF (informs only)")
 
     async def refresh_server_tools(self):
@@ -477,8 +482,15 @@ class Vesta:
             return self._build_pack()
 
     def _build_pack(self) -> dict:
+        # ⚠️ THE PACK'S PEOPLE ARE THE AGENT'S ENTRIES (owner, 2026-11-03: who is who is the VESTA Kiosk's lists, each
+        # chat's language the People card's): handed over as the pack builder's people table, never read by it from a
+        # file of its own — a chat, its role, its name and its language, as Policy reads them
+        people = os.path.join(self.s.data_dir, "pack_people.json")
+        with open(people, "w", encoding="utf-8") as f:
+            json.dump({"people": [{"name": e.name, "role": e.role, "language": e.language, "chat": e.telegram_id}
+                                  for e in self.policy().entries]}, f)
         p = subprocess.run([sys.executable, "-m", "vesta_shared.build_pack", "--out", self.s.pack_path,
-                            "--store", self.s.store_path, "--zone", self.s.timezone],
+                            "--store", self.s.store_path, "--zone", self.s.timezone, "--people", people],
                            cwd=self.s.out_dir, env=script_env(self.s), capture_output=True, text=True, timeout=limit(
                                "pack.build_timeout_s", 900, unit="seconds", group="run", lo=60, hi=7200,
                                says="How long the nightly reading of the villa's devices (the skills' list of what "
@@ -521,7 +533,6 @@ class Vesta:
     def read_recipients(self) -> None:
         """The villa's lists of who gets the messages (vesta_shared.villa_recipients), kept beside the knowledge pack
         when they changed — policy() reads them again. Unreadable: what was kept stays."""
-        from vesta_shared import villa_recipients
         got = villa_recipients.read(self.reader)
         if got is not None and villa_recipients.save(self.s.pack_path, got):
             log.info("%s", villa_recipients.says(got))
@@ -1011,7 +1022,8 @@ class Vesta:
             return
         who = " / ".join(dict.fromkeys(names))
         fix = (f"they open a private chat with @{self.bot_username or 'the bot'} and press Start (or send /start) once"
-               if chat > 0 else "add the bot to the group again, or put the group's new id in People")
+               if chat > 0 else f"the bot is added to the group again, and the group's new chat listed in "
+                                f"{villa_recipients.WHERE}")
         await self.outcome.carry_out({"send": [{"to": "owner", "title": "Not reachable on Telegram", "text": f"{who} cannot be reached on Telegram: Telegram "
                                                 f"refuses the agent's messages. Until {fix}, their messages go nowhere."}]},
                                      skip=[int(chat)])

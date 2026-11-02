@@ -25,6 +25,7 @@ from typing import Any, Callable
 from vesta_shared.message_format import ROLE_WORDS
 from vesta_shared.ha_client import error_chars, error_short_chars
 from vesta_shared import automation_words as AW  # an automation in words: one writer
+from vesta_shared import villa_recipients
 
 from . import button_data
 from .approvals import note as approval_note
@@ -261,8 +262,9 @@ class Actions:
             pass                                   # it waits on the tablet alone (approvals.ask keeps it there)
         elif d.required_role == "owner" and not targets:
             self.state.log("refused", dict(base, reason="no chat where the owner can approve"))
-            return ("Refused: no chat in People where the owner can approve it (an owner's private chat, or a group "
-                    "listed for the owner only; a group listed for both roles acts as the facility manager)."), None
+            return (f"Refused: no chat where the owner can approve it in {villa_recipients.WHERE} (an owner's private "
+                    "chat, or a group listed for the owner only; a group listed for both roles acts as the facility "
+                    "manager)."), None
         elif not targets:
             self.state.log("refused", dict(base, reason="no chat to ask in"))
             return "Refused: no chat to ask in.", None

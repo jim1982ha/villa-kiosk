@@ -8,11 +8,10 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from helpers import settings
+from helpers import listed_policy, settings
 from kiosk_fake import FakeKiosk
 from vesta_agent.layout import head_text
 from vesta_agent.notice import Notices, note_press
-from vesta_agent.policy import Policy
 from vesta_agent.state import State
 from vesta_agent.tickets import Tickets
 from vesta_shared.problems import Problems
@@ -29,7 +28,7 @@ def run(c):
 def villa(tmp_path, kiosk=None):
     s = settings(str(tmp_path))
     state = State(s.state_path)
-    notices = Notices(state, lambda: Policy({"people": PEOPLE}), "UTC")
+    notices = Notices(state, lambda: listed_policy({"people": PEOPLE}), "UTC")
     k = kiosk or FakeKiosk()
 
     async def settle(_iid, _note, **_kw):
@@ -179,7 +178,7 @@ def test_a_fault_the_repair_makes_tells_its_story_in_that_same_repair(tmp_path):
     # owner's end-to-end test, 2026-10-30: alert #95's card had no step until the NEXT repair, 4 minutes later
     s = settings(str(tmp_path))
     state = State(s.state_path)
-    notices = Notices(state, lambda: Policy({"people": PEOPLE}), "UTC")
+    notices = Notices(state, lambda: listed_policy({"people": PEOPLE}), "UTC")
     k = FakeKiosk()
 
     async def settle(_iid, _note, **_kw):

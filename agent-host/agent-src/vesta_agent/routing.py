@@ -3,9 +3,9 @@
 1. A reply to a person goes to the chat they wrote in or pressed a button in: `here`. While a person is
    being ANSWERED (a conversation) or a job they ASKED FOR runs, everything goes to their chat, the
    scripts' messages included — whatever a skill's steps name (owner, fm).
-2. A scheduled or alert message goes to EVERY chat of its role: each chat id the People list names
-   with `owner` or `fm`, a person's or a group's (owner, 2026-10-10; the Chats card's one chat per
-   role is gone).
+2. A scheduled or alert message goes to EVERY chat of its role: each Telegram chat the villa's list
+   of `owner` or `fm` names, a person's or a group's (owner, 2026-10-10; the lists are the VESTA
+   Kiosk's since 2026-11-03: vesta_shared.villa_recipients).
 3. An approval request goes to the chat it was asked from, or to every owner chat when only the
    owner may approve (or when it was asked from a chat the policy does not know).
 4. A chat listed with both roles gets a message meant for both once (Outcome sends each (chat,
@@ -72,7 +72,7 @@ class Routing:
 
     def target(self, to: str | None, origin: Origin | None = None, language: str | None = None) -> list[int]:
         """Rules 1 and 2: every chat it goes to. [] when there is nowhere to send it (no origin for `here`, nobody of
-        that role in the People list). `language` (a code): a role's chats that read it only — one version of a
+        that role in the villa's lists). `language` (a code): a role's chats that read it only — one version of a
         report per language (policy.languages_for); a person asking reads theirs, so it never narrows `here`."""
         if origin and origin.holds and to in TARGETS:
             return [origin.chat]
@@ -83,7 +83,7 @@ class Routing:
         return []
 
     def readers(self, to: str | None, origin: Origin | None = None) -> list[tuple[Language, list[int]]]:
-        """Who reads a message for `to`, by language: [(language, its chats)], in the People list's order — one entry
+        """Who reads a message for `to`, by language: [(language, its chats)], in the villa's lists' order — one entry
         for a person asking (their chat, in the language saved for them, or the group's row's), one per language its
         chats read for a role on schedule, [] when it goes nowhere.
 
@@ -177,12 +177,12 @@ class Routing:
         return [int(origin_chat)] if self.policy.knows_chat(origin_chat) else owners
 
     def _may_approve(self, role: str, required_role: str | None) -> list[int]:
-        """The chats of `role` where `required_role`'s request can be pressed: those its messages go to (the villa's
-        list), else every chat People lists with the role. ⚠️ NEVER NONE BECAUSE OF THE VILLA'S LIST (architecture
-        review round 15): a list naming only chats People does not (who may approve is People's) sent the buttons
-        nowhere."""
-        sent = [c for c in self.policy.chats_for(role) if self.policy.may_approve_in(c, required_role)]
-        return sent or [c for c in self.policy.people_chats(role) if self.policy.may_approve_in(c, required_role)]
+        """The chats of `role` where `required_role`'s request can be pressed: those the villa's list of the role names
+        (Policy.chats_for). ⚠️ ONE LIST (owner, 2026-11-03): a chat that receives a role's messages has its rights, so
+        the fallback to the agent's own People rows (review round 15) is gone with them. None listed (the lists never
+        read, or naming no chat that may): the request is refused with its reason, or waits on the tablet
+        (actions.Actions.request)."""
+        return [c for c in self.policy.chats_for(role) if self.policy.may_approve_in(c, required_role)]
 
     def label(self, chat_id: int) -> str:
         """For the log: which chat this is, never who is in it."""

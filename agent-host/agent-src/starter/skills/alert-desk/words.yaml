@@ -1,5 +1,5 @@
-# What the desk says on an alert card's Status lines, in each language the People list offers (en fr id de es it nl
-# zh ja ko). Each chat's copy of a card reads its own language (owner, 2026-10-23); a language left out of an entry
+# What the desk says on an alert card's Status lines, in each language VESTA's People card offers (en fr id de es it
+# nl zh ja ko). Each chat's copy of a card reads its own language (owner, 2026-10-23); a language left out of an entry
 # reads that line in English. The engine writes the rest of the line (the step, the moment, "(to: …)", "Cleared on
 # …") in the chat's language itself.
 # {placeholders} are filled by desk.py: durations, roles and button labels in the same language; names, dates, times

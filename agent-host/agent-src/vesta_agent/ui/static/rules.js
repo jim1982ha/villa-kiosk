@@ -142,21 +142,24 @@ export function rulesForms(doc, jobs = [], tools = null) {
       ""], aiBody, { cls: "ai", widths: ["30%", "22%", "15%", null, "44"] }));
   const missing = jobs.filter((j) => !j.skill_ai).map((j) => j.name);      // the agent's answer (server._jobs)
 
-  // people
-  const languages = (p) => ({ ...doc.languages, ...(p.language && !(p.language in doc.languages) ? { [p.language]: p.language } : {}) });
-  const people = card(W("people"), "Who the agent answers, and where it posts: every message for a role goes to each chat listed with that role, a person's private chat (a positive id) or a group (a negative id). Everyone in a listed group acts there with the group's role, whatever their own row says; a person's row is their private chat and their role in it. A person listed in both roles is two rows with the same id. /whoami, sent to the bot in a chat, shows that chat's id; a person must have sent /start to the bot once before it can write to them.",
-    ...editTable(f.people, {
-      cls: "people", add: "Add a person", blank: () => ({ telegram_id: "", name: "", role: "fm", language: "en" }),
-      columns: [{ title: "Name", width: "26%", phone: "a" }, { title: "Telegram id (person or group)", width: "22%", phone: "b" },
-                { title: "Role", width: "22%", phone: "c" }, { title: "Language", phone: "d" }],
-      cell: (p, k, touched) => [
-        () => h("input", { type: "text", value: p.name ?? "", "aria-label": "Name", oninput: (e) => { p.name = e.target.value; touched(); } }),
-        () => h("input", { type: "text", inputmode: "numeric", value: p.telegram_id ?? "", "aria-label": "Telegram id",
-                          oninput: (e) => { const t = e.target.value.trim(); p.telegram_id = /^-?\d+$/.test(t) ? Number(t) : e.target.value; touched(); } }),
-        () => sel(SCHEMA.roles, p.role, (v) => (p.role = v), "Role"),            // policy.ROLE_WORDS
-        () => sel(languages(p), p.language ?? "en", (v) => (p.language = v), "Language"),
-      ][k](),
-    }));
+  // people: ⚠️ THE KIOSK'S LISTS, SHOWN HERE (owner, 2026-11-03: "Yes, Kiosk only"; "the same way it's reflected for
+  // the Asleep between reports", knowledge.asleepCard). Who gets the messages, and with them who may press their
+  // buttons, is set in the VESTA Kiosk; the agent reads the lists (server._people: one row per chat) and never edits
+  // them. Each chat's language is the agent's, the card's one control (f.languages, by chat id)
+  f.languages = f.languages || {};
+  const langChoices = (code) => ({ ...doc.languages, ...(code in doc.languages ? {} : { [code]: code }) });
+  const peopleRows = (doc.people || []).map((p) => {
+    const code = f.languages[String(p.telegram_id)] ?? "en";
+    return [p.name, String(p.telegram_id), h("span", { class: "chip" }, p.role),
+      sel(langChoices(code), code, (v) => (f.languages[String(p.telegram_id)] = v), `Language of ${p.name}`)];
+  });
+  const people = card(W("people"), `Set in ${doc.lists_where}. Every chat in its lists gets the messages of its list's role and acts with that role: a person's private chat (a positive id) or a group (a negative id), where everyone acts with the group's role; a chat in both lists has both. A person must have sent /start to the bot once before it can write to them. The agent reads the lists and never edits them; each chat's language is chosen here, and the agent writes to it in that language.`,
+    peopleRows.length
+      ? table(["Name", "Telegram id", "Role", "Language"], peopleRows, { cls: "people", widths: ["30%", "24%", "22%", null] })
+      : [h("div", { class: "chips" }, h("span", { class: "muted" }, "None")),
+         h("p", { class: "muted" }, doc.lists_read
+           ? `The lists name no Telegram chat: the agent answers nobody and posts nowhere. Set them in ${doc.lists_where}.`
+           : `Empty until the lists are set in ${doc.lists_where}.`)]);
 
   // devices: chosen from the villa's own, by name (owner, 2026-10-01: "free form text inputs are not
   // suitable"). A box like a menu shows what is chosen; it opens a list with a search and a checkbox per

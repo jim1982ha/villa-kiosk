@@ -19,8 +19,8 @@ buttons:                      # under every message about an open alert; a press
      labels: {fr: Besoin d'aide, id: Butuh bantuan, de: Brauche Hilfe, es: Necesito ayuda, it: Serve aiuto,
               nl: Hulp nodig, zh: 需要帮助, ja: 助けが必要, ko: 도움 필요}}
 # The alert's own words in each chat's language (owner, 2026-10-23): the villa's automations write them in English;
-# a chat whose People row reads another language gets them translated by the AI, once per sentence pattern (names,
-# numbers, times and codes stay as written and are not sent as words), then from memory with no AI. The card always
+# a chat whose language (VESTA's People card) is another gets them translated by the AI, once per sentence pattern
+# (names, numbers, times and codes stay as written and are not sent as words), then from memory with no AI. The card always
 # goes out in English first; any failure keeps the English. It is part of the chat answers, not an AI job (owner,
 # 2026-10-23): it runs with their brain and limit per reply (VESTA Agent page › Rules › AI brains and limits, the
 # "Chat answers" row). Only what the AI is told is said here.

@@ -155,6 +155,8 @@ def _say(path: str) -> str:
                 if len(parts) == 4 else f"Brain and limit of the {parts[2]} skill's AI jobs")
     if parts[:2] == ["settings", "keep"] and len(parts) == 3:
         return f"Records kept: {parts[2].replace('_', ' ')}"
+    if parts[0] == "languages" and len(parts) == 2:
+        return f"{WORDS['languages']} of chat {parts[1]}"
     if parts[0] == "allowed_services" and len(parts) >= 2:
         return f"{title('actions')}: {'.'.join(parts[1:])}"
     return path

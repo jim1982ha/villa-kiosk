@@ -187,19 +187,19 @@ def test_a_language_is_one_value_code_and_name(tmp_path):
     assert Language.parse("Portuguese") is None and Language.parse("pt") is None
     assert Language.of("pt") == Language("en") and Language.of(None) == Language("en")
     assert Language.name_of("de") == "German" and Language.name_of("pt") == "pt"
-    rows = lambda lang: {"people": [{"telegram_id": 1, "name": "Rui", "role": "fm", "language": lang}]}  # noqa: E731
-    assert any("Rui: language must be one of en, fr" in p for p in problems(rows("pt")))
+    rows = lambda lang: {"languages": {1: lang}}  # noqa: E731
+    assert any("languages.1 must be one of en, fr" in p for p in problems(rows("pt")))
     assert not any("language" in p for p in problems(rows("fr")))
-    assert any("Rui: language" in p for p in problems(rows(["fr"])))          # never a crash
+    assert any("languages.1 must be" in p for p in problems(rows(["fr"])))    # never a crash
 
 
 def test_a_language_outside_the_list_is_named_and_read_as_english(tmp_path):
     agent = make_agent(tmp_path, {"people": [
         {"telegram_id": OWNER, "name": "Olga", "role": "owner", "language": "en"},
         {"telegram_id": FM_DE, "name": "Anna", "role": "fm", "language": "de"},
-        {"telegram_id": FM_FR, "name": "Rui", "role": "fm", "language": "pt"}],
+        {"telegram_id": FM_FR, "name": "Rui", "role": "fm"}], "languages": {FM_FR: "pt"},
         "settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}}, skills=["reports"])
-    assert any("Rui: language must be one of" in p for p in agent.policy().problems)
+    assert any(f"languages.{FM_FR} must be one of" in p for p in agent.policy().problems)
     assert agent.jobs._language_of("fm") == "German and English"
     out = run(send_tool(agent).handler({"to": "fm", "text": {"Deutsch": "x", "GERMAN": "Noch offen: 2",
                                                              "en": "Still open: 2"}}))

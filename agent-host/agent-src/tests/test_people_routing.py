@@ -13,7 +13,7 @@ import pytest
 
 import yaml
 
-from helpers import body, make_agent, settings, status as status_of
+from helpers import listed_policy, body, make_agent, settings, status as status_of
 from vesta_agent.layout import head_text
 from vesta_shared.message_format import UNTITLED
 from vesta_shared.messaging import SIREN_TITLE
@@ -70,40 +70,36 @@ def test_an_approval_for_the_owner_reaches_every_chat_where_the_owner_can_press_
 
 def test_a_group_listed_for_both_roles_cannot_press_an_owners_request(tmp_path):
     # the rule where the buttons go and the rule who may press them are one answer (Policy.may_approve_in)
-    pol = Policy({"people": PEOPLE})
+    pol = listed_policy({"people": PEOPLE})
     assert not pol.may_approve_in(GROUP, "owner") and pol.may_approve_in(GROUP, "any")
     assert pol.may_approve_in(JM, "owner") and pol.may_approve_in(FABIEN, "owner")
     rows = [{"telegram_id": GROUP, "name": "Group_O", "role": "owner"}, {"telegram_id": GROUP, "name": "Group_FM", "role": "fm"}]
     from vesta_agent.routing import Routing
-    assert Routing(Policy({"people": rows})).approver_chats("owner", None) == []
+    assert Routing(listed_policy({"people": rows})).approver_chats("owner", None) == []
     v = make_agent(tmp_path, {"people": rows, "act_enabled": True, "allowed_services": {"light.turn_on": "owner"}})
     answer, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
-    assert msg is None and answer.startswith("Refused: no chat in People where the owner can approve it")
+    assert msg is None and answer.startswith("Refused: no chat where the owner can approve it in the VESTA Kiosk")
 
 
-def test_an_older_files_chats_still_route_and_the_page_moves_them_into_people(tmp_path):
-    old = {"people": [{"telegram_id": JM, "name": "JM", "role": "owner"}], "chats": {"owner": GROUP, "fm": 444}}
+def test_an_older_files_people_and_chats_say_nobody_and_a_save_keeps_only_their_languages(tmp_path):
+    # who is who is the VESTA Kiosk's lists (owner, 2026-11-03): an older file's People rows and its `chats:` are
+    # read for each chat's language only, named nowhere as a problem, and gone at the page's next save
+    old = {"people": [{"telegram_id": JM, "name": "JM", "role": "owner", "language": "fr"}],
+           "chats": {"owner": GROUP, "fm": 444}}
     p = Policy(old)
-    assert p.chats_for("owner") == [JM, GROUP] and p.chats_for("fm") == [444] and not p.problems
-    assert p.person(444) is None                    # a chat of the old card is where to post, never a person
+    assert p.entries == [] and p.chats_for("owner") == p.chats_for("fm") == [] and not p.problems
+    assert p.languages == {JM: "fr"}
     text = yaml.safe_dump(old)
-    form = policy_doc.to_form(text)
-    # architecture review 18: a row of People with a positive id IS a person — the old card's private chat of nobody
-    # listed (444) stays in `chats:`, still posted to, never registered; the group becomes a row
-    assert [(r["telegram_id"], r["role"]) for r in form["people"]] == [(JM, "owner"), (GROUP, "owner")]
-    saved = yaml.safe_load(policy_doc.apply_form(text, form))
-    assert saved["chats"] == {"fm": 444} and Policy(saved).person(444) is None
-    assert sorted(Policy(saved).destinations) == sorted(p.destinations)
-    # a chat of someone already listed (their other role) becomes their row; nothing is left behind
-    mine = yaml.safe_dump({"people": [{"telegram_id": JM, "name": "JM", "role": "owner"}], "chats": {"fm": JM}})
-    saved = yaml.safe_load(policy_doc.apply_form(mine, policy_doc.to_form(mine)))
-    assert "chats" not in saved and Policy(saved).chats_for("fm") == [JM]
+    saved = yaml.safe_load(policy_doc.apply_form(text, policy_doc.to_form(text)))
+    assert saved["languages"] == {JM: "fr"} and "people" in saved      # the form writes the languages...
+    moved = yaml.safe_load(policy_doc.languages_moved(policy_doc.apply_form(text, policy_doc.to_form(text))))
+    assert moved["languages"] == {JM: "fr"} and "people" not in moved and "chats" not in moved   # ...every save moves
 
 
 def test_a_chat_telegram_refuses_is_named_on_the_overview_until_a_message_arrives(tmp_path):
     from telegram_fake import FakeTelegram
     s = settings(str(tmp_path))
-    st, tg, pol = State(s.state_path), FakeTelegram(), Policy({"people": PEOPLE})
+    st, tg, pol = State(s.state_path), FakeTelegram(), listed_policy({"people": PEOPLE})
     d = Delivery(tg, st, lambda: pol)
     tg.refuse.add("send")                                   # not the chat: the network, a refused message
     assert run(d.send(FABIEN, "x")) is None and status.unreachable(st, pol) == []
@@ -125,10 +121,10 @@ def test_only_telegrams_refusal_of_a_chat_counts_as_unreachable():
 
 
 def test_in_a_private_chat_the_persons_own_role_decides_in_a_group_the_least(tmp_path):
-    pol = Policy({"people": PEOPLE, "tool_access": {"fm": {"cameras": False}}})
+    pol = listed_policy({"people": PEOPLE, "tool_access": {"fm": {"cameras": False}}})
     tools = [{"name": "ha_get_camera_image", "annotations": {"readOnlyHint": True}}]
     pol_tools = {**pol.raw, "ha_read_tools": ["ha_get_camera_image"]}
-    pol = Policy(pol_tools)
+    pol = listed_policy(pol_tools)
     owner = pol.person(JM).role
     assert owner == "owner"
     # JM, owner and facility manager, in his own chat: the owner's tools (before, it was "the fm chat" and cut them)
@@ -139,11 +135,11 @@ def test_in_a_private_chat_the_persons_own_role_decides_in_a_group_the_least(tmp
 
 def test_the_to_line_names_the_role_the_message_is_for(tmp_path):
     s = settings(str(tmp_path))
-    n = Notices(State(s.state_path), lambda: Policy({"people": PEOPLE}), "UTC")
+    n = Notices(State(s.state_path), lambda: listed_policy({"people": PEOPLE}), "UTC")
     assert head_text(n.heading(JM, to="owner")) == f"{UNTITLED}\nTo: Owner"
     assert head_text(n.heading(GROUP, to="fm", title="Approval request")) == "Approval request\nTo: Facility Manager"
     assert head_text(n.heading(GROUP)) == f"{UNTITLED}\nTo: Owner & Facility Manager"   # no role given: the chat's
-    alone = Notices(State(s.state_path), lambda: Policy({"people": [PEOPLE[4]]}), "UTC")
+    alone = Notices(State(s.state_path), lambda: listed_policy({"people": [PEOPLE[4]]}), "UTC")
     assert head_text(alone.heading(GROUP, to="owner")) == f"{UNTITLED}\nTo: Owner"
 
 
@@ -274,7 +270,7 @@ def test_a_newer_snapshot_of_an_incident_replaces_the_older_one(tmp_path):
 def test_a_member_of_a_listed_group_acts_with_its_role_without_a_people_row(tmp_path):
     # owner, 2026-10-10: "any person from a Telegram group shall be able to inherit from the group role"
     RITA = 555
-    pol = Policy({"people": [{"telegram_id": JM, "name": "JM_O", "role": "owner"},
+    pol = listed_policy({"people": [{"telegram_id": JM, "name": "JM_O", "role": "owner"},
                              {"telegram_id": GROUP, "name": "Group_O", "role": "owner", "language": "fr"}]})
     rita = pol.member(RITA, GROUP, "Rita")
     assert (rita.name, rita.role, rita.language) == ("Rita", "owner", "fr")
@@ -296,12 +292,12 @@ def test_a_member_of_a_listed_group_acts_with_its_role_without_a_people_row(tmp_
 def test_in_a_listed_group_everyone_acts_with_the_groups_role_whatever_their_own():
     # the owner's People of 2026-10-10: the group as Owner, JM and Fabien as Facility manager — in the group JM was
     # refused the siren's approval while any unlisted member could give it
-    pol = Policy({"people": [{"telegram_id": GROUP, "name": "Group Chat", "role": "owner"},
+    pol = listed_policy({"people": [{"telegram_id": GROUP, "name": "Group Chat", "role": "owner"},
                              {"telegram_id": FABIEN, "name": "Fabien", "role": "fm"},
                              {"telegram_id": JM, "name": "JM", "role": "fm"}]})
     assert pol.member(JM, GROUP).role == "owner" and pol.member(555, GROUP).role == "owner"     # everyone in the group
     assert pol.member(JM, JM).role == "fm" and pol.person(JM).role == "fm"                     # in private: their own
-    both = Policy({"people": [{"telegram_id": GROUP, "name": "G_O", "role": "owner"}, {"telegram_id": GROUP, "name": "G_FM", "role": "fm"},
+    both = listed_policy({"people": [{"telegram_id": GROUP, "name": "G_O", "role": "owner"}, {"telegram_id": GROUP, "name": "G_FM", "role": "fm"},
                               {"telegram_id": JM, "name": "JM_O", "role": "owner"}]})
     # "irrespective of their own individual role" (owner, 2026-10-10): a group of both roles is the narrower, for all
     assert both.member(JM, GROUP).role == "fm" and both.member(555, GROUP).role == "fm" and both.member(JM, JM).role == "owner"
@@ -523,7 +519,7 @@ def test_who_acts_with_which_role_is_one_answer_everywhere(chat, who, known_as, 
     # the approver chats) — each now asks policy.member / knows_chat
     from vesta_agent import intake
     from vesta_agent.routing import Routing
-    pol = Policy({"people": PEOPLE})
+    pol = listed_policy({"people": PEOPLE})
     m = pol.member(who, chat)
     assert (m.role if m else None) == known_as
     got = intake.gate(intake.from_telegram("telegram_text", {"chat_id": chat, "user_id": who, "text": "@bot hi"}), pol, "bot", lambda *a: False)
@@ -536,7 +532,7 @@ def test_who_acts_with_which_role_is_one_answer_everywhere(chat, who, known_as, 
     # the caller passes (architecture review, 2026-10-15: tool_access kept its own copy of "the group's role")
     if acts:
         from vesta_agent.tool_access import allowed_for
-        cut = Policy({"people": PEOPLE, "tool_access": {"fm": {"create_ticket": False}}})
+        cut = listed_policy({"people": PEOPLE, "tool_access": {"fm": {"create_ticket": False}}})
         assert ("create_ticket" in allowed_for(cut, [], "owner", chat)) is (acts == "owner")
 
 

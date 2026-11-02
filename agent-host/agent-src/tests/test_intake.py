@@ -9,9 +9,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from helpers import ROOT
+from helpers import listed_policy, ROOT
 from vesta_agent import button_data, intake
-from vesta_agent.policy import NOT_REGISTERED, Person, Policy
+from vesta_agent.policy import NOT_REGISTERED, Person
 
 OWNER, FM, STRANGER, GROUP, OTHER_GROUP = 11, 22, 99, -100, -200
 BOT = "Villa_Test_bot"
@@ -19,7 +19,7 @@ BOT = "Villa_Test_bot"
 
 # the real rules, never a stand-in of them: the group is a row of People (0.12.128)
 def Pol():
-    return Policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
+    return listed_policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
                               {"telegram_id": FM, "name": "FM", "role": "fm"},
                               {"telegram_id": GROUP, "name": "Group", "role": "owner"}]})
 
@@ -71,7 +71,7 @@ def test_a_voice_message_is_handed_on_to_be_transcribed():
 
 def test_an_unlisted_group_is_recorded_as_ignored():
     assert intake.gate(intake.from_telegram("telegram_text", ev(OTHER_GROUP, OWNER)), Pol(), BOT, lambda *a: False).why == \
-        "group not listed in People"
+        "group not in the villa's lists"
 
 
 NOW = datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc)      # 20:00 in the zone below

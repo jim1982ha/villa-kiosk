@@ -653,7 +653,8 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         # kind: what the asset physically is, the owner's choice on the VESTA Agent page, else guessed (asset_kind)
         a.kind = asset_kind(a, chosen)
 
-    # people: from HA persons plus an optional table (roles, chats, language)
+    # people: the villa's persons, plus the agent's table (build_pack --people: each chat of the VESTA Kiosk's lists
+    # of who gets the messages, with its role, its name and its language; app.Vesta._build_pack)
     ppl = []
     for h in helpers:
         if h.get("helper_type") == "person":
