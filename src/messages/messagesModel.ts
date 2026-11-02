@@ -71,7 +71,7 @@ export type Place = "notification" | "report" | "watch" | "closed";
  *  Watch or Closed" (owner, 2026-10-28), else a notification —; any other record that asked and is answered or over
  *  (isFinished) in Closed; anything else a notification. ⚠️ NOTIFICATIONS HOLD WHAT STILL WAITS FOR SOMEONE (owner,
  *  2026-10-29: "anything finished goes to Closed … in a generic and consistent way"): answered approvals and every ring
- *  sat there for ever. messagesView lists by it, unreadOf counts by it. VESTA's card of an alert with an issue is the
+ *  sat there for ever. messagesView lists by it, messagePlaces counts by it. VESTA's card of an alert with an issue is the
  *  issue's (cardsOfIssue), before this. */
 export function placeOf(a: Announcement): Place {
   if (isReport(a)) return "report";
@@ -197,19 +197,40 @@ export function announcementWords(a: Announcement, { step = false }: { step?: bo
 // (VESTA's card: its version, announcements.versionOf — the identity its presses are kept by too)
 const readId = (a: Announcement) => (a.feed === "vesta" ? versionOf(a) : `${idOf(a)}@${a.at}`);
 
-/** How many of the kept announcements this tablet has not seen yet (readAtOpening): the light mark on the robot, the
- *  phone's gear and the menu's Cockpit row. The open issues are not in it: they have their own count — nor VESTA's card
- *  of an alert listed with its issue (`issues`: the open and watched cards, messagesView's own rule, cardsOfIssue). */
-export function unreadOf(kept: readonly Announcement[], read: readonly string[],
-  issues: readonly CardView[] = []): number {
+/** Where a kept record is listed: with its issue (VESTA's card of an alert an open or watched issue holds,
+ *  cardsOfIssue), else where placeOf puts it. */
+export type MessagePlace = Place | "issue";
+
+/** Each kept record's place, and how many of them this tablet has not seen yet (readAtOpening): the light mark on the
+ *  robot, the phone's gear and the menu's Cockpit row (`unread`), the reports among them (`unreadReports`, which
+ *  Messages opens on when they are all that is new). The open issues are not in it: they have their own count.
+ *
+ *  ⚠️ ONE RULE LISTS AND COUNTS (architecture review round 16, 2026-11-03): which cards take VESTA's message of an alert
+ *  away from Notifications was worked out twice, by messagesView for the list and by the page's provider for the mark
+ *  (it built the open and watched cards again for unreadOf), and two checks matched the source to keep them alike.
+ *  Both read this now, from the same `open` and `watched` (config/cockpitIssues). Pure. */
+export function messagePlaces({ open, watched, announcements, read = [] }: {
+  open: readonly CardView[];
+  watched: readonly CardView[];
+  announcements: readonly Announcement[];
+  /** What this tablet has read (readAtOpening); none: everything unread. */
+  read?: readonly string[];
+}): { of: (a: Announcement) => MessagePlace; unread: number; unreadReports: number } {
+  // ⚠️ A WATCHED ALERT IS LISTED ONCE, IN WATCH (owner, 2026-10-28), AN ALERT WITH A TICKET ONCE, WITH ITS ISSUE (owner,
+  // 2026-10-29, as Telegram shows one message): its card opens on its Open issues or Watch line, never also a notification
+  const withIssue = new Set([...open, ...watched].flatMap((c) => cardsOfIssue(c, announcements)));
+  const of = (a: Announcement): MessagePlace => (withIssue.has(a) ? "issue" : placeOf(a));
   const seen = new Set(read);
   // ⚠️ LISTED WITH ITS ISSUE, NO UNREAD (architecture review 2026-10-29 #2): counted, the mark opened Messages on an
-  // empty Notifications and stayed lit until someone opened that issue's line
-  const withIssue = new Set(issues.flatMap((c) => cardsOfIssue(c, kept)));
-  // what Notifications and Reports list (placeOf), not yet shown: an alert that is over is parked in Watch or Closed,
-  // folded (owner, 2026-10-28) — counted, it would keep the mark lit with nothing to read there
-  return kept.filter((a) => !withIssue.has(a) && (placeOf(a) === "notification" || placeOf(a) === "report")
-    && !seen.has(readId(a))).length;
+  // empty Notifications and stayed lit until someone opened that issue's line. What Notifications and Reports list, not
+  // yet shown: an alert that is over is parked in Watch or Closed, folded (owner, 2026-10-28); counted, it would keep the
+  // mark lit with nothing to read there
+  const unseen = announcements.filter((a) => !seen.has(readId(a)));
+  return {
+    of,
+    unread: unseen.filter((a) => of(a) === "notification" || of(a) === "report").length,
+    unreadReports: unseen.filter((a) => of(a) === "report").length,
+  };
 }
 
 /** What this tablet has read once the Cockpit OPENED: everything kept at that moment (owner, 2026-10-31: "Shall opening
@@ -264,15 +285,13 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
   const showReports = filter === "reports";
   const issues = showIssues ? open.map(issueItem) : [];
   const watchedItems = showIssues ? watched.map(issueItem) : [];
-  // ⚠️ A WATCHED ALERT IS LISTED ONCE, IN WATCH (owner, 2026-10-28): its card is open on its Watch line, never also a
-  // notification
-  // ⚠️ AN ALERT WITH A TICKET IS LISTED ONCE, WITH ITS ISSUE (owner, 2026-10-29, as Telegram shows one message): its
-  // card opens on its Open issues or Watch line, never also a notification line
-  const inWatch = new Set([...open, ...watched].flatMap((c) => cardsOfIssue(c, announcements)));
+  // each record in ONE place, the one the unread mark counts by (messagePlaces): VESTA's card of an alert an open or
+  // watched issue holds is listed with that issue, never also as a notification
+  const { of } = messagePlaces({ open, watched, announcements });
   // newest first, by time (two feeds: their numbers do not compare)
-  const asNotes = (shown: boolean, keep: (a: Announcement) => boolean, kind: "notification" | "report" = "notification"):
+  const asNotes = (shown: boolean, place: MessagePlace, kind: "notification" | "report" = "notification"):
     MessageItem[] => (shown
-    ? announcements.filter((a) => !inWatch.has(a) && keep(a)).sort((x, y) => byTime(y, x))
+    ? announcements.filter((a) => of(a) === place).sort((x, y) => byTime(y, x))
       .map((a) => ({ kind, key: noteKey(a), announcement: a }))
     : []);
   // ⚠️ A PROBLEM'S LIFE IS ONE PLACE (owner, 2026-10-28): open, then watched once it cleared, then closed — Watch and
@@ -280,10 +299,10 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
   // each record in ONE place (placeOf): a report under Reports, an alert that is over in Watch or Closed
   const closedIssues = showIssues ? closedFaults.filter((c) => cardsOfIssue(c, announcements).length === 0).map(issueItem) : [];
   const closedAt = (i: MessageItem) => Date.parse((i.kind === "issue" ? i.card.closedAt : i.announcement.at) ?? "") || 0;
-  const closed = [...closedIssues, ...asNotes(showIssues, (a) => placeOf(a) === "closed")].sort((a, b) => closedAt(b) - closedAt(a));
-  const watchedCards = asNotes(showIssues, (a) => placeOf(a) === "watch");
-  const notifications = asNotes(showNotes, (a) => placeOf(a) === "notification");
-  const reports = asNotes(showReports, (a) => placeOf(a) === "report", "report");
+  const closed = [...closedIssues, ...asNotes(showIssues, "closed")].sort((a, b) => closedAt(b) - closedAt(a));
+  const watchedCards = asNotes(showIssues, "watch");
+  const notifications = asNotes(showNotes, "notification");
+  const reports = asNotes(showReports, "report", "report");
   const watchedAll = [...watchedItems, ...watchedCards];
   const listed = [...issues, ...notifications, ...reports, ...watchedAll, ...closed];
   return {
@@ -293,7 +312,7 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
     notifications,
     closed,
     reports,
-    notificationsEmpty: announcements.some((a) => !inWatch.has(a) && placeOf(a) === "closed") ? NOTHING_WAITING : NOTHING_YET,
+    notificationsEmpty: announcements.some((a) => of(a) === "closed") ? NOTHING_WAITING : NOTHING_YET,
     selected: listed.find((i) => i.key === selected) ?? null,
     shows: { issues: showIssues, notifications: showNotes, reports: showReports },
   };

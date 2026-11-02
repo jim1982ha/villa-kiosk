@@ -12,7 +12,7 @@ import { readJson, writeJson } from "@/utils/storedJson";
 import { fetchAnnouncements, fetchVestaMessages, inLanguage, pressOf, type Announcement, type Pressable } from "./announcements";
 import { useConfig } from "@/config/ConfigContext";
 import { pauseFor, watchFeed, type FeedRead } from "./feed";
-import { afterRead, isReport, readAtOpening, shownTogether, unreadOf } from "./messagesModel";
+import { afterRead, messagePlaces, readAtOpening, shownTogether } from "./messagesModel";
 import { pressesOf, type PressState, type Presses } from "./presses";
 import { useCockpitIssues } from "@/components/cockpit/useVillaAttention";
 
@@ -35,7 +35,7 @@ interface Announcements {
 }
 
 interface AnnouncementsAndUnread extends Announcements {
-  /** How many kept announcements this tablet has not seen yet (messagesModel.unreadOf). */
+  /** How many kept announcements this tablet has not seen yet (messagesModel.messagePlaces). */
   unread: number;
   /** How many of them are VESTA's reports (Messages opens on Reports when they are all the unread). */
   unreadReports: number;
@@ -99,12 +99,13 @@ export function AnnouncementsProvider({ children }: { children: ReactNode }) {
   }), [kept]);
   useEffect(() => { writeJson(READ_KEY, read); }, [read]);
   const presses = useMemo(() => pressesOf((a, command) => pressOf(a, command, backendFetch)), []);
-  // the open and watched issues: VESTA's card of an alert listed with its issue is read there, never unread here
-  const { open, watched } = useCockpitIssues();
-  const issueCards = useMemo(() => [...open, ...watched], [open, watched]);
-  const value = useMemo(() => ({ ...state, unread: unreadOf(kept, read, issueCards),
-    unreadReports: unreadOf(kept.filter(isReport), read), opened, presses }),
-    [state, kept, read, issueCards, opened, presses]);
+  // the issues Messages lists, whole: VESTA's card of an alert listed with its issue is read there, never unread here
+  // (messagePlaces, the rule messagesView lists by)
+  const issues = useCockpitIssues();
+  const value = useMemo(() => {
+    const { unread, unreadReports } = messagePlaces({ ...issues, announcements: kept, read });
+    return { ...state, unread, unreadReports, opened, presses };
+  }, [state, kept, read, issues, opened, presses]);
   return <AnnouncementsContext.Provider value={value}>{children}</AnnouncementsContext.Provider>;
 }
 

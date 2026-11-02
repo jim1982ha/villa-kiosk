@@ -6,8 +6,10 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { h, draw } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
-const { messagesView, mergeAnnouncements, FILTERS, unreadOf, readAtOpening, openingFilter, followingFilter, shownTogether,
+const { messagesView, mergeAnnouncements, FILTERS, messagePlaces, readAtOpening, openingFilter, followingFilter, shownTogether,
   afterRead, cardsOfIssue } = await import("@/messages/messagesModel");
+// the unread mark, as the page's provider reads it (messagePlaces), `issues` the open issues
+const unreadOf = (kept, read, issues = []) => messagePlaces({ open: issues, watched: [], announcements: kept, read }).unread;
 const { parseVestaMessage, inLanguage } = await import("@/messages/announcements");
 const { noticeStep, NO_NOTICE } = await import("@/messages/noticeModel");
 
@@ -362,6 +364,48 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
        told.lines.map((l) => l.text).join("|") === "Also: Battery low|#100-P1 (existing)" && told.lines[1].own.sources.join() === "alert,night", told.lines);
     ck("  ...and its record: the alert's Done closes both", told.lines[1].actions.find((x) => x.kind === "done")?.ids.join() === "r1,r2", told.lines[1]);
   }
+  {
+    // ⚠️ ONE COMPARER OF "THIS TEXT ALREADY SAYS THAT" (architecture review round 16, 2026-11-03): a device's state beside
+    // its fault and a card's pills judged it by whole words, an "Also:" line under an alert by a plain substring. Each
+    // pair is driven through the three places that ask it: the "Also" line under an alert (othersFirst), a state pill
+    // beside the words of the card's lines (issueAsTold), a device's own state beside the fault folded onto it
+    // (stateBesideFault, through the card's pills); each must answer as the comparer does, and the comparer as the table.
+    const { saysWord, cockpitCard, ALSO } = await import("@/config/cockpitCard");
+    const { groupAttention } = await import("@/config/attention");
+    const PAIRS = [
+      // [the text, the shorter words, does the text say them?]
+      ["Laundry Room door unlocked", "Unlocked", true],
+      ["Pump offline for 3h", "Offline", true],
+      ["The outdoor entrance lock is missing.", "the outdoor entrance lock is missing", true],   // the owner's case, 2026-11-01
+      ["The outdoor entrance lock is missing", "The outdoor entrance lock is missing.", true],   // a closing stop aside
+      ["Door reopened at 10:00", "Open", false],                                                // a substring, not the word
+      ["Battery lower than expected", "Battery low", false],
+      ["Pump monitoring stopped", "On", false],
+    ];
+    const asked = [];
+    for (const [text, words, says] of PAIRS) {
+      const one = saysWord(text, words);
+      // an "Also:" line under an alert whose message is `text`
+      const alert = parseVestaMessage({ seq: 70, key: "incident:170", title: "#170-P1 (new)", to: "To: Owner", body: text, status: ["⚠️ New alert"], buttons: [] });
+      const also = card("also", { lines: [{ key: "a", text: "x", story: [], alertNumber: 170, closing: null, records: [] }, { key: "o", text: words, story: [], closing: null, records: [] }] });
+      const alsoKept = messagesView({ open: [also], watched: [], announcements: [alert], filter: "issues", selected: null }).issues[0].card
+        .lines.some((l) => l.text === ALSO + words);
+      // a state pill beside a line saying `text`
+      const pilled = card("pill", { lines: [{ key: "p", text, story: [], closing: null }], status: [{ text: words, tone: "tone-warn" }] });
+      const pillKept = (messagesView({ open: [pilled], watched: [], announcements: [], filter: "issues", selected: null }).issues[0].card.status ?? [])
+        .some((x) => x.text === words);
+      // a device's own state (`words`) beside its fault titled `text`
+      const dev = { key: "lock.example_says", label: "Lock", room: "Hall" };
+      const [g] = groupAttention([
+        { id: "alarm:lock.example_says", kind: "alarm", title: "Lock", detail: words, entityId: dev.key, source: "live", device: dev },
+        { id: "fault:s1", kind: "fault", title: text, detail: "Fault", entityId: dev.key, ticketId: "s1", stage: "fault", source: "alert", device: dev }]);
+      const besideKept = cockpitCard(g, null).status.some((x) => x.text === words);
+      asked.push({ text, words, says, one, alsoKept, pillKept, besideKept, folded: !!g.items[0].fault });
+    }
+    const wrong = asked.filter((a) => a.one !== a.says || a.alsoKept === a.one || a.pillKept === a.one || a.besideKept === a.one || !a.folded);
+    ck("each pair: the comparer answers as the table, and the \"Also\" line, the state pill and a device's state beside its fault all follow it",
+       wrong.length === 0, wrong);
+  }
   const opened = draw(h(CockpitAttentionRow, { card: v.issues[0].card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
   // owner, 2026-11-01: "Missing" beside words saying it was clutter; a state nothing says stays
   const stated = /class="fm-badge tone-warn">Missing</;
@@ -510,28 +554,62 @@ ck("a card listed under its open issue lights no unread mark (the issue has its 
    unreadOf([newCard], [], [withIssue]) === 0 && unreadOf([newCard], []) === 1);
 ck("  ...so Messages opens on Issues' own place, never on an empty Notifications",
    openingFilter(unreadOf([newCard], [], [withIssue])) === "issues");
-const ctxNow = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");
-ck("  ...and the page's unread count is given the open and watched issues",
-   /unreadOf\(kept, read, issueCards\)/.test(ctxNow) && /const \{ open, watched \} = useCockpitIssues\(\);/.test(ctxNow));
-const tabNow = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
-void tabNow;
+{
+  // the provider hands messagePlaces the issues WHOLE (useCockpitIssues, the list Messages draws): it cannot pick a subset
+  const ts = (await import("typescript")).default;
+  const calls = [];
+  const visit = (n) => {
+    if (ts.isCallExpression(n) && n.expression.getText() === "messagePlaces") calls.push(n.arguments[0]);
+    ts.forEachChild(n, visit);
+  };
+  const ctxTree = parseTsx("messages/AnnouncementsContext.tsx");
+  visit(ctxTree);
+  const arg = calls[0];
+  const spread = arg && ts.isObjectLiteralExpression(arg) ? arg.properties.filter(ts.isSpreadAssignment).map((p) => p.expression.getText()) : [];
+  const issuesFrom = /const issues = useCockpitIssues\(\);/.test(ctxTree.text);
+  ck("  ...and the page's unread count is read by messagePlaces from the Cockpit's issues, whole (open AND watched)",
+     calls.length === 1 && spread.join() === "issues" && issuesFrom, { calls: calls.length, spread });
+}
 
 console.log("\n  architecture review 2026-10-29, round 2: one rule places a record and counts it:");
 const { placeOf } = await import("@/messages/messagesModel");
 const stageCard = (seq, stage, n) => parseVestaMessage({ seq, at: `2026-10-29T1${seq % 10}:00:00+08:00`, key: `incident:${n}`,
   title: `#${n}-P2 (${stage})`, body: "Door", status: ["- Alert sent"], stage });
 const mixes = [];
-for (const stage of ["new", "existing", "watch", "closed"]) {
-  for (const held of [false, true]) {
-    const a = stageCard(40, stage, 77);
-    const iss = held ? [card("h", { lines: [{ key: "l", text: "", icons: null, story: [], closing: null, actions: [], alertNumber: 77 }] })] : [];
-    const listedNew = ["notifications", "reports"].map((filter) =>
-      messagesView({ open: iss, watched: [], announcements: [a], filter, selected: null }))
-      .reduce((n, v) => n + v.notifications.length + v.reports.length, 0);
-    if (unreadOf([a], [], iss) !== listedNew) mixes.push(`${stage}${held ? "+issue" : ""}: unread ${unreadOf([a], [], iss)}, listed ${listedNew}`);
+// ⚠️ ONE FUNCTION PLACES AND COUNTS (architecture review round 16): every stage, with no issue, under an open issue or a
+// watched one: the place messagePlaces gives is the section messagesView lists it in, and the mark counts exactly what
+// Notifications and Reports list
+const holdsMsg = (i, a) => (i.kind === "issue" ? cardsOfIssue(i.card, [a]).length > 0 : i.announcement === a);
+const sectionOf = (v, a) => [["issue", [...v.issues, ...v.watched.filter((i) => i.kind === "issue")]],
+  ["notification", v.notifications], ["report", v.reports], ["watch", v.watched.filter((i) => i.kind !== "issue")], ["closed", v.closed]]
+  .filter(([, items]) => items.some((i) => holdsMsg(i, a))).map(([p]) => p);
+for (const stage of ["new", "existing", "watch", "closed", "report"]) {
+  for (const held of ["none", "open", "watched"]) {
+    const a = stage === "report" ? digest : stageCard(40, stage, 77);
+    const iss = held === "none" ? [] : [card("h", { lines: [{ key: "l", text: "", icons: null, story: [], closing: null, actions: [], alertNumber: 77 }] })];
+    const lists = { open: held === "open" ? iss : [], watched: held === "watched" ? iss : [] };
+    const views = ["issues", "notifications", "reports"].map((filter) => messagesView({ ...lists, announcements: [a], filter, selected: null }));
+    const listed = new Set(views.flatMap((v) => sectionOf(v, a)));
+    const places = messagePlaces({ ...lists, announcements: [a], read: [] });
+    const listedNew = views.reduce((n, v) => n + v.notifications.length + v.reports.length, 0);
+    const tag = `${stage}${held === "none" ? "" : `+${held}`}`;
+    if ([...listed].join() !== places.of(a)) mixes.push(`${tag}: placed ${places.of(a)}, listed ${[...listed].join("|")}`);
+    if (places.unread !== listedNew) mixes.push(`${tag}: unread ${places.unread}, listed ${listedNew}`);
+    if (places.unreadReports !== views[2].reports.length) mixes.push(`${tag}: unread reports ${places.unreadReports}, listed ${views[2].reports.length}`);
+    const read = messagePlaces({ ...lists, announcements: [a], read: readAtOpening([], [a]) });
+    if (read.unread !== 0 || read.unreadReports !== 0) mixes.push(`${tag}: read, still unread ${read.unread}/${read.unreadReports}`);
   }
 }
-ck("every stage, with or without its issue: the mark counts exactly what Notifications and Reports list", mixes.length === 0, mixes);
+ck("every stage, with no issue, an open one or a watched one: one place, the section it is listed in, and the mark counts exactly what Notifications and Reports list",
+   mixes.length === 0, mixes);
+{
+  const placed = (a, watched = []) => messagePlaces({ open: [], watched, announcements: [a] }).of(a);
+  const held = card("h", { lines: [{ key: "l", text: "", story: [], actions: [], alertNumber: 77 }] });
+  const got = [placed(stageCard(40, "new", 77)), placed(digest), placed(stageCard(40, "watch", 77)), placed(stageCard(40, "closed", 77)),
+    placed(stageCard(40, "new", 77), [held])];
+  ck("  ...the table reaches every place (a notification, a report, Watch, Closed, with its issue)",
+     got.join() === "notification,report,watch,closed,issue", got);
+}
 const cleared = messagesView({ open: [], watched: [], announcements: [stageCard(41, "watch", 78)], filter: "issues", selected: null });
 const clearedNotes = messagesView({ open: [], watched: [], announcements: [stageCard(41, "watch", 78)], filter: "notifications",
   selected: null });
