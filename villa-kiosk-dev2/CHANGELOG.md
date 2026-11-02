@@ -1,3 +1,14 @@
+## 2.496.669
+
+What you will see:
+- Cockpit › Tickets: a ticket for a rule watching several devices at once (the three mains phases) names its device
+  as its Inbox card does, and tapping the name opens that device. Before, it showed the name saved when it was opened
+  and the tap did nothing.
+- A fault VESTA follows goes straight to Watch when you press Done, showing "Done on … (who)" until VESTA says when it
+  closes. Before, it showed under Closed for a few seconds, then jumped to Watch.
+- A short line under an alert, such as "Open", is no longer hidden because the alert says a longer word containing it
+  ("reopened"). The same problem written twice is still shown once.
+
 ## 2.496.668
 
 What you will see:
