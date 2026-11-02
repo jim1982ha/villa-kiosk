@@ -25,6 +25,8 @@ import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 import UnavailableByDesign from "./UnavailableByDesign";
+import WhoGetsMessages from "./WhoGetsMessages";
+import { ROLE_LABELS } from "@/auth/roles";
 import { FullScreenFor, RingShownFor } from "./MessagesSettings";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
@@ -425,6 +427,13 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             </>} />
             <FullScreenFor />
             <RingShownFor />
+            <TipTitle title="Who gets the messages" tip={<>
+              The chats and phones that get the villa's messages, for the {ROLE_LABELS.owner} and for the{" "}
+              {ROLE_LABELS.ops}. An urgent (P1) alert goes to both lists, a P2 alert to the {ROLE_LABELS.ops}'s; a notice
+              goes to the list its automation names. VESTA sends its reminders to the same chats. An urgent or P2 alert
+              with nobody listed goes to every Telegram chat of the villa, so it is never lost.
+            </>} />
+            <WhoGetsMessages />
           </>
         )}
 

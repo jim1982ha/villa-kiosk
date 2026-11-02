@@ -18,7 +18,7 @@ const table = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/ha-c
 const types = new Set([...table.websocket, ...table.camera]);
 const domains = new Set(table.serviceDomains);
 // a light's scene choice: its domain is called by every profile, on such a select only (the proxy judges the entity)
-const ownerDomains = new Set([table.sceneSelect.domain, ...table.cameraControls.domains]);
+const ownerDomains = new Set([table.sceneSelect.domain, ...table.cameraControls.domains, ...table.villaLists.domains]);
 // a camera's moves and siren are the owner's (ha-commands.json cameraControls): every profile that may press them is
 // one the proxy exempts (administer), and the buttons ask that capability
 {
@@ -28,6 +28,15 @@ const ownerDomains = new Set([table.sceneSelect.domain, ...table.cameraControls.
      holders.length > 0 && holders.every(([, r]) => r.capabilities.includes("administer"))
      && /roleCan\(role, "controlCameras"\) \? cameraControlsOf\(/.test(readFileSync(new URL("../../src/components/panels/CameraDeviceButtons.tsx", import.meta.url), "utf8")),
      holders.map(([n]) => n));
+}
+
+// who gets the messages (ha-commands.json villaLists): written from the owner's Messages tab only, by a profile the proxy
+// exempts
+{
+  const roles = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/roles.json", import.meta.url), "utf8")).profiles;
+  const holders = Object.entries(roles).filter(([, r]) => r.capabilities.includes(table.villaLists.capability));
+  ck("the villa's lists of who gets the messages: only a profile the proxy exempts may save them",
+     holders.length > 0 && holders.every(([, r]) => r.capabilities.includes("administer")), holders.map(([n]) => n));
 }
 
 const SRC = new URL("../../src/", import.meta.url).pathname;
@@ -95,7 +104,8 @@ for (const { f, src } of files) {
 // person's whereabouts never leave the add-on for a guest or ops session (readDomains' own note), and the presence
 // window shows its People to the owner only (components/hud/PresenceTile — PresenceWindow).
 // …and the scene choice's domain (sceneSelect: only a light's scene choice of it is read by another profile).
-const OWNER_ONLY = new Set(["update", "person", ...ownerDomains]);
+// …and who gets the messages: its lists and the notify entities they name (villaLists), on the owner's Messages tab.
+const OWNER_ONLY = new Set(["update", "person", ...ownerDomains, ...table.villaLists.reads]);
 const unread = [...scanned].filter(([d]) => !OWNER_ONLY.has(d) && !readable.has(d)).map(([d, f]) => `${d} (${f})`);
 ck("  ...the people of the presence window are the owner's only",
    /const sees = profileView\(role\);[\s\S]*showPeople=\{sees\.people\}/.test(readFileSync(new URL("../../src/components/hud/PresenceTile.tsx", import.meta.url), "utf8")));
