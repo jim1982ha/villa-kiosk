@@ -112,9 +112,13 @@ function timesSaid(item: AttentionItem): string {
   return n > 1 ? ` (${n} times)` : "";
 }
 
-/** Does `title` already say `word` ("Laundry Room door unlocked" says "Unlocked"), as a whole word, whatever its case? */
+/** Does `title` already say `word` ("Laundry Room door unlocked" says "Unlocked"), or a phrase ("… is missing from the
+ *  villa's system."), as whole words, whatever its case and its closing stop?
+ *  ⚠️ THE ONE COMPARER OF "THIS TEXT ALREADY SAYS THAT" (architecture review round 16, 2026-11-03): a device's state beside
+ *  its fault and a card's pills used whole words, an "Also:" line under an alert a plain substring, so a short "Open"
+ *  line went as told by an alert saying "Reopened". stateBesideFault, othersFirst and issueAsTold's pills all ask this. */
 export function saysWord(title: string, word: string): boolean {
-  const w = word.trim().toLowerCase();
+  const w = norm(word);
   if (!w) return false;
   return new RegExp(`(^|[^\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}])`, "u")
     .test(title.toLowerCase());
@@ -258,7 +262,7 @@ export function othersFirst(card: CardView, hasMessage: (line: CardLine) => bool
   if (alerts.length === 0 || others.length === 0) return card;
   // ⚠️ A PROBLEM AN ALERT TELLS ALREADY IS NO "ALSO" (owner, 2026-11-01: the night check's "… is missing from the villa's
   // system" under #103's same words): its line goes, its icon and its records stay on the alert that tells it
-  const tells = (alert: CardLine, other: CardLine) => !!other.text && norm(alert.told?.text ?? "").includes(norm(other.text));
+  const tells = (alert: CardLine, other: CardLine) => !!other.text && saysWord(alert.told?.text ?? "", other.text);
   return { ...card, lines: [
     ...others.filter((l) => l.text && !alerts.some((a) => tells(a, l))).map((l) => ({ ...l, text: ALSO + l.text })),
     ...alerts.map((a) => others.filter((l) => tells(a, l)).reduce((line, l) => ({ ...line, own: mergedSources(line.own, l.own),
@@ -313,8 +317,9 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: Ca
     // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
     // issues' pill, saying VESTA closes it then ("Closes 02:00", then "Closes within 5 min", owner 2026-10-31), who
     // cleared it the line under its fault
+    // ...one about to be watched has no pill until VESTA says when (faultConfirm.afterClose, architecture review round 16)
     return clearedCard(c.ticket, said.did, opts, { key: `watched:${c.ticket.id}`, look: "watched", watched: said,
-      nextCheck: { text: said.tip, at: null, when: said.when, tip: said.tip } });
+      nextCheck: c.awaiting ? null : { text: said.tip, at: null, when: said.when, tip: said.tip } });
   }));
 }
 
@@ -328,7 +333,7 @@ function oneCardPerDevice(cards: readonly CardView[]): CardView[] {
   for (const c of cards) {
     const key = c.entityId ? `${c.look}:device:${c.entityId}` : c.key;
     const had = byKey.get(key);
-    byKey.set(key, had ? { ...had, lines: [...had.lines, ...c.lines], nextCheck: c.nextCheck, watched: c.watched } : { ...c, key });
+    byKey.set(key, had ? { ...had, lines: [...had.lines, ...c.lines], nextCheck: c.nextCheck ?? had.nextCheck, watched: c.watched } : { ...c, key });
   }
   return [...byKey.values()];
 }

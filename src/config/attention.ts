@@ -394,6 +394,23 @@ export function recordRoom(r: { entityId?: string; room?: string }, ctx: { entit
   return recordRoomNow(ctx.resolvedRooms, id ? { key: ctx.deviceOf(id), entityId: id } : null, r.room);
 }
 
+/** A stored record's device pill, as its Inbox card names and opens it (cardDevice): the name of the device its entity
+ *  folds onto and that device, opened by a tap. A device the villa's system no longer has keeps the name stored with
+ *  the record (the name it had), a record with no entity its stored name alone, opening nothing.
+ *  ⚠️ ONE ANSWER WITH THE INBOX (architecture review round 16, 2026-11-03): the Tickets tab looked the record's raw
+ *  entity field up as one id, so a record naming several ("sensor.a,sensor.b", a rule watching three phases) was never
+ *  found: its pill showed the stored name or the raw list, and a tap opened nothing. It goes through recordEntity as the
+ *  Inbox card does. */
+export function recordDevicePill(r: { entityId?: string; room?: string; deviceLabel?: string }, ctx: {
+  devices: Pick<VillaDevices, "deviceOf">; entityMap: Parameters<typeof labelOf>[1];
+  entities: Record<string, HassEntity>; resolvedRooms: Record<string, string>;
+}): { label?: string; opens?: string } {
+  const id = recordEntity(r.entityId, (x) => x in ctx.entities);
+  if (!id) return r.deviceLabel ? { label: r.deviceLabel } : {};
+  const device = cardDevice(id, r.room, ctx);
+  return { opens: device.key, label: id in ctx.entities ? device.label : r.deviceLabel ?? device.label };
+}
+
 /** A card's title and room line: the DEVICE, whatever its problems (a problem with no device stands for itself), and
  *  ALWAYS a room line (a device no room holds reads as the By Room list files it, "Other"). */
 export function cardHead(device: CardDevice | undefined, title: string, recordRoom: string | undefined): { title: string; room: string } {
@@ -414,6 +431,8 @@ export function buildAttentionItems(opts: {
   sinceOf?: (id: string) => Since;
   /** The VESTA Agent's own timing: how long what is Done stays on Watch; absent: it did not say. */
   cadence?: AgentCadence | null;
+  /** The moment the list is read at (what is on Watch then); absent: now. */
+  now?: number;
 }): AttentionItem[] {
   const { devices, entities, entityMap, resolvedRooms, fmData } = opts;
   const sinceOf = opts.sinceOf ?? (() => null);
@@ -520,7 +539,7 @@ export function buildAttentionItems(opts: {
   // ⚠️ DONE MOVES THE CARD TO WATCH (owner, 2026-11-02: an offline device's Done closed its fault, and the device's live
   // state stayed as an open issue with nothing left to press): a device whose fault VESTA is watching has its live line
   // on Watch only, until VESTA's verdict; any other fault of the device stays. VESTA reopens it if it is still wrong.
-  const watched = new Set(watchedRecords(fmData, opts.cadence ?? null).flatMap((t) => {
+  const watched = new Set(watchedRecords(fmData, opts.cadence ?? null, opts.now ?? Date.now()).flatMap((t) => {
     const id = recordEntity(t.entityId, (x) => x in entities) ?? t.entityId;
     return id ? [devices.deviceOf(id)] : [];
   }));

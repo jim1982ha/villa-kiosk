@@ -14,7 +14,8 @@ import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
-import { useEntityLabel } from "@/hooks/useEntityLabel";
+import { useConfig } from "@/config/ConfigContext";
+import { recordDevicePill } from "@/config/attention";
 import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -54,8 +55,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const { data, retention, removeTicket } = useFmData();
   const roomOf = useCardRoom();
   const terms = useFmTerms();
-  const { deviceOfRecord } = useDeviceIdentity();
-  const label = useEntityLabel();
+  const { deviceOf, deviceOfRecord } = useDeviceIdentity();
+  const { config, resolvedRooms } = useConfig();
   const { entities } = useHA();
   /** Every card's buttons carried out: Done's form, Need help, Close's question, Reopen's form (WorkButtons). */
   const work = useCardWork();
@@ -106,6 +107,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     const work = data.completions.find((c) => c.ticketId === t.id && c.costId);
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
     const latest = faultLatest(t, momentText);
+    const pill = recordDevicePill(t, { devices: { deviceOf }, entityMap: config.entityMap, entities, resolvedRooms });
     return (
       // its stage is said in the pill of who last moved it (owner, 2026-11-02), else its own pill
       <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={latest ? undefined : status} actions={actions}
@@ -122,9 +124,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         pills={<>
           {/* a guest reports a symptom from inside the villa, not a diagnosis */}
           {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
-          {/* its device's name as its Inbox card says it (attention.cardDevice), the stored one with no device there */}
-          <DeviceChip entityId={t.entityId} onOpenEntity={onOpenEntity}
-            label={t.entityId && t.entityId in entities ? label(deviceOfRecord(t.entityId)) : t.deviceLabel ?? (t.entityId ? label(t.entityId) : undefined)} />
+          {/* its device's name and what a tap opens as its Inbox card has them (attention.recordDevicePill) */}
+          <DeviceChip entityId={pill.opens} onOpenEntity={onOpenEntity} label={pill.label} />
           {stated && latest && <StatusPill {...latest} />}
         </>} />
     );
