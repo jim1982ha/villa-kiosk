@@ -1,3 +1,15 @@
+## 2.496.671
+
+What you will see:
+- Settings › Messages › Who gets the messages: adding two chats one right after the other keeps both. Before, the
+  second could replace the first when it was added before the villa had saved the first.
+- A full-screen time saved by an older version that was out of range (more than 600s) now reads as 60s on every
+  tablet and on the villa alike. Before, a tablet showed 60s while the villa still counted the old number, so a
+  guest could see a photo for longer than the announcement was on screen.
+- Nothing else changes on screen. Behind it, the settings saved by older versions are now rewritten once by the
+  villa in today's form, and each of the villa's settings has its default and its limits written in one place, read
+  by the tablets and the villa alike.
+
 ## 2.496.670
 
 What you will see:

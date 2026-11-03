@@ -36,6 +36,7 @@ import { ANNOUNCEMENT_NOTICE_MS, languageName, languagesOf } from "@/messages/an
 import { PendingFields } from "@/hooks/usePendingField";
 import { FullScreenAnnouncements } from "./MessagesSettings";
 import WhoGetsMessages from "./WhoGetsMessages";
+import { LISTS_TITLE } from "@/messages/recipients";
 import { ROLE_LABELS } from "@/auth/roles";
 
 /** Settings' tabs (ticket 16 of "One inbox", owner 2026-10-28): General, all it held before; Messages, how this
@@ -224,7 +225,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           )}
           {can("editConfig") && (
             <>
-              <TipTitle title="Who gets the messages" tip={<>
+              <TipTitle title={LISTS_TITLE} tip={<>
                 The chats and phones that get the villa's messages, for the {ROLE_LABELS.owner} and for the{" "}
                 {ROLE_LABELS.ops}. An urgent (P1) alert goes to both lists, a P2 alert to the {ROLE_LABELS.ops}'s; a
                 notice goes to the list its automation names. VESTA sends its reminders to the same chats. An urgent or

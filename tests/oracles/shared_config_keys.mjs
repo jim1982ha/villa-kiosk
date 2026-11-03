@@ -47,8 +47,10 @@ const edit = {
   fullScreen: (v, n) => [...v, { title: `Title ${n}`, seconds: 60 + n }],
 };
 // Keys holding ONE value rather than a collection: a change replaces it whole,
-// so two devices' edits cannot both survive — the later one wins.
-const SINGLE = new Set(["fmContract", "latitude", "longitude", "northOffsetDeg", "presenceSensor", "recordsKeptDays", "roomGlowAndCones", "maintenanceMode"]);
+// so two devices' edits cannot both survive — the later one wins. They are the villa's single-value settings, each
+// one row of rootfs/usr/share/vesta/villa-settings.json (config/villaSettings, architecture review round 17).
+const vs = await import("@/config/villaSettings");
+const SINGLE = new Set(vs.VILLA_SETTING_KEYS);
 const base = Object.fromEntries(KEYS.map((k) => [k, sample[k]]));
 const J = JSON.stringify;
 
@@ -104,6 +106,20 @@ for (const k of KEYS) {
      J(dc.applySharedConfigDiff(other, diff).dismissedEntityIds.sort()) === J(["sensor.y", "sensor.z"]));
 }
 
+console.log("\n  each villa setting written down once (its row):");
+{
+  const { DEFAULT_CONFIG } = await import("@/config/AppConfig");
+  const { SETTING_NAMES } = await import("@/config/configSlice");
+  const nothing = dc.baselineFromServer({});
+  ck("every single-value key is a shared key, and its empty is its default (the app's and the server's)",
+     [...SINGLE].every((k) => KEYS.includes(k) && J(nothing[k]) === J(DEFAULT_CONFIG[k]) && J(DEFAULT_CONFIG[k]) === J(vs.VILLA_DEFAULTS[k])),
+     [...SINGLE].filter((k) => J(nothing[k]) !== J(DEFAULT_CONFIG[k])));
+  ck("  ...every shared key's empty is its default, collections too", KEYS.every((k) => J(nothing[k]) === J(DEFAULT_CONFIG[k])),
+     KEYS.filter((k) => J(nothing[k]) !== J(DEFAULT_CONFIG[k])));
+  ck("every single-value key has a name, told when another tablet changes it (never as a device)",
+     [...SINGLE].every((k) => typeof SETTING_NAMES[k] === "string" && SETTING_NAMES[k].length > 0), SETTING_NAMES);
+}
+
 console.log("\n  the baseline when the server holds nothing:");
 {
   const empty = dc.baselineFromServer({});
@@ -147,9 +163,10 @@ console.log("\n  where the villa is and which way north lies — shared, never a
 // option). The server applies it, so the app's default and ceiling are the server's.
 {
   const { RECORDS_KEPT_DAYS_DEFAULT: DEF, RECORDS_KEPT_DAYS_MAX: MAX } = await import("@/config/AppConfig");
-  const proxySrc = (await import("node:fs")).readFileSync(new URL("../../rootfs/usr/bin/supervisor-proxy.py", import.meta.url), "utf8");
-  const row = proxySrc.match(/^RECORDS_KEPT_DAYS = Option\("int", (\d+), 0, (\d+)\)$/m);
-  ck("the app's default and ceiling are the server's", !!row && Number(row[1]) === DEF && Number(row[2]) === MAX, row && row.slice(1).join());
+  // the server reads the same row (tests/store-doors.py drives its reading from the JSON)
+  const table = JSON.parse((await import("node:fs")).readFileSync(new URL("../../rootfs/usr/share/vesta/villa-settings.json", import.meta.url), "utf8"));
+  const row = table.settings.recordsKeptDays;
+  ck("the app's default and ceiling are the row's, the one the server reads", row.default === DEF && row.max === MAX && row.min === 0, row);
   const nothing = dc.baselineFromServer({});
   ck("nothing stored: the default, one year", nothing.recordsKeptDays === DEF && DEF === 365, nothing.recordsKeptDays);
   ck("a device still on the default proposes nothing",

@@ -54,10 +54,9 @@
 // GLB's own payload through a second channel.
 
 import { ingressPath } from "@/ha/ingress";
-import {
-  RECORDS_KEPT_DAYS_DEFAULT, RECORDS_KEPT_DAYS_MAX, RETIRED_KEYS, parseFullScreen, withFullScreen,
-  type AppConfig, type DeviceGroup, type FullScreenAnnouncement } from "./AppConfig";
-import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
+import { parseFullScreen, type AppConfig, type DeviceGroup, type FullScreenAnnouncement } from "./AppConfig";
+import { VILLA_DEFAULTS, readVillaSetting, type VillaSettingKey } from "./villaSettings";
+import type { FmContract } from "@/fm/fmTypes";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { backendFetch } from "@/auth/sessionLost";
 import { storeSaveResult } from "@/utils/storeSave";
@@ -121,39 +120,20 @@ const asRecord = <T>(raw: unknown): Record<string, T> | undefined =>
 const asArray = <T>(raw: unknown): T[] | undefined =>
   Array.isArray(raw) ? (raw as T[]) : undefined;
 const sameRecord = <T>(v: Keyed<T>): Keyed<T> => v;
-const asNumber = (raw: unknown): number | undefined =>
-  typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
-/** One number about the villa (where it is, which way north lies): one value,
- *  indexed as a single item. Its empty is 0, the app's own "not set" — never a
- *  villa's number — so a device still on the default proposes nothing, and a
- *  device holding a value the villa has never stored proposes it, by the same
- *  push a local edit takes. */
-const villaNumber: SharedKeyRow<number, number> = {
-  index: (v) => ({ value: v }),
-  fromIndex: (items) => items.value ?? 0,
-  parse: asNumber,
-  empty: 0,
-};
-
-/** One text about the villa (its presence sensor): one value, indexed as a single item; its empty is "" — nothing
- *  picked, never a villa's sensor. */
-const villaText: SharedKeyRow<string, string> = {
-  index: (v) => ({ value: v }),
-  fromIndex: (items) => items.value ?? "",
-  parse: (raw) => (typeof raw === "string" ? raw : undefined),
-  empty: "",
-};
-
-/** How long the Facility record is kept: a whole number of days from 0 (for ever) to the server's ceiling. Its empty
- *  is the app's default — what the server applies while the villa has stored none — so a device on the default
- *  proposes nothing. */
-const recordsKept: SharedKeyRow<number, number> = {
-  index: (v) => ({ value: v }),
-  fromIndex: (items) => items.value ?? RECORDS_KEPT_DAYS_DEFAULT,
-  parse: (raw) => (Number.isInteger(raw) && (raw as number) >= 0 && (raw as number) <= RECORDS_KEPT_DAYS_MAX
-    ? (raw as number) : undefined),
-  empty: RECORDS_KEPT_DAYS_DEFAULT,
-};
+/** One of the villa's single-value settings (config/villaSettings: its row in villa-settings.json): one value, indexed
+ *  as a single item, so a change on one device replaces it whole and an untouched copy carries nothing. Its empty is
+ *  the row's default, what the app holds and the server applies while nothing is stored, so a device still on the
+ *  default proposes nothing, and a device holding a value the villa has never stored proposes it, by the same push a
+ *  local edit takes. Its default is never a villa's own value (the villa's location: 0, "not set"). */
+function villaRow<K extends VillaSettingKey>(key: K): SharedKeyRow<AppConfig[K], AppConfig[K]> {
+  const empty = VILLA_DEFAULTS[key] as AppConfig[K];
+  return {
+    index: (v) => ({ value: v }),
+    fromIndex: (items) => items.value ?? empty,
+    parse: (raw) => readVillaSetting(key, raw),
+    empty,
+  };
+}
 
 /** The full-screen announcements, each by its title with its own seconds (AppConfig.parseFullScreen): one tablet adding
  *  one and another changing a different one's seconds both stand, as for any list here. */
@@ -173,24 +153,6 @@ const idList: SharedKeyRow<string[], true> = {
   empty: [],
 };
 
-/** One on/off of the villa's, off by default (one value, a single item): a stored config without the key reads OFF. */
-const villaSwitchOff: SharedKeyRow<boolean, boolean> = {
-  index: (v) => ({ value: v }),
-  fromIndex: (items) => items.value ?? false,
-  parse: (raw) => (typeof raw === "boolean" ? raw : undefined),
-  empty: false,
-};
-
-/** One on/off of the villa's, on by default: one value, indexed as a single item; its empty is ON — what the villa
- *  had before the switch existed — so a device on the default proposes nothing, and a stored config without the key
- *  reads ON. */
-const villaSwitchOn: SharedKeyRow<boolean, boolean> = {
-  index: (v) => ({ value: v }),
-  fromIndex: (items) => items.value ?? true,
-  parse: (raw) => (typeof raw === "boolean" ? raw : undefined),
-  empty: true,
-};
-
 const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedItems[K]> } = {
   entityMap: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
   meshBindings: { index: sameRecord, fromIndex: sameRecord, parse: asRecord, empty: {} },
@@ -204,21 +166,15 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
   },
   dismissedEntityIds: idList,
   unavailableByDesign: idList,
-  // One value, not a collection: indexed as a single item, so a change on
-  // one device replaces it whole and an untouched copy carries nothing.
-  fmContract: {
-    index: (v) => ({ terms: v }),
-    fromIndex: (items) => items.terms ?? EMPTY_FM_CONTRACT,
-    parse: (raw) => (isRecord(raw) ? { ...EMPTY_FM_CONTRACT, ...(raw as Partial<FmContract>) } : undefined),
-    empty: EMPTY_FM_CONTRACT,
-  },
-  latitude: villaNumber,
-  longitude: villaNumber,
-  northOffsetDeg: villaNumber,
-  presenceSensor: villaText,
-  recordsKeptDays: recordsKept,
-  roomGlowAndCones: villaSwitchOn,
-  maintenanceMode: villaSwitchOff,
+  // the villa's single-value settings: each from its one row (config/villaSettings)
+  fmContract: villaRow("fmContract"),
+  latitude: villaRow("latitude"),
+  longitude: villaRow("longitude"),
+  northOffsetDeg: villaRow("northOffsetDeg"),
+  presenceSensor: villaRow("presenceSensor"),
+  recordsKeptDays: villaRow("recordsKeptDays"),
+  roomGlowAndCones: villaRow("roomGlowAndCones"),
+  maintenanceMode: villaRow("maintenanceMode"),
   fullScreen: fullScreenList,
 };
 
@@ -286,11 +242,13 @@ export function mergeSharedConfig(
  *  fields are simply omitted, letting the caller keep its current value. */
 export function parseSharedConfig(raw: unknown): Partial<SharedDeviceConfig> {
   if (!isRecord(raw)) return {};
-  // ⚠️ THE VILLA'S CONFIG MAY STILL HOLD THE RETIRED SHAPE (fullScreenFor + ringShownForS, to 2.496.669): read as today's
-  const now = withFullScreen(raw);
+  // ⚠️ TODAY'S SHAPE ONLY (architecture review round 17): the add-on's server migrates the villa's copy when it reads
+  // it and on every write (supervisor-proxy.py _device_config_today), and this page ships with that server, so what it
+  // serves is today's shape. A copy in an older shape all the same (nothing should serve one) reads a retired key as
+  // a key this version does not know: left out, so this tablet keeps its own value, and nothing is pushed over it.
   const out: Record<string, unknown> = {};
   for (const key of SHARED_CONFIG_KEYS) {
-    const value = row(key).parse(now[key]);
+    const value = row(key).parse(raw[key]);
     if (value !== undefined) out[key] = value;
   }
   return out as Partial<SharedDeviceConfig>;
@@ -576,9 +534,8 @@ export async function saveSharedConfig(
   signal?: AbortSignal,
 ): Promise<StoreSaveResult> {
   try {
-    // a retired key is not carried (AppConfig RETIRED_KEYS): the old full-screen keys stop being written here
-    const kept = Object.fromEntries(Object.entries(carryOver).filter(([k]) => !RETIRED_KEYS.includes(k)));
-    const merged = { ...kept, ...config };
+    // a retired key is never in the server's copy: the server drops them on every read and write (_device_config_today)
+    const merged = { ...carryOver, ...config };
     const resp = await backendFetch(ingressPath("device-config"), {
       method: "PUT",
       signal,

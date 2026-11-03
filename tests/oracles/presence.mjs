@@ -92,7 +92,7 @@ ck("under the floors on every screen, picked in Settings › Villa from on/off s
    // its window is the Dashboard's, as every window over the map (pages/surfaces)
    && /\{shown\("presence"\) && \(\s*<PresenceWindow onClose=\{\(\) => closeSurface\("presence"\)\} onOpenEntity=\{\(id\) => handOver\("presence", id\)\}\s*canOpen=\{\(id\) => devicePanel\(id\) !== null\} \/>/.test(src("pages/Dashboard.tsx"))
    && /<EntityPicker value=\{config\.presenceSensor\} domains=\{\["binary_sensor"\]\}/.test(src("components/settings/ConfigEditorModal.tsx"))
-   && /presenceSensor: villaText,/.test(src("config/deviceConfig.ts")));
+   && /presenceSensor: villaRow\("presenceSensor"\),/.test(src("config/deviceConfig.ts")));
 
 const { PresencePanel } = await import("@/components/hud/PresenceTile");
 const panel = draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: true, canOpen: (id) => id === "person.a",

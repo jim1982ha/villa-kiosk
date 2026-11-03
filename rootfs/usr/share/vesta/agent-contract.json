@@ -865,5 +865,21 @@
     "existing": "⚠️ ⚙️",
     "watch": "✅",
     "closed": "✅"
+  },
+  "_recipients": "Who gets the villa's messages, by role (architecture review round 17, 2026-11-03): the villa's own two lists, each one of its text helpers (`lists`, by role: the owner's and the facility manager's) holding its notify entities (Telegram chats, phone apps) apart by `separator`. Every VESTA blueprint sends to them with no VESTA Agent at all, the VESTA Agent reads them (vesta_shared/villa_recipients.py) and the Kiosk edits them (src/messages/recipients.ts, at `where`). A list's text is READ the same by both: split on `separator`, each part trimmed and lower-cased, kept when it is an id of `domain` (\"<domain>.<name>\"), each id once, in its order; anything else (\"unknown\", another domain, an empty part) names nobody. `maxChars`: what a helper holds at most (its `max`): a longer list is refused, never cut. `where`: the place a person edits them, in the words of the Kiosk's menus, for any text that sends a person there. `examples`: a list's text and the ids it names; both apps drive their reading through every one (tests/oracles/recipients.mjs, and the Agent's own test).",
+  "recipients": {
+    "lists": {"owner": "input_text.vesta_owner_targets", "fm": "input_text.vesta_fm_targets"},
+    "separator": ",",
+    "domain": "notify",
+    "maxChars": 255,
+    "where": "Settings › Messages › Who gets the messages",
+    "examples": [
+      {"text": "notify.example_chat", "targets": ["notify.example_chat"]},
+      {"text": " notify.Example_Chat ,notify.EXAMPLE_PHONE ", "targets": ["notify.example_chat", "notify.example_phone"]},
+      {"text": "notify.example_chat, notify.example_phone, notify.example_chat", "targets": ["notify.example_chat", "notify.example_phone"]},
+      {"text": "sensor.example_reading, notify.example_phone,,", "targets": ["notify.example_phone"]},
+      {"text": "unknown, notify.", "targets": []},
+      {"text": "", "targets": []}
+    ]
   }
 }

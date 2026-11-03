@@ -76,9 +76,10 @@ ck("loadConfig spreads no seed under the user's maps or rooms",
    && /teleportPoints: stored\.teleportPoints \?\? \[\],/.test(ac)
    && !/\.\.\.DEFAULT_CONFIG\.(entityMap|meshBindings)/.test(ac));
 // 2.496.450: the per-sensor min/max limits were removed (no screen ever set them); a device that still stores them
-// loads fine and drops them where every config enters memory (AppConfig.RETIRED_KEYS)
+// loads fine and drops them where every config enters memory (config/migrations RETIRED_KEYS)
 {
-  const { normaliseConfig, DEFAULT_CONFIG: D, RETIRED_KEYS } = await import("@/config/AppConfig");
+  const { normaliseConfig, DEFAULT_CONFIG: D } = await import("@/config/AppConfig");
+  const { RETIRED_KEYS } = await import("@/config/migrations");
   const old = normaliseConfig({ ...D, alertThresholds: { "sensor.t": { max: 30 } }, theme: "dark" });
   ck("a stored config from before 2.496.450 (with its alertThresholds) loads, keeps its settings, and drops the old key",
      RETIRED_KEYS.includes("alertThresholds") && !("alertThresholds" in old) && old.theme === "dark" && !("alertThresholds" in D));

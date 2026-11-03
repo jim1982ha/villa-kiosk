@@ -8,7 +8,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { elements, guardsOf, parseTsx, propText } from "../consistency/jsx.mjs";
 const dc = await import("@/config/deviceConfig");
-const { DEFAULT_CONFIG, FULL_SCREEN_S_DEFAULT, normaliseConfig, withFullScreen } = await import("@/config/AppConfig");
+const { DEFAULT_CONFIG, FULL_SCREEN_S_DEFAULT, normaliseConfig } = await import("@/config/AppConfig");
 const { ADVANCED_SETTINGS_KEYS } = await import("@/config/configSlice");
 const J = JSON.stringify;
 
@@ -22,37 +22,47 @@ ck("an empty default: nothing takes the screen until the owner picks; a tablet a
    J(DEFAULT_CONFIG.fullScreen) === "[]" && DEFAULT_CONFIG.ringsFullScreen === true && FULL_SCREEN_S_DEFAULT === 60
    && J(dc.baselineFromServer({}).fullScreen) === "[]");
 
-console.log("\n  what the villa stored before 2.496.670 (its titles and one time for all), nothing lost:");
+console.log("\n  what was stored before 2.496.670 (its titles and one time for all), nothing lost:");
 {
-  // the villa's stored config today: three titles, 10s
+  // ONE table of migrations (config/migrations.ts), run by normaliseConfig on every config entering memory; the villa's
+  // copy is the add-on server's to migrate (supervisor-proxy.py _device_config_today), through the same examples
+  const { MIGRATIONS, RETIRED_KEYS, migrate } = await import("@/config/migrations");
+  const { VILLA_MIGRATION_EXAMPLES: EXAMPLES, VILLA_RETIRED_KEYS } = await import("@/config/villaSettings");
+  // the same document whatever its keys' order
+  const canon = (v) => JSON.stringify(v, (_k, x) => (x && typeof x === "object" && !Array.isArray(x)
+    ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : x));
+  ck("each stored shape reads as villa-settings.json's examples say (the server drives the same ones)",
+     EXAMPLES.length >= 5 && EXAMPLES.every((e) => canon(migrate(e.stored)) === canon(e.today)),
+     EXAMPLES.filter((e) => canon(migrate(e.stored)) !== canon(e.today)).map((e) => [e._, migrate(e.stored)]));
+  ck("  ...the examples cover an old time out of range (the default) and today's item out of range (left out)",
+     EXAMPLES.some((e) => e.stored.ringShownForS === 100000 && e.today.fullScreen?.[0]?.seconds === FULL_SCREEN_S_DEFAULT)
+     && EXAMPLES.some((e) => e.stored.fullScreen?.some?.((f) => f?.seconds === 100000)));
+  ck("the retired keys are the table's, and the server drops the same ones from the villa's copy",
+     J(RETIRED_KEYS) === J(MIGRATIONS.flatMap((m) => m.retires)) && J([...RETIRED_KEYS].sort()) === J([...VILLA_RETIRED_KEYS].sort()));
   const old = { fullScreenFor: ["🔔 Visitor at Gate A", "🔥 Overload", "🧪 Weekly test"], ringShownForS: 10 };
   const want = old.fullScreenFor.map((title) => ({ title, seconds: 10 }));
-  const parsed = dc.parseSharedConfig(old);
-  ck("the villa's copy reads as each title with that time, in the order picked",
-     J(parsed.fullScreen) === J(want) && !("fullScreenFor" in parsed) && !("ringShownForS" in parsed), parsed);
-  ck("  ...a time that was not one the field took (or none) reads the default",
-     [undefined, 0, "10", 1.5, 100000].every((v) => J(dc.parseSharedConfig({ fullScreenFor: ["A", 3], ringShownForS: v }).fullScreen)
-       === J([{ title: "A", seconds: 60 }])));
-  ck("  ...a config already in today's shape is read as it is (the retired keys beside it ignored)",
-     J(dc.parseSharedConfig({ fullScreen: [{ title: "A", seconds: 5 }], fullScreenFor: ["B"], ringShownForS: 9 }).fullScreen)
-       === J([{ title: "A", seconds: 5 }]));
-  const local = withFullScreen({ ...old, theme: "dark" });
-  ck("this tablet's own stored copy is read the same way (the defaults laid under it after)",
-     J(local) === J({ theme: "dark", fullScreen: want }), local);
+  // this tablet's own stored copy: loadConfig hands what was stored, with no defaults under it, to normaliseConfig
+  const store = new Map([["villa-kiosk:config:v2", JSON.stringify({ ...old, theme: "dark" })]]);
+  globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+  const { loadConfig } = await import("@/config/AppConfig");
+  const loaded = loadConfig();
+  ck("this tablet's own stored copy is read as each title with that time, the retired keys gone",
+     J(loaded.fullScreen) === J(want) && loaded.theme === "dark" && RETIRED_KEYS.every((k) => !(k in loaded)), loaded.fullScreen);
   const inMemory = normaliseConfig({ ...DEFAULT_CONFIG, ...old });
   ck("  ...and once in memory no retired key is carried", !("fullScreenFor" in inMemory) && !("ringShownForS" in inMemory));
-  // the baseline this tablet last synced with migrates the same way: an unchanged list pushes nothing
-  ck("  ...the old copy on the villa and the old copy here read alike: nothing to push until the owner changes it",
-     dc.isSharedConfigDiffEmpty(dc.diffSharedConfig(dc.baselineFromServer(dc.parseSharedConfig(old)),
-       dc.pickSharedConfig(normaliseConfig({ ...DEFAULT_CONFIG, ...withFullScreen(old) })))));
-  // a save writes today's key and drops the retired ones from what it carries over
+  const parsed = dc.parseSharedConfig(old);
+  ck("the villa's copy is read in today's shape only: an old one (nothing serves it) leaves the list out, this tablet keeps its own",
+     !("fullScreen" in parsed) && !("fullScreenFor" in parsed) && !("ringShownForS" in parsed), parsed);
+  // the villa's copy as the server serves it and this tablet's own, both migrated: nothing to push until the owner changes it
+  ck("  ...the villa's migrated copy and this tablet's read alike: nothing to push",
+     dc.isSharedConfigDiffEmpty(dc.diffSharedConfig(dc.baselineFromServer(dc.parseSharedConfig(migrate(old))),
+       dc.pickSharedConfig(loaded))));
   let sent = null;
   globalThis.window ??= { location: { pathname: "/", origin: "http://kiosk" } };
   globalThis.fetch = async (_url, init) => { sent = JSON.parse(init.body); return new Response("{}", { status: 200 }); };
-  await dc.saveSharedConfig(dc.pickSharedConfig({ ...DEFAULT_CONFIG, fullScreen: want }), "1", { ...old, fromANewerVersion: 1 });
-  ck("a save writes the new key, never the old ones (keys this version does not know are still carried)",
-     !!sent && J(sent.config.fullScreen) === J(want) && !("fullScreenFor" in sent.config) && !("ringShownForS" in sent.config)
-     && sent.config.fromANewerVersion === 1, sent);
+  await dc.saveSharedConfig(dc.pickSharedConfig({ ...DEFAULT_CONFIG, fullScreen: want }), "1", { fromANewerVersion: 1 });
+  ck("a save writes today's key (keys this version does not know are still carried)",
+     !!sent && J(sent.config.fullScreen) === J(want) && sent.config.fromANewerVersion === 1, sent);
 }
 
 console.log("\n  each announcement's own seconds:");
@@ -117,7 +127,7 @@ console.log("\n  where they are:");
   const at = (t) => tips.indexOf(t);
   ck("  ...one section \"Full-screen announcements\", the language's after it, \"Who gets the messages\" last",
      at('"Full-screen announcements"') >= 0 && at('"Full-screen announcements"') < at('"VESTA\'s messages on this tablet, in"')
-     && at('"VESTA\'s messages on this tablet, in"') < at('"Who gets the messages"'), tips);
+     && at('"VESTA\'s messages on this tablet, in"') < at("LISTS_TITLE"), tips);
   ck("  ...its list written through Settings' one draft, its seconds waiting in that draft's store",
      fs.length === 1 && /slice\.set\(\{ fullScreen \}/.test(propText(fs[0], "onChange"))
      && elements(set, "PendingFields").some((p) => propText(p, "pending") === "slice.pending"));

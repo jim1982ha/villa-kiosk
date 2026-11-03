@@ -6,7 +6,9 @@ import { hasVariantSuffix, inferTypeFromEntityId } from "./EntityMap";
 import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_EYE_HEIGHT } from "@/babylon/walkerSpawn";
-import { EMPTY_FM_CONTRACT, type FmContract } from "@/fm/fmTypes";
+import type { FmContract } from "@/fm/fmTypes";
+import { FULL_SCREEN_SECONDS, VILLA_DEFAULTS, villaBounds } from "./villaSettings";
+import { migrate, type FullScreenAnnouncement } from "./migrations";
 import { readJson, writeJson } from "@/utils/storedJson";
 import { isDomain } from "@/utils/entityDomain";
 
@@ -183,7 +185,7 @@ export interface AppConfig {
    * the villa has announced, never named in code. The villa's (owner, 2026-10-28, ticket 16 of "One inbox"; its own
    * seconds per announcement, owner 2026-11-03). Empty by default: nothing takes the screen until picked.
    * ⚠️ IT REPLACED `fullScreenFor` (the titles) AND `ringShownForS` (one time for all): a config stored with those reads
-   * as each title with that time (fullScreenFromRetired).
+   * as each title with that time (config/migrations MIGRATIONS; the villa's copy is the add-on server's to migrate).
    */
   fullScreen: FullScreenAnnouncement[];
   /**
@@ -369,67 +371,23 @@ export interface DeviceGroup {
 // import this module (tests/oracles/config_complete.mjs).
 const env = (import.meta.env ?? {}) as Partial<ImportMetaEnv>;
 
-/** One year of history (owner, 2026-10-20); the server's own default is the same number (RECORDS_KEPT_DAYS). */
-export const RECORDS_KEPT_DAYS_DEFAULT = 365;
-/** The longest window the field accepts — ten years, the server's clamp. */
-export const RECORDS_KEPT_DAYS_MAX = 3650;
+/** One year of history (owner, 2026-10-20); the server applies the same (villa-settings.json `recordsKeptDays`). */
+export const RECORDS_KEPT_DAYS_DEFAULT: number = VILLA_DEFAULTS.recordsKeptDays;
+/** The longest window the field accepts — ten years, the server's clamp (the same row). */
+export const RECORDS_KEPT_DAYS_MAX: number = villaBounds("recordsKeptDays").max;
 
-/** One announcement that takes the whole screen (AppConfig.fullScreen): its title, as the villa writes it, and how long
- *  it holds the screen, in seconds. */
-export interface FullScreenAnnouncement { title: string; seconds: number }
-
-/** How long a newly picked full-screen announcement holds the screen, in seconds (owner, 2026-10-28: 60s). */
-export const FULL_SCREEN_S_DEFAULT = 60;
-/** The longest a full-screen announcement's seconds field accepts. */
-const FULL_SCREEN_S_MAX = 600;
-/** A full-screen time the villa may hold: whole seconds from 1 to FULL_SCREEN_S_MAX. The one rule, for the field and
- *  for what the store holds. */
-export const fullScreenSecondsOk = (v: unknown): v is number =>
-  Number.isInteger(v) && (v as number) >= 1 && (v as number) <= FULL_SCREEN_S_MAX;
-
-/** A stored "full-screen announcements" list: each item with a title and an accepted time, each title once; anything
- *  else left out. undefined when it is not a list. Pure: tests/oracles/messages_settings.mjs. */
-export function parseFullScreen(raw: unknown): FullScreenAnnouncement[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  const seen = new Set<string>();
-  return raw.flatMap((f): FullScreenAnnouncement[] => {
-    const r = f && typeof f === "object" ? (f as Record<string, unknown>) : {};
-    if (typeof r.title !== "string" || !r.title || seen.has(r.title) || !fullScreenSecondsOk(r.seconds)) return [];
-    seen.add(r.title);
-    return [{ title: r.title, seconds: r.seconds }];
-  });
-}
-
-/**
- * ⚠️ A CONFIG STORED BEFORE 2.496.670 (formats outlive their writer): the picked titles (`fullScreenFor`) and one time
- * for all (`ringShownForS`). Read as each title with that time, or FULL_SCREEN_S_DEFAULT when it was not a time the
- * field accepted, so nothing the owner set is lost; undefined when it holds no such list. Both read paths take it: this
- * tablet's own stored config (loadConfig) and the villa's (deviceConfig parseSharedConfig); the old keys are never
- * written again (RETIRED_KEYS, deviceConfig saveSharedConfig). Pure: tests/oracles/messages_settings.mjs.
- */
-export function fullScreenFromRetired(stored: Record<string, unknown>): FullScreenAnnouncement[] | undefined {
-  if (!Array.isArray(stored.fullScreenFor)) return undefined;
-  const seconds = fullScreenSecondsOk(stored.ringShownForS) ? stored.ringShownForS : FULL_SCREEN_S_DEFAULT;
-  return parseFullScreen(stored.fullScreenFor.map((title) => ({ title, seconds })));
-}
-
-/** A stored config (this tablet's, or the villa's) with its full-screen announcements in today's shape: `fullScreen`
- *  as stored, else read from the retired keys (fullScreenFromRetired); the retired keys dropped either way. */
-export function withFullScreen<T extends Record<string, unknown>>(stored: T): T {
-  const { fullScreenFor: _titles, ringShownForS: _seconds, ...rest } = stored;
-  const migrated = stored.fullScreen === undefined ? fullScreenFromRetired(stored) : undefined;
-  return (migrated ? { ...rest, fullScreen: migrated } : rest) as unknown as T;
-}
+/** How long a newly picked full-screen announcement holds the screen, in seconds (owner, 2026-10-28: 60s;
+ *  villa-settings.json `fullScreenSeconds`). */
+export const FULL_SCREEN_S_DEFAULT: number = FULL_SCREEN_SECONDS.default;
+// the full-screen list's reading and its older shape live with every other migration (config/migrations.ts)
+export { fullScreenSecondsOk, parseFullScreen, type FullScreenAnnouncement } from "./migrations";
 
 export const DEFAULT_CONFIG: AppConfig = {
   siteTitle: "",
-  latitude: env.VITE_LAT ? Number(env.VITE_LAT) : 0,
-  longitude: env.VITE_LNG ? Number(env.VITE_LNG) : 0,
-  northOffsetDeg: 0,
-  presenceSensor: "",
-  recordsKeptDays: RECORDS_KEPT_DAYS_DEFAULT,
-  roomGlowAndCones: true,
-  maintenanceMode: false,
+  // the villa's single-value settings: each its row's default (config/villaSettings)
+  ...VILLA_DEFAULTS,
+  latitude: env.VITE_LAT ? Number(env.VITE_LAT) : VILLA_DEFAULTS.latitude,
+  longitude: env.VITE_LNG ? Number(env.VITE_LNG) : VILLA_DEFAULTS.longitude,
   fullScreen: [],
   ringsFullScreen: true,
   tabletLanguage: "en",
@@ -440,7 +398,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   dismissedEntityIds: [],
   unavailableByDesign: [],
   teleportPoints: TELEPORT_POINTS,
-  fmContract: EMPTY_FM_CONTRACT,
   eyeHeight: DEFAULT_EYE_HEIGHT,
   walkSpeed: 1,
   renderOnDemand: true,
@@ -511,7 +468,9 @@ export function mergeMotionIntoLinked(config: AppConfig): AppConfig {
 }
 
 /**
- * Every migration a config must pass through, wherever it came from.
+ * Every migration a config must pass through, wherever it came from: the stored shapes of older versions
+ * (config/migrations.ts MIGRATIONS, their retired keys dropped), then the defaults laid under what is missing, then the
+ * mappings' upgrades below.
  *
  * ⚠️ THIS EXISTS BECAUSE THE TWO READ PATHS DID NOT AGREE. Both migrations
  * below used to be applied inside loadConfig() alone — i.e. only to config
@@ -528,7 +487,7 @@ export function mergeMotionIntoLinked(config: AppConfig): AppConfig {
  * puts a whole AppConfig into memory goes through here.
  */
 export function normaliseConfig(config: AppConfig, opts: { maps?: boolean } = {}): AppConfig {
-  const complete = completeConfig(config);
+  const complete = completeConfig(migrate(config as unknown as Record<string, unknown>) as unknown as AppConfig);
   return opts.maps === false ? complete : mergeMotionIntoLinked(stripStaleVariantEntities(upgradeStaleTypes(complete)));
 }
 
@@ -552,11 +511,6 @@ export function upgradeStaleTypes(config: AppConfig): AppConfig {
   return entityMap ? { ...config, entityMap } : config;
 }
 
-/** Keys an older version stored and nothing reads any more — dropped where every config enters memory, so a device
- *  that still holds one stops carrying it. `alertThresholds`: per-sensor min/max limits no screen ever set (removed
- *  2.496.450). `fullScreenFor`, `ringShownForS`: read into `fullScreen` first (withFullScreen, 2.496.670). */
-export const RETIRED_KEYS: readonly string[] = ["alertThresholds", "fullScreenFor", "ringShownForS"];
-
 /**
  * Every setting present and valid — the ONE place a default or a bound is
  * applied (round 10, 2.496.155). A missing or null value takes DEFAULT_CONFIG's
@@ -568,7 +522,6 @@ export const RETIRED_KEYS: readonly string[] = ["alertThresholds", "fullScreenFo
  */
 function completeConfig(config: AppConfig): AppConfig {
   const out = { ...config } as Record<string, unknown>;
-  for (const k of RETIRED_KEYS) delete out[k];
   for (const [k, v] of Object.entries(DEFAULT_CONFIG)) if (out[k] === undefined || out[k] === null) out[k] = v;
   const c = out as unknown as AppConfig;
   c.entityIconScale = clampIconScale(c.entityIconScale);
@@ -580,10 +533,10 @@ export function loadConfig(): AppConfig {
     // Absent, unparsable or storage disabled all read as "nothing stored".
     const kept = readJson<Partial<AppConfig>>(CONFIG_KEY, (v): v is Partial<AppConfig> => !!v && typeof v === "object");
     if (!kept) return { ...DEFAULT_CONFIG };
-    // what an older version stored, in today's shape, before the defaults are laid under it (they would hide it)
-    const stored = withFullScreen(kept as Record<string, unknown>) as Partial<AppConfig>;
+    // ⚠️ AS STORED, NO DEFAULTS SPREAD UNDER IT: normaliseConfig reads an older version's shape first (a default
+    // would hide it: an empty `fullScreen` over the old titles), then lays the defaults under what is missing
+    const stored = kept;
     return normaliseConfig({
-      ...DEFAULT_CONFIG,
       ...stored,
       // ⚠️ THE USER'S OWN SLICES ARE TAKEN AS STORED — nothing spread under
       // them (round 10, 2.496.163). The seeds (ENTITY_MAP, TELEPORT_POINTS) are empty, so the spread merged nothing; but it was
@@ -594,7 +547,7 @@ export function loadConfig(): AppConfig {
       meshBindings: stored.meshBindings ?? {},
       render: adoptRenderLookDefaults({ ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) }),
       teleportPoints: stored.teleportPoints ?? [],
-    });
+    } as AppConfig);
   } catch (err) {
     console.warn("[AppConfig] failed to load, using defaults", err);
     return { ...DEFAULT_CONFIG };
@@ -612,6 +565,10 @@ export function loadConfig(): AppConfig {
  * Only values still sitting exactly on the SUPERSEDED default are moved: that
  * is the signature of "never touched". Anything else was chosen deliberately
  * and is left alone, so this can never overwrite a look someone tuned.
+ *
+ * ⚠️ NOT IN THE MIGRATIONS TABLE (config/migrations.ts), ON PURPOSE: it retires no key, and it may only see what was
+ * STORED. normaliseConfig runs on every change in memory, so a look picked at exactly the old value in this session
+ * (the slider reaches 1.15) would be moved back under the person's finger.
  */
 function adoptRenderLookDefaults(render: RenderConfig): RenderConfig {
   const out = { ...render };

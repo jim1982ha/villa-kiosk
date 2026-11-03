@@ -1,0 +1,41 @@
+{
+  "_what": "The villa's settings, written down ONCE (architecture review round 17, 2026-11-03): the settings every tablet shares (device-config.json) that hold one value each. The Kiosk's app builds from each row its default (AppConfig DEFAULT_CONFIG), how it reads the villa's copy and its empty (deviceConfig SHARED_KEYS) and the name a change from another tablet is told by (configSlice SETTING_NAMES): src/config/villaSettings.ts. The add-on's server (rootfs/usr/bin/supervisor-proxy.py) reads its defaults and bounds here instead of copies. Before, one setting was written in eight places, and a bound copied into the server could drift from the app's. `kind`: number (any finite number), int (a whole number from `min` to `max`), text, switch (true or false), record (an object, read over `default`). `name`: what the setting's control is called on screen. tests/oracles/shared_config_keys.mjs and tests/store-doors.py read it.",
+  "settings": {
+    "latitude": {"kind": "number", "default": 0, "name": "The villa's location"},
+    "longitude": {"kind": "number", "default": 0, "name": "The villa's location"},
+    "northOffsetDeg": {"kind": "number", "default": 0, "name": "Model north offset"},
+    "presenceSensor": {"kind": "text", "default": "", "name": "Villa presence"},
+    "recordsKeptDays": {"kind": "int", "default": 365, "min": 0, "max": 3650, "name": "Days records are kept"},
+    "roomGlowAndCones": {"kind": "switch", "default": true, "name": "Room glow"},
+    "maintenanceMode": {"kind": "switch", "default": false, "name": "Maintenance mode"},
+    "fmContract": {"kind": "record", "default": {"monthlyCap": 0, "warnAtPercent": 0}, "name": "Spend settings"}
+  },
+  "_fullScreenSeconds": "How long a full-screen announcement holds the screen (device-config.json `fullScreen`: [{title, seconds}]): whole seconds from `min` to `max`; `default` is a newly picked one's, and the time an older Kiosk's one time for all is read as when it was not one the field took. An item with another time is left out, by the app and the server alike.",
+  "fullScreenSeconds": {"default": 60, "min": 1, "max": 600},
+  "_retired": "Keys an older Kiosk stored in the villa's settings and nothing reads any more: the server drops them when it reads the file and from every write (an older tablet's cached page may still send them), once their value is read into today's shape. `alertThresholds`: per-sensor limits no screen ever set (2.496.450). `fullScreenFor`, `ringShownForS`: the picked titles and one time for all, read as `fullScreen` (2.496.670). The Kiosk's own table of migrations (src/config/migrations.ts) retires the same keys from a tablet's own copy.",
+  "retired": ["alertThresholds", "fullScreenFor", "ringShownForS"],
+  "_examples": "The villa's settings as stored (`stored`) and as read in today's shape (`today`): the server writes `today` back once, and the app reads a tablet's own stored copy the same way. Both drive their migration through every one (tests/store-doors.py, tests/oracles/messages_settings.mjs).",
+  "examples": [
+    {"_": "an older Kiosk's titles and one time for all: each title with that time",
+     "stored": {"fullScreenFor": ["Example visitor", "Example overload"], "ringShownForS": 10, "maintenanceMode": true},
+     "today": {"fullScreen": [{"title": "Example visitor", "seconds": 10}, {"title": "Example overload", "seconds": 10}], "maintenanceMode": true}},
+    {"_": "a time the field never took (or none): the default",
+     "stored": {"fullScreenFor": ["Example visitor", 3, ""], "ringShownForS": 100000},
+     "today": {"fullScreen": [{"title": "Example visitor", "seconds": 60}]}},
+    {"_": "no time at all: the default",
+     "stored": {"fullScreenFor": ["Example visitor"]},
+     "today": {"fullScreen": [{"title": "Example visitor", "seconds": 60}]}},
+    {"_": "today's shape beside the retired keys: today's is read, the retired dropped",
+     "stored": {"fullScreen": [{"title": "Example visitor", "seconds": 5}], "fullScreenFor": ["Example overload"], "ringShownForS": 9},
+     "today": {"fullScreen": [{"title": "Example visitor", "seconds": 5}]}},
+    {"_": "an item whose time is out of range, or a title twice: left out",
+     "stored": {"fullScreen": [{"title": "Example visitor", "seconds": 100000}, {"title": "Example overload", "seconds": 30}, {"title": "Example overload", "seconds": 5}, {"title": "", "seconds": 5}, 7]},
+     "today": {"fullScreen": [{"title": "Example overload", "seconds": 30}]}},
+    {"_": "a retired key with nothing to read into: dropped",
+     "stored": {"alertThresholds": {"sensor.example_reading": {"max": 30}}, "recordsKeptDays": 0},
+     "today": {"recordsKeptDays": 0}},
+    {"_": "today's shape: as it is",
+     "stored": {"fullScreen": [{"title": "Example visitor", "seconds": 600}, {"title": "Example overload", "seconds": 1}], "presenceSensor": ""},
+     "today": {"fullScreen": [{"title": "Example visitor", "seconds": 600}, {"title": "Example overload", "seconds": 1}], "presenceSensor": ""}}
+  ]
+}
