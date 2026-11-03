@@ -1,3 +1,11 @@
+## 0.12.443
+
+What you will see:
+- A chat added in the VESTA Kiosk, or a chat's language changed there, is taken up within a few minutes even while
+  VESTA's rules file has a typing slip in it. Before, VESTA kept its old lists until the slip was fixed: the new chat's
+  presses were answered "This chat is not on the villa's lists", while VESTA's People card already showed it.
+- Nothing else changes on screen.
+
 ## 0.12.442
 
 What you will see:
