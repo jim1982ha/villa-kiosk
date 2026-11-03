@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.428 (3 November 2026)
+
+- The maintenance mode's note names the Kiosk switch's new place, Advanced Settings › Villa (Kiosk 2.496.677).
+
 ## 0.6.427 (3 November 2026)
 
 Architecture review round 18, card 2: who is who is cached on its own files. `Roster.current(pack_path)` reads the kept

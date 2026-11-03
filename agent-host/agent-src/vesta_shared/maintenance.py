@@ -1,4 +1,4 @@
-"""The villa's maintenance mode: the VESTA Kiosk's switch (Advanced Settings › System), read by the agent (owner,
+"""The villa's maintenance mode: the VESTA Kiosk's switch (Advanced Settings › Villa), read by the agent (owner,
 2026-10-29: "Put it on the tablet, for the Owner only … a small 'Maintenance' mark in the top bar, so nobody forgets it").
 
 While it is on the alert desk takes up only urgent (P1) alerts; any other new one is recorded in the audit and not

@@ -1,3 +1,9 @@
+## 0.12.444
+
+What you will see:
+- Nothing changes in how VESTA works. Its notes now say the tablet's "Maintenance mode" switch is in Advanced
+  Settings › Villa, where the tablet now shows it.
+
 ## 0.12.443
 
 What you will see:
