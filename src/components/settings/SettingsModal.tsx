@@ -88,8 +88,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
     // ⚠️ THE VILLA'S (owner, 2026-11-03: moved here from Advanced Settings' Messages tab): a shared key, through the same
     // draft, Save keeping it and Cancel putting it back on every tablet.
     "fullScreen",
-    // each chat's language, beside it under "Who gets the messages" (owner, 2026-11-03): the villa's, the same draft
-    "chatLanguages",
     // ⚠️ THE VILLA'S, NOT THIS DEVICE'S (owner, 2026-10-22: moved here from Advanced Settings): a shared key
     // (deviceConfig), so writing it reaches every tablet — through the same draft as every other option here, Save
     // keeping it and Cancel putting it back.
@@ -229,11 +227,10 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
                 {ROLE_LABELS.ops}. An urgent (P1) alert goes to both lists, a P2 alert to the {ROLE_LABELS.ops}'s; a
                 notice goes to the list its automation names. VESTA sends its reminders to the same chats. An urgent or
                 P2 alert with nobody listed goes to every Telegram chat of the villa, so it is never lost. A chat added or
-                taken off is saved on the villa at once. Beside each chat, the language it reads VESTA's messages in:
-                kept with Save, and read by VESTA within a few minutes.
+                taken off, and the language beside each chat, are saved on the villa at once (Save and Cancel do not apply
+                here); VESTA reads them within a few minutes.
               </>} />
-              <WhoGetsMessages languages={v.chatLanguages}
-                onLanguages={(chatLanguages) => slice.set({ chatLanguages }, { now: true })} />
+              <WhoGetsMessages />
             </>
           )}
         </PendingFields>

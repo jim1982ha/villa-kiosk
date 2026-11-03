@@ -70,9 +70,19 @@ ck("a change is saved to that role's list, planned over the villa's latest text 
   ck("  ...choosing a chat's language writes that chat's only; English is kept as no entry",
      JSON.stringify(set) === JSON.stringify({ "notify.a": "de", "notify.b": "fr" })
      && JSON.stringify(r.withChatLanguage(set, "notify.a", "en")) === JSON.stringify({ "notify.b": "fr" }));
-  ck("  ...a menu beside each chat of the list, its choices the agreement's, written through the dialog's draft",
-     /\{ids\.map\(\(id\) => \([\s\S]*<RemovablePill[\s\S]*<Dropdown className="recipients-language"[\s\S]*withChatLanguage\(languages, id, code\)/.test(view)
+  ck("  ...a menu beside each chat of the list, its choices the agreement's",
+     /\{ids\.map\(\(id\) => \([\s\S]*<RemovablePill[\s\S]*<Dropdown className="recipients-language"[\s\S]*onChange=\{\(code\) => setLanguage\(id, code\)\}/.test(view)
      && /Object\.entries\(CHAT_LANGUAGES\)/.test(view));
+  // architecture review round 18, card 1: a chat was saved at once and its language with Save, so ✕ said "nothing was
+  // kept" over a chat that was
+  const settingsSrc = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
+  const draftKeys = /const SETTINGS_KEYS = \[([\s\S]*?)\] as const/.exec(settingsSrc)?.[1] ?? "";
+  ck("  ...the section saves a chat and its language the same way, at once: the language is no key of Settings' draft",
+     draftKeys.includes('"fullScreen"') && !draftKeys.includes("chatLanguages")
+     && /update\(\(c\) => \(\{ chatLanguages: withChatLanguage\(c\.chatLanguages, id, code\) \}\)\)/.test(view));
+  ck("  ...a chat on no list any more loses its language; one still on the other list keeps it",
+     JSON.stringify(r.droppedChats([["notify.a"], ["notify.b"]], ["notify.a", "notify.b", "notify.c"])) === JSON.stringify(["notify.c"])
+     && /if \(sent\.ok\) for \(const gone of droppedChats\([\s\S]*setLanguage\(gone, "en"\)/.test(view));
 }
 // owner, 2026-11-03: in Settings › Messages itself (Advanced Settings' Messages tab is gone), for the profiles that edit
 // the villa's setup: tests/oracles/messages_settings.mjs reads where, through the compiler's tree

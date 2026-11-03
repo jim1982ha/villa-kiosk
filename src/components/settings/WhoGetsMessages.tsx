@@ -6,30 +6,33 @@
 //
 // ⚠️ EACH CHAT'S LANGUAGE IS SET HERE, BESIDE IT (owner, 2026-11-03: "isn't it also redundant to show … the language
 // selection [on the VESTA Agent's page]? Since it's already selected in the Vesta kiosk UI"): one of the villa's
-// settings (AppConfig chatLanguages), kept with Settings' Save like the rest of its draft, and told to the Agent in its
-// heartbeat answer. The Agent's page only shows it.
+// settings (AppConfig chatLanguages), told to the Agent in its heartbeat answer. The Agent's page only shows it.
+//
+// ⚠️ ONE WAY OF SAVING FOR THE WHOLE SECTION (architecture review round 18, card 1): a chat was saved on the villa at
+// once while its language waited in Settings' draft, so ✕ said "nothing was kept" over a chat that was, and a chat
+// taken off left its language behind. Now the section owns both and saves both at once, outside the draft (its keys
+// are not Settings' draft keys: configSlice.recordEdit records only those); a chat on no list any more loses its
+// language with it.
 
 import { useRef, useState } from "react";
 import { useHA } from "@/ha/HAStateStore";
 import { HAServices } from "@/ha/HAServiceCalls";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { ROLE_LABELS } from "@/auth/roles";
-import { CHAT_LANGUAGES, ROLE_LISTS, planChange, targetsOf, withChatLanguage, type SentLists } from "@/messages/recipients";
+import { CHAT_LANGUAGES, ROLE_LISTS, droppedChats, planChange, targetsOf, withChatLanguage, type SentLists } from "@/messages/recipients";
+import { useConfig } from "@/config/ConfigContext";
 import RemovablePill from "@/components/common/RemovablePill";
 import Dropdown from "@/components/common/Dropdown";
 import EntityPicker from "./EntityPicker";
 import { withItem } from "@/utils/listToggle";
 
-interface Props {
-  /** Each chat's language as the dialog shows it (its draft's view): notify entity → code; none named reads English. */
-  languages: Readonly<Record<string, string>>;
-  /** Write each chat's languages, as the dialog writes (its draft). */
-  onLanguages: (next: Record<string, string>) => void;
-}
-
-export default function WhoGetsMessages({ languages, onLanguages }: Props) {
+export default function WhoGetsMessages() {
   const { entities, ws, getEntitiesSnapshot } = useHA();
   const name = useEntityLabel();
+  // the villa's settings, written at once (never the dialog's draft): each chat's language
+  const { config, update } = useConfig();
+  const languages = config.chatLanguages;
+  const setLanguage = (id: string, code: string) => update((c) => ({ chatLanguages: withChatLanguage(c.chatLanguages, id, code) }));
   const [problem, setProblem] = useState<string | null>(null);
   // What this tablet sent to each list that the villa may not show yet: two adds in a row build on each other
   // (each used to build from the list on screen, and the second wrote over the first).
@@ -52,6 +55,9 @@ export default function WhoGetsMessages({ languages, onLanguages }: Props) {
           sentRef.current[list.role] = plan.sent;
           const sent = await HAServices.setText(ws, list.entityId, plan.text);
           if (!sent.ok) sentRef.current[list.role] = null;
+          // a chat now on no list loses its language (it is no one's to read any more): withChatLanguage's English
+          if (sent.ok) for (const gone of droppedChats(ROLE_LISTS.map((l) => l.role === list.role ? targetsOf(plan.text)
+            : targetsOf(getEntitiesSnapshot()[l.entityId]?.state)), ids)) setLanguage(gone, "en");
           setProblem(sent.ok ? null : `The ${who}'s list could not be saved: try again.`);
         };
         return (
@@ -66,7 +72,7 @@ export default function WhoGetsMessages({ languages, onLanguages }: Props) {
                     <RemovablePill label={name(id)} tip={id} removeLabel={`Take ${name(id)} off the ${who}'s list`}
                       onRemove={() => void save((now) => withItem(now, id, false))} />
                     <Dropdown className="recipients-language" ariaLabel={`The language ${name(id)} reads VESTA's messages in`}
-                      value={languages[id] ?? "en"} onChange={(code) => onLanguages(withChatLanguage(languages, id, code))}
+                      value={languages[id] ?? "en"} onChange={(code) => setLanguage(id, code)}
                       options={Object.entries(CHAT_LANGUAGES).map(([code, words]) => ({ value: code, label: words }))} />
                   </div>
                 ))}
