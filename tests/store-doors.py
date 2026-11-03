@@ -306,21 +306,33 @@ async def main() -> None:
     ck("  ...as long as the ring holds the screen: a longer full-screen time keeps it current (architecture review 2026-10-30)",
        proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 90, 120) == ring.get("photo")
        and proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 121, 120) is None)
-    was = proxy.DEVICE_CONFIG.read_status
     # each picked announcement its own seconds (owner, 2026-11-03): current for the LONGEST; a config an older Kiosk
-    # stored (the titles and one time for all) read the same way, as the page reads it (AppConfig.fullScreenFromRetired)
+    # stored (the titles and one time for all) read in today's shape by the store (_device_config_today), as the page
+    # reads its own (config/migrations.ts)
     fs = lambda *secs: [{"title": f"T{i}", "seconds": s} for i, s in enumerate(secs)]
-    for stored, want in ((({"fullScreen": fs(10, 120, 30)}, True), 120), (({"fullScreen": fs(30)}, True), 60),
-                         (({"fullScreen": fs("x", True, -5)}, True), 60), (({"fullScreen": "x"}, True), 60),
-                         (({"fullScreen": []}, True), 60), (({}, True), 60), (({}, False), 60),
-                         (({"fullScreenFor": ["A", "B"], "ringShownForS": 120}, True), 120),
-                         (({"fullScreenFor": [], "ringShownForS": 120}, True), 60),
-                         (({"fullScreenFor": ["A"], "ringShownForS": "x"}, True), 60),
-                         (({"fullScreen": fs(90), "fullScreenFor": ["A"], "ringShownForS": 300}, True), 90)):
-        proxy.DEVICE_CONFIG.read_status = lambda stored=stored: stored
+    cfg_file = DATA / "device-config.json"
+    kept_cfg = cfg_file.read_text() if cfg_file.exists() else None
+    for stored, want in (({"fullScreen": fs(10, 120, 30)}, 120), ({"fullScreen": fs(30)}, 60),
+                         ({"fullScreen": fs("x", True, -5)}, 60), ({"fullScreen": "x"}, 60),
+                         ({"fullScreen": fs(100000)}, 60), ({"fullScreen": fs(600, 90)}, 600),
+                         ({"fullScreen": []}, 60), ({}, 60), ("{not json", 60),
+                         ({"fullScreenFor": ["A", "B"], "ringShownForS": 120}, 120),
+                         ({"fullScreenFor": ["A", "B"], "ringShownForS": 100000}, 60),
+                         ({"fullScreenFor": [], "ringShownForS": 120}, 60),
+                         ({"fullScreenFor": ["A"], "ringShownForS": "x"}, 60),
+                         ({"fullScreen": fs(90), "fullScreenFor": ["A"], "ringShownForS": 300}, 90)):
+        cfg_file.write_text(stored if isinstance(stored, str) else json.dumps(stored))
         ck(f"  ...the villa's full-screen times read from its settings {stored}: current for {want}s",
            proxy._ring_current_s() == want, proxy._ring_current_s())
+    was = proxy.DEVICE_CONFIG.read_status
+    proxy.DEVICE_CONFIG.read_status = lambda: ({"fullScreenFor": ["A"], "ringShownForS": 300}, True)
+    ck("  ...its reader reads today's shape only: the old keys, unmigrated, name no time",
+       proxy._villa_setting("fullScreen") == 0, proxy._villa_setting("fullScreen"))
     proxy.DEVICE_CONFIG.read_status = was
+    if kept_cfg is None:
+        cfg_file.unlink()
+    else:
+        cfg_file.write_text(kept_cfg)
     await proxy._record_announcement(app, kev("<b>Opened at 09:03</b>", key="run-1"))
     status, body = await call("GET", "/announcements", owner)
     same = [a for a in body["announcements"] if a.get("key") == "run-1"]
@@ -459,6 +471,71 @@ ck("the newest photo of a run it took over; none when no run of it carried one",
    proxy._taken_photo(kept, ["R-1"]) == "b.jpg" and proxy._taken_photo(kept, ["R-1", "R-2"]) == "c.jpg"
    and proxy._taken_photo(kept, ["R-3"]) is None and proxy._taken_photo(kept, []) is None,
    [proxy._taken_photo(kept, t) for t in (["R-1"], ["R-1", "R-2"], ["R-3"])])
+
+# ── the villa's settings in today's shape (architecture review round 17) ───────────────────────────────────────
+# villa-settings.json: each single-value setting's default and bounds, read by the app and by this server; its
+# `examples` (an older Kiosk's shapes and today's) driven through the server's migration here and the app's in
+# tests/oracles/messages_settings.mjs.
+print("  the villa's settings, written down once, in today's shape:")
+V = json.loads((ROOT / "rootfs" / "usr" / "share" / "vesta" / "villa-settings.json").read_text())
+row = V["settings"]["recordsKeptDays"]
+ck("the records' days: the server's default and bounds are the table's row",
+   (proxy.RECORDS_KEPT_DAYS.default, proxy.RECORDS_KEPT_DAYS.lo, proxy.RECORDS_KEPT_DAYS.hi) == (row["default"], row["min"], row["max"])
+   and proxy._records_kept_days(proxy.NOT_STORED) == row["default"] and proxy._records_kept_days(row["max"] + 1) == row["max"]
+   and proxy._records_kept_days(-1) == row["min"], (proxy.RECORDS_KEPT_DAYS.default, proxy.RECORDS_KEPT_DAYS.hi))
+ck("  ...the full-screen time's bounds too", proxy._full_screen_bounds() == tuple(V["fullScreenSeconds"][k] for k in ("default", "min", "max"))
+   and proxy._seconds_ok(V["fullScreenSeconds"]["max"]) and not proxy._seconds_ok(V["fullScreenSeconds"]["max"] + 1)
+   and not proxy._seconds_ok(V["fullScreenSeconds"]["min"] - 1))
+ck("  ...maintenance mode: not stored, the row's default", proxy.VILLA_SETTINGS["maintenanceMode"].read(proxy.NOT_STORED)
+   is V["settings"]["maintenanceMode"]["default"])
+for e in V["examples"]:
+    ck(f"migrated as the table's example says: {e['_']}", proxy._device_config_today(e["stored"]) == e["today"],
+       proxy._device_config_today(e["stored"]))
+ck("  ...today's shape is left as it is (the same document twice)",
+   all(proxy._device_config_today(e["today"]) == e["today"] for e in V["examples"]))
+was_table = proxy.VILLA_SETTINGS_TABLE
+proxy.VILLA_SETTINGS_TABLE = {}
+old = {"fullScreenFor": ["A"], "ringShownForS": 9}
+ck("an unreadable table migrates nothing (nothing dropped on a guess), and keeps the records for ever",
+   proxy._device_config_today(old) == old and proxy._records_kept_option().hi == 0)
+proxy.VILLA_SETTINGS_TABLE = was_table
+
+
+async def migrated_on_load_and_put() -> None:
+    data = TMP / "migrate"
+    data.mkdir()
+    (data / "options.json").write_text(json.dumps({"owner_pin": "1234"}))
+    old_shape = {"fullScreenFor": ["Example visitor", "Example overload"], "ringShownForS": 100000,
+                 "alertThresholds": {"sensor.example_reading": {"max": 30}}, "maintenanceMode": True}
+    today = {"fullScreen": [{"title": "Example visitor", "seconds": 60}, {"title": "Example overload", "seconds": 60}],
+             "maintenanceMode": True}
+    (data / "device-config.json").write_text(json.dumps(old_shape))
+    client = TestClient(TestServer(proxy.build_app(data_dir=str(data))))
+    await client.start_server()
+    owner = cookie("owner")
+    try:
+        on_file = json.loads((data / "device-config.json").read_text())
+        ck("at start, an older Kiosk's settings are written in today's shape, once (100000 seconds: the default 60s)",
+           on_file == today, on_file)
+        r = await client.request("GET", "/device-config", headers=owner)
+        body = await r.json()
+        ck("  ...and served so", r.status == 200 and body["config"] == today, body)
+        r = await client.request("PUT", "/device-config", headers=owner, json={"config": {**old_shape, "fullScreenFor": ["Example visitor"],
+                                                                                    "ringShownForS": 15}, "rev": body["rev"]})
+        on_file = json.loads((data / "device-config.json").read_text())
+        ck("an older tablet's cached page writing the old shape: stored in today's (its time read, the old keys dropped)",
+           r.status == 200 and on_file == {"fullScreen": [{"title": "Example visitor", "seconds": 15}], "maintenanceMode": True}, (r.status, on_file))
+        r = await client.request("PUT", "/device-config", headers=owner, json={"config": {"fullScreen": [
+            {"title": "Example visitor", "seconds": 100000}, {"title": "Example overload", "seconds": 600}]}})
+        on_file = json.loads((data / "device-config.json").read_text())
+        ck("  ...a time out of range in today's shape: that item left out, as every tablet reads it",
+           r.status == 200 and on_file == {"fullScreen": [{"title": "Example overload", "seconds": 600}]}, on_file)
+        ck("  ...a document already in today's shape is not written again at start", not await proxy.DEVICE_CONFIG.settle())
+    finally:
+        await client.close()
+
+
+asyncio.run(migrated_on_load_and_put())
 
 # ── how a closed fault was closed: the agreement's histories (architecture review, 2026-10-15) ───────────────────
 # agent-contract.json `ticketUpdate.histories`: the cases tests/oracles/fault_close.mjs drives through the app's

@@ -9,6 +9,7 @@ import {
   applyRemoteChange, fromSharedItems, sharedItems, SHARED_CONFIG_KEYS, type RemoteChange, type SharedConfigKey,
 } from "./deviceConfig";
 import type { ConfigEdit } from "./mappingEdits";
+import { VILLA_SETTING_NAMES, type VillaSettingKey } from "./villaSettings";
 import { applyKeyed, diffKeyed, type Keyed, type KeyedDiff } from "@/utils/keyedSync";
 
 export type Slice<K extends keyof AppConfig> = Pick<AppConfig, K>;
@@ -133,16 +134,15 @@ export const ADVANCED_SETTINGS_KEYS = [
 /** Whose change another tablet replaced: a device (by entity id) or one of the villa's settings. */
 export type ReplacedSubject = { device: string } | { setting: string };
 
-/** The villa's single-value settings, by the name their control shows (Settings, Advanced Settings). */
-const SETTING_NAMES: Partial<Record<SharedConfigKey, string>> = {
-  latitude: "The villa's location", longitude: "The villa's location", northOffsetDeg: "Model north offset",
-  presenceSensor: "Villa presence", recordsKeptDays: "Days records are kept", roomGlowAndCones: "Room glow",
-  fullScreen: "Full-screen announcements", maintenanceMode: "Maintenance mode",
+/** The villa's settings told by name, not as a device: every single-value one by the name its control shows (its row,
+ *  config/villaSettings: required for each, so a new one is never told as "a device"), and the full-screen list. */
+export const SETTING_NAMES: Readonly<Record<VillaSettingKey | "fullScreen", string>> = {
+  ...VILLA_SETTING_NAMES, fullScreen: "Full-screen announcements",
 };
 
 /** The device an item of a shared key is about (its id, or the entity a mesh or group stands for). */
 function subjectOf(key: string, id: string, item: unknown): ReplacedSubject {
-  const setting = SETTING_NAMES[key as SharedConfigKey];
+  const setting = (SETTING_NAMES as Partial<Record<string, string>>)[key];
   if (setting) return { setting };
   if (key === "meshBindings" && typeof item === "string") return { device: item };
   if (key === "deviceGroups" && item && typeof item === "object" && "primaryEntityId" in item) {

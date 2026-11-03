@@ -1459,8 +1459,37 @@ def _session_ttl() -> int:
 #: How long the Facility record is kept, in days — its photos, repaired faults, work done and money spent; 0 keeps them
 #: for ever. The villa's shared setting `recordsKeptDays` (device-config.json), set by the owner in Advanced Settings ›
 #: System (owner, 2026-10-20: "more a setting that shall be available to set in the UI"; the add-on option
-#: evidence_retention_days until 2.496.454). The default and ceiling are the app's (AppConfig RECORDS_KEPT_DAYS_*).
-RECORDS_KEPT_DAYS = Option("int", 365, 0, 3650)
+#: evidence_retention_days until 2.496.454). Its default and bounds are its row in villa-settings.json, the one the app
+#: reads too (src/config/villaSettings.ts).
+def _load_villa_settings() -> dict:
+    """THE VILLA'S SETTINGS, WRITTEN DOWN ONCE (architecture review round 17): /usr/share/vesta/villa-settings.json, each
+    single-value setting's kind, default and bounds, the full-screen seconds' bounds, the keys an older Kiosk stored
+    and their examples. The app builds its defaults from the same rows; this server read copies of them (a ceiling
+    written here as a literal could drift from the app's). Unreadable: {} (see _villa_row: nothing is deleted on it)."""
+    return _load_vesta_table("villa-settings.json", "the records are kept for ever and the villa's file is not migrated")
+
+
+VILLA_SETTINGS_TABLE = _load_villa_settings()
+
+
+def _villa_row(name: str) -> dict:
+    """One row of the table (`settings.<name>`, or a top-level object such as `fullScreenSeconds`); {} when unreadable."""
+    table = VILLA_SETTINGS_TABLE if isinstance(VILLA_SETTINGS_TABLE, dict) else {}
+    settings = table.get("settings") if isinstance(table.get("settings"), dict) else {}
+    row = settings.get(name, table.get(name))
+    return row if isinstance(row, dict) else {}
+
+
+def _records_kept_option() -> Option:
+    """The records' days as an option row, from the table. ⚠️ AN UNREADABLE TABLE KEEPS EVERYTHING: default and ceiling
+    0, for ever, as for an unreadable settings file (_evidence_retention_days) — this decides what is DELETED."""
+    row = _villa_row("recordsKeptDays")
+    if not all(isinstance(row.get(k), int) and not isinstance(row.get(k), bool) for k in ("default", "min", "max")):
+        return Option("int", 0, 0, 0)
+    return Option("int", row["default"], row["min"], row["max"])
+
+
+RECORDS_KEPT_DAYS = _records_kept_option()
 
 
 def _evidence_retention_days() -> int:
@@ -2822,11 +2851,15 @@ class JsonStore:
     about callers.
     """
 
-    def __init__(self, name: str, empty, max_bytes: int):
+    def __init__(self, name: str, empty, max_bytes: int, migrate=None):
         self.name = name
         self.empty = empty
         self.max_bytes = max_bytes
         self.lock = asyncio.Lock()
+        # ⚠️ TODAY'S SHAPE, ALWAYS (architecture review round 17): `migrate(document)` returns a stored document in
+        # today's shape. Every read hands that over, every write stores it (an older page cached on a tablet may still
+        # send the old shape), and `settle` writes it back once at start. Its readers read today's shape only.
+        self.migrate = migrate
 
     @property
     def path(self) -> str:
@@ -2834,11 +2867,23 @@ class JsonStore:
 
     def read(self):
         """The degrading read — see _read_json_store."""
-        return _read_json_store(self.path, self.empty)
+        return self.read_status()[0]
 
     def read_status(self) -> tuple[object, bool]:
-        """(value, readable) — see _read_json_store_status."""
-        return _read_json_store_status(self.path, self.empty)
+        """(value, readable) — see _read_json_store_status; in today's shape (`migrate`)."""
+        value, readable = _read_json_store_status(self.path, self.empty)
+        return (self.migrate(value) if readable and self.migrate else value), readable
+
+    async def settle(self) -> bool:
+        """Write the stored document back in today's shape, once, when it is not (at start). True when it wrote."""
+        if self.migrate is None:
+            return False
+        async with self.lock:
+            stored, readable = await asyncio.to_thread(_read_json_store_status, self.path, self.empty)
+            if not readable or not os.path.exists(self.path) or (today := self.migrate(stored)) == stored:
+                return False
+            await _write_json_store_async(self.path, json.dumps(today))
+            return True
 
     def rev(self) -> str:
         """The revision a conditional write names — see _store_revision."""
@@ -2867,6 +2912,8 @@ class JsonStore:
             if not readable:
                 raise StoreUnreadable(self.name)
             new = change(stored)
+            if self.migrate is not None:
+                new = self.migrate(new)
             payload = json.dumps(new)
             if len(payload.encode("utf-8")) > self.max_bytes:
                 raise StoreTooLarge(self.name)
@@ -3314,7 +3361,7 @@ async def fm_document_get_handler(request: web.Request) -> web.StreamResponse:
     })
 
 
-DEVICE_CONFIG = JsonStore("device-config.json", {}, DEVICE_CONFIG_MAX_BYTES)
+DEVICE_CONFIG = JsonStore("device-config.json", {}, DEVICE_CONFIG_MAX_BYTES, migrate=lambda doc: _device_config_today(doc))
 device_config_get_handler = _store_get_handler(
     DEVICE_CONFIG, "config", "device configuration")
 device_config_put_handler = _store_put_handler(
@@ -3600,15 +3647,14 @@ NOT_STORED = object()
 
 
 class VillaSetting:
-    """One of the villa's shared settings (device-config.json, the Kiosk's SHARED_KEYS) as this server reads it.
-    `read(raw)`: the stored value, or NOT_STORED, to the value used. `unreadable`: what a file that exists and cannot
-    be read (or holds the wrong shape) means; None is "cannot tell", which the heartbeat leaves out of its answer.
-    `retired(stored)`: the value an older Kiosk stored under other keys, read when the setting's own key is not stored
-    (formats outlive their writer), or NOT_STORED."""
-    __slots__ = ("read", "unreadable", "retired")
+    """One of the villa's shared settings (device-config.json, the Kiosk's SHARED_KEYS) as this server reads it, in
+    today's shape (DEVICE_CONFIG migrates what an older Kiosk stored: _device_config_today). `read(raw)`: the stored
+    value, or NOT_STORED, to the value used. `unreadable`: what a file that exists and cannot be read (or holds the
+    wrong shape) means; None is "cannot tell", which the heartbeat leaves out of its answer."""
+    __slots__ = ("read", "unreadable")
 
-    def __init__(self, read, unreadable, retired=None):
-        self.read, self.unreadable, self.retired = read, unreadable, retired
+    def __init__(self, read, unreadable):
+        self.read, self.unreadable = read, unreadable
 
 
 def _asleep_ids(raw) -> list[str]:
@@ -3621,27 +3667,69 @@ def _villa_empty_sensor(raw) -> str:
     return raw if isinstance(raw, str) and AGENT_ENTITY_RE.fullmatch(raw) else ""
 
 
-def _seconds(raw) -> int:
-    """A whole number of seconds over 0; anything else 0 (not set). Its range is the page's to keep
-    (AppConfig.fullScreenSecondsOk, on save)."""
-    return raw if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0 else 0
+def _full_screen_bounds() -> tuple[int, int, int] | None:
+    """(default, min, max) of a full-screen time (villa-settings.json `fullScreenSeconds`); None when unreadable."""
+    row = _villa_row("fullScreenSeconds")
+    values = tuple(row.get(k) for k in ("default", "min", "max"))
+    return values if all(isinstance(v, int) and not isinstance(v, bool) for v in values) else None
+
+
+def _seconds_ok(raw) -> bool:
+    """A full-screen time the villa may hold: whole seconds within the table's bounds (the app's fullScreenSecondsOk)."""
+    bounds = _full_screen_bounds()
+    return (bounds is not None and isinstance(raw, int) and not isinstance(raw, bool)
+            and bounds[1] <= raw <= bounds[2])
+
+
+def _full_screen_items(raw: list) -> list:
+    """Today's list as the app reads it (AppConfig parseFullScreen): each item a title and an accepted time, each title
+    once; anything else left out."""
+    seen, out = set(), []
+    for f in raw:
+        r = f if isinstance(f, dict) else {}
+        title, seconds = r.get("title"), r.get("seconds")
+        if not isinstance(title, str) or not title or title in seen or not _seconds_ok(seconds):
+            continue
+        seen.add(title)
+        out.append({"title": title, "seconds": seconds})
+    return out
+
+
+def _device_config_today(doc):
+    """The villa's settings (device-config.json) in today's shape: what an older Kiosk stored read into it, then the
+    keys it retired dropped (villa-settings.json `retired`). The app's own copy is read the same way
+    (src/config/migrations.ts), through the same examples (villa-settings.json `examples`: tests/store-doors.py).
+
+    ⚠️ ONE PLACE, AND THIS SERVER'S (architecture review round 17): the file is this server's, so it migrates it on
+    every read and every write, and writes it back once at start (JsonStore.settle). Each tablet migrated its copy by
+    hand on two paths, and this server read the old keys a third way, with no upper bound on the time (100000 seconds
+    here, 60 on the tablet). An older Kiosk's titles and one time for all (`fullScreenFor`, `ringShownForS`, to
+    2.496.669) read as each title with that time, or the default when it was not one the field takes. An unreadable
+    table migrates nothing: the document is handed over as stored (nothing dropped on a guess)."""
+    bounds = _full_screen_bounds()
+    retired = VILLA_SETTINGS_TABLE.get("retired") if isinstance(VILLA_SETTINGS_TABLE, dict) else None
+    if not isinstance(doc, dict) or bounds is None or not isinstance(retired, list):
+        return doc
+    out = {k: v for k, v in doc.items() if k not in retired}
+    if isinstance(doc.get("fullScreen"), list):
+        out["fullScreen"] = _full_screen_items(doc["fullScreen"])
+    elif isinstance(doc.get("fullScreenFor"), list):
+        seconds = doc.get("ringShownForS") if _seconds_ok(doc.get("ringShownForS")) else bounds[0]
+        out["fullScreen"] = _full_screen_items([{"title": t, "seconds": seconds} for t in doc["fullScreenFor"]])
+    return out
 
 
 def _full_screen_longest(raw) -> int:
     """The longest any full-screen announcement holds the screen (device-config.json `fullScreen`: [{title, seconds}],
-    each its own, owner 2026-11-03), in seconds; none picked, not stored or another shape: 0."""
-    items = raw if isinstance(raw, list) else []
-    return max((_seconds(f.get("seconds")) for f in items if isinstance(f, dict)), default=0)
+    each its own, owner 2026-11-03, today's shape), in seconds; none picked, not stored or another shape: 0."""
+    items = _full_screen_items(raw) if isinstance(raw, list) else []
+    return max((f["seconds"] for f in items), default=0)
 
 
-def _full_screen_retired(stored: dict):
-    """A config an older Kiosk stored (to 2.496.669): its picked titles (`fullScreenFor`) and one time for all
-    (`ringShownForS`), as today's list; NOT_STORED without the titles. The page reads it the same way
-    (AppConfig.fullScreenFromRetired)."""
-    titles = stored.get("fullScreenFor")
-    if not isinstance(titles, list):
-        return NOT_STORED
-    return [{"title": t, "seconds": stored.get("ringShownForS")} for t in titles if isinstance(t, str) and t]
+def _villa_default(name: str, kind: type, fallback):
+    """A setting's default from its row (villa-settings.json), or `fallback` when the table cannot tell."""
+    value = _villa_row(name).get("default")
+    return value if isinstance(value, kind) else fallback
 
 
 #: ⚠️ ONE READER OF THE VILLA'S SETTINGS, AND WHAT "CANNOT READ" MEANS FOR EACH (architecture review, 2026-10-30).
@@ -3655,10 +3743,11 @@ def _full_screen_retired(stored: dict):
 #:   fullScreen           the longest a full-screen announcement holds the screen; unreadable: not set (_ring_current_s)
 VILLA_SETTINGS: dict[str, VillaSetting] = {
     "unavailableByDesign": VillaSetting(_asleep_ids, None),
-    "maintenanceMode": VillaSetting(lambda raw: raw is True, None),
+    "maintenanceMode": VillaSetting(
+        lambda raw: raw if isinstance(raw, bool) else _villa_default("maintenanceMode", bool, False), None),
     "presenceSensor": VillaSetting(_villa_empty_sensor, None),
     "recordsKeptDays": VillaSetting(_records_kept_days, 0),
-    "fullScreen": VillaSetting(_full_screen_longest, 0, _full_screen_retired),
+    "fullScreen": VillaSetting(_full_screen_longest, 0),
 }
 
 
@@ -3669,8 +3758,6 @@ def _villa_setting(name: str):
     if not readable:
         return row.unreadable
     raw = stored.get(name, NOT_STORED) if isinstance(stored, dict) else NOT_STORED
-    if raw is NOT_STORED and row.retired and isinstance(stored, dict):
-        raw = row.retired(stored)
     return row.read(raw)
 
 
@@ -5272,6 +5359,9 @@ def build_app(data_dir: str | None = None) -> web.Application:
         await _cleanup_stale_options(a["session"])
         if (gone := _remove_retired_data()):
             print(f"[supervisor-proxy] removed retired file(s): {gone}", flush=True)
+        if await DEVICE_CONFIG.settle():
+            print("[supervisor-proxy] the villa's settings were written in today's shape (older keys read and dropped)",
+                  flush=True)
         await _learn_own_version(a["session"])
         a["light_scenes"] = asyncio.create_task(_learn_light_scenes(a["session"]))
         a["announcements"] = asyncio.create_task(_listen_announcements(a))

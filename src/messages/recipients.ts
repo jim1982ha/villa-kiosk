@@ -7,29 +7,70 @@
 // the message") with no VESTA Agent at all, and the Agent reads the same two (vesta_shared/villa_recipients.py). This
 // tablet only edits them: Settings › Messages › Who gets the messages (components/settings/WhoGetsMessages).
 // The helpers are defined in the Agent's message package (agent-src/homeassistant/packages/vesta_message.yaml).
+//
+// ⚠️ THE LISTS' HELPERS, THEIR SIZE AND HOW A LIST IS READ ARE THE AGREEMENT'S (agent-contract.json `recipients`,
+// architecture review round 17): the Kiosk and the Agent each wrote their own copy, and a list one side read
+// differently from the other would send an alert to someone the tablet does not show. Both drive their reading
+// through the agreement's examples.
 
-/** Each role's list on the villa: the helper's entity id, and the profile whose words name it on screen (the
- *  facility manager is the Kiosk's `ops` profile). */
+import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
+
+const AGREED = AGENT_CONTRACT.recipients;
+
+/** Each role's list on the villa: the helper's entity id (the agreement's), and the profile whose words name it on
+ *  screen (the facility manager is the Kiosk's `ops` profile: the Kiosk's own mapping). */
 export const ROLE_LISTS = [
-  { role: "owner", entityId: "input_text.vesta_owner_targets", profile: "owner" },
-  { role: "fm", entityId: "input_text.vesta_fm_targets", profile: "ops" },
+  { role: "owner", entityId: AGREED.lists.owner, profile: "owner" },
+  { role: "fm", entityId: AGREED.lists.fm, profile: "ops" },
 ] as const;
 
 /** What the villa's text helper holds at most (its `max`): a longer list is refused, never cut. */
-export const LIST_MAX_CHARS = 255;
+export const LIST_MAX_CHARS: number = AGREED.maxChars;
+
+/** Where a person edits the lists, in the menus' words (the agreement's `where`). */
+export const LISTS_WHERE: string = AGREED.where;
+
+/** The section's title in Settings › Messages: the last step of `where`, so the place the Agent sends a person to is
+ *  the one the tablet shows. */
+export const LISTS_TITLE: string = LISTS_WHERE.split(" › ").pop() ?? LISTS_WHERE;
 
 /** The notify entities a list's text names, once each, in its order ("unknown" and the like name none). */
 export function targetsOf(text: string | undefined | null): string[] {
   const out: string[] = [];
-  for (const part of (text ?? "").split(",")) {
+  const prefix = `${AGREED.domain}.`;
+  for (const part of (text ?? "").split(AGREED.separator)) {
     const id = part.trim().toLowerCase();
-    if (id.startsWith("notify.") && !out.includes(id)) out.push(id);
+    if (id.startsWith(prefix) && id.length > prefix.length && !out.includes(id)) out.push(id);
   }
   return out;
 }
 
 /** The text a list of notify entities is kept as; null when it does not fit the helper. */
 export function textOf(ids: readonly string[]): string | null {
-  const text = targetsOf(ids.join(",")).join(", ");
+  const text = targetsOf(ids.join(AGREED.separator)).join(`${AGREED.separator} `);
   return text.length <= LIST_MAX_CHARS ? text : null;
+}
+
+/** The changes this tablet sent that the villa may not show yet: the list last sent, and every text the villa may
+ *  hold while they land (the one it held before the first, then each one sent). */
+export interface SentLists { ids: readonly string[]; texts: readonly string[] }
+
+/** The list a new change builds on. Two changes in a row, the second before the villa shows the first, used to build
+ *  each from the list on screen, so the second wrote over the first (architecture review round 17): while the villa
+ *  still shows one of the texts this tablet's changes passed through, the next builds on the last one sent; once it
+ *  shows anything else (another tablet's change), on the villa's. */
+export function listBase(villaText: string | undefined | null, sent: SentLists | null): string[] {
+  return sent && sent.texts.includes(villaText ?? "") ? [...sent.ids] : targetsOf(villaText);
+}
+
+/** One change to a list, planned over what the villa shows and what this tablet has sent: the text to send (null
+ *  when the list would not fit the helper, and nothing is sent) and what this tablet will have sent after it. */
+export function planChange(villaText: string | undefined | null, sent: SentLists | null,
+  change: (ids: string[]) => string[]): { text: string | null; sent: SentLists | null } {
+  const ids = targetsOf(change(listBase(villaText, sent)).join(AGREED.separator));
+  const text = textOf(ids);
+  if (text === null) return { text, sent };
+  const now = villaText ?? "";
+  const before = sent && sent.texts.includes(now) ? sent.texts : [now];
+  return { text, sent: { ids, texts: [...before, text] } };
 }

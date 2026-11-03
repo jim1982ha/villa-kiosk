@@ -484,10 +484,11 @@ ck("  ...still never a system service or a write frame",
 ck("an unreadable table fails CLOSED (no non-owner access), never open",
    proxy._load_vesta_table("no-such-table.json", "test") == {}
    and 'HA_COMMANDS.get("websocket", ())' in inspect.getsource(proxy))
-ck("  ...for every table: roles, ha-commands, fm-records and agent-contract all load through it",
+ck("  ...for every table: roles, ha-commands, fm-records, agent-contract and villa-settings all load through it",
    all(f'_load_vesta_table("{n}",' in inspect.getsource(fn) for n, fn in (
        ("roles.json", proxy._load_roles), ("ha-commands.json", proxy._load_ha_commands),
-       ("fm-records.json", proxy._load_fm_records), ("agent-contract.json", proxy._load_agent_contract)))
+       ("fm-records.json", proxy._load_fm_records), ("agent-contract.json", proxy._load_agent_contract),
+       ("villa-settings.json", proxy._load_villa_settings)))
    and inspect.getsource(proxy).count('for path in ("/usr/share/vesta/"') == 1)
 ck("an unlisted command is refused for ops",
    refuse("ops", "config/entity_registry/update") is not None)

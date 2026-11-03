@@ -307,7 +307,8 @@ export interface FmContract {
 // applies to — it never was: the cap is always on minor spend. The categories are "Minor" and "Major" everywhere
 // (COST_CATEGORY_NAMES); a name an older store still holds is simply not read.
 
-export const EMPTY_FM_CONTRACT: FmContract = { monthlyCap: 0, warnAtPercent: 0 };
+// No contract (no cap, the default warning) is the villa setting's default: its row in villa-settings.json
+// (config/villaSettings VILLA_DEFAULTS.fmContract).
 
 /** The contract as every Facility screen, the engine and the report read it:
  *  names and threshold resolved, plus the currency Home Assistant is set to
