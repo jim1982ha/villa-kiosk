@@ -1,3 +1,9 @@
+## 2.496.684
+
+What you will see:
+- The full screen's Close: its ✕ is back to its size, inside the white button, with the green ring round it (the ✕ was
+  drawn as large as the ring, over it).
+
 ## 2.496.683
 
 What you will see:
