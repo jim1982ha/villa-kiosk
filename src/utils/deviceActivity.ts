@@ -18,9 +18,9 @@
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping, EntityType } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
-import { conditionOf, type DeviceCondition } from "@/config/deviceCondition";
+import { conditionOf, windowStatusOf, type DeviceCondition } from "@/config/deviceCondition";
 import { deviceTypeOf } from "@/config/EntityMap";
-import { TRANSITIONAL_STATES, lockBolt } from "@/utils/stateColors";
+import { TRANSITIONAL_STATES, lockBolt, type StatusKey } from "@/utils/stateColors";
 import { devicePower } from "@/utils/devicePower";
 import type { SwitchPosition } from "@/utils/entityState";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -285,35 +285,44 @@ export function classifyDeviceActivity({ type, entity: s, condition }: DeviceRea
  * OFF — its real alert — never did; a media_player glowed on `on` but not on
  * `buffering`. Now the mesh asks classifyDeviceActivity, as the badge does.
  *
- *   * `tint` — a lock's whole-mesh colour: secure, alert, or unavailable;
- *   * `pulse` — an alerting sensor's red pulse;
- *   * `glow` — an active switch/player's soft glow;
+ *   * `tint` — a lock's whole-mesh colour: its window's status colour (green locked, red unlocked or jammed, teal on
+ *     its way, grey out of contact);
+ *   * `pulse` — a sensor's red pulse, while its window says red (a leak, an open door, a detection);
+ *   * `glow` — an active switch/player's soft glow, in its window's status colour;
+ *
+ * ⚠️ THE WINDOW'S STATUS, NEVER A CALMER ONE (owner, 2026-11-04: "remove all notion of stays calm and always align it
+ * with assigned device state"): from 2026-10-26 an unlocked lock was the teal "in use" glow on the map while its
+ * window said a red Unlocked, and an open door or a detection did not pulse while its window was red. The mesh reads
+ * deviceCondition.windowStatusOf, what the window's pill and history bar read.
  *   * `dark` — no emissive at all (the baked marker glow must not show);
  *   * `none` — nothing to paint here (lights: BulbSet; covers: their pose).
  */
 type MeshLook =
   | { kind: "none" }
-  | { kind: "dark" }
-  | { kind: "glow"; on: boolean }
+  | { kind: "dark"; outline?: StatusKey }
+  | { kind: "glow"; on: boolean; tone: StatusKey }
   | { kind: "pulse"; on: boolean; unavailable: boolean }
-  | { kind: "tint"; tone: "secure" | "open" | "alert" | "unavailable" };
+  | { kind: "tint"; tone: StatusKey };
 
 export function meshLookFor(r: DeviceReading): MeshLook {
   const kind = badgeKindFor(r);
+  const status = windowStatusOf(r.entity);
   switch (r.type) {
     case "light":
     case "cover":
       return { kind: "none" };
     case "lock":
-      return { kind: "tint", tone: kind === "unavailable" ? "unavailable" : kind === "alert" ? "alert" : kind === "on" ? "open" : "secure" };
+      return { kind: "tint", tone: kind === "unavailable" ? "unavailable" : status };
     case "binary_sensor":
-      return { kind: "pulse", on: kind === "alert", unavailable: kind === "unavailable" };
+      return { kind: "pulse", on: kind !== "unavailable" && status === "alert", unavailable: kind === "unavailable" };
     case "switch":
     case "media_player":
-      return { kind: "glow", on: kind === "on" };
+      return { kind: "glow", on: kind === "on", tone: status };
+    // a running climate device's outline, in its window's colour ("Cool" green), off when its window says off
+    case "climate":
+      return kind === "on" ? { kind: "dark", outline: status } : { kind: "dark" };
     case "fan":
     case "sensor":
-    case "climate":
       return { kind: "dark" };
     default:
       return { kind: "none" };

@@ -147,7 +147,7 @@ import {
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
-import { ALERT_RED, LOST_GREY, healthPill, SECURE_GREEN, ACTIVE_GLOW } from "./colors";
+import { LOST_GREY, healthPill, STATUS_COLOR3 } from "./colors";
 import { COSMETIC_MAPPING_FIELDS, type EntityMapDelta } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
@@ -291,9 +291,7 @@ const STRIP_JOINT_EXTENSION = 0.02; // metres (2 cm) past each modelled endpoint
 // Mesh.renderOutline/renderOverlay pair, not a screen-space EffectLayer).
 // Always on while the thermostat is running, independent of the "highlight
 // clickable objects" preference — this is a live status signal, not a
-// discoverability hint.
-// Same red as the room-presence glow / badge alert ring — see colors.ts.
-const CLIMATE_ON_COLOR = ALERT_RED;
+// discoverability hint. Its colour is its window's status (applyClimateOutline).
 const CLIMATE_OUTLINE_WORLD_WIDTH = 0.04; // metres, matches the blue outline's rim
 // World-space clearance added above a mesh-bound entity's bounding-box top when
 // placing its state-label anchor, so the badge floats just clear of the
@@ -5535,11 +5533,11 @@ export class EntityVisuals {
     return null;
   }
 
-  /** Red outline + translucent overlay while a climate device is running
-   *  (state !== "off"), cleared otherwise — see CLIMATE_ON_COLOR. */
-  private applyClimateOutline(mesh: AbstractMesh, on: boolean): void {
+  /** Outline + translucent overlay while a climate device is running, in its window's status colour
+   *  (meshLookFor's `outline`; owner, 2026-11-04: it was red beside a green "Cool"), cleared otherwise (`color` null). */
+  private applyClimateOutline(mesh: AbstractMesh, color: Color3 | null): void {
     if (!(mesh instanceof Mesh)) return;
-    if (!on) {
+    if (!color) {
       if (mesh.renderOutline || mesh.renderOverlay) {
         mesh.renderOutline = false;
         mesh.renderOverlay = false;
@@ -5548,10 +5546,10 @@ export class EntityVisuals {
     }
     const unit = axisWorldScale(mesh);
     const localScale = unit.x || unit.y || unit.z || 1;
-    mesh.outlineColor = CLIMATE_ON_COLOR;
+    mesh.outlineColor = color;
     mesh.outlineWidth = CLIMATE_OUTLINE_WORLD_WIDTH / localScale;
     mesh.renderOutline = true;
-    mesh.overlayColor = CLIMATE_ON_COLOR;
+    mesh.overlayColor = color;
     // 0.3 blended so faintly with the device's own (often light-coloured)
     // material that it read as pale pink rather than red — see colors.ts.
     mesh.overlayAlpha = 0.55;
@@ -5605,11 +5603,9 @@ export class EntityVisuals {
 
       case "tint": {
         if (isPose) break;
-        // Unavailable is grey, never red: a lock that has lost contact
-        // asserts no "unlocked" reading (see colors.ts).
-        // unlocked is in use, not an alarm (owner, 2026-10-26): the "on" glow, red only for a jammed bolt
-        const c = look.tone === "unavailable" ? LOST_GREY : look.tone === "alert" ? ALERT_RED
-          : look.tone === "open" ? ACTIVE_GLOW : SECURE_GREEN;
+        // its window's status colour (meshLookFor): unavailable grey, never red — a lock that has lost contact
+        // asserts no "unlocked" reading (see colors.ts)
+        const c = STATUS_COLOR3[look.tone];
         setDiffuse?.(c);
         setEmissive?.(c.scale(look.tone === "unavailable" ? 0.25 : 0.2));
         break;
@@ -5631,7 +5627,7 @@ export class EntityVisuals {
         break;
 
       case "glow":
-        setEmissive?.(look.on ? ACTIVE_GLOW : Color3.Black());
+        setEmissive?.(look.on ? STATUS_COLOR3[look.tone].scale(0.6) : Color3.Black());
         break;
 
       case "dark":
@@ -5640,9 +5636,7 @@ export class EntityVisuals {
         // back to a placeholder sharing the lights' warm marker material,
         // whose baked glow must be overridden or it reads "lit like a light".
         setEmissive?.(Color3.Black());
-        if (map.type === "climate") {
-          this.applyClimateOutline(mesh, deviceLook(state.entity_id, this.lookSource).own === "on");
-        }
+        if (map.type === "climate") this.applyClimateOutline(mesh, look.outline ? STATUS_COLOR3[look.outline] : null);
         break;
     }
   }

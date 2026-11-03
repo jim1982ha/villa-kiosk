@@ -13,7 +13,7 @@
 
 import type { EntityType } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
-import { contactOf, lockBolt, statusKeyFor } from "@/utils/stateColors";
+import { binaryStatus, contactOf, lockBolt, statusKeyFor, type StatusKey } from "@/utils/stateColors";
 import { alertStateFor, binarySensorClassInfo, isMotionSensor } from "./BinarySensorClasses";
 
 /**
@@ -80,4 +80,15 @@ export function glowsRoom(entityId: string, deviceClass: string | undefined): bo
  *  By class only, as the window always read it: a presence or moving sensor (no problem state) is never red there. */
 export function windowProblemState(deviceClass: string | undefined): string | undefined {
   return alertStateFor(deviceClass);
+}
+
+/** THE STATUS A DEVICE'S WINDOW SAYS, as its pill and history bar colour it: a binary sensor by its class's problem
+ *  state (binaryLook), anything else by the status vocabulary (stateColors.statusKeyFor, by its domain).
+ *  ⚠️ ITS 3D OBJECT PAINTS THIS, NEVER A CALMER READING (owner, 2026-11-04: "i don't want to have inconsistent colours
+ *  for the 3D assets. It shall always be consistent with the device status"): an unlocked lock was red in its window
+ *  and the teal "in use" glow on the map (deviceActivity.meshLookFor). */
+export function windowStatusOf(entity: Pick<HassEntity, "entity_id" | "state" | "attributes">): StatusKey {
+  return entity.entity_id.startsWith("binary_sensor.")
+    ? binaryStatus(entity.state, windowProblemState(entity.attributes?.device_class as string | undefined))
+    : statusKeyFor(entity.state, entity.entity_id);
 }

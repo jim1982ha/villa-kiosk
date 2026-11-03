@@ -6,6 +6,7 @@
 // read as the same signal ("this is actively alerting"). Import this instead
 // of hardcoding a new Color3 wherever that signal shows up.
 import { Color3 } from "@babylonjs/core/Maths/math.color";
+import type { StatusKey } from "@/utils/stateColors";
 
 // Matches --status-danger (light theme value — see colors.ts's file comment
 // on why these are static, not a live theme read).
@@ -55,9 +56,14 @@ export function healthPill(health: "alert" | "fault" | "unavailable" | "ok"): { 
     : { fill: AVAILABLE_GREEN_HEX, ink: "#ffffff" };
 }
 
-// A 3D lock mesh that is SECURE (locked, or on its way to a rest state) — the
-// green it has always been drawn in, named here beside the other status
-// colours rather than written as a literal in EntityVisuals.applyToMesh.
-export const SECURE_GREEN = new Color3(0.2, 0.75, 0.3);
-// A switch or media player that is ON: a soft glow on its own mesh.
-export const ACTIVE_GLOW = new Color3(0.1, 0.35, 0.4);
+/** The status vocabulary's colours (utils/stateColors.STATUS_COLOR) for a 3D object, light-theme values like every
+ *  colour here: a mesh shows the status its device's window shows, in that window's colour (owner, 2026-11-04: "always
+ *  consistent with the device status"). It had its own: a locked lock a brighter green than its pill, an unlocked one
+ *  a teal glow beside a red "Unlocked". */
+export const STATUS_COLOR3: Record<StatusKey, Color3> = {
+  active: Color3.FromHexString("#34845A"),        // --status-on
+  idle: Color3.FromHexString("#D8D3C7"),          // --status-off
+  transitional: Color3.FromHexString("#1F7F8C"),  // --status-pending
+  unavailable: LOST_GREY,                         // --status-lost
+  alert: ALERT_RED,                               // --status-danger
+};

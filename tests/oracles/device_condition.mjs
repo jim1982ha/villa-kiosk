@@ -101,8 +101,9 @@ ck("every row reads the condition the table says (a leak, smoke, a low battery, 
 console.log("\n  the map and the Cockpit project it:");
 const pillOk = (s) => (MOVING.has(s.row) ? s.pill === "moving"
   : MAP[s.want].pill === null ? s.pill === "on" || s.pill === "off" : s.pill === MAP[s.want].pill);
-const meshOk = (s) => (s.mesh.kind === "pulse" ? s.mesh.on === (s.want === "wrong")
-  : s.mesh.kind === "tint" ? (s.mesh.tone === "alert") === (s.want === "wrong") && (s.mesh.tone === "open") === (s.want === "inUse")
+// owner, 2026-11-04: "always consistent with the device status": the 3D object is red exactly when its window is
+const meshOk = (s) => (s.mesh.kind === "pulse" ? s.mesh.on === s.windowRed
+  : s.mesh.kind === "tint" ? (s.mesh.tone === "alert") === s.windowRed
   : true);
 ck("the badge's corner: the red \"!\" only when wrong, the plain dot in use, nothing at rest",
    miss((s) => s.mark === markWanted(s)).length === 0, miss((s) => s.mark === markWanted(s)));
@@ -112,7 +113,7 @@ ck("  ...the room's number: red only for what is wrong, never for a device in us
    miss((s) => s.health === MAP[s.want].health).length === 0, miss((s) => s.health === MAP[s.want].health));
 ck("  ...a line in \"Needs attention\" exactly when it is wrong",
    miss((s) => s.cockpit === MAP[s.want].cockpit).length === 0, miss((s) => s.cockpit === MAP[s.want].cockpit));
-ck("  ...the 3D object: a sensor pulses, a lock is tinted red, only when wrong; a lock in use is tinted open",
+ck("  ...the 3D object: a sensor pulses, a lock is tinted red, exactly when its window is red (in use included)",
    miss(meshOk).length === 0 && seen.some((s) => s.mesh.kind === "tint") && seen.some((s) => s.mesh.kind === "pulse"),
    miss(meshOk));
 const glowWanted = seen.filter((s) => s.row.startsWith("binary_sensor") && s.row.endsWith(" on")
