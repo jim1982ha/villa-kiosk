@@ -117,6 +117,22 @@ const PILL_REACH = PILL_OUT + PILL_RING;
 export const PILL_MARGIN = PILL_REACH / (1 + 2 * PILL_REACH);
 export const PICTURE_SCALE = 1 / (1 - 2 * PILL_MARGIN);
 
+/**
+ * Where a badge picture of `px` puts its square and its glyph, `inset` (BADGE_INSET_CARD, 0) taken inside the pills'
+ * margin. `m`: the square's top-left (both axes); `size`: its side; `glyphBox`: what the glyph is a fraction of. ⚠️
+ * THE GLYPH'S BOX IS THE CONTROL, NEVER THE INSET SQUARE (owner, 2026-11-04): one device's glyph is the same size on
+ * its own card (chip inset 10%) and in a group card (cell not inset). Pure: tests/oracles/badge_look.mjs drives it,
+ * badgeIcons bakes by it.
+ */
+export function badgeBakeBox(px: number, inset: number,
+  /** The glyph's box as a fraction of this control (badgeLayout.glyphScaleFor): a group's cell draws the lone badge's
+   *  glyph whatever whole pixel its cell rounded to. 1: the control itself. */
+  glyphScale = 1): { m: number; size: number; glyphBox: number } {
+  const outer = px * PILL_MARGIN;
+  const inner = px - 2 * outer;
+  return { m: outer + inner * inset, size: inner - 2 * inner * inset, glyphBox: inner * glyphScale };
+}
+
 /** Where the two pills sit, for a square at `m` (its top-left, both axes) of side `size`: centres, radius, rings and
  *  symbol size, in the picture's pixels. Pure — tests/oracles/badge_mark.mjs reads it; badgeIcons draws by it. */
 export function pillGeometry(m: number, size: number): {

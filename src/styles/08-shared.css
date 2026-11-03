@@ -102,10 +102,7 @@
   pointer-events: auto; background: none; border: none; color: var(--text-secondary); cursor: pointer;
   display: flex; padding: 2px; flex: 0 0 auto;
 }
-/* an announcement the owner picked for the whole screen (AnnouncementNotice, ticket 16; its frame the Window kind
-   "screen", its header, body and footer the shell's): the body's words centred, the photo taking what height is left
-   on a phone or a tablet */
-.announcement-full { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; }
+/* an announcement's words, photo and status, as its Inbox card and VESTA's conversation draw them (AnnouncementContent) */
 .announcement-full-photo { min-height: 0; max-width: 100%; flex: 0 1 auto; max-height: 60%; border-radius: 12px; object-fit: contain; }
 .announcement-full-title { overflow-wrap: anywhere; }
 .announcement-full-text { margin: 0; font-size: var(--text-xl); white-space: pre-line; overflow-wrap: anywhere; }
@@ -113,8 +110,55 @@
 .announcement-full-to { margin: 0; color: var(--text-secondary); }
 .announcement-status-label { color: var(--text-primary); }
 .announcement-story-line { font-style: italic; }
-.announcement-full .vesta-notice-action { font-size: var(--text-lg); min-height: 56px; padding: 0 28px; }
 @media (max-width: 560px) { .announcement-full-text { font-size: var(--text-lg); } }
+/* ⚠️ AN ANNOUNCEMENT PICKED FOR THE WHOLE SCREEN, THE NIGHT LOOK (owner, 2026-11-04, proposal 5: AnnouncementNotice's
+   AnnouncementFullScreenView, in the Window kind "screen"): dark whatever the theme, so a camera's night picture reads
+   on it; its title and words at the top, its photo as large as the screen allows, then its buttons and Close inside the
+   ring that empties as its time runs out. Its own colours, named once here. */
+.modal.announcement-night {
+  --night-ground: #111311; --night-ink: #F2F4F1; --night-muted: #A9B0A8; --night-photo: #2E312E;
+  --night-track: #2C302C; --night-accent: #62B584; --night-on-accent: #0B1710;
+  background: var(--night-ground); color: var(--night-ink);
+}
+.announcement-night .announcement-night-head {
+  flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; min-height: 0; border: 0;
+  padding: max(24px, env(safe-area-inset-top)) 40px 0;
+}
+.announcement-night-head .announcement-full-title { margin: 0; font-size: var(--text-2xl); color: var(--night-ink); }
+.announcement-night-text { margin: 0; color: var(--night-muted); font-size: var(--text-md); white-space: pre-line; overflow-wrap: anywhere; }
+.announcement-night .announcement-night-body { display: flex; overflow: hidden; padding: 20px 40px; }
+.announcement-night-photo {
+  flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain; border-radius: 18px; background: var(--night-photo);
+}
+.announcement-night .announcement-night-actions {
+  justify-content: center; gap: 20px; flex-wrap: wrap; background: transparent;
+  padding: 0 40px max(24px, env(safe-area-inset-bottom));
+}
+.announcement-night-actions .vesta-notice-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.announcement-night-actions .vesta-notice-action {
+  min-height: 64px; padding: 0 36px; border-radius: 999px; font-size: var(--text-lg); font-weight: 600;
+  background: transparent; color: var(--night-ink); border: 2px solid var(--night-muted);
+}
+/* the first of its buttons is the answer it waits for (the doorbell's Unlock, Approve): filled in the accent */
+.announcement-night-actions .vesta-notice-action:first-child {
+  background: var(--night-accent); color: var(--night-on-accent); border-color: var(--night-accent);
+}
+.announcement-night-actions .vesta-notice-said { color: var(--night-muted); }
+.announcement-night-close { position: relative; width: 84px; height: 84px; flex: none; }
+.announcement-night-close svg { position: absolute; inset: 0; width: 84px; height: 84px; }
+.announcement-night-track, .announcement-night-left { fill: none; stroke-width: 5; }
+.announcement-night-track { stroke: var(--night-track); }
+.announcement-night-left { stroke: var(--night-accent); stroke-linecap: round; transition: stroke-dasharray 1s linear; }
+.announcement-night-close button {
+  position: absolute; inset: 9px; border-radius: 50%; border: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; background: var(--night-ink); color: var(--night-ground);
+}
+.announcement-night-words { color: var(--night-muted); font-size: var(--text-md); }
+@media (max-width: 560px) {
+  .announcement-night .announcement-night-head, .announcement-night .announcement-night-body,
+  .announcement-night .announcement-night-actions { padding-left: 16px; padding-right: 16px; }
+  .announcement-night-head .announcement-full-title { font-size: var(--text-xl); }
+}
 /* a sensor's news belongs to the villa map: never over the fullscreen camera's live picture */
 body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .conn-banner-short { display: none; }
