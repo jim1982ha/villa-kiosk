@@ -85,6 +85,12 @@ ck("StateTimeline draws exactly these", /timelineCells\(data, end \?\? timeKey, 
      JSON.stringify(key) === JSON.stringify([{ state: "off", color: "green", label: "Clear" },
        { state: "on", color: "red", label: "Detected" }, { state: "unavailable", color: "amber", label: "Unavailable" }]), key);
   const quiet = timelineCells([{ state: "online", t: now - 30 * H }], now, 24, 5 * 60_000, ["online"]);
+  // owner, 2026-11-04: "merge the 2 colour Locking and Unlocking with the same tile colour"
+  const bolt = timelineCells([{ state: "unlocked", t: now - 20 * H }, { state: "locking", t: now - 10 * H }, { state: "locked", t: now - 9 * H },
+    { state: "unlocking", t: now - 5 * H }, { state: "unlocked", t: now - 4 * H }], now, 24, 5 * 60_000, []);
+  const boltKey = timelineLegend(bolt, (st) => ({ locked: "green", unlocked: "red" })[st] ?? "teal", (st) => st[0].toUpperCase() + st.slice(1));
+  ck("  ...a lock's Locking and Unlocking, one colour, are one entry",
+     boltKey.map((l) => `${l.label}:${l.color}`).join() === "Unlocked:red,Locking / Unlocking:teal,Locked:green", boltKey);
   ck("  ...a resting state it paints is listed too", timelineLegend(quiet, () => "g", (x) => x).map((l) => l.state).join() === "online");
 
   const { React, h, draw } = await import("../consistency/screen.mjs");

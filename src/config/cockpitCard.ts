@@ -23,7 +23,7 @@ import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, dayMonth, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
 import { closedFaults, closedWords, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
-import { alertNumberOf, faultBegan, faultTitle } from "@/fm/fmEngine";
+import { alertNumberOf, closedAsLasting, faultBegan, faultTitle } from "@/fm/fmEngine";
 import type { FmData, FmTicket } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { Announcement } from "@/messages/announcements";
@@ -339,10 +339,11 @@ function oneCardPerDevice(cards: readonly CardView[]): CardView[] {
 }
 
 /** Every closed fault as its card, for the Closed section (owner, 2026-11-01): a watched card's, with nothing left to
- *  check, the last closed first (faultConfirm.closedFaults), and its Reopen.
- *  ⚠️ A CLOSE CAN BE TAKEN BACK (owner, 2026-11-04: "there are no button in the closed card to potentially re-open this
- *  issue"): a fault closed from the Inbox, "Not a problem while it lasts" above all, had no way back; only a ticket had,
- *  in Tickets › Closed. The same Reopen (deviceWork.closedActions): an open fault again, the VESTA Agent told. */
+ *  check, the last closed first (faultConfirm.closedFaults).
+ *  ⚠️ "NOT A PROBLEM WHILE IT LASTS" CAN BE TAKEN BACK, AND ONLY IT (owner, 2026-11-04: "just add this button for the
+ *  faults that have been closed with the Not a problem while it lasts status"): nothing follows such a close, so it had
+ *  no way back; every other close is checked or over. The Tickets tab's Reopen (deviceWork.closedActions): an open
+ *  fault again, the VESTA Agent told. */
 export function closedCards(fmData: FmData, cadence: AgentCadence | null, now: Date, opts: CardsOpts): CardView[] {
   return closedFaults(fmData, cadence, now.getTime()).flatMap((c) => clearedCard(c.ticket, closedWords(c), opts,
     { key: `closed:${c.ticket.id}`, look: "closed", nextCheck: null,
@@ -358,7 +359,7 @@ interface CardsOpts {
 }
 
 /** The card of a fault no longer open: titled by its device and its room as an open issue's is, its fault's title as
- *  its line and how it closed (`did`) under it; under Closed its Reopen, on Watch no button (VESTA is still checking it).
+ *  its line and how it closed (`did`) under it; a Reopen only under Closed, on a "Not a problem while it lasts".
  *  None when the profile may not see its device. */
 function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardView, "key" | "look" | "nextCheck" | "watched" | "closedAt">): CardView[] {
   const { devices, entities, entityMap, resolvedRooms, may } = opts;
@@ -372,7 +373,7 @@ function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardVi
     ...cardHead(device, title, t.room),
     entityId: device?.key,
     lead: null,
-    lines: [{ key: `fault:${t.id}`, records: [], actions: own.look === "closed" ? closedActions(workRecord(t)) : [], asked: null, text: device && title !== device.label ? title : "", story: [], openedAt: faultBegan(t),
+    lines: [{ key: `fault:${t.id}`, records: [], actions: own.look === "closed" && closedAsLasting(t) ? closedActions(workRecord(t)) : [], asked: null, text: device && title !== device.label ? title : "", story: [], openedAt: faultBegan(t),
       closing: did,
       ...alertNumberIn(alertNumberOf(t)) }],
   }];
