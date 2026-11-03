@@ -143,19 +143,13 @@ export function rulesForms(doc, jobs = [], tools = null) {
   const missing = jobs.filter((j) => !j.skill_ai).map((j) => j.name);      // the agent's answer (server._jobs)
 
   // people: ⚠️ THE KIOSK'S LISTS, SHOWN HERE (owner, 2026-11-03: "Yes, Kiosk only"; "the same way it's reflected for
-  // the Asleep between reports", knowledge.asleepCard). Who gets the messages, and with them who may press their
-  // buttons, is set in the VESTA Kiosk; the agent reads the lists (server._people: one row per chat) and never edits
-  // them. Each chat's language is the agent's, the card's one control (f.languages, by chat id)
-  f.languages = f.languages || {};
-  const langChoices = (code) => ({ ...doc.languages, ...(code in doc.languages ? {} : { [code]: code }) });
-  const peopleRows = (doc.people || []).map((p) => {
-    const code = f.languages[String(p.telegram_id)] ?? "en";
-    return [p.name, String(p.telegram_id), h("span", { class: "chip" }, p.role),
-      sel(langChoices(code), code, (v) => (f.languages[String(p.telegram_id)] = v), `Language of ${p.name}`)];
-  });
-  const people = card(W("people"), `Set in ${doc.lists_where}. Every chat in its lists gets the messages of its list's role and acts with that role: a person's private chat (a positive id) or a group (a negative id), where everyone acts with the group's role; a chat in both lists has both. A person must have sent /start to the bot once before it can write to them. The agent reads the lists and never edits them; each chat's language is chosen here, and the agent writes to it in that language.`,
+  // the Asleep between reports", knowledge.asleepCard). Who gets the messages, who may press their buttons and each
+  // chat's language are set in the VESTA Kiosk (owner, 2026-11-03: "isn't it also redundant to show the Telegram chat
+  // ID … and also the language selection?"); the agent reads them (server._people: one row per chat) and edits nothing.
+  const peopleRows = (doc.people || []).map((p) => [p.name, h("span", { class: "chip" }, p.role), p.language]);
+  const people = card(W("people"), `Set in ${doc.lists_where}, each chat with its language. Every chat in its lists gets the messages of its list's role, in its language, and acts with that role: a person's private chat, or a group, where everyone acts with the group's role; a chat in both lists has both. A person must have sent /start to the bot once before it can write to them. The agent reads the lists and never edits them.`,
     peopleRows.length
-      ? table(["Name", "Telegram id", "Role", "Language"], peopleRows, { cls: "people", widths: ["30%", "24%", "22%", null] })
+      ? table(["Name", "Role", "Language"], peopleRows, { cls: "people", widths: ["40%", "30%", null] })
       : [h("div", { class: "chips" }, h("span", { class: "muted" }, "None")),
          h("p", { class: "muted" }, doc.lists_read
            ? `The lists name no Telegram chat: the agent answers nobody and posts nowhere. Set them in ${doc.lists_where}.`

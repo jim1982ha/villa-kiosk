@@ -1,3 +1,14 @@
+## 0.12.442
+
+What you will see:
+- VESTA's page, Rules › People: each chat shows its name, its role and its language, read only. The Telegram id column
+  and the language menu are gone: who gets the messages and each chat's language are both set in the VESTA Kiosk,
+  under Settings › Messages › Who gets the messages, with a language beside each chat (VESTA Kiosk 2.496.673 or later).
+- policy.yaml holds no chat languages any more. The page's next save takes out the old `languages:` and People rows.
+- A language set before on VESTA's page is not carried over: every chat reads English until its language is set in the
+  Kiosk. Your three chats were all English, so nothing changes for you.
+- Copy this setup now says "Who gets the messages, and each chat's language" stay with the villa.
+
 ## 0.12.441
 
 What you will see:

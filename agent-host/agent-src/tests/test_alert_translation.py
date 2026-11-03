@@ -16,7 +16,7 @@ import pytest
 
 from ai_fake import FakeAI
 from ha_fake import FakeHA, tool
-from helpers import make_agent
+from helpers import make_agent, chat_entity
 from telegram_fake import BOT
 from vesta_agent import translation
 from vesta_shared import agent_records
@@ -265,11 +265,8 @@ def test_a_chat_whose_language_changed_reads_the_alerts_words_in_its_new_one_whe
         await alert(v, 1, "lock.test_lock", "Test lock", 10, "23/10/2026 18:30")
         await v.translations.idle()
         english = card(v, 1, GROUP)
-        with open(v.s.policy_path) as f:
-            pol = yaml.safe_load(f)
-        pol["languages"][GROUP] = "fr"                                   # the People card's Language menu
-        with open(v.s.policy_path, "w") as f:
-            yaml.safe_dump(pol, f)
+        # set in the Kiosk beside the chat, told in its answer to a heartbeat (owner, 2026-11-03)
+        v.kiosk_answered({"chatLanguages": {chat_entity(FM_DE): "de", chat_entity(FM_FR): "fr", chat_entity(GROUP): "fr"}})
         await v.on_ha_event("vesta_critical_event", {
             "blueprint": "critical_condition", "rule_id": "automation.watch_1", "incident_id": "automation.watch_1-1",
             "phase": "resolved", "severity": "critical", "label": "Test lock unavailable", "entities": ["lock.test_lock"],

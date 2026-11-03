@@ -1,6 +1,6 @@
 """Copy this villa's agent setup to another villa: one file out, a preview in, nothing written before Apply (0.6.42).
 
-⚠️ WHAT NEVER LEAVES THE VILLA: each chat's language (who is who is the villa's own lists, the VESTA Kiosk's), the
+⚠️ WHAT NEVER LEAVES THE VILLA: who gets the messages and each chat's language (the villa's own, the VESTA Kiosk's), the
 devices (protected, excluded, the allowed lists, the siren, the system actions, notify recipients), keys and tokens, and the records. They are
 this villa's — an entity id from one villa means nothing, or something else, on another. The file carries the
 skills (their villa.* files only if asked) and the shareable part of the rules:
@@ -60,7 +60,7 @@ PART_WORDS = {
 }
 PARTS = tuple(PART_WORDS)
 #: what never leaves a villa: (words, note)
-STAYS = (("Each chat's language", "who gets the messages is each villa's own lists, set in the VESTA Kiosk"),
+STAYS = (("Who gets the messages, and each chat's language", "each villa's own, set in its VESTA Kiosk"),
          ("Devices: protected, left alone, the devices each service may act on, the siren", "entity ids are this villa's"),
          ("Keys and tokens", "never in any file the page makes"), ("Records, transcripts, costs", None))
 

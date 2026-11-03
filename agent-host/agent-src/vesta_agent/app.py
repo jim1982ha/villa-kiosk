@@ -484,7 +484,7 @@ class Vesta:
 
     def _build_pack(self) -> dict:
         # ⚠️ THE PACK'S CHATS ARE THE AGENT'S ENTRIES (owner, 2026-11-03: who is who is the VESTA Kiosk's lists, each chat's
-        # language the People card's): handed over as the pack's own table of chats — a chat, its role, its name and its
+        # language set there beside the chat): handed over as the pack's own table of chats — a chat, its role, its name and its
         # language, as the roster reads them — never merged into the villa's people by name (round 17, lead 6)
         chats = os.path.join(self.s.data_dir, "pack_chats.json")
         with open(chats, "w", encoding="utf-8") as f:

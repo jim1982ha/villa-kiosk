@@ -147,8 +147,9 @@ someone answers. A person must have sent `/start` to the bot once before it can
 write to them; a chat Telegram refuses is named on the **Overview**.
 **Everyone in a listed group acts with the group's role** there (the facility
 manager's when the group is in both lists), with nothing else to set. The
-VESTA Agent page's **Rules › People** shows the lists read only; there you set
-each chat's language. The agent reads the lists again every 5 minutes, no
+VESTA Agent page's **Rules › People** shows the lists read only, each chat with
+its language, which is also set in the Kiosk, beside the chat (VESTA Kiosk
+2.496.673 or later); a chat with none reads English. The agent reads the lists again every 5 minutes, no
 restart. The same file holds the owner-only devices, the allowed
 actions and the agent's settings (AI model, limit per reply, web search).
 

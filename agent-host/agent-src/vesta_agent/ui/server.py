@@ -368,24 +368,27 @@ class UI:
             form = to_form(text)
         except yaml.YAMLError:
             form = None
-        from ..policy import LANGUAGES, form_schema, profile_labels
-        return {"text": text, "rev": r, "form": form, "problems": probs, "languages": LANGUAGES,
+        from ..policy import form_schema, profile_labels
+        return {"text": text, "rev": r, "form": form, "problems": probs,
                 "profiles": profile_labels(), "schema": form_schema(), **self._people()}
 
     def _people(self) -> dict:
         """The People card's rows: the VESTA Kiosk's lists as the agent last read them, one row per chat with its roles
-        in their words. ⚠️ READ ONLY (owner, 2026-11-03: "Yes, Kiosk only"): who gets the messages and who may press
-        their buttons is set in the Kiosk; the page edits each chat's language only (the form's `languages`).
+        in their words and its language's name. ⚠️ READ ONLY (owner, 2026-11-03: "Yes, Kiosk only", then "isn't it also
+        redundant to show the Telegram chat ID … and also the language selection?"): who gets the messages, who may
+        press their buttons and each chat's language are set in the Kiosk; no chat id is shown.
         `lists_read`: False until the agent has read them once (the card then says they are empty until set)."""
         from vesta_shared import villa_recipients
         from vesta_shared.message_format import ROLE_WORDS
+        from ..policy import Language
         from ..roster import Roster
         roster = Roster.kept(self.s.pack_path)
         rows: dict[int, dict] = {}
         for e in roster.entries:
             row = rows.setdefault(e.telegram_id, {"telegram_id": e.telegram_id, "name": e.name, "roles": []})
             row["roles"].append(ROLE_WORDS[e.role])
-        return {"people": [{"telegram_id": r["telegram_id"], "name": r["name"], "role": " and ".join(r["roles"])}
+        return {"people": [{"name": r["name"], "role": " and ".join(r["roles"]),
+                            "language": Language.of(roster.language_of(r["telegram_id"], None)).name}
                            for r in rows.values()],
                 "lists_read": roster.read_yet,
                 "lists_where": villa_recipients.WHERE}

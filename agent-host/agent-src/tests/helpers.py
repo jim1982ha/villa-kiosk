@@ -64,22 +64,22 @@ def body_of(js: str, name: str) -> str:
     return rest[:end.start()] if end else rest
 
 
+def chat_entity(chat: int) -> str:
+    """The notify entity a test villa's chat is read from (a placeholder: "notify.test_chat_<id>", a group's "_g<id>")."""
+    return f"notify.test_chat_{'g' if int(chat) < 0 else ''}{abs(int(chat))}"
+
+
 def keep_roster(s, roster) -> None:
     """The VESTA Kiosk's lists of `roster` (roster.Roster, e.g. Roster.of) kept beside the pack as the agent keeps what
-    it read (villa_recipients.save), and its languages written in policy.yaml's `languages:` as the People card's
-    Language menu writes them — the two places the agent reads who is who from (config.Settings.policy)."""
-    import yaml
-    from vesta_shared import villa_recipients
-    villa_recipients.save(s.pack_path, roster.lists)
+    it read (villa_recipients.save), each row with its notify entity, and its languages kept as the Kiosk tells them by
+    that entity (kiosk_told `chatLanguages`) — the two files the agent reads who is who from (Roster.kept)."""
+    from vesta_shared import kiosk_told, villa_recipients
+    villa_recipients.save(s.pack_path, {r: [{**row, "entity": chat_entity(row["chat"])} for row in rows]
+                                        for r, rows in roster.lists.items()})
     if roster.languages:
-        try:
-            with open(s.policy_path, encoding="utf-8") as f:
-                raw = yaml.safe_load(f) or {}
-        except OSError:
-            raw = {}
-        raw["languages"] = {**(raw.get("languages") or {}), **roster.languages}
-        with open(s.policy_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(raw, f)
+        told = kiosk_told.get("chatLanguages", s.pack_path)
+        kiosk_told.save(s.pack_path, "chatLanguages",
+                        {**told, **{chat_entity(c): code for c, code in roster.languages.items()}})
 
 
 def make_agent(tmp_path, policy: dict, *, roster=None, skills=(), telegram=None, reader=None, kiosk=None,
@@ -95,9 +95,9 @@ def make_agent(tmp_path, policy: dict, *, roster=None, skills=(), telegram=None,
     from ha_fake import FakeHA
     from telegram_fake import FakeTelegram
     from vesta_agent.app import Vesta
-    # ⚠️ WHO IS WHO IS A ROSTER (architecture review round 17, lead 1): `people:` / `chats:` rows are a retired shape,
-    # read for their languages only — a test villa that wrote them would silently have nobody
-    assert not {"people", "chats"} & set(policy), "a test villa's people are roster=Roster.of(...)"
+    # ⚠️ WHO IS WHO IS A ROSTER (architecture review round 17, lead 1): `people:`, `chats:` and `languages:` are retired
+    # shapes, read for nothing — a test villa that wrote them would silently have nobody, or English everywhere
+    assert not {"people", "chats", "languages"} & set(policy), "a test villa's people are roster=Roster.of(...)"
     from vesta_agent.kiosk import Kiosk
     env = {"VESTA_TELEGRAM_ENABLED": "true" if telegram_on else "false", "VESTA_TELEGRAM_BOT_TOKEN": "42:TG-TEST"}
     s = settings(str(tmp_path), **env)

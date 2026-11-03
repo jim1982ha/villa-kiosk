@@ -124,7 +124,7 @@ def test_what_stays_names_each_chats_language_never_a_people_list_or_an_id():
     # architecture review round 17, lead 3: People and the chat ids are the VESTA Kiosk's lists, not the agent's
     from vesta_agent.ui.setup_copy import offer
     words = [w["words"] for w in offer()["stays"]]
-    assert "Each chat's language" in words and not [w for w in words if "Telegram id" in w or "Chat id" in w]
+    assert "Who gets the messages, and each chat's language" in words and not [w for w in words if "Telegram id" in w or "Chat id" in w]
 
 
 # owner, 2026-10-20 ("fully fix all gaps"): the villa's own file keeps no skill it does not have — every save of the

@@ -80,19 +80,18 @@ def test_a_group_listed_for_both_roles_cannot_press_an_owners_request(tmp_path):
     assert msg is None and answer.startswith("Refused: no chat where the owner can approve it in the VESTA Kiosk")
 
 
-def test_an_older_files_people_and_chats_say_nobody_and_a_save_keeps_only_their_languages(tmp_path):
-    # who is who is the VESTA Kiosk's lists (owner, 2026-11-03): an older file's People rows and its `chats:` are
-    # read for each chat's language only, named nowhere as a problem, and gone at the page's next save
+def test_an_older_files_people_chats_and_languages_say_nothing_and_a_save_drops_them(tmp_path):
+    # who is who, and each chat's language, are the VESTA Kiosk's (owner, 2026-11-03): an older file's People rows, its
+    # `chats:` and its `languages:` are read for nothing, named nowhere as a problem, and gone at the page's next save
     old = {"people": [{"telegram_id": JM, "name": "JM", "role": "owner", "language": "fr"}],
-           "chats": {"owner": GROUP, "fm": 444}}
-    p = Policy(old, Roster())
-    assert p.roster.entries == [] and p.roster.chats_for("owner") == p.roster.chats_for("fm") == [] and not p.problems
-    assert p.languages == {JM: "fr"}
+           "chats": {"owner": GROUP, "fm": 444}, "languages": {JM: "fr"}, "act_enabled": True}
+    p = Policy(old, Roster.of(owner=[(JM, "JM")]))
+    assert p.roster.chats_for("owner") == [JM] and p.roster.language_of(JM, "owner") == "en" and not p.problems
     text = yaml.safe_dump(old)
-    saved = yaml.safe_load(policy_doc.apply_form(text, policy_doc.to_form(text)))
-    assert saved["languages"] == {JM: "fr"} and "people" in saved      # the form writes the languages...
-    moved = yaml.safe_load(policy_doc.languages_moved(policy_doc.apply_form(text, policy_doc.to_form(text))))
-    assert moved["languages"] == {JM: "fr"} and "people" not in moved and "chats" not in moved   # ...every save moves
+    moved = yaml.safe_load(policy_doc.kiosk_moved(policy_doc.apply_form(text, policy_doc.to_form(text))))
+    assert not {"people", "chats", "languages"} & set(moved) and moved["act_enabled"] is True
+    new = yaml.safe_dump({"act_enabled": True})
+    assert policy_doc.kiosk_moved(new) == new                                     # a file in today's shape: as it is
 
 
 def test_a_chat_telegram_refuses_is_named_on_the_overview_until_a_message_arrives(tmp_path):

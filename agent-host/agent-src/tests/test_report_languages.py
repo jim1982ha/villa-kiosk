@@ -8,7 +8,7 @@ import asyncio
 import pytest
 
 from ai_fake import FakeAI
-from helpers import make_agent
+from helpers import chat_entity, make_agent
 from vesta_agent import runner
 from vesta_agent.routing import JOB, Origin
 from vesta_agent.roster import Roster
@@ -176,20 +176,20 @@ def test_made_without_the_ai_the_one_english_text_reaches_every_reader(agent, mo
 
 # ---------------------------------------------------------------- review H5: one Language
 def test_a_language_is_one_value_code_and_name(tmp_path):
-    from vesta_agent.policy import Language, problems
+    from vesta_agent.policy import Language
     assert Language.parse("FRENCH") == Language.parse(" fr ") == Language("fr") and Language("fr").name == "French"
     assert Language.parse("Portuguese") is None and Language.parse("pt") is None
     assert Language.of("pt") == Language("en") and Language.of(None) == Language("en")
     assert Language.name_of("de") == "German" and Language.name_of("pt") == "pt"
-    rows = lambda lang: {"languages": {1: lang}}  # noqa: E731
-    assert any("languages.1 must be one of en, fr" in p for p in problems(rows("pt")))
-    assert not any("language" in p for p in problems(rows("fr")))
-    assert any("languages.1 must be" in p for p in problems(rows(["fr"])))    # never a crash
+    # ⚠️ ONE LIST, THE AGREEMENT'S (owner, 2026-11-03): the languages the Kiosk offers beside each chat
+    from vesta_shared import agreement
+    from vesta_agent.policy import LANGUAGES
+    assert LANGUAGES == agreement.section("recipients")["languages"] and "fr" in LANGUAGES
 
 
-def test_a_language_outside_the_list_is_named_and_read_as_english(tmp_path):
-    agent = make_agent(tmp_path, {"languages": {FM_FR: "pt"}, "settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}}, roster=Roster.of(owner=[(OWNER, "Olga")], fm=[(FM_DE, "Anna"), (FM_FR, "Rui")], languages={FM_DE: "de"}), skills=["reports"])
-    assert any(f"languages.{FM_FR} must be one of" in p for p in agent.policy().problems)
+def test_a_language_outside_the_list_is_read_as_english(tmp_path):
+    agent = make_agent(tmp_path, {"settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}}, roster=Roster.of(owner=[(OWNER, "Olga")], fm=[(FM_DE, "Anna"), (FM_FR, "Rui")], languages={FM_DE: "de"}), skills=["reports"])
+    agent.kiosk_answered({"chatLanguages": {chat_entity(FM_DE): "de", chat_entity(FM_FR): "pt"}})     # pt: not offered
     assert agent.jobs._language_of("fm") == "German and English"
     out = run(send_tool(agent).handler({"to": "fm", "text": {"Deutsch": "x", "GERMAN": "Noch offen: 2",
                                                              "en": "Still open: 2"}}))

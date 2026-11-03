@@ -30,6 +30,7 @@ import yaml
 
 from vesta_shared.limits import limit
 from vesta_shared.timeutil import lasting
+from vesta_shared.villa_recipients import LANGUAGES
 
 from .places import title
 from .roster import role_can_approve
@@ -39,15 +40,14 @@ if TYPE_CHECKING:
     from .roster import Roster
 
 # ------------------------------------------------------------------ constants
-# The languages a person can be answered in: the agent writes in them, and the VESTA Agent page offers
-# exactly these in its menu (owner, 2026-10-01: no free text).
-LANGUAGES = {"en": "English", "fr": "French", "id": "Indonesian", "de": "German", "es": "Spanish", "it": "Italian",
-             "nl": "Dutch", "zh": "Chinese", "ja": "Japanese", "ko": "Korean"}
+# The languages a person can be answered in: the agent writes in them, and the VESTA Kiosk offers exactly these beside
+# each chat (owner, 2026-10-01: no free text). ⚠️ ONE LIST, THE AGREEMENT'S (owner, 2026-11-03: each chat's language is
+# set in the Kiosk): agent-contract.json `recipients.languages`, read by both apps (vesta_shared.villa_recipients).
 
 
 @dataclass(frozen=True)
 class Language:
-    """A language of LANGUAGES: its code (what policy.yaml stores) and its name (what the AI reads and writes).
+    """A language of LANGUAGES: its code (what the Kiosk tells for a chat) and its name (what the AI reads and writes).
 
     ⚠️ ONE MATCHING OF A CODE AND A NAME (architecture review H5, 2026-10-23): "fr" ↔ "French" was matched by hand in
     four places (the job's prompt, the person's line in a conversation, send_message's versions, its description),
@@ -62,7 +62,7 @@ class Language:
 
     @classmethod
     def of(cls, code: str | None) -> "Language":
-        """A stored code's language; English for one outside the list (read_policy has named it)."""
+        """A stored code's language; English for one outside the list."""
         return cls(code) if isinstance(code, str) and code in LANGUAGES else cls("en")
 
     @classmethod
@@ -143,8 +143,6 @@ def value_words(path: str, value) -> str | None:
     those said "after_8h_silence", a code that names a number no longer its own)."""
     if path == "settings.conversation_reset":
         return reset_words().get(value)
-    if path.startswith("languages.") and isinstance(value, str):
-        return Language.name_of(value)
     return None
 #: The brains from the lightest to the strongest: an older file's jobs of one skill that named different brains give the
 #: skill the strongest of them (Policy.skill_brain)
@@ -260,15 +258,13 @@ class Policy:
     def __init__(self, raw: dict, roster: "Roster | None" = None):
         """The file's values as the agent uses them: read_policy's, the default where it names a problem.
 
-        `roster`: who is who (vesta_agent.roster.Roster: the VESTA Kiosk's lists), given this file's languages. ⚠️ A
+        `roster`: who is who (vesta_agent.roster.Roster: the VESTA Kiosk's lists and each chat's language). ⚠️ A
         CALLER THAT NEEDS ONLY RULES PASSES NONE (architecture review round 17, lead 1): the page's forms, the setup
         copy, the Limits tab and the alert desk read rules only, and were silently "nobody" when one asked who is who.
         Asked of a Policy built without one, `roster` is an error, never an empty list."""
         self.raw = raw if isinstance(raw, dict) else {}
         v, self.problems = read_policy(self.raw)
-        #: each chat's language, by chat id: policy.yaml's `languages:` (an older file's People rows' read into it)
-        self.languages: dict[int, str] = v["languages"]
-        self._roster = roster.speaking(self.languages) if roster is not None else None
+        self._roster = roster
         self.act_enabled: bool = v["act_enabled"]
         self.approval_ttl_minutes: int = v["approval_ttl_minutes"]
         # ⚠️ A SAFETY STOP, SO NEVER ABSENT: an unreadable value still stops the siren (and the problem is named).
@@ -302,7 +298,7 @@ class Policy:
 
     @property
     def roster(self) -> "Roster":
-        """Who is who, with this file's languages (vesta_agent.roster). Raises for a Policy built for its rules only."""
+        """Who is who (vesta_agent.roster). Raises for a Policy built for its rules only."""
         if self._roster is None:
             raise LookupError("This Policy was built for its rules only: who is who needs its Roster "
                               "(config.Settings.policy, ui.changes.page_policy).")
@@ -523,11 +519,10 @@ FIELDS: dict[str, tuple[str, bool, str | None]] = {
     "settings.keep": ("How long records are kept", True, "keep"),
     "act_enabled": ("The agent may act on the villa", True, None),
     "approval_ttl_minutes": ("Approve buttons work for (minutes)", True, None),
-    # each chat's language; who is who is the VESTA Kiosk's lists (owner, 2026-11-03), shown read-only on the People card
-    "languages": (f"{title('people')}: language", True, None),
-    # an older file's People rows, then its one chat per role: their languages read, both dropped by the page's next
-    # save (policy_doc.languages_moved)
-    "people": (f"{title('people')} (now the VESTA Kiosk's lists)", False, None),
+    # an older file's chat languages, its People rows, then its one chat per role: who is who and each chat's language
+    # are the VESTA Kiosk's (owner, 2026-11-03); read for nothing, dropped by the page's next save (policy_doc.kiosk_moved)
+    "languages": (f"{title('people')}: language (now set in the VESTA Kiosk)", False, None),
+    "people": (f"{title('people')} (the VESTA Kiosk's lists)", False, None),
     "chats": ("Chats (now the VESTA Kiosk's lists)", False, None),
     "allowed_services": (title("actions"), True, "actions"),
     "owner_only_entities": ("Only the owner may approve", True, None),
@@ -723,32 +718,9 @@ def read_policy(raw: dict) -> tuple[dict, list[str]]:
         if val is not None and not valid:
             out.append(f"{k} must be a whole number from {lo} to {hi}.")
 
-    # ---- each chat's language (owner, 2026-11-03: who is who is the VESTA Kiosk's lists, the language is the agent's)
-    langs: dict[int, str] = {}
-    lraw = raw.get("languages")
-    if lraw is not None and not isinstance(lraw, dict):
-        out.append("languages must be chat id: language.")
-    for k, val in (lraw or {}).items() if isinstance(lraw, dict) else ():
-        cid = _id(k)
-        if not cid:
-            out.append(f"languages: {k!r} is not a chat id (a group's is negative; /whoami in the chat shows it).")
-        # ⚠️ ONE OF THE MENU'S LANGUAGES (architecture review H5, 2026-10-23): any 2–3 letters passed, though the page
-        # offers only LANGUAGES; "pt" then reached the AI as a bare code. Named, and English until it is changed.
-        elif not _one_of(val, LANGUAGES):
-            out.append(f"languages.{cid} must be one of {', '.join(LANGUAGES)} (the page's menu); until then the agent "
-                       "writes to that chat in English.")
-        else:
-            langs[cid] = str(val)
-    # ⚠️ AN OLDER FILE'S PEOPLE KEEP THEIR LANGUAGE (formats outlive their writer): before 0.12.439 each row of `people:`
-    # said who, which role and which language. Who and which role are the VESTA Kiosk's lists now; each row's language
-    # is still read, by its id (the first row of an id that says one), until the page's next save writes it in
-    # `languages:` and drops `people:` and the even older `chats:` (policy_doc.languages_moved). Nothing is named wrong
-    # in them: they are the agent's own older shape.
-    for p in raw.get("people") if isinstance(raw.get("people"), list) else ():
-        tid = _id(p.get("telegram_id")) if isinstance(p, dict) else None
-        if tid and tid not in langs and _one_of(p.get("language"), LANGUAGES):
-            langs[tid] = p["language"]
-    v["languages"] = langs
+    # ---- who is who and each chat's language are the VESTA Kiosk's (owner, 2026-11-03): an older file's `languages:`,
+    # `people:` and `chats:` are read for nothing and named nowhere (the agent's own older shapes), and the page's next
+    # save drops them (policy_doc.kiosk_moved)
 
     # ---- the device lists (read even when written as text: see above)
     for key, domain in ENTITY_LISTS.items():

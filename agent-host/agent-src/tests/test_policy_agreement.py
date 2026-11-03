@@ -19,19 +19,22 @@ def test_acting_is_on_only_for_a_real_true(value):
     assert p.act_enabled is False or value is True        # never ON from a value the page refuses
 
 
-@pytest.mark.parametrize("key", ["@villa", "group", "1.5", 0])
-def test_a_language_of_a_chat_id_that_is_not_one_is_skipped_and_named_never_a_crash(key):
-    raw = {"languages": {key: "fr", -100123: "de", "42": "fr"}}
-    assert Policy(raw).languages == {-100123: "de", 42: "fr"}
-    assert [x for x in problems(raw) if "languages" in x] == [problems(raw)[0]] and len(problems(raw)) == 1
+@pytest.mark.parametrize("raw", [{"languages": {7: "fr", "@villa": "de"}}, {"languages": ["x"]}, {"languages": "fr"},
+                                 {"people": [{"telegram_id": 7, "name": "X", "role": "owner", "language": "fr"}]}])
+def test_an_older_files_chat_languages_are_read_for_nothing_and_named_nowhere(raw):
+    # owner, 2026-11-03: each chat's language is set in the VESTA Kiosk beside the chat; policy.yaml holds none
+    pol = Policy(raw, Roster.of(fm=[(7, "X")]))
+    assert pol.roster.language_of(7, "fm") == "en" and problems(raw) == []
 
 
 @pytest.mark.parametrize("code", ["pt", "French", 1, None])
-def test_a_language_outside_the_menu_is_english_and_named(code):
-    raw = {"languages": {7: code}}
-    pol = Policy(raw, Roster.of(fm=[(7, "X")]))
-    assert pol.languages == {} and pol.roster.language_of(7, "fm") == "en"
-    assert any("languages.7" in x for x in problems(raw))
+def test_a_language_the_kiosk_tells_outside_the_menu_reads_english(code, tmp_path):
+    from vesta_shared import kiosk_told, villa_recipients
+    pack = str(tmp_path / "knowledge_pack.json")
+    villa_recipients.save(pack, {"fm": [{"chat": 7, "name": "X", "entity": "notify.example_chat"}]})
+    kiosk_told.keep(pack, {"chatLanguages": {"notify.example_chat": code, "notify.example_other": "fr"}})
+    assert kiosk_told.get("chatLanguages", pack) == {"notify.example_other": "fr"}
+    assert Roster.kept(pack).language_of(7, "fm") == "en"
 
 
 @pytest.mark.parametrize("chat,registered", [(-5, False), (42, True)])
@@ -79,7 +82,7 @@ def test_the_tool_carries_out_what_carry_out_reads():
 
 # ---- the one reading (architecture review, 2026-10-07): read_policy gives the values AND the problems
 @pytest.mark.parametrize("raw", [{"allowed_services": ["light.turn_on"]}, {"system_actions": ["x"]},
-                                 {"system_actions": {"a": 1}}, {"languages": ["x"]}, {"languages": "fr"},
+                                 {"system_actions": {"a": 1}},
                                  {"settings": ["x"]}, {"tool_access": ["fm"]}, {"siren_entity": 5}])
 def test_a_section_of_the_wrong_shape_is_named_never_a_crash(raw):
     p = Policy(raw)                                    # crashed for the first two: every reply and job stopped

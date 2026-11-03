@@ -41,6 +41,16 @@ def _entity_id(v) -> str | None:
     return v if "." in v and " " not in v else ""
 
 
+def _languages(v) -> dict[str, str] | None:
+    """{notify entity id: language code}: each chat's language as the Kiosk sets it beside the chat (agent-contract.json
+    `recipients.languages`); a code outside that list is left out (the chat reads English). None when it is no object."""
+    if not isinstance(v, dict):
+        return None
+    from . import villa_recipients
+    return {str(k).strip().lower(): c for k, c in sorted(v.items())
+            if isinstance(k, str) and "." in k and isinstance(c, str) and c in villa_recipients.LANGUAGES}
+
+
 #: heartbeat answer key → the setting (agent-contract.json `heartbeat.answer`)
 SETTINGS: dict[str, Setting] = {
     "unavailableByDesign": Setting(
@@ -49,6 +59,13 @@ SETTINGS: dict[str, Setting] = {
     "maintenance": Setting(
         "maintenance_mode.json", "on", lambda v: v if isinstance(v, bool) else None, False,
         lambda on: "The VESTA Kiosk's maintenance mode: " + ("on, only P1 alerts are taken up" if on else "off")),
+    # ⚠️ EACH CHAT'S LANGUAGE IS THE KIOSK'S (owner, 2026-11-03: "isn't it also redundant to show … the language
+    # selection? Since it's already selected in the Vesta kiosk"): set beside the chat in Who gets the messages, read by
+    # the roster through the notify entity each list row names (vesta_agent.roster.Roster.kept); never policy.yaml.
+    "chatLanguages": Setting(
+        "chat_languages.json", "languages", _languages, {},
+        lambda langs: "The VESTA Kiosk's chat languages: " + (", ".join(f"{e} {c}" for e, c in langs.items())
+                                                              or "none set, every chat reads English")),
     "villaEmptySensor": Setting(
         "villa_empty_sensor.json", "entity_id", _entity_id, "",
         lambda eid: "The VESTA Kiosk's villa empty sensor: "

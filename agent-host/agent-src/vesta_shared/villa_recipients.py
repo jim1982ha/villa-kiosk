@@ -11,7 +11,8 @@ Telegram chats among them (a phone app is the villa's to reach).
 ⚠️ THE KIOSK'S LISTS ARE ALSO WHO MAY (owner, 2026-11-03: "isn't [the Agent's People table] redundant, since we are
 already defining the same in KIOSK settings?", answered "Yes, Kiosk only"): being in a role's list gives that role's
 messages AND its rights (approving, writing to the agent, a group's members acting with its role). The agent's People
-card is a read-only copy of them; only each chat's language is the agent's (policy.yaml `languages:`).
+card is a read-only copy of them, and each chat's language is set in the Kiosk beside the chat too (owner, 2026-11-03:
+kiosk_told `chatLanguages`, by the notify entity each row names).
 
 A list that cannot be read keeps what was kept; never read (no file): nobody is listed, the agent answers nobody and
 posts nowhere, and says so in its log (app.Vesta.start). A role whose list names no Telegram chat has none.
@@ -43,6 +44,9 @@ FILE = "villa_recipients.json"
 #: Where a person sets the lists, in the words of the VESTA Kiosk's own page: every text that sends someone there (the
 #: agent's log, its answers, its page) says it with these words
 WHERE = f"the VESTA Kiosk ({_AGREED.get('where') or 'Settings'})"
+#: The languages a chat can read VESTA's messages in, code → name, in the Kiosk's menu order (the agreement's
+#: `recipients.languages`): each chat's is set in the Kiosk beside it (vesta_shared.kiosk_told `chatLanguages`)
+LANGUAGES: dict[str, str] = {str(c): str(n) for c, n in (_AGREED.get("languages") or {"en": "English"}).items()}
 _CHAT = re.compile(r"^\d+_(-?\d+)$")
 
 
@@ -71,7 +75,8 @@ def name_of(entity_id: str, state: dict | None) -> str:
 
 
 def read(ha) -> dict[str, list[dict]] | None:
-    """{role: its Telegram chats, each {"chat": id, "name": its notify entity's name}} as the villa's lists name them
+    """{role: its Telegram chats, each {"chat": id, "name": its notify entity's name, "entity": its id}} as the villa's
+    lists name them
     now (a role's [] when its list names none); None when the lists cannot be read (the villa's system unreachable, the
     helpers not there)."""
     if not HELPERS:
@@ -91,17 +96,17 @@ def read(ha) -> dict[str, list[dict]] | None:
         return None
     out = {}
     for role, es in named.items():
-        chats: dict[int, str] = {}
+        chats: dict[int, tuple[str, str]] = {}
         for e in es:
             c = chat_of(rows.get(e) or {})
             if c is not None and c not in chats:
-                chats[c] = name_of(e, states.get(e))
-        out[role] = [{"chat": c, "name": n} for c, n in chats.items()]
+                chats[c] = (name_of(e, states.get(e)), e)
+        out[role] = [{"chat": c, "name": n, "entity": e} for c, (n, e) in chats.items()]
     return out
 
 
 def normal(raw) -> dict[str, list[dict]]:
-    """{role: [{"chat", "name"}]} from what was kept, in either shape.
+    """{role: [{"chat", "name"[, "entity"]}]} from what was kept, in either shape.
 
     ⚠️ AN OLDER FILE IS STILL READ (formats outlive their writer): 0.12.436 to 0.12.438 kept {role: [chat ids]}, with
     no names. Its chats are named "<role> chat" until the next reading (at the start, then every 5 minutes) writes
@@ -113,12 +118,17 @@ def normal(raw) -> dict[str, list[dict]]:
     for r in ROLES:
         if not isinstance(raw.get(r), list):
             continue
-        rows: dict[int, str] = {}
+        rows: dict[int, dict] = {}
         for c in raw[r]:
             chat, name = (c.get("chat"), c.get("name")) if isinstance(c, dict) else (c, None)
             if isinstance(chat, int) and not isinstance(chat, bool) and chat not in rows:
-                rows[chat] = str(name).strip() if isinstance(name, str) and name.strip() else f"{ROLE_WORDS[r]} chat"
-        out[r] = [{"chat": c, "name": n} for c, n in rows.items()]
+                rows[chat] = {"chat": chat,
+                              "name": str(name).strip() if isinstance(name, str) and name.strip() else f"{ROLE_WORDS[r]} chat"}
+                # the notify entity it was read from (0.12.442: its language is the Kiosk's, by that entity); a file
+                # kept before has none, and its chats read English until the next reading
+                if isinstance(c, dict) and isinstance(c.get("entity"), str) and c["entity"].strip():
+                    rows[chat]["entity"] = c["entity"].strip().lower()
+        out[r] = list(rows.values())
     return out
 
 

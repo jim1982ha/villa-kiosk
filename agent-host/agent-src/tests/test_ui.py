@@ -57,7 +57,6 @@ def test_the_forms_save_keeps_the_files_comments_and_the_agent_reads_it(ui):
         form = doc["form"]
         form["act_enabled"] = True
         form["allowed_services"]["light.turn_on"] = "direct"
-        form["languages"]["-100"] = "fr"                         # the People card's one menu (JSON: a text key)
         r = await c.put("/api/policy/form", json={"form": form, "rev": doc["rev"]}, headers=HDR)
         return r.status, await r.json()
     status, body = call(ui, fn)
@@ -66,11 +65,7 @@ def test_the_forms_save_keeps_the_files_comments_and_the_agent_reads_it(ui):
     assert "# Who the agent answers, where it posts and who may approve" in text   # a comment of the example, kept
     raw = yaml.safe_load(text)
     assert raw["act_enabled"] is True and raw["allowed_services"]["light.turn_on"] == "direct"
-    assert raw["languages"] == {-100: "fr"} and "people" not in raw
-    from vesta_agent.policy import Policy
-    from vesta_shared import villa_recipients
-    pol = Policy.load(ui.policy_path, Roster.kept(ui.pack_path))
-    assert pol.roster.languages_for("owner") == pol.roster.languages_for("fm") == ["fr"]
+    assert not {"languages", "people"} & set(raw)              # each chat's language is the Kiosk's (owner, 2026-11-03)
 
 
 def test_a_save_the_agent_would_misread_is_refused_and_the_file_untouched(ui):
@@ -79,14 +74,12 @@ def test_a_save_the_agent_would_misread_is_refused_and_the_file_untouched(ui):
     async def fn(c):
         doc = await (await c.get("/api/policy")).json()
         form = doc["form"]
-        form["languages"] = {"111": "pt"}
         form["allowed_services"]["homeassistant.restart"] = "any"
         r = await c.put("/api/policy/form", json={"form": form, "rev": doc["rev"]}, headers=HDR)
         r2 = await c.put("/api/policy/text", json={"text": "people: [unclosed", "rev": doc["rev"]}, headers=HDR)
         return r.status, (await r.json())["problems"], r2.status
     status, problems, status2 = call(ui, fn)
     assert status == 400 and status2 == 400
-    assert any("languages.111 must be one of" in p for p in problems)
     assert any("homeassistant.restart is never allowed" in p for p in problems)
     assert open(ui.policy_path).read() == before
 
@@ -252,8 +245,7 @@ def test_the_rules_choose_devices_from_the_villas_own_by_name(ui):
     ents, doc = call(ui, fn)
     assert ents["entities"] == [{"id": "scene.example_evening", "name": "Evening", "area": ""},
                                 {"id": "lock.example_door", "name": "Front door", "area": "Entrance"}]
-    from vesta_agent.policy import LANGUAGES
-    assert doc["languages"] == LANGUAGES                  # one list: the agent's (policy.Language) and the menu's
+    assert "languages" not in doc                         # no menu of languages: each chat's is set in the Kiosk
 
 
 def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
@@ -1203,18 +1195,20 @@ def test_a_phones_keyboard_opening_never_closes_a_floating_list_being_typed_in()
 
 
 # ---------------------------------------------------------------- People: the VESTA Kiosk's lists, read only
-# owner, 2026-11-03 ("Yes, Kiosk only"): who gets the messages, and who may press their buttons, is set in the Kiosk;
-# the People card shows its lists and edits each chat's language only
+# owner, 2026-11-03 ("Yes, Kiosk only", then "isn't it also redundant to show the Telegram chat ID … and also the
+# language selection?"): who gets the messages, who may press their buttons and each chat's language are set in the
+# Kiosk; the People card shows them, name, role and language, and edits nothing
 
 def test_the_people_card_shows_the_kiosks_lists_one_row_per_chat(ui):
-    keep_roster(ui, Roster.of(owner=[(111, "Ann"), (-100, "Villa group")], fm=[(-100, "Villa group")]))
+    keep_roster(ui, Roster.of(owner=[(111, "Ann"), (-100, "Villa group")], fm=[(-100, "Villa group")],
+                              languages={-100: "fr"}))
 
     async def fn(c):
         return await (await c.get("/api/rules")).json()
     doc = call(ui, fn)
-    assert doc["people"] == [{"telegram_id": 111, "name": "Ann", "role": "Owner"},
-                             {"telegram_id": -100, "name": "Villa group", "role": "Owner and Facility Manager"}]
-    assert doc["lists_read"] is True and "people" not in doc["form"] and doc["form"]["languages"] == {}
+    assert doc["people"] == [{"name": "Ann", "role": "Owner", "language": "English"},
+                             {"name": "Villa group", "role": "Owner and Facility Manager", "language": "French"}]
+    assert doc["lists_read"] is True and not {"people", "languages"} & set(doc["form"])
     assert doc["lists_where"] == "the VESTA Kiosk (Settings › Messages › Who gets the messages)"
 
 
@@ -1229,25 +1223,28 @@ def test_never_read_the_people_card_is_empty_and_says_so(tmp_path):
     assert '"None"' in forms and "`Empty until the lists are set in ${doc.lists_where}.`" in forms
 
 
-def test_the_people_card_is_read_only_but_each_chats_language(ui):
+def test_the_people_card_is_read_only_with_no_chat_id(ui):
     forms = body_of(page_js(), "rulesForms")
     card = forms[forms.index("const people = card("):forms.index("// devices: chosen from the villa's own")]
-    # no row added, removed or typed: a table of the rows the agent read, its one control the language's menu
+    # no row added, removed or typed, no menu: a table of the rows the agent read, with no Telegram id
     assert "editTable" not in card and "Add a person" not in page_js() and "input" not in card
-    assert "table([\"Name\", \"Telegram id\", \"Role\", \"Language\"], peopleRows" in card
+    assert "table([\"Name\", \"Role\", \"Language\"], peopleRows" in card and "Telegram id" not in card
     rows = forms[forms.index("const peopleRows"):forms.index("const people = card(")]
-    assert rows.count("sel(") == 1 and 'h("span", { class: "chip" }, p.role)' in rows and "f.languages[String(p.telegram_id)] = v" in rows
+    assert "sel(" not in rows and "telegram_id" not in rows and "f.languages" not in forms
+    assert rows.count("p.language") == 1 and 'h("span", { class: "chip" }, p.role)' in rows
     # its help text opens as the Kiosk's other list does (knowledge.asleepCard): "Set in the VESTA Kiosk (…)."
-    assert 'card(W("people"), `Set in ${doc.lists_where}. ' in card
+    assert 'card(W("people"), `Set in ${doc.lists_where}, each chat with its language. ' in card
     assert 'card(place("asleep"), "Set in the VESTA Kiosk (' in page_js()
     assert " — " not in card and "Home Assistant" not in card
 
 
-def test_an_older_files_people_keep_their_language_and_the_pages_save_drops_them(ui):
-    # formats outlive their writer: a villa's file of 0.12.438 and before said who, which role and which language
+def test_an_older_files_people_and_languages_are_dropped_by_the_pages_save(ui):
+    # formats outlive their writer: a villa's file of 0.12.438 and before said who, which role and which language, and
+    # 0.12.439 to 0.12.441 each chat's language: all the Kiosk's now, named nowhere, gone at the next save
     with open(ui.policy_path, "a", encoding="utf-8") as f:
         f.write("people:\n  - {telegram_id: -100, name: Old name, role: owner, language: fr}\n"
-                "  - {telegram_id: 111, name: Gone, role: fm, language: de}\nchats: {fm: 222}\n")
+                "  - {telegram_id: 111, name: Gone, role: fm, language: de}\nchats: {fm: 222}\n"
+                "languages: {-100: de}\n")
 
     async def fn(c):
         doc = await (await c.get("/api/rules")).json()
@@ -1255,8 +1252,8 @@ def test_an_older_files_people_keep_their_language_and_the_pages_save_drops_them
         r = await c.put("/api/policy/form", json={"form": doc["form"], "rev": doc["rev"]}, headers=HDR)
         return doc, before, r.status
     doc, problems, status = call(ui, fn)
-    assert problems == [] and doc["form"]["languages"] == {"-100": "fr", "111": "de"}
-    assert [p["name"] for p in doc["people"]] == ["Villa group"]            # the Kiosk's names, never the rows'
+    assert problems == [] and "languages" not in doc["form"]
+    assert [(p["name"], p["language"]) for p in doc["people"]] == [("Villa group", "English")]   # the Kiosk's, never the rows'
     assert status == 200
     raw = yaml.safe_load(open(ui.policy_path))
-    assert raw["languages"] == {-100: "fr", 111: "de"} and "people" not in raw and "chats" not in raw
+    assert not {"languages", "people", "chats"} & set(raw)

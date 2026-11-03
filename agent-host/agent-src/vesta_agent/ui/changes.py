@@ -24,7 +24,7 @@ from ..config import Settings
 from ..history import History, policy_change
 from ..policy import Policy, problems as policy_problems
 from ..skills import FILE_NAME, SKILL_NAME, SkillError, parse_skill, to_trash
-from .policy_doc import ai_moved, apply_form, known_off, languages_moved, to_form
+from .policy_doc import ai_moved, apply_form, kiosk_moved, known_off, to_form
 
 log = logging.getLogger("vesta.ui")
 
@@ -121,11 +121,11 @@ class PageFiles:
     def form_policy(self, text: str) -> str:
         """policy.yaml as a form of the page writes it: an older file's AI jobs moved to their skill's one brain and one
         limit per run (policy_doc.ai_moved; owner, 2026-10-20), by the skills' own declarations of their jobs; and
-        `skills_off` naming only skills the villa has (policy_doc.known_off); an older file's People rows gone, their
-        languages kept (policy_doc.languages_moved; owner, 2026-11-03)."""
+        `skills_off` naming only skills the villa has (policy_doc.known_off); an older file's chat languages and People
+        rows gone, the VESTA Kiosk's now (policy_doc.kiosk_moved; owner, 2026-11-03)."""
         from ..skills import Skills, job_owners, job_starters
         every = Skills(self.s.skills_dir).all(include_off=True)
-        return languages_moved(known_off(ai_moved(text, job_owners(every), job_starters(every)), set(every)))
+        return kiosk_moved(known_off(ai_moved(text, job_owners(every), job_starters(every)), set(every)))
 
     def skill_dir(self, name: str, must_exist: bool = True) -> str:
         if not SKILL_NAME.match(name or ""):

@@ -135,7 +135,7 @@ class Settings:
         """policy.yaml, read again whenever the file changes — the ONE cache of it (the engine and these
         settings each kept their own until 0.6.42). A value it does not understand falls back to its default
         (not an error: a typo in a hand-edited file must not stop the agent; the UI refuses it before it is saved)."""
-        from vesta_shared import villa_recipients
+        from vesta_shared import kiosk_told, villa_recipients
         from .roster import Roster
 
         def mtime(path):
@@ -143,8 +143,10 @@ class Settings:
                 return os.path.getmtime(path)
             except (OSError, TypeError):
                 return None
-        # read again when policy.yaml OR the villa's lists of who gets the messages (kept beside the pack) change
-        m = (mtime(self.policy_path), mtime(villa_recipients.path(self.pack_path)))
+        # read again when policy.yaml, the villa's lists of who gets the messages or the Kiosk's chat languages (both
+        # kept beside the pack) change
+        m = (mtime(self.policy_path), mtime(villa_recipients.path(self.pack_path)),
+             mtime(kiosk_told.path("chatLanguages", self.pack_path)))
         if self._policy_cache.get("mtime") != m or "value" not in self._policy_cache:
             try:
                 v = Policy.load(self.policy_path, Roster.kept(self.pack_path))  # no file: Policy({})

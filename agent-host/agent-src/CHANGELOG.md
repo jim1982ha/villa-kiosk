@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.426 (3 November 2026)
+
+Each chat's language is the VESTA Kiosk's (owner, 2026-11-03: "isn't it also redundant to show the Telegram chat ID
+… and also the language selection? … simplify policy.yaml so that it takes the full configuration from it"):
+- `vesta_shared.kiosk_told` row `chatLanguages` ({notify entity id: code}, kept in `chat_languages.json`), from the
+  Kiosk's heartbeat answer; a code outside the agreement's `recipients.languages` is left out (English).
+- `villa_recipients.read` rows carry their notify `entity`; `normal` keeps it. `Roster.kept` maps the told languages
+  onto chats through it (`roster.chat_languages`); a row kept before has none (English until the next reading).
+- `policy.LANGUAGES` is the agreement's `recipients.languages`. `Policy` reads no `languages:`; `Roster.speaking` is
+  gone. An older file's `languages:`, `people:` and `chats:` are read for nothing, named nowhere, and dropped by every
+  page save (`policy_doc.kiosk_moved`, replacing `languages_moved`).
+- `config.Settings.policy` reads again when `chat_languages.json` changes.
+- The People card (`server._people`, `rules.js`): name, role, language's name; no chat id, no menu; `/api/policy` no
+  longer sends `languages`.
+
 ## 0.6.425 (3 November 2026)
 
 Architecture review round 17, the agent's leads (1, 2 for the agent's side, 3, 6):

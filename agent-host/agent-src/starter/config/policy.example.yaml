@@ -1,11 +1,11 @@
-# policy.yaml: the villa's chat languages, lists and the agent's settings. Copied from
+# policy.yaml: the villa's device lists and the agent's settings. Copied from
 # this example at the first start into the agent's config folder
 # (/addon_configs/<app>/agent/policy.yaml, reachable from Studio Code Server or
 # Samba), then edited there. A change applies within seconds, no restart.
 # Anything absent from this file is refused.
 #
-# ⚠️ SHIPPED EMPTY ON PURPOSE. Every villa fills its own chats' languages and
-# devices; nothing here may name one villa's devices.
+# ⚠️ SHIPPED EMPTY ON PURPOSE. Every villa fills its own devices; nothing here
+# may name one villa's devices.
 #
 # The NEVER rules are in the code, not here: homeassistant.*, hassio.*,
 # shell_command.*, rest_command.*, python_script.*, pyscript.*, command_line.*,
@@ -37,12 +37,8 @@ approval_ttl_minutes: 15      # an Approve button older than this does nothing
 # Who the agent answers, where it posts and who may approve is the villa's own two lists of who
 # gets the messages, set in the VESTA Kiosk (Settings > Messages > Who gets the messages)
 # and read by the villa's alerts and the agent alike: each Telegram chat in a role's list gets that
-# role's messages and its rights. The VESTA Agent page's People card shows them, read only.
-# Here: the language each chat is written to in, by chat id (/whoami, sent to the bot in a chat,
-# shows its id): en, fr, id, de, es, it, nl, zh, ja, ko. A chat not named here reads English.
-languages: {}
-#  123456789: fr
-#  -1000000000000: en
+# role's messages and its rights, in the language set beside the chat there. The VESTA Agent
+# page's People card shows them, read only. Nothing about them is written in this file.
 
 # Only the owner can approve an action on these, whatever the service (locks, the gate, the siren...).
 owner_only_entities: []

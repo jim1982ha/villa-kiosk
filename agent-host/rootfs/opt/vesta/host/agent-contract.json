@@ -418,6 +418,7 @@
       "ok": "true",
       "offline_after_minutes": "integer: minutes of silence before the Kiosk shows the agent offline",
       "unavailableByDesign": "list of entity ids, sorted, each once: the devices asleep by design; [] when none; absent when the Kiosk cannot read its settings (keep what was told)", "maintenance": "true while the villa's maintenance mode is on (Advanced Settings › System): the Agent sends only P1 alerts; false otherwise; absent when the Kiosk cannot read its settings (keep what was told)",
+      "chatLanguages": "object: notify entity id (one the villa's lists name, recipients) → a language code of recipients.languages: the language each chat reads VESTA's messages in, set beside it in Settings › Messages › Who gets the messages; a chat it does not name reads English; absent when the Kiosk cannot read its settings (keep what was told)",
       "villaEmptySensor": "string: the entity id of the villa's \"empty\" on/off sensor picked in Settings › Villa (on = empty, off = occupied, any other state = cannot tell); \"\" when none is picked (the Agent cannot tell whether the villa is empty); absent when the Kiosk cannot read its settings (keep what was told)",
       "cadence": "present only when the beat's cadence was dropped: \"refused: <why>\""
     },
@@ -866,13 +867,15 @@
     "watch": "✅",
     "closed": "✅"
   },
-  "_recipients": "Who gets the villa's messages, by role (architecture review round 17, 2026-11-03): the villa's own two lists, each one of its text helpers (`lists`, by role: the owner's and the facility manager's) holding its notify entities (Telegram chats, phone apps) apart by `separator`. Every VESTA blueprint sends to them with no VESTA Agent at all, the VESTA Agent reads them (vesta_shared/villa_recipients.py) and the Kiosk edits them (src/messages/recipients.ts, at `where`). A list's text is READ the same by both: split on `separator`, each part trimmed and lower-cased, kept when it is an id of `domain` (\"<domain>.<name>\"), each id once, in its order; anything else (\"unknown\", another domain, an empty part) names nobody. `maxChars`: what a helper holds at most (its `max`): a longer list is refused, never cut. `where`: the place a person edits them, in the words of the Kiosk's menus, for any text that sends a person there. `examples`: a list's text and the ids it names; both apps drive their reading through every one (tests/oracles/recipients.mjs, and the Agent's own test).",
+  "_recipients": "Who gets the villa's messages, by role (architecture review round 17, 2026-11-03): the villa's own two lists, each one of its text helpers (`lists`, by role: the owner's and the facility manager's) holding its notify entities (Telegram chats, phone apps) apart by `separator`. Every VESTA blueprint sends to them with no VESTA Agent at all, the VESTA Agent reads them (vesta_shared/villa_recipients.py) and the Kiosk edits them (src/messages/recipients.ts, at `where`). A list's text is READ the same by both: split on `separator`, each part trimmed and lower-cased, kept when it is an id of `domain` (\"<domain>.<name>\"), each id once, in its order; anything else (\"unknown\", another domain, an empty part) names nobody. `maxChars`: what a helper holds at most (its `max`): a longer list is refused, never cut. `where`: the place a person edits them, in the words of the Kiosk's menus, for any text that sends a person there. `languages`: the languages a chat can read VESTA's messages in, code → name, in the menu's order (owner, 2026-11-03: each chat's language is set in the Kiosk beside the chat, never on the VESTA Agent's page; the Kiosk keeps them in the villa's settings and tells the Agent in its heartbeat answer, `chatLanguages`). `examples`: a list's text and the ids it names; both apps drive their reading through every one (tests/oracles/recipients.mjs, and the Agent's own test).",
   "recipients": {
     "lists": {"owner": "input_text.vesta_owner_targets", "fm": "input_text.vesta_fm_targets"},
     "separator": ",",
     "domain": "notify",
     "maxChars": 255,
     "where": "Settings › Messages › Who gets the messages",
+    "languages": {"en": "English", "fr": "French", "id": "Indonesian", "de": "German", "es": "Spanish", "it": "Italian",
+                  "nl": "Dutch", "zh": "Chinese", "ja": "Japanese", "ko": "Korean"},
     "examples": [
       {"text": "notify.example_chat", "targets": ["notify.example_chat"]},
       {"text": " notify.Example_Chat ,notify.EXAMPLE_PHONE ", "targets": ["notify.example_chat", "notify.example_phone"]},

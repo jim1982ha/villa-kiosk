@@ -14,7 +14,7 @@ import yaml
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, RETIRED_SECTIONS, _id, form_sections, read_policy
+from ..policy import DEFAULT_BEHAVIOUR, DEFAULTS, ENTITY_LISTS, RETIRED_SECTIONS, form_sections
 from ..tool_access import CHOOSE, OWN, ROLE_GROUPS
 
 #: What the forms edit. Everything else (system_actions, notify_recipients...) is edited in the file itself and
@@ -58,9 +58,6 @@ def to_form(text: str) -> dict:
         "settings": settings,
         "act_enabled": raw.get("act_enabled", DEFAULTS["act_enabled"]),
         "approval_ttl_minutes": raw.get("approval_ttl_minutes", DEFAULTS["approval_ttl_minutes"]),
-        # each chat's language as the agent reads it, an older file's People rows' included (policy.read_policy): the
-        # People card's menus, written in `languages:` by the next save. Keys as text: the page's JSON has no numbers.
-        "languages": {str(k): v for k, v in read_policy(raw)[0]["languages"].items()},
         "allowed_services": dict(raw.get("allowed_services") or {}),
         "siren_entity": raw.get("siren_entity"),
         "siren_auto_off_min": raw.get("siren_auto_off_min", DEFAULTS["siren_auto_off_min"]),
@@ -123,39 +120,21 @@ def ai_moved(text: str, owners: dict[str, str], starters: dict[str, dict]) -> st
     return buf.getvalue()
 
 
-def languages_out(form_languages) -> dict[int, str]:
-    """The page's languages ({"<chat id>": code}, JSON's text keys) as the file keeps them: by chat id, a number."""
-    out: dict[int, str] = {}
-    for k, v in (form_languages or {}).items() if isinstance(form_languages, dict) else ():
-        cid = _id(k)
-        if cid:
-            out[cid] = v
-    return out
+#: What the VESTA Kiosk holds now, kept by an older policy.yaml: each chat's language (0.12.439 to 0.12.441), the People
+#: rows, and the even older one chat per role (owner, 2026-11-03: who is who, and each chat's language, are the Kiosk's)
+KIOSK_MOVED = ("languages", "people", "chats")
 
 
-def languages_moved(text: str) -> str:
-    """The file with an older shape's People rows (and its even older `chats:`) gone, each row's language written in
-    `languages:` first (owner, 2026-11-03: who is who is the VESTA Kiosk's lists; each chat's language stays the
-    agent's). Every save the page's forms make goes through it (changes.PageFiles.form_policy), so the Limits tab's
-    save moves them as the Rules form's does. A file in the new shape comes back unchanged, byte for byte."""
+def kiosk_moved(text: str) -> str:
+    """The file without what the VESTA Kiosk holds now (KIOSK_MOVED): every save the page's forms make goes through
+    it (changes.PageFiles.form_policy), so the Limits tab's save drops them as the Rules form's does. Nothing is
+    carried over: a chat's language is set in the Kiosk beside the chat. A file in the new shape comes back unchanged,
+    byte for byte."""
     y = _yaml()
     doc = y.load(text) if (text or "").strip() else None
-    if not isinstance(doc, CommentedMap) or not ({"people", "chats"} & set(doc)):
+    if not isinstance(doc, CommentedMap) or not (set(KIOSK_MOVED) & set(doc)):
         return text
-    langs = read_policy(yaml.safe_load(text) or {})[0]["languages"]    # the file's own `languages:` first, then rows'
-    if langs:
-        at = list(doc).index("people") if "people" in doc else len(doc)
-        cur = doc.get("languages")
-        if not isinstance(cur, CommentedMap):
-            if "languages" in doc:
-                del doc["languages"]
-            doc.insert(min(at, len(doc)), "languages", _node({}))
-            cur = doc["languages"]
-        for cid, code in langs.items():
-            if cid not in cur and str(cid) not in cur:
-                cur[cid] = code
-        cur.fa.set_block_style()
-    for gone in ("people", "chats"):
+    for gone in KIOSK_MOVED:
         if gone in doc:
             del doc[gone]
     buf = io.StringIO()
@@ -246,8 +225,6 @@ def apply_form(text: str, form: dict) -> str:
         doc = CommentedMap()
     web = form["agent_tools"].get("web_search") if isinstance(form.get("agent_tools"), dict) else None
     form, defaults = _switches_out(form), _switches_out(to_form(""))
-    if "languages" in form:
-        form = {**form, "languages": languages_out(form["languages"])}
     for key in FORM_KEYS:
         if key not in form:
             continue

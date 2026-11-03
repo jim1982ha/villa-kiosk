@@ -211,7 +211,7 @@ def test_an_import_shows_every_change_and_what_does_not_fit_then_applies(ui, tmp
     other = settings(str(tmp_path / "other"))                    # another villa: one skill, its own people
     copy_skill("reports", other.skills_dir)
     raw = yaml.safe_load(open(other.policy_path))
-    raw["languages"] = {999: "fr"}                               # its own chat's language (People card)
+    raw["owner_only_entities"] = ["lock.example_own"]             # its own devices: never carried
     with open(other.policy_path, "w") as f:
         yaml.safe_dump(raw, f)
     zb = base64.b64encode(data).decode()
@@ -229,7 +229,7 @@ def test_an_import_shows_every_change_and_what_does_not_fit_then_applies(ui, tmp
     assert any("switch.turn_on" in m and "list is empty" in m for m in prev["misfits"])
     assert bad == 409 and ok == 200
     assert os.path.isfile(os.path.join(other.skills_dir, "villa-concierge", "skill.yaml"))
-    assert Policy.load(other.policy_path).languages == {999: "fr"}                 # the villa's own, untouched
+    assert Policy.load(other.policy_path).owner_only == {"lock.example_own"}      # the villa's own, untouched
     assert {h["place"] for h in hist} == {"Import"}
 
 

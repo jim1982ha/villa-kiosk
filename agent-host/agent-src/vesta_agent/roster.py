@@ -9,8 +9,9 @@ yet?" was a file-exists check written twice. Now Policy holds the file's rules a
 needs only rules never builds one, and asking a Policy built without one for who is who is an error, never "nobody".
 
 The lists are the VESTA Kiosk's (vesta_shared.villa_recipients, owner 2026-11-03: "Yes, Kiosk only"): being in a
-role's list gives that role's messages AND its rights. Each chat's language is the agent's (policy.yaml `languages:`,
-handed in by Policy).
+role's list gives that role's messages AND its rights. Each chat's language is the Kiosk's too, set beside the chat
+(owner, 2026-11-03: "isn't it also redundant to show … the language selection?"): vesta_shared.kiosk_told
+`chatLanguages`, by the notify entity each list row was read from. policy.yaml holds no one.
 """
 from __future__ import annotations
 
@@ -91,6 +92,15 @@ def tablet_person(chat) -> Person | None:
     return Person(int(chat), f"{ROLE_WORDS.get(role, role.capitalize())} at the tablet", role, "en")
 
 
+def chat_languages(lists, told: dict[str, str]) -> dict[int, str]:
+    """{chat id: language code} from the Kiosk's {notify entity id: code} (`told`), through the entity each row of the
+    villa's lists was read from; a row with no entity (a file kept before 0.12.442) or one the Kiosk names no language
+    for has none (English). One entity in both lists: one language."""
+    told = {str(k).lower(): v for k, v in (told or {}).items()}
+    return {int(row["chat"]): told[row["entity"]] for rows in villa_recipients.normal(lists).values() for row in rows
+            if row.get("entity") in told}
+
+
 def listed_entries(lists, languages: dict[int, str]) -> list[Person]:
     """Every entry of the villa's lists ({role: [{"chat", "name"}]}, vesta_shared.villa_recipients): one per chat and
     role, in ROLES order then the list's, named as the villa names its notify entity, in the chat's language.
@@ -109,7 +119,7 @@ class Roster:
 
     def __init__(self, lists=None, languages: dict[int, str] | None = None, *, read_yet: bool | None = None):
         self.lists: dict[str, list[dict]] = villa_recipients.normal(lists)
-        #: each chat's language, by chat id: policy.yaml's `languages:` (Policy hands them in: speaking)
+        #: each chat's language, by chat id: the Kiosk's (chat_languages), English for a chat it names none for
         self.languages: dict[int, str] = dict(languages or {})
         self.read_yet: bool = lists is not None if read_yet is None else read_yet
         entries = listed_entries(self.lists, self.languages)
@@ -126,24 +136,23 @@ class Roster:
 
     # ------------------------------------------------------------------ made
     @classmethod
-    def kept(cls, pack_path: str | None, languages: dict[int, str] | None = None) -> "Roster":
+    def kept(cls, pack_path: str | None) -> "Roster":
         """The lists as the agent last read them, kept beside the knowledge pack at `pack_path`
-        (villa_recipients.get) — THE one answer to "have they been read yet?" (`read_yet`: the kept file is there)."""
+        (villa_recipients.get) — THE one answer to "have they been read yet?" (`read_yet`: the kept file is there) —
+        each chat in the language the Kiosk last told for it (kiosk_told `chatLanguages`)."""
+        from vesta_shared import kiosk_told
         where = villa_recipients.path(pack_path) if pack_path else None
-        return cls(villa_recipients.get(pack_path) if where else {}, languages,
-                   read_yet=bool(where) and os.path.exists(where))
+        lists = villa_recipients.get(pack_path) if where else {}
+        told = kiosk_told.get("chatLanguages", pack_path) if pack_path else {}
+        return cls(lists, chat_languages(lists, told), read_yet=bool(where) and os.path.exists(where))
 
     @classmethod
     def of(cls, owner=(), fm=(), languages: dict | None = None) -> "Roster":
         """A roster written out: each role's chats as (chat id, name) pairs, each chat's language by id — for a test
-        villa, as the Kiosk's lists and the People card's languages would give them."""
+        villa, as the Kiosk's lists and its chat languages would give them."""
         return cls({"owner": [{"chat": int(c), "name": n} for c, n in owner],
                     "fm": [{"chat": int(c), "name": n} for c, n in fm]},
                    {int(k): v for k, v in (languages or {}).items()})
-
-    def speaking(self, languages: dict[int, str]) -> "Roster":
-        """The same lists with policy.yaml's languages (`languages`) where this roster sets none of its own."""
-        return Roster(self.lists, {**languages, **self.languages}, read_yet=self.read_yet)
 
     # ------------------------------------------------------------------ who this is
     def person(self, telegram_id: int | None) -> Person | None:
@@ -218,8 +227,8 @@ class Roster:
         return {r for r in ROLES if int(chat_id) in self.chats_for(r)}
 
     def language_of(self, chat_id: int, role: str | None) -> str:
-        """The language a chat reads its `role`'s messages in: the chat's (policy.yaml `languages:`, set on the VESTA
-        Agent page), en when it has none. No role (someone asking whose role is not known): the chat's first entry."""
+        """The language a chat reads its `role`'s messages in: the chat's (set in the VESTA Kiosk beside the chat:
+        chat_languages), en when it has none. No role (someone asking whose role is not known): the chat's first entry."""
         return next((e.language for e in self.entries if e.telegram_id == int(chat_id)
                      and (role is None or e.role == role)), "en")
 

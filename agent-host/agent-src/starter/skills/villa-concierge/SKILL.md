@@ -20,8 +20,8 @@ what was asked, and, once done, what the villa now reports.
 Who is talking is the agent's answer, given with each message (their name,
 their role, the language saved for their chat). Each chat in the VESTA Kiosk's
 lists of who gets the messages acts with its list's role (owner, fm); a member of
-a listed group, with the group's; each chat's language is set on VESTA's People
-card. The knowledge pack's `chats` table holds the same chats (chat, role, name,
+a listed group, with the group's; each chat's language is set in the VESTA Kiosk
+beside the chat. The knowledge pack's `chats` table holds the same chats (chat, role, name,
 language); its `people` table is the villa's own people (its person entities),
 a separate list: never take a chat for a person because their names look alike.
 A sender the lists do not name gets one line (this chat is not on the villa's

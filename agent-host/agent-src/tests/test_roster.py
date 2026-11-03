@@ -17,18 +17,30 @@ ANN, GROUP = 111, -100222
 
 
 def test_a_policy_built_for_its_rules_refuses_to_say_who_is_who():
-    rules = Policy({"act_enabled": True, "languages": {ANN: "fr"}})
-    assert rules.act_enabled and rules.languages == {ANN: "fr"}           # its rules, read as ever
+    rules = Policy({"act_enabled": True})
+    assert rules.act_enabled                                              # its rules, read as ever
     with pytest.raises(LookupError):
         rules.roster.person(ANN)                                          # never a silent "nobody"
 
 
-def test_a_roster_is_given_the_files_languages():
-    pol = Policy({"languages": {ANN: "fr", GROUP: "de"}}, Roster.of(owner=[(ANN, "Ann")], fm=[(GROUP, "Staff")]))
-    assert pol.roster.language_of(ANN, "owner") == "fr" and pol.roster.languages_for("fm") == ["de"]
-    # a language the roster was given itself stands (a test villa's Roster.of)
-    own = Policy({"languages": {ANN: "fr"}}, Roster.of(owner=[(ANN, "Ann")], languages={ANN: "id"}))
-    assert own.roster.language_of(ANN, "owner") == "id"
+def test_each_chats_language_is_the_kiosks_by_the_entity_it_was_read_from(tmp_path):
+    # owner, 2026-11-03: "isn't it also redundant to show … the language selection? Since it's already selected in the
+    # Vesta kiosk": set in the Kiosk beside the chat, told by notify entity in its heartbeat answer
+    from vesta_shared import kiosk_told, villa_recipients
+    s = settings(str(tmp_path))
+    villa_recipients.save(s.pack_path, {
+        "owner": [{"chat": ANN, "name": "Ann", "entity": "notify.example_ann"}, {"chat": GROUP, "name": "Staff", "entity": "notify.example_staff"}],
+        "fm": [{"chat": GROUP, "name": "Staff", "entity": "notify.example_staff"}, {"chat": 333, "name": "Old"}]})
+    kiosk_told.keep(s.pack_path, {"chatLanguages": {"notify.Example_Ann": "fr", "notify.example_staff": "de"}})
+    r = s.policy().roster
+    assert r.language_of(ANN, "owner") == "fr" and r.languages_for("owner") == ["fr", "de"]
+    assert r.language_of(GROUP, "fm") == "de"                             # one entity in both lists: one language
+    assert r.language_of(333, "fm") == "en"                               # a row kept before 0.12.442: no entity
+    kiosk_told.keep(s.pack_path, {"chatLanguages": {}})                   # the Kiosk cleared them: read again at once
+    assert s.policy().roster.language_of(ANN, "owner") == "en"
+    kiosk_told.keep(s.pack_path, {"chatLanguages": {"notify.example_ann": "id"}})
+    kiosk_told.keep(s.pack_path, {"maintenance": False})                  # an answer without them keeps what was told
+    assert s.policy().roster.language_of(ANN, "owner") == "id"
 
 
 def test_whether_the_lists_were_read_is_the_kept_files_one_answer(tmp_path):
