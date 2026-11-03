@@ -54,17 +54,32 @@ console.log("\n  Villa location on one line where there is room:");
      north <= 2 * coord && /\.villa-location-north \{ flex: 1 1/.test(modals), { coord, north });
 }
 
-console.log("\n  Brightness, Night dimming and Villa lighting, a third of the line each (owner, 2026-11-03):");
+console.log("\n  one line per setting, its name left and its control right (owner, 2026-11-03: \"the same layout\"):");
 {
   const modals = src("styles/04-modals.css").replace(/\/\*[\s\S]*?\*\//g, "");
   const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
   const tree = parseTsx("components/settings/SettingsModal.tsx");
-  const thirds = elements(tree, "div").filter((d) => propText(d, "className") === '"settings-third"');
-  const names = thirds.map((d) => /with-tip">([A-Z][a-z]+(?: [a-z]+)?)/.exec(d.getText())?.[1]);
-  ck("the three sit in equal thirds", JSON.stringify(names) === JSON.stringify(["Brightness", "Night dimming", "Villa lighting"])
-     && /\.settings-third \{ flex: 1 1 0; min-width: \d+px; \}/.test(modals), names);
-  ck("  ...Villa lighting's icons fill its third in equal segments", /\.daynight-segmented button \{ min-height: 24px; flex: 1 1 0; width: auto; \}/.test(modals)
-     && !/\.daynight-segmented \{[^}]*flex: 0 0 auto/.test(modals));
+  // every slider and every segmented choice of the dialog's body sits directly in a SettingRow (Interface, the header's
+  // theme, is not a setting line; the Messages tab's language grid stands as its section's own line)
+  const inRow = (e) => { for (let n = e.parent; n; n = n.parent) { if (/^<SettingRow\b/.test(n.getText?.() ?? "")) return true; } return false; };
+  const sliders = elements(tree, "input").filter((e) => propText(e, "type") === '"range"');
+  const names = sliders.map((e) => propText(e, "aria-label"));
+  ck("every slider is a setting line: its name for assistive technology, in a SettingRow",
+     JSON.stringify(names) === JSON.stringify(['"Brightness"', '"Night dimming"', '"Light effect strength"', '"Eye height"', '"Walk speed"'])
+     && sliders.every(inRow), names);
+  const choices = elements(tree, "SegmentedGroup").map((e) => [propText(e, "ariaLabel"), inRow(e)]);
+  ck("  ...and Villa lighting and Map look's Icon | Card, each with a name of its own",
+     choices.filter(([n]) => ['"Villa lighting"', '"Floating badge style"'].includes(n)).every(([, r]) => r)
+     && /label="Map look"/.test(src("components/settings/SettingsModal.tsx")), choices);
+  ck("  ...no pair or third of a line is left", !/settings-third|settings-row-half/.test(modals + src("components/settings/SettingsModal.tsx")));
+  ck("  ...its control in a column of one width on every line, the name taking what is left",
+     /\.setting-row-control \{ flex: 0 1 var\(--setting-control\);/.test(modals) && /\.setting-row-name \{[^}]*flex: 1 1 \d+px; min-width: 0;/.test(modals));
+  const toggle = src("components/common/OnOffToggle.tsx");
+  const onOff = Number(/--on-off-width: (\d+)px/.exec(modals)?.[1]), column = Number(/--setting-control: (\d+)px/.exec(modals)?.[1]);
+  ck("an On | Off is that line too, half the control column wide (owner: \"50% less wide\")",
+     /<SettingRow className=\{`on-off/.test(toggle) && onOff * 2 === column
+     && /\.setting-row-control > \.segmented\.on-off-switch \{ flex: 0 0 var\(--on-off-width\); width: var\(--on-off-width\); \}/.test(modals),
+     { onOff, column });
 }
 
 console.log("\n  every field's text, one size:");

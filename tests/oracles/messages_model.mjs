@@ -256,9 +256,9 @@ ck("Messages opens where the model says, and marks nothing itself (the Cockpit's
    && /onClick=\{\(\) => pickFilter\(f\.id\)\}/.test(tab));
 
 console.log("\n  a report, drawn (ticket 20):");
-const { NoteDetail, ReportDetail } = await import("@/components/cockpit/MessagesTab");
+const { NoteDetail } = await import("@/components/cockpit/MessagesTab");
 globalThis.window = globalThis.window ?? { location: { pathname: "/" } };   // the add-on's own address (no Ingress prefix)
-const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true }));
+const opened = draw(h(NoteDetail, { announcement: weekly, canOpenPage: true }));
 // ⚠️ THE COCKPIT'S ONE CARD (owner, 2026-10-29: "notification cards shall use the same shared card component used across
 // all Cockpit lists"): its frame, title and when as an issue's, its buttons under its words
 {
@@ -421,8 +421,25 @@ const opened = draw(h(ReportDetail, { announcement: weekly, canOpenPage: true })
 ck("its words, then its page opened in the document viewer (the add-on's sandboxed page)",
    opened.includes("Two things") && opened.includes('href="/fm-document/page-en-0001"') && opened.includes("Open the page"), opened);
 ck("  ...no page link for a profile the add-on serves no page to, nor for a report without a page",
-   !draw(h(ReportDetail, { announcement: weekly, canOpenPage: false })).includes("Open the page")
-   && !draw(h(ReportDetail, { announcement: digest, canOpenPage: true })).includes("Open the page"));
+   !draw(h(NoteDetail, { announcement: weekly, canOpenPage: false })).includes("Open the page")
+   && !draw(h(NoteDetail, { announcement: digest, canOpenPage: true })).includes("Open the page"));
+// owner, 2026-11-03: "show the button directly in the collapsed version of the card": the page sits in the card's own
+// button row, drawn folded or opened, the same for a report and for a notification carrying a page
+{
+  const actionsOf = (html) => html.slice(html.indexOf("fm-record-actions"));
+  const foldedReport = draw(h(NoteDetail, { announcement: weekly, canOpenPage: true, folded: "Two things", onToggle: () => {} }));
+  const note = { ...ann(12, { title: "🔎 Pump checked", text: "See the page." }), page: "page-en-0002" };
+  const foldedNote = draw(h(NoteDetail, { announcement: note, canOpenPage: true, folded: "See the page.", onToggle: () => {} }));
+  ck("  ...folded, its page is in the card's button row, one tap away (a report and a notification alike)",
+     /Open the page/.test(actionsOf(foldedReport)) && /fm-card-folded/.test(foldedReport)
+     && /href="\/fm-document\/page-en-0002"[\s\S]*Open the page/.test(actionsOf(foldedNote)), [actionsOf(foldedReport), actionsOf(foldedNote)]);
+  const cardFn = parseTsx("components/cockpit/MessagesTab.tsx").statements.find((st) => st.name?.getText() === "AnnouncementCard");
+  const inboxNotes = elements(cardFn, "NoteDetail");
+  ck("  ...the Inbox hands every report and notification the profile's right to the page (canManage)",
+     inboxNotes.length === 1 && propText(inboxNotes[0], "canOpenPage") === "canManage", inboxNotes.map((e) => propText(e, "canOpenPage")));
+  ck("  ...and opened, in the same row (never a second place)",
+     /Open the page/.test(actionsOf(opened)) && opened.split("Open the page").length === 2, opened);
+}
 const reportLine = listed(onReports.reports[0]);
 ck("  ...folded: its title and first words", reportLine.includes("<strong>Rapport</strong>") && reportLine.includes('<span class="fm-card-folded">Trois choses</span>'), reportLine);
 const sections = elements(parseTsx("components/cockpit/MessagesTab.tsx"), "MessagesSection").map((e) => propText(e, "title"));
@@ -637,8 +654,9 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
      + "notification)", placeOf(ring({})) === "notification"
      && placeOf(parseVestaMessage({ seq: 62, key: "incident:5", title: "#5-P2 (existing)", body: "Door",
        stage: "existing", asked: true })) === "notification");
-  ck("  ...the Closed section counts items, not alerts, and says what it holds",
-     ((c) => !!c && propText(c, "unit") === '"closed item"' && /^"Finished:/.test(String(propText(c, "tip"))))(
+  // its count is its title's (owner, 2026-11-03: no "n closed items" line under it, fault_confirm.mjs)
+  ck("  ...the Closed section says what it holds",
+     ((c) => !!c && /^"Finished:/.test(String(propText(c, "tip"))))(
        elements(parseTsx("components/cockpit/MessagesTab.tsx"), "FoldedRows").find((e) => propText(e, "title") === '"Closed"')));
 }
 

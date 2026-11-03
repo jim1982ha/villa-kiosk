@@ -47,7 +47,7 @@ export default function RecentWorkList() {
   const kept = recordsKeptNote(retention, "Work");
   return (
     <>
-    <FoldedList title="Recent work" rows={rows} unit="completion"
+    <FoldedList title="Recent work" rows={rows}
       tip={kept ? `${kept} A task's latest completion is always kept.` : undefined}>
       {({ completion: c, title, cost }) => (
         <RecordCard key={c.id} title={title}

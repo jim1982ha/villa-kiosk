@@ -514,16 +514,9 @@ export function recordsKeptNote(r: FmRetention | null, what: string): string | n
     ? `${what} older than ${r.recordsDays} days is no longer kept (Advanced Settings › System).` : null;
 }
 
-/** The days the record still holds BOTH kinds of close — the shorter window (0 = for ever, so not a bound); null when
- *  neither expires. The Tickets figures are about this period, and say so. */
-export function keptDays(r: FmRetention): number | null {
-  const bounded = [r.clearedDays, r.repairedDays].filter((d) => Number.isFinite(d) && d > 0);
-  return bounded.length ? Math.min(...bounded) : null;
-}
-
 /**
  * The resolution figures, over each record's life (recordLife). `window`: only the records whose last close (as they
- * stood at its end) falls inside it: the recap's month (monthBounds), the Tickets tab's kept record (keptDays).
+ * stood at its end) falls inside it: the recap's month (monthBounds).
  * Without one: every record given.
  *
  * ⚠️ "RESOLVED (ALL TIME)" WAS THE KEPT RECORD (architecture review, 2026-10-19): the server drops a no-action close

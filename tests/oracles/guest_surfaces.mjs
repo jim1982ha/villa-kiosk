@@ -44,6 +44,11 @@ ck("the Cockpit does not fetch energy at all (its 'Energy today' block is gone)"
     why, showPeople: false, showMovement, canOpen: () => false, onOpenEntity: () => {}, onClose: () => {} }));
   ck("  ...the presence window shows its latest movement only to a profile that sees motion",
      /Latest movement/.test(drawn(true)) && !/Latest movement|Hall motion/.test(drawn(false)));
+  // owner, 2026-11-03: "Move the latest movement section above the people section"
+  const both = draw(h(PresencePanel, { presence: { state: "occupied", label: "Occupied", tone: "active", since: null },
+    why, showPeople: true, showMovement: true, canOpen: () => false, onOpenEntity: () => {}, onClose: () => {} }));
+  ck("  ...above the People", both.indexOf("Latest movement") >= 0 && both.indexOf("Latest movement") < both.indexOf("People"),
+     [both.indexOf("Latest movement"), both.indexOf("People")]);
   ck("the motion toast and the presence window ask it",
      /if \(!profileView\(roleRef\.current\)\.motion\) return;/.test(src("pages/Dashboard.tsx"))
      && /const sees = profileView\(role\);[\s\S]*showPeople=\{sees\.people\} showMovement=\{sees\.motion\}/.test(src("components/hud/PresenceTile.tsx")));

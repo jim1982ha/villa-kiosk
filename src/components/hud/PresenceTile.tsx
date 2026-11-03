@@ -118,18 +118,7 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
           <strong>{head.label}</strong>{head.when ? <span className="muted"> · since {head.when}</span> : null}
         </div>
         {presenceHistory}
-        {showPeople && (
-          <>
-            <div className="settings-section-title">People</div>
-            {why.people === null ? <p className="muted body-text">This sensor does not list the people it watches.</p>
-              : why.people.length === 0 ? <p className="muted body-text">None of the people this sensor watches is known.</p> : (
-                <ul className="presence-list">
-                  {why.people.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
-                    said={`${x.place}${since(x.since) ? ` · since ${since(x.since)}` : ""}`} />)}
-                </ul>
-              )}
-          </>
-        )}
+        {/* Latest movement before People (owner, 2026-11-03: "Move the latest movement section above the people section") */}
         {showMovement && (
           <>
             <div className="settings-section-title">Latest movement</div>
@@ -143,6 +132,18 @@ export function PresencePanel({ presence: p, when, why, showPeople, showMovement
                 </ul>
               </>
             ) : <p className="muted body-text">{why.listsSensors ? "None of the sensors this one watches reports." : "This sensor does not list the sensors it watches."}</p>}
+          </>
+        )}
+        {showPeople && (
+          <>
+            <div className="settings-section-title">People</div>
+            {why.people === null ? <p className="muted body-text">This sensor does not list the people it watches.</p>
+              : why.people.length === 0 ? <p className="muted body-text">None of the people this sensor watches is known.</p> : (
+                <ul className="presence-list">
+                  {why.people.map((x) => <Row key={x.entityId} entityId={x.entityId} name={x.name} onOpen={opener(x.entityId)}
+                    said={`${x.place}${since(x.since) ? ` · since ${since(x.since)}` : ""}`} />)}
+                </ul>
+              )}
           </>
         )}
         {why.settings.length > 0 && (

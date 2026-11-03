@@ -430,9 +430,12 @@ console.log("\n  the screens:");
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 const tt = src("components/fm/TicketsTab.tsx");
 // what ticketCards lists is checked by value above ("Tickets lists the device whose ticket was opened last first");
-// here, that the tab draws it — and counts it (openCounts: the same cards)
+// here, that the tab draws it (its figures above the cards went: owner, 2026-11-03)
 ck("the Tickets tab draws ticketCards — the tickets in progress, by device — and Closed",
-   /ticketCards\(data\.tickets, deviceOfRecord\)/.test(tt) && /openCounts\(data\.tickets, deviceOfRecord\)\.tickets/.test(tt) && !/Raise a fault/.test(tt));
+   /ticketCards\(data\.tickets, deviceOfRecord\)/.test(tt) && !/Raise a fault/.test(tt));
+// owner, 2026-11-03: "Remove the redundant line with the high level numbers above the list of opened tickets": no figures
+ck("  ...and no figures above them (in progress, mean resolution, closed with no action, the kept record)",
+   !/fm-summary|fm-stat|mean resolution|Over the kept record/.test(tt));
 // owner, 2026-11-03 ("A"): a ticket's card says its state ONCE — its first record's pill; the records after it (the
 // night check's finding beside VESTA's alert on the same device) do not repeat "Ticket opened by … In progress"
 {
