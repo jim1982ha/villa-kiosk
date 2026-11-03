@@ -173,7 +173,7 @@ export interface AppConfig {
    */
   roomGlowAndCones: boolean;
   /**
-   * The villa's maintenance mode (owner, 2026-10-29: a switch in Advanced Settings › System, owner only, and a mark in
+   * The villa's maintenance mode (owner, 2026-10-29: a switch in Advanced Settings › Villa (System to 2.496.676), owner only, and a mark in
    * the top bar while it is on): the VESTA Agent sends only urgent (P1) alerts while it is on. ⚠️ THE KIOSK OWNS IT, as
    * it owns the devices asleep by design: the Agent reads it in its heartbeat's answer (agent-contract.json
    * `heartbeat.answer.maintenance`). Off by default.
