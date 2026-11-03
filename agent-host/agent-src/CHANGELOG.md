@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.427 (3 November 2026)
+
+Architecture review round 18, card 2: who is who is cached on its own files. `Roster.current(pack_path)` reads the kept
+lists and the Kiosk's chat languages again only when one of them changes; `Settings.policy()` caches the rules on
+policy.yaml alone and hands them with the current roster (`Policy.with_roster`). A slip in policy.yaml kept the last good
+rules WITH their old roster, so Kiosk list and language changes waited for the slip to be fixed. The page's People card
+and `page_policy` read the same `Roster.current`.
+
 ## 0.6.426 (3 November 2026)
 
 Each chat's language is the VESTA Kiosk's (owner, 2026-11-03: "isn't it also redundant to show the Telegram chat ID

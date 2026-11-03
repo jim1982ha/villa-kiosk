@@ -93,9 +93,9 @@ def page_policy(path: str, pack_path: str | None) -> Policy:
     it — hung on "Loading…"). The agent's own reading is its own (policy.py)."""
     from ..roster import Roster
     try:
-        return Policy.load(path, Roster.kept(pack_path))
+        return Policy.load(path, Roster.current(pack_path))
     except (yaml.YAMLError, OSError, ValueError, TypeError):
-        return Policy({}, Roster.kept(pack_path))
+        return Policy({}, Roster.current(pack_path))
 
 
 class PageFiles:

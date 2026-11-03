@@ -304,6 +304,13 @@ class Policy:
                               "(config.Settings.policy, ui.changes.page_policy).")
         return self._roster
 
+    def with_roster(self, roster: "Roster") -> "Policy":
+        """These same rules with `roster` for who is who (config.Settings.policy: the cached rules, the current roster)."""
+        import copy
+        other = copy.copy(self)
+        other._roster = roster
+        return other
+
     @classmethod
     def load(cls, path: str, roster: "Roster | None" = None) -> "Policy":
         """policy.yaml at `path` ({} when there is none), with `roster` (None: rules only)."""

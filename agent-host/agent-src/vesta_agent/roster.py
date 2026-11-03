@@ -101,6 +101,19 @@ def chat_languages(lists, told: dict[str, str]) -> dict[int, str]:
             if row.get("entity") in told}
 
 
+def _mtime(path: str | None) -> tuple[int, int] | None:
+    """A file's change stamp (its modification time in nanoseconds and its size); None when it is not there."""
+    try:
+        st = os.stat(path) if path else None
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size) if st else None
+
+
+#: Roster.current's cache: pack path → (the stamp of its files, the roster read from them)
+_CURRENT: dict = {}
+
+
 def listed_entries(lists, languages: dict[int, str]) -> list[Person]:
     """Every entry of the villa's lists ({role: [{"chat", "name"}]}, vesta_shared.villa_recipients): one per chat and
     role, in ROLES order then the list's, named as the villa names its notify entity, in the chat's language.
@@ -145,6 +158,23 @@ class Roster:
         lists = villa_recipients.get(pack_path) if where else {}
         told = kiosk_told.get("chatLanguages", pack_path) if pack_path else {}
         return cls(lists, chat_languages(lists, told), read_yet=bool(where) and os.path.exists(where))
+
+    @classmethod
+    def current(cls, pack_path: str | None) -> "Roster":
+        """The kept roster (`kept`), read again only when one of the files it is read from changes — THE cache of who
+        is who, for the engine and the page alike.
+
+        ⚠️ THE ROSTER KNOWS ITS OWN FILES (architecture review round 18, card 2): config.Settings.policy listed them in
+        its policy.yaml cache by hand, and on a typing slip in policy.yaml kept its last good rules WITH THEIR ROSTER —
+        a chat added in the Kiosk was refused ("This chat is not on the villa's lists") until the slip was fixed, while
+        the page, reading its own, already showed it."""
+        from vesta_shared import kiosk_told
+        sources = (villa_recipients.path(pack_path), kiosk_told.path("chatLanguages", pack_path)) if pack_path else ()
+        stamp = (pack_path, tuple(_mtime(p) for p in sources))
+        hit = _CURRENT.get(pack_path)
+        if hit is None or hit[0] != stamp:
+            hit = _CURRENT[pack_path] = (stamp, cls.kept(pack_path))
+        return hit[1]
 
     @classmethod
     def of(cls, owner=(), fm=(), languages: dict | None = None) -> "Roster":

@@ -90,3 +90,38 @@ def test_the_rules_only_callers_never_need_the_villas_lists(tmp_path, monkeypatc
     desk = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(desk)
     assert desk.siren_minutes() == Policy({}).siren_auto_off_min
+
+
+# ⚠️ WHO IS WHO IS CACHED ON ITS OWN FILES (architecture review round 18, card 2): a typing slip in policy.yaml kept the
+# last good rules with their roster, so a chat added in the Kiosk was refused until the slip was fixed
+def test_a_chat_added_in_the_kiosk_is_known_while_policy_yaml_has_a_slip(tmp_path):
+    from helpers import keep_roster, settings
+    s = settings(str(tmp_path))
+    with open(s.policy_path, "w") as f:
+        f.write("act_enabled: true\n")
+    keep_roster(s, Roster.of(owner=[(ANN, "Ann")]))
+    assert s.policy().roster.person(ANN) is not None and not s.policy().roster.knows_chat(GROUP)
+    with open(s.policy_path, "w") as f:
+        f.write("act_enabled: 'true\n")                                    # one quote left open
+    keep_roster(s, Roster.of(owner=[(ANN, "Ann")], fm=[(GROUP, "Staff")]))
+    pol = s.policy()
+    assert pol.act_enabled is True                                          # the last good rules
+    assert pol.roster.knows_chat(GROUP)                                      # and today's lists
+
+
+def test_a_language_told_by_the_kiosk_alone_is_seen(tmp_path):
+    from helpers import chat_entity, keep_roster, settings
+    from vesta_shared import kiosk_told
+    s = settings(str(tmp_path))
+    keep_roster(s, Roster.of(owner=[(ANN, "Ann")]))
+    assert s.policy().roster.language_of(ANN, "owner") == "en"
+    kiosk_told.save(s.pack_path, "chatLanguages", {chat_entity(ANN): "fr"})
+    assert s.policy().roster.language_of(ANN, "owner") == "fr"
+
+
+def test_the_page_and_the_engine_read_the_same_roster(tmp_path):
+    from helpers import keep_roster, settings
+    from vesta_agent.ui.changes import page_policy
+    s = settings(str(tmp_path))
+    keep_roster(s, Roster.of(owner=[(ANN, "Ann")]))
+    assert page_policy(s.policy_path, s.pack_path).roster is s.policy().roster is Roster.current(s.pack_path)

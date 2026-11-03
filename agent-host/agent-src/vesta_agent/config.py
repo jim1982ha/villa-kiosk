@@ -135,21 +135,18 @@ class Settings:
         """policy.yaml, read again whenever the file changes — the ONE cache of it (the engine and these
         settings each kept their own until 0.6.42). A value it does not understand falls back to its default
         (not an error: a typo in a hand-edited file must not stop the agent; the UI refuses it before it is saved)."""
-        from vesta_shared import kiosk_told, villa_recipients
         from .roster import Roster
 
-        def mtime(path):
+        try:
+            m = os.path.getmtime(self.policy_path)
+        except (OSError, TypeError):
+            m = None
+        # ⚠️ THE RULES ARE CACHED ON policy.yaml ALONE, WHO IS WHO ON ITS OWN FILES (architecture review round 18, card
+        # 2): the cache key listed the Kiosk's files too, and a slip in policy.yaml kept the last good rules with their
+        # old roster, so a chat added in the Kiosk was refused until the slip was fixed. Roster.current knows its files.
+        if self._policy_cache.get("mtime") != m or "rules" not in self._policy_cache:
             try:
-                return os.path.getmtime(path)
-            except (OSError, TypeError):
-                return None
-        # read again when policy.yaml, the villa's lists of who gets the messages or the Kiosk's chat languages (both
-        # kept beside the pack) change
-        m = (mtime(self.policy_path), mtime(villa_recipients.path(self.pack_path)),
-             mtime(kiosk_told.path("chatLanguages", self.pack_path)))
-        if self._policy_cache.get("mtime") != m or "value" not in self._policy_cache:
-            try:
-                v = Policy.load(self.policy_path, Roster.kept(self.pack_path))  # no file: Policy({})
+                rules = Policy.load(self.policy_path)  # no file: Policy({})
             except Exception as e:  # noqa: BLE001 — unreadable: the last good rules, never a stop
                 # ⚠️ ANY READING THAT FAILS KEEPS THE LAST GOOD RULES (architecture review 17, then 18): any other error
                 # stopped every message, alert and press; a YAML slip by hand (one quote left open) gave EMPTY rules —
@@ -157,8 +154,13 @@ class Settings:
                 import logging
                 logging.getLogger("vesta").error("policy.yaml could not be read (%s): the last good rules are kept",
                                                  type(e).__name__)
-                v = self._policy_cache.get("value") or Policy({}, Roster.kept(self.pack_path))
-            self._policy_cache.update(mtime=m, value=v)
+                rules = self._policy_cache.get("rules") or Policy({})
+            if rules is not self._policy_cache.get("rules"):
+                self._policy_cache.update(rules=rules, value=None)
+            self._policy_cache["mtime"] = m
+        roster = Roster.current(self.pack_path)
+        if self._policy_cache.get("value") is None or self._policy_cache.get("roster") is not roster:
+            self._policy_cache.update(roster=roster, value=self._policy_cache["rules"].with_roster(roster))
         return self._policy_cache["value"]
 
     def behaviour(self) -> dict:

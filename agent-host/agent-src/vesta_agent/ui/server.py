@@ -382,7 +382,7 @@ class UI:
         from vesta_shared.message_format import ROLE_WORDS
         from ..policy import Language
         from ..roster import Roster
-        roster = Roster.kept(self.s.pack_path)
+        roster = Roster.current(self.s.pack_path)       # the engine's own (config.Settings.policy)
         rows: dict[int, dict] = {}
         for e in roster.entries:
             row = rows.setdefault(e.telegram_id, {"telegram_id": e.telegram_id, "name": e.name, "roles": []})
