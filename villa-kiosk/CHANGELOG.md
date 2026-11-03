@@ -1,3 +1,12 @@
+## 2.496.679
+
+What you will see:
+- Settings › Messages › Who gets the messages: the language menus now sit under a column named "Language VESTA writes
+  in", so each chat's menu says what it is. The (i) is four short sentences: who gets what, and that changes save at
+  once.
+- "Language on this tablet" only appears once a chat is set to a language other than English, as there is nothing to
+  choose before. Its (i) is one sentence.
+
 ## 2.496.678
 
 What you will see:

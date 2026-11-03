@@ -411,8 +411,18 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
   ck("  ...no screen picks a version itself", pickers.length === 0, pickers);
   const settings = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
   ck("the tablet's own setting, in Settings › Messages, in this dialog's draft (Save / Cancel)",
-     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="This tablet shows VESTA's messages in"/.test(settings)
+     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="Language on this tablet"/.test(settings)
      && /tabletLanguages\(config\.chatLanguages\)/.test(settings));
+  // owner, 2026-11-03 ("very badly explained … clearer and also shorter"): nothing to choose, nothing drawn; the chats'
+  // column says what their menu is
+  const { elements, guardsOf, parseTsx } = await import("../consistency/jsx.mjs");
+  const pick = elements(parseTsx("components/settings/SettingsModal.tsx"), "TipTitle")
+    .filter((e) => /title="Language on this tablet"/.test(e.getText()));
+  ck("  ...drawn only while there is a language to choose besides English, title and all",
+     pick.length === 1 && guardsOf(pick[0]).includes("languages.length > 1") && !/so far|Only English/.test(settings), pick.map(guardsOf));
+  ck("  ...the chats' menus under a column named \"Language VESTA writes in\"",
+     /<div className="settings-list-head">\s*<span>Chat<\/span>\s*<span>Language VESTA writes in<\/span>/.test(
+       readFileSync(new URL("../../src/components/settings/WhoGetsMessages.tsx", import.meta.url), "utf8")));
 }
 
 done("✅ the villa's announcements: read into words, shown once, each in the one notice");

@@ -41,6 +41,12 @@ export default function WhoGetsMessages() {
     <>
       {/* one card, a block per role (owner, 2026-11-03: the pills sat spread across the line, the pickers not lined up) */}
       <div className="settings-list">
+      {/* the language column named once, as the announcements' "Seconds" (owner, 2026-11-03: "the language
+          description part is still very badly explained … clearer and also shorter") */}
+      <div className="settings-list-head">
+        <span>Chat</span>
+        <span>Language VESTA writes in</span>
+      </div>
       {ROLE_LISTS.map((list) => {
         const who = ROLE_LABELS[list.profile];
         const helper = entities[list.entityId];
