@@ -8,6 +8,7 @@
 
 import { wallClock } from "./villaClock";
 import type { StateHistoryPoint } from "@/types/ha.types";
+import { TRANSITIONAL_STATES } from "@/utils/stateColors";
 import { DAY_MS, HOUR_MS, localMidnight, localMonthStart } from "@/utils/localDay";
 
 /** One drawn cell — a time bucket. */
@@ -171,7 +172,10 @@ export function timelineRuns(
 /** THE LEGEND OF A BAND: every state it paints, in the order it first appears, its colour and its words (owner,
  *  2026-10-21: "how come I see a legend in some bar chart and not in other … centrally defined and consistent
  *  everywhere"). It was a prop only a sensor in words passed: an occupancy sensor striped red and green said neither,
- *  a camera beside it said both. Now every band says its own, from what it draws. */
+ *  a camera beside it said both. Now every band says its own, from what it draws.
+ *  ⚠️ ONE ENTRY PER MOVEMENT (owner, 2026-11-04: "merge the 2 colour Locking and Unlocking with the same tile colour"):
+ *  the states on their way between two rest states (TRANSITIONAL_STATES) painted in one colour are one entry, their
+ *  words joined: "Locking / Unlocking", "Opening / Closing". */
 export function timelineLegend(
   cells: readonly Cell[], colorFor: (s: string) => string, wordsFor: (s: string) => string,
 ): { state: string; color: string; label: string }[] {
@@ -181,5 +185,13 @@ export function timelineLegend(
       if (!seen.includes(st)) seen.push(st);
     }
   }
-  return seen.map((st) => ({ state: st, color: colorFor(st), label: wordsFor(st) }));
+  const out: { state: string; color: string; label: string }[] = [];
+  const moving = (st: string) => TRANSITIONAL_STATES.has(st.trim().toLowerCase());
+  for (const st of seen) {
+    const color = colorFor(st), label = wordsFor(st);
+    const same = moving(st) ? out.find((l) => moving(l.state) && l.color === color) : undefined;
+    if (!same) out.push({ state: st, color, label });
+    else if (!same.label.split(" / ").includes(label)) same.label += ` / ${label}`;
+  }
+  return out;
 }

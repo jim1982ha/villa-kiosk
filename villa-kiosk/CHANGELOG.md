@@ -1,3 +1,18 @@
+## 2.496.686
+
+What you will see:
+- Inbox › Closed: Reopen is only on a fault closed as "Not a problem while it lasts" (2.496.685 put it on every closed
+  fault). Every other close is checked by VESTA or over, and has no button.
+- A device's history bar: the states on their way between two others, in the same colour, are one entry of its legend:
+  a lock's "Locking / Unlocking", a cover's "Opening / Closing".
+
+## 2.496.685
+
+What you will see:
+- Inbox › Closed: every closed fault's card has a Reopen button, as a closed ticket already had in Tickets › Closed.
+  A fault closed as "Not a problem while it lasts", or by mistake, can be put back in Open issues: it asks why
+  (optional), and VESTA is told and follows it again. Only a profile that manages Facility work sees it.
+
 ## 2.496.684
 
 What you will see:

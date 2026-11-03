@@ -298,6 +298,24 @@ console.log("\n  one place at every moment (architecture review round 16: faultC
   const lasting = { ...written, updates: [opened, { at: iso(T0), status: "resolved", kind: "cleared", lasting: true, photoIds: [], by: "Owner" }] };
   const l = where(lasting, T0 + 8_000);
   ck("\"Not a problem while it lasts\": under Closed, on no other list", l.place === "closed" && l.onWatch === "" && l.inClosed === "k1" && l.hidden === "", l);
+  // owner, 2026-11-04: "there are no button in the closed card to potentially re-open this issue"
+  const { closedCards } = await import("@/config/cockpitCard");
+  const { CockpitAttentionRow } = await import("@/components/cockpit/IssueCard");
+  const shut = closedCards({ ...EMPTY_FM_DATA, tickets: [lasting] }, CADENCE, new Date(T0 + 8_000),
+    { devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, may: () => true });
+  const reopen = shut[0]?.lines[0].actions ?? [];
+  ck("  ...its Closed card has Reopen, on that record: an open fault again",
+     reopen.length === 1 && reopen[0].label === "Reopen" && reopen[0].ids.join() === "k1" && reopen[0].step.to === "open", reopen);
+  // owner, 2026-11-04: "i don't want you to do this for all closed items": a plain close (Done, the watch over) has none
+  const plain = closedCards({ ...EMPTY_FM_DATA, tickets: [written] }, CADENCE, new Date(T0 + 60 * 60_000 + 2 * LOOK + 1_000),
+    { devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, may: () => true });
+  ck("  ...only it: a fault closed any other way has no Reopen under Closed",
+     plain.length === 1 && plain[0].lines[0].actions.length === 0, plain[0]?.lines[0].actions);
+  const row = (canManage) => draw(h(CockpitAttentionRow, { card: shut[0], onOpenEntity: () => {}, canManage, onEditTicket: () => {}, onRaiseTicket: () => {} }));
+  // drawn by the open issues' row, whose buttons need the store's context: here its gate, for a profile that does not
+  // manage Facility work (IssueCard: canManage && line.actions)
+  ck("  ...none for a profile that does not manage Facility work",
+     !/fm-record-actions/.test(row(false)) && /\(canManage && line\.actions\.length > 0/.test(readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8")));
 }
 
 console.log("\n  gone or back as the Agent says:");
