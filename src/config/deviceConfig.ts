@@ -65,6 +65,7 @@ import {
   type Keyed, type KeyedDiff, type StoreSaveResult,
 } from "@/utils/keyedSync";
 import { readJson, writeJson } from "@/utils/storedJson";
+import { parseChatLanguages } from "@/messages/recipients";
 
 // ── THE SHARED KEYS: ONE ROW EACH ──────────────────────────────────────────
 // Every shared key, described once: how its value is indexed item by item for
@@ -87,6 +88,7 @@ interface SharedItems {
   teleportPoints: TeleportPoint;
   dismissedEntityIds: true;
   unavailableByDesign: true;
+  chatLanguages: string;
   fmContract: FmContract;
   latitude: number;
   longitude: number;
@@ -166,6 +168,8 @@ const SHARED_KEYS: { [K in SharedConfigKey]: SharedKeyRow<AppConfig[K], SharedIt
   },
   dismissedEntityIds: idList,
   unavailableByDesign: idList,
+  // each chat's language, by its notify entity: two tablets setting two chats both stand
+  chatLanguages: { index: sameRecord, fromIndex: sameRecord, parse: parseChatLanguages, empty: {} },
   // the villa's single-value settings: each from its one row (config/villaSettings)
   fmContract: villaRow("fmContract"),
   latitude: villaRow("latitude"),

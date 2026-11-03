@@ -104,6 +104,15 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
   ck("a segmented choice alone on its line fills it, in equal centred segments that wrap on a phone",
      /\.settings-modal \.row > \.segmented:only-child \{ flex: 1 1 100%; flex-wrap: wrap; \}/.test(css)
      && /\.settings-modal \.row > \.segmented:only-child button \{ flex: 1 1 0; min-width: \d+px; justify-content: center; \}/.test(css));
+  // owner, 2026-11-03 ("very poorly rendered"): ten languages were one pill stretched over three lines
+  const sg = srcOf("components/common/SegmentedGroup.tsx");
+  ck("  ...more than four choices draw as a grid of equal cells, not a pill over several lines",
+     /options\.length > 4 \? " segmented-grid"/.test(sg)
+     && /\.settings-modal \.row > \.segmented\.segmented-grid:only-child \{\s*display: grid; grid-template-columns: repeat\(auto-fill, minmax\(\d+px, 1fr\)\)/.test(css));
+  // owner, 2026-11-03: a device's id was cut every few letters beside "Confirm before toggling" on a phone
+  ck("a device's id keeps a readable width: its actions wrap onto their own line first",
+     /\.entity-id-display \{ display: flex; flex-wrap: wrap;/.test(css) && /\.entity-id-text \{ flex: 1 1 1\d\dpx; min-width: 0; overflow-wrap: anywhere; \}/.test(css)
+     && !/\.entity-id-text \{[^}]*break-all/.test(css));
 }
 done("✅ one segmented group, one on/off, one save button, one outside-close, one ticker");
 

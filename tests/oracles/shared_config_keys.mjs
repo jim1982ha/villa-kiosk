@@ -19,6 +19,7 @@ const sample = {
   teleportPoints: [{ name: "Kitchen", position: [0, 0, 0] }, { name: "Patio", position: [1, 0, 1] }],
   dismissedEntityIds: ["sensor.x", "sensor.y"],
   unavailableByDesign: ["binary_sensor.x", "binary_sensor.y"],
+  chatLanguages: { "notify.example_chat": "fr", "notify.example_group": "de" },
   fmContract: { monthlyCap: 1000, warnAtPercent: 0 },
   latitude: -8.5,
   longitude: 115.2,
@@ -36,6 +37,7 @@ const edit = {
   teleportPoints: (v, n) => [...v, { name: `Room ${n}`, position: [n, 0, 0] }],
   dismissedEntityIds: (v, n) => [...v, `sensor.n${n}`],
   unavailableByDesign: (v, n) => [...v, `binary_sensor.n${n}`],
+  chatLanguages: (v, n) => ({ ...v, [`notify.example_chat_${n}`]: "id" }),
   fmContract: (v, n) => ({ ...v, monthlyCap: 1000 + n }),
   latitude: (v, n) => v + n,
   longitude: (v, n) => v + n,
@@ -62,8 +64,10 @@ console.log("\n  reading what the server holds:");
   const parsed = dc.parseSharedConfig({ ...base, fromANewerVersion: 1 });
   ck("every shared key is read back as stored", KEYS.every((k) => J(parsed[k]) === J(base[k])));
   ck("a key this version does not know is dropped", !("fromANewerVersion" in parsed));
-  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", unavailableByDesign: 4, fmContract: 5, latitude: "x", longitude: null, northOffsetDeg: NaN, presenceSensor: 3, recordsKeptDays: 1.5, roomGlowAndCones: "off", maintenanceMode: "on", fullScreen: "x" });
+  const wrong = dc.parseSharedConfig({ entityMap: [], meshBindings: "x", deviceGroups: {}, teleportPoints: 3, dismissedEntityIds: "a", unavailableByDesign: 4, chatLanguages: [], fmContract: 5, latitude: "x", longitude: null, northOffsetDeg: NaN, presenceSensor: 3, recordsKeptDays: 1.5, roomGlowAndCones: "off", maintenanceMode: "on", fullScreen: "x" });
   ck("a wrong-shaped value is left out, so the device keeps its own", Object.keys(wrong).length === 0, J(wrong));
+  ck("a chat's language is kept only for a notify entity and a language of the agreement's menu",
+     J(dc.parseSharedConfig({ chatLanguages: { "notify.a": "fr", "notify.b": "pt", "sensor.c": "de", "notify.d": 3 } }).chatLanguages) === J({ "notify.a": "fr" }));
   ck("a dismissed list keeps only its ids", J(dc.parseSharedConfig({ dismissedEntityIds: ["a", 3, null, "b"] }).dismissedEntityIds) === J(["a", "b"]));
   ck("nothing usable reads as nothing", J(dc.parseSharedConfig(null)) === "{}" && J(dc.parseSharedConfig([1])) === "{}");
 }

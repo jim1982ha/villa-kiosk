@@ -408,7 +408,7 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
   ck("  ...no screen picks a version itself", pickers.length === 0, pickers);
   const settings = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
   ck("the tablet's own setting, in Settings › Messages, in this dialog's draft (Save / Cancel)",
-     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="VESTA's messages on this tablet, in"/.test(settings)
+     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="VESTA's language on this tablet"/.test(settings)
      && /languagesOf\(kept\)/.test(settings));
 }
 

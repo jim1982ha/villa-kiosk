@@ -28,8 +28,10 @@ export default function SegmentedGroup<K extends string>({
   ariaLabel: string;
   className?: string;
 }) {
+  // more than four choices wrap on a phone: a grid of equal cells, not a pill over several lines (owner, 2026-11-03)
+  const grid = options.length > 4 ? " segmented-grid" : "";
   return (
-    <div className={`segmented${className ? ` ${className}` : ""}`} role="group" aria-label={ariaLabel}>
+    <div className={`segmented${grid}${className ? ` ${className}` : ""}`} role="group" aria-label={ariaLabel}>
       {options.map((o) => (
         <button key={o.key} type="button" className={o.key === active ? "active" : ""} disabled={o.disabled}
           aria-disabled={o.disabled || undefined}

@@ -34,6 +34,26 @@ export const LISTS_WHERE: string = AGREED.where;
  *  the one the tablet shows. */
 export const LISTS_TITLE: string = LISTS_WHERE.split(" › ").pop() ?? LISTS_WHERE;
 
+/** The languages a chat can read VESTA's messages in, code → name, in the menu's order (the agreement's `languages`:
+ *  the Agent writes in exactly these). */
+export const CHAT_LANGUAGES: Readonly<Record<string, string>> = AGREED.languages;
+
+/** Each chat's language as the villa's settings keep it (owner, 2026-11-03: set here beside the chat, never on the
+ *  VESTA Agent's page): a notify entity id → a code of CHAT_LANGUAGES. Any other entry is left out; a chat it does not
+ *  name reads English. undefined for a value that is no object (the tablet keeps its own). Pure: the add-on's server
+ *  reads it by the same rule (supervisor-proxy.py _chat_languages), and tells the Agent in its heartbeat answer. */
+export function parseChatLanguages(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  return Object.fromEntries(Object.entries(raw as Record<string, unknown>).filter(
+    (e): e is [string, string] => e[0].startsWith(`${AGREED.domain}.`) && typeof e[1] === "string" && e[1] in CHAT_LANGUAGES));
+}
+
+/** What choosing `code` for chat `entity` writes: that chat's language, English (the default) kept as no entry. */
+export function withChatLanguage(map: Readonly<Record<string, string>>, entity: string, code: string): Record<string, string> {
+  const { [entity]: _old, ...rest } = map;
+  return code === "en" ? rest : { ...rest, [entity]: code };
+}
+
 /** The notify entities a list's text names, once each, in its order ("unknown" and the like name none). */
 export function targetsOf(text: string | undefined | null): string[] {
   const out: string[] = [];
