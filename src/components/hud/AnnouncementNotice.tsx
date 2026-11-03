@@ -93,7 +93,7 @@ export function AnnouncementFullScreenView({ announcement, onDismiss, buttons, t
       <div className="modal-footer announcement-night-actions">
         {buttons}
         <span className="announcement-night-close">
-          <svg viewBox="0 0 84 84" aria-hidden="true">
+          <svg className="announcement-night-ring" viewBox="0 0 84 84" aria-hidden="true">
             <circle cx="42" cy="42" r={RING_R} className="announcement-night-track" />
             <circle cx="42" cy="42" r={RING_R} className="announcement-night-left"
               strokeDasharray={`${(fraction * RING_C).toFixed(2)} ${RING_C.toFixed(2)}`} transform="rotate(-90 42 42)" />

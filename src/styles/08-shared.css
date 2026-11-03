@@ -145,7 +145,8 @@
 }
 .announcement-night-actions .vesta-notice-said { color: var(--night-muted); }
 .announcement-night-close { position: relative; width: 84px; height: 84px; flex: none; }
-.announcement-night-close svg { position: absolute; inset: 0; width: 84px; height: 84px; }
+/* the ring alone, never every svg in Close: a rule for all of them sized its ✕ to 84 px too (2.496.683) */
+.announcement-night-close > .announcement-night-ring { position: absolute; inset: 0; width: 84px; height: 84px; }
 .announcement-night-track, .announcement-night-left { fill: none; stroke-width: 5; }
 .announcement-night-track { stroke: var(--night-track); }
 .announcement-night-left { stroke: var(--night-accent); stroke-linecap: round; transition: stroke-dasharray 1s linear; }

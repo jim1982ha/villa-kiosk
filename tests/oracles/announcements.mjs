@@ -352,6 +352,11 @@ ck("the countdown in the shared duration words, never below 1s, its share clampe
    && countdownOf(45_000, -5).words === "1s" && countdownOf(45_000, -5).fraction === 0 && countdownOf(120_000, 120_000).words === "2min");
 {
   const src = readFileSync(new URL("../../src/components/hud/AnnouncementNotice.tsx", import.meta.url), "utf8");
+  // owner, 2026-11-04: the ✕ drawn the ring's size, over the ring, because the ring's rule named every svg in Close
+  const shared = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  ck("  ...the ring's size rule names the ring alone, never Close's ✕ inside it",
+     /\.announcement-night-close > \.announcement-night-ring \{[^}]*width: 84px/.test(shared) && !/\.announcement-night-close svg/.test(shared)
+     && /<svg className="announcement-night-ring"/.test(src) && /<X size=\{26\}/.test(src));
   ck("  ...ticked every second from when it came on screen, a new announcement starting its own",
      /const now = useNow\(1000\);/.test(src) && /leftMs=\{ms - Math\.max\(0, now - shownAt\)\}/.test(src)
      && /<OneFullScreen key=\{idOf\(state\.full\.announcement\)\}/.test(src));
