@@ -710,9 +710,14 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* Who gets the messages: a list per role, its name above, its chats as pills from the left, its picker under them. */
 .recipients-role { display: flex; flex-direction: column; gap: 8px; }
 .recipients-role-name { font-weight: 600; }
-/* a chat of the list: its pill at the left, its language at the right */
+/* a chat of the list: its pill at the left, its name on one line, its language at the right at its own short width.
+   ⚠️ THE MENU IS NOT A FORM FIELD HERE (owner, 2026-11-03, iPhone: the names stood one letter per line): the shared
+   .dropdown is width: 100% (08-shared.css, after this file), so the menu took the line and squeezed the pill. */
 .recipients-chat { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.recipients-language { flex: 0 0 auto; min-width: 140px; }
+.recipients-chat .fm-entity-chip { white-space: nowrap; }
+.recipients-chat > .dropdown.recipients-language {
+  flex: 0 0 auto; width: 150px; min-height: 36px; padding: 6px 12px; font-size: var(--text-sm);
+}
 /* A choice among many standing on its own line (SegmentedGroup, more than four options: the tablet's languages): a
    grid of equal cells in a rounded box, never a pill stretched over several lines. A compact picker beside other
    controls (the charts' five ranges) keeps its pill. */
