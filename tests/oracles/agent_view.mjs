@@ -167,7 +167,26 @@ ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0,
   const reopened = { ...t, status: "open", updates: [...t.updates,
     { at: at(6), status: "resolved", by: "Facility manager", photoIds: [] },
     { at: at(7), status: "open", by: "Owner", kind: "reopened", note: "Still beeping", photoIds: [] }] };
-  ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Reopened by Owner, on 10-10 07 · Open", faultWhen(reopened, stamp));
+  ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Reopened by Owner, on 10-10 07", faultWhen(reopened, stamp));
+  // owner, 2026-11-04: a state only on a real ticket's pill; a fault's colour kept, a ticket in progress in the buttons'
+  // accent, as its Edit Ticket
+  const { ACCENT_PILL } = await import("../../src/fm/tone.ts");
+  const ticketed = { ...reopened, status: "in_progress", updates: [...reopened.updates,
+    { at: at(8), status: "in_progress", by: "Owner", photoIds: [] }] };
+  ck("  ...no state on a fault's pill, its colour kept; a ticket's pill keeps its stage, in the buttons' accent",
+     faultLatest(reopened, stamp)?.tone === "tone-warn" && faultWhen(ticketed, stamp) === "Ticket opened by Owner, on 10-10 08 · In progress"
+     && faultLatest(ticketed, stamp)?.tone === ACCENT_PILL, [faultLatest(reopened, stamp), faultLatest(ticketed, stamp)]);
+  // ONE place says a stage's colour (faultNotes.stagePillClass): the Tickets tab's stage pill wrote its own copy
+  const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
+  ck("  ...the Tickets tab's card shows that same pill (faultLatest), and its stage pill asks the one colour rule",
+     /const latest = faultLatest\(t, momentText\);/.test(ticketsTab) && /\{stated && latest && <StatusPill \{\.\.\.latest\} \/>\}/.test(ticketsTab)
+     && /tone: stagePillClass\(stageOf\(t\)\)/.test(ticketsTab) && !/pillClass\(\w+\.tone\)/.test(ticketsTab));
+  const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
+  const buttons = readFileSync(new URL("../../src/components/fm/WorkButtons.tsx", import.meta.url), "utf8");
+  ck("  ...the accent is the buttons' own colour, and Edit Ticket is drawn in it",
+     /\.fm-badge\.tone-accent \{ background: var\(--accent\); color: var\(--text-on-accent\); \}/.test(css)
+     && /const ACCENT: Partial<Record<WorkActionKind, true>> = \{ editTicket: true \};/.test(buttons)
+     && /className=\{ACCENT\[a\.kind\] \? "btn primary" : CARD_BUTTON\}/.test(buttons));
   const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
   const kinds = /export type FmTicketUpdateKind = ([^;]+);/.exec(src("fm/fmTypes.ts"))?.[1].match(/"[^"]+"/g)?.map((k) => k.slice(1, -1));
   ck("the step kinds are the agreement's, the one list both sides read",

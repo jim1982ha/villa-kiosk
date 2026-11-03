@@ -1,3 +1,12 @@
+## 2.496.682
+
+What you will see:
+- A fault's pill no longer ends with a state when the fault is not a ticket: "Reopened by VESTA Agent, on
+  02/11/2026 19:54" (it ended "· Open"), in the same colour as before. Only a real ticket, opened from the Tickets tab,
+  says its state ("· In progress", "· Resolved").
+- A ticket in progress has its pill in the buttons' green ("Ticket opened by … · In progress"), on its Inbox card and
+  on the Tickets tab, and its Edit Ticket button is filled in that same green.
+
 ## 2.496.681
 
 What you will see:
