@@ -125,9 +125,11 @@ console.log("\n  where they are:");
      && /\(ringsFullScreen\) => slice\.set\(\{ ringsFullScreen \}/.test(propText(sw[0], "onChange")));
   const tips = elements(set, "TipTitle").map((e) => propText(e, "title"));
   const at = (t) => tips.indexOf(t);
-  ck("  ...one section \"Full-screen announcements\", the language's after it, \"Who gets the messages\" last",
-     at('"Full-screen announcements"') >= 0 && at('"Full-screen announcements"') < at('"VESTA\'s language on this tablet"')
-     && at('"VESTA\'s language on this tablet"') < at("LISTS_TITLE"), tips);
+  // owner, 2026-11-03 ("i still don't understand the difference"): the tablet's language after the chats it picks from
+  const lang = '"This tablet shows VESTA\'s messages in"';
+  ck("  ...one section \"Full-screen announcements\", \"Who gets the messages\" after it, the tablet's language last",
+     at('"Full-screen announcements"') >= 0 && at('"Full-screen announcements"') < at("LISTS_TITLE")
+     && at("LISTS_TITLE") < at(lang), tips);
   ck("  ...its list written through Settings' one draft, its seconds waiting in that draft's store",
      fs.length === 1 && /slice\.set\(\{ fullScreen \}/.test(propText(fs[0], "onChange"))
      && elements(set, "PendingFields").some((p) => propText(p, "pending") === "slice.pending"));

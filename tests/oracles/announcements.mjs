@@ -368,7 +368,7 @@ ck("each title the store holds, once, in order, without the ones already picked"
 
 console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inbox\", owner 2026-10-30):");
 {
-  const { parseVestaMessage, inLanguage, languagesOf, languageName, DEFAULT_TABLET_LANGUAGE } = await import("@/messages/announcements");
+  const { parseVestaMessage, inLanguage, tabletLanguages, languageName, DEFAULT_TABLET_LANGUAGE } = await import("@/messages/announcements");
   const { announcementWords } = await import("@/messages/messagesModel");
   const { AnnouncementContent } = await import("@/components/messages/AnnouncementContent");
   const { DEFAULT_CONFIG } = await import("@/config/AppConfig");
@@ -392,8 +392,11 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
     languages: { fr: { body: "Pompe vérifiée" } } }), "fr");
   ck("  ...every screen's words follow: the notice's line", announcementWords(noLead).line === "Pompe vérifiée", announcementWords(noLead));
   ck("  ...and the card's body as drawn", draw(h(AnnouncementContent, { announcement: fr })).includes("Porte ouverte depuis 10min"));
-  ck("the languages offered: English first, then every language VESTA holds a card's words in, each once",
-     J(languagesOf([card, ring, { ...card, seq: 6, language: "id", versions: undefined }])) === J(["en", "de", "fr", "id"]), languagesOf([card]));
+  // owner, 2026-11-03 ("i still don't understand the difference"): the chats' languages, never the kept cards'
+  const chats = { "notify.chat_b": "fr", "notify.chat_a": "de", "notify.chat_c": "fr", "notify.chat_d": "en" };
+  ck("the languages offered: English first, then each language a chat gets VESTA's messages in, each once",
+     J(tabletLanguages(chats)) === J(["en", "de", "fr"]), tabletLanguages(chats));
+  ck("  ...every chat in English: English alone (no lone button)", J(tabletLanguages({})) === J(["en"]), tabletLanguages({}));
   ck("  ...named in English (the code itself without the browser's names)", languageName("fr") === "French" && languageName("en") === "English");
   ck("  ...English by default on every tablet", DEFAULT_CONFIG.tabletLanguage === "en");
   const provider = readFileSync(new URL("../../src/messages/AnnouncementsContext.tsx", import.meta.url), "utf8");
@@ -408,8 +411,8 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
   ck("  ...no screen picks a version itself", pickers.length === 0, pickers);
   const settings = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
   ck("the tablet's own setting, in Settings › Messages, in this dialog's draft (Save / Cancel)",
-     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="VESTA's language on this tablet"/.test(settings)
-     && /languagesOf\(kept\)/.test(settings));
+     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="This tablet shows VESTA's messages in"/.test(settings)
+     && /tabletLanguages\(config\.chatLanguages\)/.test(settings));
 }
 
 done("✅ the villa's announcements: read into words, shown once, each in the one notice");

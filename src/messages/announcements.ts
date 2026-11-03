@@ -328,15 +328,14 @@ export function inLanguage(a: Announcement, lang: string): Announcement {
   };
 }
 
-/** The languages a tablet may read VESTA's cards in: English, and every language `kept` holds a card's words in. */
-export function languagesOf(kept: readonly Announcement[]): string[] {
-  const codes = new Set<string>([DEFAULT_TABLET_LANGUAGE]);
-  for (const a of kept) {
-    if (a.feed !== "vesta") continue;
-    if (a.language) codes.add(a.language);
-    for (const code of Object.keys(a.versions ?? {})) codes.add(code);
-  }
-  return [DEFAULT_TABLET_LANGUAGE, ...[...codes].filter((c) => c !== DEFAULT_TABLET_LANGUAGE).sort()];
+/** The languages a tablet may read VESTA's cards in: English, then each language a chat gets VESTA's messages in
+ *  (the menu beside it under Who gets the messages, `chatLanguages`), each once. ⚠️ THE CHATS', NOT THE CARDS'
+ *  (owner, 2026-11-03: "i still don't understand the difference"): the cards kept from before still held languages no
+ *  chat gets any more, and the menu offered them beside a list where every chat was English. */
+export function tabletLanguages(chatLanguages: Readonly<Record<string, string>>): string[] {
+  const codes = new Set(Object.values(chatLanguages));
+  codes.delete(DEFAULT_TABLET_LANGUAGE);
+  return [DEFAULT_TABLET_LANGUAGE, ...[...codes].sort()];
 }
 
 /** A language's name, in English ("fr" → "French"): the agreement's (the chats' menu, CHAT_LANGUAGES), else the

@@ -1,3 +1,13 @@
+## 2.496.676
+
+What you will see:
+- Settings › Messages: the tablet's language is now called "This tablet shows VESTA's messages in" and comes after
+  "Who gets the messages", since it picks from the chats' languages.
+- It offers only English and the languages picked beside a chat. Before, it also offered languages from old messages
+  that no chat gets any more (German, Japanese, Korean...), beside a list where every chat was English.
+- While every chat is English, it shows no buttons, only a line saying so and where to pick another language.
+- Its (i) is shorter: each chat gets VESTA's messages in its own language; this tablet shows one of them.
+
 ## 2.496.675
 
 What you will see:

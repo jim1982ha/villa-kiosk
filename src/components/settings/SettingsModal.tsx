@@ -31,8 +31,7 @@ import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import type { SceneManager } from "@/babylon/SceneManager";
 import InfoTip from "@/components/common/InfoTip";
 import { fmtDuration } from "@/components/panels/chartUtils";
-import { useAnnouncements } from "@/messages/AnnouncementsContext";
-import { ANNOUNCEMENT_NOTICE_MS, languageName, languagesOf } from "@/messages/announcements";
+import { ANNOUNCEMENT_NOTICE_MS, languageName, tabletLanguages } from "@/messages/announcements";
 import { PendingFields } from "@/hooks/usePendingField";
 import { FullScreenAnnouncements } from "./MessagesSettings";
 import WhoGetsMessages from "./WhoGetsMessages";
@@ -100,8 +99,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
   ] as const;
   const slice = useDraftedSlice(SETTINGS_KEYS);
   const v = slice.view;
-  const { kept } = useAnnouncements();
-  const languages = [...new Set([...languagesOf(kept), v.tabletLanguage])];
+  const languages = [...new Set([...tabletLanguages(config.chatLanguages), v.tabletLanguage])];
   // The 3D view follows what this dialog shows (hooks/useScenePreview): a slider is felt while it is dragged, and
   // Cancel puts the view back by the same path. ⚠️ NO SLIDER MOVES THE SCENE ITSELF (to 2.496.499, Cancel within the
   // half-second the write waits left the camera at the cancelled eye height).
@@ -200,26 +198,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           {can("editConfig") && (
             <FullScreenAnnouncements value={v.fullScreen} onChange={(fullScreen) => slice.set({ fullScreen }, { now: true })} />
           )}
-          {/* ticket 28 of "One inbox" (owner, 2026-10-30): which of the languages VESTA wrote its words in this tablet
-              shows (messages/announcements languagesOf), the current pick kept even if none holds it now; owner,
-              2026-11-03: "i don't understand what this does", said plainly, and no lone button while English is all */}
-          <TipTitle title="VESTA's language on this tablet" tip={<>
-            VESTA writes each message in the language of every chat that receives it (each chat's language is set
-            beside it under {LISTS_TITLE}). Pick which of those languages this tablet shows. It translates nothing: a message written in
-            one language only, the villa's own announcements and this tablet's buttons and menus stay as they are.
-          </>} />
-          {languages.length > 1 ? (
-            <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-              <SegmentedGroup ariaLabel="VESTA's language on this tablet" active={v.tabletLanguage}
-                onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
-                options={languages.map((code) => (
-                  { key: code, title: `VESTA's messages in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
-            </div>
-          ) : (
-            <span className="muted body-text">
-              Only {languageName(languages[0])} so far: another language shows here once a chat receives VESTA's messages in it.
-            </span>
-          )}
           {can("editConfig") && (
             <>
               <TipTitle title={LISTS_TITLE} tip={<>
@@ -232,6 +210,28 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
               </>} />
               <WhoGetsMessages />
             </>
+          )}
+          {/* ticket 28 of "One inbox" (owner, 2026-10-30): which of the languages VESTA writes its messages in this
+              tablet shows; owner, 2026-11-03: "i still don't understand the difference", so it comes AFTER the chats,
+              offers only the languages set beside them (messages/announcements tabletLanguages), the current pick kept
+              so it can be undone, and no lone button while English is all */}
+          <TipTitle title="This tablet shows VESTA's messages in" tip={<>
+            Each chat gets VESTA's messages in its own language, picked beside it under {LISTS_TITLE}. This tablet
+            shows one of those languages: pick which. Only VESTA's messages change; the villa's own announcements and
+            this tablet's buttons and menus are not translated.
+          </>} />
+          {languages.length > 1 ? (
+            <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <SegmentedGroup ariaLabel="This tablet shows VESTA's messages in" active={v.tabletLanguage}
+                onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
+                options={languages.map((code) => (
+                  { key: code, title: `VESTA's messages in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
+            </div>
+          ) : (
+            <span className="muted body-text">
+              {languageName(languages[0])}, as every chat gets them. Pick another language beside a chat under{" "}
+              {LISTS_TITLE} to offer it here.
+            </span>
           )}
         </PendingFields>
       )}
