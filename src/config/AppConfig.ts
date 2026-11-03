@@ -243,6 +243,10 @@ export interface AppConfig {
    *  warning share (fm/fmTypes.ts). SHARED: they describe the villa's
    *  agreement, so every device reads the same terms. Empty by default. */
   fmContract: FmContract;
+  /** Each chat's language (owner, 2026-11-03): a notify entity of the villa's lists → the code of the language it reads
+   *  VESTA's messages in (messages/recipients CHAT_LANGUAGES); a chat not named reads English. SHARED: set beside the
+   *  chat in Settings › Messages › Who gets the messages, and told to the VESTA Agent in its heartbeat answer. */
+  chatLanguages: Record<string, string>;
   /** Standing eye height in metres (default 1.7). Configurable in Settings. */
   eyeHeight: number;
   /** Walk-speed multiplier (1.0 = default). Configurable in Settings. */
@@ -397,6 +401,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   meshBindings: {},
   dismissedEntityIds: [],
   unavailableByDesign: [],
+  chatLanguages: {},
   teleportPoints: TELEPORT_POINTS,
   eyeHeight: DEFAULT_EYE_HEIGHT,
   walkSpeed: 1,

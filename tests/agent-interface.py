@@ -439,6 +439,19 @@ async def main() -> None:
     ck("the beat's answer carries the villa's \"empty\" sensor, as the agreement declares it: \"\" when none is picked",
        "villaEmptySensor" in contract_answer and picked == "binary_sensor.house_empty" and unpicked == "" and odd == "",
        (unpicked, picked, odd))
+    # ⚠️ EACH CHAT'S LANGUAGE IS THE KIOSK'S (owner, 2026-11-03): set beside the chat in Who gets the messages
+    cfg_file.unlink(missing_ok=True)
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    no_lang = (await r.json()).get("chatLanguages")
+    cfg_file.write_text(json.dumps({"chatLanguages": {"notify.example_group": "de", "notify.example_chat": "fr",
+                                                      "notify.example_other": "pt", "sensor.example_x": "fr",
+                                                      "notify.{{ x }}": "fr", "notify.example_odd": 3}}))
+    r = await post("/agent/v1/heartbeat", headers=bearer(), json=beat)
+    langs = (await r.json()).get("chatLanguages")
+    ck("the beat's answer carries each chat's language, as the agreement declares it: notify entities and the menu's "
+       "languages only, none when none is set",
+       "chatLanguages" in contract_answer and no_lang == {}
+       and langs == {"notify.example_chat": "fr", "notify.example_group": "de"}, (no_lang, langs))
     # ⚠️ A SETTINGS FILE THAT CANNOT BE READ TELLS THE AGENT NOTHING (architecture review, 2026-10-30): an empty list
     # and "off" made the Agent forget every sleeping device and the maintenance mode it kept
     for broken in ("{not json", json.dumps(["unavailableByDesign"])):
@@ -448,7 +461,7 @@ async def main() -> None:
         ck(f"  ...a settings file that cannot be read ({broken[:12]}): the beat counts, its answer leaves the villa's "
            "settings out (the Agent keeps what it was told)",
            r.status == 200 and answer.get("ok") is True
-           and not {"unavailableByDesign", "maintenance", "villaEmptySensor"} & answer.keys(), answer)
+           and not {"unavailableByDesign", "maintenance", "villaEmptySensor", "chatLanguages"} & answer.keys(), answer)
     cfg_file.unlink(missing_ok=True)
     presence = TMP / "data" / "agent-presence.json"
     presence.write_text(json.dumps({"last_seen": time.time() - 6 * 60, "status": None, "cadence": beat["cadence"]}))

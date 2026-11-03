@@ -3662,6 +3662,19 @@ def _asleep_ids(raw) -> list[str]:
     return sorted({e for e in raw if isinstance(e, str) and AGENT_ENTITY_RE.fullmatch(e)}) if isinstance(raw, list) else []
 
 
+#: The languages a chat can read VESTA's messages in (the agreement's recipients.languages): code → name.
+CHAT_LANGUAGES: dict = (AGENT_CONTRACT_TABLE.get("recipients") or {}).get("languages") or {}
+
+
+def _chat_languages(raw) -> dict[str, str]:
+    """Each chat's language (Settings › Messages › Who gets the messages): a notify entity id → a code of
+    CHAT_LANGUAGES, sorted by id; any other entry left out; not stored or another shape: none (every chat English)."""
+    if not isinstance(raw, dict):
+        return {}
+    return {k: v for k, v in sorted(raw.items()) if isinstance(k, str) and k.startswith("notify.")
+            and AGENT_ENTITY_RE.fullmatch(k) and isinstance(v, str) and v in CHAT_LANGUAGES}
+
+
 def _villa_empty_sensor(raw) -> str:
     """An entity id (AGENT_ENTITY_RE), or "" — none picked, or a value that is not one."""
     return raw if isinstance(raw, str) and AGENT_ENTITY_RE.fullmatch(raw) else ""
@@ -3739,6 +3752,7 @@ def _villa_default(name: str, kind: type, fallback):
 #:   unavailableByDesign  the devices asleep by design (Advanced Settings › Devices); unreadable: cannot tell
 #:   maintenanceMode      only a stored true is on (Advanced Settings › System); unreadable: cannot tell
 #:   presenceSensor       the villa's "empty" sensor (Settings › Villa; on = empty); unreadable: cannot tell
+#:   chatLanguages        each chat's language (Settings › Messages › Who gets the messages); unreadable: cannot tell
 #:   recordsKeptDays      what the sweep deletes by; unreadable: 0, keep everything (_evidence_retention_days)
 #:   fullScreen           the longest a full-screen announcement holds the screen; unreadable: not set (_ring_current_s)
 VILLA_SETTINGS: dict[str, VillaSetting] = {
@@ -3746,6 +3760,7 @@ VILLA_SETTINGS: dict[str, VillaSetting] = {
     "maintenanceMode": VillaSetting(
         lambda raw: raw if isinstance(raw, bool) else _villa_default("maintenanceMode", bool, False), None),
     "presenceSensor": VillaSetting(_villa_empty_sensor, None),
+    "chatLanguages": VillaSetting(_chat_languages, None),
     "recordsKeptDays": VillaSetting(_records_kept_days, 0),
     "fullScreen": VillaSetting(_full_screen_longest, 0),
 }
@@ -3766,7 +3781,7 @@ def _villa_setting(name: str):
 #: may not be. A key this server cannot vouch for (the file unreadable) is LEFT OUT, never sent empty: the Agent keeps
 #: what it was last told when a key is absent, as it does for an older Kiosk. Never a refused beat.
 HEARTBEAT_SETTINGS = {"unavailableByDesign": "unavailableByDesign", "maintenanceMode": "maintenance",
-                      "presenceSensor": "villaEmptySensor"}
+                      "presenceSensor": "villaEmptySensor", "chatLanguages": "chatLanguages"}
 
 
 def _heartbeat_settings() -> dict:

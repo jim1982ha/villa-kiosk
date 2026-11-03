@@ -88,6 +88,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
     // ⚠️ THE VILLA'S (owner, 2026-11-03: moved here from Advanced Settings' Messages tab): a shared key, through the same
     // draft, Save keeping it and Cancel putting it back on every tablet.
     "fullScreen",
+    // each chat's language, beside it under "Who gets the messages" (owner, 2026-11-03): the villa's, the same draft
+    "chatLanguages",
     // ⚠️ THE VILLA'S, NOT THIS DEVICE'S (owner, 2026-10-22: moved here from Advanced Settings): a shared key
     // (deviceConfig), so writing it reaches every tablet — through the same draft as every other option here, Save
     // keeping it and Cancel putting it back.
@@ -204,8 +206,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
               shows (messages/announcements languagesOf), the current pick kept even if none holds it now; owner,
               2026-11-03: "i don't understand what this does", said plainly, and no lone button while English is all */}
           <TipTitle title="VESTA's language on this tablet" tip={<>
-            VESTA writes each message in the language of every chat that receives it (each chat's language is set on
-            VESTA's page). Pick which of those languages this tablet shows. It translates nothing: a message written in
+            VESTA writes each message in the language of every chat that receives it (each chat's language is set
+            beside it under {LISTS_TITLE}). Pick which of those languages this tablet shows. It translates nothing: a message written in
             one language only, the villa's own announcements and this tablet's buttons and menus stay as they are.
           </>} />
           {languages.length > 1 ? (
@@ -226,10 +228,12 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
                 The chats and phones that get the villa's messages, for the {ROLE_LABELS.owner} and for the{" "}
                 {ROLE_LABELS.ops}. An urgent (P1) alert goes to both lists, a P2 alert to the {ROLE_LABELS.ops}'s; a
                 notice goes to the list its automation names. VESTA sends its reminders to the same chats. An urgent or
-                P2 alert with nobody listed goes to every Telegram chat of the villa, so it is never lost. A change here
-                is saved on the villa at once.
+                P2 alert with nobody listed goes to every Telegram chat of the villa, so it is never lost. A chat added or
+                taken off is saved on the villa at once. Beside each chat, the language it reads VESTA's messages in:
+                kept with Save, and read by VESTA within a few minutes.
               </>} />
-              <WhoGetsMessages />
+              <WhoGetsMessages languages={v.chatLanguages}
+                onLanguages={(chatLanguages) => slice.set({ chatLanguages }, { now: true })} />
             </>
           )}
         </PendingFields>

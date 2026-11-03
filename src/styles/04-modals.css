@@ -710,7 +710,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* Who gets the messages: a list per role, its name above, its chats as pills from the left, its picker under them. */
 .recipients-role { display: flex; flex-direction: column; gap: 8px; }
 .recipients-role-name { font-weight: 600; }
-.recipients-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+/* a chat of the list: its pill at the left, its language at the right */
+.recipients-chat { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.recipients-language { flex: 0 0 auto; min-width: 140px; }
 /* A choice among many standing on its own line (SegmentedGroup, more than four options: the tablet's languages): a
    grid of equal cells in a rounded box, never a pill stretched over several lines. A compact picker beside other
    controls (the charts' five ranges) keeps its pill. */

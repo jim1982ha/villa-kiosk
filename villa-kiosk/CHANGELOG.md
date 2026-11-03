@@ -1,3 +1,16 @@
+## 2.496.673
+
+What you will see:
+- Settings › Messages › Who gets the messages: each chat now has its own line, its name at the left and a language
+  menu at the right (English, French, Indonesian, German, Spanish, Italian, Dutch, Chinese, Japanese, Korean). It is
+  the language VESTA writes to that chat in. Adding or taking off a chat is saved on the villa at once, as before; a
+  language is kept with Save, and VESTA reads it within a few minutes.
+- This replaces the Language menu on VESTA's own page (VESTA Agent 0.12.442 or later shows the lists there read-only).
+  A language picked on VESTA's page before is not carried over: every chat reads English until you pick its language
+  here.
+- The (i) of "VESTA's language on this tablet" now says each chat's language is set beside it under "Who gets the
+  messages".
+
 ## 2.496.672
 
 What you will see:

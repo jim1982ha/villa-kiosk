@@ -8,6 +8,7 @@
 // message_format): "<b>title</b>\nTo: roles\n<blockquote>text</blockquote>\n\nStatus:\n<blockquote><i>status</i>
 // </blockquote>" — or plain text when the layout is missing. Read here into its parts, never shown as HTML.
 
+import { CHAT_LANGUAGES } from "./recipients";
 import { ingressPath } from "@/ha/ingress";
 import { fetchFeed, type FeedRead } from "./feed";
 import type { FullScreenAnnouncement } from "@/config/AppConfig";
@@ -338,9 +339,10 @@ export function languagesOf(kept: readonly Announcement[]): string[] {
   return [DEFAULT_TABLET_LANGUAGE, ...[...codes].filter((c) => c !== DEFAULT_TABLET_LANGUAGE).sort()];
 }
 
-/** A language's name, in English ("fr" → "French"): the browser's own names, the code itself where it has none (an older
- *  iPad without Intl.DisplayNames). */
+/** A language's name, in English ("fr" → "French"): the agreement's (the chats' menu, CHAT_LANGUAGES), else the
+ *  browser's own names, the code itself where it has none (an older iPad without Intl.DisplayNames). */
 export function languageName(code: string): string {
+  if (code in CHAT_LANGUAGES) return CHAT_LANGUAGES[code];
   try {
     const names = typeof Intl !== "undefined" && "DisplayNames" in Intl
       ? new Intl.DisplayNames(["en"], { type: "language" }) : null;

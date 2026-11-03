@@ -136,8 +136,8 @@ export type ReplacedSubject = { device: string } | { setting: string };
 
 /** The villa's settings told by name, not as a device: every single-value one by the name its control shows (its row,
  *  config/villaSettings: required for each, so a new one is never told as "a device"), and the full-screen list. */
-export const SETTING_NAMES: Readonly<Record<VillaSettingKey | "fullScreen", string>> = {
-  ...VILLA_SETTING_NAMES, fullScreen: "Full-screen announcements",
+export const SETTING_NAMES: Readonly<Record<VillaSettingKey | "fullScreen" | "chatLanguages", string>> = {
+  ...VILLA_SETTING_NAMES, fullScreen: "Full-screen announcements", chatLanguages: "A chat's language",
 };
 
 /** The device an item of a shared key is about (its id, or the entity a mesh or group stands for). */
