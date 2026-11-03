@@ -29,10 +29,19 @@ export function FullScreenAnnouncements({ value, onChange }: Props) {
   const offered = announcedTitles(kept, value.map((f) => f.title));
   return (
     <>
-      {value.map((f) => (
-        <FullScreenRow key={f.title} item={f} onRemove={() => onChange(value.filter((x) => x.title !== f.title))} />
-      ))}
-      <div style={{ marginTop: 6 }}>
+      {/* one card: its heading says the list is every tablet's and names the seconds column, then a row per pick
+          (owner, 2026-11-03: "very poorly rendered", the rows did not line up and "For every tablet" floated alone) */}
+      <div className="settings-list" style={{ marginTop: 14 }}>
+        <div className="settings-list-head">
+          <span>Announcements, on every tablet</span>
+          <span>Seconds</span>
+        </div>
+        {value.length === 0 && <div className="settings-list-row muted body-text">None yet: add one below.</div>}
+        {value.map((f) => (
+          <FullScreenRow key={f.title} item={f} onRemove={() => onChange(value.filter((x) => x.title !== f.title))} />
+        ))}
+      </div>
+      <div style={{ marginTop: 8 }}>
         <SearchPicker compact placeholder="Add an announcement…"
           onPick={(t) => onChange([...value.filter((x) => x.title !== t), { title: t, seconds: FULL_SCREEN_S_DEFAULT }])}
           rows={(q) => offered.filter((t) => t.toLowerCase().includes(q.trim().toLowerCase())).map((t) => ({ key: t, label: t }))}
@@ -58,23 +67,23 @@ function FullScreenRow({ item, onRemove }: { item: FullScreenAnnouncement; onRem
   const field = usePendingField<string>(`fullScreen:${item.title}`, FIELD_COMMIT_MS);
   const removeLabel = `Take ${item.title} off full screen`;
   return (
-    <div className="settings-field-row">
-      <span className="body-text">{item.title}</span>
-      <span className="row" style={{ gap: 6, alignItems: "center" }}>
+    <div className="settings-list-row fs-row">
+      <span className="body-text fs-row-title">{item.title}</span>
+      <span className="fs-row-seconds">
         <input
-          inputMode="numeric" className="field-narrow" aria-label={`Seconds ${item.title} fills the screen`}
+          inputMode="numeric" aria-label={`Seconds ${item.title} fills the screen`}
           value={field.shown ?? String(item.seconds)}
           onChange={(e) => field.draft(e.target.value, secondsWrite(item.title, e.target.value))}
           onBlur={field.flush}
           onKeyDown={(e) => e.key === "Enter" && field.flush()}
         />
-        <span className="body-text">s</span>
-        <Tip text={removeLabel}>
-          <button type="button" className="btn ghost" aria-label={removeLabel} onClick={onRemove}>
-            <X size={16} aria-hidden />
-          </button>
-        </Tip>
+        <span className="muted">s</span>
       </span>
+      <Tip text={removeLabel}>
+        <button type="button" className="btn ghost icon-btn-sm" aria-label={removeLabel} onClick={onRemove}>
+          <X size={16} aria-hidden />
+        </button>
+      </Tip>
     </div>
   );
 }

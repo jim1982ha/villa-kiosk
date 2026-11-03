@@ -1,3 +1,16 @@
+## 2.496.672
+
+What you will see:
+- Settings › Messages is tidier on a phone:
+  - Full-screen announcements: the picked announcements sit in one card headed "Announcements, on every tablet" and
+    "Seconds". Each row has its name, a short seconds box and its ✕ in the same columns, so the rows line up.
+  - The language section is now called "VESTA's language on this tablet". Its languages show as a grid of equal
+    boxes instead of one long pill wrapped over several lines.
+  - Who gets the messages: one card with a block per list. The list's name is on top, its chats follow from the left,
+    and the "Add a chat or phone" box is under them, the same for the Owner and the Facility Manager.
+- Advanced Settings › Devices: on a phone, a device's name is no longer cut every few letters beside "Confirm before
+  toggling". The name keeps its width and the toggle and pencil move to their own line underneath when they do not fit.
+
 ## 2.496.671
 
 What you will see:

@@ -126,8 +126,8 @@ console.log("\n  where they are:");
   const tips = elements(set, "TipTitle").map((e) => propText(e, "title"));
   const at = (t) => tips.indexOf(t);
   ck("  ...one section \"Full-screen announcements\", the language's after it, \"Who gets the messages\" last",
-     at('"Full-screen announcements"') >= 0 && at('"Full-screen announcements"') < at('"VESTA\'s messages on this tablet, in"')
-     && at('"VESTA\'s messages on this tablet, in"') < at("LISTS_TITLE"), tips);
+     at('"Full-screen announcements"') >= 0 && at('"Full-screen announcements"') < at('"VESTA\'s language on this tablet"')
+     && at('"VESTA\'s language on this tablet"') < at("LISTS_TITLE"), tips);
   ck("  ...its list written through Settings' one draft, its seconds waiting in that draft's store",
      fs.length === 1 && /slice\.set\(\{ fullScreen \}/.test(propText(fs[0], "onChange"))
      && elements(set, "PendingFields").some((p) => propText(p, "pending") === "slice.pending"));

@@ -198,22 +198,19 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
             on={v.ringsFullScreen} onChange={(ringsFullScreen) => slice.set({ ringsFullScreen }, { now: true })}
             icon={<Maximize size={16} />} label="Full screen on this tablet" />
           {can("editConfig") && (
-            <>
-              <div className="settings-inline-label" style={{ marginTop: 12 }}>For every tablet</div>
-              <FullScreenAnnouncements value={v.fullScreen} onChange={(fullScreen) => slice.set({ fullScreen }, { now: true })} />
-            </>
+            <FullScreenAnnouncements value={v.fullScreen} onChange={(fullScreen) => slice.set({ fullScreen }, { now: true })} />
           )}
           {/* ticket 28 of "One inbox" (owner, 2026-10-30): which of the languages VESTA wrote its words in this tablet
               shows (messages/announcements languagesOf), the current pick kept even if none holds it now; owner,
               2026-11-03: "i don't understand what this does", said plainly, and no lone button while English is all */}
-          <TipTitle title="VESTA's messages on this tablet, in" tip={<>
+          <TipTitle title="VESTA's language on this tablet" tip={<>
             VESTA writes each message in the language of every chat that receives it (each chat's language is set on
             VESTA's page). Pick which of those languages this tablet shows. It translates nothing: a message written in
             one language only, the villa's own announcements and this tablet's buttons and menus stay as they are.
           </>} />
           {languages.length > 1 ? (
             <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-              <SegmentedGroup ariaLabel="VESTA's messages on this tablet, in" active={v.tabletLanguage}
+              <SegmentedGroup ariaLabel="VESTA's language on this tablet" active={v.tabletLanguage}
                 onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
                 options={languages.map((code) => (
                   { key: code, title: `VESTA's messages in ${languageName(code)} on this tablet`, label: languageName(code) }))} />

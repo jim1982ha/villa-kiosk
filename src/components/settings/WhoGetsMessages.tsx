@@ -23,6 +23,8 @@ export default function WhoGetsMessages() {
   const sentRef = useRef<Partial<Record<string, SentLists | null>>>({});
   return (
     <>
+      {/* one card, a block per role (owner, 2026-11-03: the pills sat spread across the line, the pickers not lined up) */}
+      <div className="settings-list">
       {ROLE_LISTS.map((list) => {
         const who = ROLE_LABELS[list.profile];
         const helper = entities[list.entityId];
@@ -40,25 +42,28 @@ export default function WhoGetsMessages() {
           setProblem(sent.ok ? null : `The ${who}'s list could not be saved: try again.`);
         };
         return (
-          <div key={list.role} className="settings-field-row" style={{ flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-            <span className="body-text" style={{ minWidth: 130 }}>{who}</span>
+          <div key={list.role} className="settings-list-row recipients-role">
+            <span className="body-text recipients-role-name">{who}</span>
             {!helper ? (
               <span className="muted body-text">The villa has no list for this yet: it comes with VESTA's message settings.</span>
             ) : (
               <>
-                {ids.map((id) => (
-                  <RemovablePill key={id} label={name(id)} tip={id} removeLabel={`Take ${name(id)} off the ${who}'s list`}
-                    onRemove={() => void save((now) => withItem(now, id, false))} />
-                ))}
-                <div style={{ flex: "1 1 180px", minWidth: 140 }}>
-                  <EntityPicker domains={["notify"]} onChange={(id) => void save((now) => withItem(now, id, true))}
-                    placeholder="Add a chat or phone…" hideCurrentLabel compact />
-                </div>
+                {ids.length > 0 && (
+                  <div className="recipients-pills">
+                    {ids.map((id) => (
+                      <RemovablePill key={id} label={name(id)} tip={id} removeLabel={`Take ${name(id)} off the ${who}'s list`}
+                        onRemove={() => void save((now) => withItem(now, id, false))} />
+                    ))}
+                  </div>
+                )}
+                <EntityPicker domains={["notify"]} onChange={(id) => void save((now) => withItem(now, id, true))}
+                  placeholder="Add a chat or phone…" hideCurrentLabel compact />
               </>
             )}
           </div>
         );
       })}
+      </div>
       {problem && <span className="body-text sev-warning" role="alert">{problem}</span>}
     </>
   );

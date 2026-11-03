@@ -564,8 +564,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
 /* Entity ID cell: id text on the left, action icons (edit + delete) pinned right
    so every card lines up identically. */
-.entity-id-display { display: flex; align-items: center; gap: 8px; width: 100%; color: var(--text-secondary); }
-.entity-id-text { flex: 1 1 auto; min-width: 0; word-break: break-all; }
+/* ⚠️ THE ID KEEPS A READABLE WIDTH (owner, 2026-11-03: on a phone "fan.cei / ling_fa / n_mas…" was cut every few
+   letters beside "Confirm before toggling"): the id takes at least 180px, and the actions wrap onto their own line,
+   on the right, when the two no longer fit; a long id breaks at its dots and underscores first. */
+.entity-id-display { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; color: var(--text-secondary); }
+.entity-id-text { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
 .entity-id-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-left: auto; }
 .entity-id-actions .icon-btn { width: 30px; height: 30px; }
 @media (hover: hover) {
@@ -688,3 +691,30 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
 /* The version beside a modal's title, small (owner, 2026-10-22: it left the footer for "Log out all devices"). */
 .modal-title-version { font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); margin-left: 8px; letter-spacing: 0; }
+
+/* A settings list in one card (Settings › Messages, owner 2026-11-03: "very poorly rendered … messy"): a small heading
+   line, then one row per item, each row's parts in the same columns, a hairline between rows. */
+.settings-list { border: 1px solid var(--hairline); border-radius: var(--radius-squircle); overflow: hidden; }
+.settings-list-head {
+  display: flex; justify-content: space-between; gap: 12px; padding: 8px 14px;
+  font-size: var(--text-2xs); color: var(--text-muted); border-bottom: 1px solid var(--hairline);
+}
+.settings-list-row { padding: 10px 14px; }
+.settings-list-row + .settings-list-row { border-top: 1px solid var(--hairline); }
+/* A full-screen announcement: its title (wrapping, never pushing the rest), its seconds, its ✕, in fixed columns. */
+.fs-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; }
+.fs-row-title { min-width: 0; overflow-wrap: anywhere; }
+.fs-row-seconds { display: inline-flex; align-items: center; gap: 6px; }
+.modal .fs-row-seconds input { width: 64px; padding: 8px 6px; text-align: center; }
+.icon-btn-sm { width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+/* Who gets the messages: a list per role, its name above, its chats as pills from the left, its picker under them. */
+.recipients-role { display: flex; flex-direction: column; gap: 8px; }
+.recipients-role-name { font-weight: 600; }
+.recipients-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+/* A choice among many standing on its own line (SegmentedGroup, more than four options: the tablet's languages): a
+   grid of equal cells in a rounded box, never a pill stretched over several lines. A compact picker beside other
+   controls (the charts' five ranges) keeps its pill. */
+.settings-modal .row > .segmented.segmented-grid:only-child {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); border-radius: var(--radius-squircle);
+}
+.settings-modal .row > .segmented.segmented-grid:only-child button { border-radius: 10px; min-width: 0; }
