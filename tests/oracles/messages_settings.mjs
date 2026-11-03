@@ -126,7 +126,7 @@ console.log("\n  where they are:");
   const tips = elements(set, "TipTitle").map((e) => propText(e, "title"));
   const at = (t) => tips.indexOf(t);
   // owner, 2026-11-03 ("i still don't understand the difference"): the tablet's language after the chats it picks from
-  const lang = '"This tablet shows VESTA\'s messages in"';
+  const lang = '"Language on this tablet"';
   ck("  ...one section \"Full-screen announcements\", \"Who gets the messages\" after it, the tablet's language last",
      at('"Full-screen announcements"') >= 0 && at('"Full-screen announcements"') < at("LISTS_TITLE")
      && at("LISTS_TITLE") < at(lang), tips);

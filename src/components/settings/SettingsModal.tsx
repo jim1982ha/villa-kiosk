@@ -201,37 +201,29 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           {can("editConfig") && (
             <>
               <TipTitle title={LISTS_TITLE} tip={<>
-                The chats and phones that get the villa's messages, for the {ROLE_LABELS.owner} and for the{" "}
-                {ROLE_LABELS.ops}. An urgent (P1) alert goes to both lists, a P2 alert to the {ROLE_LABELS.ops}'s; a
-                notice goes to the list its automation names. VESTA sends its reminders to the same chats. An urgent or
-                P2 alert with nobody listed goes to every Telegram chat of the villa, so it is never lost. A chat added or
-                taken off, and the language beside each chat, are saved on the villa at once (Save and Cancel do not apply
-                here); VESTA reads them within a few minutes.
+                Who gets the villa's alerts and VESTA's messages on Telegram. Urgent (P1) alerts go to both lists, P2
+                alerts to the {ROLE_LABELS.ops}. With a list empty, they go to every Telegram chat. Changes here are
+                saved at once.
               </>} />
               <WhoGetsMessages />
             </>
           )}
-          {/* ticket 28 of "One inbox" (owner, 2026-10-30): which of the languages VESTA writes its messages in this
-              tablet shows; owner, 2026-11-03: "i still don't understand the difference", so it comes AFTER the chats,
-              offers only the languages set beside them (messages/announcements tabletLanguages), the current pick kept
-              so it can be undone, and no lone button while English is all */}
-          <TipTitle title="This tablet shows VESTA's messages in" tip={<>
-            Each chat gets VESTA's messages in its own language, picked beside it under {LISTS_TITLE}. This tablet
-            shows one of those languages: pick which. Only VESTA's messages change; the villa's own announcements and
-            this tablet's buttons and menus are not translated.
-          </>} />
-          {languages.length > 1 ? (
-            <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-              <SegmentedGroup ariaLabel="This tablet shows VESTA's messages in" active={v.tabletLanguage}
-                onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
-                options={languages.map((code) => (
-                  { key: code, title: `VESTA's messages in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
-            </div>
-          ) : (
-            <span className="muted body-text">
-              {languageName(languages[0])}, as every chat gets them. Pick another language beside a chat under{" "}
-              {LISTS_TITLE} to offer it here.
-            </span>
+          {/* ticket 28 of "One inbox" (owner, 2026-10-30): which of the chats' languages this tablet shows VESTA's
+              messages in (messages/announcements tabletLanguages), the current pick kept so it can be undone; owner,
+              2026-11-03: "very badly explained … clearer and also shorter": NOTHING drawn while there is nothing to
+              choose (every chat in English) */}
+          {languages.length > 1 && (
+            <>
+              <TipTitle title="Language on this tablet" tip={<>
+                The language VESTA's messages show in on this tablet: one of the chats' languages above.
+              </>} />
+              <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                <SegmentedGroup ariaLabel="Language on this tablet" active={v.tabletLanguage}
+                  onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
+                  options={languages.map((code) => (
+                    { key: code, title: `VESTA's messages in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
+              </div>
+            </>
           )}
         </PendingFields>
       )}
