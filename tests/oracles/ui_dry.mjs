@@ -109,6 +109,10 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
   ck("  ...more than four choices draw as a grid of equal cells, not a pill over several lines",
      /options\.length > 4 \? " segmented-grid"/.test(sg)
      && /\.settings-modal \.row > \.segmented\.segmented-grid:only-child \{\s*display: grid; grid-template-columns: repeat\(auto-fill, minmax\(\d+px, 1fr\)\)/.test(css));
+  // owner, 2026-11-03: a chat's name stood one letter per line beside a language menu as wide as the line
+  ck("a chat's name keeps its line and its language menu its own short width",
+     /\.recipients-chat \.fm-entity-chip \{ white-space: nowrap; \}/.test(css)
+     && /\.recipients-chat > \.dropdown\.recipients-language \{\s*flex: 0 0 auto; width: \d+px;/.test(css));
   // owner, 2026-11-03: a device's id was cut every few letters beside "Confirm before toggling" on a phone
   ck("a device's id keeps a readable width: its actions wrap onto their own line first",
      /\.entity-id-display \{ display: flex; flex-wrap: wrap;/.test(css) && /\.entity-id-text \{ flex: 1 1 1\d\dpx; min-width: 0; overflow-wrap: anywhere; \}/.test(css)

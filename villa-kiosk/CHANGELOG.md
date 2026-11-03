@@ -1,3 +1,9 @@
+## 2.496.674
+
+What you will see:
+- Settings › Messages › Who gets the messages, on a phone: each chat's name stays on one line, and its language menu
+  sits at the right at a short width. Before, the menu took the whole line and the names stood one letter per line.
+
 ## 2.496.673
 
 What you will see:
