@@ -169,6 +169,18 @@ ck("  ...and a fault only a person closes has no next-check pill: nothing checks
      /\{showsIssues && \(\s*<>\s*<FoldedRows title="Watch"/.test(tabSrc) && !/if \(rows\.length === 0\) return null/.test(tabSrc));
   ck("  ...Watch and Closed start folded; Open issues, Notifications and Reports open",
      /useState\(\{ issues: true, notes: true, reports: true, watch: false, closed: false \}\)/.test(readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8")));
+  // owner, 2026-11-03: "remove all the redundant sub-text mentioning how many items are included in each section" ("1
+  // watched item" under Watch (1)): a section whose title shows its count says it nowhere else
+  const { Pager } = await import("@/components/common/Paged");
+  const { pageOf } = await import("@/components/common/paging");
+  const pager = (n, unit) => draw(h(Pager, { paged: { ...pageOf(Array.from({ length: n }, (_, i) => i), 10, 0), go: () => {} }, unit }));
+  ck("  ...one page under a counted title: no line at all; a list whose title has none keeps \"3 reports\"; past a page, where the reader stands",
+     pager(1) === "" && /3 reports/.test(pager(3, "report")) && /1–10 of 23/.test(pager(23)) && !/watched/.test(pager(1)),
+     [pager(1), pager(3, "report")]);
+  const counted = [...elements(tree.statements.find((st) => st.name?.getText() === "FoldedRows"), "Pager"),
+    ...elements(parseTsx("components/common/FoldedList.tsx"), "Pager")];
+  ck("  ...Watch, Closed, Tickets' Closed and Recent work, each titled with its count, pass the pager no count's word",
+     counted.length === 2 && counted.every((e) => propText(e, "unit") == null), counted.map((e) => propText(e, "unit")));
 }
 
 console.log("\n  a hidden device: no card in any section (config/cockpitIssues, the cards Open issues draws):");

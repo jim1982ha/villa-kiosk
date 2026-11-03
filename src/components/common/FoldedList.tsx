@@ -8,15 +8,13 @@ import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Pager, usePaged, PAGE_CARDS } from "./Paged";
 
-export default function FoldedList<T>({ title, rows, unit, children, tip }: {
+export default function FoldedList<T>({ title, rows, children, tip }: {
   /** Its name, before the count: "Closed", "Recent work". */
   title: string;
   /** Its (i): what it keeps, and for how long (owner, 2026-10-22: never a visible line under it). */
   tip?: ReactNode;
   /** Every row, in the order shown. */
   rows: T[];
-  /** What a row is, singular, for the pager ("closed record"). */
-  unit: string;
   /** One row, drawn. */
   children: (row: T) => ReactNode;
 }) {
@@ -35,7 +33,8 @@ export default function FoldedList<T>({ title, rows, unit, children, tip }: {
       {open && (
         <>
           <div className="fm-list">{paged.page.map(children)}</div>
-          <Pager paged={paged} unit={unit} />
+          {/* its count is in its title: the pager only past a page (owner, 2026-11-03) */}
+          <Pager paged={paged} />
         </>
       )}
     </div>

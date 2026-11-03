@@ -61,15 +61,15 @@ export function MessagesSection({ title, count, open, onToggle, tip, children }:
 
 /** A section that only grows (Watch, Closed): its cards a page at a time; `empty` said while it has none (it is always
  *  there: owner, 2026-10-28). */
-function FoldedRows({ rows, unit, card, empty, tip, ...section }: {
-  title: string; rows: MessageItem[]; unit: string; open: boolean; onToggle: () => void; tip: string;
+function FoldedRows({ rows, card, empty, tip, ...section }: {
+  title: string; rows: MessageItem[]; open: boolean; onToggle: () => void; tip: string;
   card: (item: MessageItem) => ReactNode; empty: string;
 }) {
   const paged = usePaged(rows);
   return (
     <MessagesSection {...section} count={rows.length} tip={<InfoTip label={`About ${section.title}`}>{tip}</InfoTip>}>
       {paged.page.map(card)}
-      {rows.length === 0 ? <p className="muted body-text messages-empty">{empty}</p> : <Pager paged={paged} unit={unit} />}
+      {rows.length === 0 ? <p className="muted body-text messages-empty">{empty}</p> : <Pager paged={paged} />}
     </MessagesSection>
   );
 }
@@ -102,8 +102,7 @@ export function InboxCard({ item, opened, onToggle, canManage, onOpenEntity, onE
 }
 
 function AnnouncementCard({ item, canManage, ...shown }: CardShown & { item: Exclude<MessageItem, { kind: "issue" }>; canManage: boolean }) {
-  return item.kind === "report" ? <ReportDetail announcement={item.announcement} canOpenPage={canManage} {...shown} />
-    : <NoteDetail announcement={item.announcement} {...shown} />;
+  return <NoteDetail announcement={item.announcement} canOpenPage={canManage} {...shown} />;
 }
 
 export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEditTicket, onReportProblem, focusFaults }: {
@@ -217,11 +216,11 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
       {/* a problem's later life, with the issues and always there, empty or not (owner, 2026-10-28) */}
       {showsIssues && (
         <>
-          <FoldedRows title="Watch" rows={view.watched} unit="watched item" open={folds.watch}
+          <FoldedRows title="Watch" rows={view.watched} open={folds.watch}
             onToggle={() => fold("watch")} card={card} empty="Nothing is being watched."
             tip="Cleared problems VESTA still watches: VESTA closes each at the time on its card if all is still well; a problem back before then reopens as the same problem." />
           {/* what is finished (placeOf, closedCards): faults and alerts that ended, requests and rings answered or over; folded, last */}
-          <FoldedRows title="Closed" rows={view.closed} unit="closed item" open={folds.closed}
+          <FoldedRows title="Closed" rows={view.closed} open={folds.closed}
             onToggle={() => fold("closed")} card={card} empty="Nothing closed yet."
             tip="Finished: faults and alerts that ended, and messages that asked something and were answered or are over (a request approved, refused or expired, a ring opened or missed)." />
         </>
@@ -233,29 +232,28 @@ export default function MessagesTab({ onOpenEntity, doors, onRaiseTicket, onEdit
 /** Folded or opened, as every Inbox card (InboxCard). */
 type CardShown = Pick<RecordCardProps, "folded"> & { onToggle?: () => void };
 
-/** A report: what VESTA wrote, then its page in the document viewer — for the profiles the add-on serves pages to (the
- *  owner and the facility manager: fm-document), so no one is offered a page they cannot open. */
-export function ReportDetail({ announcement: a, canOpenPage, ...shown }: CardShown & { announcement: Announcement; canOpenPage: boolean }) {
-  return (
-    <NoteDetail announcement={a} {...shown}>
-      {a.page && canOpenPage && <PageLink page={a.page} />}
-    </NoteDetail>
-  );
-}
-
 /** A notification's title, when it came and all it says, or a report. ⚠️ THE COCKPIT'S ONE CARD (owner, 2026-10-29: "the
  *  notification cards styled the same way as the Issue cards, text colour, font, size"): its frame, title and text sizes
  *  are an issue's (RecordCard), its buttons under it on the right; held, then the superadmin code, it is erased as a
  *  Facility record is (owner, 2026-10-29: a card left from an older format). ⚠️ IT OWNS ITS PRESS (architecture review
  *  2026-10-29 #4): the screens each decided whether to pass one — an issue's card and a report passed none — so whatever
  *  buttons a message carries are pressed here, the same wherever it shows (RecordButtons, the one button row). */
-export function NoteDetail({ announcement: a, children, folded, onToggle }: CardShown & { announcement: Announcement; children?: ReactNode }) {
+export function NoteDetail({ announcement: a, canOpenPage = false, folded, onToggle }: CardShown & {
+  announcement: Announcement;
+  /** This profile is served VESTA's pages (the owner and the facility manager: fm-document), so no one is offered a
+   *  page they cannot open. */
+  canOpenPage?: boolean;
+}) {
+  // ⚠️ ITS PAGE WITH ITS BUTTONS, FOLDED TOO (owner, 2026-11-03: "show the button directly in the collapsed version of
+  // the card"): the card's own button row (RecordCard `actions`) is drawn folded or opened, so a report's or a
+  // notification's page is one tap away without opening it first
+  const page = a.page && canOpenPage ? <PageLink page={a.page} /> : null;
   return (
     <RecordCard title={a.title} folded={folded} onOpen={onToggle}
       lead={isReport(a) ? <FileText size={18} aria-hidden="true" /> : <Bell size={18} aria-hidden="true" />}
       when={a.at ? momentText(a.at) : undefined}
       erase={{ title: "Delete message", detail: a.title, run: (token) => eraseMessage(a, token, backendFetch) }}
-      body={<div className="messages-card-body"><AnnouncementContent announcement={a} />{children}</div>}
-      actions={a.buttons.length > 0 ? <RecordButtons record={a} /> : undefined} />
+      body={<div className="messages-card-body"><AnnouncementContent announcement={a} /></div>}
+      actions={page || a.buttons.length > 0 ? <>{page}{a.buttons.length > 0 && <RecordButtons record={a} />}</> : undefined} />
   );
 }

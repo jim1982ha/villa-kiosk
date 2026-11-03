@@ -54,9 +54,6 @@ const recap = buildMonthlyRecap({ fm: { ...EMPTY_FM_DATA, tickets: [fixed] }, mo
   deviceOfRecord: (id) => id, now });
 ck("the monthly report's mean resolution: 1h 30min", recap.includes("Mean time from a fault raised to its fix this month: **1h 30min**"),
   recap.split("\n").find((l) => /resolution/.test(l)));
-const tickets = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
-ck("the Tickets tab's mean resolution in the same words",
-  /meanResolutionHours === null \? "—" : fmtDuration\(stats\.meanResolutionHours \* 3_600_000\)/.test(tickets));
 // no number, no words (architecture review K: "NaNd", "Infinityd")
 ck("no number: no words", [NaN, Infinity, -Infinity].every((v) => fmtDuration(v) === ""), [NaN, Infinity].map(fmtDuration));
 

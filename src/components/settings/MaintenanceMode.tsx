@@ -1,5 +1,5 @@
 // src/components/settings/MaintenanceMode.tsx
-// The villa's maintenance mode (owner, 2026-10-29): its switch (Advanced Settings › System, owner only) and THE ONE
+// The villa's maintenance mode (owner, 2026-10-29): its switch (Advanced Settings › Villa, first, owner only) and THE ONE
 // explanation of it, shown by the switch's (i) and by the top bar's "Maintenance" mark while it is on (owner: "describe
 // properly and clearly what the maintenance switch does in a (i) … and in the TOP BAR"). The VESTA Agent reads the
 // switch from the stored villa settings (agent-contract.json `heartbeat.answer.maintenance`).
@@ -23,7 +23,7 @@ export function MaintenanceModeExplained() {
         <li>alerts already open carry on as before.</li>
       </ul>
       It takes effect within a few minutes. Every tablet shows "Maintenance" in its top bar while it is on. Turn it off
-      in Advanced Settings › System once the work is done: the alerts that came meanwhile are not sent afterwards.
+      in Advanced Settings › Villa once the work is done: the alerts that came meanwhile are not sent afterwards.
     </>
   );
 }

@@ -354,6 +354,14 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
 
         {tab === "villa" && (
           <>
+            {/* the villa's maintenance mode (owner, 2026-10-29): VESTA reads it from here, and the top bar shows it;
+                owner, 2026-11-03: the Villa tab's first setting, still for the profiles that edit the villa only */}
+            {roleCan(role, "editConfig") && (
+              <>
+                <TipTitle title="Maintenance mode" tip={<MaintenanceModeExplained />} />
+                <MaintenanceMode />
+              </>
+            )}
             <TipTitle title="Villa location" tip="Drives the sun's position, and day and night, for this villa." />
             {/* Latitude, Longitude and the north offset on ONE line where there is room; on a phone the two
                 coordinates share a line and the offset takes the next (owner, 2026-10-22) */}
@@ -419,9 +427,6 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             other roles rather than rendered-and-403 — see the TABS filter. */}
         {tab === "system" && roleCan(role, "editConfig") && (
           <>
-            {/* the villa's maintenance mode (owner, 2026-10-29): VESTA reads it from here, and the top bar shows it */}
-            <TipTitle title="Maintenance mode" tip={<MaintenanceModeExplained />} />
-            <MaintenanceMode />
             <TipTitle title="Maintenance records" tip={<>
               Photos, repaired faults, work done, money spent and messages older than this are deleted.
               0 keeps them for ever. A task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.

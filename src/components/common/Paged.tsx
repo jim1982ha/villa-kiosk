@@ -44,29 +44,29 @@ export function usePaged<T>(rows: T[], size = PAGE_ROWS): PageView<T> & {
 }
 
 /**
- * The count line and the arrows. Renders nothing above the fold that a short
- * list does not need.
+ * Where the reader stands ("11–20 of 23") and the arrows, once there is more than a page.
  *
- * ⚠️ THE COUNT SHOWS EVEN WHEN THERE IS ONLY ONE PAGE, and the arrows do not.
- * "12 requests" is information; two greyed arrows are furniture. This is the
- * one asymmetry in the component and it is the reason a short log does not look
- * like a broken pager.
+ * ⚠️ ONE PAGE SAYS ITS COUNT ONLY WHERE NOTHING ELSE DOES (owner, 2026-11-03: "remove all the redundant sub-text
+ * mentioning how many items are included in each section … redundant with the number already appearing in the section
+ * title"): a list under a title showing "(n)" passes no `unit`, and one page of it shows nothing here. A list whose
+ * title has no count ("12 requests") passes its `unit` and keeps the line; two greyed arrows are furniture either way.
  */
 export function Pager<T>({ paged, unit, children }: {
   paged: PageView<T> & { go: (to: number) => void };
-  /** What a row IS, singular — "request", "event". Pluralised naively, which
-   *  is correct for every unit this app has. */
-  unit: string;
+  /** What a row IS, singular ("request", "event"), for the count of a list on one page: only for a list whose title
+   *  shows no count. Pluralised naively, which is correct for every unit this app has. */
+  unit?: string;
   /** Anything that belongs on the same row — an export button, typically. */
   children?: React.ReactNode;
 }) {
   const { first, total, page, pageNo, lastPage, go } = paged;
   const many = lastPage > 0;
+  if (!many && !unit && !children) return null;
   return (
     <div className="pager">
       <span className="muted">
         {many ? `${first}–${first + page.length - 1} of ${total}`
-              : countOf(total, unit)}
+              : unit ? countOf(total, unit) : null}
       </span>
       <span className="pager-controls">
         {children}

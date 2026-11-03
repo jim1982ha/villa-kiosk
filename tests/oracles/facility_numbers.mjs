@@ -124,9 +124,7 @@ eq("a short date renders without throwing", typeof shortDate("2026-07-24T00:00:0
 
 console.log("\n  a figure names its period (architecture review, 2026-10-19: \"Resolved (all time)\" was the kept record):");
 {
-  const { keptDays, monthBounds, closedTicketStats } = await import("@/fm/fmEngine");
-  const { h, draw, text } = await import("../consistency/screen.mjs");
-  const { TicketFigures } = await import("@/components/fm/TicketsTab");
+  const { monthBounds, closedTicketStats } = await import("@/fm/fmEngine");
   const NOW = Date.parse("2026-12-31T12:00:00Z"), DAY = 86_400_000;
   const iso = (ms) => new Date(ms).toISOString();
   // a TICKET closed `daysAgo`, `hours` after its Open Ticket; `cleared`: with no work done; `waited`: hours it sat as a
@@ -141,8 +139,6 @@ console.log("\n  a figure names its period (architecture review, 2026-10-19: \"R
   const agentCleared = { id: "agent5", title: "agent5", status: "resolved", openedAt: iso(NOW - 5 * DAY - HOUR), resolvedAt: iso(NOW - 5 * DAY),
     photoIds: [], updates: [{ at: iso(NOW - 5 * DAY), status: "resolved", kind: "cleared", photoIds: [] }] };
   const tickets = [closed("blip91", 91, 1, true), closed("blip89", 89, 1, true), closed("fix100", 100, 2), closed("fix10", 10, 6, false, 48)];
-  eq("the kept record is the shorter window the server publishes (0 = for ever, not a bound)",
-     [keptDays({ clearedDays: 90, repairedDays: 365 }), keptDays({ clearedDays: 90, repairedDays: 0 }), keptDays({ clearedDays: 0, repairedDays: 0 })], [90, 90, null]);
   const kept = ticketStats(tickets, { start: NOW - 90 * DAY, end: NOW + 1 });
   eq("over the kept record: the 91-day-old no-action close and the 100-day-old repair are out (a fault's time: from raised, 48h + 6h)",
      [kept.closedWithoutAction, kept.resolved, kept.meanResolutionHours], [1, 1, 54]);
@@ -150,11 +146,6 @@ console.log("\n  a figure names its period (architecture review, 2026-10-19: \"R
   eq("  ...the TICKETS' figures: the Agent's own clear is not one, and a ticket's time runs from its Open Ticket (6h)",
      [keptTickets.closedWithoutAction, keptTickets.resolved, keptTickets.meanResolutionHours], [1, 1, 6]);
   eq("  ...with no window, every record given (the old figures)", [ticketStats(tickets).closedWithoutAction, ticketStats(tickets).resolved], [2, 2]);
-  const tab = text(draw(h(TicketFigures, { tickets: [...tickets, agentCleared], inProgress: 0, retention: { clearedDays: 90, repairedDays: 365 }, now: NOW })));
-  eq("the Tickets tab draws those figures, and names their window",
-     tab, "|0|in progress|6h|mean resolution|1|closed, no action|Over the kept record (90 days).|");
-  const unsaid = text(draw(h(TicketFigures, { tickets, inProgress: 0, retention: null, now: NOW })));
-  eq("  ...a server that did not say: what is held, and no number of days claimed", unsaid.endsWith("|Over the kept record.|"), true);
   // the month as it stood at its end: fixed in November, reopened and cleared in December — November's repair
   const twice = { ...closed("twice", 5, 1, true), openedAt: "2026-11-10T00:00:00Z",
     updates: [{ at: "2026-11-10T04:00:00Z", status: "resolved", photoIds: [] }, { at: "2026-12-20T00:00:00Z", status: "open", photoIds: [], kind: "reopened" },

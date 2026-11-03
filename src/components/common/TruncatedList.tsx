@@ -84,7 +84,7 @@ export function ShowAll<T>({ list, noun, plural = `${noun}s` }: { list: Truncate
   return (
     <>
       {/* more than a page: where the reader stands and the arrows (the count alone would repeat the button's) */}
-      {list.paged && list.paged.lastPage > 0 && <Pager paged={{ ...list.paged, go: list.go }} unit={noun} />}
+      {list.paged && list.paged.lastPage > 0 && <Pager paged={{ ...list.paged, go: list.go }} />}
       <button className="btn ghost mt" onClick={list.toggle}
               aria-expanded={list.expanded}>
         <ChevronDown size={16}

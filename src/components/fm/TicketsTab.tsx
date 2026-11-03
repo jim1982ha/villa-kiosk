@@ -19,9 +19,9 @@ import { recordDevicePill } from "@/config/attention";
 import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
 import { useHA } from "@/ha/HAStateStore";
-import { closedTickets, closedTicketStats, faultBegan, faultTitle, keptDays, STAGE_WORDS, stageOf, type FmRetention } from "@/fm/fmEngine";
+import { closedTickets, faultBegan, faultTitle, STAGE_WORDS, stageOf } from "@/fm/fmEngine";
 import { pillClass } from "@/fm/tone";
-import { closedActions, helpAsked, openCounts, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
+import { closedActions, helpAsked, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
 import RecordCard, { DeviceChip, StatusPill, type RecordCardProps } from "./RecordCard";
 import FaultForm from "./FaultForm";
@@ -37,8 +37,6 @@ import WorkButtons, { CARD_BUTTON, WorkLabel, useCardWork } from "./WorkButtons"
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { formatMoney } from "@/utils/money";
-import { DAY_MS } from "@/utils/localDay";
-import { fmtDuration } from "@/components/panels/chartUtils";
 
 export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, onEditOpened, raiseFor, onRaiseOpened }: {
   onOpenEntity: (id: string) => void;
@@ -52,7 +50,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   raiseFor?: string;
   onRaiseOpened?: () => void;
 }) {
-  const { data, retention, removeTicket } = useFmData();
+  const { data, removeTicket } = useFmData();
   const roomOf = useCardRoom();
   const terms = useFmTerms();
   const { deviceOf, deviceOfRecord } = useDeviceIdentity();
@@ -63,14 +61,11 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const cadence = useAgent().status?.cadence ?? null;
   const now = useNow(60_000);
 
-  // in progress: the cards below, one per device (openCounts) — the other figures are per record (a repair's time)
-  const inProgress = openCounts(data.tickets, deviceOfRecord).tickets;
   const tickets = useMemo(() => ticketCards(data.tickets, deviceOfRecord), [data.tickets, deviceOfRecord]);
   // ⚠️ THE CLOSED ONES ARE A SECTION OF THEIR OWN, FOLDED AND PAGED (owner, 2026-10-14): the VESTA Agent clears several
   // a day. Latest closed first; the server drops them after their retention window (supervisor-proxy _fm_expire).
   // ...THE TICKETS', NOT EVERY RECORD'S (owner, 2026-11-01): a fault the VESTA Agent cleared with nobody taking it on was
-  // never a ticket, nor a ticket reopened and closed as a fault (fmEngine.closedTickets) — its figures above are the
-  // tickets' too (closedTicketStats)
+  // never a ticket, nor a ticket reopened and closed as a fault (fmEngine.closedTickets)
   const closed = useMemo(() => closedTickets(data.tickets), [data.tickets]);
   // the record open as its form, among the records this tab lists (ListEditor): reopened by VESTA, erased on another
   // tablet, it leaves the list and its form closes
@@ -167,7 +162,6 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}
           onDone={() => setRaising(null)} />
       )}
-      <TicketFigures tickets={data.tickets} inProgress={inProgress} retention={retention} />
 
       {tickets.length === 0 && (
         // THE Cockpit card, as every other (owner, 2026-10-22)
@@ -178,7 +172,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
       )}
       {tickets.length > 0 && <div className="fm-list">{tickets.map(ticket)}</div>}
 
-      <FoldedList title="Closed" rows={closed} unit="closed ticket">
+      <FoldedList title="Closed" rows={closed}>
         {(t) => (
           // reopened, it is a fault again: back in Open issues (the VESTA Agent reads it, never guesses)
           record(t, stagePill(t),
@@ -186,44 +180,6 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         )}
       </FoldedList>
 
-    </div>
-  );
-}
-
-/**
- * The tab's figures — in progress, the mean resolution, the closes with no action — and the period they cover.
- *
- * ⚠️ THE PERIOD IS THE RECORD THE SERVER STILL KEEPS (architecture review, 2026-10-19): it drops a no-action close after
- * its window and a repair after the evidence window (supervisor-proxy _fm_expire), so a figure over "everything" was a
- * figure over whatever had not expired yet. Counted over the shorter of the two windows the server PUBLISHES with the
- * record (fmEngine.keptDays), and named under the figures. Drawn by tests/oracles/facility_numbers.mjs.
- */
-export function TicketFigures({ tickets, inProgress, retention, now = Date.now() }: {
-  tickets: readonly FmTicket[];
-  /** Tickets in progress, one per device (deviceWork.openCounts). */
-  inProgress: number;
-  /** The server's retention windows (FmDataContext.retention); null: not said, the figures cover what is held. */
-  retention: FmRetention | null;
-  now?: number;
-}) {
-  const days = retention ? keptDays(retention) : null;
-  // the closed TICKETS' figures, each timed from its Open Ticket (owner, 2026-11-01), never every closed fault's
-  const stats = closedTicketStats(tickets, days === null ? undefined : { start: now - days * DAY_MS, end: now + 1 });
-  return (
-    <div className="fm-stack">
-      <div className="fm-summary">
-        <div className="fm-stat"><span className="n">{inProgress}</span><span className="l">in progress</span></div>
-        <div className="fm-stat">
-          <span className="n">{stats.meanResolutionHours === null ? "—" : fmtDuration(stats.meanResolutionHours * 3_600_000)}</span>
-          <span className="l">mean resolution</span>
-        </div>
-        {/* closes with no work done, apart from the repairs (review 31: they made the mean say 4.5 h for a 48 h repair) */}
-        {stats.closedWithoutAction > 0 && (
-          <div className="fm-stat"><span className="n">{stats.closedWithoutAction}</span><span className="l">closed, no action</span></div>
-        )}
-      </div>
-      {/* the figures' period, said as data in a few words (owner, 2026-10-22: no visible description text) */}
-      <p className="muted fm-row-sub">Over the kept record{days === null ? "" : ` (${days} days)`}.</p>
     </div>
   );
 }

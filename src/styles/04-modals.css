@@ -305,13 +305,9 @@
 /* Day/Auto/Night control (SettingsModal, beside Brightness/Night dimming): shorter than the ordinary .segmented-icons
    sizing above so it matches the sliders' TRACK/THUMB (the thumb is 28px: 2px padding + a 24px button lands on it). */
 .daynight-segmented { padding: 2px; }
-/* ⚠️ IT FILLS ITS THIRD OF THE LINE (owner, 2026-11-03: Brightness, Night dimming and Villa lighting "equally balanced
-   … a third each"), its three icons in equal centred segments, at every width. */
+/* ⚠️ IT FILLS ITS SETTING LINE'S CONTROL COLUMN (common/SettingRow), its three icons in equal centred segments. */
 .daynight-segmented button { min-height: 24px; flex: 1 1 0; width: auto; }
 
-/* A line of three settings sharing the modal's width equally (SettingsModal: Brightness, Night dimming, Villa
-   lighting), titles first; once a third would fall under its min-width they wrap, each line still filled. */
-.settings-third { flex: 1 1 0; min-width: 180px; }
 
 /* ⚠️ A CHOICE STANDING AS ITS SECTION'S OWN LINE FILLS IT (owner, 2026-11-03: "using the whole width of the modal and
    the values inside it are well centred"): the group spans the line, its segments share it equally, each centred. On
@@ -321,20 +317,18 @@
 .settings-modal .row > .segmented:only-child { flex: 1 1 100%; flex-wrap: wrap; }
 .settings-modal .row > .segmented:only-child button { flex: 1 1 0; min-width: 88px; justify-content: center; }
 
-/* THE on/off setting (common/OnOffToggle): its name at the left, then On | Off — the plain .segmented look and size,
-   Map look's Icon | Card — filling the rest of the line in equal halves, never narrower than a thumb's two targets.
-   In a pair of halves (.settings-row-half) each takes a whole line on a phone, so the name keeps its words. */
-.on-off { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 100%; }
-.on-off-name { display: inline-flex; align-items: center; gap: 7px; flex: 0 1 auto; min-width: 0; color: var(--text-secondary); }
-.segmented.on-off-switch { flex: 1 1 0; min-width: 150px; }
-@media (max-width: 560px) {
-  .on-off.settings-row-half { flex: 1 1 100%; }
-}
-
-/* Two on/off settings sharing one line (SettingsModal: Clickable Glow / Natural Scroll, Summary bar / Room glow), each
-   half its name and its On | Off; on a phone each takes a whole line (.on-off.settings-row-half above), so a name is
-   never cut. flex-basis lives in this class, not an inline style, so that rule can win. */
-.settings-row-half { flex: 1 1 280px; }
+/* THE line of one setting (common/SettingRow; owner, 2026-11-03: "the same layout, for consistency"): its icon and
+   name at the left, taking what is left and wrapping its words, its control at the right in a column of ONE width on
+   every line, so the sliders, choices and On | Off line up; on a phone both shrink, the line never wraps. */
+.setting-row { display: flex; align-items: center; gap: 12px; min-width: 0; margin-top: 12px; }
+.setting-row-name { display: inline-flex; align-items: center; gap: 7px; flex: 1 1 140px; min-width: 0; color: var(--text-secondary); }
+.setting-row-name > .info-tip > .info-btn { width: 24px; height: 24px; }
+.setting-row-control { flex: 0 1 var(--setting-control); display: flex; justify-content: flex-end; min-width: 0; }
+.setting-row-control > input[type="range"], .setting-row-control > .segmented { flex: 1 1 auto; width: 100%; min-width: 0; }
+.modal { --setting-control: 240px; --on-off-width: 120px; }
+/* THE on/off setting (common/OnOffToggle): On | Off at the right of its line, half as wide as when it filled the rest
+   of the line (owner, 2026-11-03: "50% less wide"), still two thumb-sized targets. */
+.setting-row-control > .segmented.on-off-switch { flex: 0 0 var(--on-off-width); width: var(--on-off-width); }
 
 
 /* Villa Latitude/Longitude pair in the Config Editor — full modal width,
@@ -679,8 +673,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
    height (owner, 2026-10-22). */
 /* "Confirm before toggling" on a device's line (MappingFields ConfirmToggle): the on/off toggle at the line's own
    compact height, beside the device's name. */
-.on-off.config-confirm { flex: 0 0 auto; font-size: var(--text-xs); }
-.on-off.config-confirm .on-off-switch { flex: 0 0 auto; min-width: 110px; padding: 2px; }
+.on-off.config-confirm { flex: 0 0 auto; font-size: var(--text-xs); margin-top: 0; }
+.on-off.config-confirm .setting-row-control { flex: 0 0 auto; }
+.on-off.config-confirm .on-off-switch { flex: 0 0 auto; width: auto; min-width: 110px; padding: 2px; }
 .on-off.config-confirm .on-off-switch button { min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--text-xs); }
 /* a picker in a device card takes the card's width, like the fields above it (owner, 2026-10-22) */
 .config-table td > .picker { flex: 1 1 auto; min-width: 0; }

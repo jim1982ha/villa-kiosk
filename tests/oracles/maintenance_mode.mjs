@@ -1,7 +1,7 @@
 // The villa's maintenance mode (owner, 2026-10-29: "Put it on the tablet, for the Owner only, in Advanced Settings, as a
 // 'Maintenance mode' switch … It should also show while it's on, a small 'Maintenance' mark in the top bar, so nobody
 // forgets it"): one switch of the villa's, stored centrally (off by default, a stored config without it reads off),
-// drafted by Advanced Settings like its other keys, drawn in its System tab for the profiles that edit the villa, and
+// drafted by Advanced Settings like its other keys, drawn first in its Villa tab (owner, 2026-11-03; System before) for the profiles that edit the villa, and
 // marked in the top bar while it is on, on a phone too. The proxy's answer to the Agent is tests/agent-interface.py's.
 // Driven by value through the shared store's row, then the markup read through the compiler's tree.
 import { register } from "node:module";
@@ -27,8 +27,10 @@ ck("  ...Advanced Settings drafts it like its other keys (Cancel puts it back)",
 console.log("\n  where it is switched and seen:");
 const modal = parseTsx("components/settings/ConfigEditorModal.tsx");
 const sw = elements(modal, "MaintenanceMode");
-ck("the switch is in Advanced Settings › System, for the profiles that edit the villa only",
-   sw.length === 1 && guardsOf(sw[0]).includes('tab === "system"') && guardsOf(sw[0]).includes('roleCan(role, "editConfig")'),
+const villaFirst = elements(modal, "TipTitle").find((e) => guardsOf(e).includes('tab === "villa"'));
+ck("the switch is in Advanced Settings › Villa, its first setting, for the profiles that edit the villa only",
+   sw.length === 1 && guardsOf(sw[0]).includes('tab === "villa"') && guardsOf(sw[0]).includes('roleCan(role, "editConfig")')
+   && !!villaFirst && propText(villaFirst, "title") === '"Maintenance mode"',
    sw.map(guardsOf));
 const hud = parseTsx("components/hud/HUD.tsx");
 const mark = elements(hud, "span").find((e) => propText(e, "className") === '"maintenance-mark"');
@@ -46,7 +48,7 @@ const said = draw(h(MaintenanceModeExplained, null));
 ck("the explanation says what VESTA does meanwhile: P1 still chased, any other new alert not taken up, open ones carry on, "
    + "nothing sent afterwards, where to turn it off",
    /urgent \(P1\) alerts still reach/.test(said) && /not taken up by VESTA: no number, no reminder, no fault/.test(said)
-   && /already open carry on/.test(said) && /not sent afterwards/.test(said) && /Advanced Settings › System/.test(said), said);
+   && /already open carry on/.test(said) && /not sent afterwards/.test(said) && /Advanced Settings › Villa/.test(said), said);
 const tips = elements(modal, "TipTitle").filter((e) => propText(e, "title") === '"Maintenance mode"');
 ck("  ...the switch's (i) and the top bar mark's (i) show that same one (no second wording)",
    tips.length === 1 && propText(tips[0], "tip") === "<MaintenanceModeExplained />"

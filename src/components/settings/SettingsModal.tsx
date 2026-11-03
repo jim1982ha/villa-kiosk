@@ -14,9 +14,10 @@ import RemoteReplacedNote from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import OnOffToggle from "@/components/common/OnOffToggle";
+import SettingRow from "@/components/common/SettingRow";
 import {
   Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Radar,
-  Settings2, MessageSquare, Maximize,
+  Settings2, MessageSquare, Maximize, SunDim, MoonStar, CloudSun, Lightbulb, Map as MapIcon, Eye, Footprints,
 } from "lucide-react";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { TipTitle } from "@/components/common/InfoTip";
@@ -29,10 +30,8 @@ import { useScenePreview } from "@/hooks/useScenePreview";
 import { DEFAULT_SITE_TITLE, type RenderConfig } from "@/config/AppConfig";
 import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
 import type { SceneManager } from "@/babylon/SceneManager";
-import InfoTip from "@/components/common/InfoTip";
 import { fmtDuration } from "@/components/panels/chartUtils";
-import { useAnnouncements } from "@/messages/AnnouncementsContext";
-import { ANNOUNCEMENT_NOTICE_MS, languageName, languagesOf } from "@/messages/announcements";
+import { ANNOUNCEMENT_NOTICE_MS, languageName, tabletLanguages } from "@/messages/announcements";
 import { PendingFields } from "@/hooks/usePendingField";
 import { FullScreenAnnouncements } from "./MessagesSettings";
 import WhoGetsMessages from "./WhoGetsMessages";
@@ -100,8 +99,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
   ] as const;
   const slice = useDraftedSlice(SETTINGS_KEYS);
   const v = slice.view;
-  const { kept } = useAnnouncements();
-  const languages = [...new Set([...languagesOf(kept), v.tabletLanguage])];
+  const languages = [...new Set([...tabletLanguages(config.chatLanguages), v.tabletLanguage])];
   // The 3D view follows what this dialog shows (hooks/useScenePreview): a slider is felt while it is dragged, and
   // Cancel puts the view back by the same path. ⚠️ NO SLIDER MOVES THE SCENE ITSELF (to 2.496.499, Cancel within the
   // half-second the write waits left the camera at the cancelled eye height).
@@ -200,26 +198,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           {can("editConfig") && (
             <FullScreenAnnouncements value={v.fullScreen} onChange={(fullScreen) => slice.set({ fullScreen }, { now: true })} />
           )}
-          {/* ticket 28 of "One inbox" (owner, 2026-10-30): which of the languages VESTA wrote its words in this tablet
-              shows (messages/announcements languagesOf), the current pick kept even if none holds it now; owner,
-              2026-11-03: "i don't understand what this does", said plainly, and no lone button while English is all */}
-          <TipTitle title="VESTA's language on this tablet" tip={<>
-            VESTA writes each message in the language of every chat that receives it (each chat's language is set
-            beside it under {LISTS_TITLE}). Pick which of those languages this tablet shows. It translates nothing: a message written in
-            one language only, the villa's own announcements and this tablet's buttons and menus stay as they are.
-          </>} />
-          {languages.length > 1 ? (
-            <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-              <SegmentedGroup ariaLabel="VESTA's language on this tablet" active={v.tabletLanguage}
-                onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
-                options={languages.map((code) => (
-                  { key: code, title: `VESTA's messages in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
-            </div>
-          ) : (
-            <span className="muted body-text">
-              Only {languageName(languages[0])} so far: another language shows here once a chat receives VESTA's messages in it.
-            </span>
-          )}
           {can("editConfig") && (
             <>
               <TipTitle title={LISTS_TITLE} tip={<>
@@ -232,6 +210,28 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
               </>} />
               <WhoGetsMessages />
             </>
+          )}
+          {/* ticket 28 of "One inbox" (owner, 2026-10-30): which of the languages VESTA writes its messages in this
+              tablet shows; owner, 2026-11-03: "i still don't understand the difference", so it comes AFTER the chats,
+              offers only the languages set beside them (messages/announcements tabletLanguages), the current pick kept
+              so it can be undone, and no lone button while English is all */}
+          <TipTitle title="This tablet shows VESTA's messages in" tip={<>
+            Each chat gets VESTA's messages in its own language, picked beside it under {LISTS_TITLE}. This tablet
+            shows one of those languages: pick which. Only VESTA's messages change; the villa's own announcements and
+            this tablet's buttons and menus are not translated.
+          </>} />
+          {languages.length > 1 ? (
+            <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <SegmentedGroup ariaLabel="This tablet shows VESTA's messages in" active={v.tabletLanguage}
+                onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
+                options={languages.map((code) => (
+                  { key: code, title: `VESTA's messages in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
+            </div>
+          ) : (
+            <span className="muted body-text">
+              {languageName(languages[0])}, as every chat gets them. Pick another language beside a chat under{" "}
+              {LISTS_TITLE} to offer it here.
+            </span>
           )}
         </PendingFields>
       )}
@@ -267,144 +267,98 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           dedicated button. Day/night warmth is handled automatically. */}
       <div className="settings-section-title">Render quality &amp; look</div>
 
-      {/* Blue-glow (a render/interaction toggle) and Natural scrolling (an
-          Overview-camera toggle) don't share a topic — paired on one row,
-          as single-button segmented toggles matching Summary bar's style
-          below, purely for density at the user's request. .settings-
-          row-half's flex-basis (not an inline style — see its own comment)
-          keeps them on that one line on a phone too, matching desktop,
-          not just on a roomy screen. */}
-      <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-        <OnOffToggle ariaLabel="Blue glow for clickable devices" className="settings-row-half" title="Blue glow around clickable devices"
-          on={v.highlightInteractive} onChange={(highlightInteractive) => slice.set({ highlightInteractive }, { now: true })}
-          icon={<MousePointerClick size={16} />} label="Clickable Glow" />
-        <OnOffToggle ariaLabel="Natural scrolling" className="settings-row-half" title="Natural scrolling in the bird's-eye view"
-          on={v.naturalScrolling} onChange={(naturalScrolling) => slice.set({ naturalScrolling }, { now: true })}
-          icon={<Move size={16} />} label="Natural Scroll" />
-      </div>
+      {/* ⚠️ ONE LINE PER SETTING (owner, 2026-11-03: "show the other menu (toggle, slider, etc) with the same layout, for
+          consistency"): each is common/SettingRow, its icon and name at the left, its control at the right in a column
+          of one width, an On | Off half as wide (common/OnOffToggle). The pairs and thirds sharing a line are gone. */}
+      <OnOffToggle ariaLabel="Blue glow for clickable devices" title="Blue glow around clickable devices"
+        on={v.highlightInteractive} onChange={(highlightInteractive) => slice.set({ highlightInteractive }, { now: true })}
+        icon={<MousePointerClick size={16} />} label="Clickable Glow" />
+      <OnOffToggle ariaLabel="Natural scrolling" title="Natural scrolling in the bird's-eye view"
+        on={v.naturalScrolling} onChange={(naturalScrolling) => slice.set({ naturalScrolling }, { now: true })}
+        icon={<Move size={16} />} label="Natural Scroll" />
 
-      {/* Brightness/Night dimming apply to every villa; the day/night
-          preview override (moved here from the header, no longer a single
-          invert toggle — see AppConfig's dayNightPreview) only means
-          anything for BAKED villas, whose day/night is a dramatic
-          pre-rendered atlas crossfade worth previewing/overriding on
-          demand rather than a plain lighting dim. .row + flex-wrap (not
-          .slider-pair, which is a strict 2-col grid shared with the Eye
-          height/Walk speed pair below): three equal thirds (owner,
-          2026-11-03: "equally balanced in the modal width"), wrapping on
-          a narrow screen. */}
-      <div className="row" style={{ gap: 12, marginTop: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div className="settings-third">
-          <label className="with-tip">Brightness · {v.render.exposure.toFixed(2)}×
-            <InfoTip label="About Brightness">The overall exposure of the 3D view. Updates live.</InfoTip></label>
-          <input
-            type="range" min={0.6} max={2} step={0.05} value={v.render.exposure}
-            onChange={(e) => applyRender({ exposure: Number(e.target.value) })}
-          />
-        </div>
-        <div className="settings-third">
-          <label className="with-tip">Night dimming · {v.render.nightDimming.toFixed(1)}×
-            <InfoTip label="About Night dimming">How much extra dimming applies at night. Updates live.</InfoTip></label>
-          <input
-            type="range" min={0} max={1} step={0.1} value={v.render.nightDimming}
-            onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
-          />
-        </div>
-        {(manager?.lightingMode().structureUnlit ?? false) && (
-          // A third of the line, as its two sliders (owner, 2026-11-03: .settings-third), its icons filling it
-          // (.daynight-segmented). Sunrise, not Sun,
-          // for "Day": the Theme selector above already uses Sun for its
-          // Light option, and the two sat close enough on the same screen
-          // to read as the same control.
-          // ⚠️ Distinct from the INTERFACE theme in the header — see the
-          // long note there. This relights the VILLA; that one themes the
-          // panels. The written label is what keeps them apart: it now sits
-          // in a labelled wrapper like its slider siblings, so the control
-          // states what it does instead of relying on the reader decoding a
-          // sun/moon glyph that the header control also uses.
-          <div className="settings-third">
-          <label className="with-tip">Villa lighting
-            <InfoTip label="About Villa lighting">
-              Forces this villa's baked day or night look, or follows the real cycle on Auto. It relights the 3D
-              model, unlike the Interface theme in the header, which only recolours the panels.
-            </InfoTip></label>
+      {/* Brightness/Night dimming apply to every villa; the day/night preview override (AppConfig's dayNightPreview)
+          only means anything for BAKED villas, whose day/night is a pre-rendered atlas crossfade worth previewing. */}
+      <SettingRow icon={<SunDim size={16} />} label={`Brightness · ${v.render.exposure.toFixed(2)}×`}
+        tip="The overall exposure of the 3D view. Updates live.">
+        <input aria-label="Brightness"
+          type="range" min={0.6} max={2} step={0.05} value={v.render.exposure}
+          onChange={(e) => applyRender({ exposure: Number(e.target.value) })}
+        />
+      </SettingRow>
+      <SettingRow icon={<MoonStar size={16} />} label={`Night dimming · ${v.render.nightDimming.toFixed(1)}×`}
+        tip="How much extra dimming applies at night. Updates live.">
+        <input aria-label="Night dimming"
+          type="range" min={0} max={1} step={0.1} value={v.render.nightDimming}
+          onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
+        />
+      </SettingRow>
+      {(manager?.lightingMode().structureUnlit ?? false) && (
+        // Sunrise, not Sun, for "Day": the Interface theme in the header uses Sun for its Light option. ⚠️ Distinct
+        // from that INTERFACE theme: this relights the VILLA, that one themes the panels; the written name keeps
+        // them apart.
+        <SettingRow icon={<CloudSun size={16} />} label="Villa lighting" tip={<>
+          Forces this villa's baked day or night look, or follows the real cycle on Auto. It relights the 3D
+          model, unlike the Interface theme in the header, which only recolours the panels.
+        </>}>
           <SegmentedGroup ariaLabel="Villa lighting" className="segmented-icons daynight-segmented"
             active={v.render.dayNightPreview ?? "auto"} onChange={(dayNightPreview) => applyRender({ dayNightPreview })} options={[
             { key: "day", title: "Light the villa as daytime", label: <Sunrise size={17} /> },
             { key: "night", title: "Light the villa as night", label: <Moon size={17} /> },
             { key: "auto", title: "Automatic, the villa follows the real day/night cycle", label: <SunMoon size={17} /> },
           ]} />
-          </div>
-        )}
-      </div>
+        </SettingRow>
+      )}
 
-      {/* Light effect strength scales a lit fixture's room illumination in
-          BOTH villa flavours (2.31.0): the floor "light pool" decal in
-          baked-lighting villas (see babylon/LightPools.ts — their unlit
-          structure can't be brightened by a real light), and the real
-          dynamic PointLight's intensity in non-baked villas (where it
-          silently did nothing before). */}
-      <label style={{ marginTop: 14 }}>Light effect strength · {v.render.lightPoolIntensity.toFixed(1)}×</label>
-      <input
-        type="range" min={0.3} max={2} step={0.1} value={v.render.lightPoolIntensity}
-        onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
-      />
+      {/* Light effect strength scales a lit fixture's room illumination in BOTH villa flavours (2.31.0): the floor
+          "light pool" decal in baked-lighting villas (babylon/LightPools.ts), the real PointLight's intensity in
+          non-baked ones. */}
+      <SettingRow icon={<Lightbulb size={16} />} label={`Light effect strength · ${v.render.lightPoolIntensity.toFixed(1)}×`}>
+        <input aria-label="Light effect strength"
+          type="range" min={0.3} max={2} step={0.1} value={v.render.lightPoolIntensity}
+          onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
+        />
+      </SettingRow>
 
-      {/* ⚠️ NO PARAGRAPH UNDER AN OPTION (owner, 2026-10-22): its explanation is ONE (i) on its title (common/InfoTip). */}
-      <label className="with-tip" style={{ marginTop: 16 }}>Map look
-        <InfoTip label="About the map look">
-          Icon: a badge with a value pill. Card: a coloured card with icon and value inline. Both show the same
-          information, purely a look preference. Badge size, {config.entityIconScale.toFixed(2)}×, is set with the
-          +/- buttons next to the category filters in the top bar. Summary bar: the row of tiles at the bottom of the
-          screen.
-          {can("editConfig") && " Room glow: light up the room in red and draw the camera's cone when presence is "
-            + "detected or a sensor triggers (the devices themselves still glow). It applies to every tablet."}
-        </InfoTip></label>
-      {/* The on-map badge look (Icon / Card), on its own line; then (owner, 2026-11-03: every on/off setting is On | Off,
-          its name at the left) the Summary bar and, for a profile that may edit the villa's setup, the villa's room
-          glow and camera cones (AppConfig.roomGlowAndCones, every tablet's; on this line since 2026-10-22), two
-          halves that wrap together on a phone. */}
-      <div className="row" style={{ gap: 10, marginTop: 6 }}>
+      {/* ⚠️ NO PARAGRAPH UNDER AN OPTION (owner, 2026-10-22): its explanation is ONE (i) on its name (common/InfoTip).
+          Then the Summary bar and, for a profile that may edit the villa's setup, the villa's room glow and camera
+          cones (AppConfig.roomGlowAndCones, every tablet's), each its own line. */}
+      <SettingRow icon={<MapIcon size={16} />} label="Map look" tipLabel="About the map look" tip={<>
+        Icon: a badge with a value pill. Card: a coloured card with icon and value inline. Both show the same
+        information, purely a look preference. Badge size, {config.entityIconScale.toFixed(2)}×, is set with the
+        +/- buttons next to the category filters in the top bar.
+      </>}>
         <SegmentedGroup ariaLabel="Floating badge style" active={v.badgeStyle} onChange={(badgeStyle) => slice.set({ badgeStyle }, { now: true })} options={[
           { key: "classic", title: "Icon badge style, the reading sits on a small pill under the icon", label: <><Circle size={16} /> <span className="badge-btn-label">Icon</span></> },
           { key: "card", title: "Card badge style, the reading sits inline beside the icon (default)", label: <><CreditCard size={16} /> <span className="badge-btn-label">Card</span></> },
         ]} />
-      </div>
-      <div className="row" style={{ gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-        <OnOffToggle ariaLabel="Summary bar" className="settings-row-half" title="The summary bar at the bottom of the screen"
-          on={v.showSummaryBar} onChange={(showSummaryBar) => slice.set({ showSummaryBar }, { now: true })}
-          icon={<PanelBottom size={16} />} label="Summary bar" />
-        {can("editConfig") && (
-          <OnOffToggle ariaLabel="Room glow and camera cones" className="settings-row-half" title="Room glow and camera cones, on every tablet"
-            on={v.roomGlowAndCones} onChange={(roomGlowAndCones) => slice.set({ roomGlowAndCones }, { now: true })}
-            icon={<Radar size={16} />} label="Room glow" />
-        )}
-      </div>
+      </SettingRow>
+      <OnOffToggle ariaLabel="Summary bar" title="The summary bar at the bottom of the screen"
+        on={v.showSummaryBar} onChange={(showSummaryBar) => slice.set({ showSummaryBar }, { now: true })}
+        icon={<PanelBottom size={16} />} label="Summary bar" tip="The row of tiles at the bottom of the screen." />
+      {can("editConfig") && (
+        <OnOffToggle ariaLabel="Room glow and camera cones" title="Room glow and camera cones, on every tablet"
+          on={v.roomGlowAndCones} onChange={(roomGlowAndCones) => slice.set({ roomGlowAndCones }, { now: true })}
+          icon={<Radar size={16} />} label="Room glow" tip={<>
+            Light up the room in red and draw the camera's cone when presence is detected or a sensor triggers (the
+            devices themselves still glow). It applies to every tablet.
+          </>} />
+      )}
 
-      {/* ── Camera & movement ─────────────────────────────────────────────
-          First-person walk-through comfort. Bird's-eye's own "Natural
-          scrolling" toggle moved up next to the blue-glow toggle above, so
-          this section is first-person only now. No separator above (same
-          "the title's own top margin is enough" rule every other section
-          transition in this modal follows) — a redundant hr-plus-margin
-          was the reported inconsistency. */}
+      {/* ── Camera & movement: first-person walk-through comfort (Natural scrolling, a bird's-eye setting, is above). */}
       <div className="settings-section-title">First-person view</div>
-      <div className="slider-pair" style={{ marginTop: 10 }}>
-        <div>
-          <label>Eye height · {eyeHeight.toFixed(2)} m</label>
-          <input
-            type="range" min={0.8} max={2.2} step={0.05} value={eyeHeight}
-            onChange={(e) => applyEyeHeight(Number(e.target.value))}
-          />
-        </div>
-        <div>
-          <label>Walk speed · {v.walkSpeed.toFixed(1)}×</label>
-          <input
-            type="range" min={0.3} max={3} step={0.1} value={v.walkSpeed}
-            onChange={(e) => applyWalkSpeed(Number(e.target.value))}
-          />
-        </div>
-      </div>
+      <SettingRow icon={<Eye size={16} />} label={`Eye height · ${eyeHeight.toFixed(2)} m`}>
+        <input aria-label="Eye height"
+          type="range" min={0.8} max={2.2} step={0.05} value={eyeHeight}
+          onChange={(e) => applyEyeHeight(Number(e.target.value))}
+        />
+      </SettingRow>
+      <SettingRow icon={<Footprints size={16} />} label={`Walk speed · ${v.walkSpeed.toFixed(1)}×`}>
+        <input aria-label="Walk speed"
+          type="range" min={0.3} max={3} step={0.1} value={v.walkSpeed}
+          onChange={(e) => applyWalkSpeed(Number(e.target.value))}
+        />
+      </SettingRow>
 
       </>
       )}
