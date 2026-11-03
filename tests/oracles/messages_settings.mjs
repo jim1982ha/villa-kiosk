@@ -129,7 +129,8 @@ console.log("\n  where they are:");
   const lang = '"Language on this tablet"';
   ck("  ...one section \"Full-screen announcements\", \"Who gets the messages\" after it, the tablet's language last",
      at('"Full-screen announcements"') >= 0 && at('"Full-screen announcements"') < at("LISTS_TITLE")
-     && at("LISTS_TITLE") < at(lang), tips);
+     && ((row) => !!row && elements(set, "TipTitle").find((e) => propText(e, "title") === "LISTS_TITLE").getStart() < row.getStart())(
+       elements(set, "SettingRow").find((e) => propText(e, "label") === lang)), tips);
   ck("  ...its list written through Settings' one draft, its seconds waiting in that draft's store",
      fs.length === 1 && /slice\.set\(\{ fullScreen \}/.test(propText(fs[0], "onChange"))
      && elements(set, "PendingFields").some((p) => propText(p, "pending") === "slice.pending"));

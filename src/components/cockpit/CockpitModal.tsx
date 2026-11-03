@@ -84,7 +84,7 @@ export default function CockpitModal({
   // faults are missing from "Open issues" as much as from Tickets; and a save's problem ("This fault was just changed on
   // another device") follows a button pressed on an Overview card. They were the Facility tabs' alone.
   const { data, ready, unreachable, saveError, heldFor } = useFmData();
-  // the tickets in progress, counted on the Tickets tab's name as its own figure counts them (openCounts: one per device)
+  // the tickets in progress, counted on the Tickets tab's name as its cards are (openCounts: one per device)
   const { deviceOfRecord } = useDeviceIdentity();
   const ticketsOpen = useMemo(() => openCounts(data.tickets, deviceOfRecord).tickets, [data.tickets, deviceOfRecord]);
   const held = heldLine(heldFor);

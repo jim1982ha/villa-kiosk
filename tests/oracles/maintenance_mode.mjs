@@ -28,9 +28,11 @@ console.log("\n  where it is switched and seen:");
 const modal = parseTsx("components/settings/ConfigEditorModal.tsx");
 const sw = elements(modal, "MaintenanceMode");
 const villaFirst = elements(modal, "TipTitle").find((e) => guardsOf(e).includes('tab === "villa"'));
+const switchOf = parseTsx("components/settings/MaintenanceMode.tsx");
+const toggle = elements(switchOf, "OnOffToggle");
 ck("the switch is in Advanced Settings › Villa, its first setting, for the profiles that edit the villa only",
    sw.length === 1 && guardsOf(sw[0]).includes('tab === "villa"') && guardsOf(sw[0]).includes('roleCan(role, "editConfig")')
-   && !!villaFirst && propText(villaFirst, "title") === '"Maintenance mode"',
+   && !!villaFirst && sw[0].getStart() < villaFirst.getStart(),
    sw.map(guardsOf));
 const hud = parseTsx("components/hud/HUD.tsx");
 const mark = elements(hud, "span").find((e) => propText(e, "className") === '"maintenance-mark"');
@@ -49,8 +51,10 @@ ck("the explanation says what VESTA does meanwhile: P1 still chased, any other n
    + "nothing sent afterwards, where to turn it off",
    /urgent \(P1\) alerts still reach/.test(said) && /not taken up by VESTA: no number, no reminder, no fault/.test(said)
    && /already open carry on/.test(said) && /not sent afterwards/.test(said) && /Advanced Settings › Villa/.test(said), said);
-const tips = elements(modal, "TipTitle").filter((e) => propText(e, "title") === '"Maintenance mode"');
-ck("  ...the switch's (i) and the top bar mark's (i) show that same one (no second wording)",
-   tips.length === 1 && propText(tips[0], "tip") === "<MaintenanceModeExplained />"
+// architecture review 19 #5: a setting line named as every other, what it does in its (i), never a grey sentence
+ck("  ...the switch's line is named Maintenance mode; its (i) and the top bar mark's (i) show that same one (no second wording)",
+   toggle.length === 1 && propText(toggle[0], "label") === '"Maintenance mode"'
+   && propText(toggle[0], "tip") === "<MaintenanceModeExplained />"
+   && elements(modal, "TipTitle").every((e) => propText(e, "title") !== '"Maintenance mode"')
    && !!mark && elements(mark, "InfoTip").length === 1 && elements(mark, "MaintenanceModeExplained").length === 1);
 done("✅ the villa's maintenance mode: one switch, off by default, seen in the top bar while on");

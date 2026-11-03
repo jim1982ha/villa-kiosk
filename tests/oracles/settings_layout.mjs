@@ -60,7 +60,7 @@ console.log("\n  one line per setting, its name left and its control right (owne
   const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
   const tree = parseTsx("components/settings/SettingsModal.tsx");
   // every slider and every segmented choice of the dialog's body sits directly in a SettingRow (Interface, the header's
-  // theme, is not a setting line; the Messages tab's language grid stands as its section's own line)
+  // theme, is not a setting line; the Messages tab's chat grid stands as its section's own line)
   const inRow = (e) => { for (let n = e.parent; n; n = n.parent) { if (/^<SettingRow\b/.test(n.getText?.() ?? "")) return true; } return false; };
   const sliders = elements(tree, "input").filter((e) => propText(e, "type") === '"range"');
   const names = sliders.map((e) => propText(e, "aria-label"));
@@ -68,19 +68,19 @@ console.log("\n  one line per setting, its name left and its control right (owne
      JSON.stringify(names) === JSON.stringify(['"Brightness"', '"Night dimming"', '"Light effect strength"', '"Eye height"', '"Walk speed"'])
      && sliders.every(inRow), names);
   const choices = elements(tree, "SegmentedGroup").map((e) => [propText(e, "ariaLabel"), inRow(e)]);
-  ck("  ...and Villa lighting and Map look's Icon | Card, each with a name of its own",
-     choices.filter(([n]) => ['"Villa lighting"', '"Floating badge style"'].includes(n)).every(([, r]) => r)
+  ck("  ...and Villa lighting, Map look's Icon | Card and the tablet's language, each with a name of its own",
+     ['"Villa lighting"', '"Floating badge style"', '"Language on this tablet"'].every((n) => choices.some(([c, r]) => c === n && r))
      && /label="Map look"/.test(src("components/settings/SettingsModal.tsx")), choices);
   ck("  ...no pair or third of a line is left", !/settings-third|settings-row-half/.test(modals + src("components/settings/SettingsModal.tsx")));
   // owner, 2026-11-03: on a wide screen several to a line, each its name over its control; a phone one per line
   const lines = elements(tree, "div").filter((d) => propText(d, "className") === '"setting-line"')
     .map((d) => [...d.getText().matchAll(/(?<![-\w])label=\{?[`"]([^`"$]+?)(?: · |[`"])/g)].map((m) => m[1].trim()));
-  ck("on a wide screen: Clickable Glow, Room glow, Natural Scroll; Brightness, Night dimming, Villa lighting; Map look, "
-     + "Summary bar; Eye height, Walk speed, each set on one line",
+  ck("on a wide screen: Clickable Glow, Room glow, Natural Scroll; Brightness, Night dimming, Light effect strength; Map "
+     + "look, Summary bar, Villa lighting; Eye height, Walk speed, each set on one line",
      JSON.stringify(lines.map((l) => l.filter((n) => ["Clickable Glow", "Room glow", "Natural Scroll", "Brightness",
-       "Night dimming", "Villa lighting", "Map look", "Summary bar", "Eye height", "Walk speed"].includes(n))))
-     === JSON.stringify([["Clickable Glow", "Room glow", "Natural Scroll"], ["Brightness", "Night dimming", "Villa lighting"],
-       ["Map look", "Summary bar"], ["Eye height", "Walk speed"]]), lines);
+       "Night dimming", "Light effect strength", "Villa lighting", "Map look", "Summary bar", "Eye height", "Walk speed"].includes(n))))
+     === JSON.stringify([["Clickable Glow", "Room glow", "Natural Scroll"], ["Brightness", "Night dimming", "Light effect strength"],
+       ["Map look", "Summary bar", "Villa lighting"], ["Eye height", "Walk speed"]]), lines);
   const wide = /@media \(min-width: (\d+)px\) \{\s*\.setting-line \{ display: flex;/.exec(modals);
   ck("  ...only on a wide screen (a phone keeps one per line), each its name over its control, in equal shares",
      !!wide && Number(wide[1]) > 560 && /\.setting-line > \.setting-row \{ flex: 1 1 0; flex-direction: column;/.test(modals)

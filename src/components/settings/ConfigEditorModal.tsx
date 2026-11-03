@@ -26,7 +26,7 @@ import GroupedDevices from "./GroupedDevices";
 import UnavailableByDesign from "./UnavailableByDesign";
 import EntityPicker from "./EntityPicker";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import MaintenanceMode, { MaintenanceModeExplained } from "./MaintenanceMode";
+import MaintenanceMode from "./MaintenanceMode";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
 import RemoteReplacedNote, { SaveProblemNote } from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
@@ -356,12 +356,7 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
           <>
             {/* the villa's maintenance mode (owner, 2026-10-29): VESTA reads it from here, and the top bar shows it;
                 owner, 2026-11-03: the Villa tab's first setting, still for the profiles that edit the villa only */}
-            {roleCan(role, "editConfig") && (
-              <>
-                <TipTitle title="Maintenance mode" tip={<MaintenanceModeExplained />} />
-                <MaintenanceMode />
-              </>
-            )}
+            {roleCan(role, "editConfig") && <MaintenanceMode />}
             <TipTitle title="Villa location" tip="Drives the sun's position, and day and night, for this villa." />
             {/* Latitude, Longitude and the north offset on ONE line where there is room; on a phone the two
                 coordinates share a line and the offset takes the next (owner, 2026-10-22) */}

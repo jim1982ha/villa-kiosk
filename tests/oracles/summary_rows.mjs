@@ -65,8 +65,9 @@ ck("one order for every by-room list — \"Other\" last even after a room alphab
   const overview = parseTsx("components/cockpit/IssueCard.tsx");
   ck("the Cockpit has no Room / Floor / Category tiles and no Recent activity any more",
      ["SummaryGroupPanel", "SegmentedGroup"].every((t) => elements(overview, t).length === 0)
-     // its one folded list is the watched faults' (owner, 2026-10-25), never a Recent activity again
-     && elements(overview, "FoldedList").every((e) => propText(e, "rows") === "watched")
+     // the Inbox's folded lists are Watch and Closed (owner, 2026-10-25, 2026-10-28), never a Recent activity again
+     // (architecture review 19 #6: this read IssueCard, which holds no folded list, so it could never fail)
+     && elements(parseTsx("components/cockpit/MessagesTab.tsx"), "FoldedList").map((e) => propText(e, "title")).join() === '"Watch","Closed"'
      && !/^import .*(logbook|Logbook|cockpitData)/m.test(read("components/cockpit/IssueCard.tsx")));
 }
 

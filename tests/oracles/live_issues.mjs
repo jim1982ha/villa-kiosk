@@ -473,7 +473,7 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
   ck("  ...only while the issues are listed, for a profile that reports and does not manage",
      !!actions && JSX.guardsOf(actions).join() === "showsIssues,!canManage,canReport", actions && JSX.guardsOf(actions));
   ck("  ...and nothing of it left on the section's title line", !/Open a ticket<\/button>/.test(msg)
-     && !JSX.elements(tab, "MessagesSection").some((s) => JSX.propText(s, "actions") !== null));
+     && !JSX.elements(tab, "ListSection").some((s) => JSX.propText(s, "actions") !== null));
   const { WORK_ACTIONS } = await import("@/fm/deviceWork");
   const wb = JSX.parseTsx("components/fm/WorkButtons.tsx");
   ck("  ...the Tickets tab's Open Ticket: the card's words and wrench, defined once (WorkLabel, the card's buttons draw it too)",
@@ -483,7 +483,7 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
   // owner, 2026-10-31: on a phone (360 to 430 px) Open Ticket still dropped to its own line, 2 to 42 px short in
   // WebKit; the filter's button says "Notifs", its section keeps "Notifications"
   const { FILTERS } = await import("@/messages/messagesModel");
-  const notesSection = JSX.elements(tab, "MessagesSection").find((s) => JSX.propText(s, "onToggle") === '() => fold("notes")');
+  const notesSection = JSX.elements(tab, "ListSection").find((s) => JSX.propText(s, "onToggle") === '() => fold("notes")');
   // owner, 2026-11-01: "Notifications if it fits": both words drawn, the toolbar's width shows one
   ck("  ...the filters say Issues · Notifications · Reports, \"Notifs\" where the line is too narrow; drawn from that one list; the section is \"Notifications\"",
      FILTERS.map((f) => f.label).join(" · ") === "Issues · Notifications · Reports" && FILTERS[1].short === "Notifs"

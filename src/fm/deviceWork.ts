@@ -194,7 +194,7 @@ export const workRecord = (t: Pick<FmTicket, "id" | "status" | "updates">): Work
  *  on (each an Overview card); `tickets` — the Tickets tab's cards; `total` — the devices with
  *  anything open (each an issue card with a Done). ⚠️ ONE UNIT (architecture review, 2026-10-15): the pump's two
  *  faults taken on together showed one ticket card under "2 in progress", and readiness said "2 open tickets". The
- *  figures that must stay per record (a repair's mean time, the closed list) are ticketStats'. */
+ *  figures that must stay per record (a repair's mean time, in the monthly recap) are ticketStats'. */
 interface OpenCounts { faults: number; tickets: number; total: number }
 
 export function openCounts(records: readonly FmTicket[], deviceOfRecord: (field: string) => string): OpenCounts {

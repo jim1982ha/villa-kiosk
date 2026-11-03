@@ -144,10 +144,10 @@ ck("  ...and a fault only a person closes has no next-check pill: nothing checks
   // watched is the Messages model's, by value (messages_model.mjs); the tab draws them in that order
   const tree = parseTsx("components/cockpit/MessagesTab.tsx");
   const tab = tree.statements.find((s) => s.name?.getText() === "MessagesTab");
-  const sections = elements(tab, "MessagesSection");
+  const sections = elements(tab, "ListSection");
   const named = (t) => sections.find((e) => propText(e, "title") === `"${t}"`);
   const issuesSec = named("Open issues"), notesSec = named("Notifications");
-  const folded = (t) => elements(tab, "FoldedRows").find((e) => propText(e, "title") === `"${t}"`);
+  const folded = (t) => elements(tab, "FoldedList").find((e) => propText(e, "title") === `"${t}"`);
   const watch = folded("Watch"), closedSec = folded("Closed");
   const within = (n, outer) => !!n && !!outer && n.getStart() >= outer.getStart() && n.getEnd() <= outer.getEnd();
   // ⚠️ FOLDED BY DEFAULT (owner, 2026-10-25: "collapse all the cards in the watchlist … by default"); a section of its
@@ -159,14 +159,23 @@ ck("  ...and a fault only a person closes has no next-check pill: nothing checks
      [!!issuesSec, !!notesSec, !!watch, !!closedSec]);
   ck("  ...the count stays the open issues' (cockpitIssues' open cards), never the watched",
      propText(issuesSec, "count") === "open.length", propText(issuesSec, "count"));
-  const { MessagesSection } = await import("@/components/cockpit/MessagesTab");
-  const drawn = (open) => draw(h(MessagesSection, { title: "Watch", count: 2, open, onToggle: () => {} }, h("p", null, "card 1")));
+  const { ListSection, default: FoldedList } = await import("@/components/common/FoldedList");
+  const drawn = (open) => draw(h(ListSection, { title: "Watch", count: 2, open, onToggle: () => {} }, h("p", null, "card 1")));
   ck("  ...a section folded shows its name and count, no card; open, its cards",
      /Watch \(2\)/.test(drawn(false)) && !/card 1/.test(drawn(false)) && /aria-expanded="false"/.test(drawn(false))
      && /card 1/.test(drawn(true)), drawn(false));
   const tabSrc = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
   ck("  ...Watch and Closed are drawn with the issues, always, empty or not (owner, 2026-10-28)",
-     /\{showsIssues && \(\s*<>\s*<FoldedRows title="Watch"/.test(tabSrc) && !/if \(rows\.length === 0\) return null/.test(tabSrc));
+     /\{showsIssues && \(\s*<>\s*<FoldedList title="Watch"/.test(tabSrc)
+     && ((html) => /Closed/.test(html) && /Nothing closed yet\./.test(html))(draw(h(FoldedList, { title: "Closed", rows: [], open: true,
+       onToggle: () => {}, empty: "Nothing closed yet.", children: () => null }))));
+  // ⚠️ ONE FOLDED LIST (architecture review 19 #2, 2026-11-03): Tickets' Closed and Schedule's Recent work vanished when
+  // empty, under a grey line and Closed with no (i), while the Inbox's said "Nothing closed yet." under its section name
+  const closedTickets = elements(parseTsx("components/fm/TicketsTab.tsx"), "FoldedList")
+    .concat(elements(parseTsx("components/fm/RecentWorkList.tsx"), "FoldedList"));
+  ck("  ...Tickets' Closed and Schedule's Recent work are the same folded list, each with its empty line, Closed with its (i)",
+     closedTickets.length === 2 && closedTickets.every((e) => propText(e, "empty") !== null)
+     && propText(closedTickets[0], "tip") !== null, closedTickets.length);
   ck("  ...Watch and Closed start folded; Open issues, Notifications and Reports open",
      /useState\(\{ issues: true, notes: true, reports: true, watch: false, closed: false \}\)/.test(readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8")));
   // owner, 2026-11-03: "remove all the redundant sub-text mentioning how many items are included in each section" ("1
@@ -177,10 +186,12 @@ ck("  ...and a fault only a person closes has no next-check pill: nothing checks
   ck("  ...one page under a counted title: no line at all; a list whose title has none keeps \"3 reports\"; past a page, where the reader stands",
      pager(1) === "" && /3 reports/.test(pager(3, "report")) && /1–10 of 23/.test(pager(23)) && !/watched/.test(pager(1)),
      [pager(1), pager(3, "report")]);
-  const counted = [...elements(tree.statements.find((st) => st.name?.getText() === "FoldedRows"), "Pager"),
-    ...elements(parseTsx("components/common/FoldedList.tsx"), "Pager")];
-  ck("  ...Watch, Closed, Tickets' Closed and Recent work, each titled with its count, pass the pager no count's word",
-     counted.length === 2 && counted.every((e) => propText(e, "unit") == null), counted.map((e) => propText(e, "unit")));
+  // and Notifications and Reports titled with theirs too (architecture review 19 #4: they kept "12 notifications")
+  const counted = [...elements(tab, "Pager"), ...elements(parseTsx("components/common/FoldedList.tsx"), "Pager")];
+  ck("  ...Notifications, Reports, Watch, Closed, Tickets' Closed and Recent work, each titled with its count, pass the pager no count's word",
+     counted.length === 3 && counted.every((e) => propText(e, "unit") == null)
+     && ["Notifications", "Reports"].every((t) => /^view\.\w+\.length$/.test(propText(named(t), "count") ?? "")),
+     counted.map((e) => propText(e, "unit")));
 }
 
 console.log("\n  a hidden device: no card in any section (config/cockpitIssues, the cards Open issues draws):");

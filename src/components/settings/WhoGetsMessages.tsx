@@ -26,13 +26,19 @@ import Dropdown from "@/components/common/Dropdown";
 import EntityPicker from "./EntityPicker";
 import { withItem } from "@/utils/listToggle";
 
-export default function WhoGetsMessages() {
+export default function WhoGetsMessages({ onSaved }: {
+  /** A change saved on the villa (a chat added or taken off, a language set): the dialog's Cancel says it was kept. */
+  onSaved?: () => void;
+}) {
   const { entities, ws, getEntitiesSnapshot } = useHA();
   const name = useEntityLabel();
   // the villa's settings, written at once (never the dialog's draft): each chat's language
   const { config, update } = useConfig();
   const languages = config.chatLanguages;
-  const setLanguage = (id: string, code: string) => update((c) => ({ chatLanguages: withChatLanguage(c.chatLanguages, id, code) }));
+  const setLanguage = (id: string, code: string) => {
+    update((c) => ({ chatLanguages: withChatLanguage(c.chatLanguages, id, code) }));
+    onSaved?.();
+  };
   const [problem, setProblem] = useState<string | null>(null);
   // What this tablet sent to each list that the villa may not show yet: two adds in a row build on each other
   // (each used to build from the list on screen, and the second wrote over the first).
@@ -64,13 +70,14 @@ export default function WhoGetsMessages() {
           // a chat now on no list loses its language (it is no one's to read any more): withChatLanguage's English
           if (sent.ok) for (const gone of droppedChats(ROLE_LISTS.map((l) => l.role === list.role ? targetsOf(plan.text)
             : targetsOf(getEntitiesSnapshot()[l.entityId]?.state)), ids)) setLanguage(gone, "en");
+          if (sent.ok) onSaved?.();
           setProblem(sent.ok ? null : `The ${who}'s list could not be saved: try again.`);
         };
         return (
           <div key={list.role} className="settings-list-row recipients-role">
             <span className="body-text recipients-role-name">{who}</span>
             {!helper ? (
-              <span className="muted body-text">The villa has no list for this yet: it comes with VESTA's message settings.</span>
+              <span className="muted body-text">This list is not on the villa yet.</span>
             ) : (
               <>
                 {ids.map((id) => (

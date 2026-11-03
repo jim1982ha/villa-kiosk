@@ -128,8 +128,8 @@ ck("the card shows the Agent's rows when an Agent is connected OR one of its fau
 {
   const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
   const tab = parseTsx("components/cockpit/MessagesTab.tsx");
-  const issues = elements(tab, "MessagesSection").find((s) => propText(s, "title") === '"Open issues"');
-  const head = elements(tab, "div").find((d) => propText(d, "className") === '"with-tip"');
+  const issues = elements(tab, "ListSection").find((s) => propText(s, "title") === '"Open issues"');
+  const head = elements(parseTsx("components/common/FoldedList.tsx"), "div").find((d) => propText(d, "className") === '"with-tip"');
   const inHead = head ? head.children.filter((c) => c.getText().trim()).map((c) => c.getText().replace(/\s+/g, " ")) : [];
   ck("it is Open issues' own (i), drawn right after the section's title, in the same group (Messages)",
      propText(issues, "tip") === "canManage ? <FaultTiming /> : undefined"
