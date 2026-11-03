@@ -1,3 +1,14 @@
+## 0.12.446
+
+What you will see:
+- Knowledge › Device links reads first: one line per device saying what VESTA uses for its Schedule, Normal power and
+  Run hours (the helper's name, then "Found by name" or "Set by you", or a dash), each column with its own (i).
+- The drop-downs open for one device only, on its Set or Change button; Done closes them.
+- The devices whose run-hours check is off come first, under "Run-hours check off"; the others are folded under
+  "Schedule linked"; a device the villa no longer has is last, under "No longer found".
+- Plainer words here and in Device kinds: "Found by name" (was Guessed), "Set by you" (was Chosen here), "Use the one
+  found" (was Back to the guess), a dash (was None linked).
+
 ## 0.12.445
 
 What you will see:
