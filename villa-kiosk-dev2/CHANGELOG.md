@@ -1,3 +1,11 @@
+## 2.496.686
+
+What you will see:
+- Inbox › Closed: Reopen is only on a fault closed as "Not a problem while it lasts" (2.496.685 put it on every closed
+  fault). Every other close is checked by VESTA or over, and has no button.
+- A device's history bar: the states on their way between two others, in the same colour, are one entry of its legend:
+  a lock's "Locking / Unlocking", a cover's "Opening / Closing".
+
 ## 2.496.685
 
 What you will see:
