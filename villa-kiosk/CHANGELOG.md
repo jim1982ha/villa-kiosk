@@ -1,3 +1,12 @@
+## 2.496.680
+
+What you will see:
+- Settings › General on a wide screen (a computer, or the tablet held wide): several settings share a line, each its
+  name over its control: Clickable Glow, Room glow and Natural Scroll; Brightness, Night dimming and Villa lighting;
+  Map look and Summary bar; Eye height and Walk speed. Light effect strength keeps its own line. On a phone each
+  setting keeps its own line, its name on the left and its control on the right.
+- Room glow now sits beside Clickable Glow (it was under Summary bar).
+
 ## 2.496.679
 
 What you will see:

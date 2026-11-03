@@ -72,6 +72,19 @@ console.log("\n  one line per setting, its name left and its control right (owne
      choices.filter(([n]) => ['"Villa lighting"', '"Floating badge style"'].includes(n)).every(([, r]) => r)
      && /label="Map look"/.test(src("components/settings/SettingsModal.tsx")), choices);
   ck("  ...no pair or third of a line is left", !/settings-third|settings-row-half/.test(modals + src("components/settings/SettingsModal.tsx")));
+  // owner, 2026-11-03: on a wide screen several to a line, each its name over its control; a phone one per line
+  const lines = elements(tree, "div").filter((d) => propText(d, "className") === '"setting-line"')
+    .map((d) => [...d.getText().matchAll(/(?<![-\w])label=\{?[`"]([^`"$]+?)(?: · |[`"])/g)].map((m) => m[1].trim()));
+  ck("on a wide screen: Clickable Glow, Room glow, Natural Scroll; Brightness, Night dimming, Villa lighting; Map look, "
+     + "Summary bar; Eye height, Walk speed, each set on one line",
+     JSON.stringify(lines.map((l) => l.filter((n) => ["Clickable Glow", "Room glow", "Natural Scroll", "Brightness",
+       "Night dimming", "Villa lighting", "Map look", "Summary bar", "Eye height", "Walk speed"].includes(n))))
+     === JSON.stringify([["Clickable Glow", "Room glow", "Natural Scroll"], ["Brightness", "Night dimming", "Villa lighting"],
+       ["Map look", "Summary bar"], ["Eye height", "Walk speed"]]), lines);
+  const wide = /@media \(min-width: (\d+)px\) \{\s*\.setting-line \{ display: flex;/.exec(modals);
+  ck("  ...only on a wide screen (a phone keeps one per line), each its name over its control, in equal shares",
+     !!wide && Number(wide[1]) > 560 && /\.setting-line > \.setting-row \{ flex: 1 1 0; flex-direction: column;/.test(modals)
+     && !/^\.setting-line \{/m.test(modals), wide?.[1]);
   ck("  ...its control in a column of one width on every line, the name taking what is left",
      /\.setting-row-control \{ flex: 0 1 var\(--setting-control\);/.test(modals) && /\.setting-row-name \{[^}]*flex: 1 1 \d+px; min-width: 0;/.test(modals));
   const toggle = src("components/common/OnOffToggle.tsx");
