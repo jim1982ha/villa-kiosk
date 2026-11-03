@@ -1,3 +1,9 @@
+## 0.12.445
+
+What you will see:
+- Rules › People: a role pill that would not fit on one line (a phone's narrow column) says "FM" instead of
+  "Facility Manager"; where it fits, the full words stay.
+
 ## 0.12.444
 
 What you will see:

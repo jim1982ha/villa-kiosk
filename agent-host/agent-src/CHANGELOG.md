@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.429 (3 November 2026)
+
+- Rules › People: each row also carries its roles in the alert card's short words (`role_short`, "FM"); the page shows
+  them when the long words would wrap the pill.
+
 ## 0.6.428 (3 November 2026)
 
 - The maintenance mode's note names the Kiosk switch's new place, Advanced Settings › Villa (Kiosk 2.496.677).

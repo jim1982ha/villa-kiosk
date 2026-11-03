@@ -377,17 +377,20 @@ class UI:
         in their words and its language's name. ⚠️ READ ONLY (owner, 2026-11-03: "Yes, Kiosk only", then "isn't it also
         redundant to show the Telegram chat ID … and also the language selection?"): who gets the messages, who may
         press their buttons and each chat's language are set in the Kiosk; no chat id is shown.
+        `role_short`: the same roles in the alert card's short words ("FM"), shown where the long ones would wrap
+        (owner, 2026-11-03: "rename Facility Manager to FM if the pill width can't fit Facility Manager on 1 line").
         `lists_read`: False until the agent has read them once (the card then says they are empty until set)."""
         from vesta_shared import villa_recipients
-        from vesta_shared.message_format import ROLE_WORDS
+        from vesta_shared.message_format import ROLE_SHORT, ROLE_WORDS
         from ..policy import Language
         from ..roster import Roster
         roster = Roster.current(self.s.pack_path)       # the engine's own (config.Settings.policy)
         rows: dict[int, dict] = {}
         for e in roster.entries:
-            row = rows.setdefault(e.telegram_id, {"telegram_id": e.telegram_id, "name": e.name, "roles": []})
+            row = rows.setdefault(e.telegram_id, {"telegram_id": e.telegram_id, "name": e.name, "roles": [], "short": []})
             row["roles"].append(ROLE_WORDS[e.role])
-        return {"people": [{"name": r["name"], "role": " and ".join(r["roles"]),
+            row["short"].append(ROLE_SHORT[e.role])
+        return {"people": [{"name": r["name"], "role": " and ".join(r["roles"]), "role_short": " and ".join(r["short"]),
                             "language": Language.of(roster.language_of(r["telegram_id"], None)).name}
                            for r in rows.values()],
                 "lists_read": roster.read_yet,

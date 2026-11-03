@@ -1206,10 +1206,15 @@ def test_the_people_card_shows_the_kiosks_lists_one_row_per_chat(ui):
     async def fn(c):
         return await (await c.get("/api/rules")).json()
     doc = call(ui, fn)
-    assert doc["people"] == [{"name": "Ann", "role": "Owner", "language": "English"},
-                             {"name": "Villa group", "role": "Owner and Facility Manager", "language": "French"}]
+    assert doc["people"] == [{"name": "Ann", "role": "Owner", "role_short": "Owner", "language": "English"},
+                             {"name": "Villa group", "role": "Owner and Facility Manager", "role_short": "Owner and FM",
+                              "language": "French"}]
     assert doc["lists_read"] is True and not {"people", "languages"} & set(doc["form"])
     assert doc["lists_where"] == "the VESTA Kiosk (Settings › Messages › Who gets the messages)"
+    # a role's pill on one line: its long words while they fit, else the short ones (owner, 2026-11-03: "FM")
+    forms, fit = body_of(page_js(), "rulesForms"), body_of(page_js(), "fitWords")
+    assert "fitWords(h(\"span\", { class: \"chip\" }, p.role), p.role, p.role_short)" in forms
+    assert "if (pill.offsetHeight > one) pill.textContent = short;" in fit
 
 
 def test_never_read_the_people_card_is_empty_and_says_so(tmp_path):

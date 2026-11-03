@@ -146,7 +146,9 @@ export function rulesForms(doc, jobs = [], tools = null) {
   // the Asleep between reports", knowledge.asleepCard). Who gets the messages, who may press their buttons and each
   // chat's language are set in the VESTA Kiosk (owner, 2026-11-03: "isn't it also redundant to show the Telegram chat
   // ID … and also the language selection?"); the agent reads them (server._people: one row per chat) and edits nothing.
-  const peopleRows = (doc.people || []).map((p) => [p.name, h("span", { class: "chip" }, p.role), p.language]);
+  // a role's pill on ONE line (owner, 2026-11-03: "rename Facility Manager to FM if the pill width can't fit Facility
+  // Manager on 1 line"): its long words while they fit, else the alert card's short ones (server._people role_short)
+  const peopleRows = (doc.people || []).map((p) => [p.name, fitWords(h("span", { class: "chip" }, p.role), p.role, p.role_short), p.language]);
   const people = card(W("people"), `Set in ${doc.lists_where}, each chat with its language. Every chat in its lists gets the messages of its list's role, in its language, and acts with that role: a person's private chat, or a group, where everyone acts with the group's role; a chat in both lists has both. A person must have sent /start to the bot once before it can write to them. The agent reads the lists and never edits them.`,
     peopleRows.length
       ? table(["Name", "Role", "Language"], peopleRows, { cls: "people", widths: ["40%", "30%", null] })
@@ -370,4 +372,21 @@ export function toolsCard(f, t, reload) {
   const c = card(place("tools"), "Each tool the AI may call. A tool switched off does not exist for it, in chats and in reports. Changes count at the next message.", tabs.bar, tabs.body);
   c.id = "rules-tools";
   return c;
+}
+
+/** A pill that says `long` while it fits on one line, else `short`: measured against its own one-line height (the short
+ *  words), after layout, when the fonts arrive and on every resize; a pill gone from the page stops listening. */
+function fitWords(pill, long, short) {
+  if (!short || short === long) return pill;
+  const fit = () => {
+    if (!pill.isConnected) { window.removeEventListener("resize", fit); return; }
+    pill.textContent = short;
+    const one = pill.offsetHeight;
+    pill.textContent = long;
+    if (pill.offsetHeight > one) pill.textContent = short;
+  };
+  requestAnimationFrame(fit);
+  document.fonts?.ready.then(() => pill.isConnected && fit());
+  window.addEventListener("resize", fit);
+  return pill;
 }
