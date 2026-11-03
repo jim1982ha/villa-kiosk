@@ -329,6 +329,16 @@
 /* THE on/off setting (common/OnOffToggle): On | Off at the right of its line, half as wide as when it filled the rest
    of the line (owner, 2026-11-03: "50% less wide"), still two thumb-sized targets. */
 .setting-row-control > .segmented.on-off-switch { flex: 0 0 var(--on-off-width); width: var(--on-off-width); }
+/* ⚠️ ON A WIDE SCREEN, SEVERAL SETTINGS TO A LINE (owner, 2026-11-03: Clickable Glow, Room glow and Natural Scroll;
+   Brightness, Night dimming and Villa lighting; Map look and Summary bar; Eye height and Walk speed): a .setting-line
+   shares its width equally, each setting its name over its control (a third leaves no room for both side by side).
+   On a phone a .setting-line is nothing of its own: each setting keeps its own line. */
+@media (min-width: 721px) {
+  .setting-line { display: flex; gap: 24px; align-items: flex-start; margin-top: 12px; }
+  .setting-line > .setting-row { flex: 1 1 0; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 0; }
+  .setting-line > .setting-row > .setting-row-name { flex: none; }
+  .setting-line > .setting-row > .setting-row-control { flex: none; justify-content: flex-start; }
+}
 
 
 /* Villa Latitude/Longitude pair in the Config Editor — full modal width,
