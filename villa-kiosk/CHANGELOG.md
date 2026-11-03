@@ -1,3 +1,13 @@
+## 2.496.675
+
+What you will see:
+- Settings › Messages › Who gets the messages saves everything at once: a chat added or taken off, as before, and now
+  also the language beside each chat. Before, the language waited for Save while the chat did not, so ✕ could say
+  "All changes cancelled, nothing was kept." over a chat that had been kept. Save and Cancel no longer apply to this
+  section; its (i) says so.
+- Taking a chat off every list also forgets its language, so VESTA is no longer told the language of a chat nobody
+  lists.
+
 ## 2.496.674
 
 What you will see:

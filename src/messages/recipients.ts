@@ -54,6 +54,13 @@ export function withChatLanguage(map: Readonly<Record<string, string>>, entity: 
   return code === "en" ? rest : { ...rest, [entity]: code };
 }
 
+/** The chats of `before` that no list names now (`lists`: each list's chats after a change): their language goes with
+ *  them. Pure. */
+export function droppedChats(lists: readonly (readonly string[])[], before: readonly string[]): string[] {
+  const kept = new Set(lists.flat());
+  return before.filter((id) => !kept.has(id));
+}
+
 /** The notify entities a list's text names, once each, in its order ("unknown" and the like name none). */
 export function targetsOf(text: string | undefined | null): string[] {
   const out: string[] = [];
