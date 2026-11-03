@@ -25,6 +25,34 @@ ck("unavailable: the state weight, DASHED by the one pattern", d.px === m.ringTh
 ck("no ring colour: no ring", L.badgeRing({}, 28, m).px === 0 && L.badgeRing({}, 28, m).dash === null);
 ck("the bake size is the drawn size in render px (user scale × CSS→GUI)", L.badgeBakePx(22, 1.25, 3) === 82.5);
 
+// owner, 2026-11-04: "the entity glyph inside the entity icon shall be sized exactly the same" on a lone card (its value
+// beside it, its chip inset 10%) and in a group card (its cell not inset); the badge's own size unchanged
+console.log("\n  one glyph size, inset or not:");
+{
+  const { glyphDrawPx } = await import("@/babylon/badgeLayout");
+  const { arrange } = await import("@/babylon/badgeCard");
+  const { glyphScaleFor } = await import("@/babylon/badgeLayout");
+  for (const pointer of ["coarse", "fine"]) {
+    const mm = badgeMetricsFor(pointer);
+    for (const card of [true, false]) {
+      const lone = glyphDrawPx(mm, card);                                        // the lone badge's control
+      const unit = card ? mm.cardHeightPx : mm.badgeDiameterPx;
+      const cell = arrange(2, unit, mm.cardIconFraction, mm.minGapPx).chip;     // a group card's cell
+      // both drawn in base CSS px (the bake is that times one scale), the lone card's chip inset, the cell not
+      const a = L.badgeBakeBox(lone, card ? L.BADGE_INSET_CARD : 0), b = L.badgeBakeBox(cell, 0, glyphScaleFor(mm, card, cell));
+      ck(`  ${pointer}, ${card ? "Card" : "Icon"}: a group's cell (${cell} px) draws the lone badge's glyph box (${lone} px)`,
+         near(a.glyphBox, b.glyphBox) && (!card || a.size < lone * 0.9), [lone, cell, a, b]);
+    }
+  }
+  const icons = readFileSync(new URL("../../src/babylon/badgeIcons.ts", import.meta.url), "utf8");
+  const visuals = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+  ck("  ...the group's cells are baked with that scale", /glyphScale: glyphScaleFor\(this\.metrics, this\.isCardStyle\(\), lay\.chip\)/.test(visuals));
+  ck("  ...and the bake sizes the glyph and its stroke from that box, never from the inset square",
+     /const \{ m, size, glyphBox: inner \} = badgeBakeBox\(px, inset, glyphScale\);/.test(icons)
+     && /const iconScale = \(inner \/ ICON_VIEWBOX\) \* iconFraction\(\);/.test(icons) && /inner > 0 \? \(px \* glyphScale\) \/ inner : 1/.test(icons)
+     && !/\(size \/ ICON_VIEWBOX\)/.test(icons));
+}
+
 console.log("\n  one owner for each number:");
 const css = readFileSync(new URL("../../src/styles/01-base.css", import.meta.url), "utf8");
 const tok = (n) => Number(css.match(new RegExp(`--chip-${n}:\\s*([\\d.]+)px`))[1]);

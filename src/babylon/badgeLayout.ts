@@ -113,6 +113,17 @@ export function glyphDrawPx(m: BadgeMetrics, card: boolean): number {
 }
 
 /**
+ * ⚠️ ONE GLYPH SIZE PER STYLE ON THE MAP (owner, 2026-11-04: "the entity glyph inside the entity icon shall be sized
+ * exactly the same", "globally and in a centralised way"): a group's cell of `cellPx` draws its glyph in the box the
+ * lone badge of the same style draws in (glyphDrawPx), as a fraction of the cell (badgeLook.badgeBakeBox's
+ * glyphScale). The cell rounds to whole pixels its own way (badgeCard.arrange: 17 px beside a 16 px card chip on a
+ * mouse screen), and a Classic group's cell is smaller than the lone badge; neither changes the glyph any more.
+ */
+export function glyphScaleFor(m: BadgeMetrics, card: boolean, cellPx: number): number {
+  return cellPx > 0 ? glyphDrawPx(m, card) / cellPx : 1;
+}
+
+/**
  * The size a glyph's bitmap must be BAKED at, in RENDER px — not
  * `glyphDrawPx`. Every control is built in base CSS px and the container is
  * then scaled, so a control 44 wide covers 44·s render pixels; baking at 44

@@ -111,7 +111,7 @@ const HAIRLINE_FRACTION = 0.023;
 
 // The two pills' geometry is badgeLook's (pure, for the oracles and badgeControls): pillGeometry, PILL_MARGIN.
 export { PICTURE_SCALE, PILL_MARGIN, pillGeometry } from "./badgeLook";
-import { PICTURE_SCALE, PILL_MARGIN, pillGeometry } from "./badgeLook";
+import { PICTURE_SCALE, badgeBakeBox, pillGeometry } from "./badgeLook";
 
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -302,13 +302,15 @@ interface BakeSpec {
   bakePx?: number;
   /** The card style's heavier glyph (ICON_STROKE_VIEWBOX_BOLD). */
   bold?: boolean;
+  /** The glyph's box as a fraction of the control (badgeLayout.glyphScaleFor); 1 when omitted. */
+  glyphScale?: number;
 }
 
 /** The badge picture a BakeSpec describes, as a data URL (cached). */
 export function badgeImage(s: BakeSpec): string {
   return badgeImageDataUrl(
     s.category, s.iconKey, s.state, s.color, s.inset ?? 0, s.mark ?? null, s.linkPill ?? null,
-    s.ring === "none", s.bakePx ?? 0, s.bold ?? false, typeof s.ring === "number" ? s.ring : undefined);
+    s.ring === "none", s.bakePx ?? 0, s.bold ?? false, typeof s.ring === "number" ? s.ring : undefined, s.glyphScale ?? 1);
 }
 
 /** Render (and cache) the composited squircle badge for a category + glyph +
@@ -361,6 +363,8 @@ function badgeImageDataUrl(
    * card beside it. Omitted: the classic style's own fractions.
    */
   ringOfSize?: number,
+  /** The glyph's box as a fraction of the control (BakeSpec.glyphScale). */
+  glyphScale = 1,
 ): string {
   const theme = typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") ?? "" : "";
   // The two pills are part of the key: two badges alike in every other
@@ -374,7 +378,7 @@ function badgeImageDataUrl(
   // Weight is part of the key for the same reason size is: the two weights are
   // two different pictures, and a cache that conflated them would serve
   // whichever style happened to bake first to both of them.
-  const cacheKey = `${category}:${iconKey}:${state}:${mark ?? ""}:${linkPill ?? ""}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}:${ringOfSize ?? ""}`;
+  const cacheKey = `${category}:${iconKey}:${state}:${mark ?? ""}:${linkPill ?? ""}:${colorOverride ?? ""}:${inset}:${suppressRing}:${theme}:${px}:${boldGlyph}:${ringOfSize ?? ""}:${glyphScale}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -385,11 +389,8 @@ function badgeImageDataUrl(
   let url = "";
   if (ctx) {
     const surface = categorySurface(category, state, colorOverride);
-    // the pills' margin (PILL_MARGIN) outside, then the caller's own inset inside it
-    const outer = px * PILL_MARGIN;
-    const inner = px - 2 * outer;
-    const m = outer + inner * inset;        // transparent margin
-    const size = inner - 2 * inner * inset; // the squircle itself
+    // the pills' margin (PILL_MARGIN) outside, then the caller's own inset inside it (badgeLook.badgeBakeBox)
+    const { m, size, glyphBox: inner } = badgeBakeBox(px, inset, glyphScale);
     const corner = size * BADGE_CORNER_FRACTION;
 
     // A face with no trustworthy state is drawn faded (categorySurface's `faded`); the pills drawn after it
@@ -425,14 +426,19 @@ function badgeImageDataUrl(
       ctx.restore();
     }
 
-    const iconScale = (size / ICON_VIEWBOX) * iconFraction();
+    // ⚠️ THE GLYPH IS A FRACTION OF THE CONTROL (`inner`), NEVER OF THE INSET SQUIRCLE (owner, 2026-11-04: "the
+    // entity glyph inside the entity icon shall be sized exactly the same" with or without the value beside it): a
+    // lone Card badge's chip is baked inset 10% a side, a group card's cell is not, and the glyph followed the
+    // squircle, so the same device's glyph was drawn 20% smaller on its own card than in a group of the same size.
+    // The squircle keeps its inset (the card still shows around the chip); only the glyph no longer shrinks with it.
+    // Uninset callers (inner === size) are unchanged.
+    const iconScale = (inner / ICON_VIEWBOX) * iconFraction();
     const iconPx = ICON_VIEWBOX * iconScale;
     const offset = (px - iconPx) / 2;       // centred in the canvas = in the squircle
-    // `px / size` is 1 for every uninset caller, so this changes nothing for
-    // them and makes the inset ones agree with them — see drawIcon's
-    // strokeScale.
+    // one stroke weight for every caller, inset or not, a group's cell included: in proportion to the glyph's box
+    // (`px · glyphScale / inner`), never to the square — see drawIcon's strokeScale
     drawIcon(ctx, ICON_NODES[iconKey] ?? ICON_NODES.gauge, iconScale, offset, surface.glyph,
-      boldGlyph, size > 0 ? px / size : 1, opticalNudge(iconKey));
+      boldGlyph, inner > 0 ? (px * glyphScale) / inner : 1, opticalNudge(iconKey));
     ctx.restore();
 
     const pills = pillGeometry(m, size);

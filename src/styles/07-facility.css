@@ -401,6 +401,8 @@
 .fm-badge.tone-danger { background: var(--status-danger); color: #fff; }
 .fm-badge.tone-warn { background: var(--status-warning); color: #fff; }
 .fm-badge.tone-ok { background: var(--status-on); color: #fff; }
+/* who last moved a fault that is no ticket: the buttons' accent, no stage (fm/tone ACCENT_PILL) */
+.fm-badge.tone-accent { background: var(--accent); color: var(--text-on-accent); }
 
 .fm-check-icon { flex: 0 0 auto; display: flex; }
 .fm-check-icon.pass { color: var(--status-on); }

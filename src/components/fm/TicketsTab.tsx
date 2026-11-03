@@ -20,14 +20,13 @@ import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
 import { useHA } from "@/ha/HAStateStore";
 import { closedTickets, faultBegan, faultTitle, STAGE_WORDS, stageOf } from "@/fm/fmEngine";
-import { pillClass } from "@/fm/tone";
 import { closedActions, helpAsked, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
 import RecordCard, { DeviceChip, StatusPill, type RecordCardProps } from "./RecordCard";
 import FaultForm from "./FaultForm";
 import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
-import { faultLatest, faultNoteLines } from "@/fm/faultNotes";
+import { faultLatest, faultNoteLines, stagePillClass } from "@/fm/faultNotes";
 import { checkPill } from "@/fm/faultTiming";
 import { SourceIcons } from "./sourceIcons";
 import { faultSource } from "@/fm/issueSource";
@@ -130,7 +129,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   /** A record's status pill: its stage's one word and tone (fmEngine.STAGE_WORDS — the recap's word too). */
   const stagePill = (t: FmTicket) => {
     const s = STAGE_WORDS[stageOf(t)];
-    return { text: s.word, tone: pillClass(s.tone) };
+    return { text: s.word, tone: stagePillClass(stageOf(t)) };
   };
 
   /** A ticket in progress: ONE card — every record taken on with it, its pill on the first, its buttons inside at the

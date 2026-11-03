@@ -32,8 +32,9 @@ ck("closed as not a problem: resolved, kind cleared, lasting, by the profile", h
 ck("  ...a plain close says nothing of lasting", !("lasting" in plain.updates.at(-1)) && !closedAsLasting(plain));
 ck("  ...the agreement tells the VESTA Agent what lasting means",
    /`lasting`: true/.test(JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"))._ticketUpdate));
-ck("its pill: Not a problem by the person, Resolved", faultLatest(held, (a) => a.slice(11, 16))?.text
-   === "Not a problem by Owner, on 10:00 · Resolved", faultLatest(held, (a) => a.slice(11, 16)));
+// a fault never taken on as a ticket says no state (owner, 2026-11-04: a state is a real ticket's alone)
+ck("its pill: Not a problem by the person, no state (it was never a ticket)", faultLatest(held, (a) => a.slice(11, 16))?.text
+   === "Not a problem by Owner, on 10:00", faultLatest(held, (a) => a.slice(11, 16)));
 
 console.log("  nothing watches it:");
 const cadence = { checkMinutes: 5, nightlyAt: "02:00" };

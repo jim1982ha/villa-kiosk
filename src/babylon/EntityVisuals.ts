@@ -134,7 +134,7 @@ import {
   roomOfEntity, placementItems as passItems, glassScratch, viewportBudget, cellCapFor, drawableMaxOf,
   type ShownLabel, type PendingEntityGroup, type PlacementFrame, type CardShapeInput, type PassClearance,
 } from "./placementPass";
-import { glyphDrawPx, glyphBakePx, type GlassClearance } from "./badgeLayout";
+import { glyphDrawPx, glyphBakePx, glyphScaleFor, type GlassClearance } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
 import { badgeImage, PICTURE_SCALE } from "./badgeIcons";
 import { applyBadgeFrame, badgeRing, badgeBakePx, BADGE_INSET_CARD, BADGE_CORNER_FRACTION, NO_RING } from "./badgeLook";
@@ -4804,6 +4804,7 @@ export class EntityVisuals {
               // it baked the classic fractions, ≈1.3 px beside a card at 3.
               // Gated on the setting so the Icon style stays a clean control.
               bold: this.isCardStyle(),
+              glyphScale: glyphScaleFor(this.metrics, this.isCardStyle(), lay.chip),
               ring: this.isCardStyle()
                 ? badgeRing(categorySurface(s2.lbl.category, face, color), lay.chip, this.metrics).px / Math.max(1e-6, lay.chip)
                 : "baked",

@@ -1,3 +1,23 @@
+## 2.496.683
+
+What you will see:
+- A notice or alert picked for the full screen has a new look, at night as by day: a dark screen with its title and
+  words at the top, its photo as large as the screen allows, then its buttons (the doorbell's Unlock filled in green)
+  and Close inside a ring that empties as its time runs out, "Closes in 24s" beside it, counting down to the time set
+  in Settings › Messages. The "To:" line is gone from it: it said whom the villa sent it to on Telegram, not who is
+  looking ("To: FM" on the owner's tablet); its card in the Inbox keeps it.
+- Map badges: a device's icon is drawn the same size on its own card (with its value beside it) and in a group of
+  badges, in both map looks and on every screen; the badges themselves keep their size.
+
+## 2.496.682
+
+What you will see:
+- A fault's pill no longer ends with a state when the fault is not a ticket: "Reopened by VESTA Agent, on
+  02/11/2026 19:54" (it ended "· Open"), in the same colour as before. Only a real ticket, opened from the Tickets tab,
+  says its state ("· In progress", "· Resolved").
+- A ticket in progress has its pill in the buttons' green ("Ticket opened by … · In progress"), on its Inbox card and
+  on the Tickets tab, and its Edit Ticket button is filled in that same green.
+
 ## 2.496.681
 
 What you will see:

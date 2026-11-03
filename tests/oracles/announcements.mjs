@@ -332,13 +332,30 @@ ck("  ...nor for a title not picked, nor when the ring is answered (its cleared 
    && JSON.stringify(noticeFor(said("🔔 Visitor at Gate A", "✅ Opened at 14:05:10 from the tablet"), picked))
      === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 }));
 
-const { AnnouncementFullScreenView } = await import("@/components/hud/AnnouncementNotice");
+const { AnnouncementFullScreenView, countdownOf } = await import("@/components/hud/AnnouncementNotice");
 const fullHtml = draw(h(AnnouncementFullScreenView, { announcement: { ...offered, photo: "x.jpg", text: "Someone is at the door.\nGate A",
-  status: "⚠️ New alert" }, onDismiss: () => {}, buttons: h(RecordButtons, { record: offered }) }));
-ck("full screen: its title, then its photo large, all it says, its bottom line, its buttons, and Close",
-   /class="announcement-full-photo" src="\/announcement-photo\/x\.jpg"/.test(fullHtml) && fullHtml.includes(">🔔 Visitor at Gate A</h2>")
+  status: "⚠️ New alert", to: "FM" }, onDismiss: () => {}, buttons: h(RecordButtons, { record: offered }), totalMs: 45_000, leftMs: 24_000 }));
+// owner, 2026-11-04: proposal 5, "Night, the countdown around Close"; and a timer counting down to when it goes
+ck("full screen, the night look: its title, all it says, its photo large, its buttons, and Close in its countdown ring",
+   /class="modal-header announcement-night-head"[\s\S]*class="modal-body announcement-night-body"[\s\S]*class="modal-footer announcement-night-actions"/.test(fullHtml)
+   && fullHtml.includes(">🔔 Visitor at Gate A</h2>")
+   && /class="announcement-night-photo" src="\/announcement-photo\/x\.jpg"/.test(fullHtml)
    && fullHtml.includes("Gate A</p>") && fullHtml.includes("⚠️ New alert") && fullHtml.includes(">🔓 Unlock</button>")
-   && /class="modal-footer"[\s\S]*Close/.test(fullHtml), fullHtml);
+   && /aria-label="Close, it closes by itself in 24s"/.test(fullHtml) && fullHtml.includes(">Closes in 24s<"), fullHtml);
+ck("  ...no \"To:\" line: whom Telegram sent it to, never who is looking (it read \"To: FM\" on the owner's tablet)",
+   !/To: FM/.test(fullHtml));
+const nightRing = /class="announcement-night-left" stroke-dasharray="([\d.]+) ([\d.]+)"/.exec(fullHtml);
+ck("  ...its ring as full as the share of its time left", !!nightRing && Math.abs(nightRing[1] / nightRing[2] - 24 / 45) < 1e-3, nightRing && nightRing.slice(1));
+ck("the countdown in the shared duration words, never below 1s, its share clamped",
+   JSON.stringify(countdownOf(45_000, 24_000)) === JSON.stringify({ words: "24s", fraction: 24 / 45 })
+   && countdownOf(45_000, 90_000).words === "45s" && countdownOf(45_000, 90_000).fraction === 1
+   && countdownOf(45_000, -5).words === "1s" && countdownOf(45_000, -5).fraction === 0 && countdownOf(120_000, 120_000).words === "2min");
+{
+  const src = readFileSync(new URL("../../src/components/hud/AnnouncementNotice.tsx", import.meta.url), "utf8");
+  ck("  ...ticked every second from when it came on screen, a new announcement starting its own",
+     /const now = useNow\(1000\);/.test(src) && /leftMs=\{ms - Math\.max\(0, now - shownAt\)\}/.test(src)
+     && /<OneFullScreen key=\{idOf\(state\.full\.announcement\)\}/.test(src));
+}
 const problemHtml = draw(h(AnnouncementNoticeView, { announcement: said("🔥 Overload", "⚠️ New alert"), onDismiss: () => {} }));
 ck("a notice that goes by itself carries its ✕ too (owner, 2026-10-30: closed before its 10s)", problemHtml.includes('aria-label="Dismiss"'), problemHtml);
 {

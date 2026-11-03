@@ -180,7 +180,7 @@ console.log("\n  optical centring:");
   ck("the dash is short — about twice the dashes round a badge (owner, 2026-09-26)", RING_DASH[0] === 1.1 && RING_DASH[1] === 0.9);
   const { readFileSync } = await import("node:fs");
   const icons = readFileSync(new URL("../../src/babylon/badgeIcons.ts", import.meta.url), "utf8");
-  ck("every baked badge is optically centred (the one bake every badge style uses)", /boldGlyph, size > 0 \? px \/ size : 1, opticalNudge\(iconKey\)\);/.test(icons));
+  ck("every baked badge is optically centred (the one bake every badge style uses)", /boldGlyph, inner > 0 \? \(px \* glyphScale\) \/ inner : 1, opticalNudge\(iconKey\)\);/.test(icons));
 }
 
 /* ── the chip width model ──────────────────────────────────────────────── */

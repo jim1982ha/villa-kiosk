@@ -8,8 +8,8 @@
 // title word for word. Each step now carries its kind (FmTicketUpdate.kind, agent-contract.json `ticketUpdate`).
 
 import { NEED_HELP } from "./deviceWork";
-import { pillClass } from "./tone";
-import { STAGE_WORDS, isClearedStep, isTicketResolved, stageOf, standingHelp, statusChanges, stepsInTimeOrder } from "./fmEngine";
+import { ACCENT_PILL, pillClass } from "./tone";
+import { STAGE_WORDS, type FmStage, isClearedStep, isTicketResolved, recordLife, stageOf, standingHelp, statusChanges, stepsInTimeOrder } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
 import { authorWords } from "@/auth/roles";
 
@@ -46,12 +46,24 @@ export function notedStory(t: Pick<FmTicket, "updates">): { note: string; at: st
  * latest of its status steps said in one form, so the pill follows it: ticket opened, help asked, reopened, done, closed.
  * Who: the name typed for who does the work, else the profile that recorded it. null while it is only a fault nobody
  * moved. ⚠️ ITS STAGE IN IT, IN ITS COLOUR (owner, 2026-11-02: "Ticket opened by … -- In Progress", the separate "In
- * progress" pill then redundant): its stage's word and tone (fmEngine.STAGE_WORDS), the card's only stage pill. Pure.
+ * progress" pill then redundant): its stage's word and tone (fmEngine.STAGE_WORDS), the card's only stage pill.
+ * ⚠️ A STAGE ONLY FOR A TICKET (owner, 2026-11-04: "Reopened by VESTA Agent … · Open": "it doesn't make sense to show a
+ * state for such card. The status in the pill shall only appear for real ticket opened in the Ticket tab"): a ticket,
+ * in progress or closed as one (recordLife.ticket), says its stage; any other fault says who moved it and when. Its
+ * colour is its stage's (stagePillClass), a fault's kept as it was (owner, 2026-11-04). Pure.
  */
+/** A stage's pill colour: its tone (fmEngine.STAGE_WORDS), a ticket in progress the buttons' accent (tone.ACCENT_PILL),
+ *  the colour of its Edit Ticket. The Tickets tab's stage pill and every card's who-moved-it pill alike. */
+export function stagePillClass(stage: FmStage): string {
+  return stage === "ticket" ? ACCENT_PILL : pillClass(STAGE_WORDS[stage].tone);
+}
+
 export function faultLatest(t: FmTicket, stamp: (at: string) => string): { text: string; tone: string } | null {
   const stage = STAGE_WORDS[stageOf(t)];
+  const ticket = recordLife(t).ticket;
   const said = (word: string, at: string, who?: string) =>
-    ({ text: `${word}${who ? ` by ${who}` : ""}, on ${stamp(at)} · ${stage.word}`, tone: pillClass(stage.tone) });
+    ({ text: `${word}${who ? ` by ${who}` : ""}, on ${stamp(at)}${ticket ? ` · ${stage.word}` : ""}`,
+       tone: stagePillClass(stageOf(t)) });
   const steps = statusSteps(t);
   const last = steps[steps.length - 1];
   const help = standingHelp(t);

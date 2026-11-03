@@ -114,6 +114,10 @@ export function WorkLabel({ kind }: { kind: WorkActionKind }) {
   return <>{ICON[kind]}{ICON[kind] ? " " : null}{WORK_ACTIONS[kind].label}</>;
 }
 
+/** The buttons drawn in the accent (owner, 2026-11-04: Edit Ticket "with this same green accent style", the colour of
+ *  its ticket's pill: faultNotes.stagePillClass). */
+const ACCENT: Partial<Record<WorkActionKind, true>> = { editTicket: true };
+
 /** Does pressing it open a form the card does not hold (the caller's `onOpen`)? */
 const leavesCard = (a: WorkAction) => a.step.kind === "raise" || a.step.kind === "edit";
 
@@ -146,7 +150,7 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
       alternative={lasting ? { label: lasting, onConfirm: () => work.close(cardKey, confirming.ids, false, true) } : undefined} />;
   }
   const buttons = actions.map((a) => (
-    <button key={a.kind} type="button" className={CARD_BUTTON}
+    <button key={a.kind} type="button" className={ACCENT[a.kind] ? "btn primary" : CARD_BUTTON}
       aria-label={a.step.kind === "close" && name ? `${a.label} “${name}”` : undefined}
       onClick={() => (a.step.kind === "close" ? work.ask(cardKey) : leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised))}>
       <WorkLabel kind={a.kind} />

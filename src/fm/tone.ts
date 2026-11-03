@@ -26,3 +26,8 @@ export const toneClass = (t: Tone): string => (t === "ok" ? "" : `tone-${t}`);
 /** A tone's class on a status pill (RecordCard `status.tone`, 07-facility.css .fm-badge): a pill is always filled, so
  *  its ok is drawn too (green, as a task's "ok" pill) — only a card's frame is left plain when all is well. */
 export const pillClass = (t: Tone): string => `tone-${t}`;
+
+/** A ticket IN PROGRESS's pill: the buttons' accent, as its Edit Ticket button (owner, 2026-11-04: "change the colour
+ *  of the pill for OPENED ticket, for this green colour, and also colour the Edit Ticket button with this same green
+ *  accent style"). */
+export const ACCENT_PILL = "tone-accent";

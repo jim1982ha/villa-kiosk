@@ -8,17 +8,18 @@
 // its few seconds; its card in the Cockpit's Inbox keeps them after (owner, 2026-10-29). A rewrite of the same record
 // (answered, opened at the gate, decided) takes its place and says what changed.
 
-import { useEffect, useReducer, useRef, type ReactNode } from "react";
-import { Bell } from "lucide-react";
+import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
+import { Bell, X } from "lucide-react";
+import { fmtDuration } from "@/components/panels/chartUtils";
+import { useNow } from "@/hooks/useInterval";
 import { NoticeView } from "./Notice";
 import Window from "@/components/common/Window";
-import ModalFooter from "@/components/common/ModalFooter";
 import { useConfig } from "@/config/ConfigContext";
 import type { Announcement } from "@/messages/announcements";
 import { NO_NOTICE, noticeStep } from "@/messages/noticeModel";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { announcementWords, idOf } from "@/messages/messagesModel";
-import { AnnouncementContent, AnnouncementPhoto, RecordButtons } from "@/components/messages/AnnouncementContent";
+import { AnnouncementPhoto, RecordButtons } from "@/components/messages/AnnouncementContent";
 
 /** One announcement, drawn — pure (a check draws it): its photo above its words when it has one (a ring's snapshot,
  *  the notice then square-cornered: 08-shared.css), its title and the first line of what it says, then `buttons` (its
@@ -44,21 +45,65 @@ export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step 
   );
 }
 
-/** An announcement the owner picked for the whole screen (Settings › Messages › "Full-screen announcements"), drawn
- *  over everything for its own seconds, in the one window frame (its "screen" kind): its title in the header; its
- *  photo large, all it says and its buttons in the body; Close, which hands it back to its notice, in the footer. */
-export function AnnouncementFullScreenView({ announcement, onDismiss, buttons }: {
+/** What the countdown says and draws: the time left in the shared duration words (fmtDuration: "24s", "1min"), and
+ *  the share of its time left, 0 to 1 (the ring round Close). Pure: tests/oracles/announcements.mjs. */
+export function countdownOf(totalMs: number, leftMs: number): { words: string; fraction: number } {
+  const left = Math.max(0, Math.min(totalMs, leftMs));
+  return { words: fmtDuration(Math.max(1000, left)), fraction: totalMs > 0 ? left / totalMs : 0 };
+}
+
+/** The ring's circumference, for a radius of 39 in an 84 box (08-shared.css .announcement-night-close). */
+const RING_R = 39;
+const RING_C = 2 * Math.PI * RING_R;
+
+/**
+ * An announcement the owner picked for the whole screen (Settings › Messages › "Full-screen announcements"), drawn over
+ * everything for its own seconds, in the one window frame (its "screen" kind).
+ *
+ * ⚠️ THE NIGHT LOOK, THE COUNTDOWN ROUND CLOSE (owner, 2026-11-04: proposal 5 of the five, "implement it fully"; and
+ * "show a timer … that count down when the notification will disappear"): a dark screen whatever the theme (a camera's
+ * night picture reads best on it), its title and what it says at the top, its photo as large as the screen allows, then
+ * its buttons (the doorbell's Unlock, an approval's) and Close inside a ring that empties as its time runs out, with
+ * "Closes in 24s" beside it. No "To:" line here: it says whom the villa sent it to on Telegram, never who is looking (it
+ * read "To: FM" on the owner's tablet); its Inbox card keeps it. The shell's header, body and footer, as every window
+ * (its window carries `announcement-night`: 08-shared.css). Pure: a check draws it.
+ */
+export function AnnouncementFullScreenView({ announcement, onDismiss, buttons, totalMs, leftMs }: {
   announcement: Announcement;
   onDismiss: () => void;
   buttons?: ReactNode;
+  /** Its whole time on screen, and what is left of it (OneFullScreen ticks it). */
+  totalMs: number;
+  leftMs: number;
 }) {
+  const { words, fraction } = countdownOf(totalMs, leftMs);
+  const story = announcement.story ?? [];
   return (
     <>
-      <div className="modal-header"><h2 className="announcement-full-title">{announcement.title}</h2></div>
-      <div className="modal-body announcement-full">
-        <AnnouncementContent announcement={announcement} buttons={buttons} />
+      <div className="modal-header announcement-night-head">
+        <h2 className="announcement-full-title">{announcement.title}</h2>
+        {announcement.text && <p className="announcement-night-text">{announcement.text}</p>}
+        {(story.length > 0 || announcement.status) && (
+          <p className="announcement-night-text">{[...story, announcement.status].filter(Boolean).join("\n")}</p>
+        )}
       </div>
-      <ModalFooter onClose={onDismiss} />
+      <div className="modal-body announcement-night-body">
+        {announcement.photo && <AnnouncementPhoto id={announcement.photo} className="announcement-night-photo" />}
+      </div>
+      <div className="modal-footer announcement-night-actions">
+        {buttons}
+        <span className="announcement-night-close">
+          <svg viewBox="0 0 84 84" aria-hidden="true">
+            <circle cx="42" cy="42" r={RING_R} className="announcement-night-track" />
+            <circle cx="42" cy="42" r={RING_R} className="announcement-night-left"
+              strokeDasharray={`${(fraction * RING_C).toFixed(2)} ${RING_C.toFixed(2)}`} transform="rotate(-90 42 42)" />
+          </svg>
+          <button type="button" onClick={onDismiss} aria-label={`Close, it closes by itself in ${words}`}>
+            <X size={26} aria-hidden="true" />
+          </button>
+        </span>
+        <span className="announcement-night-words" aria-hidden="true">Closes in {words}</span>
+      </div>
     </>
   );
 }
@@ -69,11 +114,14 @@ function OneNotice({ announcement, onDismiss, step }: { announcement: Announceme
     buttons={<RecordButtons record={announcement} />} />;
 }
 
-/** The full screen in its window, with its record's buttons; Escape / Back and Close dismiss it alike. */
-function OneFullScreen({ announcement, onDismiss }: { announcement: Announcement; onDismiss: () => void }) {
+/** The full screen in its window, with its record's buttons; Escape / Back and Close dismiss it alike. Its countdown
+ *  ticks every second from when it came on screen; its end is AnnouncementNotice's one timer, never this one. */
+function OneFullScreen({ announcement, ms, onDismiss }: { announcement: Announcement; ms: number; onDismiss: () => void }) {
+  const [shownAt] = useState(() => Date.now());
+  const now = useNow(1000);          // the app's one ticking clock (hooks/useInterval)
   return (
-    <Window kind="screen" label={announcement.title} onClose={onDismiss}>
-      <AnnouncementFullScreenView announcement={announcement} onDismiss={onDismiss}
+    <Window kind="screen" className="announcement-night" label={announcement.title} onClose={onDismiss}>
+      <AnnouncementFullScreenView announcement={announcement} onDismiss={onDismiss} totalMs={ms} leftMs={ms - Math.max(0, now - shownAt)}
         buttons={<RecordButtons record={announcement} />} />
     </Window>
   );
@@ -112,7 +160,9 @@ export default function AnnouncementNotice() {
 
   return (
     <>
-      {state.full && <OneFullScreen announcement={state.full.announcement} onDismiss={() => send({ type: "fullEnded" })} />}
+      {/* keyed by the announcement: a new one on screen starts its own countdown */}
+      {state.full && <OneFullScreen key={idOf(state.full.announcement)} announcement={state.full.announcement} ms={state.full.ms}
+        onDismiss={() => send({ type: "fullEnded" })} />}
       {state.shown.map(({ announcement: a, ms }) => (
         <TimedNotice key={idOf(a)} announcement={a} ms={ms} step={state.steps.includes(idOf(a))}
           onEnded={() => send({ type: "noticeEnded", id: idOf(a) })} onDismiss={() => send({ type: "dismissed", id: idOf(a) })} />
