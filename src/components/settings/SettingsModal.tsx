@@ -7,6 +7,7 @@
 // There's no HA URL/token here anymore: the kiosk always reaches Home Assistant
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
+import { useState } from "react";
 import Window from "@/components/common/Window";
 import { eyeHeightOf } from "@/babylon/walkerSpawn";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
@@ -17,7 +18,7 @@ import OnOffToggle from "@/components/common/OnOffToggle";
 import SettingRow from "@/components/common/SettingRow";
 import {
   Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Radar,
-  Settings2, MessageSquare, Maximize, SunDim, MoonStar, CloudSun, Lightbulb, Map as MapIcon, Eye, Footprints,
+  Settings2, MessageSquare, Maximize, SunDim, MoonStar, CloudSun, Lightbulb, Map as MapIcon, Eye, Footprints, Languages,
 } from "lucide-react";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { TipTitle } from "@/components/common/InfoTip";
@@ -105,8 +106,11 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
   // half-second the write waits left the camera at the cancelled eye height).
   useScenePreview(manager, v);
 
+  // the sections saved at once while the dialog is open (Who gets the messages): Cancel says they were kept
+  const [keptAtOnce, setKeptAtOnce] = useState<string[]>([]);
   const commit = {
     dirty: slice.dirty,
+    keptAtOnce,
     save: slice.save,
     // The sliders, the fields and the scene's preview read the slice's view,
     // so they all follow the reverted config with nothing to re-apply.
@@ -205,7 +209,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
                 alerts to the {ROLE_LABELS.ops}. With a list empty, they go to every Telegram chat. Changes here are
                 saved at once.
               </>} />
-              <WhoGetsMessages />
+              <WhoGetsMessages onSaved={() => setKeptAtOnce((k) => k.includes(LISTS_TITLE) ? k : [...k, LISTS_TITLE])} />
             </>
           )}
           {/* ticket 28 of "One inbox" (owner, 2026-10-30): which of the chats' languages this tablet shows VESTA's
@@ -213,17 +217,13 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
               2026-11-03: "very badly explained … clearer and also shorter": NOTHING drawn while there is nothing to
               choose (every chat in English) */}
           {languages.length > 1 && (
-            <>
-              <TipTitle title="Language on this tablet" tip={<>
-                The language VESTA's messages show in on this tablet: one of the chats' languages above.
-              </>} />
-              <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <SettingRow icon={<Languages size={16} />} label="Language on this tablet"
+                tip="The language VESTA's messages show in on this tablet: one of the chats' languages above.">
                 <SegmentedGroup ariaLabel="Language on this tablet" active={v.tabletLanguage}
                   onChange={(code) => slice.set({ tabletLanguage: code }, { now: true })}
                   options={languages.map((code) => (
                     { key: code, title: `VESTA's messages in ${languageName(code)} on this tablet`, label: languageName(code) }))} />
-              </div>
-            </>
+              </SettingRow>
           )}
         </PendingFields>
       )}
@@ -262,8 +262,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
       {/* ⚠️ ONE LINE PER SETTING (owner, 2026-11-03: "show the other menu (toggle, slider, etc) with the same layout, for
           consistency"): each is common/SettingRow, its icon and name at the left, its control at the right in a column
           of one width, an On | Off half as wide (common/OnOffToggle). ⚠️ ON A WIDE SCREEN, SEVERAL TO A LINE (owner,
-          2026-11-03: Clickable Glow, Room glow and Natural Scroll; Brightness, Night dimming and Villa lighting; Map look
-          and Summary bar; Eye height and Walk speed): a .setting-line, each its name over its control; a phone keeps
+          2026-11-03: Clickable Glow, Room glow and Natural Scroll; Brightness, Night dimming and Light effect strength; Map
+          look, Summary bar and Villa lighting, owner 2026-11-03 again; Eye height and Walk speed): a .setting-line, each its name over its control; a phone keeps
           one per line. */}
       <div className="setting-line">
         <OnOffToggle ariaLabel="Blue glow for clickable devices" title="Blue glow around clickable devices"
@@ -282,8 +282,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           icon={<Move size={16} />} label="Natural Scroll" />
       </div>
 
-      {/* Brightness/Night dimming apply to every villa; the day/night preview override (AppConfig's dayNightPreview)
-          only means anything for BAKED villas, whose day/night is a pre-rendered atlas crossfade worth previewing. */}
+      {/* Brightness/Night dimming apply to every villa */}
       <div className="setting-line">
         <SettingRow icon={<SunDim size={16} />} label={`Brightness · ${v.render.exposure.toFixed(2)}×`}
           tip="The overall exposure of the 3D view. Updates live.">
@@ -299,6 +298,36 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
             onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
           />
         </SettingRow>
+        {/* Light effect strength scales a lit fixture's room illumination in BOTH villa flavours (2.31.0): the floor
+            "light pool" decal in baked-lighting villas (babylon/LightPools.ts), the real PointLight's intensity in
+            non-baked ones. */}
+        <SettingRow icon={<Lightbulb size={16} />} label={`Light effect strength · ${v.render.lightPoolIntensity.toFixed(1)}×`}>
+          <input aria-label="Light effect strength"
+            type="range" min={0.3} max={2} step={0.1} value={v.render.lightPoolIntensity}
+            onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
+          />
+        </SettingRow>
+      </div>
+
+      {/* ⚠️ NO PARAGRAPH UNDER AN OPTION (owner, 2026-10-22): its explanation is ONE (i) on its name (common/InfoTip).
+          Map look shares its line with the Summary bar and Villa lighting; the villa's room glow and camera cones
+          (AppConfig.roomGlowAndCones, every tablet's, editConfig only) share Clickable Glow's. */}
+      <div className="setting-line">
+        <SettingRow icon={<MapIcon size={16} />} label="Map look" tipLabel="About the map look" tip={<>
+          Icon: a badge with a value pill. Card: a coloured card with icon and value inline. Both show the same
+          information, purely a look preference. Badge size, {config.entityIconScale.toFixed(2)}×, is set with the
+          +/- buttons next to the category filters in the top bar.
+        </>}>
+          <SegmentedGroup ariaLabel="Floating badge style" active={v.badgeStyle} onChange={(badgeStyle) => slice.set({ badgeStyle }, { now: true })} options={[
+            { key: "classic", title: "Icon badge style, the reading sits on a small pill under the icon", label: <><Circle size={16} /> <span className="badge-btn-label">Icon</span></> },
+            { key: "card", title: "Card badge style, the reading sits inline beside the icon (default)", label: <><CreditCard size={16} /> <span className="badge-btn-label">Card</span></> },
+          ]} />
+        </SettingRow>
+        <OnOffToggle ariaLabel="Summary bar" title="The summary bar at the bottom of the screen"
+          on={v.showSummaryBar} onChange={(showSummaryBar) => slice.set({ showSummaryBar }, { now: true })}
+          icon={<PanelBottom size={16} />} label="Summary bar" tip="The row of tiles at the bottom of the screen." />
+        {/* the day/night preview override (AppConfig's dayNightPreview) only means anything for BAKED villas, whose
+            day/night is a pre-rendered atlas crossfade worth previewing */}
         {(manager?.lightingMode().structureUnlit ?? false) && (
           // Sunrise, not Sun, for "Day": the Interface theme in the header uses Sun for its Light option. ⚠️ Distinct
           // from that INTERFACE theme: this relights the VILLA, that one themes the panels; the written name keeps
@@ -315,35 +344,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
             ]} />
           </SettingRow>
         )}
-      </div>
-
-      {/* Light effect strength scales a lit fixture's room illumination in BOTH villa flavours (2.31.0): the floor
-          "light pool" decal in baked-lighting villas (babylon/LightPools.ts), the real PointLight's intensity in
-          non-baked ones. */}
-      <SettingRow icon={<Lightbulb size={16} />} label={`Light effect strength · ${v.render.lightPoolIntensity.toFixed(1)}×`}>
-        <input aria-label="Light effect strength"
-          type="range" min={0.3} max={2} step={0.1} value={v.render.lightPoolIntensity}
-          onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
-        />
-      </SettingRow>
-
-      {/* ⚠️ NO PARAGRAPH UNDER AN OPTION (owner, 2026-10-22): its explanation is ONE (i) on its name (common/InfoTip).
-          Map look shares its line with the Summary bar; the villa's room glow and camera cones (AppConfig.roomGlowAndCones,
-          every tablet's, editConfig only) share Clickable Glow's. */}
-      <div className="setting-line">
-        <SettingRow icon={<MapIcon size={16} />} label="Map look" tipLabel="About the map look" tip={<>
-          Icon: a badge with a value pill. Card: a coloured card with icon and value inline. Both show the same
-          information, purely a look preference. Badge size, {config.entityIconScale.toFixed(2)}×, is set with the
-          +/- buttons next to the category filters in the top bar.
-        </>}>
-          <SegmentedGroup ariaLabel="Floating badge style" active={v.badgeStyle} onChange={(badgeStyle) => slice.set({ badgeStyle }, { now: true })} options={[
-            { key: "classic", title: "Icon badge style, the reading sits on a small pill under the icon", label: <><Circle size={16} /> <span className="badge-btn-label">Icon</span></> },
-            { key: "card", title: "Card badge style, the reading sits inline beside the icon (default)", label: <><CreditCard size={16} /> <span className="badge-btn-label">Card</span></> },
-          ]} />
-        </SettingRow>
-        <OnOffToggle ariaLabel="Summary bar" title="The summary bar at the bottom of the screen"
-          on={v.showSummaryBar} onChange={(showSummaryBar) => slice.set({ showSummaryBar }, { now: true })}
-          icon={<PanelBottom size={16} />} label="Summary bar" tip="The row of tiles at the bottom of the screen." />
       </div>
 
       {/* ── Camera & movement: first-person walk-through comfort (Natural scrolling, a bird's-eye setting, is above). */}

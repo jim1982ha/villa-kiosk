@@ -415,9 +415,10 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
      && /tabletLanguages\(config\.chatLanguages\)/.test(settings));
   // owner, 2026-11-03 ("very badly explained … clearer and also shorter"): nothing to choose, nothing drawn; the chats'
   // column says what their menu is
-  const { elements, guardsOf, parseTsx } = await import("../consistency/jsx.mjs");
-  const pick = elements(parseTsx("components/settings/SettingsModal.tsx"), "TipTitle")
-    .filter((e) => /title="Language on this tablet"/.test(e.getText()));
+  const { elements, guardsOf, parseTsx, propText } = await import("../consistency/jsx.mjs");
+  // a setting line as every other (architecture review 19 #5: it was a section title over a loose control)
+  const pick = elements(parseTsx("components/settings/SettingsModal.tsx"), "SettingRow")
+    .filter((e) => propText(e, "label") === '"Language on this tablet"');
   ck("  ...drawn only while there is a language to choose besides English, title and all",
      pick.length === 1 && guardsOf(pick[0]).includes("languages.length > 1") && !/so far|Only English/.test(settings), pick.map(guardsOf));
   ck("  ...the chats' menus under a column named \"Language VESTA writes in\"",

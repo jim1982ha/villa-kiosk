@@ -95,19 +95,19 @@ ck("under the floors on every screen, picked in Settings › Villa from on/off s
    && /presenceSensor: villaRow\("presenceSensor"\),/.test(src("config/deviceConfig.ts")));
 
 const { PresencePanel } = await import("@/components/hud/PresenceTile");
-const panel = draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: true, canOpen: (id) => id === "person.a",
+const panel = draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: true, showMovement: true, canOpen: (id) => id === "person.a",
   onOpenEntity: () => {}, onClose: () => {} }));
 ck("a row is a button only when it opens something; the others are plain text (no hover, no pointer)",
    (panel.match(/<button type="button" class="presence-row opens">/g) ?? []).length === 1
    && (panel.match(/<div class="presence-row">/g) ?? []).length === 3, panel.slice(0, 500));
-const all = draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: true, canOpen: () => true, onOpenEntity: () => {},
+const all = draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: true, showMovement: true, canOpen: () => true, onOpenEntity: () => {},
   onClose: () => {}, presenceHistory: h("i", { "data-presence": "band" }) }));
 ck("the latest movement is never a button, and has no chart of its own: the villa's band replaces it (owner, 2026-10-20)",
    !/<button type="button" class="presence-row opens"><span>Hall<\/span>/.test(all)
    && /<div class="presence-row"><span class="with-tip"><span>Hall<\/span>/.test(all)
    && !/data-history/.test(all) && /<\/div><i data-presence="band"><\/i>/.test(all), all);
 ck("  ...a profile that may not see people gets no People at all",
-   !/People/.test(draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: false, canOpen: () => false, onOpenEntity: () => {}, onClose: () => {} }))));
+   !/People/.test(draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: false, showMovement: true, canOpen: () => false, onOpenEntity: () => {}, onClose: () => {} }))));
 
 // owner, 2026-10-20: the window's only band was the latest movement's ("Clear") — the villa's own, in its words
 ck("the presence band says the villa's words, as its 'now' does: on Empty, off Occupied, else unknown — same colours",
@@ -131,7 +131,7 @@ ck("the presence band says the villa's words, as its 'now' does: on Empty, off O
   ck("  ...charted from the sensor picked in Settings, in the presence's words and colours (no stages named)",
      b.entityId === S && b.words("on") === "Empty" && b.words("off") === "Occupied"
      && b.colorFor("off") === STATUS_COLOR.active && b.colorFor("on") === STATUS_COLOR.idle, b.entityId);
-  const placed = draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: true, canOpen: () => false,
+  const placed = draw(h(PresencePanel, { presence: off, when: "x", why, showPeople: true, showMovement: true, canOpen: () => false,
     onOpenEntity: () => {}, onClose: () => {}, presenceHistory: h("i", { "data-band": "1" }) }));
   ck("  ...drawn in the window right under its 'now'", /<div class="presence-now"[^>]*>(?:(?!<div)[\s\S])*?<\/div><i data-band="1">/.test(placed),
      placed.slice(0, 400));
@@ -177,7 +177,7 @@ ck("  ...colours: someone home red, empty the other bands' green, each step betw
    && c("wait") === STATUS_COLOR.transitional && new Set(ORDER.map(([s]) => c(s))).size === 4
    && c("unavailable") === STATUS_COLOR.unavailable, ORDER.map(([s]) => c(s)));
 {
-  const drawnTip = draw(h(PresencePanel, { presence: off, when: "x", why: w2, showPeople: true, canOpen: () => true, onOpenEntity: () => {},
+  const drawnTip = draw(h(PresencePanel, { presence: off, when: "x", why: w2, showPeople: true, showMovement: true, canOpen: () => true, onOpenEntity: () => {},
     onClose: () => {} }));
   ck("  ...drawn: an (i) after the setting's name, its value in words, and the (i) never inside the row's button",
      /About Away grace/.test(drawnTip) && />5min</.test(drawnTip) && />3 pulses in 5min</.test(drawnTip) && !/<button[^>]*>(?:(?!<\/button>).)*<button/s.test(drawnTip), drawnTip.slice(0, 400));

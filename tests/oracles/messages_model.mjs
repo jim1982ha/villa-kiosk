@@ -442,7 +442,7 @@ ck("  ...no page link for a profile the add-on serves no page to, nor for a repo
 }
 const reportLine = listed(onReports.reports[0]);
 ck("  ...folded: its title and first words", reportLine.includes("<strong>Rapport</strong>") && reportLine.includes('<span class="fm-card-folded">Trois choses</span>'), reportLine);
-const sections = elements(parseTsx("components/cockpit/MessagesTab.tsx"), "MessagesSection").map((e) => propText(e, "title"));
+const sections = elements(parseTsx("components/cockpit/MessagesTab.tsx"), "ListSection").map((e) => propText(e, "title"));
 ck("the tab draws a Reports section, its lines from the model's reports",
    sections.includes('"Reports"') && /reportsPaged = usePaged\(view\.reports\)/.test(tab), sections);
 
@@ -657,7 +657,7 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
   // its count is its title's (owner, 2026-11-03: no "n closed items" line under it, fault_confirm.mjs)
   ck("  ...the Closed section says what it holds",
      ((c) => !!c && /^"Finished:/.test(String(propText(c, "tip"))))(
-       elements(parseTsx("components/cockpit/MessagesTab.tsx"), "FoldedRows").find((e) => propText(e, "title") === '"Closed"')));
+       elements(parseTsx("components/cockpit/MessagesTab.tsx"), "FoldedList").find((e) => propText(e, "title") === '"Closed"')));
 }
 
 // owner, 2026-10-30: two doorbell rings, both answered (so under Issues › Closed), and Notifications said "Nothing

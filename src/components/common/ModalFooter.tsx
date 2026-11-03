@@ -57,6 +57,10 @@ interface ModalCommit {
   save: () => void | boolean | Promise<unknown>;
   /** Throw the draft away — every tab's (Cancel, Escape, the backdrop). */
   discard: () => void;
+  /** What this dialog saved at once while it was open, by its section's name ("Who gets the messages"): Cancel cannot
+   *  undo it, so the notice says it was kept (architecture review 19 #1, 2026-11-03: "nothing was kept" while a chat
+   *  added to a list stayed on it). */
+  keptAtOnce?: readonly string[];
 }
 
 export default function ModalFooter({
@@ -132,7 +136,8 @@ export default function ModalFooter({
         {actions}
         {/* ⚠️ THE PRIMARY ANSWER ON THE RIGHT, WHERE EVERY OTHER WINDOW'S Close IS (owner, 2026-10-22: Settings' footer
             "differs from the other modals"): Cancel, then Save. */}
-        <Tip text={dirty ? "Cancel, undoes every change made here, on every tab, and closes" : "Cancel, closes"}>
+        <Tip text={dirty ? (commit?.keptAtOnce?.length ? "Cancel, undoes the changes still waiting for Save, and closes"
+          : "Cancel, undoes every change made here, on every tab, and closes") : "Cancel, closes"}>
           <button
             className="btn"
             aria-label="Cancel"
@@ -179,9 +184,18 @@ export function footerExits(commit: ModalCommit | null, onClose: () => void,
       const changed = commit?.dirty === true;
       if (changed) commit!.discard();
       onClose();
-      if (changed) notice({ text: CANCELLED_NOTICE, tone: "info" });
+      const text = cancelNotice(changed, commit?.keptAtOnce ?? []);
+      if (text) notice({ text, tone: "info" });
     },
   };
+}
+
+/** What Cancel says: the draft's changes cancelled, and what was already saved at once said kept, or nothing when
+ *  nothing changed. */
+export function cancelNotice(dirty: boolean, keptAtOnce: readonly string[]): string | null {
+  if (keptAtOnce.length === 0) return dirty ? CANCELLED_NOTICE : null;
+  const kept = `${keptAtOnce.join(" and ")} ${keptAtOnce.length > 1 ? "were" : "was"} already saved.`;
+  return dirty ? `Other changes cancelled. ${kept}` : kept;
 }
 
 export const SAVED_NOTICE = "All changes saved and applied.";

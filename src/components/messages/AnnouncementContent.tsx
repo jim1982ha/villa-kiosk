@@ -27,13 +27,18 @@ export function AnnouncementPhoto({ id, className }: { id: string; className: st
 }
 
 /** A page VESTA attached (a report's, an investigation's), opened in the document viewer — ONE link for every place a
- *  VESTA message shows (the Inbox's report, the conversation's answer: architecture review 2026-10-29 #4). The caller
- *  offers it only to a profile the add-on serves pages to. */
-export function PageLink({ page }: { page: string }) {
+ *  VESTA message shows (the Inbox's report, the conversation's answer: architecture review 2026-10-29 #4), and every
+ *  card's (RecordCard `pages`: a ticket's investigation too, architecture review 19 #3). The caller offers it only to a
+ *  profile the add-on serves pages to. */
+export function PageLink({ page, label = "Open the page" }: {
+  page: string;
+  /** What it opens, when more than "the page" is known (a ticket's "Investigation report"). */
+  label?: string;
+}) {
   return (
     <div className="fm-documents">
       <a className="fm-document-link" href={documentUrl(page)} target="_blank" rel="noopener noreferrer">
-        <FileText size={15} aria-hidden="true" /> Open the page
+        <FileText size={15} aria-hidden="true" /> {label}
       </a>
     </div>
   );

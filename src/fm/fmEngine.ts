@@ -565,7 +565,7 @@ export function ticketStats(tickets: readonly FmTicket[], window?: TicketWindow)
 }
 
 /** The TICKETS' figures (owner, 2026-11-01): the closed tickets alone (recordLife ticket), each timed from its Open
- *  Ticket (ticketMs): the Tickets tab's and the recap's ticket line. */
+ *  Ticket (ticketMs): the monthly recap's ticket line. */
 export function closedTicketStats(records: readonly FmTicket[], window?: TicketWindow): TicketStats {
   return closeStats(records.map((t) => recordLife(t, window?.end)).filter((l) => l.ticket), window, (l) => l.ticketMs);
 }

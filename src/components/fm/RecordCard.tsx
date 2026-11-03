@@ -22,12 +22,12 @@
 // opened, a card's second line is the same CardPillLine: the room and its next check on the left, its state on the right.
 
 import type { ReactNode } from "react";
-import { FileText, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import ErasableRow from "./ErasableRow";
 import EvidenceRow from "./EvidenceRow";
 import RecordMeta, { RecordNotes } from "./RecordMeta";
-import { documentUrl } from "@/fm/fmApi";
+import { PageLink } from "@/components/messages/AnnouncementContent";
 
 /** A card's status pill: `tone` is the badge's colour class (fm/tone pillClass). */
 export interface RecordStatus { text: string; tone: string }
@@ -53,7 +53,10 @@ export interface RecordCardProps {
   /** Folded: this line, cut with "…", stands for its text; undefined: the card whole. */
   folded?: string;
   photoIds?: string[];
-  documentIds?: string[];
+  /** VESTA's pages kept with it (a report's, a ticket's investigation), opened on the iPad, offline: first in its
+   *  button row, folded or whole (architecture review 19 #3: a ticket's were drawn under its notes, only when whole,
+   *  while a report's sat in the button row). */
+  pages?: { id: string; label: string }[];
   /** A cost, formatted, at the right of the text. */
   amount?: string;
   actions?: ReactNode;
@@ -117,7 +120,7 @@ function CardPillLine({ room, check, status }: { room?: string; check?: RecordCa
 }
 
 export default function RecordCard({ title, status, lead, titlePills, room, when, check, pills, notes, body, folded, photoIds,
-  documentIds, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
+  pages, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const whole = folded === undefined;
   const inside = (
     <>
@@ -137,23 +140,12 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
           {whole && pills && <RecordMeta>{pills}</RecordMeta>}
           {whole && (body ?? <RecordNotes notes={notes ?? []} />)}
           {whole && (photoIds?.length ?? 0) > 0 && <EvidenceRow photoIds={photoIds!} disabled />}
-          {/* a report kept with it (the VESTA Agent's investigation): opens on the iPad, offline */}
-          {whole && (documentIds?.length ?? 0) > 0 && (
-            <div className="fm-documents">
-              {documentIds!.map((id, i) => (
-                <a key={id} className="fm-document-link" href={documentUrl(id)} target="_blank" rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}>
-                  <FileText size={15} aria-hidden="true" />
-                  {documentIds!.length > 1 ? `Investigation report ${i + 1}` : "Investigation report"}
-                </a>
-              ))}
-            </div>
-          )}
         </div>
         {amount && <span className="fm-amount">{amount}</span>}
         {/* a press on a button is the button's: never the card's hold-to-erase, never its tap-to-open */}
-        {actions && (
+        {(actions || (pages?.length ?? 0) > 0) && (
           <div className="fm-record-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+            {pages?.map((p) => <PageLink key={p.id} page={p.id} label={p.label} />)}
             {actions}
           </div>
         )}

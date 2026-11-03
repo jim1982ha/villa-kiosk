@@ -28,13 +28,14 @@ export function MaintenanceModeExplained() {
   );
 }
 
-/** The switch: one for every tablet (AppConfig.maintenanceMode). */
+/** The switch: one for every tablet (AppConfig.maintenanceMode), a setting line named as every other, what it does in
+ *  its (i) (architecture review 19 #5: its line showed a grey sentence where its name goes). */
 export default function MaintenanceMode() {
   const { config, update } = useConfig();
   const on = config.maintenanceMode;
   return (
     <OnOffToggle ariaLabel="Maintenance mode" title="Maintenance mode, on every tablet" on={on}
       onChange={(maintenanceMode) => update({ maintenanceMode })}
-      icon={<Wrench size={16} />} label={<span className="muted body-text">Only urgent (P1) alerts are sent while it's on.</span>} />
+      icon={<Wrench size={16} />} label="Maintenance mode" tip={<MaintenanceModeExplained />} />
   );
 }

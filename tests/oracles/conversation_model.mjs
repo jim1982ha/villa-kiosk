@@ -260,10 +260,20 @@ ck("  ...a typed one carries no such mark",
 
 // architecture review 2026-10-29 #4: ONE drawing of a VESTA message's page, wherever it shows
 const { execSync } = await import("node:child_process");
-const pageLinks = execSync("grep -rl '/> Open the page' src --include=*.tsx", { cwd: new URL("../..", import.meta.url).pathname })
+// and every card's (architecture review 19 #3: a ticket's investigation report was a second drawing, in its notes)
+const pageLinks = execSync("grep -rl 'fm-document-link' src --include=*.tsx", { cwd: new URL("../..", import.meta.url).pathname })
   .toString().trim().split("\n");
-ck("\"Open the page\" is drawn in ONE place (PageLink), the conversation's answers and the Inbox's reports alike",
+ck("a VESTA page's link is drawn in ONE place (PageLink), the conversation's answers, the Inbox's reports and a ticket's investigation alike",
    pageLinks.length === 1 && pageLinks[0].endsWith("AnnouncementContent.tsx"), pageLinks);
+{
+  const RecordCard = (await import("@/components/fm/RecordCard")).default;
+  const folded = draw(h(RecordCard, { title: "Pump", folded: "Pump stopped", pages: [{ id: "doc1", label: "Investigation report" }] }));
+  ck("  ...on a card, first in its button row, folded too (a ticket's investigation as a report's page)",
+     /fm-record-actions[\s\S]*fm-document-link[\s\S]*Investigation report/.test(folded), folded);
+  const ticketCard = elements(parseTsx("components/fm/TicketsTab.tsx"), "RecordCard").find((e) => propText(e, "pages") !== null);
+  ck("  ...the Tickets tab hands a ticket's investigations to the card as its pages",
+     !!ticketCard && /t\.documentIds\?\.map/.test(propText(ticketCard, "pages") ?? ""));
+}
 
 
 console.log("\n  hidden without VESTA, wherever it shows:");

@@ -98,10 +98,11 @@ function Row({ entityId, name, said, onOpen, tip }: {
 /** Why the villa counts as empty or occupied: who it watches (the owner only), the latest movement among the sensors
  *  it watches with its history, the settings that decide it — all from the sensor's own lists (config/presence).
  *  Pure (a check draws it): the history is drawn by `historyOf`, the window's ReadingHistory. */
-export function PresencePanel({ presence: p, when, why, showPeople, showMovement = true, canOpen, onOpenEntity, onClose, presenceHistory }: {
+export function PresencePanel({ presence: p, when, why, showPeople, showMovement, canOpen, onOpenEntity, onClose, presenceHistory }: {
   presence: Presence; when: string; why: PresenceWhy; showPeople: boolean;
-  /** Its latest movement — never for a profile that sees no motion (profileView: a guest). */
-  showMovement?: boolean; canOpen: (entityId: string) => boolean;
+  /** Its latest movement — never for a profile that sees no motion (profileView: a guest). ⚠️ REQUIRED (architecture
+   *  review 19 #6): a default of true showed it to a guest from any screen that forgot to say. */
+  showMovement: boolean; canOpen: (entityId: string) => boolean;
   onOpenEntity: (entityId: string) => void; onClose: () => void;
   /** The villa's presence itself over time — Occupied / Empty (owner, 2026-10-20: the only band was the latest
    *  movement's, "Clear", read as the villa's) — right under its "now". */

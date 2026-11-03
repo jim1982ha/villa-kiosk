@@ -3,8 +3,9 @@
 //
 // ⚠️ FOLDED BY DEFAULT (owner, 2026-10-14): Grouped Devices and Bound 3D objects opened on their whole working
 // surface — a picker, a filter, every group, three list buttons — under a description that already says what the
-// section is for. Folded, a section reads as its description and one line saying what is inside. The line wears the
-// disclosure style the Tickets tab's folded lists use (.fm-disclosure), so every fold in the app opens the same way.
+// section is for. Folded, a section reads as its description and one line saying what is inside, in the grey
+// disclosure style (.fm-disclosure): a section's working part, not a list's name (a list folds under its section's
+// name: common/FoldedList).
 
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";

@@ -41,8 +41,29 @@ const draft = (over = {}) => {
   const log = await run(d.commit, "cancel");
   ck("  ...with nothing changed: closes, undoes nothing, says nothing", d.did.length === 0 && log.join() === "closed", [d.did, log]);
 }
-
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
+
+// ⚠️ WHAT WAS SAVED AT ONCE IS SAID KEPT (architecture review 19 #1, 2026-11-03): a chat added to a list stayed on it
+// while Cancel said "nothing was kept"
+{
+  const d = draft({ keptAtOnce: ["Who gets the messages"] });
+  const log = await run(d.commit, "cancel");
+  ck("Cancel with changes and a list saved at once: undoes the draft, says the list was kept",
+     d.did.join() === "discarded" && log[1] === "Other changes cancelled. Who gets the messages was already saved.", log);
+  const only = await run(draft({ dirty: false, keptAtOnce: ["Who gets the messages"] }).commit, "cancel");
+  ck("  ...a list change alone: says it was saved, never silent", only[1] === "Who gets the messages was already saved.", only);
+}
+{
+  const tree = parseTsx("components/settings/SettingsModal.tsx");
+  const who = elements(tree, "WhoGetsMessages");
+  ck("Settings hands Who gets the messages its onSaved, and the dialog's commit carries keptAtOnce",
+     who.length === 1 && /setKeptAtOnce/.test(propText(who[0], "onSaved") ?? "")
+     && /const commit = \{[^}]*keptAtOnce,/.test(src("components/settings/SettingsModal.tsx")), who.length);
+  const lists = src("components/settings/WhoGetsMessages.tsx");
+  ck("  ...which calls it after a list saved and after a language set",
+     /if \(sent\.ok\) onSaved\?\.\(\);/.test(lists) && /withChatLanguage\(c\.chatLanguages, id, code\) \}\)\);\s*onSaved\?\.\(\);/.test(lists));
+}
+
 const footer = elements(parseTsx("components/common/ModalFooter.tsx"), "button").map((b) => propText(b, "aria-label"));
 ck("the footer's buttons are Save and Cancel — no Close beside a Save", footer.includes('"Cancel"') && !footer.includes('"Close"'), footer);
 ck("Settings' Escape and backdrop are the same Cancel, and no question is asked any more",

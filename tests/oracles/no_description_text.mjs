@@ -2,7 +2,7 @@
 // section is for is read in ONE (i) beside its title (common/InfoTip, opened by a tap on every phone), never in a
 // paragraph under it. Data, status, short empty states, errors and warnings stay visible.
 //
-// Reads the compiler's tree of every screen there: a grey paragraph (<p className="muted …">) of more than a short
+// Reads the compiler's tree of every screen there: a grey paragraph or span (<p className="muted …">) of more than a short
 // line is an explanation, and is refused; the old hint classes are gone.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import ts from "typescript";
@@ -26,7 +26,8 @@ export function explanations(rel, text) {
       const open = n.openingElement;
       const cls = open.attributes.properties.find((a) => ts.isJsxAttribute(a) && a.name.getText(sf) === "className");
       const clsText = cls && ts.isJsxAttribute(cls) && cls.initializer ? cls.initializer.getText(sf) : "";
-      if (open.tagName.getText(sf) === "p" && /\bmuted\b|field-hint/.test(clsText)) {
+      // a span too (architecture review 19 #5: Maintenance mode's line showed its explanation in a grey span)
+      if (/^(p|span)$/.test(open.tagName.getText(sf)) && /\bmuted\b|field-hint/.test(clsText)) {
         const words = n.children.filter(ts.isJsxText).map((c) => c.getText(sf)).join(" ").split(/\s+/).filter(Boolean);
         if (words.length > MAX_WORDS) out.push(`${rel}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1} ${words.slice(0, 10).join(" ")}`);
       }
@@ -40,7 +41,8 @@ console.log("  the rule, by value:");
 ck("an explanation in a grey paragraph is found; a short status is not",
    explanations("a.tsx", `const a = <p className="muted body-text">Each task repeats at the interval you set, and the board shows it.</p>;`).length === 1
    && explanations("b.tsx", `const b = <p className="muted body-text">No tasks yet.</p>;`).length === 0
-   && explanations("c.tsx", `const c = <p className="muted body-text field-hint">Drives the sun's position and day and night for this villa.</p>;`).length === 1);
+   && explanations("c.tsx", `const c = <p className="muted body-text field-hint">Drives the sun's position and day and night for this villa.</p>;`).length === 1
+   && explanations("d.tsx", `const d = <span className="muted body-text">Only urgent (P1) alerts are sent while it is on.</span>;`).length === 1);
 
 console.log("\n  Settings, Advanced Settings and the Cockpit:");
 const found = files.filter((f) => !NOT_HERE.has(f.slice(ROOT.length)))

@@ -111,7 +111,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         // a ticket in progress is read again as its Inbox card is; a closed one is not
         check={stageOf(t) === "ticket" ? checkPill([{ source: faultSource(t), check: t.check }], cadence, new Date(now)) ?? undefined : undefined}
         when={momentText(faultBegan(t))} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
-        documentIds={t.documentIds} amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
+        pages={t.documentIds?.map((id, i, all) => ({ id, label: all.length > 1 ? `Investigation report ${i + 1}` : "Investigation report" }))}
+        amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
         erase={{ title: "Erase this ticket", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => editor.edit(t.id)}
         // its device's room now, the stored one only with no device (owner, 2026-10-30: devicePlace.recordRoomNow)
@@ -172,7 +173,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
       )}
       {tickets.length > 0 && <div className="fm-list">{tickets.map(ticket)}</div>}
 
-      <FoldedList title="Closed" rows={closed}>
+      <FoldedList title="Closed" rows={closed} empty="No ticket closed yet."
+        tip="Finished tickets, the latest closed first. A ticket reopened is a fault again, in Inbox › Open issues.">
         {(t) => (
           // reopened, it is a fault again: back in Open issues (the VESTA Agent reads it, never guesses)
           record(t, stagePill(t),
