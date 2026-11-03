@@ -13,11 +13,12 @@ import re
 import pytest
 import yaml
 
-from helpers import alert_desk, copy_skill, make_agent, settings, body, status
+from helpers import alert_desk, copy_skill, make_agent, settings, body, status, keep_roster
 from ha_fake import FakeHA, tool
 from vesta_agent.app import Vesta
 from vesta_agent.routing import CONVERSATION, Origin
 from vesta_agent.kiosk import Kiosk
+from vesta_agent.roster import Roster
 from telegram_fake import BOT, FakeTelegram  # noqa: F401 — the one fake (tests/telegram_fake.py)
 
 OWNER, FM, STRANGER = 111, 222, 999
@@ -26,9 +27,7 @@ GROUP, PRIVATE = -100123, OWNER
 
 @pytest.fixture
 def agent(tmp_path):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner", "language": "en"},
-                                         {"telegram_id": FM, "name": "FM", "role": "fm", "language": "en"}],
-                              "chats": {"owner": GROUP, "fm": GROUP}}, skills=["alert-desk"],
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Owner"), (GROUP, "Owner chat")], fm=[(FM, "FM"), (GROUP, "Facility manager chat")]), skills=["alert-desk"],
                    reader=FakeHA(tools=[tool("ha_get_state")]))
     v.bot_username = BOT["username"]
     v.conversed = []
@@ -93,15 +92,17 @@ def test_an_unlisted_group_is_ignored_never_left(agent):
     assert agent.conversed == [] and agent.tg.sent == []        # FakeTelegram raises on leaveChat
 
 
-def test_unregistered_people_get_their_id_in_private_and_a_listed_groups_members_its_role(agent):
+def test_an_unlisted_person_is_sent_to_the_kiosks_lists_in_private_and_a_listed_groups_members_get_its_role(agent):
+    # architecture review round 17, lead 3: no registering, no id to copy — the Kiosk picks a chat by its name
+    from vesta_shared.villa_recipients import WHERE
     run(agent.on_ha_event("telegram_text", text_event(STRANGER, STRANGER, "hi")))
-    assert agent.tg.sent and str(STRANGER) in agent.tg.sent[0][1]
+    assert agent.tg.sent and WHERE in agent.tg.sent[0][1] and str(STRANGER) not in agent.tg.sent[0][1]
     agent.tg.sent.clear()
     # owner, 2026-10-10: "any person from a Telegram group shall inherit from the group role" — no People row needed
     run(agent.on_ha_event("telegram_text", text_event(GROUP, STRANGER, "@Villa_Test_bot hi")))
     assert agent.conversed == [(GROUP, "X", "hi")]                            # answered, named as Telegram names them
-    assert agent.policy().member(STRANGER, GROUP).role == "fm"                # listed for both roles: the narrower
-    assert agent.policy().member(STRANGER, STRANGER) is None                  # a member only in the group
+    assert agent.policy().roster.member(STRANGER, GROUP).role == "fm"                # listed for both roles: the narrower
+    assert agent.policy().roster.member(STRANGER, STRANGER) is None                  # a member only in the group
 
 
 def test_a_press_on_a_home_assistant_message_is_left_to_its_automation(agent):
@@ -221,13 +222,8 @@ def test_a_report_asked_for_in_a_chat_can_be_sent_there(agent):
 def test_an_answer_settles_the_alert_in_every_chat_and_its_reminder(agent):
     # owner, 2026-10-01: a P1 goes to the owner's chat AND the facility manager's, and a reminder repeats
     # it; pressed in one, every copy loses its buttons and says who answered
-    with open(agent.s.policy_path) as f:
-        raw = yaml.safe_load(f)
-    # the owner reads in the group, the facility manager in their private chat (People rows, 0.12.128)
-    raw["people"].append({"telegram_id": GROUP, "name": "Group", "role": "owner"})
-    raw.pop("chats")
-    with open(agent.s.policy_path, "w") as f:
-        yaml.safe_dump(raw, f)
+    # the owner reads in the group, the facility manager in their private chat (the Kiosk's lists)
+    keep_roster(agent.s, Roster.of(owner=[(OWNER, "Owner"), (GROUP, "Group")], fm=[(FM, "FM")]))
     from vesta_shared.store import Store
     iid = Store(agent.s.store_path).new_incident("k", "automation.x", "lock.front_door", "P1", {"message": "m"})
     desk = alert_desk()                     # what the desk sends: a P1 to both roles, its buttons to the facility manager's

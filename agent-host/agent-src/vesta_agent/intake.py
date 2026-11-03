@@ -28,7 +28,8 @@ from vesta_shared.when import Spec
 
 from .places import tab
 
-from .policy import NOT_REGISTERED, reset_at, silence_reset_hours, tablet_profile
+from .policy import reset_at, silence_reset_hours
+from .roster import NOT_LISTED, tablet_profile
 
 OWN_COMMANDS = {"/ask", "/new", "/whoami"}
 
@@ -101,7 +102,7 @@ class Intake:
 
 def _shared(chat: int) -> bool:
     """Others read this place too: a Telegram chat (the villa's automations, other bots), never a tablet's conversation
-    (policy.tablet_profile: the People module's one answer)."""
+    (roster.tablet_profile: the who-is-who module's one answer)."""
     return tablet_profile(chat) is None
 
 
@@ -168,23 +169,23 @@ def gate(q: Question, policy, bot_username: str | None, is_own_message: Callable
     # ⚠️ /whoami SAYS A CHAT'S ID BEFORE IT IS LISTED (0.12.128): read there by anyone while the villa's lists name
     # nobody, by a listed person once it is not (a stranger in an unlisted group still gets nothing). A place
     # that knows who asks (a tablet) says who that is: there is no Telegram id to tell.
-    if cmd == "/whoami" and (q.person is not None or not group or not policy.destinations or policy.roles_in(cid)
-                             or policy.person(q.user_id) is not None):
+    if cmd == "/whoami" and (q.person is not None or not group or not policy.roster.destinations or policy.roster.roles_in(cid)
+                             or policy.roster.person(q.user_id) is not None):
         # a tablet: who is signed in there is the answer (no Telegram id to tell)
         said = (f"You are {q.person.name}; VESTA answers you as {ROLE_WORDS.get(q.person.role, q.person.role)}."
                 if q.person is not None else f"Your Telegram id: {q.user_id}. This chat id: {cid}.")
         return Intake("whoami", cid, q.person, said, group=group)
-    if group and not policy.roles_in(cid):
+    if group and not policy.roster.roles_in(cid):
         # never leaveChat: the bot is Home Assistant's too
-        return Intake("drop", cid, group=True, why="group not in the villa's lists" if policy.destinations else None)
+        return Intake("drop", cid, group=True, why="group not in the villa's lists" if policy.roster.destinations else None)
     # a listed group's member has its role; a tablet's profile is the caller's (the Kiosk stamped it)
-    person = q.person if q.person is not None else policy.member(q.user_id, cid, q.first_name)
+    person = q.person if q.person is not None else policy.roster.member(q.user_id, cid, q.first_name)
     if group:
         mention = bool(bot_username) and f"@{bot_username}".lower() in text.lower()
         if not (cmd or mention or invoked or is_own_message(cid, q.reply_to)):
             return Intake("drop", cid, group=True)            # people talking to each other
     if person is None:
-        return Intake("unregistered", cid, text="" if group else f"{NOT_REGISTERED} Your Telegram id is {q.user_id}.",
+        return Intake("unregistered", cid, text="" if group else NOT_LISTED,
                       group=group)
     if cmd == "/new":
         return Intake("new", cid, person, "New conversation.", group=group)

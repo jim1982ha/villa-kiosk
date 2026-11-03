@@ -15,6 +15,7 @@ from ha_fake import FakeHA, tool
 from telegram_fake import BOT
 from vesta_agent.layout import head_text
 from vesta_agent.ha_events import CONTEXT_KEY
+from vesta_agent.roster import Roster
 
 OWNER, FM = 111, 222
 GROUP, FM_CHAT = -100123, 222
@@ -27,9 +28,7 @@ def run(coro):
 
 @pytest.fixture
 def agent(tmp_path):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner", "language": "en"},
-                                         {"telegram_id": FM, "name": "Wayan", "role": "fm", "language": "en"}],
-                              "chats": {"owner": GROUP, "fm": FM_CHAT}}, skills=["alert-desk"],
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Owner"), (GROUP, "Owner chat")], fm=[(FM, "Wayan"), (FM_CHAT, "Facility manager chat")]), skills=["alert-desk"],
                    reader=FakeHA(tools=[tool("ha_get_state")]))
     v.bot_username = BOT["username"]
     return v

@@ -27,8 +27,6 @@ def ui(tmp_path):
     for name in ("reports", "villa-concierge", "alert-desk"):
         copy_skill(name, s.skills_dir)
     raw = yaml.safe_load(open(s.policy_path))
-    raw["people"] = [{"telegram_id": 111, "name": "Owner", "role": "owner", "language": "en"}]
-    raw["chats"] = {"owner": -1001, "fm": -1002}
     raw["switch_entities"] = ["switch.example_pump"]
     with open(s.policy_path, "w") as f:
         yaml.safe_dump(raw, f)
@@ -213,7 +211,7 @@ def test_an_import_shows_every_change_and_what_does_not_fit_then_applies(ui, tmp
     other = settings(str(tmp_path / "other"))                    # another villa: one skill, its own people
     copy_skill("reports", other.skills_dir)
     raw = yaml.safe_load(open(other.policy_path))
-    raw["people"] = [{"telegram_id": 999, "name": "Them", "role": "owner", "language": "fr"}]
+    raw["languages"] = {999: "fr"}                               # its own chat's language (People card)
     with open(other.policy_path, "w") as f:
         yaml.safe_dump(raw, f)
     zb = base64.b64encode(data).decode()

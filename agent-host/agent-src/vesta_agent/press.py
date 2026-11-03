@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 
-from .policy import Person
+from .roster import Person
 
 
 @dataclass
@@ -23,7 +23,7 @@ class Press:
     chat: int
     mid: int | None                      # the message pressed
     presser: int | None                  # who pressed (their id where they pressed)
-    person: Person | None                # who that is, with the role they press with there (Policy.member)
+    person: Person | None                # who that is, with the role they press with there (Roster.member)
     parts: list[str]                     # the button's own data after its kind (button_data.read)
     toast: Callable[[str], Awaitable]    # the short notice over the button
     name: str | None = None              # the presser's name as the place gives it (Telegram's first name)
@@ -51,5 +51,5 @@ def from_telegram(q: dict, chat: int, person: Person | None, parts: list[str],
 def from_tablet(chat: int, person: Person | None, parts: list[str], toast: Callable[[str], Awaitable],
                 name: str | None = None) -> Press:
     """A press on a tablet (tablet.Tablet.collect: the Kiosk stamped who pressed): its conversation is the chat, the
-    signed-in profile the presser (Policy.member knows the owner and the facility manager there)."""
+    signed-in profile the presser (Roster.member knows the owner and the facility manager there)."""
     return Press(chat=chat, mid=None, presser=chat, person=person, parts=parts, toast=toast, name=name, place=TABLET)

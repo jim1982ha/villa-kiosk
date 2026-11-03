@@ -11,9 +11,10 @@ import json
 from helpers import make_agent
 from telegram_fake import BOT
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 OWNER, FM = 111, 222
-PEOPLE = [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}, {"telegram_id": FM, "name": "FM", "role": "fm"}]
+ROSTER = Roster.of(owner=[(OWNER, "Owner")], fm=[(FM, "FM")])
 
 
 #: each update's own id, as Telegram gives one to each (the agent takes each in once: missed_at_start.key)
@@ -24,7 +25,7 @@ def run(coro):
 
 
 def _villa(tmp_path):
-    v = make_agent(tmp_path, {"people": PEOPLE}, skills=["proposals"])
+    v = make_agent(tmp_path, {}, roster=ROSTER, skills=["proposals"])
     v.bot_username = BOT["username"]
     store = Store(v.s.store_path)
     gate = store.add_proposal("retune", "Retune Gate relay: it fires too often", "21 alerts in 30 days", "")
@@ -84,7 +85,7 @@ def test_accept_3_typed_alone_is_no_answer(tmp_path, monkeypatch):
         said.append(await call["call"]("run_skill_script", {"skill": "proposals", "script": "answer.py", "args": [
             "answer", "--number", str(gate), "--choice", "accept"]}))
     FakeAI("ok", act=act).install(monkeypatch)
-    run(v.converse(OWNER, v.policy().person(OWNER), f"accept {gate}"))
+    run(v.converse(OWNER, v.policy().roster.person(OWNER), f"accept {gate}"))
     assert said[0].get("is_error") and "/proposal" in said[0]["content"][0]["text"]
     assert all(p["status"] == "open" for p in store.proposals(None))
 

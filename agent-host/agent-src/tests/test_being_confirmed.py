@@ -20,6 +20,7 @@ from villa_timeline import TimelineVilla
 from vesta_shared import alert_watch
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 spec = importlib.util.spec_from_file_location("desk_confirm", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
 desk = importlib.util.module_from_spec(spec)
@@ -36,7 +37,7 @@ def run(c):
 
 def villa(agent_kiosk=None, tmp_path=None):
     k = agent_kiosk or FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     return v, k, Store(v.s.store_path)
 
 

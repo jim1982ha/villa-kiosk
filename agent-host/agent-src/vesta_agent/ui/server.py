@@ -379,15 +379,15 @@ class UI:
         `lists_read`: False until the agent has read them once (the card then says they are empty until set)."""
         from vesta_shared import villa_recipients
         from vesta_shared.message_format import ROLE_WORDS
-        from ..policy import listed_entries
-        lists = villa_recipients.get(self.s.pack_path)
+        from ..roster import Roster
+        roster = Roster.kept(self.s.pack_path)
         rows: dict[int, dict] = {}
-        for e in listed_entries(lists, {}):
+        for e in roster.entries:
             row = rows.setdefault(e.telegram_id, {"telegram_id": e.telegram_id, "name": e.name, "roles": []})
             row["roles"].append(ROLE_WORDS[e.role])
         return {"people": [{"telegram_id": r["telegram_id"], "name": r["name"], "role": " and ".join(r["roles"])}
                            for r in rows.values()],
-                "lists_read": os.path.exists(villa_recipients.path(self.s.pack_path) or ""),
+                "lists_read": roster.read_yet,
                 "lists_where": villa_recipients.WHERE}
 
 

@@ -12,9 +12,10 @@ from ha_fake import FakeHA, tool as ha_tool
 from helpers import make_agent
 from vesta_agent import script_run
 from vesta_agent.script_run import ScriptAnswer
+from vesta_agent.roster import Roster
 
 JM = 111
-PEOPLE = [{"telegram_id": JM, "name": "JM", "role": "owner"}]
+ROSTER = Roster.of(owner=[(JM, "JM")])
 RAW = json.dumps({"data": {"source": "history", "period": {"start": "2026-10-20T06:00:00+00:00",
                                                             "end": "2026-10-20T10:21:00+00:00"},
                            "entities": [{"entity_id": "sensor.pump_power",
@@ -24,7 +25,7 @@ RAW = json.dumps({"data": {"source": "history", "period": {"start": "2026-10-20T
 def _villa(tmp_path, monkeypatch, answer: ScriptAnswer, args=None):
     ha = FakeHA(tools=[ha_tool("ha_get_history", entity_ids="string", source="string")],
                 answers={"ha_get_history": RAW})
-    v = make_agent(tmp_path, {"people": PEOPLE, "ha_read_tools": ["ha_get_history"]}, skills=("investigate",), reader=ha)
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_history"]}, roster=ROSTER, skills=("investigate",), reader=ha)
     asyncio.run(v.refresh_server_tools())
     ran, got = [], {}
 
@@ -36,7 +37,7 @@ def _villa(tmp_path, monkeypatch, answer: ScriptAnswer, args=None):
     async def reads(run_):
         got["text"] = (await run_["call"]("ha_get_history", args or {"entity_ids": "sensor.pump_power"}))["content"][0]["text"]
     FakeAI("ok", act=reads).install(monkeypatch)
-    asyncio.run(v.converse(JM, v.policy().person(JM), "why does the pump keep starting?"))
+    asyncio.run(v.converse(JM, v.policy().roster.person(JM), "why does the pump keep starting?"))
     return ran, got["text"]
 
 

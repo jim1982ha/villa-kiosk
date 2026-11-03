@@ -8,6 +8,7 @@ import sys
 
 from ai_fake import FakeAI
 from helpers import STARTER_SKILLS, make_agent, make_skill
+from vesta_agent.roster import Roster
 
 sys.path.insert(0, os.path.join(STARTER_SKILLS, "villa-concierge", "scripts"))
 
@@ -51,19 +52,18 @@ def test_every_offline_device_is_named_once_and_never_green(tmp_path):
 
 def test_the_ai_is_given_the_check_before_every_answer(tmp_path, monkeypatch):
     # the AI took one quick look and answered "everything ok": the check is now in front of it, whatever it chooses
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}],
-                              "chats": {"owner": OWNER_CHAT}})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Owner"), (OWNER_CHAT, "Owner chat")]))
     make_skill(v.s.skills_dir, "lookout", {"description": "x", "before_answer": "look.py",
                                            "scripts": {"look.py": {}}},
                {"look.py": "import json; print(json.dumps({'text': 'V: AMBER\\nOffline (1): Jacuzzi pump plug'}))\n"})
     ai = FakeAI("V is amber: the Jacuzzi pump plug is offline.").install(monkeypatch)
-    asyncio.run(v.converse(OWNER_CHAT, v.policy().person(OWNER), "what's the status of the villa now?"))
+    asyncio.run(v.converse(OWNER_CHAT, v.policy().roster.person(OWNER), "what's the status of the villa now?"))
     (run,) = ai.runs
     assert "Checked just now by the lookout skill" in run["prompt"] and "Offline (1): Jacuzzi pump plug" in run["prompt"]
     # a check that cannot run is said, never silently left out
     with open(os.path.join(v.s.skills_dir, "lookout", "scripts", "look.py"), "w") as f:
         f.write("import sys; sys.exit(3)\n")
-    asyncio.run(v.converse(OWNER_CHAT, v.policy().person(OWNER), "and now?"))
+    asyncio.run(v.converse(OWNER_CHAT, v.policy().roster.person(OWNER), "and now?"))
     assert "check could not run just now" in ai.runs[-1]["prompt"]
 
 

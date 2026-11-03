@@ -4,7 +4,7 @@ so its alerts, chases and reports go where the villa's own alerts go, and each c
 ⚠️ ONE PLACE FOR "WHICH CHAT IS WHOSE" (owner, 2026-11-03: "a single file on the villa, which VESTA also reads, so
 there's one place for both and alerts still work without VESTA"). The villa holds two lists of its notify entities,
 input_text.vesta_owner_targets and input_text.vesta_fm_targets (agent-src/homeassistant/packages/vesta_message.yaml),
-set from the VESTA Kiosk (Settings › Messages › Who gets the messages). Every VESTA blueprint sends to them by
+set from the VESTA Kiosk (WHERE). Every VESTA blueprint sends to them by
 priority (P1 both, P2 the facility manager) without the agent; the agent reads the same lists (`read`) and sends to the
 Telegram chats among them (a phone app is the villa's to reach).
 
@@ -26,22 +26,33 @@ import json
 import os
 import re
 
+from . import agreement
 from .message_format import ROLES
 
-#: role → the villa's list of it (an input_text of notify entity ids, apart by ",")
-HELPERS: dict[str, str] = {role: f"input_text.vesta_{role}_targets" for role in ROLES}
+# ⚠️ THE LISTS AGREED IN WRITING (architecture review round 17, lead 2): which helpers hold them, how their text is read
+# and where a person edits them are the agreement's `recipients` (agent-contract.json, the Kiosk's own file): the Kiosk
+# edits them and this module reads them by the same rule, driven through the agreement's examples by both apps.
+_AGREED = agreement.section("recipients")
+#: role → the villa's list of it (an input_text of notify entity ids, apart by SEPARATOR); {} without the agreement
+HELPERS: dict[str, str] = {r: str(h) for r, h in (_AGREED.get("lists") or {}).items() if r in ROLES}
+SEPARATOR: str = str(_AGREED.get("separator") or ",")
+DOMAIN: str = str(_AGREED.get("domain") or "notify")
+#: what a list's helper holds at most (its `max` in homeassistant/packages/vesta_message.yaml)
+MAX_CHARS: int = int(_AGREED.get("maxChars") or 255)
 FILE = "villa_recipients.json"
 #: Where a person sets the lists, in the words of the VESTA Kiosk's own page: every text that sends someone there (the
 #: agent's log, its answers, its page) says it with these words
-WHERE = "the VESTA Kiosk (Settings › Messages › Who gets the messages)"
+WHERE = f"the VESTA Kiosk ({_AGREED.get('where') or 'Settings'})"
 _CHAT = re.compile(r"^\d+_(-?\d+)$")
 
 
 def entities(text) -> list[str]:
-    """The notify entity ids a list's text names, once each, in its order."""
+    """The ids of DOMAIN a list's text names, once each, in its order: split on SEPARATOR, each part trimmed and
+    lower-cased; anything else (another domain, a bare "notify.", an empty part) names nobody — the agreement's rule."""
     if not isinstance(text, str):
         return []
-    return list(dict.fromkeys(e.strip().lower() for e in text.split(",") if e.strip().lower().startswith("notify.")))
+    parts = (e.strip().lower() for e in text.split(SEPARATOR))
+    return list(dict.fromkeys(e for e in parts if e.startswith(f"{DOMAIN}.") and len(e) > len(DOMAIN) + 1))
 
 
 def chat_of(entry: dict) -> int | None:
@@ -63,6 +74,8 @@ def read(ha) -> dict[str, list[dict]] | None:
     """{role: its Telegram chats, each {"chat": id, "name": its notify entity's name}} as the villa's lists name them
     now (a role's [] when its list names none); None when the lists cannot be read (the villa's system unreachable, the
     helpers not there)."""
+    if not HELPERS:
+        return None                      # no agreement read: which helpers hold the lists is not known
     try:
         st = ha.states(list(HELPERS.values()))
     except Exception:  # noqa: BLE001 — unreachable: what was kept stays

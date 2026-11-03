@@ -10,6 +10,7 @@ import os
 import sys
 
 from helpers import STARTER_SKILLS
+from vesta_agent.roster import Roster
 
 sys.path.insert(0, os.path.join(STARTER_SKILLS, "villa-concierge", "scripts"))
 
@@ -70,8 +71,7 @@ def test_the_ais_own_search_never_offers_a_hidden_entity(tmp_path):
     found = {"success": True, "entities": [{"entity_id": RAW, "friendly_name": "Front Door Raw"},
                                            {"entity_id": FIXED, "friendly_name": "Front Door"}],
              "by_domain": {"lock": [{"entity_id": RAW}, {"entity_id": FIXED}]}}
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 5, "name": "Asker", "role": "owner"}], "chats": {"owner": 5},
-                              "ha_read_tools": ["ha_search"]},
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_search"]}, roster=Roster.of(owner=[(5, "Asker")]),
                    reader=FakeHA(tools=[tool("ha_search", query={"type": "string"})],
                                  answers={"ha_search": json.dumps(found)}))
     with open(v.s.pack_path, "w") as f:
@@ -92,8 +92,7 @@ def test_no_read_tool_of_the_ai_shows_a_hidden_entity(tmp_path):
     from vesta_agent.routing import CONVERSATION, Origin
     overview = {"domains": {"lock": {"count": 2, "entities": [RAW, FIXED]}}}
     state = {"entity_id": RAW, "state": "locked"}
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 5, "name": "Asker", "role": "owner"}], "chats": {"owner": 5},
-                              "ha_read_tools": ["ha_get_overview", "ha_get_state"]},
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_overview", "ha_get_state"]}, roster=Roster.of(owner=[(5, "Asker")]),
                    reader=FakeHA(tools=[tool("ha_get_overview"), tool("ha_get_state", entity_id={"type": "string"})],
                                  answers={"ha_get_overview": json.dumps(overview), "ha_get_state": json.dumps(state)}))
     with open(v.s.pack_path, "w") as f:

@@ -64,57 +64,47 @@ def body_of(js: str, name: str) -> str:
     return rest[:end.start()] if end else rest
 
 
-def villa_lists(raw: dict) -> dict:
-    """The VESTA Kiosk's lists of who gets the messages ({role: [{"chat", "name"}]}, vesta_shared.villa_recipients) a
-    test villa's rules in the older shape stand for: each `people:` row a chat of its role's list, named as the row,
-    then each chat of an even older `chats:`.
-
-    ⚠️ WHO IS WHO IS THE KIOSK'S LISTS ONLY (owner, 2026-11-03: "Yes, Kiosk only"): the tests keep the rows they
-    always wrote — one table of a test villa's people — and the rows' languages are read as a villa's older file's are
-    (policy.read_policy: `people:` rows into `languages:`)."""
-    from vesta_agent.policy import ROLES, _id
-    from vesta_shared.message_format import ROLE_WORDS
-    out: dict[str, list[dict]] = {r: [] for r in ROLES}
-    rows = [(p.get("telegram_id"), p.get("role"), str(p.get("name") or "").strip())
-            for p in raw.get("people") or [] if isinstance(p, dict)]
-    rows += [(c, r, f"{ROLE_WORDS.get(r, r)} chat") for r, c in (raw.get("chats") or {}).items()]
-    for tid, role, name in rows:
-        tid = _id(tid)
-        if tid and role in out and all(e["chat"] != tid for e in out[role]):
-            out[role].append({"chat": tid, "name": name or str(tid)})
-    return out
-
-
-def listed_policy(raw: dict):
-    """policy.Policy of a test villa's rules, with the Kiosk's lists its People rows stand for (villa_lists)."""
-    from vesta_agent.policy import Policy
-    return Policy(raw, villa_lists(raw))
-
-
-def keep_lists(s, raw: dict) -> None:
-    """The Kiosk's lists `raw`'s People rows stand for, kept beside the pack as the agent keeps what it read."""
+def keep_roster(s, roster) -> None:
+    """The VESTA Kiosk's lists of `roster` (roster.Roster, e.g. Roster.of) kept beside the pack as the agent keeps what
+    it read (villa_recipients.save), and its languages written in policy.yaml's `languages:` as the People card's
+    Language menu writes them — the two places the agent reads who is who from (config.Settings.policy)."""
+    import yaml
     from vesta_shared import villa_recipients
-    if "people" in raw or "chats" in raw:
-        villa_recipients.save(s.pack_path, villa_lists(raw))
+    villa_recipients.save(s.pack_path, roster.lists)
+    if roster.languages:
+        try:
+            with open(s.policy_path, encoding="utf-8") as f:
+                raw = yaml.safe_load(f) or {}
+        except OSError:
+            raw = {}
+        raw["languages"] = {**(raw.get("languages") or {}), **roster.languages}
+        with open(s.policy_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(raw, f)
 
 
-def make_agent(tmp_path, policy: dict, *, skills=(), telegram=None, reader=None, kiosk=None, telegram_on: bool = True):
+def make_agent(tmp_path, policy: dict, *, roster=None, skills=(), telegram=None, reader=None, kiosk=None,
+               telegram_on: bool = True):
     """An agent on a test villa: these rules (policy.yaml), these starter skills, the shared stand-ins.
 
     ⚠️ ONE WAY TO BUILD THE TEST VILLA (architecture review, 2026-10-07): seven test files each wrote the rules,
     copied the skills and built the agent by hand, so a change to the agent's constructor edited all of them.
     `telegram`, `reader` (Home Assistant), `kiosk`: tests/telegram_fake.py, ha_fake.py and the Kiosk switched off,
-    unless given. `telegram_on=False`: the takeover is off and nothing is sent (no Telegram at all)."""
+    unless given. `telegram_on=False`: the takeover is off and nothing is sent (no Telegram at all). `roster`: who is
+    who (roster.Roster.of), kept as the agent keeps the Kiosk's lists (keep_roster); None: never read, nobody."""
     import yaml
     from ha_fake import FakeHA
     from telegram_fake import FakeTelegram
     from vesta_agent.app import Vesta
+    # ⚠️ WHO IS WHO IS A ROSTER (architecture review round 17, lead 1): `people:` / `chats:` rows are a retired shape,
+    # read for their languages only — a test villa that wrote them would silently have nobody
+    assert not {"people", "chats"} & set(policy), "a test villa's people are roster=Roster.of(...)"
     from vesta_agent.kiosk import Kiosk
     env = {"VESTA_TELEGRAM_ENABLED": "true" if telegram_on else "false", "VESTA_TELEGRAM_BOT_TOKEN": "42:TG-TEST"}
     s = settings(str(tmp_path), **env)
     with open(s.policy_path, "w") as f:
         yaml.safe_dump(policy, f)
-    keep_lists(s, policy)
+    if roster is not None:
+        keep_roster(s, roster)
     for name in skills:
         copy_skill(name, s.skills_dir)
     tg = telegram if telegram is not None else (FakeTelegram() if telegram_on else None)
@@ -259,9 +249,10 @@ def voice_agent(tmp_path, voice_yaml: dict | None = None, language: str = "fr", 
     `v.conversed` ({"chat", "text", "voice", "spoken"})."""
     import yaml
     from telegram_fake import FakeTelegram
-    v = make_agent(tmp_path, {"people": [{"telegram_id": VOICE_OWNER, "name": "Owner", "role": "owner",
-                                          "language": language}],
-                              "chats": {"owner": VOICE_GROUP, "fm": VOICE_GROUP}}, skills=["villa-concierge"],
+    from vesta_agent.roster import Roster
+    roster = Roster.of(owner=[(VOICE_OWNER, "Owner"), (VOICE_GROUP, "Owner chat")],
+                       fm=[(VOICE_GROUP, "Facility manager chat")], languages={VOICE_OWNER: language})
+    v = make_agent(tmp_path, {}, roster=roster, skills=["villa-concierge"],
                    telegram=FakeTelegram(audio=open(TONE, "rb").read()), reader=reader, kiosk=kiosk,
                    telegram_on=telegram_on)
     with open(os.path.join(v.s.skills_dir, "villa-concierge", "villa.voice.yaml"), "w") as f:

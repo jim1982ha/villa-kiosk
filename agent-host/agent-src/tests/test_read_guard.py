@@ -13,6 +13,7 @@ import pytest
 from ha_fake import FakeHA, tool
 from vesta_shared.ha_client import HAError, McpClient
 from vesta_shared.read_guard import logbook_slice, logbook_villa_hours, refused
+from vesta_agent.roster import Roster
 
 LOGBOOK_VILLA_HOURS = logbook_villa_hours()
 
@@ -83,8 +84,7 @@ def test_the_ais_own_reads(tmp_path):
     names = sorted({n for n, _, _ in CASES})
     ha = FakeHA(tools=[tool(n, **(LOGS if n == "ha_get_logs" else {"mode": "string", "action": "string"}))
                        for n in names])
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
-                              "ha_read_tools": names}, reader=ha)
+    v = make_agent(tmp_path, {"ha_read_tools": names}, roster=Roster.of(owner=[(111, "Owner"), (-1, "Owner chat")]), reader=ha)
     asyncio.run(v.refresh_server_tools())
     tools = {t.name: t for t in v.toolbox().tool_objects(None, Origin(-1, CONVERSATION))}
     assert set(names) <= set(tools), sorted(tools)

@@ -23,7 +23,8 @@ from dataclasses import dataclass
 
 from vesta_shared.message_format import ROLE_WORDS, ROLES
 
-from .policy import Language, Policy, tablet_profile
+from .policy import Language, Policy
+from .roster import tablet_profile
 
 TARGETS = ("here", *ROLES)
 
@@ -73,13 +74,13 @@ class Routing:
     def target(self, to: str | None, origin: Origin | None = None, language: str | None = None) -> list[int]:
         """Rules 1 and 2: every chat it goes to. [] when there is nowhere to send it (no origin for `here`, nobody of
         that role in the villa's lists). `language` (a code): a role's chats that read it only — one version of a
-        report per language (policy.languages_for); a person asking reads theirs, so it never narrows `here`."""
+        report per language (Roster.languages_for); a person asking reads theirs, so it never narrows `here`."""
         if origin and origin.holds and to in TARGETS:
             return [origin.chat]
         if to == "here":
             return [origin.chat] if origin else []
         if to in ROLES:
-            return self.policy.chats_for(to, language)
+            return self.policy.roster.chats_for(to, language)
         return []
 
     def readers(self, to: str | None, origin: Origin | None = None) -> list[tuple[Language, list[int]]]:
@@ -93,11 +94,11 @@ class Routing:
         page went in the first language to every chat of the role. The job's prompt (ai_jobs), send_message
         (versions) and a job's steps after its limit (ai_jobs.on_limit) all read this."""
         if to in ROLES and not (origin and origin.holds):
-            return [(Language.of(c), self.target(to, origin, c)) for c in self.policy.languages_for(to)]
+            return [(Language.of(c), self.target(to, origin, c)) for c in self.policy.roster.languages_for(to)]
         chats = self.target(to, origin)
         if not chats:
             return []
-        return [(Language.of(self.policy.language_of(chats[0], origin.role if origin else None)), chats)]
+        return [(Language.of(self.policy.roster.language_of(chats[0], origin.role if origin else None)), chats)]
 
     def versions(self, to: str | None, origin: Origin | None, text, attachment=None) -> list[tuple] | str:
         """The copies of one message to send, as (language code or None, text, attachment): one per language its
@@ -162,7 +163,7 @@ class Routing:
         return [(pairs[n][0], pairs[n][1], frozenset(roles[k])) for n, k in kept], unrouted
 
     def approver_chats(self, required_role: str | None, origin_chat: int | None) -> list[int]:
-        """Rule 3: where an Approve / Refuse request is sent — never where nobody can press it (Policy.may_approve_in): a
+        """Rule 3: where an Approve / Refuse request is sent — never where nobody can press it (Roster.may_approve_in): a
         group listed for both roles acts as the facility manager's, so an owner's request is not sent there."""
         owners = self._may_approve("owner", "owner")
         if required_role == "owner" or origin_chat is None:
@@ -174,19 +175,19 @@ class Routing:
             # means both roles' chats, the owner's first — not the owner's alone, as for a request with no asker
             fms = self._may_approve("fm", required_role)
             return list(dict.fromkeys([*owners, *fms]))
-        return [int(origin_chat)] if self.policy.knows_chat(origin_chat) else owners
+        return [int(origin_chat)] if self.policy.roster.knows_chat(origin_chat) else owners
 
     def _may_approve(self, role: str, required_role: str | None) -> list[int]:
         """The chats of `role` where `required_role`'s request can be pressed: those the villa's list of the role names
-        (Policy.chats_for). ⚠️ ONE LIST (owner, 2026-11-03): a chat that receives a role's messages has its rights, so
+        (Roster.chats_for). ⚠️ ONE LIST (owner, 2026-11-03): a chat that receives a role's messages has its rights, so
         the fallback to the agent's own People rows (review round 15) is gone with them. None listed (the lists never
         read, or naming no chat that may): the request is refused with its reason, or waits on the tablet
         (actions.Actions.request)."""
-        return [c for c in self.policy.chats_for(role) if self.policy.may_approve_in(c, required_role)]
+        return [c for c in self.policy.roster.chats_for(role) if self.policy.roster.may_approve_in(c, required_role)]
 
     def label(self, chat_id: int) -> str:
         """For the log: which chat this is, never who is in it."""
-        return self.policy.chat_label(chat_id)
+        return self.policy.roster.chat_label(chat_id)
 
 
 def job_to(job: dict, origin: Origin | None) -> str:

@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from vesta_shared.ha_client import McpClient
+from vesta_agent.roster import Roster
 
 T = datetime(2026, 9, 30, 12, 0, tzinfo=timezone.utc)
 
@@ -178,8 +179,7 @@ def test_the_ai_reads_the_whole_villas_logbook_a_few_hours_at_a_time(tmp_path):
     from vesta_shared.read_guard import logbook_villa_hours
     LOGBOOK_VILLA_HOURS = logbook_villa_hours()
     ha = FakeHA(tools=[tool("ha_get_logs", source="string", hours_back="number", entity_id="string", end_time="string")])
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
-                              "ha_read_tools": ["ha_get_logs"]}, reader=ha)
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_logs"]}, roster=Roster.of(owner=[(111, "Owner"), (-1, "Owner chat")]), reader=ha)
     asyncio.run(v.refresh_server_tools())                                     # the tools HA MCP lists, as at start
     logs = next(t for t in v.toolbox().tool_objects(None, Origin(-1, CONVERSATION)) if t.name == "ha_get_logs")
     week = asyncio.run(logs.handler({"source": "logbook", "hours_back": 168}))
@@ -232,8 +232,7 @@ def test_the_log_says_who_reads_the_villa_and_for_how_long(tmp_path, caplog):
     from vesta_agent import script_run
     from vesta_agent.routing import CONVERSATION, Origin
     ha = FakeHA(tools=[tool("ha_get_state", entity_id="string")])
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
-                              "ha_read_tools": ["ha_get_state"]}, reader=ha)
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_state"]}, roster=Roster.of(owner=[(111, "Owner"), (-1, "Owner chat")]), reader=ha)
     asyncio.run(v.refresh_server_tools())
     get = next(t for t in v.toolbox().tool_objects(None, Origin(-1, CONVERSATION)) if t.name == "ha_get_state")
     with caplog.at_level(logging.INFO):
@@ -268,8 +267,7 @@ def test_the_ai_reads_since_when_a_door_is_really_unlocked_never_the_restart(tmp
     ha = FakeHA(tools=[tool("ha_get_state", entity_id="string"), tool("ha_search", query="string")],
                 answers={"ha_get_state": json.dumps(state), "ha_get_history": json.dumps(history),
                          "ha_search": json.dumps(found)})
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
-                              "ha_read_tools": ["ha_get_state", "ha_search"]}, reader=ha)
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_state", "ha_search"]}, roster=Roster.of(owner=[(111, "Owner"), (-1, "Owner chat")]), reader=ha)
     asyncio.run(v.refresh_server_tools())
     get = next(t for t in v.toolbox().tool_objects(None, Origin(-1, CONVERSATION)) if t.name == "ha_get_state")
     said = json.loads(asyncio.run(get.handler({"entity_id": "lock.example_door"}))["content"][0]["text"])["data"]
@@ -352,7 +350,7 @@ def test_a_skill_script_s_reads_are_on_its_took_line(tmp_path, caplog):
     import logging
     from helpers import make_agent, make_skill
     from vesta_agent import script_run
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1}})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(111, "Owner"), (-1, "Owner chat")]))
     make_skill(v.s.skills_dir, "probe", {"description": "x", "scripts": {"look.py": {}}},
                {"look.py": "import sys\nfrom vesta_shared.script import say_reads\nprint('{}')\n"
                            "say_reads({'ha_get_history': 3, 'ha_get_state': 1})\n"})

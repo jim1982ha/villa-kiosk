@@ -30,7 +30,8 @@ from vesta_shared import villa_recipients
 from . import button_data
 from .approvals import note as approval_note
 from .siren import WHILE_EMPTY, withdrawn_now
-from .policy import NOT_REGISTERED, Decision, Person, Policy, action_hash
+from .policy import Decision, Policy, action_hash
+from .roster import NOT_LISTED, Person
 from .routing import Routing
 from vesta_shared.occupancy import OCCUPIED
 from .state import State
@@ -248,7 +249,7 @@ class Actions:
         # still asks; so does anything an owner-only device hides behind (_wrap_check
         # raised it to "owner").
         if (d.direct and d.required_role == "any" and requester is not None and origin_chat is not None
-                and policy.member(requester.telegram_id, origin_chat) is not None):      # one answer: policy.member
+                and policy.roster.member(requester.telegram_id, origin_chat) is not None):      # one answer: Roster.member
             result = self.execute(d)
             self.state.log("direct", dict(base, by=requester.name, ok=result["ok"]))
             log.info("Direct %s.%s on %s, asked by %s: %s", d.domain, d.service, ", ".join(d.entity_ids),
@@ -298,14 +299,14 @@ class Actions:
         happened) and 'follow' (a device still on its way). The words every copy then shows are approvals.note's."""
         now = now or datetime.now(timezone.utc)
         policy = self.policy_loader()
-        person = policy.member(presser_id, chat, name)        # pressed in a listed group: its role (policy.member)
+        person = policy.roster.member(presser_id, chat, name)        # pressed in a listed group: its role (Roster.member)
         ap = self.state.approval(aid)
         if not ap:
             self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "unknown id"})
             return {"toast": "This request does not exist.", "state": None, "executed": False}
         if person is None:
-            self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "not a registered person or anonymous"})
-            return {"toast": NOT_REGISTERED, "state": None, "executed": False}
+            self.state.log("press_refused", {"approval": aid, "by": presser_id, "reason": "not on the villa's lists, or anonymous"})
+            return {"toast": NOT_LISTED, "state": None, "executed": False}
         from .approvals import toast                         # one table of a request's states and their words
         if ap["status"] != "pending":
             return {"toast": toast(ap["status"]), "state": None, "executed": False}

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from ha_fake import FakeHA
 from helpers import make_agent
 from vesta_agent.ha_events import CONTEXT_KEY
+from vesta_agent.roster import Roster
 
 NOW = datetime.now(timezone.utc)
 RULE = "automation.example_watchdog"
@@ -30,7 +31,7 @@ def run_of(run_id: str, minutes_ago: float, data: dict) -> dict:
 
 def agent(tmp_path, runs):
     ha = FakeHA(rules=[{"entity_id": RULE, "kind": "automation", "config": {}}], traces={RULE: runs})
-    return make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}]}, reader=ha)
+    return make_agent(tmp_path, {}, roster=Roster.of(owner=[(111, "Owner")]), reader=ha)
 
 
 def taken_in(v) -> list:

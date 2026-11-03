@@ -15,10 +15,11 @@ import yaml
 from helpers import make_agent
 from kiosk_fake import FakeKiosk
 from vesta_agent.config import STARTER_DIR
-from vesta_agent.policy import Person
+from vesta_agent.roster import Person
 from vesta_agent.routing import CONVERSATION, Origin
 from vesta_agent.tool_access import OWN
 from vesta_agent.tools import SKILL_PREFACE
+from vesta_agent.roster import Roster
 
 FM, FM_CHAT = 222, -100222
 #: the only ways "ticket" may be said: the tool's own name, the Kiosk's button, and what a person's press does
@@ -71,7 +72,7 @@ def test_no_starter_text_calls_what_vesta_raises_a_ticket():
 
 def test_no_tool_text_or_label_calls_what_vesta_raises_a_ticket(tmp_path):
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}], "chats": {"fm": FM_CHAT}},
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM"), (FM_CHAT, "Facility manager chat")]),
                    kiosk=k)
     texts = [SKILL_PREFACE] + [f"{label}\n{what}" for label, what, _ in OWN.values()]
     tb = v.toolbox()

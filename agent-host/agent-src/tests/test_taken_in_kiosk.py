@@ -14,6 +14,7 @@ from kiosk_fake import FakeKiosk
 from vesta_agent.tickets import Tickets
 from vesta_shared.problems import Problems
 from vesta_shared.store import Incident, Store
+from vesta_agent.roster import Roster
 
 spec = importlib.util.spec_from_file_location("desk_taken", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
 desk = importlib.util.module_from_spec(spec)
@@ -111,8 +112,7 @@ def test_the_closed_message_tells_every_step_the_villa_saw_on_15_october(tmp_pat
     from helpers import make_agent
     from vesta_shared import result as R
     owner, fm = 101, 202
-    v = make_agent(tmp_path, {"people": [{"telegram_id": owner, "name": "Jim", "role": "owner"},
-                                         {"telegram_id": fm, "name": "Wayan", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(owner, "Jim")], fm=[(fm, "Wayan")]))
     st = Store(v.s.store_path)
     iid = st.new_incident("k", "watchdog", "lock.example_door", "P2", {"message": "Door unavailable"})
     send = lambda to, status, stage: asyncio.run(v.outcome.carry_out(

@@ -11,6 +11,7 @@ from telegram_fake import FakeTelegram
 from vesta_agent import delivery as delivery_module
 from vesta_agent.delivery import Delivery
 from vesta_agent.state import State
+from vesta_agent.roster import Roster
 
 OWNER, GROUP = 111, -100123
 
@@ -40,8 +41,7 @@ def test_a_chat_has_one_typing_loop_whatever_holds_it(tmp_path, monkeypatch):
 
 def test_typing_starts_when_the_message_arrives_not_when_the_ai_starts(tmp_path, monkeypatch):
     # villa, 12:32: the photo was fetched for 2.6 s before "typing…" began
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}],
-                              "chats": {"owner": GROUP}}, telegram=FakeTelegram(audio=b"\xff\xd8jpeg"))
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Owner"), (GROUP, "Owner chat")]), telegram=FakeTelegram(audio=b"\xff\xd8jpeg"))
     v.bot_username = "Villa_Test_bot"
     seen = {}
     real_download = v.tg.download

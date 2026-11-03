@@ -12,6 +12,7 @@ from vesta_shared import result
 from vesta_shared.knowledge_pack import KnowledgePack
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 PM = os.path.join(STARTER_SKILLS, "preventive-maintenance", "scripts")
 
@@ -26,7 +27,7 @@ def test_a_pump_that_ran_short_keeps_its_fault_until_a_quiet_night(tmp_path):
     # its fault was made and resolved in the same second: "Cleared: the check no longer sees it", the digest "nothing new"
     nightly, R = _load("nightly", PM), _load("rules", PM)
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 222, "name": "Fabien", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(222, "Fabien")]), kiosk=k)
     st = Store(v.s.store_path)
     f = R.Finding("PM-RUNHOURS", "sensor.pool_pump_power", "pool_pump", "power", "P3",
                   "Pool Pump ran 3.0 h against 8.0 h scheduled.", {}, "Check the timer.")

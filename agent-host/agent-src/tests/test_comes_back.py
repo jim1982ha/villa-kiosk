@@ -17,6 +17,7 @@ from kiosk_fake import FakeKiosk
 from vesta_agent.layout import head_text
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 spec = importlib.util.spec_from_file_location("desk24", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
 desk = importlib.util.module_from_spec(spec)
@@ -39,7 +40,7 @@ def ev(rule, entity, minutes, phase="opened", blueprint="critical_presence_guard
 # ---------------------------------------------------------------------- the heading says what the message is
 def test_a_closing_message_is_headed_closed_never_new(tmp_path):
     # owner, 2026-10-11: "For: JM, P2 Incident: New #9 … Closed on …" — "is it a closure or not?"
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]))
     n = v.notices
     to = "To: FM"                                                   # an alert card's word (owner, 2026-10-16)
     assert head_text(n.heading(FM, 9, "fm", "new")) == f"#9 (new)\n{to}"
@@ -150,7 +151,7 @@ def test_the_kiosk_fault_keeps_again_in_its_name(tmp_path):
 
 def test_a_reopened_task_whose_old_resolution_is_seen_reopens_its_fault_and_a_lost_resolve_is_redone(tmp_path):
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     iid = st.new_incident("k", "automation.ap", "sensor.ap", "P2", {"message": "AP down"})
     tid, _ = pb.open_task("incident", iid, "automation.ap", "sensor.ap", "AP down")
@@ -211,7 +212,7 @@ def test_no_test_store_ships_inside_the_app():
 def test_a_returning_fault_the_kiosk_never_had_is_made_with_its_check_note(tmp_path):
     # villa, 2026-10-11: the Onsen pump's fault, made new at its return, read "Back again." instead of "Check: …"
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     fid, _ = st.raise_finding("PM-ENERGY-CHANGE", "sensor.onsen_energy", "energy", "2026-10-09", "P3", "Onsen pump low", {})
     tid, _ = pb.open_task("finding", fid, "PM-ENERGY-CHANGE", "sensor.onsen_energy", "Onsen pump low",
@@ -225,7 +226,7 @@ def test_the_check_follows_the_rules_words_on_telegram_the_digest_and_the_kiosk(
     # architecture review, 2026-10-19: Telegram read the route's check live, the Kiosk fault's note froze it at its
     # making, the digest's "Still open" line read a key nobody wrote — three answers to "what to do"
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     store = Store(v.s.store_path)
     route = next(r for r in desk.RULES["routes"] if r.get("blueprint") == "critical_watchdog")
     monkeypatch.setitem(route, "check", "Power and network of the device named.")
@@ -257,7 +258,7 @@ def test_lowered_then_raised_reopens_the_one_fault_in_the_kiosk(tmp_path):
     # architecture review, 2026-10-19: an alert lowered to P3 (its task closed "Lowered to P3.") and raised back got a
     # second task and a second Cockpit fault for the same number — and the double check skips a fault a task holds
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     store = Store(v.s.store_path)
     e = dict(blueprint="critical_watchdog", state="disconnected", bad_states=["disconnected"])
     iid = desk.intake(store, ev("automation.ap", "sensor.ap", 0, **e), T0)["incident_id"]

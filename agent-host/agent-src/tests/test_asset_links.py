@@ -18,6 +18,7 @@ from vesta_agent.ui.changes import PageFiles, Refused
 from vesta_shared import asset_links
 from vesta_shared.choice_files import BY_KIND
 from vesta_shared.knowledge_pack import KnowledgePack, build_pack
+from vesta_agent.roster import Roster
 
 SLUG = "example_pool_pump"
 GUESSED = f"schedule.{SLUG}_expected_runtime"          # the name rule's schedule
@@ -223,7 +224,7 @@ def test_the_agent_reads_a_link_chosen_since_its_last_look_at_the_pack(tmp_path,
     """Pinned on the caller: the agent's own pack (Vesta.pack, what its tools read), read again when the page's file
     changes, though the pack itself did not."""
     from helpers import make_agent
-    villa = make_agent(tmp_path, {"people": []}, telegram_on=False)
+    villa = make_agent(tmp_path, {}, roster=Roster.of(), telegram_on=False)
     os.makedirs(os.path.dirname(villa.s.pack_path), exist_ok=True)
     with open(villa.s.pack_path, "w", encoding="utf-8") as f:
         f.write(build_pack(REGISTRY, HELPERS).to_json())

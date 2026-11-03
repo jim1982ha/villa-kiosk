@@ -15,6 +15,7 @@ from vesta_agent import script_run
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
 from vesta_agent.routing import CONVERSATION, Origin
+from vesta_agent.roster import Roster
 
 CHAT = 333
 SECRET = "sk-ant-TEST-0123456789abcdef"
@@ -29,8 +30,7 @@ def agent(tmp_path):
                  "if cmd == 'ok': print(json.dumps({'found': 1}))\n"
                  "elif cmd == 'idle': sys.exit(2)\n"
                  f"else: print('the token is {SECRET}', file=sys.stderr); sys.exit(3)\n"})
-    return make_agent(tmp_path, {"people": [{"telegram_id": CHAT, "name": "Asker", "role": "owner"}],
-                                 "chats": {"owner": -1001, "fm": -1002}}, reader=FakeHA(tools=[tool("ha_get_state")]))
+    return make_agent(tmp_path, {}, roster=Roster.of(owner=[(CHAT, "Asker"), (-1001, "Owner chat")], fm=[(-1002, "Facility manager chat")]), reader=FakeHA(tools=[tool("ha_get_state")]))
 
 
 def _records(v, kind):
@@ -134,7 +134,7 @@ def test_a_code_job_finds_the_knowledge_pack_without_being_given_it(tmp_path):
     # recheck.py runs every 5 minutes with --store only (2026-10-18): it reads what is offline through the pack
     make_skill(os.path.join(str(tmp_path), "skills"), "probe", {"description": "t"},
                {"p.py": "import json, os\nprint(json.dumps({'pack': os.environ.get('VESTA_PACK')}))\n"})
-    v = make_agent(tmp_path, {"people": [], "chats": {}})
+    v = make_agent(tmp_path, {}, roster=Roster.of())
     assert v.code_command(v.skills.get("probe"), "p.py") == {"pack": v.s.pack_path} and v.s.pack_path
 
 

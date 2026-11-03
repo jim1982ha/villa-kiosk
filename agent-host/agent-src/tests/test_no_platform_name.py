@@ -11,6 +11,7 @@ import os
 import re
 
 import yaml
+from vesta_agent.roster import Roster
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 SPOKEN = [
@@ -151,13 +152,13 @@ def test_a_chat_answer_naming_home_assistant_reaches_telegram_as_the_villas_syst
     from ai_fake import FakeAI
     from helpers import make_agent
     owner = 111
-    v = make_agent(tmp_path, {"people": [{"telegram_id": owner, "name": "JM", "role": "owner"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(owner, "JM")]))
 
     async def sends(call):        # what the AI sends itself (send_message) goes the same way
         await call["call"]("send_message", {"to": "here", "text": "First, HA restarted at 03:00."})
     FakeAI("The investigate skill will trace through Home Assistant's history and logs around that time.",
            act=sends).install(monkeypatch)
-    asyncio.run(v.converse(owner, v.policy().person(owner), "why did the pump stop?"))
+    asyncio.run(v.converse(owner, v.policy().roster.person(owner), "why did the pump stop?"))
     said = [text for chat, text, _ in v.tg.sent if chat == owner]
     assert said[-1] == "The investigate skill will trace through the villa's history and logs around that time."
     assert any(t.endswith("First, the villa's system restarted at 03:00.") for t in said), said

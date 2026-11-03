@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.425 (3 November 2026)
+
+Architecture review round 17, the agent's leads (1, 2 for the agent's side, 3, 6):
+- **Who is who: `vesta_agent/roster.py`** (lead 1). `Roster(lists, languages)` answers person, member, may_approve_in,
+  knows_chat, chats_for, delivered_roles, language_of, languages_for, roles_in, group_role, name_in, names_of,
+  chat_label; `Roster.kept(pack_path)` reads the kept lists and `read_yet` (the one "read yet?", app and the People
+  card); `Roster.of(owner=[(chat, name)], fm=[...], languages={...})` writes one out. `Person`, the tablet's people and
+  `listed_entries` moved there. `Policy(raw, roster=None)` holds the file's rules; `policy.roster` raises `LookupError`
+  for a Policy built for its rules only (policy_doc, setup_copy, limits_tab, the desk's siren time). Callers ask
+  `policy.roster.…`. The tests build their villas with `Roster.of` (`make_agent(…, roster=)`, `keep_roster`); `people:`
+  rows are read only by read_policy's language read and `policy_doc.languages_moved`.
+- **The lists agreed in writing** (lead 2): agent-contract.json `recipients` (the Kiosk's file); `villa_recipients`
+  reads HELPERS, SEPARATOR, DOMAIN, MAX_CHARS and WHERE from it, and `entities()` follows its rule (a bare "notify."
+  names nobody). Tests drive `entities()` over every agreement example and hold the package's `max` to `maxChars`.
+  vesta_message.yaml's comment names Settings › Messages › Who gets the messages.
+- **No more "registered"** (lead 3): `roster.NOT_LISTED` names `villa_recipients.WHERE` and no id (intake's reply, a
+  button press's toast, actions' refusal); setup_copy's STAYS says each chat's language; RULE_WORDS["direct"], the
+  starter policy.example.yaml, the app log line and DOCS.md reworded.
+- **The knowledge pack's chats are their own table** (lead 6): `KnowledgePack.chats` [{chat, role, name, language}]
+  (`build_pack --chats`, from `app._build_pack`); `people` is the villa's person entities only, never merged with a chat
+  by name. PACK_RULES 6 (rebuilt at start). villa-concierge/SKILL.md's "Who is talking" says so.
+
 ## 0.6.424 (3 November 2026)
 
 - Who is who is the VESTA Kiosk's lists only (owner, 2026-11-03: "Yes, Kiosk only"). `villa_recipients.read` keeps

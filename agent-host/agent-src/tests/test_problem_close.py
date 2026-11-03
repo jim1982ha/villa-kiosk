@@ -9,6 +9,7 @@ import pytest
 from vesta_shared.problems import CLEARED, DONE, STILL_THERE, Problems
 from vesta_shared.result import faults_changed
 from vesta_shared.store import Incident, Store
+from vesta_agent.roster import Roster
 
 NOW = "2026-10-07T12:00:00+00:00"
 
@@ -248,7 +249,7 @@ def test_a_night_check_edited_before_0_12_267_still_runs_and_still_moves_its_fau
     from kiosk_fake import FakeKiosk
     from vesta_shared import result
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 222, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(222, "JM")]), kiosk=k)
     store = Store(v.s.store_path)
     rules = dict(state_rules={"PM-UNAVAILABLE"}, event_rules=set(), worsened_step=15)
 

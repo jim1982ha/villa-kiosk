@@ -24,10 +24,6 @@ def ui(tmp_path):
     s = settings(str(tmp_path))
     for name in ("preventive-maintenance", "alert-desk", "investigate", "reports"):
         copy_skill(name, s.skills_dir)
-    text = open(s.policy_path, encoding="utf-8").read()          # a policy the agent's checks accept on a save
-    with open(s.policy_path, "w", encoding="utf-8") as f:
-        f.write(text.replace("people: []", "people:\n  - {telegram_id: -100, name: Villa group, role: owner}\n"
-                                            "  - {telegram_id: -100, name: Villa group FM, role: fm}", 1))
     return s
 
 

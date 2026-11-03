@@ -40,7 +40,8 @@ from vesta_shared.offline import held_since
 from vesta_shared.timeutil import villa_time
 
 from . import __version__, script_run, status, tool_access
-from .policy import ROLE_WORDS, Person, Policy
+from .policy import ROLE_WORDS, Policy
+from .roster import Person
 from .kiosk import KioskError, fault_note_chars, fault_title_chars
 from .redact import scrub  # noqa: F401 — callers import it from here too
 from .routing import Origin, Routing

@@ -8,6 +8,7 @@ import json
 
 from ha_fake import FakeHA, tool
 from helpers import make_agent
+from vesta_agent.roster import Roster
 
 OWNER, OWNER_CHAT = 111, -1001
 ANSWER = {"success": True, "entry_id": "e1", "entry": {
@@ -20,8 +21,7 @@ def _agent(tmp_path):
     ha = FakeHA(tools=[tool("ha_get_integration", entry_id="string", include_diagnostics="boolean",
                             include_options="boolean", query="string")],
                 answers={"ha_get_integration": json.dumps(ANSWER)})
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}],
-                              "chats": {"owner": OWNER_CHAT}, "ha_read_tools": ["ha_get_integration"]}, reader=ha)
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_integration"]}, roster=Roster.of(owner=[(OWNER, "Owner"), (OWNER_CHAT, "Owner chat")]), reader=ha)
     asyncio.run(v.refresh_server_tools())
     from vesta_agent.routing import CONVERSATION, Origin
     get = next(t for t in v.toolbox().tool_objects(None, Origin(OWNER_CHAT, CONVERSATION)) if t.name == "ha_get_integration")

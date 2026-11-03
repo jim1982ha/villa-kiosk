@@ -15,6 +15,7 @@ from vesta_agent.ui.changes import PageFiles, Refused
 from vesta_shared import asset_kinds
 from vesta_shared.choice_files import BY_KIND
 from vesta_shared.knowledge_pack import KnowledgePack, build_pack
+from vesta_agent.roster import Roster
 
 SLUG = "example_led_strip"
 #: a strip whose name says "led": guessed lighting, which the night check never reads
@@ -162,7 +163,7 @@ def test_the_agents_own_start_moves_the_old_helper(tmp_path):
     """Pinned on the caller: the agent's real start() (helpers.restarted), its client holding the old helper."""
     from ha_fake import FakeHA
     from helpers import make_agent, restarted
-    villa = make_agent(tmp_path, {"people": []}, telegram_on=False,
+    villa = make_agent(tmp_path, {}, roster=Roster.of(), telegram_on=False,
                        reader=FakeHA(states={asset_kinds.OLD_HELPER: {"state": '{"example_pump": "motor"}'}}))
     assert not os.path.exists(villa.s.choice_path("kinds"))
     restarted(villa)

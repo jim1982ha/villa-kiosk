@@ -13,9 +13,10 @@ from helpers import make_agent
 from kiosk_fake import FakeKiosk
 from telegram_fake import BOT, FakeTelegram
 from vesta_agent.fault_offers import CREATE as OFFER_BUTTON, DECLINE as NO_OFFER_BUTTON
+from vesta_agent.roster import Roster
 
 JM = 111
-PEOPLE = [{"telegram_id": JM, "name": "JM", "role": "owner"}]
+ROSTER = Roster.of(owner=[(JM, "JM")])
 
 
 #: each update's own id, as Telegram gives one to each (the agent takes each in once: missed_at_start.key)
@@ -29,14 +30,14 @@ def _asked(tmp_path, monkeypatch, *tickets):
     """JM asks a question; the AI calls create_ticket once per entry of `tickets`. (agent, Kiosk, tool answers)."""
     from ai_fake import FakeAI
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": PEOPLE}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=k)
     said = []
 
     async def act(call):
         for t in tickets:
             said.append(await call["call"]("create_ticket", t))
     FakeAI("The pump ran for three hours. The relay's own log would tell what started it.", act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "what happened to the pump on the 9th?"))
+    run(v.converse(JM, v.policy().roster.person(JM), "what happened to the pump on the 9th?"))
     return v, k, said
 
 
@@ -110,7 +111,7 @@ def test_an_answer_with_no_fault_has_no_button(tmp_path, monkeypatch):
 def test_a_scheduled_job_still_creates_its_fault_at_once(tmp_path):
     # nobody to press: an AI job of the night records its fault directly, as before
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": PEOPLE}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=k)
     tool = next(t for t in v.toolbox().tool_objects(None, None) if t.name == "create_ticket")
     run(tool.handler({"title": "Pool pump ran 3.0 h against 8.0 h"}))
     assert k.tickets == [("Pool pump ran 3.0 h against 8.0 h", None)]
@@ -134,13 +135,13 @@ def test_an_answer_sent_as_a_page_gets_its_offer_on_its_own_and_no_working_words
     from ai_fake import FakeAI
     from vesta_agent import runner
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": PEOPLE}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=k)
 
     async def act(call):
         await call["call"]("create_ticket", {"title": "Check the float switch"})
         await call["call"]("send_message", {"to": "here", "text": "The pump ran 3 h. The page has the rest."})
     FakeAI(runner.RunResult("", None, False, 0.01, [], earlier="Now let me send the page."), act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "what happened to the pump?"))
+    run(v.converse(JM, v.policy().roster.person(JM), "what happened to the pump?"))
     texts = [t for _, t, _ in v.tg.sent]
     assert texts[0].endswith("The pump ran 3 h. The page has the rest.")
     (_, offer, kb), = v.tg.sent[1:]
@@ -151,15 +152,15 @@ def test_an_answer_sent_as_a_page_gets_its_offer_on_its_own_and_no_working_words
 def test_a_run_that_ended_on_a_tool_and_sent_nothing_still_answers(tmp_path, monkeypatch):
     from ai_fake import FakeAI
     from vesta_agent import runner
-    v = make_agent(tmp_path, {"people": PEOPLE}, kiosk=FakeKiosk())
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=FakeKiosk())
     FakeAI(runner.RunResult("", None, False, 0.01, [], earlier="The pump ran 3 h.")).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "what happened to the pump?"))
+    run(v.converse(JM, v.policy().roster.person(JM), "what happened to the pump?"))
     assert [t for _, t, _ in v.tg.sent] == ["The pump ran 3 h."]
 
 
 def _with_investigate(tmp_path):
     from helpers import copy_skill
-    v = make_agent(tmp_path, {"people": PEOPLE}, kiosk=FakeKiosk())
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=FakeKiosk())
     copy_skill("investigate", v.s.skills_dir)
     return v
 
@@ -175,14 +176,14 @@ def test_investigate_is_refused_without_its_command_and_given_with_it(tmp_path, 
         said.append(await call["call"]("run_skill_script", {"skill": "investigate", "script": "investigate.py",
                                                             "args": ["find", "--what", "pump"]}))
     ai = FakeAI("ok", act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "what happened to the pump?"))
+    run(v.converse(JM, v.policy().roster.person(JM), "what happened to the pump?"))
     assert all(r.get("is_error") and "/investigate" in r["content"][0]["text"] for r in said)
     sys_prompt = ai.runs[-1]["system_prompt"]
     assert "investigate (/investigate)" in sys_prompt and "Your skills:" in sys_prompt
     assert "investigate (" not in sys_prompt.split("Your skills:")[1].split("\n")[0]     # not among the AI's choices
     said.clear()
     before = len(ai.runs)
-    run(v.converse(JM, v.policy().person(JM), "what happened to the pump?", invoked="investigate"))
+    run(v.converse(JM, v.policy().roster.person(JM), "what happened to the pump?", invoked="investigate"))
     assert not said[0].get("is_error") and "wrote /investigate" in ai.runs[before]["prompt"]
 
 
@@ -199,11 +200,11 @@ def test_a_continue_goes_on_with_the_skill_its_turn_was_called_for(tmp_path, mon
     from vesta_agent import runner
     stop = {"now": True}
     ai = FakeAI(lambda call: runner.RunResult("ok", "sess-1", stop["now"], 0.01, []), act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "the pump", invoked="investigate"))      # stops at its limit
+    run(v.converse(JM, v.policy().roster.person(JM), "the pump", invoked="investigate"))      # stops at its limit
     (cont_data,) = [b["callback_data"] for _, _, kb in v.tg.sent if kb for row in kb["inline_keyboard"] for b in row
                     if b["callback_data"].startswith("c:")]
     stop["now"] = False
-    run(v.converse(JM, v.policy().person(JM), "thanks"))                                 # a word in between
+    run(v.converse(JM, v.policy().roster.person(JM), "thanks"))                                 # a word in between
     assert said[-1].get("is_error")                                                      # (not an investigation)
     run(v.on_ha_event("telegram_callback", {"id": f"cb{next(_IDS)}", "data": cont_data, "chat_id": JM, "user_id": JM, "bot": BOT,
                                             "message": {"message_id": 1001, "chat": {"id": JM}, "text": "x"}}))
@@ -216,9 +217,9 @@ def test_a_command_starts_a_fresh_conversation_so_nothing_earlier_is_reused(tmp_
     v = _with_investigate(tmp_path)
     ai = FakeAI(runner.RunResult("ok", "sess-new", False, 0.01, [])).install(monkeypatch)
     v.state.set_session(JM, "sess-earlier")
-    run(v.converse(JM, v.policy().person(JM), "the pump", invoked="investigate"))
+    run(v.converse(JM, v.policy().roster.person(JM), "the pump", invoked="investigate"))
     assert ai.runs[0]["resume"] is None                                     # (the page's follow-up, if any, resumes it)
-    run(v.converse(JM, v.policy().person(JM), "and why at 03:09?"))          # the follow-up goes on from the investigation
+    run(v.converse(JM, v.policy().roster.person(JM), "and why at 03:09?"))          # the follow-up goes on from the investigation
     assert ai.runs[-1]["resume"] == "sess-new"
 
 
@@ -247,7 +248,7 @@ def _investigating(tmp_path, monkeypatch, *, page_on_run=(1,), offer=False, summ
                                                 "attachment": "investigation.html"})
     # told to write nothing after the page, it writes a long message anyway (the villa, 20:20)
     ai = FakeAI("I've completed a thorough investigation. Key finding: …", act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "the heater on the 9th", invoked="investigate"))
+    run(v.converse(JM, v.policy().roster.person(JM), "the heater on the 9th", invoked="investigate"))
     return v, runs
 
 
@@ -375,13 +376,13 @@ def test_an_offer_whose_answer_telegram_refused_is_shown_with_the_next_answer(tm
     v, k, _ = _asked(tmp_path, monkeypatch, {"title": "Check the float switch"})
     assert not v.state.pending_offers(JM)                                   # delivered: shown
     from ai_fake import FakeAI
-    v2 = make_agent(tmp_path / "b", {"people": PEOPLE}, kiosk=FakeKiosk())
+    v2 = make_agent(tmp_path / "b", {}, roster=ROSTER, kiosk=FakeKiosk())
     v2.tg.refuse = {"send"}
 
     async def act(call):
         await call["call"]("create_ticket", {"title": "Check the float switch"})
     FakeAI("answer", act=act).install(monkeypatch)
-    run(v2.converse(JM, v2.policy().person(JM), "the pump?"))
+    run(v2.converse(JM, v2.policy().roster.person(JM), "the pump?"))
     assert [o["title"] for o in v2.state.pending_offers(JM)] == ["Check the float switch"]   # not lost
 
 
@@ -401,7 +402,7 @@ def test_an_investigation_offers_one_fault_even_across_its_continue(tmp_path, mo
             open(os.path.join(out, "investigation.html"), "w").write("<!doctype html>")
             await call["call"]("send_message", {"to": "here", "text": "Done.", "attachment": "investigation.html"})
     FakeAI(lambda call: runner.RunResult("", "sess-1", stop["now"], 0.01, []), act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "the pump", invoked="investigate"))
+    run(v.converse(JM, v.policy().roster.person(JM), "the pump", invoked="investigate"))
     (cont,) = [b["callback_data"] for _, _, kb in v.tg.sent if kb for row in kb["inline_keyboard"] for b in row
                if b["callback_data"].startswith("c:")]
     stop["now"] = False
@@ -426,7 +427,7 @@ def test_an_earlier_investigations_account_never_titles_a_new_offer(tmp_path, mo
         open(os.path.join(out, "investigation.html"), "w").write("<!doctype html>")
         await call["call"]("send_message", {"to": "here", "text": "Done.", "attachment": "investigation.html"})
     FakeAI("", act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "the pump on the 9th", invoked="investigate"))
+    run(v.converse(JM, v.policy().roster.person(JM), "the pump on the 9th", invoked="investigate"))
     (_, _, kb), = v.tg.buttoned
     offer = v.state.claim_ticket_offer(kb["inline_keyboard"][0][0]["callback_data"].split(":")[1], JM)
     assert offer["title"] == "Check on site: the pump on the 9th"
@@ -439,7 +440,7 @@ def test_a_follow_up_stopped_at_its_limit_leaves_a_continue_not_a_wrong_reason(t
     v = _with_investigate(tmp_path)
     runs = []
     FakeAI(lambda call: runs.append(1) or runner.RunResult("", "sess-1", len(runs) == 2, 0.01, [])).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "the pump", invoked="investigate"))
+    run(v.converse(JM, v.policy().roster.person(JM), "the pump", invoked="investigate"))
     assert len(runs) == 2                                                    # the page missing: one follow-up
     texts = [t for _, t, _ in v.tg.sent]
     assert not any("could not be made" in t for t in texts)
@@ -469,14 +470,14 @@ def test_an_investigation_uses_its_own_brain_while_every_other_answer_keeps_the_
     from vesta_agent import skills
     from vesta_agent.policy import PROFILES
     assert set(skills.BRAINS) == set(PROFILES)                               # one list of brains
-    v = make_agent(tmp_path, {"people": PEOPLE, "settings": {"profile": "economy", "reply_limit_usd": 1}},
+    v = make_agent(tmp_path, {"settings": {"profile": "economy", "reply_limit_usd": 1}}, roster=ROSTER,
                    kiosk=FakeKiosk())
     copy_skill("investigate", v.s.skills_dir)
     ai = FakeAI("ok").install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "what is on?"))
+    run(v.converse(JM, v.policy().roster.person(JM), "what is on?"))
     assert (ai.runs[-1]["profile"], ai.runs[-1]["limit_usd"]) == ("economy", 1.0)
     n = len(ai.runs)
-    run(v.converse(JM, v.policy().person(JM), "the heater", invoked="investigate"))
+    run(v.converse(JM, v.policy().roster.person(JM), "the heater", invoked="investigate"))
     assert all((r["profile"], r["limit_usd"]) == ("auto", 3.0) for r in ai.runs[n:])   # its page follow-up too
     # the Costs tab's "Skills" (owner, 2026-10-19): the command skill it was called for; an ordinary message has none
     assert ai.runs[n]["skill"] == "investigate" and ai.runs[n - 1]["skill"] is None
@@ -488,7 +489,7 @@ def test_a_web_search_the_ai_made_reaches_the_runs_scripts(tmp_path, monkeypatch
     import json
     from ai_fake import FakeAI
     from helpers import make_skill
-    v = make_agent(tmp_path, {"people": PEOPLE}, kiosk=FakeKiosk())
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=FakeKiosk())
     make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says its environment",
                                                                            "commands": {"show": "its environment"}}}},
                {"env.py": "import json, os\nprint(json.dumps({'searched': os.environ.get('VESTA_WEB_SEARCHES', '')}))\n"})
@@ -499,7 +500,7 @@ def test_a_web_search_the_ai_made_reaches_the_runs_scripts(tmp_path, monkeypatch
         await call["web_search"]("centrifugal pump runs without stopping")
         said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
     FakeAI("ok", act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "the heater"))
+    run(v.converse(JM, v.policy().roster.person(JM), "the heater"))
     got = [json.loads(s["content"][0]["text"])["searched"] for s in said]
     assert got[0] == ""                                                     # no search yet: nothing said
     assert json.loads(got[1]) == ["centrifugal pump runs without stopping"]
@@ -524,7 +525,7 @@ def test_an_investigation_keeps_its_web_searches_across_a_restart_before_its_con
         else:
             said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
     FakeAI(lambda call: runner.RunResult("ok", "sess-1", stop["now"], 0.01, []), act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "the pump", invoked="investigate"))      # searches, stops at its limit
+    run(v.converse(JM, v.policy().roster.person(JM), "the pump", invoked="investigate"))      # searches, stops at its limit
     (cont_data,) = [b["callback_data"] for _, _, kb in v.tg.sent if kb for row in kb["inline_keyboard"] for b in row
                     if b["callback_data"].startswith("c:")]
     v = restarted(v)                                                                     # an update in between
@@ -540,7 +541,7 @@ def test_the_log_says_how_long_each_script_and_the_whole_answer_took(tmp_path, m
     import re
     from ai_fake import FakeAI
     from helpers import make_skill
-    v = make_agent(tmp_path, {"people": PEOPLE}, kiosk=FakeKiosk())
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=FakeKiosk())
     make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says hello",
                                                                            "commands": {"show": "hello"}}}},
                {"env.py": "import time\ntime.sleep(0.2)\nprint('{}')\n"})
@@ -549,7 +550,7 @@ def test_the_log_says_how_long_each_script_and_the_whole_answer_took(tmp_path, m
         await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]})
     FakeAI("ok", act=act, delay_s=1.2).install(monkeypatch)              # the AI's own thinking time
     with caplog.at_level(logging.INFO, logger="vesta"):
-        run(v.converse(JM, v.policy().person(JM), "the heater"))
+        run(v.converse(JM, v.policy().roster.person(JM), "the heater"))
     said = "\n".join(r.getMessage() for r in caplog.records)
     took = re.search(r"Skill echo: env\.py show took (\d+\.\d) s", said)
     assert took and float(took.group(1)) >= 0.2
@@ -577,12 +578,12 @@ def test_an_investigations_searches_reach_the_page_made_in_its_follow_up(tmp_pat
         else:
             said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
     FakeAI("ok", act=act).install(monkeypatch)
-    run(v.converse(JM, v.policy().person(JM), "the pump", invoked="investigate"))
+    run(v.converse(JM, v.policy().roster.person(JM), "the pump", invoked="investigate"))
     assert len(said) == 2                                                      # the turn, then its page follow-up
     assert json.loads(json.loads(said[1]["content"][0]["text"])["searched"]) == ["pump runs without stopping causes"]
     said.clear()
     search.clear()                                                            # another investigation, no search
-    run(v.converse(JM, v.policy().person(JM), "the heater", invoked="investigate"))
+    run(v.converse(JM, v.policy().roster.person(JM), "the heater", invoked="investigate"))
     assert len(said) == 2 and json.loads(said[1]["content"][0]["text"])["searched"] == ""   # never the other's
 
 
@@ -602,7 +603,7 @@ def test_a_runs_scripts_are_told_whether_it_may_search_the_web(tmp_path, monkeyp
     from helpers import make_skill
     got = {}
     for on in (True, False):
-        v = make_agent(tmp_path / str(on), {"people": PEOPLE, "settings": {"web_search": on}}, kiosk=FakeKiosk())
+        v = make_agent(tmp_path / str(on), {"settings": {"web_search": on}}, roster=ROSTER, kiosk=FakeKiosk())
         make_skill(v.s.skills_dir, "echo", {"tools": [], "scripts": {"env.py": {"description": "says its environment",
                                                                                "commands": {"show": "its environment"}}}},
                    {"env.py": "import json, os\nprint(json.dumps({'on': os.environ.get('VESTA_WEB_SEARCH_ON', '')}))\n"})
@@ -611,6 +612,6 @@ def test_a_runs_scripts_are_told_whether_it_may_search_the_web(tmp_path, monkeyp
         async def act(call):
             said.append(await call["call"]("run_skill_script", {"skill": "echo", "script": "env.py", "args": ["show"]}))
         FakeAI("ok", act=act).install(monkeypatch)
-        run(v.converse(JM, v.policy().person(JM), "the heater"))
+        run(v.converse(JM, v.policy().roster.person(JM), "the heater"))
         got[on] = json.loads(said[0]["content"][0]["text"])["on"]
     assert got == {True: "1", False: ""}

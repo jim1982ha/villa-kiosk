@@ -13,6 +13,7 @@ from helpers import body, make_agent, restarted
 from vesta_shared.messaging import SIREN_TITLE
 from telegram_fake import BOT
 from vesta_agent import button_data
+from vesta_agent.roster import Roster
 
 JM, FABIEN, GROUP = 111, 222, -100333
 
@@ -21,10 +22,9 @@ def run(c):
     return asyncio.run(c)
 
 
-def _villa(tmp_path, people=None, **policy):
-    v = make_agent(tmp_path, {"people": people or [{"telegram_id": JM, "name": "JM", "role": "owner"},
-                                                   {"telegram_id": FABIEN, "name": "Fabien", "role": "fm"}],
-                              "act_enabled": True, "allowed_services": {"cover.open_cover": "any"}, **policy})
+def _villa(tmp_path, roster=None, **policy):
+    v = make_agent(tmp_path, {"act_enabled": True, "allowed_services": {"cover.open_cover": "any"}, **policy},
+                   roster=roster or Roster.of(owner=[(JM, "JM")], fm=[(FABIEN, "Fabien")]))
 
     class Writer:
         def call_service(self, *a):
@@ -50,7 +50,7 @@ def _press(v, msg, chat=JM, who=JM, yn="y"):
 # ---------------------------------------------------------------------- a stop in the middle of a press
 def test_a_request_approved_seconds_before_a_restart_is_ended_at_the_start(tmp_path):
     v = _villa(tmp_path)
-    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.person(JM), JM)
     run(v.approvals.ask(msg))
     v.state.claim_approval(msg.approval_id, "approved", JM, name="JM")      # approved; the agent stops right here…
     v = restarted(v)                                                       # …and is back 40 s later
@@ -61,7 +61,7 @@ def test_a_request_approved_seconds_before_a_restart_is_ended_at_the_start(tmp_p
 
 def test_a_decision_whose_copies_never_said_so_says_it_at_the_start(tmp_path):
     v = _villa(tmp_path)
-    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.person(JM), JM)
     run(v.approvals.ask(msg))
     v.actions.decide(msg.approval_id, JM, False, chat=JM)                  # refused; stopped before the copies changed
     assert v.tg.edits == []
@@ -75,7 +75,7 @@ def test_a_decision_whose_copies_never_said_so_says_it_at_the_start(tmp_path):
 # ---------------------------------------------------------------------- Telegram does not take a change
 def test_a_copy_telegram_did_not_take_is_tried_again_until_it_shows(tmp_path):
     v = _villa(tmp_path)
-    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.person(JM), JM)
     run(v.approvals.ask(msg))
     v.tg.refuse.add("edit")                                                # a network blip, just then
     _press(v, msg)
@@ -96,7 +96,7 @@ def test_a_copy_is_tried_again_for_two_hours_whatever_the_pace_then_given_up(tmp
     from datetime import datetime, timedelta, timezone
     from vesta_agent import incident_thread
     v = _villa(tmp_path)
-    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.person(JM), JM)
     run(v.approvals.ask(msg))
     v.tg.refuse.add("edit")                                                # deleted in the chat: refused for ever
     _press(v, msg)
@@ -137,7 +137,7 @@ def test_a_photos_message_is_changed_through_its_caption():
 def test_a_request_nobody_received_is_never_waiting(tmp_path):
     v = _villa(tmp_path)
     v.tg.refuse.add("blocked")
-    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.person(JM), JM)
     assert run(v.approvals.ask(msg)) == 0
     assert v.state.approval(msg.approval_id)["status"] == "undelivered"
     told = v.approvals.now()
@@ -160,19 +160,18 @@ def test_the_intrusion_is_said_when_no_owner_chat_takes_the_siren_request(tmp_pa
 
 # ---------------------------------------------------------------------- one name per person per chat
 def test_a_person_listed_twice_is_named_one_way_in_a_chat(tmp_path):
-    people = [{"telegram_id": JM, "name": "JM_O", "role": "owner"}, {"telegram_id": JM, "name": "JM_FM", "role": "fm"},
-              {"telegram_id": GROUP, "name": "Group_FM", "role": "fm"}]
+    roster = Roster.of(owner=[(JM, "JM_O")], fm=[(JM, "JM_FM"), (GROUP, "Group_FM")])
     from helpers import known_devices
-    v = _villa(tmp_path, people=people)
+    v = _villa(tmp_path, roster=roster)
     known_devices(v, "cover.bedroom3")
-    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().member(JM, GROUP), GROUP)
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.member(JM, GROUP), GROUP)
     assert msg.chats == [GROUP]
     run(v.approvals.ask(msg))
     _press(v, msg, chat=GROUP)
     (_, _, text), = v.tg.edits
     assert bool(re.search(r"\nStatus:\nApproved on .* \(JM_FM\)\.", text))                        # the name the group knows, as an alert press
     assert "(by JM_FM on " in v.approvals.now()
-    assert v.policy().member(JM, GROUP).name == v.policy().name_in(JM, GROUP) == "JM_FM"
+    assert v.policy().roster.member(JM, GROUP).name == v.policy().roster.name_in(JM, GROUP) == "JM_FM"
 
 
 # ---------------------------------------------------------------------- a report cut by a stop
@@ -335,7 +334,7 @@ def test_a_copy_given_up_once_gets_its_own_two_hours_at_its_next_change(tmp_path
     from datetime import datetime, timedelta, timezone
     from vesta_agent import incident_thread
     v = _villa(tmp_path)
-    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().person(JM), JM)
+    _, msg = v.actions.request("cover", "open_cover", "cover.bedroom3", {}, v.policy().roster.person(JM), JM)
     run(v.approvals.ask(msg))
     v.tg.refuse.add("edit")
     _press(v, msg)
@@ -358,7 +357,7 @@ def test_a_copy_given_up_once_gets_its_own_two_hours_at_its_next_change(tmp_path
 def test_a_question_being_answered_when_the_agent_stops_is_said_at_the_start(tmp_path, monkeypatch):
     # owner, 2026-10-15: an /investigate running when the agent was updated "went quiet" — the question lived in memory
     v = _villa(tmp_path)
-    person = v.policy().person(JM)
+    person = v.policy().roster.person(JM)
 
     async def forever(*a, **k):
         await asyncio.Event().wait()
@@ -397,6 +396,6 @@ def test_a_question_answered_leaves_nothing_for_the_next_start(tmp_path, monkeyp
     async def answered(*a, **k):
         return None
     monkeypatch.setattr(v, "_converse", answered)
-    run(v.converse(JM, v.policy().person(JM), "How is the pool?"))
+    run(v.converse(JM, v.policy().roster.person(JM), "How is the pool?"))
     v = restarted(v)
     assert not [t for _, t, _ in v.tg.sent if "interrupted by a restart" in t]

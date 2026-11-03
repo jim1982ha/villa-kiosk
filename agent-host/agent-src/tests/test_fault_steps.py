@@ -20,6 +20,7 @@ from kiosk_fake import FakeKiosk
 from vesta_agent.kiosk import Kiosk, retitled, tagged
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 spec = importlib.util.spec_from_file_location("desk26", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
 desk = importlib.util.module_from_spec(spec)
@@ -101,7 +102,7 @@ def test_a_title_a_person_wrote_stays_and_the_agents_reading_goes_under_it():
 
 def test_the_nightly_repair_never_writes_its_title_over_a_persons(tmp_path):
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     fid, _ = st.raise_finding("PM-X", "lock.front", "offline", "2026-10-07", "P3", "Front door lock unavailable", {})
     tid, _ = pb.open_task("finding", fid, "PM-X", "lock.front", "Front door lock unavailable")
@@ -119,7 +120,7 @@ def test_the_repair_gives_an_open_problem_with_no_fault_its_fault(tmp_path, capl
     # villa, 2026-10-14: a sensor open for five days, never in the Cockpit, and nothing anywhere said so (0.12.193 said
     # it in the log; since 0.12.210 the repair makes the fault)
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st = Store(v.s.store_path)
     st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39h", {})
     with caplog.at_level("WARNING", logger="vesta.outcome"):
@@ -133,7 +134,7 @@ def test_an_open_problem_whose_fault_the_kiosk_no_longer_holds_gets_it_again(tmp
     # the new one held none of them, and the Cockpit showed "Unavailable" with nothing to act on while the digest said
     # "still open" — the repair skipped every task that had an id, held or not
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st = Store(v.s.store_path)
     st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39h", {})
     run(v.tickets.repair())
@@ -151,7 +152,7 @@ def test_a_kiosk_that_cannot_read_its_store_costs_the_problem_no_fault(tmp_path)
     # the Kiosk's read answers an empty record when its file cannot be read, and refuses every write: the task keeps
     # the id it had, so the fault it still holds on disk is found again — never doubled — once the file is back
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st = Store(v.s.store_path)
     st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39h", {})
     run(v.tickets.repair())
@@ -170,7 +171,7 @@ def test_a_closed_fault_of_an_open_problem_is_held_not_missing(tmp_path):
     # the other side: a fault the Kiosk holds CLOSED is not missing — its problem still there, the repair opens THAT
     # fault again (its close did not reach the task: the agent's own clearing as its problem came back), never a second
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st = Store(v.s.store_path)
     st.raise_finding("PM-X", "sensor.example_room", "offline", "2026-10-09", "P3", "Example offline for 39h", {})
     run(v.tickets.repair())
@@ -193,7 +194,7 @@ def _told(st) -> list[dict]:
 
 
 def _closed_night_fault(tmp_path, k):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     fid, _ = st.raise_finding("PM-X", "sensor.pump", "power", "2026-10-07", "P3", "Pump weak", {})
     tid, _ = pb.open_task("finding", fid, "PM-X", "sensor.pump", "Pump weak")
@@ -437,7 +438,7 @@ def test_an_open_problem_whose_fault_the_agent_closed_gets_it_back_and_a_persons
     # villa, 2026-10-15: Timmerflotte_2623, dead since 9 Oct, had no Open Ticket in the Cockpit — its task had been closed
     # by the agent while the sensor stayed dead, and the repair only warned, every 5 minutes, for a day
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     dead, _ = st.raise_finding("PM-X", "sensor.room_a", "offline", "2026-10-09", "P3", "Room A offline for 6d", {})
     gone, _ = st.raise_finding("PM-X", "sensor.room_b", "offline", "2026-10-09", "P3", "Room B offline for 6d", {})
@@ -466,7 +467,7 @@ def test_each_fault_says_how_the_agent_reads_it_again_for_its_cards_next_check(t
     # device is read again every few minutes (the skill's `rechecks`), a battery at the nightly check, an alert at every
     # look of the desk; a chat's fault only a person closes
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k,
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k,
                    skills=("preventive-maintenance",))
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     off, _ = st.raise_finding("PM-UNAVAILABLE", "sensor.room_a", "room_a", "2026-10-15", "P3", "Room A offline for 1d", {})
@@ -512,7 +513,7 @@ def test_a_duration_in_a_faults_title_is_worded_by_the_kiosk_when_it_shows_it(tm
     assert (f.detail["since"], f.detail["since_words"]) == ((night - timedelta(hours=129)).isoformat(), "5d 9h")
 
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     fid, _ = st.raise_finding("PM-UNAVAILABLE", "switch.tv", "tv", "2026-10-15", "P3", f.summary, f.detail)
     pb.settle(f"finding:{fid}")
@@ -524,7 +525,7 @@ def test_a_duration_in_a_faults_title_is_worded_by_the_kiosk_when_it_shows_it(tm
     assert "titlePattern" not in k.ticket(t["id"]) and k.ticket(t["id"])["title"] == "TV — unplugged on purpose"
     older = FakeKiosk()                                                        # a Kiosk that does not read the field
     older.info["ticket_fields"] = [x for x in older.info["ticket_fields"] if x != "titlePattern"]
-    v2 = make_agent(tmp_path / "older", {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=older)
+    v2 = make_agent(tmp_path / "older", {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=older)
     st2 = Store(v2.s.store_path)
     fid2, _ = st2.raise_finding("PM-UNAVAILABLE", "switch.tv", "tv", "2026-10-15", "P3", f.summary, f.detail)
     Problems(st2).settle(f"finding:{fid2}")
@@ -537,7 +538,7 @@ def test_a_fault_waiting_to_close_tells_the_kiosk_when_and_stops_when_it_holds_a
     # clear — the desk's moment (Notes.CLOSES_AT) is the fault's closesAt; gone from the fault when it holds again
     from vesta_shared.store import Notes
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     iid = st.new_incident("rule_x|lock.front", "rule_x", "lock.front", "P2", {"summary": "Front door unlocked"})
     pb.open_task("incident", iid, "rule_x", "lock.front", "Front door unlocked")
@@ -571,7 +572,7 @@ def test_a_fault_brought_up_to_date_is_written_once_whatever_it_needs():
 def test_the_repair_puts_a_fault_right_in_one_write(tmp_path):
     # the same review: the repair (tickets._converge) hands every change a fault needs to ONE Kiosk.amend
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     fid, _ = st.raise_finding("PM-X", "lock.front", "offline", "2026-10-07", "P3", "Front door lock unavailable", {})
     pb.open_task("finding", fid, "PM-X", "lock.front", "Front door lock unavailable")

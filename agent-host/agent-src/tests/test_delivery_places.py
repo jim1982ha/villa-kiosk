@@ -13,6 +13,7 @@ import pytest
 from helpers import make_agent
 from kiosk_fake import FakeKiosk
 from vesta_agent import delivery, tablet
+from vesta_agent.roster import Roster
 
 OWNER = 111
 JPEG = (base64.b64encode(b"\xff\xd8\xff camera").decode(), "image/jpeg")
@@ -20,7 +21,7 @@ JPEG = (base64.b64encode(b"\xff\xd8\xff camera").decode(), "image/jpeg")
 
 @pytest.fixture
 def agent(tmp_path):
-    return make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}]}, kiosk=FakeKiosk())
+    return make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Owner")]), kiosk=FakeKiosk())
 
 
 @pytest.mark.parametrize("where", ["telegram", "tablet"])

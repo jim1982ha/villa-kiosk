@@ -84,8 +84,9 @@ def test_a_refused_call_says_so_and_confirms_nothing(run, caplog):
 
 
 # ---------------------------------------------------------------------- the `direct` rule
-from vesta_agent.policy import Person  # noqa: E402
-from helpers import listed_policy  # noqa: E402
+from vesta_agent.roster import Person  # noqa: E402
+from vesta_agent.roster import Roster
+from vesta_agent.policy import Policy
 
 JM = Person(111, "Registered", "fm", "en")
 
@@ -94,10 +95,7 @@ JM = Person(111, "Registered", "fm", "en")
 def villa(tmp_path, monkeypatch):
     monkeypatch.delenv("VESTA_HA_READ_ONLY", raising=False)
     session = StrictSession()
-    pol = listed_policy({"act_enabled": True, "people": [{"telegram_id": 111, "name": "Registered", "role": "fm"}],
-                  "chats": {"fm": 111, "owner": -100},
-                  "owner_only_entities": ["light.example_gate_lamp"],
-                  "allowed_services": {"light.turn_on": "direct", "cover.open_cover": "any"}})
+    pol = Policy({"act_enabled": True, "owner_only_entities": ["light.example_gate_lamp"], "allowed_services": {"light.turn_on": "direct", "cover.open_cover": "any"}}, Roster.of(owner=[(-100, "Owner chat")], fm=[(111, "Registered")]))
     # a light group that holds the owner-only lamp (what _wrap_check looks behind)
     actions = Actions(lambda: pol, State(str(tmp_path / "state.db")),
                       lambda: Writer("http://unused", "UTC", write=True, session=session),
@@ -159,8 +157,7 @@ def test_a_group_whose_members_cannot_be_read_asks_the_owner(villa, tmp_path, mo
     # architecture review 17, 2026-10-10: a slow Home Assistant made a group look as if it held nothing, and a "direct"
     # rule switched an owner-only light on with no approval — what cannot be checked is the owner's to approve
     _, session = villa
-    pol = listed_policy({"act_enabled": True, "people": [{"telegram_id": 111, "name": "Registered", "role": "fm"}],
-                  "chats": {"fm": 111, "owner": -100}, "allowed_services": {"light.turn_on": "direct"}})
+    pol = Policy({"act_enabled": True, "allowed_services": {"light.turn_on": "direct"}}, Roster.of(owner=[(-100, "Owner chat")], fm=[(111, "Registered")]))
     blind = Actions(lambda: pol, State(str(tmp_path / "blind.db")),
                     lambda: Writer("http://unused", "UTC", write=True, session=session), related=lambda ids: None)
     answer, msg = blind.request("light", "turn_on", "light.example_group", {}, JM, 111)
@@ -187,14 +184,11 @@ def test_what_an_action_touches_is_unknown_without_the_pack_or_for_an_id_it_neve
 def test_a_direct_rule_asks_the_owner_while_the_pack_is_missing(tmp_path):
     # the real wiring (app.Vesta → Actions → _wrap_check), not a stand-in `related`
     from helpers import known_devices, make_agent
-    v = make_agent(tmp_path, {"act_enabled": True, "people": [{"telegram_id": 111, "name": "JM", "role": "fm"},
-                                                             {"telegram_id": 222, "name": "Owner", "role": "owner"}],
-                              "owner_only_entities": ["siren.example_siren"],
-                              "allowed_services": {"switch.turn_off": "direct"}})
-    _, msg = v.actions.request("switch", "turn_off", "switch.example_siren_power", {}, v.policy().person(111), 111)
+    v = make_agent(tmp_path, {"act_enabled": True, "owner_only_entities": ["siren.example_siren"], "allowed_services": {"switch.turn_off": "direct"}}, roster=Roster.of(owner=[(222, "Owner")], fm=[(111, "JM")]))
+    _, msg = v.actions.request("switch", "turn_off", "switch.example_siren_power", {}, v.policy().roster.person(111), 111)
     assert msg is not None and msg.to == "owner" and msg.chats == [222]                      # asked, never done
     known_devices(v, "switch.example_lamp")
-    answer, msg = v.actions.request("switch", "turn_off", "switch.example_lamp", {}, v.policy().person(111), 111)
+    answer, msg = v.actions.request("switch", "turn_off", "switch.example_lamp", {}, v.policy().roster.person(111), 111)
     assert msg is None and "without approval" in answer                                       # known: direct as before
 
 

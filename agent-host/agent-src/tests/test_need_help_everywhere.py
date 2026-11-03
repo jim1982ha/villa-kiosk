@@ -15,13 +15,14 @@ from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 spec = importlib.util.spec_from_file_location("desk_help", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
 desk = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(desk)
 
 OWNER, FM = 111, 222
-PEOPLE = {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"}, {"telegram_id": FM, "name": "JM", "role": "fm"}]}
+ROSTER = Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "JM")])
 
 
 def run(c):
@@ -30,7 +31,7 @@ def run(c):
 
 def villa(tmp_path):
     k = FakeKiosk()
-    v = make_agent(tmp_path, PEOPLE, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=k)
     return k, v, Store(v.s.store_path)
 
 
@@ -139,7 +140,7 @@ def wake(v, k, monkeypatch):
 def test_need_help_pressed_on_the_tablet_reaches_the_owner_on_telegram_at_once(tmp_path, monkeypatch, caplog):
     # architecture review round 6, 2026-10-30: up to 5 minutes for the agent's read, then up to 5 for the desk's look
     k = FakeKiosk()
-    v = make_agent(tmp_path, PEOPLE, kiosk=k, skills=["alert-desk"])
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=k, skills=["alert-desk"])
     st = Store(v.s.store_path)
     finding_task(st, k)
     k.person_helps("t-pump", by="JM")

@@ -15,6 +15,7 @@ from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 spec = importlib.util.spec_from_file_location("desk25", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
 desk = importlib.util.module_from_spec(spec)
@@ -100,7 +101,7 @@ def test_a_rule_that_never_says_it_cleared_is_read_again_by_the_desk(tmp_path):
 # ---------------------------------------------------------------------- 2 · a person's reopening in the Kiosk
 def test_a_fault_a_person_reopens_in_the_kiosk_stays_open_and_the_facility_manager_is_asked(tmp_path):
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     iid = st.new_incident("automation.door|lock.door", "automation.door", "lock.door", "P2", {"message": "Door unlocked"})
     tid, _ = pb.open_task("incident", iid, "automation.door", "lock.door", "Door unlocked")
@@ -121,7 +122,7 @@ def test_a_fault_a_person_reopens_in_the_kiosk_stays_open_and_the_facility_manag
 
 # ---------------------------------------------------------------------- 3 · a settled copy says "Closed"
 def test_a_copy_settled_after_its_incident_closed_is_headed_closed(tmp_path):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, skills=["alert-desk"])
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), skills=["alert-desk"])
     st = Store(v.s.store_path)
     iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
     run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Door unlocked", "incident_id": iid, "keyboard": True,
@@ -134,8 +135,7 @@ def test_a_copy_settled_after_its_incident_closed_is_headed_closed(tmp_path):
 
 # ---------------------------------------------------------------------- 5 · a person Telegram refuses
 def test_an_alert_no_facility_manager_received_goes_to_the_owner_at_once_and_the_owner_is_told_who(tmp_path):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"},
-                                         {"telegram_id": FM, "name": "Fabien", "role": "fm"}]}, skills=["alert-desk"])
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "Fabien")]), skills=["alert-desk"])
     st = Store(v.s.store_path)
     iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
     st.update_incident(iid, state="asked", asked_at=datetime.now(timezone.utc).isoformat())
@@ -156,7 +156,7 @@ def test_an_alert_no_facility_manager_received_goes_to_the_owner_at_once_and_the
 
 
 def test_telegram_switched_off_is_never_taken_for_a_refused_person(tmp_path):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"}]}, skills=["alert-desk"])
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "Fabien")]), skills=["alert-desk"])
     st = Store(v.s.store_path)
     iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
     v.tg.refuse.add("send")                                            # a network blip, not a refusal
@@ -187,7 +187,7 @@ def test_a_fault_the_agent_cleared_and_a_person_renamed_is_never_a_persons_close
     # the task (a flap), the facility manager then renamed the closed fault — its rename step carries "resolved" too,
     # and the LAST step's kind was read: "Closed in the Cockpit on … (Facility manager)" went into the alert's history
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     settled = []
 
     async def settle(iid, note, **_kw):
@@ -223,7 +223,7 @@ def test_a_reopening_told_before_the_mark_existed_is_never_told_again(tmp_path):
 def test_a_night_fault_a_person_reopens_is_theirs_until_they_close_it(tmp_path):
     # its finding closed (the night no longer sees it): without the person's mark, the next repair cleared it again
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     fid, _ = st.raise_finding("PM-X", "sensor.pump", "power", "2026-10-07", "P3", "Pump weak", {})
     tid, _ = pb.open_task("finding", fid, "PM-X", "sensor.pump", "Pump weak")

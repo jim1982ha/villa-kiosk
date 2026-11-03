@@ -14,12 +14,13 @@ from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 spec = importlib.util.spec_from_file_location("desk_done", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
 desk = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(desk)
 
-PEOPLE = {"people": [{"telegram_id": 111, "name": "Jim", "role": "owner"}, {"telegram_id": 222, "name": "JM", "role": "fm"}]}
+ROSTER = Roster.of(owner=[(111, "Jim")], fm=[(222, "JM")])
 
 
 def run(c):
@@ -87,7 +88,7 @@ def test_a_press_on_the_tablets_notice_is_handed_to_the_desk_as_the_tablets(tmp_
 
 def test_still_there_after_a_telegram_done_says_telegram_never_the_cockpit(tmp_path):
     k = FakeKiosk()
-    v = make_agent(tmp_path, PEOPLE, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=k)
     st = Store(v.s.store_path)
     fid, _ = st.raise_finding("PM-RUNHOURS", "sensor.example_pump_power", "power",
                               datetime.now(timezone.utc).date().isoformat(), "P3", "Pump ran shorter than expected", {})
@@ -119,7 +120,7 @@ def test_a_cockpit_done_recorded_as_work_done_is_the_persons_done_and_never_doub
     # the Kiosk records an issue card's Done as work done (resolved by the person, a completion with their name):
     # the agent takes it as that person's Done in the Cockpit, and adds no completion of its own
     k = FakeKiosk()
-    v = make_agent(tmp_path, PEOPLE, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=k)
     st = Store(v.s.store_path)
     iid, tid = alert(st, "t-door", k)
     k.person_does("t-door", who="JM")
@@ -135,7 +136,7 @@ def test_a_second_need_help_on_a_finding_whose_alert_is_open_goes_to_that_alert(
     # again as a Telegram Need help is, never a second alert
     import json
     k = FakeKiosk()
-    v = make_agent(tmp_path, PEOPLE, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=ROSTER, kiosk=k)
     st = Store(v.s.store_path)
     fid, _ = st.raise_finding("PM-RUNHOURS", "sensor.example_pump_power", "power",
                               datetime.now(timezone.utc).date().isoformat(), "P3", "Pump ran shorter than expected", {})

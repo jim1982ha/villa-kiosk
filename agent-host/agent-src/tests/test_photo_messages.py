@@ -8,9 +8,11 @@ import asyncio
 import base64
 
 from ai_fake import FakeAI
-from helpers import listed_policy, make_agent
+from helpers import make_agent
 from telegram_fake import FakeTelegram
 from vesta_agent import intake, runner
+from vesta_agent.roster import Roster
+from vesta_agent.policy import Policy
 
 OWNER, GROUP = 111, -100123
 JPEG = b"\xff\xd8\xff\xe0fake-jpeg"
@@ -27,8 +29,7 @@ def photo_event(chat, user, caption=None, mime="image/jpeg", reply_to=None):
 
 
 def _Policy():
-    return listed_policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
-                              {"telegram_id": GROUP, "name": "Group", "role": "owner"}]})
+    return Policy({}, Roster.of(owner=[(OWNER, "Owner"), (GROUP, "Group")]))
 
 
 def gate(e):
@@ -50,8 +51,7 @@ def test_a_photo_is_read_by_the_rules_of_a_text_message():
 
 
 def test_the_ai_looks_at_the_photo_with_its_caption(tmp_path, monkeypatch):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}],
-                              "chats": {"owner": GROUP}}, telegram=FakeTelegram(audio=JPEG))
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Owner"), (GROUP, "Owner chat")]), telegram=FakeTelegram(audio=JPEG))
     v.bot_username = "Villa_Test_bot"
     ai = FakeAI("The Onsen pump shows 0 W.").install(monkeypatch)
     asyncio.run(v.handle_message("telegram_attachment", photo_event(GROUP, OWNER, "/ask are you sure ?")))
@@ -64,8 +64,7 @@ def test_the_ai_looks_at_the_photo_with_its_caption(tmp_path, monkeypatch):
 
 def test_a_photo_that_cannot_be_fetched_is_said(tmp_path, monkeypatch):
     from vesta_agent.telegram import TelegramError
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}],
-                              "chats": {"owner": GROUP}})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Owner"), (GROUP, "Owner chat")]))
     v.bot_username = "Villa_Test_bot"
 
     async def refused(file_id, limit=0):

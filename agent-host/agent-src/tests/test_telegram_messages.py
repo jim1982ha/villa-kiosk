@@ -20,7 +20,8 @@ def _delivery(tmp_path):
     s = settings(str(tmp_path))
     tg = FakeTelegram()
     from vesta_agent.policy import Policy
-    return Delivery(tg, State(s.state_path), lambda: Policy({})), tg
+    from vesta_agent.roster import Roster
+    return Delivery(tg, State(s.state_path), lambda: Policy({}, Roster())), tg
 
 
 def test_a_long_list_arrives_after_its_introduction_cut_between_lines():

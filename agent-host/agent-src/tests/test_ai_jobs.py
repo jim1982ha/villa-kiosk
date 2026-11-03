@@ -7,7 +7,7 @@ import types
 import pytest
 
 from ai_fake import FakeAI
-from helpers import listed_policy, make_skill, settings
+from helpers import make_skill, settings
 from vesta_agent import job_steps
 from vesta_agent.ai_jobs import AiJobs, not_set
 from vesta_agent.api_errors import for_job
@@ -17,6 +17,8 @@ from vesta_agent.routing import JOB, Origin
 from vesta_agent.skills import Skills
 from vesta_agent.state import State
 from vesta_agent.turn import Turns
+from vesta_agent.roster import Roster
+from vesta_agent.policy import Policy
 
 ASKER = 77
 
@@ -59,9 +61,7 @@ def jobs(tmp_path, monkeypatch):
     make_skill(s.skills_dir, "rep", {"tools": [], "schedule": [{
         "when": "Mon 08:00", "name": "rep-weekly", "to": "fm", "prompt": "make it", "on_request": True,
         "button": "Weekly report", "without_ai": ["page.py --finish {to} --no-ai {why}"]}]}, {"page.py": "print('{}')\n"})
-    pol = listed_policy({"settings": {"jobs": {"rep-weekly": {"profile": "economy", "limit_usd": 1}}},
-                  "people": [{"telegram_id": -1, "name": "Owners", "role": "owner"},
-                             {"telegram_id": -2, "name": "Managers", "role": "fm"}]})
+    pol = Policy({"settings": {"jobs": {"rep-weekly": {"profile": "economy", "limit_usd": 1}}}}, Roster.of(owner=[(-1, "Owners")], fm=[(-2, "Managers")]))
     told, steps = [], []
 
     async def tell_owner(problem, to):
@@ -195,9 +195,9 @@ def test_one_brain_and_one_limit_for_a_skill_are_what_every_one_of_its_jobs_runs
     make_skill(s.skills_dir, "rep", {"tools": [], "jobs_default": {"brain": "auto", "limit_usd": 2}, "schedule": [
         {"when": "Mon 08:00", "name": "rep-weekly", "to": "fm", "prompt": "make it"},
         {"when": "1 08:00", "name": "rep-monthly", "to": "owner", "prompt": "make it"}]}, {})
-    people = [{"telegram_id": -1, "name": "Owners", "role": "owner"}, {"telegram_id": -2, "name": "Managers", "role": "fm"}]
-    raw = {"settings": {"skill_ai": {"rep": {"brain": "economy", "limit_usd": 1.5}}}, "people": people}
-    pol = [listed_policy(raw)]
+    roster = Roster.of(owner=[(-1, "Owners")], fm=[(-2, "Managers")])
+    raw = {"settings": {"skill_ai": {"rep": {"brain": "economy", "limit_usd": 1.5}}}}
+    pol = [Policy(raw, roster)]
 
     async def safe(coro):
         await coro
@@ -219,19 +219,19 @@ def test_one_brain_and_one_limit_for_a_skill_are_what_every_one_of_its_jobs_runs
         return [(r["profile"], r["limit_usd"]) for r in ai.runs[-2:]]
     assert run_all() == [("economy", 1.5), ("economy", 1.5)]
     raw["settings"]["skill_ai"]["rep"] = {"brain": "performance", "limit_usd": 4}      # the one change, on Rules
-    pol[0] = listed_policy(raw)
+    pol[0] = Policy(raw, roster)
     assert run_all() == [("performance", 4.0), ("performance", 4.0)]
     # the two older files: their brain as it was, the SKILL's starter limit (never the jobs' own)
-    pol[0] = listed_policy({"settings": {"jobs": {"rep-weekly": {"profile": "economy", "limit_usd": 1},
-                                           "rep-monthly": {"profile": "auto", "limit_usd": 6}}}, "people": people})
+    pol[0] = Policy({"settings": {"jobs": {"rep-weekly": {"profile": "economy", "limit_usd": 1},
+                                           "rep-monthly": {"profile": "auto", "limit_usd": 6}}}}, roster)
     assert run_all() == [("auto", 2.0), ("auto", 2.0)]
-    pol[0] = listed_policy({"settings": {"skill_brains": {"rep": "economy"}, "jobs": {"rep-weekly": {"limit_usd": 1}}},
-                     "people": people})
+    pol[0] = Policy({"settings": {"skill_brains": {"rep": "economy"}, "jobs": {"rep-weekly": {"limit_usd": 1}}}},
+                    roster)
     assert run_all() == [("economy", 2.0), ("economy", 2.0)]
-    pol[0] = listed_policy({"settings": {"jobs": {"rep-weekly": {"limit_usd": 1}}}, "people": people})   # no brain: not run
+    pol[0] = Policy({"settings": {"jobs": {"rep-weekly": {"limit_usd": 1}}}}, roster)   # no brain: not run
     n = len(ai.runs)
     asyncio.run(j.run(*j.find("rep-weekly")))
     assert len(ai.runs) == n
-    pol[0] = listed_policy({"people": people})                                                    # nothing set: not run
+    pol[0] = Policy({}, roster)                                                                   # nothing set: not run
     asyncio.run(j.run(*j.find("rep-monthly")))
     assert len(ai.runs) == n

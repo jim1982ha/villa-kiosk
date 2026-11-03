@@ -11,6 +11,7 @@ from ai_fake import FakeAI
 from helpers import make_agent
 from vesta_agent import runner
 from vesta_agent.routing import JOB, Origin
+from vesta_agent.roster import Roster
 
 OWNER, FM_DE, FM_FR, GROUP = 111, 222, 333, -100777
 
@@ -21,12 +22,7 @@ def run(coro):
 
 @pytest.fixture
 def agent(tmp_path):
-    return make_agent(tmp_path, {"people": [
-        {"telegram_id": GROUP, "name": "Group", "role": "owner", "language": "id"},
-        {"telegram_id": FM_DE, "name": "Anna", "role": "fm", "language": "de"},
-        {"telegram_id": FM_FR, "name": "Luc", "role": "fm", "language": "fr"},
-        {"telegram_id": OWNER, "name": "Olga", "role": "owner", "language": "id"}],
-        "settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}}, skills=["reports"])
+    return make_agent(tmp_path, {"settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}}, roster=Roster.of(owner=[(GROUP, "Group"), (OWNER, "Olga")], fm=[(FM_DE, "Anna"), (FM_FR, "Luc")], languages={GROUP: "id", FM_DE: "de", FM_FR: "fr", OWNER: "id"}), skills=["reports"])
 
 
 def send_tool(agent, origin=None):
@@ -149,9 +145,7 @@ def test_stopped_at_its_limit_each_language_gets_the_page_of_its_own_notes(agent
 
 
 def test_stopped_at_its_limit_with_one_language_the_step_runs_once_as_before(tmp_path, monkeypatch):
-    agent = make_agent(tmp_path, {"people": [{"telegram_id": FM_DE, "name": "Anna", "role": "fm", "language": "de"},
-                                             {"telegram_id": OWNER, "name": "Olga", "role": "owner", "language": "en"}],
-                                  "settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}},
+    agent = make_agent(tmp_path, {"settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}}, roster=Roster.of(owner=[(OWNER, "Olga")], fm=[(FM_DE, "Anna")], languages={FM_DE: "de"}),
                        skills=["reports"])
     from vesta_agent import job_steps
     calls = []
@@ -194,11 +188,7 @@ def test_a_language_is_one_value_code_and_name(tmp_path):
 
 
 def test_a_language_outside_the_list_is_named_and_read_as_english(tmp_path):
-    agent = make_agent(tmp_path, {"people": [
-        {"telegram_id": OWNER, "name": "Olga", "role": "owner", "language": "en"},
-        {"telegram_id": FM_DE, "name": "Anna", "role": "fm", "language": "de"},
-        {"telegram_id": FM_FR, "name": "Rui", "role": "fm"}], "languages": {FM_FR: "pt"},
-        "settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}}, skills=["reports"])
+    agent = make_agent(tmp_path, {"languages": {FM_FR: "pt"}, "settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2}}}}, roster=Roster.of(owner=[(OWNER, "Olga")], fm=[(FM_DE, "Anna"), (FM_FR, "Rui")], languages={FM_DE: "de"}), skills=["reports"])
     assert any(f"languages.{FM_FR} must be one of" in p for p in agent.policy().problems)
     assert agent.jobs._language_of("fm") == "German and English"
     out = run(send_tool(agent).handler({"to": "fm", "text": {"Deutsch": "x", "GERMAN": "Noch offen: 2",

@@ -14,6 +14,7 @@ from helpers import copy_skill, settings
 from vesta_shared import limits, skill_settings
 from vesta_agent.policy import Policy
 from vesta_agent.ui.server import UI
+from vesta_agent.roster import Roster
 
 HDR = {"X-Vesta-UI": "1"}
 SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -24,10 +25,6 @@ def ui(tmp_path):
     s = settings(str(tmp_path))
     for name in ("preventive-maintenance", "alert-desk", "investigate"):
         copy_skill(name, s.skills_dir)
-    text = open(s.policy_path, encoding="utf-8").read()
-    with open(s.policy_path, "w", encoding="utf-8") as f:
-        f.write(text.replace("people: []", "people:\n  - {telegram_id: -100, name: Villa group, role: owner}\n"
-                                            "  - {telegram_id: -100, name: Villa group FM, role: fm}", 1))
     return s
 
 
@@ -187,7 +184,7 @@ def test_every_change_is_in_page_changes(ui):
 #: The cut-shaped numbers that are NOT limits on what the agent reads, says or keeps — each with why. A new one fails
 #: the release (test below) until it is declared with limit() or added here with its reason.
 NOT_LIMITS = {
-    ("vesta_agent/policy.py", "hashlib.sha1(str(profile).encode()).digest()[:4]"): "4 bytes of a hash: a tablet "
+    ("vesta_agent/roster.py", "hashlib.sha1(str(profile).encode()).digest()[:4]"): "4 bytes of a hash: a tablet "
                                                                                    "conversation's id, never a text",
     # dates and times cut out of a timestamp, hashes shortened for a key, a word's prefix or suffix
     ("vesta_agent/status.py", "str(start)[:16]"): "the date and time part of a timestamp",
@@ -286,8 +283,7 @@ def test_a_value_set_on_the_tab_reaches_the_ais_own_reads(tmp_path, monkeypatch)
     p.write_text("ai.history_rows: 500\nai.history_default_hours: 48\nlogbook.villa_window_hours: 2\n")
     ha = FakeHA(tools=[tool("ha_get_history", entity_ids="string", source="string", start_time="string", limit="number"),
                        tool("ha_get_logs", source="string", hours_back="number", entity_id="string")])
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
-                              "ha_read_tools": ["ha_get_history", "ha_get_logs"]}, reader=ha)
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_history", "ha_get_logs"]}, roster=Roster.of(owner=[(111, "Owner"), (-1, "Owner chat")]), reader=ha)
     asyncio.run(v.refresh_server_tools())
     tools = {t.name: t for t in v.toolbox().tool_objects(None, Origin(-1, CONVERSATION))}
     asyncio.run(tools["ha_get_history"].handler({"entity_ids": "sensor.example_power"}))
@@ -477,7 +473,7 @@ def test_a_time_of_day_is_a_limit_too(tmp_path, monkeypatch):
 def test_the_ais_read_skill_tool_gives_each_named_setting_its_value(tmp_path):
     # the AI reads the guide through read_skill: the values beside the names, as the page's chips show them
     from helpers import make_agent
-    v = make_agent(str(tmp_path), {"people": []}, skills=["preventive-maintenance"])
+    v = make_agent(str(tmp_path), {}, roster=Roster.of(), skills=["preventive-maintenance"])
     res = asyncio.run(v.toolbox()._read_skill().handler({"skill": "preventive-maintenance"}))
     text = res["content"][0]["text"]
     assert "`unavailable_minutes` (10 minutes)" in text and "`pack.rebuild_at` (01:30 villa time)" in text

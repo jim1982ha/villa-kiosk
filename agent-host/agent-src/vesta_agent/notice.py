@@ -137,7 +137,7 @@ class Notices:
         if not chat:
             return "en"
         try:
-            return status_words.lang_of(self.policy().language_of(int(chat), None))
+            return status_words.lang_of(self.policy().roster.language_of(int(chat), None))
         except Exception:  # noqa: BLE001 — the card is written in English, never not at all
             return "en"
 
@@ -148,15 +148,15 @@ class Notices:
 
     def roles_for(self, chat: int, to=None) -> set[str]:
         """The roles a notice to `chat` is for: `to` (a role, or every role the copy went there for: outcome merges
-        them), else the roles whose messages go to the chat (policy.delivered_roles: the villa's lists) —
+        them), else the roles whose messages go to the chat (Roster.delivered_roles: the villa's lists) —
         for a private chat that gets none, its person's role."""
         roles = self._wanted(to)
         if roles:
             return roles
         pol = self.policy()
-        roles = pol.delivered_roles(chat)
-        if not roles and int(chat) > 0 and pol.person(chat) is not None:
-            roles = {pol.person(chat).role}
+        roles = pol.roster.delivered_roles(chat)
+        if not roles and int(chat) > 0 and pol.roster.person(chat) is not None:
+            roles = {pol.roster.person(chat).role}
         return roles & set(ROLE_WORDS)
 
     def _reach(self, incident: int) -> list[str] | None:
@@ -464,9 +464,9 @@ class Notices:
             return roles & set(ROLE_WORDS)
         try:
             pol = self.policy()
-            roles = {r for chat, _rs in h.get("chats") or [] for r in pol.roles_in(int(chat))}
+            roles = {r for chat, _rs in h.get("chats") or [] for r in pol.roster.roles_in(int(chat))}
             names = set(h.get("to") or [])
-            roles |= {e.role for e in pol.entries if e.name in names}
+            roles |= {e.role for e in pol.roster.entries if e.name in names}
         except Exception:  # noqa: BLE001 — a policy that cannot be read: the role words written then
             names = set(h.get("to") or [])
         words = {w.removeprefix("the ").lower(): r for r, w in ROLE_WORDS.items()}

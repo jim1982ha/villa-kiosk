@@ -91,11 +91,11 @@ def page_policy(path: str, pack_path: str | None) -> Policy:
     that cannot be read counts as one that sets nothing, its problem shown by rules_problems (architecture review 9: an
     unparseable file made api/jobs, api/overview and api/skills answer 500, and Rules (file) — the one place to repair
     it — hung on "Loading…"). The agent's own reading is its own (policy.py)."""
-    from vesta_shared import villa_recipients
+    from ..roster import Roster
     try:
-        return Policy.load(path, villa_recipients.get(pack_path) if pack_path else None)
+        return Policy.load(path, Roster.kept(pack_path))
     except (yaml.YAMLError, OSError, ValueError, TypeError):
-        return Policy({})
+        return Policy({}, Roster.kept(pack_path))
 
 
 class PageFiles:

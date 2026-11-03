@@ -10,12 +10,14 @@ from ha_fake import FakeHA
 from helpers import make_agent
 from vesta_agent.policy import Policy
 from vesta_shared import villa_recipients
+from vesta_agent.roster import Roster
 
 BOT = 900
 JM, FABIEN, GROUP, OTHER_GROUP = 111, 222, -100333, -100444
 PEOPLE = [{"telegram_id": JM, "name": "Jm", "role": "owner", "language": "fr"},
           {"telegram_id": FABIEN, "name": "Fabien", "role": "fm"},
           {"telegram_id": GROUP, "name": "Group", "role": "fm"}]
+ROSTER = Roster.of(owner=[(JM, "Jm")], fm=[(FABIEN, "Fabien"), (GROUP, "Group")], languages={JM: "fr"})
 
 
 def _villa(owner: str, fm: str, entries: dict | None = None) -> FakeHA:
@@ -53,26 +55,26 @@ def test_the_villa_lists_are_read_as_named_telegram_chats_by_role():
 def test_a_chat_in_a_kiosk_list_gets_its_roles_messages_and_rights_by_the_entitys_name():
     from vesta_agent.routing import Routing
     lists = {"owner": [{"chat": JM, "name": "Jm private"}], "fm": [{"chat": OTHER_GROUP, "name": "Managers group"}]}
-    pol = Policy({"languages": {OTHER_GROUP: "de"}}, lists)
-    assert pol.chats_for("owner") == [JM] and pol.chats_for("fm") == [OTHER_GROUP]
-    assert pol.person(JM).name == "Jm private" and pol.person(JM).role == "owner"
-    assert pol.may_approve_in(JM, "owner") and pol.may_approve_in(OTHER_GROUP, "any")
-    assert not pol.may_approve_in(OTHER_GROUP, "owner")
-    assert pol.member(555, OTHER_GROUP, "Wayan").role == "fm"                  # a group's member: its role
-    assert pol.language_of(OTHER_GROUP, "fm") == "de" and pol.language_of(JM, "owner") == "en"
-    assert pol.chats_for("fm", "de") == [OTHER_GROUP] and pol.chats_for("fm", "en") == []
+    pol = Policy({"languages": {OTHER_GROUP: "de"}}, Roster(lists))
+    assert pol.roster.chats_for("owner") == [JM] and pol.roster.chats_for("fm") == [OTHER_GROUP]
+    assert pol.roster.person(JM).name == "Jm private" and pol.roster.person(JM).role == "owner"
+    assert pol.roster.may_approve_in(JM, "owner") and pol.roster.may_approve_in(OTHER_GROUP, "any")
+    assert not pol.roster.may_approve_in(OTHER_GROUP, "owner")
+    assert pol.roster.member(555, OTHER_GROUP, "Wayan").role == "fm"                  # a group's member: its role
+    assert pol.roster.language_of(OTHER_GROUP, "fm") == "de" and pol.roster.language_of(JM, "owner") == "en"
+    assert pol.roster.chats_for("fm", "de") == [OTHER_GROUP] and pol.roster.chats_for("fm", "en") == []
     assert Routing(pol).approver_chats("owner", None) == [JM]
     assert Routing(pol).approver_chats("any", OTHER_GROUP) == [OTHER_GROUP]
 
 
 def test_a_chat_only_in_an_older_people_list_has_no_rights_and_gets_nothing():
     # ⚠️ ONE LIST (owner, 2026-11-03): People's rows are an older shape, read for their languages only
-    pol = Policy({"people": PEOPLE}, {"owner": [{"chat": JM, "name": "Jm"}]})
-    assert pol.language_of(JM, "owner") == "fr"                            # its language kept
+    pol = Policy({"people": PEOPLE}, Roster.of(owner=[(JM, "Jm")]))
+    assert pol.roster.language_of(JM, "owner") == "fr"                            # its language kept
     for chat in (FABIEN, GROUP):
-        assert pol.person(chat) is None and pol.roles_in(chat) == set() and not pol.knows_chat(chat)
-        assert not pol.may_approve_in(chat, "any") and pol.member(chat, chat) is None
-    assert pol.chats_for("fm") == [] and pol.member(555, GROUP, "Wayan") is None
+        assert pol.roster.person(chat) is None and pol.roster.roles_in(chat) == set() and not pol.roster.knows_chat(chat)
+        assert not pol.roster.may_approve_in(chat, "any") and pol.roster.member(chat, chat) is None
+    assert pol.roster.chats_for("fm") == [] and pol.roster.member(555, GROUP, "Wayan") is None
     from vesta_agent.routing import Routing
     assert Routing(pol).approver_chats("any", FABIEN) == [JM]               # an unknown chat: the owner's
 
@@ -80,7 +82,7 @@ def test_a_chat_only_in_an_older_people_list_has_no_rights_and_gets_nothing():
 def test_never_read_nobody_is_listed_and_a_request_is_refused_with_its_reason(tmp_path):
     v = make_agent(tmp_path, {"act_enabled": True, "allowed_services": {"light.turn_on": "any"}})
     pol = v.policy()
-    assert pol.entries == [] and pol.chats_for("owner") == pol.chats_for("fm") == []
+    assert pol.roster.entries == [] and pol.roster.chats_for("owner") == pol.roster.chats_for("fm") == []
     answer, msg = v.actions.request("light", "turn_on", "light.pool", {}, None, None)
     assert msg is None and answer.startswith("Refused: no chat where the owner can approve it in the VESTA Kiosk")
     done = asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Pool pump offline."}]}))
@@ -97,7 +99,7 @@ def test_the_agent_reads_the_villa_lists_and_its_next_message_follows_them(tmp_p
                                                    "fm": [{"chat": OTHER_GROUP, "name": "Managers group"}]}
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Pool pump offline."}]}))
     assert [c for c, _, _ in v.tg.sent] == [OTHER_GROUP]
-    assert v.policy().person(JM).name == "Jm private" and v.policy().language_of(OTHER_GROUP, "fm") == "fr"
+    assert v.policy().roster.person(JM).name == "Jm private" and v.policy().roster.language_of(OTHER_GROUP, "fm") == "fr"
     # a reminder or a step's notice sent there says whom it is for by the same lists
     assert v.notices.roles_for(OTHER_GROUP) == {"fm"} and v.notices.roles_for(GROUP) == set()
     # emptied in the Kiosk: nobody of the role; the villa unreachable later: what was kept stays
@@ -105,7 +107,7 @@ def test_the_agent_reads_the_villa_lists_and_its_next_message_follows_them(tmp_p
     v.read_recipients()
     v.tg.sent.clear()
     done = asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "text": "Pool pump offline."}]}))
-    assert v.tg.sent == [] and done["unrouted"] == 1 and v.policy().person(JM) is not None
+    assert v.tg.sent == [] and done["unrouted"] == 1 and v.policy().roster.person(JM) is not None
     v.reader = FakeHA()
     v.read_recipients()
     assert villa_recipients.get(v.s.pack_path) == {"owner": [{"chat": JM, "name": "Jm private"}], "fm": []}
@@ -134,8 +136,8 @@ def test_an_older_file_of_chat_ids_is_still_read_and_rewritten_with_names(tmp_pa
     with open(villa_recipients.path(v.s.pack_path), "w") as f:
         json.dump({"owner": [JM], "fm": [OTHER_GROUP]}, f)
     pol = v.policy()
-    assert pol.chats_for("owner") == [JM] and pol.person(JM).name == "Owner chat"
-    assert pol.may_approve_in(OTHER_GROUP, "any")
+    assert pol.roster.chats_for("owner") == [JM] and pol.roster.person(JM).name == "Owner chat"
+    assert pol.roster.may_approve_in(OTHER_GROUP, "any")
     v.read_recipients()                                     # the next reading writes the names
     with open(villa_recipients.path(v.s.pack_path)) as f:
         assert json.load(f)["owner"] == [{"chat": JM, "name": "Jm private"}]
@@ -153,7 +155,7 @@ def test_on_a_machine_just_started_both_reads_run_at_the_first_housekeeping(tmp_
     from kiosk_fake import FakeKiosk
     clock = [10.0]
     monkeypatch.setattr(app_module.time, "monotonic", lambda: clock[0])
-    v = make_agent(tmp_path, {"people": PEOPLE}, reader=_villa("notify.tg_jm", "notify.tg_other"), kiosk=FakeKiosk())
+    v = make_agent(tmp_path, {}, roster=ROSTER, reader=_villa("notify.tg_jm", "notify.tg_other"), kiosk=FakeKiosk())
     faults = []
 
     async def repair():
@@ -172,8 +174,8 @@ def test_on_a_machine_just_started_both_reads_run_at_the_first_housekeeping(tmp_
     assert faults == [10.0, 310.0] and _chats(v)["fm"] == []
 
 
-def test_the_knowledge_packs_people_are_the_kiosks_lists_with_each_chats_language(tmp_path, monkeypatch):
-    # the skills read the pack (villa-concierge: who is talking): its people table is the agent's entries, never a
+def test_the_knowledge_packs_chats_are_the_kiosks_lists_with_each_chats_language(tmp_path, monkeypatch):
+    # the skills read the pack (villa-concierge: who is talking): its chats table is the agent's entries, never a
     # file of its own (owner, 2026-11-03)
     import subprocess
     import vesta_agent.app as app_module
@@ -183,9 +185,54 @@ def test_the_knowledge_packs_people_are_the_kiosks_lists_with_each_chats_languag
     seen = {}
 
     def fake_run(cmd, **kw):
-        seen["people"] = json.load(open(cmd[cmd.index("--people") + 1]))["people"]
+        seen["chats"] = json.load(open(cmd[cmd.index("--chats") + 1]))["chats"]
         return subprocess.CompletedProcess(cmd, 0, "{}", "")
     monkeypatch.setattr(app_module.subprocess, "run", fake_run)
     v._build_pack()
-    assert seen["people"] == [{"name": "Jm private", "role": "owner", "language": "en", "chat": JM},
-                              {"name": "Managers group", "role": "fm", "language": "id", "chat": OTHER_GROUP}]
+    assert seen["chats"] == [{"chat": JM, "role": "owner", "name": "Jm private", "language": "en"},
+                             {"chat": OTHER_GROUP, "role": "fm", "name": "Managers group", "language": "id"}]
+
+
+def test_the_pack_never_takes_a_chat_for_a_person_by_its_name(tmp_path):
+    # architecture review round 17, lead 6: a chat whose name matched a person's (lower-cased) was merged into them —
+    # the person took the chat's role and language, and a group was listed among the villa's people
+    from vesta_shared.build_pack import main as build
+    from vesta_shared.knowledge_pack import KnowledgePack
+    fixture = tmp_path / "villa"
+    fixture.mkdir()
+    (fixture / "registry.json").write_text(json.dumps({"entities": [], "areas": [], "devices": []}))
+    (fixture / "states.json").write_text(json.dumps({"states": {}}))
+    (fixture / "helpers.json").write_text(json.dumps({"helpers": [{"entity_id": "person.example_jm", "name": "Jm Private",
+                                                                   "helper_type": "person"}], "states": {}}))
+    chats = tmp_path / "chats.json"
+    chats.write_text(json.dumps({"chats": [{"chat": JM, "role": "owner", "name": "jm private", "language": "fr"},
+                                           {"chat": OTHER_GROUP, "role": "fm", "name": "Managers group",
+                                            "language": "id"}]}))
+    out = tmp_path / "pack.json"
+    build(["--out", str(out), "--fixture-dir", str(fixture), "--chats", str(chats)])
+    pack = KnowledgePack.read(str(out))
+    assert pack.people == [{"entity_id": "person.example_jm", "name": "Jm Private"}]
+    assert pack.chats == [{"chat": JM, "role": "owner", "name": "jm private", "language": "fr"},
+                          {"chat": OTHER_GROUP, "role": "fm", "name": "Managers group", "language": "id"}]
+
+
+# ---- the lists agreed in writing (architecture review round 17, lead 2): the agreement's `recipients` section
+def test_a_lists_text_is_read_as_every_example_of_the_agreement_says():
+    from vesta_shared import agreement
+    examples = agreement.section("recipients").get("examples")
+    assert examples, "the agreement has no examples of a list's text"
+    for ex in examples:
+        assert villa_recipients.entities(ex["text"]) == ex["targets"], ex
+
+
+def test_the_helpers_the_place_and_the_packages_size_are_the_agreements():
+    import os
+    import yaml
+    from helpers import ROOT
+    from vesta_shared import agreement
+    agreed = agreement.section("recipients")
+    assert villa_recipients.HELPERS == agreed["lists"] and agreed["where"] in villa_recipients.WHERE
+    with open(os.path.join(ROOT, "homeassistant", "packages", "vesta_message.yaml"), encoding="utf-8") as f:
+        package = yaml.safe_load(f)
+    for helper in agreed["lists"].values():
+        assert package["input_text"][helper.split(".", 1)[1]]["max"] == agreed["maxChars"], helper

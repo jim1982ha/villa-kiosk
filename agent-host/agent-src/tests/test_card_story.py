@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from helpers import listed_policy, settings
+from helpers import settings
 from kiosk_fake import FakeKiosk
 from vesta_agent.layout import head_text
 from vesta_agent.notice import Notices, note_press
@@ -16,9 +16,11 @@ from vesta_agent.state import State
 from vesta_agent.tickets import Tickets
 from vesta_shared.problems import Problems
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
+from vesta_agent.policy import Policy
 
 FM, OWNER = 111, 222
-PEOPLE = [{"telegram_id": FM, "name": "Wayan", "role": "fm"}, {"telegram_id": OWNER, "name": "Fabien", "role": "owner"}]
+ROSTER = Roster.of(owner=[(OWNER, "Fabien")], fm=[(FM, "Wayan")])
 
 
 def run(c):
@@ -28,7 +30,7 @@ def run(c):
 def villa(tmp_path, kiosk=None):
     s = settings(str(tmp_path))
     state = State(s.state_path)
-    notices = Notices(state, lambda: listed_policy({"people": PEOPLE}), "UTC")
+    notices = Notices(state, lambda: Policy({}, ROSTER), "UTC")
     k = kiosk or FakeKiosk()
 
     async def settle(_iid, _note, **_kw):
@@ -178,7 +180,7 @@ def test_a_fault_the_repair_makes_tells_its_story_in_that_same_repair(tmp_path):
     # owner's end-to-end test, 2026-10-30: alert #95's card had no step until the NEXT repair, 4 minutes later
     s = settings(str(tmp_path))
     state = State(s.state_path)
-    notices = Notices(state, lambda: listed_policy({"people": PEOPLE}), "UTC")
+    notices = Notices(state, lambda: Policy({}, ROSTER), "UTC")
     k = FakeKiosk()
 
     async def settle(_iid, _note, **_kw):

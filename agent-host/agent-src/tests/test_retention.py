@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from helpers import STARTER_SKILLS
 from vesta_shared import retention
 from vesta_shared.ha_client import HABase
+from vesta_agent.roster import Roster
 
 NOW = datetime(2026, 10, 20, 12, 0, tzinfo=timezone.utc)
 KEPT_DAYS = 12.25
@@ -124,8 +125,7 @@ def test_the_real_caller_adds_the_older_part_to_the_ais_answer(tmp_path):
         "entities": [{"entity_id": "binary_sensor.door", "states": []}]}, "metadata": {}})
     ha = FakeHA(tools=[tool("ha_get_history", entity_ids="string", start_time="string")],
                 answers={"ha_get_history": answer})
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 111, "name": "Owner", "role": "owner"}], "chats": {"owner": -1},
-                              "ha_read_tools": ["ha_get_history"]}, reader=ha)
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_history"]}, roster=Roster.of(owner=[(111, "Owner"), (-1, "Owner chat")]), reader=ha)
     with open(v.s.pack_path, "w", encoding="utf-8") as f:
         f.write(build_pack({"entities": []}, [], detailed_days=10.0).to_json())
     asyncio.run(v.refresh_server_tools())

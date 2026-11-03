@@ -1,3 +1,16 @@
+## 0.12.441
+
+What you will see:
+- Someone writing to VESTA from a Telegram chat that is not on the villa's lists now reads: "This chat is not on the
+  villa's lists. Ask the owner to add it in the VESTA Kiosk (Settings › Messages › Who gets the messages)." It no
+  longer says "You are not registered with the VESTA Agent" or shows their Telegram id. A button pressed there shows
+  the same words.
+- On the VESTA Agent page, Copy this setup now says each chat's language stays with the villa (it named People and
+  their Telegram ids, which are the Kiosk's lists now), and the rule "no approval when a registered person asks" reads
+  "no approval when someone on the villa's lists asks". The app's Documentation tab describes the Kiosk's lists.
+- Nothing else on screen: the rest is how VESTA is built inside (who is who in one place, the lists' format agreed with
+  the VESTA Kiosk in writing, the device list keeping the chats apart from the villa's people).
+
 ## 0.12.440
 
 What you will see:

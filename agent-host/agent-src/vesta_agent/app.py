@@ -69,7 +69,8 @@ from .voice import TelegramAudio, Voice
 from .transcriber import villa_entity_ids
 from . import answering, missed_at_start, speech
 from .tickets import Tickets
-from .policy import NOT_REGISTERED, Person, Policy, problems as policy_problems
+from .policy import Policy, problems as policy_problems
+from .roster import NOT_LISTED, Person
 from .routing import Origin, Routing
 from .scheduler import Scheduler, every as scheduler_every
 from .command_offers import CommandOffers
@@ -237,7 +238,7 @@ class Vesta:
         # naming none — one tablet test, not a second copy (architecture review round 10)
         self.briefing = Briefing(checks=lambda: skill_checks(self.skills), run=run_check(self.s, self.state),
                                  approvals=lambda: self.approvals.now() if self.policy().act_enabled else None,
-                                 facts=self.chat_facts, where=lambda cid: self.policy().chat_label(cid) or tablet.WHERE)
+                                 facts=self.chat_facts, where=lambda cid: self.policy().roster.chat_label(cid) or tablet.WHERE)
         # what follows every answer, in its order (answering.py)
         self.answering = answering.Answering(self.delivery, self.fault_offers, self.approvals, self.chat_jobs,
                                              self.tablet.later, self.aloud)
@@ -391,12 +392,12 @@ class Vesta:
             # entity unhidden, a device deleted) waited for 01:30; read in the background, the start is not held up
             self.devices_changed(0)
         pol = self.policy()
-        # a listed group with no person still answers its members (policy.member): only empty lists are "nobody".
+        # a listed group with no person still answers its members (Roster.member): only empty lists are "nobody".
         # ⚠️ NOBODY UNTIL THE VILLA'S LISTS NAME SOMEONE (owner, 2026-11-03: they are the one list of who is who): never
         # read yet (a first start before the villa answered), or naming no Telegram chat — said, never guessed around.
         # The villa's own alerts are sent by the villa itself, whatever the agent knows.
-        if not pol.destinations:
-            read = os.path.exists(villa_recipients.path(self.s.pack_path) or "")
+        if not pol.roster.destinations:
+            read = pol.roster.read_yet
             log.warning("The villa's lists of who gets the messages %s: the agent answers nobody and posts nowhere "
                         "until they name a Telegram chat, in %s.", "name no Telegram chat" if read else "are not read yet",
                         villa_recipients.WHERE)
@@ -482,15 +483,15 @@ class Vesta:
             return self._build_pack()
 
     def _build_pack(self) -> dict:
-        # ⚠️ THE PACK'S PEOPLE ARE THE AGENT'S ENTRIES (owner, 2026-11-03: who is who is the VESTA Kiosk's lists, each
-        # chat's language the People card's): handed over as the pack builder's people table, never read by it from a
-        # file of its own — a chat, its role, its name and its language, as Policy reads them
-        people = os.path.join(self.s.data_dir, "pack_people.json")
-        with open(people, "w", encoding="utf-8") as f:
-            json.dump({"people": [{"name": e.name, "role": e.role, "language": e.language, "chat": e.telegram_id}
-                                  for e in self.policy().entries]}, f)
+        # ⚠️ THE PACK'S CHATS ARE THE AGENT'S ENTRIES (owner, 2026-11-03: who is who is the VESTA Kiosk's lists, each chat's
+        # language the People card's): handed over as the pack's own table of chats — a chat, its role, its name and its
+        # language, as the roster reads them — never merged into the villa's people by name (round 17, lead 6)
+        chats = os.path.join(self.s.data_dir, "pack_chats.json")
+        with open(chats, "w", encoding="utf-8") as f:
+            json.dump({"chats": [{"chat": e.telegram_id, "role": e.role, "name": e.name, "language": e.language}
+                                 for e in self.policy().roster.entries]}, f)
         p = subprocess.run([sys.executable, "-m", "vesta_shared.build_pack", "--out", self.s.pack_path,
-                            "--store", self.s.store_path, "--zone", self.s.timezone, "--people", people],
+                            "--store", self.s.store_path, "--zone", self.s.timezone, "--chats", chats],
                            cwd=self.s.out_dir, env=script_env(self.s), capture_output=True, text=True, timeout=limit(
                                "pack.build_timeout_s", 900, unit="seconds", group="run", lo=60, hi=7200,
                                says="How long the nightly reading of the villa's devices (the skills' list of what "
@@ -718,7 +719,7 @@ class Vesta:
             async def toast(text: str):
                 await self.tablet.answer(chat, ask.get("seq"), text)
             return await self._safe(self._pressed(
-                f"{pressed.get('kind')}:{pressed.get('id')}", chat, self.policy().member(chat, chat), toast,
+                f"{pressed.get('kind')}:{pressed.get('id')}", chat, self.policy().roster.member(chat, chat), toast,
                 lambda who, parts: press.from_tablet(chat, who, parts, toast, name=person.name)))
         # a spoken question (ticket 23 of "One inbox", hold to talk): read as a voice note, its audio the tablet's
         spoken = isinstance(ask.get("voice"), str) and bool(ask["voice"])
@@ -782,7 +783,7 @@ class Vesta:
             if got.action == "whoami":
                 log.info("whoami: person %s (%s) in chat %s", from_id, q.first_name, got.chat)
             elif got.action == "unregistered":
-                log.info("Unregistered sender: id %s (%s) in chat %s", from_id, q.first_name, got.chat)
+                log.info("Sender not on the villa's lists: id %s (%s) in chat %s", from_id, q.first_name, got.chat)
                 self.state.log("unknown_sender", {"telegram_id": from_id, "chat": got.chat})
             elif got.action == "new":
                 self.state.set_session(got.chat, None)
@@ -956,7 +957,7 @@ class Vesta:
         async def toast(text: str):
             await self.delivery.toast(qid, text)
 
-        await self._pressed(data, cid, pol.member(presser, cid, q.get("from_first")), toast,
+        await self._pressed(data, cid, pol.roster.member(presser, cid, q.get("from_first")), toast,
                             lambda person, parts: press.from_telegram(q, cid, person, parts, toast))
 
     async def _pressed(self, data: str, chat: int, person: Person | None, toast, make) -> None:
@@ -970,9 +971,9 @@ class Vesta:
                   button_data.DECLINE: self.command_offers.decline}.get(kind)
         if handle is None:
             return await toast("Unknown button.")
-        # a listed group's member presses with its role (Policy.member); a tablet's profile as the Kiosk stamped it
+        # a listed group's member presses with its role (Roster.member); a tablet's profile as the Kiosk stamped it
         if kind in button_data.FOR_PEOPLE_ONLY and person is None:
-            return await toast(NOT_REGISTERED)
+            return await toast(NOT_LISTED)
         await handle(make(person, parts))
 
     async def _press_continue(self, p: "Press") -> None:
@@ -986,7 +987,7 @@ class Vesta:
                             request=self.requests.resume(cont.get("invoked"), cont.get("inv")))
 
     async def _press_alert(self, p: "Press") -> None:
-        # the presser as this chat knows them (Policy.member: one person may be both owner and fm, each with its name)
+        # the presser as this chat knows them (Roster.member: one person may be both owner and fm, each with its name)
         await self.buttons.press(p.chat, p.parts, p.person, p.toast, name=p.person.name, pressed=p.mid,
                                  anywhere=p.place == press.TABLET)
 
@@ -1017,10 +1018,10 @@ class Vesta:
         """⚠️ TOLD ON TELEGRAM, ONCE (architecture review 25): only the VESTA Agent page named a person Telegram refuses —
         Fabien never pressed Start and missed every message meant for him. Said to the owner's chats (never to the
         refused one) the first time; again only once it was reached in between."""
-        names = [e.name for e in self.policy().entries if e.telegram_id == int(chat)]
+        names = self.policy().roster.names_of(int(chat))
         if not names:
             return
-        who = " / ".join(dict.fromkeys(names))
+        who = " / ".join(names)
         fix = (f"they open a private chat with @{self.bot_username or 'the bot'} and press Start (or send /start) once"
                if chat > 0 else f"the bot is added to the group again, and the group's new chat listed in "
                                 f"{villa_recipients.WHERE}")

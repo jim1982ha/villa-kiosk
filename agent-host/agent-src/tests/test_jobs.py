@@ -17,9 +17,11 @@ from ha_fake import FakeHA, tool
 from vesta_agent import runner
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
-from vesta_agent.policy import Person, Policy, problems
+from vesta_agent.policy import Policy, problems
+from vesta_agent.roster import Person
 from vesta_agent.routing import CONVERSATION, JOB, Origin
 from vesta_agent.skills import SkillError, Skills, ai_jobs
+from vesta_agent.roster import Roster
 
 GROUP, ASKER = -100555, 444
 
@@ -30,9 +32,7 @@ def run(coro):
 
 @pytest.fixture
 def agent(tmp_path, monkeypatch):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": ASKER, "name": "Asker", "role": "fm"}],
-                              "chats": {"owner": GROUP, "fm": GROUP}, "ha_read_tools": ["ha_get_state"],
-                              "settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2.5}}}},
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_state"], "settings": {"skill_ai": {"reports": {"brain": "performance", "limit_usd": 2.5}}}}, roster=Roster.of(owner=[(GROUP, "Owner chat")], fm=[(ASKER, "Asker"), (GROUP, "Facility manager chat")]),
                    skills=["reports"], reader=FakeHA(tools=[tool("ha_get_state")]))
     v.bot_username = BOT["username"]
     v.code = []

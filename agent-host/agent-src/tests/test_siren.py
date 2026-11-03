@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from vesta_agent.siren import Siren
 from vesta_agent.state import State
+from vesta_agent.roster import Roster
 
 T0 = datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc)
 POLICY = types.SimpleNamespace(siren_entity="switch.example_siren", siren_auto_off_min=3)
@@ -81,7 +82,7 @@ def test_every_execution_reaches_the_siren_whatever_the_path(tmp_path, monkeypat
 
 def test_the_agent_wires_the_siren_to_its_actions_and_watches_it(tmp_path):
     from helpers import make_agent
-    agent = make_agent(tmp_path, {"siren_entity": "switch.example_siren", "people": []})
+    agent = make_agent(tmp_path, {"siren_entity": "switch.example_siren"}, roster=Roster.of())
     agent.actions.on_executed("switch", "turn_on", ["switch.example_siren"])
     assert agent.state.siren_stop() is not None
     import inspect

@@ -10,6 +10,7 @@ from helpers import make_agent
 from kiosk_fake import FakeKiosk
 from vesta_agent.kiosk import KioskError
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 FM = 222
 SENTENCE = "a fault's entity must be one the villa knows"
@@ -20,7 +21,7 @@ def run(c):
 
 
 def _villa(tmp_path, k):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     st = Store(v.s.store_path)
     st.raise_finding("PM-X", "sensor.example_a", "offline", "2026-10-09", "P3", "A offline", {})
     st.raise_finding("PM-X", "sensor.example_b", "offline", "2026-10-09", "P3", "B offline", {})
@@ -77,7 +78,7 @@ def test_the_error_says_whether_the_kiosk_refused_or_was_not_reached():
 
 def test_the_refusals_words_reach_the_chat_answer(tmp_path):
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=k)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
     k.refuses("t1", 403, SENTENCE)
     tools = {t.name: t for t in v.toolbox().tool_objects(None, None)}
     out = run(tools["create_ticket"].handler({"title": "Pump weak"}))

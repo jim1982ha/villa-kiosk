@@ -103,8 +103,7 @@ class Writer:
 
 def villa(tmp_path, empty="on", images=None):
     states = {EMPTY_SENSOR: {"entity_id": EMPTY_SENSOR, "state": empty}}
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "JM", "role": "owner"}], "act_enabled": True,
-                              "siren_entity": SIREN, "allowed_services": {"switch.turn_on": "owner"}},
+    v = make_agent(tmp_path, {"act_enabled": True, "siren_entity": SIREN, "allowed_services": {"switch.turn_on": "owner"}}, roster=Roster.of(owner=[(OWNER, "JM")]),
                    reader=FakeHA(tools=[tool("ha_get_state")], states=states, images=images or {}))
     with open(v.s.pack_path, "w", encoding="utf-8") as f:
         f.write(build_pack(REGISTRY, []).to_json())
@@ -189,10 +188,7 @@ def rules_villa(tmp_path, rule, extra=None):
     one device with its plug, and a scene that sets it."""
     states = {"scene.example_alarm": {"entity_id": "scene.example_alarm", "state": "scening",
                                       "attributes": {"entity_id": [SIREN]}}}
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "JM", "role": "owner"},
-                                         {"telegram_id": FM, "name": "Fabien", "role": "fm"}],
-                              "act_enabled": True, "siren_entity": SIREN,
-                              "allowed_services": {"switch.turn_on": rule, "scene.turn_on": "direct", **(extra or {})}},
+    v = make_agent(tmp_path, {"act_enabled": True, "siren_entity": SIREN, "allowed_services": {"switch.turn_on": rule, "scene.turn_on": "direct", **(extra or {})}}, roster=Roster.of(owner=[(OWNER, "JM")], fm=[(FM, "Fabien")]),
                    reader=FakeHA(tools=[tool("ha_get_state")], states=states))
     reg = {"entities": [{"entity_id": SIREN, "device_id": "dev_siren"},
                         {"entity_id": "switch.example_siren_plug", "device_id": "dev_siren"},
@@ -205,7 +201,7 @@ def rules_villa(tmp_path, rule, extra=None):
 
 def test_a_direct_rule_still_asks_the_owner_before_the_siren(tmp_path):
     v = rules_villa(tmp_path, "direct")
-    jm = v.policy().person(OWNER)
+    jm = v.policy().roster.person(OWNER)
     answer, msg = v.actions.request("switch", "turn_on", SIREN, {}, jm, OWNER)
     assert msg is not None and "Approval requested from the owner" in answer
     assert v.state.approval(msg.approval_id)["required_role"] == "owner"
@@ -231,6 +227,7 @@ def test_an_any_rule_lets_only_the_owner_approve_the_siren(tmp_path):
 from types import SimpleNamespace  # noqa: E402
 
 from vesta_agent import siren as S  # noqa: E402
+from vesta_agent.roster import Roster
 
 
 class _Actions:
@@ -265,7 +262,8 @@ def _request(siren=SIREN, home=False, refuse=None, photos=None, delivered=True):
     async def photo(cam):
         return (photos or {}).get(cam)
     acts = _Actions(home, refuse)
-    pol = SimpleNamespace(siren_entity=siren, chats_for=lambda role, lang=None: {"owner": [OWNER], "fm": [FM]}[role])
+    pol = SimpleNamespace(siren_entity=siren, roster=SimpleNamespace(
+        chats_for=lambda role, lang=None: {"owner": [OWNER], "fm": [FM]}[role]))
     log = []
     req = S.Request(policy=lambda: pol, state=SimpleNamespace(log=lambda *a: log.append(a)), actions=acts, ask=ask,
                     post=post, photo=photo, name=lambda cam: "Drive Camera")
@@ -333,7 +331,7 @@ def test_when_the_siren_cannot_be_asked_the_owner_and_the_facility_manager_hear_
 
 def test_a_chat_listed_for_both_roles_hears_of_it_once():
     req, _, seen = _request(siren=None)
-    req.policy().chats_for = lambda role, lang=None: [OWNER]           # one group for the owner and the FM
+    req.policy().roster.chats_for = lambda role, lang=None: [OWNER]           # one group for the owner and the FM
     out = run(req.gate(gate(())))
     (post,) = [s for s in seen if s[0] == "post"]
     assert out["warned"] == {OWNER} and post[3]["roles"] == {"owner", "fm"}

@@ -1137,7 +1137,7 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
   entity's friendly_name (the registry's name is null on a real villa), else its id's object part. `get`/`normal` still
   read the older kept shape `{role: [ids]}` (named "<role> chat" until the next reading rewrites it). `WHERE` is the
   Kiosk's place, in every text that sends someone there.
-- **`Policy(raw, villa)`**: `entries` (one per chat and role), `people`, `destinations` come from the lists only
+- **`Policy(raw, villa)`** (round 17: `roster.Roster`, handed to Policy): `entries` (one per chat and role), `people`, `destinations` come from the lists only
   (`policy.listed_entries`); being in a role's list gives its messages AND its rights (approving, writing, a group's
   members acting with its role). Phones are not entries. `chats_for` is the lists'; `people_chats` and the "villa list
   else People" fallback are gone (one mechanism), with `legacy_chats`/`legacy_rows`.
@@ -1152,5 +1152,30 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
 - **The page**: the People card shows the lists read only, as Knowledge's "Asleep between reports" shows the Kiosk's
   list (`server._people`, one row per chat, its roles as a chip), the Language menu its one control. `page_policy`
   reads the lists as the agent does.
-- **The knowledge pack's people table** is the agent's entries (`app._build_pack` hands them as `--people`), refreshed
+- **The knowledge pack's people table** (round 17: its own `chats` table, `--chats`) is the agent's entries (`app._build_pack` hands them as `--people`), refreshed
   at each pack build.
+
+## Who is who in one module, the lists agreed in writing, no "registered", the pack's chats (architecture review round 17, 2026-11-03, 0.12.441)
+
+- **Who is who: `vesta_agent/roster.py`** (lead 1). `Roster(lists, languages)` holds the VESTA Kiosk's lists and each
+  chat's language and answers every who-is-who question (person, member, may_approve_in, knows_chat, chats_for,
+  delivered_roles, language_of, languages_for, roles_in, group_role, name_in, names_of, chat_label); `Person`, the
+  tablet's people (`tablet_*`), `listed_entries`, `role_can_approve` and `NOT_LISTED` live there. `Roster.kept(pack)`
+  is the lists as last read, with `read_yet` — the one answer to "read yet?" (app's start log, the People card).
+  `Roster.of(owner=[(chat, name)], fm=[…], languages={…})` writes one out (the tests' villas: `make_agent(…, roster=)`,
+  `helpers.keep_roster`). **`Policy(raw, roster=None)` holds policy.yaml's rules**; it gives the roster the file's
+  `languages` (`Roster.speaking`). Callers that need who is who ask `policy.roster.…` (config.Settings.policy and
+  ui.changes.page_policy build it with `Roster.kept`); callers that need rules only (policy_doc, setup_copy,
+  limits_tab, the alert desk's siren time) build none, and `policy.roster` raises `LookupError` there — never a silent
+  "nobody" (tests/test_roster.py). `people:` rows are read by read_policy's language read and
+  `policy_doc.languages_moved` only; no test writes them except the tests of those two.
+- **The lists agreed in writing** (lead 2): agent-contract.json `recipients` (the Kiosk's file, copied):
+  `villa_recipients.HELPERS`, `SEPARATOR`, `DOMAIN`, `MAX_CHARS`, `WHERE` are read from it, and `entities()` follows its
+  rule (a bare "notify." names nobody). A test drives `entities()` over every agreement example; another holds the
+  package's helpers' `max` to `maxChars`.
+- **No "registered"** (lead 3): a sender the lists do not name reads `NOT_LISTED` ("This chat is not on the villa's
+  lists. Ask the owner to add it in" + WHERE), no Telegram id — the Kiosk picks a chat by its name. Setup copy's
+  "stays" names each chat's language.
+- **The knowledge pack's chats are their own table** (lead 6): `KnowledgePack.chats` [{chat, role, name, language}]
+  from `build_pack --chats` (app._build_pack, the roster's entries); `people` is the villa's person entities only. The
+  name merge (lower-cased) is gone: a chat named like a person took that person's role. PACK_RULES 6.

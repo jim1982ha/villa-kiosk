@@ -16,6 +16,7 @@ from telegram_fake import BOT
 from vesta_agent.ha_events import CONTEXT_KEY
 from vesta_shared import kiosk_words, message_format as mf, status_words
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 GROUP, FM_DE, FM_FR = -100123, 222, 333
 RULE = "automation.critical_condition_phase"
@@ -58,10 +59,7 @@ def test_a_line_kept_in_the_store_keeps_its_languages_and_an_older_one_reads_as_
 
 def villa(tmp_path):
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [
-        {"telegram_id": GROUP, "name": "Owner group", "role": "owner", "language": "en"},
-        {"telegram_id": FM_DE, "name": "Anna", "role": "fm", "language": "de"},
-        {"telegram_id": FM_FR, "name": "Luc", "role": "fm", "language": "fr"}]},
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(GROUP, "Owner group")], fm=[(FM_DE, "Anna"), (FM_FR, "Luc")], languages={FM_DE: "de", FM_FR: "fr"}),
         skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")]), kiosk=k)
     v.bot_username = BOT["username"]
     ctx = "RUN-500"

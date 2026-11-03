@@ -1,5 +1,6 @@
 """job_notices.py by value: every order in which a reply, a result and a job's end can reach a chat."""
 from vesta_agent.job_notices import JobNotices
+from vesta_agent.roster import Roster
 
 C = 7
 
@@ -64,7 +65,7 @@ def test_a_chat_jobs_typing_says_at_its_end_how_often_it_was_sent(tmp_path, capl
     import logging
     from helpers import make_agent
     from vesta_agent.routing import JOB, Origin
-    v = make_agent(tmp_path, {"chats": {"owner": -100777, "fm": 222}})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(-100777, "Owner chat")], fm=[(222, "Facility manager chat")]))
 
     async def go():
         gate = asyncio.Event()

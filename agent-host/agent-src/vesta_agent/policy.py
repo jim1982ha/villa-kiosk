@@ -24,7 +24,7 @@ import re
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -32,7 +32,11 @@ from vesta_shared.limits import limit
 from vesta_shared.timeutil import lasting
 
 from .places import title
+from .roster import role_can_approve
 from .siren import always_owners
+
+if TYPE_CHECKING:
+    from .roster import Roster
 
 # ------------------------------------------------------------------ constants
 # The languages a person can be answered in: the agent writes in them, and the VESTA Agent page offers
@@ -90,13 +94,10 @@ NEVER_SERVICES = {
 # Keys that target entities indirectly (a whole area, a device, a label): refused,
 # every call must name its entities so the entity rules can be checked.
 INDIRECT_TARGET_KEYS = {"area_id", "device_id", "floor_id", "label_id"}
-# Telegram ids that are not a person: an admin posting as the group, a channel.
-ANONYMOUS_TELEGRAM_IDS = {1087968824, 136817688, 777000}
 
 #: the people's roles and what the page calls them (architecture review 9: the page typed "Owner" / "Facility manager"
 #: twice, and the chats' words a third time)
 from vesta_shared.message_format import ROLE_WORDS  # noqa: E402  (the roles' words: "To:", history lines, the page)
-from vesta_shared.message_format import ROLE_SHORT  # noqa: E402  (the same, as a card says them: "FM")
 ROLES = tuple(ROLE_WORDS)
 
 # ------------------------------------------------------------------ the file's defaults, once
@@ -178,11 +179,6 @@ KEEP_SAYS = {
                   "nightly clean-up deletes them; skills put in the trash are deleted then too.",
     "daily_figures_months": "How long the skills keep each device's daily figures, from which its normal is learned.",
 }
-#: A value the file leaves out. The starter policy.example.yaml writes the same ones.
-#: What a person policy.yaml does not know reads, wherever they write or press (one wording: a button press in
-#: actions.py said "registered with VESTA", the others "the VESTA Agent" — review 6).
-NOT_REGISTERED = "You are not registered with the VESTA Agent."
-
 #: The agent's two numbers, name: (default, lowest, highest) — the ONE table the check below, the Limits tab's rows and
 #: the Rules tab's inputs read (architecture review P: the bounds were written in all three).
 NUMBERS = {
@@ -199,58 +195,6 @@ DEFAULTS = {"act_enabled": False, **{k: d for k, (d, _lo, _hi) in NUMBERS.items(
 
 
 @dataclass
-class Person:
-    telegram_id: int
-    name: str
-    role: str
-    language: str = "en"
-
-
-# ── The tablet's people (ticket 21 of "One inbox") ─────────────────────────────────────────────────────────────────
-# ⚠️ ONE ANSWER TO "WHO IS THIS" (architecture review, 2026-10-29): who sits at a tablet was handed in by hand at two
-# steps (the gate, the conversation) and unknown at the others — an owner's action that runs at once from their Telegram
-# chat became an approval request from the tablet. The People module answers for the tablet's conversations too: the
-# owner and the facility manager there are themselves (never listed in People, never sent a role's messages: they are
-# not among `destinations`); a guest is nobody registered (answers only: tool_access.GUEST).
-
-#: Above every Telegram chat id: Telegram's have at most 52 significant bits (its Bot API says so of every chat id).
-TABLET_BASE = 2 ** 52
-
-
-def tablet_profiles() -> dict[str, str]:
-    """The Kiosk's profiles the agent answers, each with its role (the agreement's conversation.profiles)."""
-    from vesta_shared import agreement
-    return {str(k): str(v) for k, v in (agreement.section("conversation").get("profiles") or {}).items()}
-
-
-def tablet_chat(profile: str | None) -> int | None:
-    """The conversation of a profile, as a chat id no Telegram chat has (stable across versions: from its name)."""
-    if profile not in tablet_profiles():
-        return None
-    return TABLET_BASE + int.from_bytes(hashlib.sha1(str(profile).encode()).digest()[:4], "big")
-
-
-def tablet_profile(chat) -> str | None:
-    """The profile whose conversation `chat` is; None for any other chat (a Telegram one)."""
-    try:
-        chat = int(chat)
-    except (TypeError, ValueError):
-        return None
-    return next((p for p in tablet_profiles() if tablet_chat(p) == chat), None) if chat >= TABLET_BASE else None
-
-
-def tablet_person(chat) -> Person | None:
-    """Who writes in a tablet's conversation, from the profile the Kiosk stamped: its role's rights, named for the AI by
-    the role ("Owner at the tablet"). English: the tablet's one language (ticket 28 parked). None for any other chat."""
-    profile = tablet_profile(chat)
-    role = tablet_profiles().get(str(profile)) if profile else None
-    if not role:
-        return None
-    from vesta_shared.message_format import ROLE_WORDS
-    return Person(int(chat), f"{ROLE_WORDS.get(role, role.capitalize())} at the tablet", role, "en")
-
-
-@dataclass
 class Decision:
     allowed: bool
     reason: str
@@ -259,7 +203,7 @@ class Decision:
     service: str = ""
     entity_ids: list[str] = field(default_factory=list)
     data: dict = field(default_factory=dict)
-    direct: bool = False                  # no approval when a registered person asked (rule `direct`)
+    direct: bool = False                  # no approval when a listed person asked (rule `direct`)
 
     def action_hash(self) -> str:
         return action_hash(self.domain, self.service, self.entity_ids, self.data)
@@ -313,20 +257,18 @@ def _int_in(v: Any, lo: int, hi: int, default: int) -> int:
 
 
 class Policy:
-    def __init__(self, raw: dict, villa: dict | None = None):
-        """The file's values as the agent uses them: read_policy's, the default where it names a problem. `villa`: the
-        villa's own lists of who gets the messages ({role: [{"chat", "name"}]}, vesta_shared.villa_recipients), the
-        ONE answer to who is who: each chat listed is an entry of its role (owner, 2026-11-03: "Yes, Kiosk only"). None
-        or {} (never read): nobody is listed."""
+    def __init__(self, raw: dict, roster: "Roster | None" = None):
+        """The file's values as the agent uses them: read_policy's, the default where it names a problem.
+
+        `roster`: who is who (vesta_agent.roster.Roster: the VESTA Kiosk's lists), given this file's languages. ⚠️ A
+        CALLER THAT NEEDS ONLY RULES PASSES NONE (architecture review round 17, lead 1): the page's forms, the setup
+        copy, the Limits tab and the alert desk read rules only, and were silently "nobody" when one asked who is who.
+        Asked of a Policy built without one, `roster` is an error, never an empty list."""
         self.raw = raw if isinstance(raw, dict) else {}
         v, self.problems = read_policy(self.raw)
         #: each chat's language, by chat id: policy.yaml's `languages:` (an older file's People rows' read into it)
         self.languages: dict[int, str] = v["languages"]
-        entries = listed_entries(villa, self.languages)
-        people: dict[int, Person] = {}
-        for e in entries:
-            if e.telegram_id > 0 and (e.telegram_id not in people or e.role == "owner"):
-                people[e.telegram_id] = e
+        self._roster = roster.speaking(self.languages) if roster is not None else None
         self.act_enabled: bool = v["act_enabled"]
         self.approval_ttl_minutes: int = v["approval_ttl_minutes"]
         # ⚠️ A SAFETY STOP, SO NEVER ABSENT: an unreadable value still stops the siren (and the problem is named).
@@ -339,12 +281,6 @@ class Policy:
         self.jobs: dict[str, dict] = v["jobs"]
         self.skill_brains: dict[str, str] = v["skill_brains"]
         self.keep: dict[str, int] = v["keep"]
-        self.people: dict[int, Person] = people                 # by Telegram id: the owner's entry when it has two
-        self.entries: list[Person] = entries                    # every entry, one per id and role (a group's included)
-        # ⚠️ WHERE EACH ROLE'S MESSAGES GO IS WHO HAS THE ROLE (owner, 2026-10-10: "each message shall be sent to either
-        # the Owner profiles or the Facility Manager profiles"): every chat the villa lists with a role, a person's or a
-        # group's — the same lists that give the rights (owner, 2026-11-03).
-        self.destinations: list[tuple[int, str]] = [(e.telegram_id, e.role) for e in entries]
         self.owner_only: set[str] = v["owner_only"]
         self.excluded: set[str] = v["excluded"]
         self.allowed_services: dict[str, str] = v["allowed_services"]
@@ -363,13 +299,23 @@ class Policy:
         """What only the owner may approve: the owner-only list, and the configured siren whatever that list says
         (siren.always_owners: the siren's rule, one place)."""
         return always_owners(self.owner_only, self.siren_entity)
+
+    @property
+    def roster(self) -> "Roster":
+        """Who is who, with this file's languages (vesta_agent.roster). Raises for a Policy built for its rules only."""
+        if self._roster is None:
+            raise LookupError("This Policy was built for its rules only: who is who needs its Roster "
+                              "(config.Settings.policy, ui.changes.page_policy).")
+        return self._roster
+
     @classmethod
-    def load(cls, path: str, villa: dict[str, list[int]] | None = None) -> "Policy":
+    def load(cls, path: str, roster: "Roster | None" = None) -> "Policy":
+        """policy.yaml at `path` ({} when there is none), with `roster` (None: rules only)."""
         if not path or not os.path.exists(path):
-            return cls({}, villa)
+            return cls({}, roster)
         with open(path, encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
-        return cls(raw if isinstance(raw, dict) else {}, villa)
+        return cls(raw if isinstance(raw, dict) else {}, roster)
 
     # ------------------------------------------------------------------ the AI jobs
     def skill_brain(self, skill: str | None, job_names) -> str | None:
@@ -412,126 +358,6 @@ class Policy:
             if got:
                 out[name] = {"profile": got["brain"], "limit_usd": got["limit_usd"]}
         return out
-
-    # ------------------------------------------------------------------ people
-    def person(self, telegram_id: int | None) -> Person | None:
-        """Their People entry — or, in a tablet's conversation, the owner or the facility manager signed in there (a
-        guest is nobody registered: tablet_person)."""
-        if telegram_id is None or int(telegram_id) in ANONYMOUS_TELEGRAM_IDS:
-            return None
-        listed = self.people.get(int(telegram_id))
-        if listed is not None:
-            return listed
-        tab = tablet_person(telegram_id)
-        return tab if tab is not None and tab.role in ROLES else None
-
-    def member(self, telegram_id: int | None, chat_id: int | None, name: str | None = None) -> Person | None:
-        """Who this is, writing or pressing in `chat_id`: their People entry; else, in a GROUP the People list names, a
-        member of it with the group's role — the facility manager's when the group is listed for both (the narrower).
-
-        ⚠️ A GROUP'S MEMBERS INHERIT ITS ROLE (owner, 2026-10-10: "a person in the group can naturally send messages in
-        the group, without having to be defined as a people"): a People row also sends that person every message of
-        their role in private, so a group member had to choose between no answer and every alert twice. A member's rights
-        hold only in that group (an anonymous admin stays nobody).
-
-        ⚠️ THE GROUP'S ROLE, WHOEVER WRITES THERE (owner, 2026-10-10: "people in a Telegram group inherit automatically the
-        role of the Telegram group they are in, irrespective of their own individual role"): a listed person kept their
-        row's role in the group, so an Owner group refused the siren's approval to JM (listed as Facility manager) and
-        accepted it from any unlisted member. Their own row's role holds in their private chat."""
-        p = self.person(telegram_id)
-        if telegram_id is None or int(telegram_id) in ANONYMOUS_TELEGRAM_IDS or chat_id is None or int(chat_id) >= 0:
-            return p
-        role = self.group_role(chat_id)
-        if role is None:
-            return p
-        if p is not None:
-            # ⚠️ NAMED AS THIS CHAT KNOWS THEM (architecture review 21): listed twice (JM_O, JM_FM), a person pressing in
-            # a group of the facility manager's read "Done pressed by JM_FM" on an alert and "Approved by JM_O" on a
-            # request — the name of a role they did not have there. One name, `name_in`'s, for every press and record
-            name = self.name_in(p.telegram_id, chat_id) or p.name
-            return p if (p.role, p.name) == (role, name) else Person(p.telegram_id, name, role, p.language)
-        group = next((e for e in self.entries if e.telegram_id == int(chat_id) and e.role == role), None)
-        return Person(int(telegram_id), (name or "").strip() or f"a member of {group.name if group else 'the group'}",
-                      role, group.language if group else "en")
-
-    def may_approve_in(self, chat_id: int, required_role: str | None) -> bool:
-        """Can someone acting in `chat_id` approve a request that needs `required_role`? The rule of `member`: a private
-        chat is its person's role; a listed group, its role for everyone in it — the facility manager's when listed for
-        both. Where a request's buttons go (routing.approver_chats) and who may press them (actions.decide) are this one
-        answer (architecture review 21: an owner's request reached a group listed for both, where "Only the owner can
-        approve this." answered every press)."""
-        if int(chat_id) < 0:
-            role = self.group_role(chat_id)
-            return role is not None and self.role_can_approve(role, required_role)
-        p = self.person(chat_id)
-        return p is not None and self.role_can_approve(p.role, required_role)
-
-    def knows_chat(self, chat_id: int) -> bool:
-        """Is this a chat of the villa's lists: a listed group, or the private chat of a listed person?"""
-        return bool(self.roles_in(chat_id)) or int(chat_id) in self.people
-
-    def chats_for(self, role: str, language: str | None = None) -> list[int]:
-        """Every chat a message for `role` goes to: each chat the villa's list of the role names — once, in the list's
-        order, only those that read `language` (a code) when one is given. [] when the lists were never read.
-
-        ⚠️ ONE LIST FOR WHERE AND WHO MAY (owner, 2026-11-03: "Yes, Kiosk only"): 0.12.436 sent to the villa's lists and
-        kept the rights in the agent's People list, with a fallback to People where the villa's list named no chat; two
-        lists of the same people, and a chat could receive a role's alerts and be refused its buttons."""
-        return list(dict.fromkeys(c for c, r in self.destinations if r == role
-                                  and (language is None or self.language_of(c, role) == language)))
-
-    def delivered_roles(self, chat_id: int) -> set[str]:
-        """The roles whose messages go to `chat_id` (chats_for): what a copy sent there is for."""
-        return {r for r in ROLES if int(chat_id) in self.chats_for(r)}
-
-    def language_of(self, chat_id: int, role: str | None) -> str:
-        """The language a chat reads its `role`'s messages in: the chat's (policy.yaml `languages:`, set on the VESTA
-        Agent page), en when it has none. No role (someone asking whose role is not known): the chat's first entry."""
-        return next((e.language for e in self.entries if e.telegram_id == int(chat_id)
-                     and (role is None or e.role == role)), "en")
-
-    def languages_for(self, role: str) -> list[str]:
-        """Every language (a code) the chats of `role` read, once, in the list's order.
-
-        ⚠️ ONE REPORT, EVERY READER'S LANGUAGE (owner, 2026-10-23: "I received the daily report in German, whereas I
-        set my language to French"): a role's report was written in its FIRST row's language and that one text went
-        to every chat of the role. A role read in two languages gets one version per language (tools send_message)."""
-        return list(dict.fromkeys(self.language_of(c, role) for c in self.chats_for(role)))
-
-    def roles_in(self, chat_id: int) -> set[str]:
-        """The roles a chat is listed with ({} for a chat the villa's lists do not name)."""
-        return {r for c, r in self.destinations if c == int(chat_id)}
-
-    def group_role(self, chat_id: int) -> str | None:
-        """The ONE role everyone in a listed GROUP acts with — the facility manager's when the group is listed for both
-        (never more where facility managers read) — or None for a private chat or a group the People list does not
-        name. ⚠️ ONE ANSWER (architecture review, 2026-10-15): written three times (member, may_approve_in,
-        tool_access), and reviews 18 and 21 were each one of them disagreeing with the others."""
-        if int(chat_id) >= 0:
-            return None
-        roles = self.roles_in(chat_id)
-        return ("fm" if "fm" in roles else "owner") if roles else None
-
-    def name_in(self, telegram_id: int, chat_id: int) -> str | None:
-        """A person's name as this chat knows them: their entry for a role the chat is listed with (Fabien_FM in a chat
-        of the facility manager's only), else their name — the owner's entry when they have both."""
-        roles = self.roles_in(chat_id)
-        named = [e.name for e in self.entries if e.telegram_id == int(telegram_id) and e.role in roles]
-        p = self.person(telegram_id)
-        return named[0] if len(set(named)) == 1 else (p.name if p else None)
-
-    def chat_label(self, chat_id: int) -> str:
-        """Which chat this is, in words, never who is in it: "Owner and FM group", "private chat". "" for a tablet's
-        conversation (owner, 2026-10-31: Every run read "Reply to Owner at the tablet  private chat"): no Telegram chat,
-        and its person already says "at the tablet" (tablet_person) — so "" means "no Telegram chat" (app.py's prompt).
-        ⚠️ THE ROLES' OWN WORDS, IN THEIR ORDER (architecture review round 10: Costs read "fm and owner group", the
-        sorted role ids, after every other place had been given the alert card's words): ROLE_SHORT, in ROLES order."""
-        if tablet_profile(chat_id) is not None:
-            return ""
-        mine = self.roles_in(chat_id)
-        roles = " and ".join(w for r, w in ROLE_SHORT.items() if r in mine)
-        kind = "group" if int(chat_id) < 0 else "private chat"
-        return f"{roles} {kind}" if roles else kind
 
     # ------------------------------------------------------------------ layer 2
     def check_service(self, domain: str, service: str, entity_id: Any = None, data: dict | None = None,
@@ -634,13 +460,8 @@ class Policy:
             d.reason = "Acting on the villa is not switched on yet (v1 informs only)."
         return d
 
-    @staticmethod
-    def role_can_approve(person_role: str, required_role: str | None) -> bool:
-        if required_role == "owner":
-            return person_role == "owner"
-        if required_role == "any":
-            return person_role in ROLES
-        return False
+    #: the roles' rule of approving (roster.role_can_approve): a Policy's callers ask it here
+    role_can_approve = staticmethod(role_can_approve)
 
     def summary(self) -> str:
         """Plain words for the system prompt. The code holds the rules; this only tells the model."""
@@ -666,7 +487,7 @@ RULE_WORDS = {
     "any": f"the {ROLE_WORDS['owner'].lower()} or the {ROLE_WORDS['fm'].lower()} approves",
     "owner": f"only the {ROLE_WORDS['owner'].lower()} approves",
     "listed": "only the devices chosen beside it, then approval",
-    "direct": "no approval when a registered person asks",
+    "direct": "no approval when someone on the villa's lists asks",
 }
 RULES = tuple(RULE_WORDS)
 ENTITY_LISTS = {"owner_only_entities": None, "excluded_entities": None, "switch_entities": "switch",
@@ -774,18 +595,6 @@ def problems(raw: Any) -> list[str]:
     if not isinstance(raw, dict):
         return ["The file must be a set of sections (name: value), not a list or a single value."]
     return read_policy(raw)[1]
-
-
-def listed_entries(villa, languages: dict[int, str]) -> list[Person]:
-    """Every entry of the villa's lists ({role: [{"chat", "name"}]}, vesta_shared.villa_recipients): one per chat and
-    role, in ROLES order then the list's, named as the villa names its notify entity, in the chat's language.
-
-    ⚠️ ONE PERSON, TWO ROLES (owner, 2026-10-10): a chat in both lists is two entries; the person is recognised with the
-    owner's rights, the wider (Policy.people), and each role's name is used where that role is meant."""
-    from vesta_shared.villa_recipients import normal
-    lists = normal(villa)
-    return [Person(int(row["chat"]), row["name"], role, languages.get(int(row["chat"]), "en"))
-            for role in ROLES for row in lists.get(role) or []]
 
 
 def _one_of(value, choices) -> bool:

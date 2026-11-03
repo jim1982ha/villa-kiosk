@@ -10,19 +10,23 @@ import base64
 import pytest
 
 from ai_fake import FakeAI
-from helpers import listed_policy, make_agent
+from helpers import make_agent
 from ha_fake import FakeHA, tool
 from kiosk_fake import FakeKiosk
 from vesta_agent import tablet, tool_access
-from vesta_agent.policy import TABLET_BASE
+from vesta_agent.roster import TABLET_BASE
+from vesta_agent.roster import Roster
+from vesta_agent.policy import Policy
 
 OWNER, FM = 111, 222
 
 
+#: the villa's people, as the VESTA Kiosk's lists name them
+ROSTER = Roster.of(owner=[(OWNER, "Owner")], fm=[(FM, "Wayan")])
+
+
 def policy(**extra):
-    return {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner", "language": "en"},
-                       {"telegram_id": FM, "name": "Wayan", "role": "fm", "language": "en"}],
-            "ha_read_tools": ["ha_get_state", "ha_get_camera_image"], **extra}
+    return {"ha_read_tools": ["ha_get_state", "ha_get_camera_image"], **extra}
 
 
 @pytest.fixture
@@ -32,7 +36,7 @@ def kiosk():
 
 @pytest.fixture
 def agent(tmp_path, kiosk):
-    return make_agent(tmp_path, policy(), skills=["investigate"],
+    return make_agent(tmp_path, policy(), roster=ROSTER, skills=["investigate"],
                       reader=FakeHA(tools=[tool("ha_get_state"), tool("ha_get_camera_image")]), kiosk=kiosk)
 
 
@@ -153,7 +157,7 @@ def test_an_answers_pictures_and_page_go_with_it(agent, kiosk, tmp_path):
 
 def test_being_prepared_is_replaced_by_the_result(tmp_path, kiosk):
     # with Telegram off: the tablet is the second place precisely for when Telegram is not there
-    agent = make_agent(tmp_path, policy(), kiosk=kiosk, telegram_on=False)
+    agent = make_agent(tmp_path, policy(), roster=ROSTER, kiosk=kiosk, telegram_on=False)
     chat = tablet.chat_of("owner")
     replied = asyncio.Event()
 
@@ -188,8 +192,7 @@ def test_the_owner_at_the_tablet_is_the_owner_for_an_action_that_runs_at_once(tm
     from vesta_agent.state import State
     monkeypatch.delenv("VESTA_HA_READ_ONLY", raising=False)
     session = StrictSession()
-    pol = listed_policy({"act_enabled": True, "people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}],
-                  "chats": {"owner": OWNER}, "allowed_services": {"light.turn_on": "direct"}})
+    pol = Policy({"act_enabled": True, "allowed_services": {"light.turn_on": "direct"}}, Roster.of(owner=[(OWNER, "Owner")]))
     actions = Actions(lambda: pol, State(str(tmp_path / "s.db")),
                       lambda: Writer("http://unused", "UTC", write=True, session=session))
     owner, guest = tablet.chat_of("owner"), tablet.chat_of("guest")
@@ -197,9 +200,9 @@ def test_the_owner_at_the_tablet_is_the_owner_for_an_action_that_runs_at_once(tm
     assert msg is None and "without approval" in answer and len(session.calls) == 1        # done at once, as on Telegram
     _, msg = actions.request("light", "turn_on", "light.example_pool", {}, tablet.person_of("guest"), guest)
     assert msg is not None and len(session.calls) == 1                                     # a guest is nobody registered
-    assert pol.person(owner).role == "owner" and pol.person(guest) is None
+    assert pol.roster.person(owner).role == "owner" and pol.roster.person(guest) is None
     # ...and a tablet is never sent a role's messages: it is in no role's chats, and no listed chat
-    assert owner not in pol.chats_for("owner") and not pol.knows_chat(owner)
+    assert owner not in pol.roster.chats_for("owner") and not pol.roster.knows_chat(owner)
 
 
 def test_the_tablet_answer_says_what_became_of_a_request_approved_on_telegram(tmp_path, monkeypatch):
@@ -207,8 +210,7 @@ def test_the_tablet_answer_says_what_became_of_a_request_approved_on_telegram(tm
     # Approve" — "a single message to merge both status is enough"
     from telegram_fake import BOT
     kiosk = FakeKiosk()
-    v = make_agent(tmp_path, {**policy(), "act_enabled": True, "allowed_services": {"light.turn_on": "owner"},
-                              "chats": {"owner": OWNER}}, kiosk=kiosk)
+    v = make_agent(tmp_path, {**policy(), "act_enabled": True, "allowed_services": {"light.turn_on": "owner"}}, roster=ROSTER, kiosk=kiosk)
 
     class Writer:
         def call_service(self, *a):
@@ -246,8 +248,7 @@ def test_the_tablet_answer_says_what_became_of_a_request_approved_on_telegram(tm
 def test_the_tablet_answer_says_when_nobody_answered_the_request(tmp_path, monkeypatch):
     from datetime import datetime, timedelta, timezone
     kiosk = FakeKiosk()
-    v = make_agent(tmp_path, {**policy(), "act_enabled": True, "allowed_services": {"light.turn_on": "owner"},
-                              "chats": {"owner": OWNER}}, kiosk=kiosk)
+    v = make_agent(tmp_path, {**policy(), "act_enabled": True, "allowed_services": {"light.turn_on": "owner"}}, roster=ROSTER, kiosk=kiosk)
 
     async def act(run):
         await run["call"]("ha_call_service", {"domain": "light", "service": "turn_on", "entity_id": "light.example_gym"})
@@ -262,8 +263,7 @@ def test_the_tablet_answer_says_when_nobody_answered_the_request(tmp_path, monke
 def test_a_request_either_may_approve_asked_at_the_tablet_reaches_both_roles(tmp_path):
     # owner, 2026-10-29: "approval required by either FM or Owner, I don't see any notification on the FM Telegram chat"
     from vesta_agent.routing import Routing
-    pol = listed_policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
-                             {"telegram_id": FM, "name": "Wayan", "role": "fm"}]})
+    pol = Policy({}, Roster.of(owner=[(OWNER, "Owner")], fm=[(FM, "Wayan")]))
     r, tab = Routing(pol), tablet.chat_of("owner")
     assert r.approver_chats("any", tab) == [OWNER, FM]                    # both roles' chats, the owner's first
     assert r.approver_chats("owner", tab) == [OWNER]                      # only the owner may: the owner's alone
@@ -272,8 +272,7 @@ def test_a_request_either_may_approve_asked_at_the_tablet_reaches_both_roles(tmp
 
 def _approval_villa(tmp_path, monkeypatch, role="any"):
     kiosk = FakeKiosk()
-    v = make_agent(tmp_path, {**policy(), "act_enabled": True, "allowed_services": {"light.turn_on": role},
-                              "chats": {"owner": OWNER, "fm": FM}}, kiosk=kiosk)
+    v = make_agent(tmp_path, {**policy(), "act_enabled": True, "allowed_services": {"light.turn_on": role}}, roster=ROSTER, kiosk=kiosk)
     done = []
 
     class Writer:
@@ -322,7 +321,7 @@ def test_with_no_telegram_chat_a_request_waits_on_the_tablet_and_is_approved_the
     # owner, 2026-10-29: "if no Telegram is available but Kiosk is opened with a Owner (or FM) profile: shall the
     # notification (approval) appear as notification in this UI?" — yes, with its buttons
     kiosk = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [], "act_enabled": True, "allowed_services": {"light.turn_on": "owner"}},
+    v = make_agent(tmp_path, {"act_enabled": True, "allowed_services": {"light.turn_on": "owner"}}, roster=Roster.of(),
                    kiosk=kiosk, telegram_on=False)
     done = []
 
@@ -371,7 +370,7 @@ def test_a_tablet_conversation_is_never_shared_whoever_built_the_question():
 def test_a_guest_is_not_given_the_villas_status(tmp_path, kiosk, monkeypatch):
     # architecture review round 8: the status check before each answer names the offline devices, the open alerts and
     # the locks, which the guest's tablet does not show
-    v = make_agent(tmp_path, policy(), skills=["villa-concierge"], reader=FakeHA(tools=[tool("ha_get_state")]),
+    v = make_agent(tmp_path, policy(), roster=ROSTER, skills=["villa-concierge"], reader=FakeHA(tools=[tool("ha_get_state")]),
                    kiosk=kiosk)
     ai = FakeAI("ok").install(monkeypatch)
     kiosk.person_asks("guest", "Is it warm inside?")

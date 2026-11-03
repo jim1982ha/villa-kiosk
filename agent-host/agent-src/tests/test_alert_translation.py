@@ -24,6 +24,7 @@ from vesta_agent.ha_events import CONTEXT_KEY
 from vesta_agent.state import State
 from vesta_agent.phrases import acceptable, fits, wordy
 from vesta_agent.translation import answer, fill, mask
+from vesta_agent.roster import Roster
 
 GROUP, FM_DE, FM_FR = -100123, 222, 333
 #: the Chat answers row of Rules › AI brains and limits: what a translation runs with (owner, 2026-10-23)
@@ -36,14 +37,13 @@ STATES = {"lock.test_lock": {"entity_id": "lock.test_lock", "state": "unavailabl
 
 
 def villa(tmp_path, group_language="en", settings=CHAT_ANSWERS):
-    pol = {"people": [
-        {"telegram_id": GROUP, "name": "Owner group", "role": "owner", "language": group_language},
-        {"telegram_id": FM_DE, "name": "Anna", "role": "fm", "language": "de"},
-        {"telegram_id": FM_FR, "name": "Luc", "role": "fm", "language": "fr"}]}
+    pol: dict = {}
+    roster = Roster.of(owner=[(GROUP, "Owner group")], fm=[(FM_DE, "Anna"), (FM_FR, "Luc")],
+                       languages={GROUP: group_language, FM_DE: "de", FM_FR: "fr"})
     if settings is not None:
         pol["settings"] = dict(settings)
     # the villa's system names its devices as the alert arrives (app.Vesta._alert_names)
-    v = make_agent(tmp_path, pol, skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")], states=STATES))
+    v = make_agent(tmp_path, pol, roster=roster, skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")], states=STATES))
     v.bot_username = BOT["username"]
     # the villa's devices as the night's build names them: a name in an alert is a value, never words to translate
     from vesta_shared.knowledge_pack import build_pack
@@ -213,9 +213,10 @@ def test_the_chats_terms_have_one_owner_for_a_reply_and_a_translation():
     # one reading of the Chat answers row (turn.chat_brain): a reply and a translation can never disagree on it
     from types import SimpleNamespace
     from vesta_agent.policy import Policy
+    from vesta_agent.roster import Roster
     from vesta_agent.turn import chat_terms, translation_terms
     s = SimpleNamespace(profile="performance", reply_limit_usd=0.7)
-    reply = chat_terms(s, Policy({}), [], None, 1)
+    reply = chat_terms(s, Policy({}, Roster()), [], None, 1)
     tr = translation_terms(s, "alert-desk")
     assert (tr.profile, tr.limit_usd) == (reply.profile, reply.limit_usd) == ("performance", 0.7)
     assert tr.tools == frozenset() and tr.who == agent_records.TRANSLATION and tr.skill == "alert-desk"
@@ -266,7 +267,7 @@ def test_a_chat_whose_language_changed_reads_the_alerts_words_in_its_new_one_whe
         english = card(v, 1, GROUP)
         with open(v.s.policy_path) as f:
             pol = yaml.safe_load(f)
-        pol["people"][0]["language"] = "fr"
+        pol["languages"][GROUP] = "fr"                                   # the People card's Language menu
         with open(v.s.policy_path, "w") as f:
             yaml.safe_dump(pol, f)
         await v.on_ha_event("vesta_critical_event", {

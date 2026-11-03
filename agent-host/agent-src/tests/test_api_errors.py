@@ -20,6 +20,7 @@ from vesta_agent import api_errors, runner
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
 from vesta_agent.state import State
+from vesta_agent.roster import Roster
 
 RAW = 'API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low"}}'
 
@@ -108,15 +109,14 @@ OWNER_CHAT, FM = -100777, 222
 
 @pytest.fixture
 def agent(tmp_path):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "FM", "role": "fm"}],
-                              "chats": {"owner": OWNER_CHAT, "fm": FM}})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER_CHAT, "Owner chat")], fm=[(FM, "FM")]))
     v.server_tools = [{"name": "ha_get_state", "annotations": {"readOnlyHint": True}}]   # as HA MCP lists it
     return v
 
 
 def test_a_person_reads_the_reason_and_the_owner_is_told_once(agent, monkeypatch):
     FakeAI("", problem="credit", cost_usd=0.0).install(monkeypatch)
-    person = agent.policy().person(FM)
+    person = agent.policy().roster.person(FM)
     for _ in range(2):
         asyncio.run(agent.converse(FM, person, "is the pool OK?"))
     to_fm = [t for c, t, _ in agent.tg.sent if c == FM]
@@ -246,7 +246,7 @@ def test_a_report_asked_for_while_the_ai_is_down_is_a_button_that_needs_no_ai(ag
     # villa, 2026-10-07 12:42: "Generate the weekly report" met "out of credit" — only the AI could have understood
     # the words and started the job. The answer offers each report that can be made without it; a press makes it.
     _report_without_ai(agent, monkeypatch, run_job=False)
-    person = agent.policy().person(FM)
+    person = agent.policy().roster.person(FM)
 
     async def go():
         await agent.converse(FM, person, "a report please")
@@ -272,7 +272,7 @@ def test_no_report_button_for_a_person_who_may_not_start_one(agent, monkeypatch)
     pol.setdefault("agent_tools", {})["start_job"] = False
     with open(agent.s.policy_path, "w") as f:
         yaml.safe_dump(pol, f)
-    asyncio.run(agent.converse(FM, agent.policy().person(FM), "generate the weekly report"))
+    asyncio.run(agent.converse(FM, agent.policy().roster.person(FM), "generate the weekly report"))
     assert [kb for c, _, kb in agent.tg.sent if c == FM] == [None]
 
 
@@ -281,7 +281,7 @@ def test_a_report_named_in_the_message_starts_without_asking(agent, monkeypatch)
     _report_without_ai(agent, monkeypatch, run_job=False)
 
     async def go():
-        await agent.converse(FM, agent.policy().person(FM), "Generate the Weekly Report for last week now")
+        await agent.converse(FM, agent.policy().roster.person(FM), "Generate the Weekly Report for last week now")
         await agent.chat_jobs.idle()
     asyncio.run(go())
     first = [m for m in agent.tg.sent if m[0] == FM][0]
@@ -294,7 +294,7 @@ def test_a_report_made_from_a_button_never_takes_the_next_answer_for_its_waiting
     # villa, 2026-10-07 14:17: a tapped Daily digest was sent; the next answer (its buttons) vanished at once — the
     # job, started without a reply, took that answer for its "being prepared" message and deleted it
     _report_without_ai(agent, monkeypatch, run_job=False)
-    person = agent.policy().person(FM)
+    person = agent.policy().roster.person(FM)
 
     async def go():
         await agent.converse(FM, person, "a report please")
@@ -312,7 +312,7 @@ def test_a_report_made_from_a_button_never_takes_the_next_answer_for_its_waiting
 def test_no_report_button_for_a_question_about_something_else(agent, monkeypatch):
     # owner, 2026-10-07: "what do you see in the living camera now?" got the report buttons
     _report_without_ai(agent, monkeypatch, run_job=False)
-    asyncio.run(agent.converse(FM, agent.policy().person(FM), "what do you see in the living camera now?"))
+    asyncio.run(agent.converse(FM, agent.policy().roster.person(FM), "what do you see in the living camera now?"))
     (text, kb), = [(t, kb) for c, t, kb in agent.tg.sent if c == FM]
     assert kb is None and text == api_errors.FOR_PERSON["credit"]
 
@@ -359,14 +359,16 @@ def test_a_refused_run_that_read_and_wrote_nothing_cost_nothing(tmp_path):
 
 def test_a_button_pressed_by_someone_the_villa_does_not_know_is_refused_in_one_wording(agent, monkeypatch):
     # architecture review 6: "not registered" was checked three times, one saying "VESTA" alone
-    from vesta_agent.policy import NOT_REGISTERED
+    from vesta_agent.roster import NOT_LISTED
     _report_without_ai(agent, monkeypatch, run_job=False)
     agent.state.remember_message(FM, 901)
     for data in ("w:credit:rep-weekly", "c:abc", "i:7:done"):
         asyncio.run(agent.on_ha_event("telegram_callback", {"id": data, "data": data, "chat_id": FM, "user_id": 555,
                                                             "message": {"message_id": 901, "chat": {"id": FM}}}))
-    assert agent.tg.toasts == [(d, NOT_REGISTERED) for d in ("w:credit:rep-weekly", "c:abc", "i:7:done")]
-    assert "VESTA Agent" in NOT_REGISTERED
+    assert agent.tg.toasts == [(d, NOT_LISTED) for d in ("w:credit:rep-weekly", "c:abc", "i:7:done")]
+    # architecture review round 17, lead 3: there is no registering any more — the words send them to the Kiosk's place
+    from vesta_shared.villa_recipients import WHERE
+    assert WHERE in NOT_LISTED and "registered" not in NOT_LISTED and len(NOT_LISTED) <= 200   # a toast's own limit
 
 
 def test_a_continue_is_added_to_the_report_buttons_never_in_their_place(agent, monkeypatch):
@@ -375,7 +377,7 @@ def test_a_continue_is_added_to_the_report_buttons_never_in_their_place(agent, m
     from vesta_agent import runner
     _report_without_ai(agent, monkeypatch, run_job=False)
     FakeAI(runner.RunResult("", "S1", True, 1.0, [], "api credit", "credit")).install(monkeypatch)
-    asyncio.run(agent.converse(FM, agent.policy().person(FM), "a report please"))
+    asyncio.run(agent.converse(FM, agent.policy().roster.person(FM), "a report please"))
     (kb,) = [kb for c, _t, kb in agent.tg.sent if c == FM]
     assert [[b["text"] for b in row] for row in kb["inline_keyboard"]] == [["Weekly report"], ["Continue"]]
 

@@ -20,8 +20,9 @@ from telegram_fake import BOT
 from vesta_agent import button_data, runner
 from vesta_agent.chat_facts import HEAD, NONE_PREPARED, SINCE, ChatFacts
 from vesta_agent.in_progress import InProgress
-from vesta_agent.policy import Person
+from vesta_agent.roster import Person
 from vesta_agent.state import State
+from vesta_agent.roster import Roster
 
 FM, OWNER = 222, 111
 WAYAN = Person(FM, "Wayan", "fm")
@@ -35,9 +36,7 @@ def run(c):
 
 @pytest.fixture
 def villa(tmp_path, monkeypatch):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner", "language": "en"},
-                                         {"telegram_id": FM, "name": "Wayan", "role": "fm", "language": "en"}],
-                              "settings": {"skill_ai": {"reports": {"brain": "economy", "limit_usd": 1}}}},
+    v = make_agent(tmp_path, {"settings": {"skill_ai": {"reports": {"brain": "economy", "limit_usd": 1}}}}, roster=Roster.of(owner=[(OWNER, "Owner")], fm=[(FM, "Wayan")]),
                    skills=["reports", "alert-desk"])
     v.bot_username = BOT["username"]
 

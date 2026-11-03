@@ -225,7 +225,9 @@ class Asset:
 #: is not the villa's, 0.6.248). 4: the days of detailed history the villa's system keeps, measured (0.6.265) — rebuilt
 #: at start, so an update measures it at once instead of at the next 01:30 (owner, 2026-10-20). 5: each asset's
 #: guessed links kept beside its links (asset_links, owner 2026-10-30), so a choice of the page can be taken back.
-PACK_RULES = 5
+#: 6: the chats of the VESTA Kiosk's lists are a table of their own (`chats`), never merged into the villa's people by
+#: name (architecture review round 17, lead 6).
+PACK_RULES = 6
 
 
 
@@ -251,6 +253,7 @@ class KnowledgePack:
     families: dict[str, list[dict]]
     assets: dict[str, dict]
     areas: list[str]
+    #: the villa's people, as its system knows them (its person entities): {"entity_id", "name"}
     people: list[dict]
     channels: dict[str, str]
     unknown_area: list[str]
@@ -268,6 +271,11 @@ class KnowledgePack:
     # its drops were a second fault for the same relay, and the plug behind an owner-only siren hid nothing.
     # {entity_id: device_id}; empty in a pack built before (then the rows' own device is all there is).
     entity_devices: dict[str, str] = field(default_factory=dict)
+    # ⚠️ THE CHATS, A TABLE OF THEIR OWN (architecture review round 17, lead 6): each chat of the VESTA Kiosk's lists of who
+    # gets the messages, {"chat", "role", "name", "language"} (build_pack --chats, app.Vesta._build_pack). They were
+    # merged into `people` where a chat's name matched a person's, lower-cased — a guess: "Owner group" is no person, and a
+    # person named as a chat took its role and language. [] in a pack built before.
+    chats: list[dict] = field(default_factory=list)
     # Which of build_pack's rules wrote it (PACK_RULES); 0 in a pack built before the number was kept.
     rules: int = 0
     # ⚠️ ONE LIST OF CRITICAL DEVICES (owner, 2026-10-18 — architecture review, offline devices #2): the entities the
@@ -560,7 +568,7 @@ def _norm_entities(registry: dict, states: dict | None) -> list[dict]:
 
 
 def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
-               bom_rows: list[dict] | None = None, people: list[dict] | None = None,
+               bom_rows: list[dict] | None = None, chats: list[dict] | None = None,
                channels: dict | None = None, generated_at: str = "", villa: str | None = None,
                critical=(), detailed_days: float | None = None) -> KnowledgePack:
     """`critical`: the entities the villa's own "critical devices offline" rule watches (vesta_shared.critical).
@@ -653,18 +661,8 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         # kind: what the asset physically is, the owner's choice on the VESTA Agent page, else guessed (asset_kind)
         a.kind = asset_kind(a, chosen)
 
-    # people: the villa's persons, plus the agent's table (build_pack --people: each chat of the VESTA Kiosk's lists
-    # of who gets the messages, with its role, its name and its language; app.Vesta._build_pack)
-    ppl = []
-    for h in helpers:
-        if h.get("helper_type") == "person":
-            ppl.append({"entity_id": h.get("entity_id"), "name": h.get("name"), "role": None, "language": None, "chat": None})
-    for p in people or []:
-        match = next((x for x in ppl if x["name"] and p.get("name") and x["name"].lower() == p["name"].lower()), None)
-        if match:
-            match.update({k: v for k, v in p.items() if v is not None})
-        else:
-            ppl.append(dict({"entity_id": None, "name": None, "role": None, "language": None, "chat": None}, **p))
+    # the villa's people: its person entities, as its system names them — and nothing else (the chats are their own table)
+    ppl = [{"entity_id": h.get("entity_id"), "name": h.get("name")} for h in helpers if h.get("helper_type") == "person"]
 
     unknown_area = sorted({r["entity_id"] for fam in ("power", "energy", "runtime", "battery", "level", "water", "security")
                            for r in families.get(fam, []) if not r["area"]})
@@ -686,6 +684,7 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         assets={s: asdict(a) for s, a in assets.items()},
         areas=sorted({v for v in area_names.values() if v} or {r["area"] for f in families.values() for r in f if r["area"]}),
         people=ppl,
+        chats=[{k: c.get(k) for k in ("chat", "role", "name", "language")} for c in chats or [] if isinstance(c, dict)],
         channels=channels or {},
         unknown_area=unknown_area,
         unclassified=unclassified,

@@ -11,8 +11,9 @@ from ha_fake import FakeHA, tool
 from helpers import make_agent
 from kiosk_fake import FakeKiosk
 from vesta_agent import tool_access
-from vesta_agent.policy import Person
+from vesta_agent.roster import Person
 from vesta_agent.routing import CONVERSATION, Origin
+from vesta_agent.roster import Roster
 
 LAMP, MOTION, TEMP, JO, SPEAKER = ("light.example_lamp", "binary_sensor.example_motion", "sensor.example_room_temp",
                                    "person.example_jo", "media_player.example_speaker")
@@ -38,8 +39,7 @@ def agent(tmp_path, kiosk=None):
     if kiosk is None:
         kiosk = FakeKiosk()
         kiosk.villa = VILLA
-    v = make_agent(tmp_path, {"people": [{"telegram_id": 5, "name": "Owner", "role": "owner"}], "chats": {"owner": 5},
-                              "ha_read_tools": ["ha_get_state", "ha_search", "ha_eval_template"]}, reader=ha, kiosk=kiosk)
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_state", "ha_search", "ha_eval_template"]}, roster=Roster.of(owner=[(5, "Owner")]), reader=ha, kiosk=kiosk)
     asyncio.run(v.refresh_server_tools())
     return v
 

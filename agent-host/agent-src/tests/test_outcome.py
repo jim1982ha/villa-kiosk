@@ -8,12 +8,14 @@ import os
 
 import pytest
 
-from helpers import keep_lists, listed_policy, alert_desk, make_agent, make_skill, body
+from helpers import alert_desk, make_agent, make_skill, body, keep_roster
 from telegram_fake import BOT
 from ha_fake import FakeHA, tool
 from kiosk_fake import FakeKiosk
 from vesta_agent.routing import CONVERSATION, Origin, Routing
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
+from vesta_agent.policy import Policy
 
 GROUP, FM_PRIVATE, ASKER = -100777, 222, 333
 
@@ -35,8 +37,7 @@ def agent(tmp_path):
                 "                  'send': [{'to': 'fm', 'text': 'Pump draws less power'}], 'pad': 'x' * PAD}))\n"
                 .replace("PAD", os.environ.get("PAD", "10"))})
     k = FakeKiosk()
-    v = make_agent(tmp_path, {"people": [{"telegram_id": ASKER, "name": "Asker", "role": "fm", "language": "en"}],
-                              "chats": {"owner": GROUP, "fm": FM_PRIVATE}},
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(GROUP, "Owner chat")], fm=[(ASKER, "Asker"), (FM_PRIVATE, "Facility manager chat")]),
                    reader=FakeHA(tools=[tool("ha_get_state")]), kiosk=k)
     v.bot_username = BOT["username"]
     return v, k
@@ -124,8 +125,7 @@ def test_one_occasion_answers_every_routing_question():
     # architecture review, 2026-10-01: "who is asking" read in one place — what the AI is offered, where
     # each message lands, whether it may start a job — as a table, without building any tool
     from vesta_agent.routing import JOB, PRESS
-    r = Routing(listed_policy({"people": [{"telegram_id": GROUP, "name": "Group", "role": "owner"},
-                                   {"telegram_id": FM_PRIVATE, "name": "FM", "role": "fm"}]}))
+    r = Routing(Policy({}, Roster.of(owner=[(GROUP, "Group")], fm=[(FM_PRIVATE, "FM")])))
     scheduled, talk, job, press = None, Origin(ASKER, CONVERSATION), Origin(ASKER, JOB), Origin(ASKER, PRESS)
     assert [Routing.offered(o) for o in (scheduled, talk, job, press)] == [
         ["owner", "fm"], ["here"], ["here"], ["here", "owner", "fm"]]
@@ -137,11 +137,7 @@ def test_one_occasion_answers_every_routing_question():
 def test_the_routing_rule():
     # owner, 2026-10-10: a role's messages go to EVERY chat the People list names with it, a person's or a group's
     OWNER = 444
-    pol = listed_policy({"people": [{"telegram_id": ASKER, "name": "A", "role": "fm"},
-                             {"telegram_id": OWNER, "name": "O", "role": "owner"},
-                             {"telegram_id": GROUP, "name": "Group_O", "role": "owner"},
-                             {"telegram_id": FM_PRIVATE, "name": "F", "role": "fm"},
-                             {"telegram_id": GROUP, "name": "Group_FM", "role": "fm"}]})
+    pol = Policy({}, Roster.of(owner=[(OWNER, "O"), (GROUP, "Group_O")], fm=[(ASKER, "A"), (FM_PRIVATE, "F"), (GROUP, "Group_FM")]))
     r = Routing(pol)
     assert r.target("here", Origin(ASKER)) == [ASKER]                      # 1. a reply: where they wrote
     assert r.target("here") == []                                          #    no one asked: nowhere
@@ -153,12 +149,12 @@ def test_the_routing_rule():
     assert r.approver_chats("owner", ASKER) == [OWNER]
     assert r.approver_chats("any", ASKER) == [ASKER]                       #    otherwise where it was asked
     assert r.approver_chats("any", -999) == [OWNER]                        #    an unknown chat: the owner chats
-    assert Routing(listed_policy({})).target("owner") == []                       #    nobody of the role: nowhere
+    assert Routing(Policy({}, Roster())).target("owner") == []                    #    nobody of the role: nowhere
 
 
 def test_a_message_for_both_roles_sharing_one_chat_is_sent_once(agent):
     v, _ = agent
-    keep_lists(v.s, {"chats": {"owner": GROUP, "fm": GROUP}})
+    keep_roster(v.s, Roster.of(owner=[(GROUP, "Owner chat")], fm=[(GROUP, "Facility manager chat")]))
     done = run(v.outcome.carry_out({"send": [{"to": "owner", "text": "Siren off."}, {"to": "fm", "text": "Siren off."}]}))
     assert done["sent"] == 1 and [c for c, _, _ in v.tg.sent] == [GROUP]   # 4. one chat, one message
 

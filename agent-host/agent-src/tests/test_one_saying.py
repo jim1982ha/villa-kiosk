@@ -12,9 +12,10 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from helpers import STARTER_SKILLS, make_agent
+from helpers import STARTER_SKILLS, keep_roster, make_agent
 from vesta_agent.layout import head_text
 from vesta_shared.store import Store
+from vesta_agent.roster import Roster
 
 spec = importlib.util.spec_from_file_location("desk27", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
 desk = importlib.util.module_from_spec(spec)
@@ -69,8 +70,7 @@ def test_home_assistants_all_clear_is_said_in_the_desks_words(tmp_path):
 
 def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path):
     from vesta_shared import result as R
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"},
-                                         {"telegram_id": FM, "name": "JM", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "JM")]))
     run = asyncio.run
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=21, buttons=True, stage="new")]}, "alert-desk"))
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=21, stage="reminder", status="Reminder")]}, "alert-desk"))
@@ -95,7 +95,7 @@ def test_a_copy_settled_by_a_press_is_headed_closed_once_the_desk_closes_it(tmp_
     # owner, 2026-10-11: the group's copy kept "New" above "Done pressed by Fabien" — the press settles every copy, the
     # desk closes the incident just after
     from vesta_shared import result as R
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "Fabien")]))
     st = Store(v.s.store_path)
     iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
     run = asyncio.run
@@ -117,8 +117,7 @@ def test_a_copy_settled_by_a_press_is_headed_closed_once_the_desk_closes_it(tmp_
 def test_one_result_records_one_history_line_per_kind_of_notice(tmp_path):
     # owner, 2026-10-11: "Escalated … to Jim, Fabien" — Fabien had only been told his own "Need help" was passed on
     from vesta_shared import result as R
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"},
-                                         {"telegram_id": FM, "name": "Fabien", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "Fabien")]))
     run = asyncio.run
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=4, buttons=True, stage="new")]}, "alert-desk"))
     run(v.outcome.carry_out({"send": [R.message("owner", ALERT, incident=4, stage="escalated", status="over to you"),
@@ -155,8 +154,7 @@ def test_the_bottom_line_shows_the_stage_by_its_icon():
 
 
 def test_need_help_and_an_unchecked_closure_carry_their_icon_end_to_end(tmp_path):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"},
-                                         {"telegram_id": FM, "name": "Fabien", "role": "fm"}]}, skills=["alert-desk"])
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "Fabien")]), skills=["alert-desk"])
     st = Store(v.s.store_path)
     now = datetime.now(timezone.utc)
     iid = desk.intake(st, ev("opened", summary=ALERT), now, occupancy_reader=lambda: "x")["incident_id"]
@@ -220,7 +218,7 @@ def test_telegram_shows_the_title_in_bold_the_alert_quoted_and_the_status_quoted
 
 def test_a_copy_turning_closed_turns_green(tmp_path):
     from vesta_shared import result as R
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "Fabien")]))
     st = Store(v.s.store_path)
     iid = st.new_incident("k", "automation.r", "lock.a", "P2", {"message": "Door unlocked"})
     asyncio.run(v.outcome.carry_out({"send": [R.message("fm", "Door unlocked", incident=iid, buttons=True, stage="new")]}, "alert-desk"))
@@ -236,9 +234,7 @@ def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):
     # the facility managers leaves the owner's group copy as it was — no edit, no FM line
     from vesta_shared import result as R
     GROUP, JM2 = -100123, 333
-    v = make_agent(tmp_path, {"people": [{"telegram_id": GROUP, "name": "VillaGroup", "role": "owner"},
-                                         {"telegram_id": FM, "name": "Fabien", "role": "fm"},
-                                         {"telegram_id": JM2, "name": "JM", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(GROUP, "VillaGroup")], fm=[(FM, "Fabien"), (JM2, "JM")]))
     run = asyncio.run
     run(v.outcome.carry_out({"send": [R.message("owner", ALERT, incident=5, buttons=True, stage="new"),
                                       R.message("fm", ALERT, incident=5, buttons=True, stage="new")]}, "alert-desk"))
@@ -264,8 +260,7 @@ def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):
 def test_a_close_reaches_a_copy_without_buttons_too(tmp_path):
     # one incident, one picture (owner, 2026-10-11): a copy sent without buttons kept its old status at a close
     from vesta_shared import result as R
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"},
-                                         {"telegram_id": FM, "name": "Fabien", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "Fabien")]))
     asyncio.run(v.outcome.carry_out({"send": [R.message("owner", ALERT, incident=6, stage="new"),
                                               R.message("fm", ALERT, incident=6, buttons=True, stage="new")]}, "x"))
     assert not v.thread.shown(6)[OWNER]["buttons"]
@@ -277,7 +272,7 @@ def test_a_close_reaches_a_copy_without_buttons_too(tmp_path):
 
 def test_an_old_copy_gets_the_new_heading_whole(tmp_path):
     # review 28: a copy sent before 0.12.152, settled, showed the old heading with the new icons and no style
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "Fabien")]))
     head = head_text(v.notices.retitle(9, "For: Fabien, P2 Incident: Follow Up #9\nAlert sent on 09/10/2026 13:12, to Fabien", FM))
     assert head.split("\n")[:2] == ["#9 (new)", "To: FM"]
 
@@ -285,13 +280,9 @@ def test_an_old_copy_gets_the_new_heading_whole(tmp_path):
 def test_the_history_names_roles_and_keeps_its_first_alert(tmp_path):
     # review 28: after 20 notices the first alert vanished without a word. Owner, 2026-10-13: roles, never names — a
     # person leaving the People list changes nothing
-    import yaml
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"},
-                                         {"telegram_id": 444, "name": "Ketut", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "Fabien"), (444, "Ketut")]))
     v.notices.record(5, "new", [(FM, "fm"), (444, "fm")])
-    with open(v.s.policy_path, "w") as f:
-        yaml.safe_dump({"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"},
-                                   {"telegram_id": 555, "name": "Made", "role": "fm"}]}, f)
+    keep_roster(v.s, Roster.of(fm=[(FM, "Fabien"), (555, "Made")]))     # Ketut gone from the Kiosk's list, Made in
     for _ in range(25):
         v.notices.record(5, "reminder", [(FM, "fm"), (555, "fm")])
     lines = head_text(v.notices.heading(FM, 5, "fm")).split("\n")
@@ -322,8 +313,7 @@ def test_each_chat_lists_only_its_own_steps(tmp_path):
     # owner's group listed the FM's alert and reminder, the FM's chat the still-theres sent to the owner alone
     from vesta_shared import result as R
     GROUP = -100123
-    v = make_agent(tmp_path, {"people": [{"telegram_id": GROUP, "name": "VillaGroup", "role": "owner"},
-                                         {"telegram_id": FM, "name": "Wayan", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(GROUP, "VillaGroup")], fm=[(FM, "Wayan")]))
     run = asyncio.run
 
     def send(*msgs):
@@ -354,8 +344,7 @@ def test_a_copy_refreshed_elsewhere_is_headed_as_the_copy_sent(tmp_path):
     # (notice.heading), never the sent copy's re-parsed — and lists the step once, on its bottom line only
     from vesta_shared import result as R
     GROUP = -100123
-    v = make_agent(tmp_path, {"people": [{"telegram_id": GROUP, "name": "VillaGroup", "role": "fm"},
-                                         {"telegram_id": FM, "name": "Wayan", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(GROUP, "VillaGroup"), (FM, "Wayan")]))
     run = asyncio.run
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=9, buttons=True, stage="new", status="new")]}, "alert-desk"))
     run(v.outcome.carry_out({"send": [R.message("fm", ALERT, incident=9, buttons=True, stage="reminder", status="reminder")]},
@@ -373,8 +362,7 @@ def test_a_copy_refreshed_elsewhere_is_headed_as_the_copy_sent(tmp_path):
 def test_who_each_notice_is_for_is_worked_out_before_anything_is_sent(tmp_path):
     # architecture review scan 2, 2026-10-19 (notice.Notices.audiences): "To:" per incident, each step's own roles, a
     # report's roles — a table, no Telegram. An answer in its own chat (no role) widens nothing.
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"},
-                                         {"telegram_id": FM, "name": "Fabien", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "Fabien")]))
     alert = lambda st: {"incident_id": 9, "stage": st}
     report = {"text": "weekly"}
     going, told, sent_to = v.notices.audiences(

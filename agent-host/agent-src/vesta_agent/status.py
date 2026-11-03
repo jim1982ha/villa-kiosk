@@ -49,12 +49,12 @@ def unreachable(state, policy) -> list[str]:
     said, what to do. A chat no longer listed is not named (its record is gone at its next message anyway)."""
     out = []
     for chat, rec in sorted(state.unreachable().items()):
-        names = [e.name for e in policy.entries if e.telegram_id == chat]
+        names = policy.roster.names_of(chat)
         if not names:
             continue
         fix = ("they must open a private chat with the bot and send it /start once" if chat > 0 else
                f"add the bot to the group again, and list the group's new chat in {villa_recipients.WHERE}")
-        out.append(f"{' / '.join(dict.fromkeys(names))}: Telegram refused the last message ({rec.get('error')}). "
+        out.append(f"{' / '.join(names)}: Telegram refused the last message ({rec.get('error')}). "
                    f"To fix: {fix}.")
     return out
 

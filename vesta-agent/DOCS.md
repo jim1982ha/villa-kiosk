@@ -4,7 +4,7 @@ The Home Assistant app that runs the **VESTA Agent**: the villa's assistant on
 Telegram. It reads Home Assistant, follows up the critical alerts of the VESTA
 rules, records jobs for the facility manager in the VESTA Kiosk, writes the
 daily, weekly and monthly reports, and **asks before any action**: every
-action is an Approve / Refuse button pressed by a registered person.
+action is an Approve / Refuse button pressed by someone on the villa's lists.
 
 It has one page, **VESTA Agent** in Home Assistant's sidebar (administrators
 only), to edit its rules and its skills. Nothing else connects to it: no port
@@ -133,26 +133,23 @@ Skills: alert-desk, investigate, preventive-maintenance, reports, roi-energy, vi
 Telegram: sending as @<the bot> (Home Assistant receives; the agent reads its events)
 VESTA Kiosk: agreement 1
 HA MCP: 77 tools on the server, 15 shown to the model
-policy.yaml has no people yet: the agent answers nobody. ...
+The villa's lists of who gets the messages are not read yet: the agent answers nobody ...
 Acting on the villa is OFF (informs only)
 ```
 
-**Register the people.** In each chat the agent should use (a private chat
-with the bot, the villa group), send `/whoami`; the bot answers with the
-person's Telegram id and the chat id. Then, on the VESTA Agent page, **Rules ›
-People** (or the file `/addon_configs/<id>_vesta_agent[_dev]/agent/policy.yaml`
-with Studio Code Server): one row per person and role (id, name, role `owner` or
-`fm`, language). **People is also where the agent posts**: a message for a role
-goes to every chat listed with that role, a person's private chat or a group (a
-group's id is negative). Add the group as a row of each role whose messages it
-should get; a person in both roles is two rows with the same id. Every copy of
-a message updates together when someone answers. A person must have sent
-`/start` to the bot once before it can write to them; a chat Telegram refuses is
-named on the **Overview**. **Everyone in a group listed in People acts with the
-group's role** there (the facility manager's when the group is listed for both),
-whatever their own row says, and with no row needed: they can ask, answer and
-press buttons in the group. A person's own row gives them messages in their
-private chat, and their role there. Saved changes apply within seconds, no restart. The same file holds the owner-only devices, the allowed
+**Who gets the messages.** The villa's own two lists, set in the VESTA Kiosk
+(Settings › Messages › Who gets the messages), are the one answer to who is
+who: the VESTA blueprints send there without the agent, and the agent reads the
+same lists. A Telegram chat in a role's list (a private chat or a group) gets
+that role's messages **and** its rights: asking, answering, pressing Approve.
+A chat in both lists is both. Every copy of a message updates together when
+someone answers. A person must have sent `/start` to the bot once before it can
+write to them; a chat Telegram refuses is named on the **Overview**.
+**Everyone in a listed group acts with the group's role** there (the facility
+manager's when the group is in both lists), with nothing else to set. The
+VESTA Agent page's **Rules › People** shows the lists read only; there you set
+each chat's language. The agent reads the lists again every 5 minutes, no
+restart. The same file holds the owner-only devices, the allowed
 actions and the agent's settings (AI model, limit per reply, web search).
 
 ## Telegram
@@ -164,13 +161,16 @@ nothing Home Assistant does with Telegram changes, whether the agent runs or
 not: its alerts, the doorbell's gate button, any automation that waits for a
 Telegram button.
 
-- In a private chat, the agent answers any message from a registered person.
+- In a private chat, the agent answers any message from a chat on the villa's lists.
 - In a group, it answers a message that mentions the bot, a reply to one of its
   own messages, or `/ask …`. Anything else is dropped by its code, unread by
   the AI. (A mention reaches it only while the bot is a group administrator;
   replies and commands always do.)
-- It answers only the chats listed in People, and never leaves a group. In a
+- It answers only the chats on the villa's lists, and never leaves a group. In a
   group not listed yet, it answers only `/whoami`, and only to a listed person.
+  Anyone else writing in private is told: "This chat is not on the villa's
+  lists. Ask the owner to add it in the VESTA Kiosk (Settings › Messages › Who
+  gets the messages)."
 - A button press on a Home Assistant message (the gate) is left to Home
   Assistant; the agent handles only the buttons of its own messages.
 - An alert's buttons disappear once one is pressed; the message then says who
@@ -297,7 +297,7 @@ lights without an approval.
 | `Home Assistant events: Home Assistant refused the VESTA Agent token` | the token is wrong or was revoked |
 | `VESTA Kiosk: …` | the Kiosk's agent interface is off, or the token differs |
 | `Telegram: off` | *Telegram takeover* is off: nothing is sent |
-| `Unregistered sender: id …` | someone not in `policy.yaml` wrote to the agent |
+| `Sender not on the villa's lists: id …` | someone the VESTA Kiosk's lists do not name wrote to the agent |
 | `Alert received: opened — …` | Home Assistant sent a critical alert; the next line says what the agent did with it |
 | `Alert handled by alert-desk: new, incident #…` | the follow-up started (`repeat`, `counted`, `resolved`, `abandoned` otherwise) |
 | `Sent to chat … (fm chat)` | one message sent, and to which chat |

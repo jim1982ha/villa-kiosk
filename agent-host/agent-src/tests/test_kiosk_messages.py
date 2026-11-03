@@ -16,16 +16,19 @@ from telegram_fake import BOT
 from vesta_agent import kiosk_messages
 from vesta_agent.app import Vesta
 from vesta_agent.ha_events import CONTEXT_KEY
+from vesta_agent.roster import Roster
 
 OWNER, FM = 111, 222
 GROUP, FM_CHAT = -100123, 222
 SUMMARY = "🔓 Laundry door unlocked\nLaundry lock is unlocked\nHeld 1min"
 
 
+#: the villa's people: the owner in private and in the group, the facility manager in private (the Kiosk's lists)
+ROSTER = Roster.of(owner=[(OWNER, "Owner"), (GROUP, "Owner chat")], fm=[(FM_CHAT, "Wayan")])
+
+
 def policy():
-    return {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner", "language": "en"},
-                       {"telegram_id": FM, "name": "Wayan", "role": "fm", "language": "en"}],
-            "chats": {"owner": GROUP, "fm": FM_CHAT}}
+    return {}
 
 
 @pytest.fixture
@@ -35,7 +38,7 @@ def kiosk():
 
 @pytest.fixture
 def agent(tmp_path, kiosk):
-    v = make_agent(tmp_path, policy(), skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")]), kiosk=kiosk)
+    v = make_agent(tmp_path, policy(), roster=ROSTER, skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")]), kiosk=kiosk)
     v.bot_username = BOT["username"]
     return v
 
@@ -139,7 +142,7 @@ def test_a_reply_to_a_person_is_not_kept_for_the_tablet(agent, kiosk):
 
 
 def test_the_tablet_still_gets_it_when_telegram_is_off(tmp_path, kiosk):
-    v = make_agent(tmp_path, policy(), kiosk=kiosk, telegram_on=False)
+    v = make_agent(tmp_path, policy(), roster=ROSTER, kiosk=kiosk, telegram_on=False)
 
     async def note(v):
         await v.outcome.carry_out({"send": [{"to": "owner", "title": "Siren stopped", "text": "The siren was stopped."}]})
@@ -148,7 +151,7 @@ def test_the_tablet_still_gets_it_when_telegram_is_off(tmp_path, kiosk):
 
 
 def test_a_snapshot_or_approval_is_kept_when_telegram_took_nothing(tmp_path, kiosk):
-    v = make_agent(tmp_path, policy(), kiosk=kiosk, telegram_on=False)
+    v = make_agent(tmp_path, policy(), roster=ROSTER, kiosk=kiosk, telegram_on=False)
 
     async def snap(v):
         await v.poster.post(GROUP, "Camera snapshot", incident=1, photo=("QUJD", "image/jpeg"), thread="snapshot-1")
@@ -247,7 +250,7 @@ def test_a_kiosk_that_cannot_be_reached_or_keeps_none_changes_nothing(agent, kio
 
 
 def test_no_kiosk_no_push(tmp_path):
-    v = make_agent(tmp_path, policy(), skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")]))
+    v = make_agent(tmp_path, policy(), roster=ROSTER, skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")]))
     v.bot_username = BOT["username"]
     scenario(v, alert)
     assert v.messages._running == {} and v.messages._last == {}
@@ -288,7 +291,7 @@ def test_a_fault_a_person_reopens_in_the_cockpit_reaches_the_tablet(tmp_path, ki
     spec = importlib.util.spec_from_file_location("desk25k", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
     desk = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(desk)
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]}, kiosk=kiosk)
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=kiosk)
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     iid = st.new_incident("automation.door|lock.door", "automation.door", "lock.door", "P2", {"message": "Door unlocked"})
     tid, _ = pb.open_task("incident", iid, "automation.door", "lock.door", "Door unlocked")
@@ -310,7 +313,7 @@ def test_a_scheduled_digest_is_kept_but_the_same_report_asked_for_in_a_chat_is_n
     from helpers import make_skill
     from vesta_agent import job_steps
     from vesta_agent.routing import JOB, Origin
-    v = make_agent(tmp_path, policy(), kiosk=kiosk)
+    v = make_agent(tmp_path, policy(), roster=ROSTER, kiosk=kiosk)
     make_skill(v.s.skills_dir, "digest", {"tools": []}, {"d.py": (
         "import json\nprint(json.dumps({'send': [{'to': 'owner', 'title': 'Morning digest', "
         "'text': 'New since yesterday: nothing. Still open: 1.'}]}))\n")})
@@ -385,14 +388,14 @@ def test_the_card_keeps_its_newest_runs_and_its_to_line_is_cut_like_every_text()
 PAGE = b"<!DOCTYPE html><html><body>The week</body></html>"
 
 
-def scheduled_report(tmp_path, kiosk, people, send):
+def scheduled_report(tmp_path, kiosk, roster, send):
     """An agent whose skill `weekly` has one scheduled code job, `d.py`, printing `send` (its pages written in the out
     folder first); the job run as the app runs it: the scheduler's tick at its time, then every push settled."""
     import json
     from zoneinfo import ZoneInfo
     from helpers import make_skill
     from vesta_agent.scheduler import Scheduler
-    v = make_agent(tmp_path, {"people": people}, kiosk=kiosk)
+    v = make_agent(tmp_path, {}, roster=roster, kiosk=kiosk)
     make_skill(v.s.skills_dir, "weekly", {"tools": [], "schedule": [{"when": "07:00", "run": "d.py", "timeout": 60}]},
                {"d.py": f"import json\nprint(json.dumps({{'send': {json.dumps(send)!s}}}))\n"})
     for item in send:
@@ -411,8 +414,7 @@ def scheduled_report(tmp_path, kiosk, people, send):
 
 
 def test_a_scheduled_report_is_kept_as_a_report_with_its_page(tmp_path, kiosk):
-    v = scheduled_report(tmp_path, kiosk, [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
-                                           {"telegram_id": FM, "name": "Wayan", "role": "fm"}],
+    v = scheduled_report(tmp_path, kiosk, Roster.of(owner=[(OWNER, "Owner")], fm=[(FM, "Wayan")]),
                          [{"to": "fm", "title": "Weekly report", "text": "Two things to look at", "attachment": "week.html"},
                           {"to": "owner", "title": "Weekly report", "text": "Two things to look at", "attachment": "week.html"}])
     reports = [r for r in kiosk.messages.values() if r.get("report")]
@@ -424,8 +426,7 @@ def test_a_scheduled_report_is_kept_as_a_report_with_its_page(tmp_path, kiosk):
 
 
 def test_a_report_in_two_languages_is_one_record(tmp_path, kiosk):
-    scheduled_report(tmp_path, kiosk, [{"telegram_id": FM, "name": "Wayan", "role": "fm", "language": "en"},
-                                       {"telegram_id": 333, "name": "Made", "role": "fm", "language": "fr"}],
+    scheduled_report(tmp_path, kiosk, Roster.of(fm=[(FM, "Wayan"), (333, "Made")], languages={333: "fr"}),
                      [{"to": "fm", "language": "fr", "title": "Weekly report", "text": "Deux choses", "attachment": "w_fr.html"},
                       {"to": "fm", "language": "en", "title": "Weekly report", "text": "Two things", "attachment": "w_en.html"}])
     (rec,) = kiosk.messages.values()
@@ -435,7 +436,7 @@ def test_a_report_in_two_languages_is_one_record(tmp_path, kiosk):
 
 
 def test_only_an_html_page_goes_to_the_tablet(tmp_path, kiosk):
-    scheduled_report(tmp_path, kiosk, [{"telegram_id": FM, "name": "Wayan", "role": "fm"}],
+    scheduled_report(tmp_path, kiosk, Roster.of(fm=[(FM, "Wayan")]),
                      [{"to": "fm", "title": "Weekly figures", "text": "Attached", "attachment": "week.csv"}])
     (rec,) = kiosk.messages.values()
     assert rec["report"] == "weekly:d.py" and "page" not in rec and kiosk.documents == [], rec
@@ -451,7 +452,7 @@ def test_a_note_sent_outside_a_scheduled_run_is_no_report(agent, kiosk):
 
 def test_a_report_whose_page_the_kiosk_cannot_hold_is_kept_without_it(tmp_path, kiosk):
     kiosk.documents = None                                      # a Kiosk older than 2.496.326: it keeps no page
-    scheduled_report(tmp_path, kiosk, [{"telegram_id": FM, "name": "Wayan", "role": "fm"}],
+    scheduled_report(tmp_path, kiosk, Roster.of(fm=[(FM, "Wayan")]),
                      [{"to": "fm", "title": "Weekly report", "text": "Two things", "attachment": "week.html"}])
     (rec,) = kiosk.messages.values()
     assert rec["report"] == "weekly:d.py" and "page" not in rec, rec
@@ -467,7 +468,7 @@ def test_a_chat_refusing_its_copy_leaves_the_card_whole(agent, kiosk):
 
 
 def test_a_scheduled_report_rewritten_later_stays_a_report_with_its_page(tmp_path, kiosk):
-    v = scheduled_report(tmp_path, kiosk, [{"telegram_id": FM, "name": "Wayan", "role": "fm"}],
+    v = scheduled_report(tmp_path, kiosk, Roster.of(fm=[(FM, "Wayan")]),
                          [{"to": "fm", "title": "Night check", "text": "Pump idle", "key": "night-1", "attachment": "n.html"}])
 
     async def later(v):

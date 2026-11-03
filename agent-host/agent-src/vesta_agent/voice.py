@@ -18,7 +18,7 @@ import time
 from datetime import datetime, timezone
 from typing import Protocol
 
-from .policy import Person
+from .roster import Person
 from .telegram import TelegramError
 from .transcriber import Heard, Transcriber, script_seconds, timeout_s
 

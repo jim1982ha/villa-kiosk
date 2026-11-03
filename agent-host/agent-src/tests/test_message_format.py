@@ -8,6 +8,7 @@ import re
 
 from helpers import make_agent
 from vesta_shared import message_format as F
+from vesta_agent.roster import Roster
 
 OWNER, FM = 111, 222
 DAILY = F.document("Villa Example, daily report on 11/10/2026.", "", [
@@ -80,16 +81,14 @@ def test_no_style_is_written_anywhere_else():
 
 
 def test_a_report_reaches_telegram_with_its_to_line_filled_and_no_other_heading(tmp_path):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"},
-                                         {"telegram_id": FM, "name": "JM", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")], fm=[(FM, "JM")]))
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "text": DAILY}]}, "reports"))
     (chat, text, _), = v.tg.sent
     assert chat == FM and text == F.fill_to(DAILY, "Facility Manager") and "For:" not in text and "-------" not in text
 
 
 def test_a_report_names_every_role_it_went_to_in_every_chat(tmp_path):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "Fabien", "role": "fm"},
-                                         {"telegram_id": 333, "name": "JM", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "Fabien"), (333, "JM")]))
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "text": DAILY}]}, "reports"))
     assert {c: t.split("\n")[1] for c, t, _ in v.tg.sent} == {FM: "To: Facility Manager", 333: "To: Facility Manager"}
 
@@ -98,14 +97,14 @@ def test_a_report_names_every_role_it_went_to_in_every_chat(tmp_path):
 def test_a_report_asked_for_in_a_chat_names_its_readers_role(tmp_path):
     # its "To:" was empty: a reply in the asker's chat carries no heading, and the line was filled only with one
     from vesta_agent.routing import JOB, Origin
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Jim", "role": "owner"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Jim")]))
     asyncio.run(v.outcome.carry_out({"send": [{"to": "here", "text": DAILY}]}, "reports", Origin(OWNER, kind=JOB)))
     assert v.tg.sent[-1][1].split("\n")[1] == "To: Owner"
 
 
 def test_a_report_titled_as_data_keeps_its_shape_whatever_the_ai_wrote(tmp_path):
     # the AI translated "To:" ("Kepada:"), or sent one quiet line: the report fell back to "For: JM / -------", unstyled
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]))
     t = "Villa Example, daily report on 11/10/2026."
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "title": t, "text": "Vila tenang: tidak ada yang baru."}]}, "x"))
     text = v.tg.sent[-1][1]
@@ -146,7 +145,7 @@ def test_a_message_without_a_heading_has_its_status_styled_as_every_other():
 
 def test_a_long_report_goes_as_whole_messages_none_lost(tmp_path):
     # one long daily lost its whole "Still open" section, cut at Telegram's 4,096
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]))
     t = "Villa Example, daily report on 11/10/2026."
     body = F.split_title(F.document(t, "", [("New since yesterday", [f"- P3 sensor {i} has been offline for 33 h, "
                                                                      f"{'x' * 90}." for i in range(40)]),
@@ -164,7 +163,7 @@ def test_a_long_report_goes_as_whole_messages_none_lost(tmp_path):
 def test_a_long_report_in_paragraphs_loses_nothing(tmp_path):
     # architecture review 3 (2026-10-13): six paragraphs under "Findings:" (4,400 characters) went as ONE message cut with
     # "…" — a labelled section's paragraphs are one item, and an item longer than a message was shortened
-    v = make_agent(tmp_path, {"people": [{"telegram_id": FM, "name": "JM", "role": "fm"}]})
+    v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]))
     paragraphs = [f"Paragraph {i}. " + "word " * 180 + f"end of {i}." for i in range(6)] + ["x" * 5000]
     body = "Findings:\n" + "\n\n".join(paragraphs)
     asyncio.run(v.outcome.carry_out({"send": [{"to": "fm", "title": "Weekly report", "text": body}]}, "reports"))

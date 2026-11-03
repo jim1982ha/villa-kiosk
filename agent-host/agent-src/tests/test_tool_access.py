@@ -16,9 +16,11 @@ from telegram_fake import FakeTelegram
 from vesta_agent import runner, tool_access
 from vesta_agent.app import Vesta
 from vesta_agent.kiosk import Kiosk
-from vesta_agent.policy import Person, Policy, problems
+from vesta_agent.policy import Policy, problems
+from vesta_agent.roster import Person
 from vesta_agent.routing import CONVERSATION, Origin
 from vesta_agent.skills import Skills, ToolError, validate_script_args
+from vesta_agent.roster import Roster
 
 OWNER, FM, FM_CHAT, OWNER_CHAT = 111, 222, -2002, -1001
 RO = {"readOnlyHint": True}
@@ -35,12 +37,8 @@ def run(c):
 
 @pytest.fixture
 def agent(tmp_path, monkeypatch):
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
-                                         {"telegram_id": FM, "name": "FM", "role": "fm"}],
-                              "chats": {"owner": OWNER_CHAT, "fm": FM_CHAT},
-                              "ha_read_tools": ["ha_get_state", "ha_get_history", "ha_get_camera_image",
-                                                "ha_config_set_automation", "ha_manage_theme"],
-                              "settings": {"jobs": {"fm-weekly": {"profile": "economy", "limit_usd": 1}}}},
+    v = make_agent(tmp_path, {"ha_read_tools": ["ha_get_state", "ha_get_history", "ha_get_camera_image",
+                                                "ha_config_set_automation", "ha_manage_theme"], "settings": {"jobs": {"fm-weekly": {"profile": "economy", "limit_usd": 1}}}}, roster=Roster.of(owner=[(OWNER, "Owner"), (OWNER_CHAT, "Owner chat")], fm=[(FM, "FM"), (FM_CHAT, "Facility manager chat")]),
                    skills=["reports", "villa-concierge"], reader=FakeHA(tools=SERVER, images={"camera.lounge": "SlBFRw=="}))
     v.runs = FakeAI("ok").install(monkeypatch).runs
     run(v.refresh_server_tools())

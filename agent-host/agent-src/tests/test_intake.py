@@ -9,9 +9,11 @@ from datetime import datetime, timezone
 
 import pytest
 
-from helpers import listed_policy, ROOT
+from helpers import ROOT
 from vesta_agent import button_data, intake
-from vesta_agent.policy import NOT_REGISTERED, Person
+from vesta_agent.roster import NOT_LISTED, Person
+from vesta_agent.roster import Roster
+from vesta_agent.policy import Policy
 
 OWNER, FM, STRANGER, GROUP, OTHER_GROUP = 11, 22, 99, -100, -200
 BOT = "Villa_Test_bot"
@@ -19,9 +21,7 @@ BOT = "Villa_Test_bot"
 
 # the real rules, never a stand-in of them: the group is a row of People (0.12.128)
 def Pol():
-    return listed_policy({"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"},
-                              {"telegram_id": FM, "name": "FM", "role": "fm"},
-                              {"telegram_id": GROUP, "name": "Group", "role": "owner"}]})
+    return Policy({}, Roster.of(owner=[(OWNER, "Owner"), (GROUP, "Group")], fm=[(FM, "FM")]))
 
 
 def ev(chat, user, text="hi", **k):
@@ -34,7 +34,7 @@ def ev(chat, user, text="hi", **k):
     ("telegram_text", ev(GROUP, OWNER, f"@{BOT} lights?"), "converse", "lights?"),
     ("telegram_text", ev(GROUP, OWNER, "yes", reply_to_message_id=5), "converse", "yes"),     # a reply to it
     ("telegram_text", ev(OTHER_GROUP, OWNER, f"@{BOT} hi"), "drop", ""),                      # an unlisted group
-    ("telegram_text", ev(STRANGER, STRANGER), "unregistered", f"{NOT_REGISTERED} Your Telegram id is {STRANGER}."),
+    ("telegram_text", ev(STRANGER, STRANGER), "unregistered", NOT_LISTED),
     ("telegram_command", {"chat_id": OWNER, "user_id": OWNER, "command": "/new"}, "new", "New conversation."),
     ("telegram_command", {"chat_id": OTHER_GROUP, "user_id": STRANGER, "command": "/whoami"}, "drop", ""),
     ("telegram_command", {"chat_id": GROUP, "user_id": STRANGER, "command": "/whoami"}, "whoami",

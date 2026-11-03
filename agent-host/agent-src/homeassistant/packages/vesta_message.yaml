@@ -4,7 +4,7 @@
 # switches the blueprints back to plain text within a minute. Nothing else depends on it.
 #
 # Who gets the villa's messages, by role (owner, 2026-11-03: one place for every VESTA blueprint and the VESTA Agent):
-# each a list of the villa's notify entities, apart by ",". Set from the VESTA Kiosk (Settings > Villa > Who gets the
+# each a list of the villa's notify entities, apart by ",". Set from the VESTA Kiosk (Settings › Messages › Who gets the
 # messages); read by every VESTA blueprint (P1: both lists, P2: the facility manager's; a notice: its "Who gets the
 # message") and by the VESTA Agent (vesta_shared.villa_recipients). Helpers live in this package file, never made from
 # the screens (owner, 2026-10-18). No `initial:`, so the value set is kept across restarts.

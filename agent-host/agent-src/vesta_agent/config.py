@@ -136,6 +136,7 @@ class Settings:
         settings each kept their own until 0.6.42). A value it does not understand falls back to its default
         (not an error: a typo in a hand-edited file must not stop the agent; the UI refuses it before it is saved)."""
         from vesta_shared import villa_recipients
+        from .roster import Roster
 
         def mtime(path):
             try:
@@ -146,7 +147,7 @@ class Settings:
         m = (mtime(self.policy_path), mtime(villa_recipients.path(self.pack_path)))
         if self._policy_cache.get("mtime") != m or "value" not in self._policy_cache:
             try:
-                v = Policy.load(self.policy_path, villa_recipients.get(self.pack_path))  # no file: Policy({})
+                v = Policy.load(self.policy_path, Roster.kept(self.pack_path))  # no file: Policy({})
             except Exception as e:  # noqa: BLE001 — unreadable: the last good rules, never a stop
                 # ⚠️ ANY READING THAT FAILS KEEPS THE LAST GOOD RULES (architecture review 17, then 18): any other error
                 # stopped every message, alert and press; a YAML slip by hand (one quote left open) gave EMPTY rules —
@@ -154,7 +155,7 @@ class Settings:
                 import logging
                 logging.getLogger("vesta").error("policy.yaml could not be read (%s): the last good rules are kept",
                                                  type(e).__name__)
-                v = self._policy_cache.get("value") or Policy({})
+                v = self._policy_cache.get("value") or Policy({}, Roster.kept(self.pack_path))
             self._policy_cache.update(mtime=m, value=v)
         return self._policy_cache["value"]
 

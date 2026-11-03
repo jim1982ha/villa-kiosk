@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from ha_fake import FakeHA
 from helpers import make_agent
+from vesta_agent.roster import Roster
 
 NOW = datetime.now(timezone.utc)
 BOT_EVENTS = "event.example_bot_update_event"
@@ -40,7 +41,7 @@ def agent(tmp_path, rows, monkeypatch, ready: bool = True):
     ha = FakeHA(states={BOT_EVENTS: {"state": "x", "attributes": {"event_types": TYPES}},
                         "event.example_doorbell": {"state": "x", "attributes": {"event_types": ["ring"]}}},
                 history={BOT_EVENTS: rows})
-    v = make_agent(tmp_path, {"people": [{"telegram_id": OWNER, "name": "Owner", "role": "owner"}]}, reader=ha)
+    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(OWNER, "Owner")]), reader=ha)
     v.state.remember_message(CHAT, CARD)
     if ready:
         v.state.updates_recorded()               # an earlier start of this engine recorded the updates it took in live

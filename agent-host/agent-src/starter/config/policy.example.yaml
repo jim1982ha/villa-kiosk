@@ -53,12 +53,12 @@ siren_auto_off_min: 3
 # Never acted on, never reported as real devices (a test lock, for example).
 excluded_entities: []
 
-# Lights, covers and fans for both roles; TVs and speakers at once for a registered person; locks, siren, automations for the owner.
+# Lights, covers and fans for both roles; TVs and speakers at once for someone on the villa's lists; locks, siren, automations for the owner.
 # service: who may approve.
 #   any    = the owner or the facility manager approves (Approve / Refuse buttons)
 #   owner  = only the owner approves
 #   listed = only the devices named in the lists below (switch_entities...), then any
-#   direct = no buttons: done at once when a registered person asks in a chat. A scheduled job or an
+#   direct = no buttons: done at once when someone on the villa's lists asks in a chat. A scheduled job or an
 #            alert still asks, and an owner-only device still waits for the owner.
 allowed_services:
   light.turn_on: any

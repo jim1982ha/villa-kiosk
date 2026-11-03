@@ -34,7 +34,7 @@ from . import intake
 from .kiosk import KioskError, kiosk_timeout_s
 from .kiosk_messages import buttons_of
 from .kiosk_owed import TURN, KioskOwed
-from .policy import Person, tablet_chat, tablet_person, tablet_profile, tablet_profiles
+from .roster import Person, tablet_chat, tablet_person, tablet_profile, tablet_profiles
 
 log = logging.getLogger("vesta.tablet")
 
@@ -48,12 +48,12 @@ TYPING_EVERY_S = 60.0
 #: How the person's message reads to the AI: where it was written, and how that place shows the answer.
 WHERE = ("conversation on the villa's wall tablet (the VESTA Kiosk; apart from every Telegram chat): it shows your text "
          "as written, plain text, with the camera pictures you looked at and the pages you send")
-# who is at a tablet is the People module's answer (policy.tablet_*): one place for every step that asks
+# who is at a tablet is the who-is-who module's answer (roster.tablet_*): one place for every step that asks
 profiles, chat_of, profile_of = tablet_profiles, tablet_chat, tablet_profile
 
 
 def person_of(profile: str | None) -> Person | None:
-    """Who asks, from the profile the Kiosk stamped (policy.tablet_person): a guest too, answered with answers only."""
+    """Who asks, from the profile the Kiosk stamped (roster.tablet_person): a guest too, answered with answers only."""
     chat = tablet_chat(profile)
     return tablet_person(chat) if chat is not None else None
 

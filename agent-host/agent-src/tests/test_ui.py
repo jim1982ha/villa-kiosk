@@ -1,7 +1,7 @@
 """The UI server (vesta_agent.ui), through HTTP as the page uses it. Synthetic data only."""
 from __future__ import annotations
 
-from helpers import run_kit, run_terms
+from helpers import run_kit, run_terms, keep_roster
 import asyncio
 import os
 from pathlib import Path
@@ -10,9 +10,10 @@ import pytest
 import yaml
 from aiohttp.test_utils import TestClient, TestServer
 
-from helpers import copy_skill, keep_lists, settings, page_js, body_of
+from helpers import copy_skill, settings, page_js, body_of
 from vesta_agent.ui.server import UI
 from vesta_agent.policy import PROFILES
+from vesta_agent.roster import Roster
 
 HDR = {"X-Vesta-UI": "1"}
 
@@ -22,8 +23,7 @@ def ui(tmp_path):
     s = settings(str(tmp_path))                                  # seeds policy.yaml from the starter example
     copy_skill("reports", s.skills_dir)
     # a villa set up: its group in both of the VESTA Kiosk's lists of who gets the messages, as the agent read them
-    keep_lists(s, {"people": [{"telegram_id": -100, "name": "Villa group", "role": "owner"},
-                              {"telegram_id": -100, "name": "Villa group", "role": "fm"}]})
+    keep_roster(s, Roster.of(owner=[(-100, "Villa group")], fm=[(-100, "Villa group")]))
     return s
 
 
@@ -69,8 +69,8 @@ def test_the_forms_save_keeps_the_files_comments_and_the_agent_reads_it(ui):
     assert raw["languages"] == {-100: "fr"} and "people" not in raw
     from vesta_agent.policy import Policy
     from vesta_shared import villa_recipients
-    pol = Policy.load(ui.policy_path, villa_recipients.get(ui.pack_path))
-    assert pol.languages_for("owner") == pol.languages_for("fm") == ["fr"]
+    pol = Policy.load(ui.policy_path, Roster.kept(ui.pack_path))
+    assert pol.roster.languages_for("owner") == pol.roster.languages_for("fm") == ["fr"]
 
 
 def test_a_save_the_agent_would_misread_is_refused_and_the_file_untouched(ui):
@@ -261,7 +261,7 @@ def test_the_costs_tab_reads_every_run_from_the_agents_records(ui):
     from datetime import datetime, timedelta, timezone
     from vesta_agent.state import State
     owner = -100777
-    keep_lists(ui, {"chats": {"owner": owner}})
+    keep_roster(ui, Roster.of(owner=[(owner, "Owner chat")]))
     st = State(ui.state_path)
     now = datetime.now(timezone.utc)
     rows = [((now - timedelta(hours=1)), {"who": "job:fm-weekly", "cost_usd": 1.25, "profile": "auto", "model": "claude-sonnet-5",
@@ -301,7 +301,8 @@ def test_a_reply_at_the_tablet_names_no_chat_and_a_telegram_one_keeps_its_chat(u
     # (policy.chat_label), wherever a run's chat is said; a Telegram reply keeps "owner group"
     import json
     from datetime import datetime, timedelta, timezone
-    from vesta_agent.policy import Policy, tablet_chat, tablet_person
+    from vesta_agent.policy import Policy
+    from vesta_agent.roster import tablet_chat, tablet_person
     from vesta_agent.state import State
     from vesta_shared import villa_recipients
     tab = tablet_chat("owner")
@@ -317,8 +318,8 @@ def test_a_reply_at_the_tablet_names_no_chat_and_a_telegram_one_keeps_its_chat(u
         return await (await c.get("/api/costs?days=7")).json()
     runs = {r["person"]: r["chat"] for r in call(ui, fn)["runs"]}
     assert runs == {"Owner at the tablet": None, "Villa group": "Owner and FM group"}, runs
-    pol = Policy.load(ui.policy_path, villa_recipients.get(ui.pack_path))
-    assert pol.chat_label(tab) == "" and pol.chat_label(-100) == "Owner and FM group"
+    pol = Policy.load(ui.policy_path, Roster.kept(ui.pack_path))
+    assert pol.roster.chat_label(tab) == "" and pol.roster.chat_label(-100) == "Owner and FM group"
 
 
 def test_a_run_records_its_brain_model_tokens_and_what_was_asked(ui, monkeypatch):
@@ -1206,9 +1207,7 @@ def test_a_phones_keyboard_opening_never_closes_a_floating_list_being_typed_in()
 # the People card shows its lists and edits each chat's language only
 
 def test_the_people_card_shows_the_kiosks_lists_one_row_per_chat(ui):
-    keep_lists(ui, {"people": [{"telegram_id": 111, "name": "Ann", "role": "owner"},
-                               {"telegram_id": -100, "name": "Villa group", "role": "owner"},
-                               {"telegram_id": -100, "name": "Villa group", "role": "fm"}]})
+    keep_roster(ui, Roster.of(owner=[(111, "Ann"), (-100, "Villa group")], fm=[(-100, "Villa group")]))
 
     async def fn(c):
         return await (await c.get("/api/rules")).json()
