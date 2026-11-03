@@ -1,3 +1,10 @@
+## 2.496.685
+
+What you will see:
+- Inbox › Closed: every closed fault's card has a Reopen button, as a closed ticket already had in Tickets › Closed.
+  A fault closed as "Not a problem while it lasts", or by mistake, can be put back in Open issues: it asks why
+  (optional), and VESTA is told and follows it again. Only a profile that manages Facility work sees it.
+
 ## 2.496.684
 
 What you will see:
