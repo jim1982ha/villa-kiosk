@@ -85,7 +85,7 @@ def test_a_kind_chosen_on_the_page_is_the_one_the_night_check_follows_and_back_t
     card = kinds.save(s, files, SLUG, None)
     assert [(r["kind"], r["chosen"]) for r in card["rows"]] == [("lighting", False)]
     assert not _night_reads_it(monkeypatch, s.pack_path)
-    assert files.history.rows(5)[0]["what"] == "Example LED strip back to its guess, Lighting"
+    assert files.history.rows(5)[0]["what"] == "Example LED strip back to the one found, Lighting"
 
     # Undo (Overview › Page changes) puts the choice back, through the same writer
     files.undo(files.history.rows(5)[0]["id"])

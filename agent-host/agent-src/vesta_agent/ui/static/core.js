@@ -327,7 +327,8 @@ export function paged(head, rows, per = 10, { cls = "", widths = null, nav = ["�
   const body = h("tbody");
   // each cell carries its column's name: on a phone the row becomes a card, every value on its own line, its name on
   // the left (app.css; owner, 2026-10-31: no two columns sharing a line any more, their values left and right)
-  const label = head.map((c) => String(isCell(c) ? c.v : c || ""));
+  // a heading with its (i) (withInfo: Device links' columns) is named by its words, never by the node
+  const label = head.map((c) => (c instanceof Node ? c.firstChild?.textContent || "" : String(isCell(c) ? c.v : c || "")));
   const line = (cells) => h("tr", {}, cells.map((c, i) => cell(c, "td", { label: label[i] })));
   // a row is its cells, or {cells, more}: `more` drawn on its own line under the row, across every column, while the
   // row's moreButton is open (Costs › Every run: a run's question and steps, owner 2026-10-19 — they were squeezed

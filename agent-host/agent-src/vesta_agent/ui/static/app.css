@@ -596,3 +596,6 @@ table.limits .limit-value > .btn { margin-left: auto; }
 /* the Knowledge tab (knowledge.js): a device link's cell, its drop-down above its chip and what it means */
 .link-cell { display: flex; flex-direction: column; gap: 4px; }
 .link-cell .chips { align-items: center; }
+/* read first (owner, 2026-11-04): a link as what VESTA uses, its helper's name over where it comes from */
+.link-read { display: flex; flex-direction: column; gap: 2px; }
+.link-group + .link-group { margin-top: 12px; }

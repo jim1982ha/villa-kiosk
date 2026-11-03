@@ -4,7 +4,7 @@
 // Device links as the tabs of one tabbed section (places.TABBED; owner, 2026-10-31: the two cards were tabs too). Each
 // is saved where it lives, at once (no save bar): a kind and a link through the page's one writer (ui/kinds.py,
 // ui/links.py: in Page changes, undoable), the translations forgotten in the agent's memory.
-import { api, ask, card, dropdown, fill, h, inOrder, paged, place, plural, problemsBox, reasons, tabbed, tabbedIn, tell, toast, $view } from "./core.js";
+import { api, ask, card, dropdown, fill, h, inOrder, paged, place, plural, problemsBox, reasons, tabbed, tabbedIn, tell, toast, withInfo, $view } from "./core.js";
 
 // a (i) in readable sections (owner, 2026-10-30: "barely understandable and very poorly formatted"): a heading, then
 // its sentences or a list of [bold words, the rest]
@@ -57,10 +57,10 @@ export function kindsCard(data, probs) {
       h("p", {}, "A pump that runs longer, starts more often or draws a different power than usual is often the first sign of wear, a leak or a blockage. A light left on or a meter's total is not a fault.")),
     ...part("Where the kind comes from", items([
       ["From the villa's system:", "what the device is made of there (a light, a fan, a climate unit)."],
-      ["Guessed:", "from its name, when the villa's system does not say."],
-      ["Chosen here:", "your choice, which always wins."]])),
+      ["Found by name:", "from its name, when the villa's system does not say."],
+      ["Set by you:", "your choice, which always wins."]])),
     ...part("To correct a kind",
-      h("p", {}, "Pick the right one in its list. It applies from the next night check and report. \"Back to the guess\" undoes it.")),
+      h("p", {}, "Pick the right one in its list. It applies from the next night check and report. \"Use the one found\" undoes it.")),
     ...part("\"light + fan\"",
       h("p", {}, "A wall switch driving a light and a fan on one power reading: VESTA checks the fan by its own on and off, reads the power only while the light is off, and counts the light in the energy figures only.")));
   const list = h("div");
@@ -68,7 +68,7 @@ export function kindsCard(data, probs) {
     try {
       Object.assign(data, await api("PUT", "api/kinds", { slug: r.slug, kind }));
       fill(probs);
-      toast(kind ? `Saved: ${r.name} is ${names[kind]}` : (r.guess ? `Saved: ${r.name} back to its guess, ${names[r.guess]}` : `Removed: ${r.name}`));
+      toast(kind ? `Saved: ${r.name} is ${names[kind]}` : (r.guess ? `Saved: ${r.name} back to the one found, ${names[r.guess]}` : `Removed: ${r.name}`));
     } catch (e) {
       fill(probs, problemsBox(reasons(e), `${r.name} not saved:`));
       probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
@@ -78,12 +78,12 @@ export function kindsCard(data, probs) {
   const row = (r) => [
     [h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null,
       r.parts ? h("span", { class: "muted" }, ` · ${r.parts}`) : null],
-    dropdown(data.kinds.map(([k, name]) => [k, k === r.guess ? `${name} (${r.source === "system" ? "the villa's system" : "guess"})` : name]), r.kind, (v) => save(r, v), `${r.name}, kind`),
+    dropdown(data.kinds.map(([k, name]) => [k, k === r.guess ? `${name} (${r.source === "system" ? "the villa's system" : "found by name"})` : name]), r.kind, (v) => save(r, v), `${r.name}, kind`),
     h("span", { class: "chips" },
       r.gone ? h("span", { class: "chip warn" }, "No longer found")
         : h("span", { class: r.chosen ? "chip" : "chip gray" },
-          r.chosen ? "Chosen here" : r.source === "system" ? "From the villa's system" : "Guessed"),
-      r.chosen ? h("button", { type: "button", class: "btn ghost", onclick: () => save(r, null) }, r.gone ? "Remove" : "Back to the guess") : null),
+          r.chosen ? "Set by you" : r.source === "system" ? "From the villa's system" : "Found by name"),
+      r.chosen ? h("button", { type: "button", class: "btn ghost", onclick: () => save(r, null) }, r.gone ? "Remove" : "Use the one found") : null),
   ];
   const draw = () => {
     const q = KIND_SEARCH.trim().toLowerCase();
@@ -107,10 +107,16 @@ export function kindsCard(data, probs) {
 // ---------------------------------------------------------------- knowledge › device links
 // ⚠️ A NAME WAS THE ONLY LINK (owner, 2026-10-30): a device's schedule, normal power and run hours were found only by
 // the helper's name (schedule.<device>_expected_runtime), so a schedule named otherwise was never read and its
-// run-hours check stayed off, unsaid. Each link: a drop-down of the villa's helpers of its type, by name, and None;
-// where it comes from (Guessed, Chosen here, None linked); "Back to the guess". Saved at once (ui/links.py). The
-// links' names and words are the agent's (asset_links.ROLES).
+// run-hours check stayed off, unsaid. Saved at once (ui/links.py). The links' names and words are the agent's
+// (asset_links.ROLES).
+// ⚠️ READ FIRST, CHANGED ON ASK (owner, 2026-11-04: "Device links section is hardly understandable"): it was three
+// drop-downs and three "Guessed / Chosen here / None linked" tags per device, the columns' meaning behind one (i).
+// Now each device is one line that says what VESTA uses, each column its own (i); the drop-downs open for one device
+// on its Set or Change. The devices whose run-hours check is off come first, the others folded under "Schedule
+// linked"; a device the villa no longer has, last. One set of words with Device kinds: Found by name, Set by you,
+// "Use the one found".
 let LINK_SEARCH = "";
+let LINK_EDITING = null;
 export function linksCard(data, probs) {
   const roles = data.roles.map(([k, name, , words]) => ({ k, name, words }));
   const info = h("div", { class: "tip-doc" },
@@ -118,50 +124,78 @@ export function linksCard(data, probs) {
       h("p", {}, `Every device that measures its own power or energy, as in Device kinds, and any other that has a link: ${data.rows.length} on this villa.`)),
     ...part("What each link is used for", items(roles.map((r) => [`${r.name}:`, r.words]))),
     ...part("Where a link comes from", items([
-      ["Guessed:", "a helper of the villa's system whose name follows the agent's rule (the device's name, then what it is)."],
-      ["Chosen here:", "your choice, which always wins, None included."],
-      ["None linked:", "no helper found or chosen. That link does nothing."]])),
+      ["Found by name:", "a helper of the villa's system whose name follows the agent's rule (the device's name, then what it is)."],
+      ["Set by you:", "your choice, which always wins, None included."],
+      ["—:", "nothing found or set. That link does nothing."]])),
     ...part("To change a link",
-      h("p", {}, "Pick the helper in its list, or None to switch the link off. It applies from the next night check. \"Back to the guess\" undoes it.")));
+      h("p", {}, "Press Set or Change on its device, then pick the helper in its list, or None to switch the link off. It applies from the next night check. \"Use the one found\" undoes your choice.")));
   const list = h("div");
   const nameOf = (role, id) => ((data.options[role] || []).find(([i]) => i === id) || [id, id])[1];
+  const rowOf = (slug) => data.rows.find((x) => x.slug === slug);
+  // a row's cells are boxes filled in place: Set, Change and a save redraw that one device, never the page it is on
+  const boxes = new Map();
+  const show = (r) => {
+    const b = boxes.get(r.slug);
+    if (!b) return;
+    const editing = LINK_EDITING === r.slug;
+    roles.forEach((role, i) => fill(b.links[i], editing ? editCell(r, role) : readCell(r, role)));
+    fill(b.button, h("button", { type: "button", class: editing ? "btn" : "btn ghost",
+      onclick: () => { const was = LINK_EDITING; LINK_EDITING = editing ? null : r.slug;
+        if (editing) draw(); else { if (was && rowOf(was)) show(rowOf(was)); show(r); } } },
+      editing ? "Done" : r.links.schedule?.value || r.gone ? "Change" : "Set"));
+  };
   const save = async (r, role, value) => {
     const link = roles.find((x) => x.k === role).name;
     try {
       Object.assign(data, await api("PUT", "api/links", { slug: r.slug, role, value }));
       fill(probs);
-      toast(value === null ? `Saved: ${r.name}, ${link} back to its guess` : `Saved: ${r.name}, ${link} ${value ? nameOf(role, value) : "None"}`);
+      toast(value === null ? `Saved: ${r.name}, ${link} back to the one found` : `Saved: ${r.name}, ${link} ${value ? nameOf(role, value) : "None"}`);
     } catch (e) {
       fill(probs, problemsBox(reasons(e), `${r.name} not saved:`));
       probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
     }
-    draw();
+    const now = rowOf(r.slug);
+    if (now) show(now); else { LINK_EDITING = null; draw(); }       // a gone device's last link removed: its row goes
   };
-  const cell = (r, role) => {
+  const source = (l) => (l.source === "chosen" ? "Set by you" : "Found by name");
+  // what VESTA uses: the helper's name and where it comes from, or a dash
+  const readCell = (r, role) => {
     const l = r.links[role.k] || { value: null, source: "none" };
-    const opts = [["", "None"], ...(data.options[role.k] || []).map(([i, n]) => [i, i === l.guess ? `${n} (guess)` : n])];
+    if (!l.value) return h("span", { class: "muted" }, l.source === "chosen" ? "None, set by you" : "—");
+    return h("span", { class: "link-read" }, h("span", {}, l.name || l.value), h("span", { class: "muted small" }, source(l)));
+  };
+  const editCell = (r, role) => {
+    const l = r.links[role.k] || { value: null, source: "none" };
+    const opts = [["", "None"], ...(data.options[role.k] || []).map(([i, n]) => [i, i === l.guess ? `${n} (found by name)` : n])];
     if (l.value && !opts.some(([i]) => i === l.value)) opts.push([l.value, l.name || l.value]);
     return h("div", { class: "link-cell" },
-      r.gone ? null : dropdown(opts, l.value || "", (v) => save(r, role.k, v), `${r.name}, ${role.name}`),
-      h("span", { class: "chips" },
-        h("span", { class: l.source === "chosen" ? "chip" : "chip gray" },
-          l.source === "chosen" ? "Chosen here" : l.source === "guessed" ? "Guessed" : "None linked"),
-        l.source === "chosen" ? h("button", { type: "button", class: "btn ghost", onclick: () => save(r, role.k, null) }, r.gone ? "Remove" : "Back to the guess") : null),
-      // the night check's run-hours check needs a schedule: the hours planned for each day
-      role.k === "schedule" && !l.value && !r.gone ? h("span", { class: "muted small" }, "No schedule linked: the run-hours check is off for it") : null);
+      r.gone ? readCell(r, role) : dropdown(opts, l.value || "", (v) => save(r, role.k, v), `${r.name}, ${role.name}`),
+      l.source === "chosen" ? h("span", { class: "chips" }, h("span", { class: "chip" }, "Set by you"),
+        h("button", { type: "button", class: "btn ghost", onclick: () => save(r, role.k, null) }, r.gone ? "Remove" : "Use the one found")) : null);
   };
-  const row = (r) => [
-    [h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null,
-      r.gone ? h("span", { class: "chips" }, h("span", { class: "chip warn" }, "No longer found")) : null],
-    ...roles.map((role) => cell(r, role)),
-  ];
+  const row = (r) => {
+    const b = { links: roles.map(() => h("div")), button: h("div", { class: "link-action" }) };
+    boxes.set(r.slug, b);
+    show(r);
+    return [[h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null], ...b.links, b.button];
+  };
+  const head = ["Device", ...roles.map((r) => withInfo(r.name, r.words)), ""];
+  const group = (title, rows, open) => rows.length
+    ? h("details", { class: "tool-group link-group", open },
+        h("summary", {}, h("b", {}, `${title} (${rows.length})`)),
+        paged(head, rows.map(row), 10, { cls: "links", widths: ["24%", null, null, null, "88px"], nav: ["‹ Previous", "Next ›", "devices"] }))
+    : null;
   const draw = () => {
+    boxes.clear();
     const q = LINK_SEARCH.trim().toLowerCase();
     const shown = data.rows.filter((r) => !q || `${r.name} ${r.area} ${r.slug}`.toLowerCase().includes(q));
+    const off = shown.filter((r) => !r.gone && !r.links.schedule?.value);
     fill(list, data.rows.length
-      ? (shown.length ? paged(["Device", ...roles.map((r) => r.name)], shown.map(row), 10,
-          { cls: "links", widths: ["28%", null, null, null], nav: ["‹ Previous", "Next ›", "devices"] })
-        : h("p", { class: "muted" }, "No device matches the search."))
+      ? (shown.length
+          ? [group("Run-hours check off", off, true),
+             group("Schedule linked", shown.filter((r) => !r.gone && r.links.schedule?.value), !off.length),
+             group("No longer found", shown.filter((r) => r.gone), true)]
+          : h("p", { class: "muted" }, "No device matches the search."))
       : h("p", { class: "muted" }, data.built ? "No device with a power or energy reading." : "The agent has not read the villa's devices yet."));
   };
   const search = h("input", { type: "search", placeholder: "Search the devices", value: LINK_SEARCH, "aria-label": "Search the devices",

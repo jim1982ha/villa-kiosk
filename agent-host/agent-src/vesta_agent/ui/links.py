@@ -58,7 +58,7 @@ def rows(settings) -> dict:
 
 
 def save(settings, files: PageFiles, slug: str, role: str, value: str | None) -> dict:
-    """One device's link chosen (`value`: a helper's id, or "" for None), or back to the guess (None): written,
+    """One device's link chosen (`value`: a helper's id, or "" for None), or back to the one found by name (None): written,
     recorded in Page changes, undoable."""
     if role not in asset_links.ROLES:
         raise Refused([f"{role!r} is not a link ({', '.join(asset_links.ROLES)})."])
@@ -80,11 +80,11 @@ def save(settings, files: PageFiles, slug: str, role: str, value: str | None) ->
     link = asset_links.ROLES[role][1]
     guess = row["links"].get(role, {}).get("guess_name")
     if value is None:
-        what = (f"{row['name']}: {link} back to its guess, {guess}" if guess
-                else f"{row['name']}: {link} back to its guess, none found")
+        what = (f"{row['name']}: {link} back to the one found, {guess}" if guess
+                else f"{row['name']}: {link} back to the one found, none found")
     elif value == "":
         what = f"{row['name']}: {link} set to None"
     else:
-        what = f"{row['name']}: {link} set to {names[value]}" + (f" (guessed {guess})" if guess else "")
+        what = f"{row['name']}: {link} set to {names[value]}" + (f" (found by name: {guess})" if guess else "")
     files.text_change(PLACE, what, {"kind": "links"}, asset_links.text_of(links))
     return rows(settings)

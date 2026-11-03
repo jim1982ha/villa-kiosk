@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.430 (4 November 2026)
+
+- Knowledge › Device links: read first, changed on ask (one line per device, Set / Change / Done), the run-hours check
+  off first, a (i) per column; Device kinds and Device links say "Found by name", "Set by you", "Use the one found",
+  and so do their Page changes lines. A paged table's heading with an (i) is named by its words on a phone.
+
 ## 0.6.429 (3 November 2026)
 
 - Rules › People: each row also carries its roles in the alert card's short words (`role_short`, "FM"); the page shows

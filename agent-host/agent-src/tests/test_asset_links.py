@@ -101,7 +101,7 @@ def test_a_schedule_chosen_on_the_page_is_the_one_the_night_check_reads_none_swi
     assert BY_KIND["links"].chosen(s.config_dir) == {SLUG: {"schedule": OTHER}}
     (change,) = files.history.rows(5)
     assert change["place"] == "Knowledge" and change["what"] == \
-        "Example pool pump: Schedule set to Example filtration hours (guessed Example pump plan)"
+        "Example pool pump: Schedule set to Example filtration hours (found by name: Example pump plan)"
     assert KnowledgePack.load(s.pack_path).assets[SLUG]["schedule"] == OTHER
     assert _expected(monkeypatch, s.pack_path)[0]["monday"] == 4.0
 
@@ -117,7 +117,7 @@ def test_a_schedule_chosen_on_the_page_is_the_one_the_night_check_reads_none_swi
     assert _row(card)["links"]["schedule"]["source"] == "guessed"
     assert BY_KIND["links"].chosen(s.config_dir) == {}
     assert _expected(monkeypatch, s.pack_path)[0]["monday"] == 4.0
-    assert files.history.rows(5)[0]["what"] == "Example pool pump: Schedule back to its guess, Example pump plan"
+    assert files.history.rows(5)[0]["what"] == "Example pool pump: Schedule back to the one found, Example pump plan"
 
     # Undo (Overview › Page changes) puts the None back, through the same writer
     files.undo(files.history.rows(5)[0]["id"])
@@ -214,9 +214,19 @@ def test_the_device_links_card_says_which_devices_and_explains_in_sections():
         assert f'part("{head}"' in card, head
     # each link named, with what it is used for: the agent's words (asset_links.ROLES), never a copy on the page
     assert "items(roles.map((r) => [`${r.name}:`, r.words]))" in card
-    for chip in ('"Chosen here"', '"Guessed"', '"None linked"', '"Back to the guess"', '["", "None"]'):
+    # one set of words with Device kinds (owner, 2026-11-04: "hardly understandable")
+    for chip in ('"Set by you"', '"Found by name"', '"Use the one found"', '["", "None"]', '"—"'):
         assert chip in card, chip
-    assert '"No schedule linked: the run-hours check is off for it"' in card
+    for gone in ("Guessed", "Chosen here", "None linked", "Back to the guess", "(guess)"):
+        assert gone not in card, gone
+    # read first: one line per device, its drop-downs only for the device being changed (Set / Change, then Done)
+    assert 'editing ? editCell(r, role) : readCell(r, role)' in card
+    assert 'editing ? "Done" : r.links.schedule?.value || r.gone ? "Change" : "Set"' in card
+    # each column its own (i), the link's own words
+    assert 'const head = ["Device", ...roles.map((r) => withInfo(r.name, r.words)), ""];' in card
+    # the devices whose run-hours check is off first and open, the others folded, the gone last
+    draw = card[card.index("const draw = () =>"):]
+    assert draw.index('group("Run-hours check off", off, true)') < draw.index('group("Schedule linked"') < draw.index('group("No longer found"')
     assert 'card(place("links"), info, which,' in card
 
 

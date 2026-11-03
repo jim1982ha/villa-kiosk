@@ -74,7 +74,7 @@ def save(settings, files: PageFiles, slug: str, kind: str | None) -> dict:
     if slug in kinds:
         what = f"{row['name']} set to {name[kind][0]}" + (f" (guessed {name[row['guess']][0]})" if row["guess"] else "")
     else:
-        what = (f"{row['name']} back to its guess, {name[row['guess']][0]}" if row["guess"]
+        what = (f"{row['name']} back to the one found, {name[row['guess']][0]}" if row["guess"]
                 else f"{row['name']}: its kind removed (no longer among the villa's devices)")
     files.text_change(PLACE, what, {"kind": "kinds"}, asset_kinds.text_of(kinds))
     return rows(settings)
