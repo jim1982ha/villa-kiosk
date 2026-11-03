@@ -1,3 +1,9 @@
+## 2.496.677
+
+What you will see:
+- Advanced Settings: the "Maintenance mode" switch is now the first setting of the Villa tab (it was in System). Still
+  for the owner only; its (i) says where to turn it off.
+
 ## 2.496.676
 
 What you will see:
