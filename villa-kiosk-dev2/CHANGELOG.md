@@ -1,3 +1,21 @@
+## 2.496.678
+
+What you will see:
+- Settings › General: every setting is one line, its icon and name on the left and its control on the right, the
+  controls lined up one under the other: Clickable Glow, Natural Scroll, Brightness, Night dimming, Villa lighting,
+  Light effect strength, Map look, Summary bar, Room glow, Eye height and Walk speed. Map look now has a name and icon
+  of its own beside Icon | Card, like Summary bar. Settings that shared a line now have one each.
+- Every On | Off is half as wide as before, at the right of its line: in Settings, Settings › Messages (Full screen on
+  this tablet), Advanced Settings › Villa (Maintenance mode). A device's "Confirm before toggling" keeps its small size.
+- Summary bar and Room glow each have their own (i) now; Map look's (i) only explains Icon and Card.
+- Villa presence window: "Latest movement" now comes before "People".
+- Cockpit, Inbox and Tickets: the line under a section repeating how many it holds ("1 watched item", "5 closed
+  tickets", "3 completions") is gone; the number in the section's title says it. A long list still shows where you are
+  ("11–20 of 23") and its arrows.
+- Cockpit › Inbox: a report or a message with a page shows "Open the page" on its card even while folded, in the
+  card's own button row, so you no longer have to open it first.
+- Cockpit › Tickets: the figures above the tickets ("in progress", "mean resolution", "closed, no action", and the
+  line under them) are gone. Open Ticket and the tickets stay.
 ## 2.496.677
 
 What you will see:
