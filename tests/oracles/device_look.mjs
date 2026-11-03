@@ -12,7 +12,7 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { badgeKindFor, meshLookFor } = await import("@/utils/deviceActivity");
-const { conditionOf } = await import("@/config/deviceCondition");
+const { conditionOf, windowStatusOf } = await import("@/config/deviceCondition");
 
 // its condition as the app reads it (readingOf → deviceCondition.conditionOf): an id of the type's own domain
 const ent = (type, state, attrs = {}) => ({ entity_id: `${type}.y`, state, attributes: attrs, last_changed: "", last_updated: "" });
@@ -25,17 +25,19 @@ console.log("  the cases the old mesh rule got wrong:");
 {
   const oldLockRed = (s) => s !== "locked";
   ck("the OLD lock rule paints `locking` red", oldLockRed("locking"));
-  ck("a lock that is locking: secure, like its badge", meshLookFor(read("lock", "locking")).tone === "secure" && badgeKindFor(read("lock", "locking")) === "off");
-  // owner, 2026-10-26: an unlocked door is in use — the "on" glow, red only for a jammed bolt
-  ck("  ...unlocked: open (in use); jammed: alert", meshLookFor(read("lock", "unlocked")).tone === "open"
-     && badgeKindFor(read("lock", "unlocked")) === "on" && meshLookFor(read("lock", "jammed")).tone === "alert");
-  ck("  ...unavailable: amber, never an 'unlocked' red", meshLookFor(read("lock", "unavailable")).tone === "unavailable");
+  ck("a lock that is locking: on its way (teal), as its window and history bar, never red", meshLookFor(read("lock", "locking")).tone === "transitional");
+  // owner, 2026-11-04: "always consistent with the device status": its window's colour, never a calmer one (an unlocked
+  // lock was the teal "in use" glow beside a red Unlocked in its window, 2026-10-26 to 2.496.686)
+  ck("  ...locked: green; unlocked: red, as its window; jammed: red", meshLookFor(read("lock", "locked")).tone === "active"
+     && meshLookFor(read("lock", "unlocked")).tone === "alert" && meshLookFor(read("lock", "jammed")).tone === "alert");
+  ck("  ...unavailable: grey, never an 'unlocked' red", meshLookFor(read("lock", "unavailable")).tone === "unavailable");
   const oldPulse = (s) => s === "on";
   const motion = read("binary_sensor", "on", { device_class: "motion" });
   ck("the OLD sensor rule pulses a motion PIR that sees someone", oldPulse("on"));
-  // owner, 2026-10-26: a detection is in use, no error ("reserve the ! for devices that are really in error"): its badge
-  // is "on" with the plain dot, so its object does not pulse like a leak either
-  ck("a motion PIR on: in use, no pulse, as its badge is calm", meshLookFor(motion).on === false && badgeKindFor(motion) === "on");
+  // owner, 2026-11-04: its window says a red "Motion detected": its object pulses red with it
+  ck("a motion PIR on: pulses, as its window is red", meshLookFor(motion).on === true);
+  ck("  ...a door sensor open too; closed, no pulse", meshLookFor(read("binary_sensor", "on", { device_class: "door" })).on === true
+     && meshLookFor(read("binary_sensor", "off", { device_class: "door" })).on === false);
   const leak = read("binary_sensor", "on", { device_class: "moisture" });
   ck("a leak sensor on: pulses", meshLookFor(leak).on === true && badgeKindFor(leak) === "alert");
   const net = read("binary_sensor", "off", { device_class: "connectivity" });
@@ -45,7 +47,7 @@ console.log("  the cases the old mesh rule got wrong:");
      meshLookFor(read("media_player", "buffering")).on === true && meshLookFor(read("media_player", "on")).on === false);
 }
 
-console.log("\n  every type and state: the mesh says what the badge says");
+console.log("\n  every type and state: the mesh says what its window says");
 {
   const states = ["on", "off", "locked", "unlocked", "locking", "unlocking", "jammed", "open", "opening", "playing", "buffering", "idle", "paused", "heat", "unavailable", "unknown"];
   const classes = [undefined, "motion", "moisture", "door", "connectivity", "smoke"];
@@ -53,17 +55,20 @@ console.log("\n  every type and state: the mesh says what the badge says");
   for (const type of ["lock", "binary_sensor", "switch", "media_player", "fan", "sensor", "climate", "light", "cover"]) {
     for (const st of states) for (const dc of (type === "binary_sensor" ? classes : [undefined])) {
       const r = read(type, st, dc ? { device_class: dc } : {});
-      const badge = badgeKindFor(r), look = meshLookFor(r);
+      const badge = badgeKindFor(r), look = meshLookFor(r), win = windowStatusOf(r.entity);
       const ok =
-        look.kind === "tint" ? (look.tone === "unavailable") === (badge === "unavailable") && (look.tone === "alert") === (badge === "alert")
-        : look.kind === "pulse" ? look.on === (badge === "alert") && look.unavailable === (badge === "unavailable")
-        : look.kind === "glow" ? look.on === (badge === "on")
+        look.kind === "tint" ? look.tone === (badge === "unavailable" ? "unavailable" : win)
+        : look.kind === "pulse" ? look.on === (badge !== "unavailable" && win === "alert") && look.unavailable === (badge === "unavailable")
+        : look.kind === "glow" ? look.on === (badge === "on") && look.tone === win
         : true;
       if (!ok) disagree.push(`${type}/${st}/${dc ?? "-"}: badge=${badge} mesh=${JSON.stringify(look)}`);
     }
   }
-  ck("no (type, state, class) where the mesh and the badge disagree", disagree.length === 0, disagree.slice(0, 5));
+  ck("no (type, state, class) where the mesh and its window disagree", disagree.length === 0, disagree.slice(0, 5));
   ck("lights and covers are painted elsewhere (BulbSet, poses)", meshLookFor(read("light", "on")).kind === "none" && meshLookFor(read("cover", "open")).kind === "none");
+  // owner, 2026-11-04: a running climate device was outlined red beside its window's green "Cool"
+  ck("a running climate device is outlined in its window's colour; off, not at all",
+     meshLookFor(read("climate", "cool")).outline === "active" && meshLookFor(read("climate", "off")).outline === undefined);
   ck("sensors, fans and climate are dark (a placeholder must not keep the marker glow)",
      ["sensor", "fan", "climate"].every((t) => meshLookFor(read(t, "on")).kind === "dark"));
 }
@@ -74,6 +79,8 @@ console.log("\n  the caller:");
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
   ck("applyToMesh paints meshLookFor, read through the one DeviceReading (deviceActivity.readingOf)",
      /const look = meshLookFor\(readingOf\(state\.entity_id, this\.lookSource\)\);/.test(ev));
+  ck("  ...in the status vocabulary's colour of its tone (colors.STATUS_COLOR3), the window's", /const c = STATUS_COLOR3\[look\.tone\];/.test(ev)
+     && /look\.on \? STATUS_COLOR3\[look\.tone\]/.test(ev) && !/SECURE_GREEN|ACTIVE_GLOW/.test(ev));
   ck("  ...and reads no raw state of its own", !/state\.state === "locked"|const alert = state\.state === "on"|state\.state === "playing"/.test(ev));
   ck("  ...nor a literal colour", !/new Color3\(0\.2, 0\.75, 0\.3\)|new Color3\(0\.9, 0\.2, 0\.2\)|new Color3\(0\.1, 0\.35, 0\.4\)/.test(ev));
 }

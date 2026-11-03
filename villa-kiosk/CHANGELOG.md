@@ -1,3 +1,14 @@
+## 2.496.687
+
+What you will see:
+- The 3D map: every device's object takes the colour its own window shows, never a calmer one.
+  - A lock is green when locked, red when unlocked or jammed, and teal while locking or unlocking. An unlocked lock
+    was a soft teal glow on the map beside a red "Unlocked" in its window.
+  - A door, window or motion sensor pulses red while its window says red ("Open", "Motion detected"), as a leak does.
+  - A switch or media player that is on glows in its window's colour (green when on, teal while buffering).
+  - A running air-conditioner is outlined in its window's colour (green for "Cool"), no longer red.
+- The badges, the rooms' counts and Open issues are unchanged.
+
 ## 2.496.686
 
 What you will see:

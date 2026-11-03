@@ -133,7 +133,9 @@ console.log("\n  the callers ask it (pin the caller):");
     db = src("pages/Dashboard.tsx") + src("components/panels/useOpenPanelActions.ts"),
     ph = src("components/panels/panelHeader.ts");
   ck("the map paints badges, cells and chip members from deviceLook through its one source",
-     (ev.match(/deviceLook\([^)]*this\.lookSource\)/g) ?? []).length >= 4 && /mapLookSource\(this\.lastState, this\.mapping/.test(ev));
+     // three deviceLook reads, the mesh's through meshLookFor(readingOf(…)) (the climate outline's since 2026-11-04)
+     (ev.match(/deviceLook\([^)]*this\.lookSource\)/g) ?? []).length >= 3 && /meshLookFor\(readingOf\(state\.entity_id, this\.lookSource\)\)/.test(ev)
+     && /mapLookSource\(this\.lastState, this\.mapping/.test(ev));
   ck("the device-list rows and the panel header ask deviceLook through the store",
      // the header since 2.496.305 in components/panels/panelHeader (driven by value in panel_header.mjs)
      /deviceLook\(id, looks\)/.test(sg) && /deviceLook\(entityId, storeLookSource\(/.test(ph) && /panelHeader\(\{/.test(db));
