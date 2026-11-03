@@ -1,3 +1,24 @@
+## 2.496.681
+
+What you will see:
+- Settings › General on a wide screen: Light effect strength now shares the line of Brightness and Night dimming, and
+  Villa lighting comes third on the line of Map look and Summary bar.
+- Settings, Cancel: when a list in Who gets the messages was changed, the message now says "Other changes cancelled.
+  Who gets the messages was already saved." (it said "nothing was kept" while the chat stayed on the list). A list
+  change alone says "Who gets the messages was already saved."
+- Cockpit: Tickets' Closed and Schedule's Recent work look like the Inbox's Watch and Closed: the same uppercase name
+  with its count, an (i), and always there, saying "No ticket closed yet." or "No work done yet." when empty.
+- Cockpit › Inbox: Notifications and Reports show their count in their name ("NOTIFICATIONS (12)"), with no
+  "12 notifications" line under the cards.
+- Cockpit › Tickets: a ticket VESTA investigated shows its "Investigation report" button at the right, with its other
+  buttons, folded or open, as a report's "Open the page" (it was under the notes, only when the card was open).
+- Advanced Settings › Villa: Maintenance mode is a setting line named "Maintenance mode", what it does in its (i)
+  (the line showed a grey sentence where its name goes). Settings › Messages: Language on this tablet is a setting
+  line too, its name on the left and the languages on the right.
+- Who gets the messages: a list the villa does not have yet says "This list is not on the villa yet."
+
+Architecture review 19 (all six cards).
+
 ## 2.496.680
 
 What you will see:
