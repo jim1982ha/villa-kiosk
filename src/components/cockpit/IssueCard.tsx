@@ -11,7 +11,7 @@ import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
 import { cardIcons, rowWhen, type CardLine, type CardView, type LineSources } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
-import RecordCard, { StatusPill } from "@/components/fm/RecordCard";
+import RecordCard, { ActionsRow, STATE_INLINE, StatusPill } from "@/components/fm/RecordCard";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
@@ -52,6 +52,10 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
   focused?: boolean;
 }) {
   const icons = cardIcons(card);
+  const rows = card.lines.map((line) => buttons?.(line) ?? null);
+  const status = [card.status ?? []].flat();
+  // the card's state at its first problem's buttons, on a wide card (ActionsRow)
+  const atFirst = !!rows[0] && status.length > 0;
   return (
     <RecordCard
       // ⚠️ ITS NAME OPENS THE DEVICE (owner, 2026-11-01, the audit: a device pill said the name again under it)
@@ -63,6 +67,7 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
       room={card.room}
       // its device's own state ("Missing"): the status pill every card has
       status={card.status}
+      statusInBody={atFirst}
       // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look
@@ -76,7 +81,8 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
       check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
       body={(
         <ul className="cockpit-attention-subs">
-          {card.lines.map((line, i) => <CockpitAttentionSub key={line.key} line={line} icons={icons.lines[i] ?? null} buttons={buttons?.(line)} />)}
+          {card.lines.map((line, i) => <CockpitAttentionSub key={line.key} line={line} icons={icons.lines[i] ?? null}
+            buttons={rows[i]} state={i === 0 && atFirst ? status.map((s) => <StatusPill key={s.text} {...s} />) : null} />)}
         </ul>
       )}
       // a fault being confirmed: its frame marked, the one place its look differs (owner, 2026-10-23)
@@ -85,7 +91,11 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
   );
 }
 
-function CockpitAttentionSub({ line, icons, buttons }: { line: CardLine; icons: LineSources | null; buttons?: ReactNode }) {
+function CockpitAttentionSub({ line, icons, buttons, state }: {
+  line: CardLine; icons: LineSources | null; buttons?: ReactNode;
+  /** The card's own state pills, at this problem's buttons on a wide card (its first). */
+  state?: ReactNode;
+}) {
   return (
     <li className="cockpit-attention-sub">
       <div className="cockpit-attention-sub-line fm-record-gutter">
@@ -95,7 +105,7 @@ function CockpitAttentionSub({ line, icons, buttons }: { line: CardLine; icons: 
           {/* its words whole, over as many lines as they need: no hover repeats them (owner, 2026-10-31) */}
           <span className="cockpit-attention-sub-title">{line.text}</span>
           {/* who last moved this fault and its stage, in the stage's colour, beside its words (owner, 2026-11-01/02) */}
-          {line.latest && <span className="fm-meta"><StatusPill {...line.latest} /></span>}
+          {line.latest && <span className={`fm-meta${buttons ? ` ${STATE_INLINE}` : ""}`}><StatusPill {...line.latest} /></span>}
           {/* what happened about it on Telegram — the short story its Status tells: the alert sent, a reminder, an
               escalation, a button pressed (owner, 2026-10-14; every line since ticket 19 of "One inbox") */}
           {/* ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components"):
@@ -111,7 +121,11 @@ function CockpitAttentionSub({ line, icons, buttons }: { line: CardLine; icons: 
           {line.closing && <span className="cockpit-attention-latest">{line.closing}</span>}
         </span>
       </div>
-      {buttons && <div className="fm-record-actions">{buttons}</div>}
+      {buttons && (
+        <ActionsRow state={state || line.latest ? <>{state}{line.latest && <StatusPill {...line.latest} />}</> : undefined}>
+          {buttons}
+        </ActionsRow>
+      )}
     </li>
   );
 }
