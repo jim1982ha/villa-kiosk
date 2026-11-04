@@ -179,7 +179,7 @@ ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0,
   // ONE place says a stage's colour (faultNotes.stagePillClass): the Tickets tab's stage pill wrote its own copy
   const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
   ck("  ...the Tickets tab's card shows that same pill (faultLatest), and its stage pill asks the one colour rule",
-     /const latest = faultLatest\(t, momentText\);/.test(ticketsTab) && /\{stated && latest && <StatusPill \{\.\.\.latest\} \/>\}/.test(ticketsTab)
+     /const latest = faultLatest\(t, momentText\);/.test(ticketsTab) && /const latestPill = stated && latest && <StatusPill \{\.\.\.latest\} \/>;/.test(ticketsTab)
      && /tone: stagePillClass\(stageOf\(t\)\)/.test(ticketsTab) && !/pillClass\(\w+\.tone\)/.test(ticketsTab));
   const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
   const buttons = readFileSync(new URL("../../src/components/fm/WorkButtons.tsx", import.meta.url), "utf8");

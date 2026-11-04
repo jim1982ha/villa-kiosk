@@ -207,6 +207,19 @@
   .work-short { display: inline; }
 }
 .fm-record-head:has(> .fm-record-lead) ~ .fm-record-body .fm-work-row { margin-left: -30px; }
+/* ⚠️ A CARD'S STATE ON ITS BUTTONS' LINE (owner, 2026-11-05: "on the same line as the buttons on desktop (vertically
+   centered)", "maybe don't change the style" on a phone): its state pills (RecordCard ActionsRow) at the left of its
+   buttons on a card as wide as the buttons' labels need (the width at which they stop being tiles, above), where they
+   stood on a narrower one (STATE_INLINE). */
+.fm-work-state { display: none; }
+@container work-row (min-width: 560px) {
+  .fm-record-actions { align-items: center; }
+  .fm-work-state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-right: auto; min-width: 0; }
+  .fm-state-inline { display: none; }
+  /* the buttons beside it, at their own width; a standing Need help's line keeps its place above them */
+  .fm-work-state ~ .fm-work-row { flex: 0 1 auto; margin-left: 0; }
+  .fm-work-state ~ .fm-work-asked { order: -1; }
+}
 /* A card's Need help that nothing has answered yet ("🆘 Need help asked …", WorkButtons): a line of its own above the
    buttons, on the Inbox and the Tickets tab alike (architecture review round 6). */
 .fm-work-asked { flex: 1 1 100%; min-width: 0; font-size: var(--text-xs); color: var(--text-dim); }
@@ -399,6 +412,10 @@
   font-size: var(--text-2xs); font-weight: 600; padding: 3px 9px; border-radius: 999px;
   white-space: nowrap; background: var(--bg-input); color: var(--text-secondary);
 }
+/* ⚠️ NEVER WIDER THAN ITS CARD (owner, 2026-11-05, a phone: "Ticket opened by Fab & Jm, on 31/10/2026 10:04 · In
+   progress" ran out of the card): on a card, a pill too long for its line wraps inside it */
+.fm-record .fm-badge { white-space: normal; max-width: 100%; overflow-wrap: anywhere; display: inline-block; }
+.fm-record :is(.fm-meta, .card-pill-status, .fm-work-state) > span { max-width: 100%; min-width: 0; }
 /* by its tone (fm/tone pillClass: a ticket's stage, a task's due state) — filled, its ok too */
 .fm-badge.tone-danger { background: var(--status-danger); color: #fff; }
 .fm-badge.tone-warn { background: var(--status-warning); color: #fff; }

@@ -388,4 +388,35 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
   ck("  ...and the Inbox draws no pill of its own: its cards are RecordCard's", !/CardPillLine|fm-badge/.test(row));
 }
 
+// owner, 2026-11-05: "the coloured pill … on the same line as the buttons on desktop (vertically centered)", the
+// "Unavailable" pill too, on every card of every tab, the phone's look kept: a card's state pills are drawn in its
+// buttons' row (shown on a wide card) and, marked, where they stood (shown on a narrow one); a card with no buttons
+// keeps them where they stood, unmarked
+{
+  const row = (html) => inside(html, "fm-record-actions");
+  const stood = (html) => /fm-state-inline/.test(html);
+  const unavailable = { key: "device:a", title: "Lock", room: "Hall", status: [{ text: "Unavailable", tone: "warn" }],
+    lines: [{ key: "a", text: "", actions: [], story: [],
+      latest: { text: "Reopened by VESTA Agent, on 31/10/2026 13:11", tone: "warn" } }] };
+  const withButtons = draw(h(AttentionCard, { card: unavailable, onOpenEntity: () => {}, buttons: () => btn("Done") }));
+  const without = draw(h(AttentionCard, { card: unavailable, onOpenEntity: () => {} }));
+  ck("a card's state and its problem's pill stand on its buttons' line, at their left (an Inbox card)",
+     /fm-work-state[\s\S]*Unavailable[\s\S]*Reopened by VESTA Agent[\s\S]*Done/.test(row(withButtons))
+     && /card-pill-status fm-state-inline/.test(withButtons) && /fm-meta fm-state-inline/.test(withButtons), withButtons);
+  ck("  ...a card with no buttons keeps them where they stand", !/fm-work-state/.test(without) && !stood(without), without);
+  const task = draw(h(RecordCard, { title: "Pool filter clean", status: { text: "Due soon", tone: "due-soon" }, actions: btn("Done") }));
+  const ticketPill = h("span", { className: "fm-badge" }, "Ticket opened by Owner");
+  const tk = draw(h(RecordCard, { title: "Pump", rowState: ticketPill, actions: btn("Close") }));
+  ck("  ...on every list's card: a task's due state, a ticket's pill of who last moved it",
+     /fm-work-state[\s\S]*Due soon[\s\S]*Done/.test(row(task)) && /card-pill-status fm-state-inline/.test(task)
+     && /fm-work-state[\s\S]*Ticket opened by Owner[\s\S]*Close/.test(row(tk)), [task, tk]);
+  const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
+  ck("  ...shown in the row on a card as wide as the buttons' labels, where they stood on a narrower one",
+     /\.fm-work-state \{ display: none; \}\s*@container work-row \(min-width: 560px\) \{[\s\S]*?\.fm-work-state \{ display: flex;[\s\S]*?\.fm-state-inline \{ display: none; \}/.test(css)
+     && /@container work-row \(max-width: 559px\)/.test(css));
+  // owner, 2026-11-05, a phone: "the pill is overflowing outside the visible screen"
+  ck("  ...a pill too long for its line wraps inside its card, never past it",
+     /\.fm-record \.fm-badge \{ white-space: normal; max-width: 100%;/.test(css));
+}
+
 done("✅ every Cockpit list is one card, checked as it is drawn");

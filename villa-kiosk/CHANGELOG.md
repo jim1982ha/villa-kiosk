@@ -1,3 +1,12 @@
+## 2.496.699
+
+What you will see:
+- Cockpit cards on a laptop or the tablet: a card's coloured pills ("Reopened by VESTA Agent, on …", "Ticket opened by …
+  · In progress", "Unavailable", a task's "Due soon") stand on the buttons' line, at its left, vertically centred,
+  instead of a line of their own. The same on every tab (Inbox, Tickets, Schedule, Today). On a phone they stay where
+  they were.
+- On a phone, a long pill wraps inside its card instead of running out of the screen.
+
 ## 2.496.698
 
 What you will see:

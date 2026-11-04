@@ -22,7 +22,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { closedTickets, faultBegan, faultTitle, STAGE_WORDS, stageOf } from "@/fm/fmEngine";
 import { closedActions, helpAsked, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
-import RecordCard, { DeviceChip, StatusPill, type RecordCardProps } from "./RecordCard";
+import RecordCard, { DeviceChip, STATE_INLINE, StatusPill, type RecordCardProps } from "./RecordCard";
 import FaultForm from "./FaultForm";
 import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
@@ -101,10 +101,13 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     const work = data.completions.find((c) => c.ticketId === t.id && c.costId);
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
     const latest = faultLatest(t, momentText);
+    // drawn once: among its tags, and on its buttons' line on a wide card (RecordCard rowState)
+    const latestPill = stated && latest && <StatusPill {...latest} />;
     const pill = recordDevicePill(t, { devices: { deviceOf }, entityMap: config.entityMap, entities, resolvedRooms });
     return (
       // its stage is said in the pill of who last moved it (owner, 2026-11-02), else its own pill
       <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={latest ? undefined : status} actions={actions}
+        rowState={latestPill || undefined}
         // where it comes from, the icon its Inbox card leads with (owner, 2026-11-01, the audit)
         lead={<SourceIcons sources={[faultSource(t)]} severities={["warn"]} />}
         // a ticket in progress is read again as its Inbox card is; a closed one is not
@@ -121,7 +124,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
           {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
           {/* its device's name and what a tap opens as its Inbox card has them (attention.recordDevicePill) */}
           <DeviceChip entityId={pill.opens} onOpenEntity={onOpenEntity} label={pill.label} />
-          {stated && latest && <StatusPill {...latest} />}
+          {/* on its buttons' line on a wide card (RecordCard ActionsRow) */}
+          {latestPill && <span className={actions ? STATE_INLINE : undefined}>{latestPill}</span>}
         </>} />
     );
   };

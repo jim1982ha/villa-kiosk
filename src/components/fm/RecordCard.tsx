@@ -65,6 +65,28 @@ export interface RecordCardProps {
   framed?: boolean;
   /** The frame's tint: fm/tone's toneClass ("tone-warn", "tone-danger"), none when all is well. */
   tone?: string;
+  /** More of its state for its buttons' row (ActionsRow), beside its `status`: a ticket's pill of who last moved it,
+   *  drawn by the caller among its tags on a narrow card (STATE_INLINE). */
+  rowState?: ReactNode;
+  /** Its status is shown in a buttons' row of its `body` (an open issue's first problem) on a wide card. */
+  statusInBody?: boolean;
+}
+
+/** The class of a pill that its card's buttons' row shows on a wide card (ActionsRow): there, it is not drawn here. */
+export const STATE_INLINE = "fm-state-inline";
+
+/** ⚠️ A CARD'S STATE ON ITS BUTTONS' LINE (owner, 2026-11-05: "the coloured pill … on the same line as the buttons on
+ *  desktop, vertically centered", the "Unavailable" pill too, on every card of every tab): a card's buttons' row, its
+ *  state pills at its left on a wide card; on a narrow one (a phone) they stay where they stand (STATE_INLINE), the
+ *  row is the buttons alone (07-facility.css, the card's width). Every card's buttons' row is this one. */
+export function ActionsRow({ state, children }: { state?: ReactNode; children: ReactNode }) {
+  return (
+    // a press on a button is the button's: never the card's hold-to-erase, never its tap-to-open
+    <div className="fm-record-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+      {state && <span className="fm-work-state">{state}</span>}
+      {children}
+    </div>
+  );
 }
 
 /** ⚠️ ONE PILL for when VESTA looks again (owner, 2026-10-23: an open issue's and a cleared fault's alike; 2026-11-01:
@@ -106,22 +128,30 @@ export function StatusPill({ text, tone }: RecordStatus) {
 
 /** A card's line of pills, folded or whole: its room and next check on the left, its state on the right (owner,
  *  2026-11-01); nothing with none. */
-function CardPillLine({ room, check, status }: { room?: string; check?: RecordCardProps["check"]; status: readonly RecordStatus[] }) {
+function CardPillLine({ room, check, status, atButtons }: {
+  room?: string; check?: RecordCardProps["check"]; status: readonly RecordStatus[];
+  /** Its status is in a buttons' row too (ActionsRow): drawn here on a narrow card only. */
+  atButtons?: boolean;
+}) {
   if (!room && !check && status.length === 0) return null;
   return (
     <span className="card-pill-line">
       {room && <Pill text={room} />}
       {check && <CheckPill {...check} />}
       {status.length > 0 && (
-        <span className="card-pill-status">{status.map((s) => <StatusPill key={s.text} {...s} />)}</span>
+        <span className={`card-pill-status${atButtons ? ` ${STATE_INLINE}` : ""}`}>{status.map((s) => <StatusPill key={s.text} {...s} />)}</span>
       )}
     </span>
   );
 }
 
 export default function RecordCard({ title, status, lead, titlePills, room, when, check, pills, notes, body, folded, photoIds,
-  pages, amount, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
+  pages, amount, actions, erase, onOpen, framed = true, tone, rowState, statusInBody }: RecordCardProps) {
   const whole = folded === undefined;
+  const statuses = [status ?? []].flat();
+  const row = !!actions || (pages?.length ?? 0) > 0;
+  const rowPills = row && (statuses.length > 0 || rowState)
+    ? <>{statuses.map((s) => <StatusPill key={s.text} {...s} />)}{rowState}</> : undefined;
   const inside = (
     <>
       <div className="fm-record-head">
@@ -132,7 +162,7 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
         </div>
         {when && <Pill text={when} className="fm-record-check" />}
       </div>
-      <CardPillLine room={room} check={check} status={[status ?? []].flat()} />
+      <CardPillLine room={room} check={check} status={statuses} atButtons={(row && statuses.length > 0) || statusInBody} />
       {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}
       <div className="fm-record-body">
         <div className="fm-row-main">
@@ -142,12 +172,11 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
           {whole && (photoIds?.length ?? 0) > 0 && <EvidenceRow photoIds={photoIds!} disabled />}
         </div>
         {amount && <span className="fm-amount">{amount}</span>}
-        {/* a press on a button is the button's: never the card's hold-to-erase, never its tap-to-open */}
-        {(actions || (pages?.length ?? 0) > 0) && (
-          <div className="fm-record-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+        {row && (
+          <ActionsRow state={rowPills}>
             {pages?.map((p) => <PageLink key={p.id} page={p.id} label={p.label} />)}
             {actions}
-          </div>
+          </ActionsRow>
         )}
       </div>
     </>
