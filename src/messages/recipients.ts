@@ -3,9 +3,8 @@
 // which VESTA also reads, so there's one place for both and alerts still work without VESTA").
 //
 // Each list is one of the villa's text helpers, holding the villa's notify entities (Telegram chats, phone apps) apart
-// by ",". Every VESTA blueprint sends to them by priority (owner, 2026-11-04: P1 the owner's list, P2 the facility
-// manager's, a notice too, through the villa's "VESTA chats by priority" sensor) with no VESTA Agent at all, and the
-// Agent reads the same two (vesta_shared/villa_recipients.py). This
+// by ",". Every VESTA blueprint sends to them by priority (P1 both, P2 the facility manager; a notice, its "Who gets
+// the message") with no VESTA Agent at all, and the Agent reads the same two (vesta_shared/villa_recipients.py). This
 // tablet only edits them: Settings › Messages › Who gets the messages (components/settings/WhoGetsMessages).
 // The helpers are defined in the Agent's message package (agent-src/homeassistant/packages/vesta_message.yaml).
 //

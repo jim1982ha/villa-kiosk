@@ -1,3 +1,10 @@
+## 2.496.689
+
+What you will see:
+- Settings › Messages › Who gets the messages, its (i), and Maintenance mode's (i) say again what the villa does:
+  urgent (P1) alerts go to both lists, P2 alerts to the Facility Manager's (2.496.688 described a change that was not
+  kept).
+
 ## 2.496.688
 
 What you will see:
