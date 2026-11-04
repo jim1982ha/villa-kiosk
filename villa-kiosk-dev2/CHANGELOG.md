@@ -1,3 +1,10 @@
+## 2.496.698
+
+What you will see:
+- Cockpit cards: "Not a problem" ("Ignore" on a phone) closes the fault as soon as it is pressed, with no question
+  first, as VESTA's own "Not a problem" already does on Telegram and the tablet. Done and No action needed still ask
+  their question.
+
 ## 2.496.697
 
 What you will see:
