@@ -11,7 +11,7 @@
 // are still the caller's: they open a form the card does not hold.
 
 import { useState, type ReactNode } from "react";
-import { Pencil, Wrench } from "lucide-react";
+import { Ban, BellOff, Check, LifeBuoy, Pencil, RotateCcw, Wrench } from "lucide-react";
 import { useFmData, type FmDataContextValue } from "@/fm/FmDataContext";
 import { DONE_STEP } from "@/fm/fmCommands";
 import type { FmSaveOutcome } from "@/fm/fmSave";
@@ -102,17 +102,29 @@ export function useCardWork(): CardWork {
  *  VESTA's Done, the doorbell's Unlock) both draw with this. */
 export const CARD_BUTTON = "btn ghost";
 
-/** The Overview's buttons carry an icon (the Tickets tab's wrench for Open Ticket, owner 2026-10-14). */
-const ICON: Partial<Record<WorkActionKind, ReactNode>> = {
+/** ⚠️ EVERY WORK BUTTON CARRIES AN ICON (owner, 2026-11-04: "use 1 word label and icon in the button", on a phone,
+ *  and "consistently adjust cards on laptop screens"): it had been Open Ticket's wrench (owner, 2026-10-14) and Edit
+ *  Ticket's pencil only. The same icon for the same act on every card. */
+const ICON: Record<WorkActionKind, ReactNode> = {
+  done: <Check size={14} aria-hidden />,
+  doneNew: <Check size={14} aria-hidden />,
+  ticketDone: <Check size={14} aria-hidden />,
+  needHelp: <LifeBuoy size={14} aria-hidden />,
+  helpNew: <LifeBuoy size={14} aria-hidden />,
+  notAProblem: <BellOff size={14} aria-hidden />,
   openTicket: <Wrench size={14} aria-hidden />,
   raiseTicket: <Wrench size={14} aria-hidden />,
   editTicket: <Pencil size={14} aria-hidden />,
+  closeTicket: <Ban size={14} aria-hidden />,
+  reopen: <RotateCcw size={14} aria-hidden />,
 };
 
 /** What a work button says: its icon, then its words (fm/deviceWork's ONE wording per action) — a card's buttons and
- *  the Inbox's own "Open Ticket" above its list (owner, 2026-10-31) alike. */
+ *  the Tickets tab's own "Open Ticket" alike. Both words drawn when it has a short one: a card's row too narrow for
+ *  every label in full shows the one word under the icon (07-facility.css, the row's width), any other place the label. */
 export function WorkLabel({ kind }: { kind: WorkActionKind }) {
-  return <>{ICON[kind]}{ICON[kind] ? " " : null}{WORK_ACTIONS[kind].label}</>;
+  const { label, short } = WORK_ACTIONS[kind];
+  return <>{ICON[kind]}{short ? <><span className="work-long">{label}</span><span className="work-short">{short}</span></> : label}</>;
 }
 
 /** The buttons drawn in the accent (owner, 2026-11-04: Edit Ticket "with this same green accent style", the colour of
@@ -151,7 +163,7 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
   }
   const buttons = actions.map((a) => (
     <button key={a.kind} type="button" className={ACCENT[a.kind] ? "btn primary" : CARD_BUTTON}
-      aria-label={a.step.kind === "close" && name ? `${a.label} “${name}”` : undefined}
+      aria-label={a.step.kind === "close" && name ? `${a.label} “${name}”` : a.short ? a.label : undefined}
       onClick={() => (a.step.kind === "close" ? work.ask(cardKey, a.kind) : leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised))}>
       <WorkLabel kind={a.kind} />
     </button>
@@ -160,8 +172,9 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
     <>
       {/* what a Need help did, on the card it was pressed on: the same line on the Inbox and the Tickets tab */}
       {asked && <div className="fm-work-asked">{helpLine(asked, momentText)}</div>}
-      {/* ONE ROW, every card alike (owner, 2026-10-31, iPhone: Open Ticket dropped under Done · Need help): the
-          buttons are grouped in a row of their own, which the card's icon column lends its width (07-facility.css) */}
+      {/* ONE ROW, every card alike (owner, 2026-10-31, iPhone: Open Ticket dropped under Done · Need help; 2026-11-04:
+          Open Ticket "on the same line"): the buttons are grouped in a row of their own, which the card's icon column
+          lends its width, their one words under their icons where it is too narrow for the labels (07-facility.css) */}
       <div className="fm-work-row">{buttons}</div>
       {after}
     </>
