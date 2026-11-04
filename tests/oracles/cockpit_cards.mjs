@@ -259,6 +259,13 @@ ck("its state pill on the line under its title, Log and the bin inside on the ri
    /Pool filter clean/.test(inside(task, "fm-record-head")) && /Due soon/.test(pillLine(task)) && /fm-record-actions[\s\S]*Log[\s\S]*aria-label="Remove"/.test(task)
    && /class="fm-record-card state-due-soon"/.test(task), task.slice(0, 300));
 ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase on it", !/fm-erasable/.test(task));
+// owner, 2026-11-04: "what is the top right pill (light grey) for … it never disappears": the hold-to-erase hint dot,
+// drawn on every erasable row's corner over its time pill. A row that can be erased draws its content and nothing else
+{
+  const { default: ErasableRow } = await import("@/components/fm/ErasableRow");
+  const row = draw(h(ErasableRow, { intent: { title: "Erase", detail: "x" }, erase: async () => {} }, h("b", null, "the card")));
+  ck("  ...an erasable row draws no hint of it: only its own content", /^<div [^>]*class="fm-row fm-erasable"[^>]*><b>the card<\/b><\/div>$/.test(row), row);
+}
 
 // owner, 2026-10-18: a problem's words ran on, and no button showed the mouse was on it. Drawn: the words cut on one line
 // (whole on hover); in the stylesheets: every button lights under the mouse, the card does not light over a button.

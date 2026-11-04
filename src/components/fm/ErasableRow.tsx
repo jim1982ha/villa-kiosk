@@ -3,11 +3,13 @@
 // enter the superadmin code.
 //
 // Exists so "which rows can be erased, and how" is answered once. Every such
-// row gets the same gesture, the same prompt and the same hint: a small dot in
-// the corner, meaningless to anyone who hasn't been told what it is, obvious
-// to anyone who has. An earlier hint dot on the HUD category icons was removed
-// as clutter (v2.59.0), so this one is deliberately fainter and appears only
-// on rows that actually offer the capability.
+// row gets the same gesture and the same prompt.
+//
+// ⚠️ NO HINT DOT (owner, 2026-11-04: "what is the top right pill (light grey)
+// for … it never disappears"): a faint dot in each erasable row's corner was
+// the gesture's hint, meaningless to anyone not told, and it sat on the cards'
+// time pill. The gesture is the superadmin's, who knows it; the dot went, as
+// the HUD category icons' did (v2.59.0).
 
 import type { ReactNode } from "react";
 import { useSuperadminDelete } from "@/hooks/useSuperadminDelete";
@@ -45,7 +47,6 @@ export default function ErasableRow({ intent, erase, className, onOpen, children
       {...pointerHandlers}
     >
       {children}
-      <span className="fm-erasable-dot" aria-hidden="true" />
     </div>
   );
 }
