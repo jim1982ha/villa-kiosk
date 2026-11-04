@@ -372,6 +372,17 @@ def test_home_assistants_late_all_clear_joins_the_incident_the_desk_closed(store
     assert not res["send"] and not res["actions"]                       # never closed twice
 
 
+def test_the_rules_give_up_after_not_a_problem_joins_the_incident_it_closed(store):
+    # owner, 2026-11-04 (#117): "Not a problem" pressed at 15:11, then the rule's own "Still not clear after 30min: no
+    # longer tracking this incident" at 15:34 stayed a second message, with no number and no priority
+    iid = desk.intake(store, event(), T0)["incident_id"]
+    desk.reply(store, iid, "not_a_problem", "owner", T0 + timedelta(minutes=7), name="Owner")
+    res = desk.intake(store, event(phase="abandoned", still_true=True), T0 + timedelta(minutes=30))
+    assert res["decision"] == "abandoned_late" and res["ha_messages"][0]["incident_id"] == iid
+    assert res["ha_messages"][0]["status"].startswith("Not a problem on Telegram (Owner)."), res["ha_messages"]
+    assert not res["send"] and not res["actions"]                       # nobody told again, nothing reopened
+
+
 def test_the_ticks_cli_reads_home_assistant_again(tmp_path):
     # the engine runs "desk.py tick" every 5 minutes: it must be given Home Assistant, or nothing is read again
     import subprocess

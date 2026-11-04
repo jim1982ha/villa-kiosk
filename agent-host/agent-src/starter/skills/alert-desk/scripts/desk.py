@@ -1054,6 +1054,16 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
     out = {"send": [], "actions": [], "incident_id": None, "decision": "abandoned_unknown"}
     inc = _find_by_ha_incident(store, ev.get("ha_incident")) or open_alert(store, ev)
     if not inc:
+        # ⚠️ ALREADY CLOSED BY A PERSON, STILL ITS MESSAGE (owner, 2026-11-04, #117: "Not a problem" pressed at 15:11,
+        # then the rule's own "Still not clear after 30min: no longer tracking this incident" at 15:34, a message with no
+        # number and no priority): the rule gave up on a run a person had already closed. Its message becomes the
+        # incident's card again, as it stands (its close said once more), never a second, nameless alert
+        late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=W.late_close_days()), now=now)
+        if late:
+            out["incident_id"], out["decision"] = late["id"], "abandoned_late"
+            said = Said(f"{late.get('reply') or ended()}.") if late.get("reply") else ended()
+            out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
+                                               **about(late, watched(said, W.minutes(late))))]
         return out
     out["incident_id"] = inc["id"]
     if str(ev.get("still_true")).lower() == "false":

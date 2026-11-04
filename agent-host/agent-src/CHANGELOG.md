@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.434 (4 November 2026)
+
+- The alert desk's `abandoned` on a run a person already closed (desk.abandoned: "abandoned_late", the incident found
+  among those closed within late_close_days, as resolved's "resolved_late") takes the rule's own message over as the
+  closed incident's card, its close said again; it was "abandoned_unknown" and the villa's raw message stayed.
+
 ## 0.6.433 (4 November 2026)
 
 - "Not a problem" (while it lasts) is said as such: message_format.COCKPIT["lasting"] and LASTING_IN (each language in
