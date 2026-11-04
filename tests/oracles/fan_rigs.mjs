@@ -13,6 +13,7 @@ const { Scene } = await import("@babylonjs/core/scene.js");
 const { Vector3 } = await import("@babylonjs/core/Maths/math.vector.js");
 const { TransformNode } = await import("@babylonjs/core/Meshes/transformNode.js");
 const { CreateBox } = await import("@babylonjs/core/Meshes/Builders/boxBuilder.js");
+const { CreateCylinder } = await import("@babylonjs/core/Meshes/Builders/cylinderBuilder.js");
 const { VertexBuffer } = await import("@babylonjs/core/Buffers/buffer.js");
 const { FanRigs, isCeilingFan } = await import("@/babylon/fanRigs");
 
@@ -63,32 +64,52 @@ console.log("\n  the rig:");
   ck("a non-ceiling fan is never rigged", r.fans.spinningCount === 0 && r.fan.parent === r.villa);
 }
 
+// ⚠️ THE AXLE IS THE BLADE TIPS' CIRCLE (owner, 2026-11-04, a recording: the blades swung round the hub). It was the
+// average of the fixture's top quarter, which assumed a round ceiling mount on top: a fan exported as its flat blades
+// alone has none, and its axle landed 9 cm off on the villa's model. Three blades, placement baked into the vertices,
+// with something lopsided on top (a bracket, a pull chain): turned, every blade tip draws the same circle
 {
-  // An ASYMMETRIC fan: a round mount on the axle, and a blade reaching out to
-  // one side — its bounding box's middle is NOT the axle. The mount must stay
-  // put while it turns (FAN_AXIS_TOP_SLICE: the top slice decides the axle).
   const { Mesh } = await import("@babylonjs/core/Meshes/mesh.js");
-  const scene = new Scene(new NullEngine());
-  const villa = new TransformNode("villa", scene);
-  // A real canopy has plenty of vertices (under 20 in the top slice, the rig
-  // falls back to the box's middle — see setupFanRig).
-  const { CreateCylinder } = await import("@babylonjs/core/Meshes/Builders/cylinderBuilder.js");
-  const mount = CreateCylinder("m", { height: 0.2, diameter: 0.25, tessellation: 24 }, scene); mount.position.set(5, 2.9, 3);
-  const blade = CreateBox("b", { width: 1.6, height: 0.05, depth: 0.2 }, scene); blade.position.set(5.8, 2.4, 3);
-  const fan = Mesh.MergeMeshes([mount, blade], true);
-  fan.parent = villa;
-  const fans = new FanRigs(scene, () => undefined, () => {});
-  const mountWorld = () => {
-    fan.computeWorldMatrix(true);
-    const p = fan.getVerticesData(VertexBuffer.PositionKind), wm = fan.getWorldMatrix();
-    const out = new Vector3(); let n = 0;
-    for (let i = 0; i < p.length; i += 3) if (p[i + 1] > 2.85) { out.addInPlace(Vector3.TransformCoordinates(new Vector3(p[i], p[i + 1], p[i + 2]), wm)); n++; }
-    return out.scale(1 / n);
+  const { enclosingCircle } = await import("@/babylon/fanRigs");
+  const AXLE = new Vector3(5, 2.5, 3);
+  const fixture = (mount) => {
+    const scene = new Scene(new NullEngine());
+    const villa = new TransformNode("villa", scene);
+    const parts = [0, 1, 2].map((k) => {
+      const blade = CreateBox(`b${k}`, { width: 0.6, height: 0.02, depth: 0.12 }, scene);
+      blade.rotation.set(0.25, (k * 2 * Math.PI) / 3, 0); // pitched, as a blade is
+      blade.position.set(AXLE.x + 0.4 * Math.cos((k * 2 * Math.PI) / 3), AXLE.y, AXLE.z - 0.4 * Math.sin((k * 2 * Math.PI) / 3));
+      return blade;
+    });
+    const bracket = CreateBox("bracket", { width: 0.08, height: 0.06, depth: 0.08, updatable: true }, scene);
+    bracket.position.set(AXLE.x + 0.18, AXLE.y + 0.05, AXLE.z);
+    if (mount) {
+      const m = CreateCylinder("m", { height: 0.25, diameter: 0.2, tessellation: 24 }, scene); m.position.set(AXLE.x, AXLE.y + 0.15, AXLE.z);
+      parts.push(m);
+    }
+    const fan = Mesh.MergeMeshes([...parts, bracket], true);
+    fan.parent = villa;
+    return { scene, fan };
   };
-  const before = mountWorld();
-  fans.show(on(100), [fan]);
-  fans.animate(250, 1);
-  ck("an asymmetric fan turns about its MOUNT, not its bounding box's middle", Vector3.Distance(before, mountWorld()) < 0.02, Vector3.Distance(before, mountWorld()));
+  const tipCircle = (fan) => {
+    fan.computeWorldMatrix(true);
+    const p = fan.getVerticesData(VertexBuffer.PositionKind), wm = fan.getWorldMatrix(), v = new Vector3(), flat = [];
+    for (let i = 0; i < p.length; i += 3) { Vector3.TransformCoordinatesFromFloatsToRef(p[i], p[i + 1], p[i + 2], wm, v); flat.push([v.x, v.z]); }
+    return enclosingCircle(flat);
+  };
+  for (const [mount, said] of [[false, "blades alone"], [true, "with its mount"]]) {
+    const { scene, fan } = fixture(mount);
+    const before = tipCircle(fan);
+    const fans = new FanRigs(scene, () => undefined, () => {});
+    fans.show(on(100), [fan]);
+    let worst = 0;
+    for (let i = 0; i < 9; i++) { fans.animate(70, 1); const c = tipCircle(fan); worst = Math.max(worst, Math.hypot(c.x - before.x, c.y - before.y)); }
+    ck(`a fan, ${said}, something lopsided on top: it turns in place (its blade tips' circle never moves)`,
+       Math.hypot(before.x - AXLE.x, before.y - AXLE.z) < 0.01 && worst < 0.005, { before, worst });
+  }
+  const c = enclosingCircle([[0, 0], [4, 0], [2, 3], [2, 1], [1, 0.5]]);
+  ck("  ...the smallest circle holding the points: three on its edge, the rest inside",
+     Math.abs(c.x - 2) < 1e-9 && Math.abs(c.y - 5 / 6) < 1e-9 && Math.abs(c.r - 13 / 6) < 1e-9 && enclosingCircle([]) === null, c);
 }
 
 console.log("\n  teardown:");
