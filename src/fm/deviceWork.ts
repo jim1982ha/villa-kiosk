@@ -70,8 +70,8 @@ export type WorkActionKind = "done" | "needHelp" | "notAProblem" | "doneNew" | "
 
 /** What a button does once pressed: record a stage change (FaultStageModal, to `to`), open the record's form, open
  *  the ticket form pointed at a device, ask for help on the records (a "help" step: the VESTA Agent asks the owner to
- *  act), raise a fault for the device and close it or ask for help on it in the same write (`then`), or — after its
- *  question — close the records with no action. */
+ *  act), raise a fault for the device and close it or ask for help on it in the same write (`then`), or close the
+ *  records (after its question, when it has one). */
 type WorkStep =
   | { kind: "stage"; to: FmTicketStatus }
   | { kind: "edit" }
@@ -80,8 +80,9 @@ type WorkStep =
   | { kind: "raiseThen"; then: "done" | "help" }
   /** `work`: the records are resolved as work done (a completion with who did it, in Recent work, as a Done on Telegram
    *  records it: the Agent's resolve_ticket); without, closed with no action (no completion, no cost). `lasting`: closed
-   *  with no action as "Not a problem while it lasts" (FmTicketUpdate.lasting). */
-  | { kind: "close"; question: string; confirmLabel: string; work?: true; lasting?: true };
+   *  with no action as "Not a problem while it lasts" (FmTicketUpdate.lasting). `ask`: the question asked in place of
+   *  the buttons before it closes, and its yes; none: it closes as pressed. */
+  | { kind: "close"; ask?: { question: string; confirmLabel: string }; work?: true; lasting?: true };
 
 /** `short`: its one word where the card's row is too narrow for every label in full (owner, 2026-11-04, a phone: "use
  *  1 word label and icon in the button"; WorkButtons.WorkLabel, 07-facility.css); none when the label is one word. */
@@ -96,7 +97,7 @@ export const NEED_HELP = "Need help";
  *  lasts` only after clicking on the `Done` Button, show it directly next to `Done`, `Need Help`"): it was the second
  *  answer to a Done's or a No action needed's question; now it follows Need help on every card that offers Done on a
  *  record on the Inbox (never a Tickets card's: owner, 2026-11-04), in the order VESTA's own alert offers it on Telegram, its label short ("the button label must be short":
- *  owner, 2026-11-04), the rest of its meaning in its question. */
+ *  owner, 2026-11-04); pressed, it closes, no question asked (owner, 2026-11-04). */
 export const NOT_A_PROBLEM = "Not a problem";
 /** The one words of Need help, Not a problem and a ticket's button on a narrow row (WorkActionSpec.short). */
 const HELP = "Help", IGNORE = "Ignore", TICKET = "Ticket";
@@ -107,11 +108,11 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // shall do the same thing"): an alert's card had VESTA's Done · Need help, a fault's Open Ticket · Close
   // ⚠️ A DONE IS WORK DONE, WHEREVER IT IS PRESSED (owner, 2026-10-30, review round 4: Done on Telegram filed a
   // completion in Recent work, the same Done on the Cockpit card a "Closed without action" gone after 90 days)
-  done: { label: DONE, step: { kind: "close", question: "Done? VESTA checks it again before it closes.", confirmLabel: DONE, work: true } },
+  done: { label: DONE, step: { kind: "close", ask: { question: "Done? VESTA checks it again before it closes.", confirmLabel: DONE }, work: true } },
   needHelp: { label: NEED_HELP, short: HELP, step: { kind: "help" } },
-  notAProblem: { label: NOT_A_PROBLEM, short: IGNORE, step: { kind: "close",
-    question: "Not a problem? VESTA will not raise it again while it lasts.", confirmLabel: NOT_A_PROBLEM,
-    lasting: true } },
+  // ⚠️ NO QUESTION (owner, 2026-11-04: "When I click 'ignore' I don't want to see the confirmation message since it's
+  // redundant"): it closes as pressed, as VESTA's own "Not a problem" does on Telegram and the tablet
+  notAProblem: { label: NOT_A_PROBLEM, short: IGNORE, step: { kind: "close", lasting: true } },
   doneNew: { label: DONE, step: { kind: "raiseThen", then: "done" } },
   helpNew: { label: NEED_HELP, short: HELP, step: { kind: "raiseThen", then: "help" } },
   openTicket: { label: "Open Ticket", short: TICKET, step: { kind: "stage", to: "in_progress" } },
@@ -122,7 +123,7 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // Ticket card, the `Done` shall be renamed to `Close`"): it said Done, as the Inbox's (2026-10-30), until then
   ticketDone: { label: "Close", step: { kind: "stage", to: "resolved" } },
   // what it records in its words (owner, 2026-11-01): "Close" read as the normal end of a ticket, beside Done
-  closeTicket: { label: "No action needed", short: "Dismiss", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "No action needed" } },
+  closeTicket: { label: "No action needed", short: "Dismiss", step: { kind: "close", ask: { question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "No action needed" } } },
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
 };
 

@@ -1,7 +1,8 @@
 // src/components/fm/WorkButtons.tsx
 // A card's buttons for its faults and tickets — the Inbox's and the Tickets tab's (architecture review, 2026-10-16).
 // WHICH buttons, on which records and with which question is fm/deviceWork's answer (tested by value); this draws it,
-// and CARRIES OUT every step a button names, for both tabs: No action needed and Done ask their question in place of the buttons, a stage
+// and CARRIES OUT every step a button names, for both tabs: No action needed and Done ask their question in place of the buttons
+// (Not a problem closes as pressed), a stage
 // change opens its form (FaultStageModal), Need help writes its step, Done or Need help on a card with no record raises
 // its fault in the same write. A step that did not land says why under the card; a Need help that stands says so.
 //
@@ -28,8 +29,7 @@ export type RaisedFault = Omit<FmTicket, "id" | "openedAt" | "status">;
 /** The steps of one list's cards, carried out — one per list, keyed by card, so a second card's Close puts the first
  *  one's buttons back. */
 interface CardWork {
-  /** The card whose close question is being asked, and which button asked it (Done, Not a problem while it lasts, No
-   *  action needed). */
+  /** The card whose close question is being asked, and which button asked it (Done, No action needed). */
   asking: { key: string; kind: WorkActionKind } | null;
   /** Why the last step on this card did not land; null when it did, or none was tried. */
   problemFor: (cardKey: string) => string | null;
@@ -156,15 +156,21 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
   </>;
   if (actions.length === 0) return after || null;
   const confirming = work.asking?.key === cardKey ? actions.find((a) => a.kind === work.asking?.kind) : undefined;
-  if (confirming && confirming.step.kind === "close") {
-    const { question, confirmLabel, work: asWork, lasting } = confirming.step;
+  if (confirming && confirming.step.kind === "close" && confirming.step.ask) {
+    const { ask: { question, confirmLabel }, work: asWork, lasting } = confirming.step;
     return <InlineConfirm question={question} confirmLabel={confirmLabel}
       onConfirm={() => work.close(cardKey, confirming.ids, asWork, lasting)} onCancel={work.cancel} />;
   }
+  /** A close with a question asks it; one without (Not a problem) closes as pressed. */
+  const closing = (a: WorkAction) => {
+    const step = a.step;
+    if (step.kind !== "close") return undefined;
+    return step.ask ? () => work.ask(cardKey, a.kind) : () => void work.close(cardKey, a.ids, step.work, step.lasting);
+  };
   const buttons = actions.map((a) => (
     <button key={a.kind} type="button" className={ACCENT[a.kind] ? "btn primary" : CARD_BUTTON}
       aria-label={a.step.kind === "close" && name ? `${a.label} “${name}”` : a.short ? a.label : undefined}
-      onClick={() => (a.step.kind === "close" ? work.ask(cardKey, a.kind) : leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised))}>
+      onClick={closing(a) ?? (() => (leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised)))}>
       <WorkLabel kind={a.kind} />
     </button>
   ));

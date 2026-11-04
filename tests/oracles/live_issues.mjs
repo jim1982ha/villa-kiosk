@@ -29,11 +29,12 @@ const deviceOf = (id) => (id === "sensor.pump_energy" ? "sensor.pump_power" : id
 console.log("  a card's buttons are its faults' only (fm/deviceWork, architecture review 2026-10-16):");
 const item = (id, kind, entityId, extra = {}) => ({ id, kind, title: id, detail: "", entityId, device: { key: deviceOf(entityId), label: "dev" }, ...extra });
 // a card's buttons as the owner reads them: "label → the records it acts on [what it asks first]"
-const said = (acts) => acts.map((a) => `${a.label} → ${[...a.ids].sort().join(",")}${a.step.kind === "close" ? ` [${a.step.question} / ${a.step.confirmLabel}]` : ""}${a.step.kind === "stage" ? ` (${a.step.to})` : ""}`);
+const said = (acts) => acts.map((a) => `${a.label} → ${[...a.ids].sort().join(",")}${a.step.kind === "close" ? (a.step.ask ? ` [${a.step.ask.question} / ${a.step.ask.confirmLabel}]` : " [closes as pressed]") : ""}${a.step.kind === "stage" ? ` (${a.step.to})` : ""}`);
 // owner, 2026-10-30: Done · Need help · Open Ticket on every issue card, one Done closing everything on it
 const OV_DONE = "[Done? VESTA checks it again before it closes. / Done]", TK_CLOSE = "[Close this ticket? Nothing was done, no cost is recorded. / No action needed]";
 // owner, 2026-11-04: Not a problem is a button of its own, after Need help, its label short, its meaning in its question
-const NAP = "[Not a problem? VESTA will not raise it again while it lasts. / Not a problem]";
+// owner, 2026-11-04: "When I click 'ignore' I don't want to see the confirmation message since it's redundant"
+const NAP = "[closes as pressed]";
 const [pump] = groupAttention([
   item("unavailable:sensor.pump_power", "unavailable", "sensor.pump_power"),
   item("fault:a", "fault", "sensor.pump_energy", { ticketId: "a", stage: "fault" }),
@@ -610,11 +611,25 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   // each close asks the question of the button pressed (owner, 2026-11-04: Not a problem a button of its own, no
   // longer a second yes under Done's question; tests/oracles/not_a_problem.mjs)
   const asked = (kind, key = "device:x") => ({ key, kind });
-  ck("  ...the button pressed asks ITS question in place of the buttons: Done's, Not a problem's, the ticket's Close",
+  ck("  ...the button pressed asks ITS question in place of the buttons: Done's, the ticket's No action needed; Not a problem has none",
      seen(drawButtons(ovActs, asked("done"))) === "|Done? VESTA checks it again before it closes.|Cancel|Done|"
-     && seen(drawButtons(ovActs, asked("notAProblem"))) === "|Not a problem? VESTA will not raise it again while it lasts.|Cancel|Not a problem|"
+     && seen(drawButtons(ovActs, asked("notAProblem"))) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] Open Ticket|"
      && seen(drawButtons(tkActs, asked("closeTicket"))) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|No action needed|",
      [seen(drawButtons(ovActs, asked("done"))), seen(drawButtons(ovActs, asked("notAProblem"))), seen(drawButtons(tkActs, asked("closeTicket")))]);
+  {
+    // what a press does, on the drawn buttons themselves (WorkButtons draws with no hook: called, its tree is read)
+    const calls = [];
+    const pressing = { ...work(null), ask: (key, kind) => calls.push(["ask", kind]), close: async (key, ids, asWork, lasting) => calls.push(["close", ids.join(), !!asWork, !!lasting]) };
+    const tree = WorkButtons({ actions: ovActs, cardKey: "device:x", work: pressing });
+    const buttons = [];
+    const walk = (n) => { if (!n || typeof n !== "object") return; if (Array.isArray(n)) return n.forEach(walk);
+      if (n.type === "button") buttons.push(n); walk(n.props?.children); };
+    walk(tree);
+    const press = (label) => buttons.find((b) => JSON.stringify(b.props.children).includes(`"kind":"${label}"`))?.props.onClick();
+    press("notAProblem"); press("done");
+    ck("  ...Not a problem closes as pressed, as lasting with no work, no question first (owner, 2026-11-04); Done still asks",
+       JSON.stringify(calls) === JSON.stringify([["close", "a", false, true], ["ask", "done"]]), calls);
+  }
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
      seen(drawButtons(tkActs, asked("closeTicket", "device:y"))) === "|[icon] Close|[icon] Need help|[icon] No action needed|" && drawButtons([]) === "");
   const { momentText } = await import("@/utils/dateText");

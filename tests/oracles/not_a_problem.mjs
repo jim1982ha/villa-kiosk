@@ -93,9 +93,10 @@ console.log("  where a person says it:");
 // owner, 2026-11-04: "show it directly next to `Done`, `Need Help`" — a button of its own, its label short ("the button
 // label must be short"), no longer the second yes of Done's or No action needed's question
 const lasting = Object.entries(WORK_ACTIONS).filter(([, a]) => a.step?.lasting).map(([n]) => n);
-ck("one button closes as lasting: Not a problem, short, its meaning in its question, no work done",
+// owner, 2026-11-04: "When I click 'ignore' I don't want to see the confirmation message since it's redundant"
+ck("one button closes as lasting: Not a problem, short, with no question (it closes as pressed), no work done",
    JSON.stringify(lasting) === JSON.stringify(["notAProblem"]) && WORK_ACTIONS.notAProblem.label === NOT_A_PROBLEM
-   && NOT_A_PROBLEM === "Not a problem" && /while it lasts/.test(WORK_ACTIONS.notAProblem.step.question)
+   && NOT_A_PROBLEM === "Not a problem" && WORK_ACTIONS.notAProblem.step.ask === undefined
    && !WORK_ACTIONS.notAProblem.step.work, lasting);
 const W = await import("@/fm/deviceWork");
 const order = (acts) => acts.map((a) => a.kind).join(" · ");
@@ -107,7 +108,7 @@ ck("  ...after Need help on an Inbox card that offers Done on a record; never on
    [order(W.overviewActions([{ id: "a", stage: "fault" }])), order(W.ticketActions([{ id: "a", stage: "ticket" }]))]);
 const wb = parseTsx("components/fm/WorkButtons.tsx");
 const confirm = elements(wb, "InlineConfirm")[0];
-ck("  ...its question closes with lasting; no question offers a second yes any more", !!confirm
+ck("  ...a question (Done's, No action needed's) closes as its button says; no question offers a second yes any more", !!confirm
    && propText(confirm, "onConfirm") === "() => work.close(cardKey, confirming.ids, asWork, lasting)"
    && propText(confirm, "alternative") == null, confirm && propText(confirm, "onConfirm"));
 
