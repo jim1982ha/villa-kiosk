@@ -205,9 +205,10 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           {can("editConfig") && (
             <>
               <TipTitle title={LISTS_TITLE} tip={<>
-                Who gets the villa's alerts and VESTA's messages on Telegram. Urgent (P1) alerts go to both lists, P2
-                alerts to the {ROLE_LABELS.ops}. With a list empty, they go to every Telegram chat. Changes here are
-                saved at once.
+                Who gets the villa's alerts and VESTA's messages on Telegram. Urgent (P1) alerts go to the{" "}
+                {ROLE_LABELS.owner} list only, P2 alerts to the {ROLE_LABELS.ops} list only. A list with nobody in it
+                hands its alerts to the other list; with both empty, they go to every Telegram chat. The villa sends
+                them itself, with or without this tablet or VESTA. Changes here are saved at once.
               </>} />
               <WhoGetsMessages onSaved={() => setKeptAtOnce((k) => k.includes(LISTS_TITLE) ? k : [...k, LISTS_TITLE])} />
             </>
