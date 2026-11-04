@@ -1,3 +1,10 @@
+## 0.12.450
+
+What you will see:
+- An alert closed by a person (Done or Not a problem) no longer gets a second, nameless message when its automation
+  gives up later ("Still not clear after 30min: no longer tracking this incident"): that message becomes the alert's
+  card again (its number, its priority, how it was closed).
+
 ## 0.12.449
 
 What you will see:
