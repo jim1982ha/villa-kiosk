@@ -325,7 +325,7 @@ READS: dict[str, Reading] = {
     "PM-RECONNECT-LOOP": Reading(lambda pack, f: [{"entity_id": f["entity_id"]}], lambda pack, f, rows: [f["entity_id"]],
                                  lambda t, rows: t.loops()),
     R.HIDDEN_IN_RULE: Reading(lambda pack, f: [{"entity_id": f["entity_id"]}], _none,
-                              lambda t, rows: t.hidden()),
+                              lambda t, rows: t.hidden(), judge=battery.reworded),
     "PM-POWER-CHANGE": _asset, "PM-ENERGY-CHANGE": _asset, "PM-RUNHOURS": _asset, "PM-RUN-SAG": _asset,
     "PM-EXPECTED-SILENT": _asset, result.COUNTER_RESET: _asset,
     "PM-LEVEL-HIGH": Reading(_level_rows, _none, lambda t, rows: t.level_day(rows), per_day=True),

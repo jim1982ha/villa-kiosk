@@ -61,6 +61,17 @@ def seen(row: dict, found) -> Verdict:
     return Verdict(any(x.rule_id == row["rule_id"] and x.entity_id == row["entity_id"] for x in found))
 
 
+def reworded(row: dict, found) -> Verdict:
+    """`seen`, raised again when its words now differ (`restate`): a rule whose words change only when what it finds
+    does, so its fault says it within the next tick, never only after the next night.
+
+    ⚠️ NOT EVERY RULE (owner, 2026-11-05: "after updating, i still see this card"): the hidden-device fault kept its
+    words of 02:01 under a release that words it otherwise. A rule whose words count time ("offline for 4d 9h") would
+    be raised again at every tick, so it stays `seen`."""
+    same = next((x for x in found if x.rule_id == row["rule_id"] and x.entity_id == row["entity_id"]), None)
+    return Verdict(True, restate=same) if same is not None and same.summary != row.get("summary") else seen(row, found)
+
+
 def judge(row: dict, found) -> Verdict:
     """THE battery verdict on an open finding (`row`, as stored) from what its rule finds now (`found`): ONE place for
     what the night and the recheck each worked out (architecture review N, 2026-10-27).

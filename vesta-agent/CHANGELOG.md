@@ -1,3 +1,9 @@
+## 0.12.454
+
+What you will see:
+- A Cockpit card about an automation watching a hidden device takes its new words within 5 minutes of the update
+  ("… that no longer answers: … (offline)."), not only after the next night check.
+
 ## 0.12.453
 
 What you will see:

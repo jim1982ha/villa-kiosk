@@ -139,3 +139,26 @@ def test_a_script_is_called_a_script_and_never_a_rule():
     assert f.summary.startswith("The script 'Alert photo' watches 1 device") and "rule" not in (f.summary + f.check).lower()
     (g,) = R.hidden_in_rule_rules([script], [RAW], lambda e: "Front Door Raw", gone={RAW})
     assert g.summary.endswith("no longer answers: Front Door Raw (no longer in the villa's system).")
+
+
+def test_a_fault_worded_by_an_older_release_says_the_new_words_at_the_next_recheck(tmp_path):
+    # owner, 2026-11-05: "after updating, i still see this card" — written by the night under the old words, it kept
+    # them until the next night; the 5-minute recheck now raises it again in the words it finds
+    from vesta_shared.problems import Problems
+    from vesta_shared.store import Store
+    _night(tmp_path, [WATCHDOG])
+    store = Store(str(tmp_path / "s.sqlite"))
+    (f,) = _open(tmp_path)
+    old = "The automation 'Devices' watches 1 device hidden in the villa's system: Front Door Raw."
+    store.db.execute("UPDATE findings SET summary=? WHERE id=?", (old, f["id"]))
+    store.db.commit()
+    (task,) = [t for t in Problems(store).open_tasks() if t.get("source") == f"finding:{f['id']}"]
+    r = subprocess.run([sys.executable, os.path.join(os.path.dirname(NIGHTLY), "recheck.py"), "--pack",
+                        str(tmp_path / "pack.json"), "--store", str(tmp_path / "s.sqlite"), "--fixture-dir",
+                        str(tmp_path / "fx"), "--now", "2026-10-03T12:00:00+00:00", "--zone", "UTC"],
+                       capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH}, timeout=60)
+    assert r.returncode == 0, r.stderr
+    (now,) = _open(tmp_path)
+    assert now["summary"].endswith("that no longer answers: Front Door Raw (offline)."), now["summary"]
+    assert "(offline)" in Problems(Store(str(tmp_path / "s.sqlite"))).current_title(task)   # the Cockpit card's words
+    assert json.loads(r.stdout)["faults_changed"] is True                     # the Kiosk's fault is brought up to date now

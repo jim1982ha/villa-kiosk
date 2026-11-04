@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.438 (5 November 2026)
+
+- PM-HIDDEN-IN-RULE's recheck judges with battery.reworded: an open finding whose words now differ is raised again
+  (restate), so its Kiosk fault is retitled at the next tick. Rules whose words count time keep `seen`.
+
 ## 0.6.437 (5 November 2026)
 
 - Architecture review 21: a press's receipt is interim (IncidentThread.close `interim`), replaced in every copy by the
