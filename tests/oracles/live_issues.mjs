@@ -557,15 +557,28 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   const drawButtons = (actions, asking = null, extra = {}) => draw(h(WorkButtons,
     { actions, cardKey: "device:x", work: work(asking, extra.problem ?? null), ...extra }));
   const ovActs = W.overviewActions([{ id: "a", stage: "fault" }]), tkActs = W.ticketActions([{ id: "a", stage: "ticket" }]);
-  ck("an issue card: Done, Need help, Not a problem, then Open Ticket with its wrench, in their row, Done named for a screen reader",
+  // the words a row shows, wide (every label in full) or narrow (the one words): both are drawn, the row's width
+  // shows one (07-facility.css .work-short)
+  const seen = (html, narrow = false) => text(html.replace(narrow ? /<span class="work-long">[^<]*<\/span>/g
+    : /<span class="work-short">[^<]*<\/span>/g, "")).replace(/\[icon\]\|?/g, "[icon] ");
+  ck("an issue card: Done, Need help, Not a problem, then Open Ticket, each with its icon, in their row, Done named for a screen reader",
      /^<div class="fm-work-row">/.test(drawButtons(ovActs, null, { name: "Pump" }))
-     && text(drawButtons(ovActs, null, { name: "Pump" })) === "|Done|Need help|Not a problem|[icon] Open Ticket|"
-     && /aria-label="Done “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })), text(drawButtons(ovActs)));
+     && seen(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] Open Ticket|"
+     && /aria-label="Done “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })) && /aria-label="Open Ticket"/.test(drawButtons(ovActs)), seen(drawButtons(ovActs)));
+  // owner, 2026-11-04 (iPhone screenshot): "use 1 word label and icon in the button … open/edit a ticket shall also
+  // appear on the same line"
+  ck("  ...on a narrow row, one word each under its icon: Done · Help · Ignore · Ticket, and the Tickets tab's Done · Help · Ignore · Dismiss",
+     seen(drawButtons(ovActs), true) === "|[icon] Done|[icon] Help|[icon] Ignore|[icon] Ticket|"
+     && seen(drawButtons(W.overviewActions([{ id: "a", stage: "ticket" }])), true) === "|[icon] Done|[icon] Help|[icon] Ignore|[icon] Ticket|"
+     && seen(drawButtons(tkActs), true) === "|[icon] Done|[icon] Help|[icon] Ignore|[icon] Dismiss|",
+     [seen(drawButtons(ovActs), true), seen(drawButtons(tkActs), true)]);
   // owner, 2026-10-31 (iPhone screenshot): Open Ticket wrapped under Done · Need help. Measured on that screenshot, a
-  // 390 px wide iPhone: the card 354 px wide; the labels' own widths at 15 px: Done 34, Need help 68, the wrench and
-  // Open Ticket 101. ⚠️ A FOURTH BUTTON (owner, 2026-11-04: Not a problem beside Done and Need help, about 98 px, Need
-  // help's width per letter): the four need more than that card holds, so the row wraps (never a cut label): Done ·
-  // Need help · Not a problem hold the first line, Open Ticket the second.
+  // 390 px wide iPhone: the card 354 px wide (the screen less 36 px); the labels' own widths at 15 px: Done 34, Need
+  // help 68, the wrench and Open Ticket 101 (the icon 14 px and the button's 8 px gap: 22). ⚠️ A FOURTH BUTTON (owner,
+  // 2026-11-04): with Not a problem (98 px, Need help's width per letter) the four wrapped, Open Ticket on a second line;
+  // the owner asked one word and its icon instead, all four on one line. Every label in full shows only where the row
+  // holds the widest card's four (the Tickets tab's No action needed, 121 px); below, the one words under their icons
+  // share the row equally, and the widest of them (Dismiss, 53 px) fits a quarter of a 360 px phone's row.
   {
     const { readFileSync } = await import("node:fs");
     const css = (f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8");
@@ -576,31 +589,38 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     const lent = num(/\.fm-record-body \.fm-work-row \{ margin-left: -(\d+)px/, fac) || 0;
     const gutter = num(/\.fm-record-head:has\(> \.fm-record-lead\), \.fm-record-head:has\(> \.fm-record-lead\) ~ :is\(\.fm-record-body, \.card-pill-line\) \{ padding-left: (\d+)px/, fac);
     const cardPad = num(/--card-pad: \d+px (\d+)px/, base);
-    const line = (labels) => labels.reduce((w, label) => w + label + 2 * pad + 2, 0) + (labels.length - 1) * gap;
-    const room = 354 - 2 * cardPad - gutter + lent;
-    const wraps = /\.fm-work-row \{[^}]*flex-wrap: wrap/.test(fac) && /\.fm-work-row > \.btn \{[^}]*white-space: nowrap/.test(fac);
-    ck("  ...on a 390 px iPhone Done · Need help · Not a problem fit on one line (the row lent the icon column), the row wraps the rest whole",
-       pad > 0 && gap > 0 && lent === gutter && line([34, 68, 98]) <= room && wraps,
-       { pad, gap, lent, gutter, three: line([34, 68, 98]), four: line([34, 68, 98, 101]), room, wraps });
+    const narrowBelow = num(/@container work-row \(max-width: (\d+)px\)/, fac) + 1;
+    const tile = /@container work-row \(max-width: \d+px\) \{\s*\.fm-work-row > \.btn \{ flex: 1 1 0; min-width: 0; flex-direction: column; gap: \d+px; padding: \d+px (\d+)px; \}\s*\.work-long \{ display: none; \}\s*\.work-short \{ display: inline; \}/.exec(fac);
+    const tilePad = Number(tile?.[1]);
+    const ICON = 22;
+    const line = (labels) => labels.reduce((w, label) => w + label + ICON + 2 * pad + 2, 0) + (labels.length - 1) * gap;
+    const room = (screen) => screen - 36 - 2 * cardPad - gutter + lent;
+    const full = Math.max(line([34, 68, 98, 101 - ICON]), line([34, 68, 98, 121]));
+    const tiles = 4 * (53 + 2 * tilePad + 2) + 3 * gap;
+    ck("  ...every label in full only on a row that holds the widest card's four; one words below, the four on one line on every phone, 360 to 430 px",
+       pad > 0 && gap > 0 && lent === gutter && !!tile && full <= narrowBelow
+       && [360, 375, 390, 412, 430].every((w) => room(w) < narrowBelow && tiles <= room(w))
+       && /\.work-short \{ display: none; \}/.test(fac) && /container: work-row \/ inline-size;/.test(fac),
+       { pad, gap, lent, gutter, full, narrowBelow, tiles, room360: room(360) });
   }
-  ck("  ...a ticket: Done, Need help, Not a problem and Close, no icon; a closed record: Reopen",
-     text(drawButtons(tkActs)) === "|Done|Need help|Not a problem|No action needed|" && text(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|Reopen|", text(drawButtons(tkActs)));
+  ck("  ...a ticket: Done, Need help, Not a problem and No action needed, each with its icon; a closed record: Reopen",
+     seen(drawButtons(tkActs)) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] No action needed|" && seen(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|[icon] Reopen|", seen(drawButtons(tkActs)));
   // each close asks the question of the button pressed (owner, 2026-11-04: Not a problem a button of its own, no
   // longer a second yes under Done's question; tests/oracles/not_a_problem.mjs)
   const asked = (kind, key = "device:x") => ({ key, kind });
   ck("  ...the button pressed asks ITS question in place of the buttons: Done's, Not a problem's, the ticket's Close",
-     text(drawButtons(ovActs, asked("done"))) === "|Done? VESTA checks it again before it closes.|Cancel|Done|"
-     && text(drawButtons(ovActs, asked("notAProblem"))) === "|Not a problem? VESTA will not raise it again while it lasts.|Cancel|Not a problem|"
-     && text(drawButtons(tkActs, asked("closeTicket"))) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|No action needed|",
-     [text(drawButtons(ovActs, asked("done"))), text(drawButtons(ovActs, asked("notAProblem"))), text(drawButtons(tkActs, asked("closeTicket")))]);
+     seen(drawButtons(ovActs, asked("done"))) === "|Done? VESTA checks it again before it closes.|Cancel|Done|"
+     && seen(drawButtons(ovActs, asked("notAProblem"))) === "|Not a problem? VESTA will not raise it again while it lasts.|Cancel|Not a problem|"
+     && seen(drawButtons(tkActs, asked("closeTicket"))) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|No action needed|",
+     [seen(drawButtons(ovActs, asked("done"))), seen(drawButtons(ovActs, asked("notAProblem"))), seen(drawButtons(tkActs, asked("closeTicket")))]);
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
-     text(drawButtons(tkActs, asked("closeTicket", "device:y"))) === "|Done|Need help|Not a problem|No action needed|" && drawButtons([]) === "");
+     seen(drawButtons(tkActs, asked("closeTicket", "device:y"))) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] No action needed|" && drawButtons([]) === "");
   const { momentText } = await import("@/utils/dateText");
   const at = "2026-10-30T09:20:00.000Z";
   ck("  ...a Need help that stands is said above the buttons, when and by whom; a step that did not land, under them",
-     text(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })) === `|🆘 Need help asked ${momentText(at)} (Owner)|Done|Need help|Not a problem|No action needed|`
-     && text(drawButtons(tkActs, null, { problem: "Not saved." })) === "|Done|Need help|Not a problem|No action needed|Not saved.|",
-     [text(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })), text(drawButtons(tkActs, null, { problem: "Not saved." }))]);
+     seen(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })) === `|🆘 Need help asked ${momentText(at)} (Owner)|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] No action needed|`
+     && seen(drawButtons(tkActs, null, { problem: "Not saved." })) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] No action needed|Not saved.|",
+     [seen(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })), seen(drawButtons(tkActs, null, { problem: "Not saved." }))]);
 }
 
 console.log("\n  a Need help pressed is said on its card, and asked once (architecture review round 6, 2026-10-30):");

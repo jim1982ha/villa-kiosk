@@ -83,7 +83,9 @@ type WorkStep =
    *  with no action as "Not a problem while it lasts" (FmTicketUpdate.lasting). */
   | { kind: "close"; question: string; confirmLabel: string; work?: true; lasting?: true };
 
-interface WorkActionSpec { label: string; step: WorkStep }
+/** `short`: its one word where the card's row is too narrow for every label in full (owner, 2026-11-04, a phone: "use
+ *  1 word label and icon in the button"; WorkButtons.WorkLabel, 07-facility.css); none when the label is one word. */
+interface WorkActionSpec { label: string; short?: string; step: WorkStep }
 
 /** The words Done and Need help say on every card, the Inbox's and the Tickets tab's alike. */
 const DONE = "Done";
@@ -96,6 +98,8 @@ export const NEED_HELP = "Need help";
  *  record, in the order VESTA's own alert offers it on Telegram, its label short ("the button label must be short":
  *  owner, 2026-11-04), the rest of its meaning in its question. */
 export const NOT_A_PROBLEM = "Not a problem";
+/** The one words of Need help, Not a problem and a ticket's button on a narrow row (WorkActionSpec.short). */
+const HELP = "Help", IGNORE = "Ignore", TICKET = "Ticket";
 
 /** ONE wording per action. */
 export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
@@ -104,21 +108,21 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // ⚠️ A DONE IS WORK DONE, WHEREVER IT IS PRESSED (owner, 2026-10-30, review round 4: Done on Telegram filed a
   // completion in Recent work, the same Done on the Cockpit card a "Closed without action" gone after 90 days)
   done: { label: DONE, step: { kind: "close", question: "Done? VESTA checks it again before it closes.", confirmLabel: DONE, work: true } },
-  needHelp: { label: NEED_HELP, step: { kind: "help" } },
-  notAProblem: { label: NOT_A_PROBLEM, step: { kind: "close",
+  needHelp: { label: NEED_HELP, short: HELP, step: { kind: "help" } },
+  notAProblem: { label: NOT_A_PROBLEM, short: IGNORE, step: { kind: "close",
     question: "Not a problem? VESTA will not raise it again while it lasts.", confirmLabel: NOT_A_PROBLEM,
     lasting: true } },
   doneNew: { label: DONE, step: { kind: "raiseThen", then: "done" } },
-  helpNew: { label: NEED_HELP, step: { kind: "raiseThen", then: "help" } },
-  openTicket: { label: "Open Ticket", step: { kind: "stage", to: "in_progress" } },
+  helpNew: { label: NEED_HELP, short: HELP, step: { kind: "raiseThen", then: "help" } },
+  openTicket: { label: "Open Ticket", short: TICKET, step: { kind: "stage", to: "in_progress" } },
   // a card with no record yet (only what the villa's system reports): the same words, the ticket form for its device
-  raiseTicket: { label: "Open Ticket", step: { kind: "raise" } },
-  editTicket: { label: "Edit Ticket", step: { kind: "edit" } },
+  raiseTicket: { label: "Open Ticket", short: TICKET, step: { kind: "raise" } },
+  editTicket: { label: "Edit Ticket", short: TICKET, step: { kind: "edit" } },
   // ⚠️ THE TICKETS TAB SAYS DONE TOO (owner, 2026-10-30: "I agree with your recommendation"): its "Mark resolved" was
   // the same work done as the Inbox's Done, in other words; it keeps its form (what was done, cost, photos)
   ticketDone: { label: DONE, step: { kind: "stage", to: "resolved" } },
   // what it records in its words (owner, 2026-11-01): "Close" read as the normal end of a ticket, beside Done
-  closeTicket: { label: "No action needed", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "No action needed" } },
+  closeTicket: { label: "No action needed", short: "Dismiss", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "No action needed" } },
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
 };
 

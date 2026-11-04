@@ -26,15 +26,20 @@ import { isRenderedFloor, stampedFloor } from "./floorOf";
 const FAN_MAX_RAD_PER_SEC = 6.2;
 // A ceiling fan is exported as ONE fused mesh (mount + motor + blades all one
 // piece, one material — no separate "blade" sub-object to isolate), so the
-// whole thing has to spin together; see updateFanSpin/computeFanSpin. The top
-// fraction of its height (the ceiling mount/canopy) is reliably the one part
-// that's round and centred exactly on the true axle, so its own vertices —
-// not the whole mesh's bounding box — decide WHERE that axle sits. Get this
-// right and the mount+pole (rotationally symmetric) reads as motionless even
-// though it's technically rotating with the blades; get it wrong (the old
-// plain bbox-midpoint) and the pole visibly orbits in a small circle instead
-// of spinning in place.
-const FAN_AXIS_TOP_SLICE = 0.25;
+// whole thing has to spin together. WHERE its axle sits is the centre of the
+// smallest circle holding the whole fixture seen from above: the circle its
+// blade tips draw, whatever else it carries (enclosingCircle). Get it wrong
+// and the blades visibly swing round the hub instead of turning in place.
+//
+// ⚠️ IT WAS THE AVERAGE OF THE FIXTURE'S TOP QUARTER (owner, 2026-11-04, a
+// recording: "before it was perfectly ok, with only the blades to turn"). That
+// assumed a round ceiling mount on top; a model exporting a fan as its flat
+// blades alone (the hub a separate light) has no mount, its top quarter is a
+// lopsided part of the blades, and the axle landed 9 cm off: the blades swung
+// 18 cm round the hub. Measured on the villa's own model, the circle's centre
+// is within 2 cm of the point each fan is most symmetric about, with or
+// without its mount; the plain bounding box's middle is up to 21 cm off (three
+// blades are not a square).
 
 /**
  * Does this fan entity SPIN on the map? Only a CEILING fan does — a VMC or a
@@ -50,6 +55,43 @@ const FAN_AXIS_TOP_SLICE = 0.25;
  */
 export function isCeilingFan(entityId: string): boolean {
   return /ceiling[_-]?fan/i.test(entityId);
+}
+
+/**
+ * The smallest circle holding every point (Welzl's algorithm, its expected
+ * linear time from a shuffled order; the shuffle is a fixed one, so a fixture
+ * rigs alike on every load). Null for no point.
+ */
+export function enclosingCircle(points: readonly (readonly [number, number])[]): { x: number; y: number; r: number } | null {
+  if (points.length === 0) return null;
+  const p = points.slice();
+  for (let i = p.length - 1; i > 0; i--) {
+    const j = (i * 7919) % (i + 1);
+    [p[i], p[j]] = [p[j], p[i]];
+  }
+  type C = { x: number; y: number; r: number };
+  const holds = (c: C, q: readonly [number, number]) => Math.hypot(q[0] - c.x, q[1] - c.y) <= c.r * (1 + 1e-9) + 1e-9;
+  const two = (a: readonly [number, number], b: readonly [number, number]): C =>
+    ({ x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, r: Math.hypot(a[0] - b[0], a[1] - b[1]) / 2 });
+  const three = (a: readonly [number, number], b: readonly [number, number], c: readonly [number, number]): C | null => {
+    const d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+    if (Math.abs(d) < 1e-12) return null;
+    const a2 = a[0] ** 2 + a[1] ** 2, b2 = b[0] ** 2 + b[1] ** 2, c2 = c[0] ** 2 + c[1] ** 2;
+    const x = (a2 * (b[1] - c[1]) + b2 * (c[1] - a[1]) + c2 * (a[1] - b[1])) / d;
+    const y = (a2 * (c[0] - b[0]) + b2 * (a[0] - c[0]) + c2 * (b[0] - a[0])) / d;
+    return { x, y, r: Math.hypot(a[0] - x, a[1] - y) };
+  };
+  let c: C = { x: p[0][0], y: p[0][1], r: 0 };
+  for (let i = 1; i < p.length; i++) {
+    if (holds(c, p[i])) continue;
+    c = { x: p[i][0], y: p[i][1], r: 0 };
+    for (let j = 0; j < i; j++) {
+      if (holds(c, p[j])) continue;
+      c = two(p[i], p[j]);
+      for (let k = 0; k < j; k++) if (!holds(c, p[k])) c = three(p[i], p[j], p[k]) ?? c;
+    }
+  }
+  return c;
 }
 
 /** One mesh of a fan, reparented under a pivot at its true axle. */
@@ -131,12 +173,9 @@ export class FanRigs {
    * bounding info stay exactly what they always were, so the badge (and
    * everything else that reads the mesh directly) can't be affected.
    *
-   * The axle itself: average the vertices in the TOP slice of the fixture —
-   * along whichever LOCAL axis currently reads as world-vertical, see
-   * FAN_AXIS_TOP_SLICE — since the ceiling mount/canopy is reliably round and
-   * centred exactly on the true axle, unlike the whole fixture's bounding box
-   * (which assumes the blade assembly is perfectly symmetric; it usually
-   * isn't quite).
+   * The axle itself: the centre of the smallest circle holding every vertex,
+   * seen from above (enclosingCircle) — the circle the blade tips draw — at
+   * the fixture's mid height (a vertical axle: any height on it turns alike).
    */
   private setupFanRig(
     meshes: readonly AbstractMesh[],
@@ -150,42 +189,22 @@ export class FanRigs {
       m.unfreezeWorldMatrix();
       m.computeWorldMatrix(true);
 
-      // The LOCAL (pre-rotation) direction that currently reads as
-      // world-vertical — NOT necessarily local Y: these fixtures import with
-      // a baked axis-conversion rotation (SweetHome's Z-up -> glTF's Y-up),
-      // so the mesh's own un-rotated vertex data has "up" on a different
-      // axis. Deriving it (rather than assuming Y or Z) keeps this correct
-      // regardless of how any given model happens to be authored/exported.
-      const invWorld = Matrix.Invert(m.getWorldMatrix());
-      const axisInMeshSpace = Vector3.TransformNormal(Vector3.Up(), invWorld);
-      axisInMeshSpace.normalize();
-
-      // Project every vertex onto that axis to find the fixture's "height"
-      // range, then average the positions in its top slice — in the mesh's
-      // OWN local/object space, the same space getVerticesData returns, so
-      // no world-matrix round-trip is needed for this part.
+      // Every vertex seen from above, in the WORLD (these fixtures import
+      // with a baked axis-conversion rotation, so the mesh's own data has
+      // "up" on another axis; the world's is Y).
+      const wm = m.getWorldMatrix();
       const v = Vector3.Zero();
-      let hMin = Infinity, hMax = -Infinity;
+      const flat: [number, number][] = [];
+      let yMin = Infinity, yMax = -Infinity;
       for (let i = 0; i < positions.length; i += 3) {
-        v.set(positions[i], positions[i + 1], positions[i + 2]);
-        const h = Vector3.Dot(v, axisInMeshSpace);
-        if (h < hMin) hMin = h;
-        if (h > hMax) hMax = h;
+        Vector3.TransformCoordinatesFromFloatsToRef(positions[i], positions[i + 1], positions[i + 2], wm, v);
+        flat.push([v.x, v.z]);
+        if (v.y < yMin) yMin = v.y;
+        if (v.y > yMax) yMax = v.y;
       }
-      const topThreshold = hMax - (hMax - hMin) * FAN_AXIS_TOP_SLICE;
-      const sum = Vector3.Zero();
-      let sampled = 0;
-      for (let i = 0; i < positions.length; i += 3) {
-        v.set(positions[i], positions[i + 1], positions[i + 2]);
-        if (Vector3.Dot(v, axisInMeshSpace) >= topThreshold) { sum.addInPlace(v); sampled++; }
-      }
-      // Fall back to the plain local bbox midpoint if the top slice somehow
-      // caught too little geometry to average reliably (e.g. a sparse mount).
-      const bb = m.getBoundingInfo().boundingBox;
-      const axleLocal = sampled >= 20 ? sum.scale(1 / sampled) : bb.minimum.add(bb.maximum).scale(0.5);
-      if (!Number.isFinite(axleLocal.x) || !Number.isFinite(axleLocal.y) || !Number.isFinite(axleLocal.z)) continue;
-
-      const axleWorld = Vector3.TransformCoordinates(axleLocal, m.getWorldMatrix());
+      const circle = enclosingCircle(flat);
+      if (!circle || !Number.isFinite(circle.x) || !Number.isFinite(circle.y) || !Number.isFinite(yMin)) continue;
+      const axleWorld = new Vector3(circle.x, (yMin + yMax) / 2, circle.y);
       const parent = m.parent;
       const parentWorld = parent?.getWorldMatrix?.();
       const pivot = new TransformNode(`fanPivot_${m.uniqueId}`, this.scene);

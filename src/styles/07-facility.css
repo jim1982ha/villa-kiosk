@@ -186,12 +186,22 @@
 .fm-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 /* a card's pills, the same size on its title's line (its time, a spend's device), its room's line and the meta line */
 :is(.fm-meta, .fm-record-head, .card-pill-line) .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
-/* ⚠️ A CARD'S BUTTONS ON ONE LINE ON A PHONE (owner, 2026-10-31, iPhone: Open Ticket wrapped under Done · Need help):
-   one row of their own (WorkButtons, Inbox and Tickets alike), 12 px each side instead of the 18 of a .btn, and under
-   a card with an icon column the row takes that column's width too (it is empty under the buttons). On a phone narrower
-   still they wrap together, never cut. */
-.fm-work-row { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* ⚠️ A CARD'S BUTTONS ON ONE LINE, PHONE AND LAPTOP (owner, 2026-10-31, iPhone: Open Ticket wrapped under Done · Need
+   help; 2026-11-04, the fourth button, Not a problem: "use 1 word label and icon in the button … open/edit a ticket
+   shall also appear on the same line"): one row of their own (WorkButtons, Inbox and Tickets alike), 12 px each side
+   instead of the 18 of a .btn, and under a card with an icon column the row takes that column's width too (it is
+   empty under the buttons). Each button's icon, then its label; on a row narrower than every label in full needs, the
+   buttons share the row equally, each its one word under its icon (WorkLabel's .work-short). A browser without
+   container queries keeps the labels, wrapping whole, never cut. */
+.fm-work-row { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
+  container: work-row / inline-size; }
 .fm-work-row > .btn { padding: 0 12px; white-space: nowrap; }
+.work-short { display: none; }
+@container work-row (max-width: 559px) {
+  .fm-work-row > .btn { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px; padding: 6px 4px; }
+  .work-long { display: none; }
+  .work-short { display: inline; }
+}
 .fm-record-head:has(> .fm-record-lead) ~ .fm-record-body .fm-work-row { margin-left: -30px; }
 /* A card's Need help that nothing has answered yet ("🆘 Need help asked …", WorkButtons): a line of its own above the
    buttons, on the Inbox and the Tickets tab alike (architecture review round 6). */

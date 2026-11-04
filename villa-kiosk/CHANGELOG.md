@@ -1,3 +1,19 @@
+## 2.496.694
+
+What you will see:
+- A ceiling fan turning on the map spins in place again: its blades turn round their hub instead of swinging round it.
+  This happened on fans whose model has the blades alone (the bedrooms' fans in the latest model). Every fan's centre
+  is now found from the circle its blade tips draw, whatever the model's shape.
+
+## 2.496.693
+
+What you will see:
+- Cockpit cards (Inbox and Tickets tab): every button now has an icon. On a phone, all four buttons fit on one line,
+  each one word under its icon: Done · Help · Ignore · Ticket on an issue, and Done · Help · Ignore · Dismiss on a
+  ticket. Open Ticket and Edit Ticket no longer drop to a second line. On a tablet or a laptop, where the line is wide
+  enough, the buttons keep their full words (Done, Need help, Not a problem, Open Ticket), each with the same icon.
+  Pressing a button asks the same question as before.
+
 ## 2.496.692
 
 What you will see:
