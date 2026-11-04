@@ -125,3 +125,20 @@ def test_the_page_and_the_engine_read_the_same_roster(tmp_path):
     s = settings(str(tmp_path))
     keep_roster(s, Roster.of(owner=[(ANN, "Ann")]))
     assert page_policy(s.policy_path, s.pack_path).roster is s.policy().roster is Roster.current(s.pack_path)
+
+
+# ⚠️ ONE GROUP, ONE LANGUAGE (architecture review 20, card 5): a person with their own row writing in a group was
+# answered, and their voice read, in their private chat's language, while the group's alerts and digests used the group's
+def test_a_listed_person_writing_in_a_group_is_answered_in_the_groups_language(tmp_path):
+    from vesta_shared import kiosk_told, villa_recipients
+    s = settings(str(tmp_path))
+    villa_recipients.save(s.pack_path, {
+        "owner": [{"chat": ANN, "name": "Ann", "entity": "notify.example_ann"}],
+        "fm": [{"chat": GROUP, "name": "Staff", "entity": "notify.example_staff"}]})
+    kiosk_told.keep(s.pack_path, {"chatLanguages": {"notify.example_ann": "en", "notify.example_staff": "fr"}})
+    r = s.policy().roster
+    assert r.member(ANN, ANN).language == "en"                            # her own chat: her own language
+    listed, unlisted = r.member(ANN, GROUP), r.member(999, GROUP, "Bo")
+    assert (listed.role, listed.language) == ("fm", "fr") == (unlisted.role, unlisted.language)
+    assert listed.language == r.language_of(GROUP, "fm")                  # what the group's alerts and digests use
+

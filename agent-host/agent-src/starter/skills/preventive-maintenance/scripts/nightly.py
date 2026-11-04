@@ -10,7 +10,8 @@ Reads (one pass, never a loop during the day):
   current states     for availability, silence and battery levels
   logbook 3 days     for reconnect loops
 
-Writes: the feature store and the findings table in the agent store. It
+Writes: the feature store, the findings table and each device's run-hours verdict (vesta_shared.run_hours, for the
+VESTA Agent page) in the agent store. It
 never writes to Home Assistant. The result JSON lists what the agent should
 now do: create tasks (Kiosk faults), send a P2 at once, ask the owner about
 new devices. The agent does those through the action catalogue.
@@ -47,6 +48,7 @@ from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Li
 from vesta_shared.problems import Problems, alert_name, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
+from vesta_shared import run_hours  # noqa: E402  (a device's run-hours check on or off, and why: one verdict)
 from vesta_shared import battery  # noqa: E402  (a battery's ids and its rested level: one owner)
 from vesta_shared.timeutil import schedule_hours_per_day  # noqa: E402
 from vesta_shared.ha_client import HAError  # noqa: E402
@@ -109,11 +111,14 @@ def run(args) -> dict:
 
     # the villa's state per day, kept night after night (vesta_shared.occupancy): None without its helper
     occupied = occupancy.days(cli, store, os.path.dirname(HERE), win_start.date(), today, Z)
+    verdicts: dict[str, dict] = {}
     for slug, asset in pack.assets.items():
         found, written = asset_findings(cli, store, params, asset, today, day_end, hour_stats, day_stats, now_ref,
-                                        zone, Z, notes, skip_raw=args.skip_raw, occupied=occupied)
+                                        zone, Z, notes, skip_raw=args.skip_raw, occupied=occupied, verdicts=verdicts)
         findings += found
         features_written += written
+    # each device's run-hours check as tonight judged it, for the Device links page (vesta_shared.run_hours)
+    run_hours.record(store, now_ref.astimezone(timezone.utc).isoformat(timespec="seconds"), verdicts)
 
     # ---- batteries, availability, silence, levels (current states) -----------
     # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery is judged too
@@ -205,20 +210,27 @@ def run(args) -> dict:
 
 def asset_findings(cli, store, params, asset: dict, today: date, day_end: datetime, hour_stats: dict, day_stats: dict,
                    now_ref: datetime, zone: str, Z, notes: list[str], skip_raw: bool = False,
-                   write_features: bool = True, occupied: dict | None = None) -> tuple[list, int]:
+                   write_features: bool = True, occupied: dict | None = None,
+                   verdicts: dict | None = None) -> tuple[list, int]:
     """One asset's day rules (rules.power_rules) over the day `today` ending at `day_end` — the night's reading, and the
     5-minute recheck's of an open finding judged on a finished day (owner, 2026-10-20: one reading of each rule).
     `hour_stats` / `day_stats`: the statistics read for its power / energy entities; `notes` gets what a cut read says.
     `occupied`: the villa's state per day (vesta_shared.occupancy.days; None: not known — compared as before).
+    `verdicts`: gets its run-hours verdict (vesta_shared.run_hours.entry) under its slug, when it was judged.
     Returns (its findings, the features written — none when `write_features` is off)."""
     findings: list = []
     features_written = 0
     p_eid = asset["entities"].get("power")
     e_eid = asset["entities"].get("energy")
-    if not p_eid and not e_eid:
-        return findings, 0
-    # physics is for motors. Lighting circuits and meters are read by roi-energy, never chased here.
-    if asset.get("kind", "appliance") in ("lighting", "meter"):
+
+    def judged(v: run_hours.Verdict) -> None:
+        if verdicts is not None:
+            verdicts[asset.get("slug") or asset["name"]] = run_hours.entry(asset, v)
+        if (said := v.note(asset["name"])):
+            notes.append(said)
+    # physics is for motors. Lighting circuits and meters are read by roi-energy, never chased here (run_hours.NOT_JUDGED).
+    if (v := run_hours.verdict(asset, None)).code in ("no_reading", "kind"):
+        judged(v)
         return findings, 0
     p_series, e_series = {}, {}
     # a motor whose meter measures another part too (a wall switch's fan and light: vesta_shared.daily.shared_meter):
@@ -277,18 +289,25 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
         if today in e_series and write_features:
             store.put_feature(today.isoformat(), e_eid, "energy", "kwh", e_series[today]["kwh"])
             features_written += 1
+    # ⚠️ THE RUN-HOURS CHECK, ONE VERDICT (architecture review 20, cards 2 and 3): judged by vesta_shared.run_hours, the
+    # one the Device links page groups by, and recorded for it; a linked schedule gone from the villa is said, never
+    # silently off
     expected = None
     if asset.get("schedule"):
         sch = params.schedule(asset["schedule"].split(".", 1)[1])
-        if sch:
-            expected = schedule_hours_per_day(sch)
-            if not any(expected.values()):
-                notes.append(f"{asset['name']}: schedule {asset['schedule']} has no time blocks, run-hours check off.")
-                expected = None
-    if expected and (off := schedule_unused(cli, asset["schedule"])):
-        notes.append(f"{asset['name']}: schedule {asset['schedule']} is used only by {', '.join(off)}, switched off: "
-                     "run-hours check off.")
-        expected = None
+        expected = schedule_hours_per_day(sch) if sch else None
+        blocks = bool(expected and any(expected.values())) if sch else None
+        v = run_hours.verdict(asset, sch is not None, blocks, name=(sch or {}).get("name"))
+        if v.on and (off := schedule_unused(cli, asset["schedule"])):
+            v = run_hours.verdict(asset, True, True, off, name=(sch or {}).get("name"))
+        expected = expected if v.on else None
+    else:
+        v = run_hours.verdict(asset, None)
+    judged(v)
+    # a linked normal power gone from the villa: its running threshold falls back on its power alone (daily.running_threshold)
+    if (base := asset.get("baseline_helper")) and not params.has(base.split(".", 1)[1]):
+        notes.append(f"{asset['name']}: its Normal power {base} is no longer in the villa's system, so it is judged on its "
+                     "own power readings.")
     prior = {}
     for eid in (p_eid, e_eid):
         for rid in ("PM-POWER-CHANGE", "PM-ENERGY-CHANGE"):

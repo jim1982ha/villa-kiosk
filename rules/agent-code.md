@@ -48,12 +48,18 @@ prompt text before blaming a skill.
 
 ## Never in the critical path
 
-A critical alert never depends on the Agent: the villa's system formats and sends its own, with a plain-text fallback.
-The Agent listens, translates and adds; notifications are never blocked by it, and when a translation is not possible
-the original stays.
+A critical alert never depends on the Agent, nor on the Kiosk app: the villa's system formats and sends its own to
+Telegram, with a plain-text fallback, and the Kiosk app hears it from the villa directly for the tablet. Who gets it
+is the villa's own (its two lists and its "VESTA chats by priority" sensor): an empty or broken list sends to more
+chats, never to none. The Agent listens, translates and adds; notifications are never blocked by it, and when a
+translation is not possible the original stays.
 
 **Why:** the owner's design (2026-09-30): the villa's system stays the only receiver of the villa's bot; the Agent reads
-its events and only sends.
+its events and only sends. Owner, 2026-11-04: "make sure all the critical alerts are received on Telegram and VESTA
+Kiosk UI, with or without a running/configured agent".
+
+**How to apply:** for every change on an alert's path, say what still reaches Telegram and the tablet with the Agent
+stopped, with the Kiosk app stopped, and with a list empty; a sender names no chat of its own, it reads the sensor.
 
 ## Format changes need migrations
 

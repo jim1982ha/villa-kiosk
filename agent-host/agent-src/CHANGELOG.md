@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.431 (4 November 2026)
+
+- Architecture review 20: the alert desk takes the siren's duration from the engine (VESTA_SIREN_MINUTES, its last good
+  rules), never policy.yaml itself; Roster.member gives a group's language to everyone writing there; one run-hours
+  verdict (vesta_shared.run_hours) for the night check and Knowledge › Device links, a linked helper gone said on both;
+  knowledge_pack.kind_and_why (kind_from_parts deleted); one saved sentence per Knowledge save; the pack's unread
+  `chats` table removed (old packs still read).
+- Costs: a step of a tool with no line of its own says its settings in words, a template by what it reads.
+- The villa package's "VESTA chats by priority" sensor (chats per priority, and `follow`: what Follow means, from the
+  alert desk's routes and unrouted), written by message_format.package_chats; FOLLOW_PRIORITY is the line each VESTA
+  blueprint resolves its priority with.
+
 ## 0.6.430 (4 November 2026)
 
 - Knowledge › Device links: read first, changed on ask (one line per device, Set / Change / Done), the run-hours check

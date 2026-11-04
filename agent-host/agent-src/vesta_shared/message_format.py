@@ -588,5 +588,85 @@ def write_jinja(path: str = JINJA_FILE) -> bool:
     return new != src
 
 
+PACKAGE_FILE = os.path.join(os.path.dirname(__file__), "..", "homeassistant", "packages", "vesta_message.yaml")
+PACKAGE_BEGIN = "        # CHATS BY PRIORITY: written by vesta_shared.message_format.package_chats — python -m vesta_shared.message_format"
+PACKAGE_END = "        # END CHATS BY PRIORITY"
+#: The villa's sensor of the chats each priority reaches (package_chats): every VESTA rule sends to its attribute for
+#: the rule's priority, never to a table of its own
+CHATS_SENSOR = "sensor.vesta_chats_by_priority"
+
+
+def follow_table(rules: dict) -> dict:
+    """What "Follow the VESTA Agent skill" means for a VESTA rule, by the alert desk's `rules` (its rules.yaml): the
+    priority of each kind of rule (its blueprint's route), else by the rule's name (`unrouted`: critical_…, other) —
+    desk.route_for's answer for an event naming its blueprint, as data the villa reads (package_chats)."""
+    sev = (rules.get("defaults") or {}).get("severity")
+    kinds = {str(r["blueprint"]): str(r.get("severity") or sev) for r in rules.get("routes") or [] if r.get("blueprint")}
+    by_name = rules.get("unrouted") or {}
+    return {"blueprints": kinds, "critical_": str(by_name.get("critical_") or sev), "other": str(by_name.get("other") or sev)}
+
+
+#: How a VESTA blueprint turns its "VESTA priority" input into the priority it sends with: its own P1–P4, else
+#: ("Follow the VESTA Agent skill") the villa's copy of the alert desk's table (package_chats `follow`), else P1 —
+#: the sensor missing reaches everyone, never no one. `{blueprint}`: the blueprint's file name. Each blueprint holds
+#: this line (a blueprint has no include); tests/test_ha_message_layout.py drives it against desk.route_for.
+FOLLOW_PRIORITY = ("{%- set p = (vesta_priority | default('', true) | string | upper) -%}"
+                   "{%- set f = state_attr('" + "sensor.vesta_chats_by_priority" + "', 'follow') -%}"
+                   "{%- set f = f if f is mapping else {} -%}"
+                   "{{ p if p in ['P1', 'P2', 'P3', 'P4'] else ((f.get('blueprints') or {}).get('{blueprint}')"
+                   " or f.get('critical_' if this.entity_id.startswith('automation.critical_') else 'other')"
+                   " or 'P1') }}")
+
+
+def package_chats() -> str:
+    """The attributes of the villa's "VESTA chats by priority" sensor: for each priority, the notify entities of the
+    lists of the roles it reaches (the alert desk's people_roles; each role's list is the agreement's helper), once
+    each and only those the villa has; and `follow`, what "Follow the VESTA Agent skill" means (follow_table).
+
+    ⚠️ THE VILLA KNOWS, WITH OR WITHOUT THE AGENT (owner, 2026-11-04: every critical alert reaches Telegram and the
+    tablet "with or without a running/configured agent"; "Follow VESTA Agent skill" kept, the villa holding its copy):
+    8 rules kept their own copy of "P1 the owner and the facility manager, P2 the facility manager" and 4 a second
+    field for a notice's people. They read this sensor now; the tables stay the alert desk's, as the template's "To:"
+    words are (jinja_words), written here by `python -m vesta_shared.message_format`."""
+    import yaml
+    from . import villa_recipients
+    with open(ALERT_DESK_RULES, encoding="utf-8") as f:
+        rules = yaml.safe_load(f) or {}
+    roles = rules.get("people_roles") or {}
+    lines = [PACKAGE_BEGIN]
+    listed = [r for r in roles if r in villa_recipients.HELPERS]
+    for p in ("P1", "P2", "P3", "P4"):
+        mine = [villa_recipients.HELPERS[r] for r in listed if p in (roles.get(r) or [])]
+        # a priority that reaches a list reads its lists, and with nobody in them every Telegram chat of the villa;
+        # one that reaches none (P3, P4: the tablet only) sends to no chat
+        lines.append(f"          {p}: >-")
+        if not mine:
+            lines.append("            {{ [] }}")
+            continue
+        lines.append("            {%- set ns = namespace(t=[]) -%}{%- for h in " + json.dumps(mine) + " -%}"
+                     "{%- set ns.t = ns.t + ((states(h) | default('', true) | string).split(',') | map('trim')"
+                     " | map('lower') | select('match', '^notify[.]') | list) -%}{%- endfor -%}"
+                     "{%- set t = ns.t | select('in', states.notify | map(attribute='entity_id') | list) | unique"
+                     " | list -%}"
+                     "{{ t if t else (integration_entities('telegram_bot') | select('match', '^notify[.]') | list) }}")
+    lines.append("          follow: >-")
+    lines.append("            {{ " + json.dumps(follow_table(rules), sort_keys=True) + " }}")
+    lines.append(PACKAGE_END)
+    return "\n".join(lines)
+
+
+def write_package(path: str = PACKAGE_FILE) -> bool:
+    """The package's chats-by-priority block rewritten from `package_chats`; True when it changed."""
+    with open(path, encoding="utf-8") as f:
+        src = f.read()
+    a, b = src.index(PACKAGE_BEGIN), src.index(PACKAGE_END) + len(PACKAGE_END)
+    new = src[:a] + package_chats() + src[b:]
+    if new != src:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new)
+    return new != src
+
+
 if __name__ == "__main__":
     print("vesta_message.jinja:", "words rewritten" if write_jinja() else "already up to date")
+    print("vesta_message.yaml:", "chats by priority rewritten" if write_package() else "already up to date")

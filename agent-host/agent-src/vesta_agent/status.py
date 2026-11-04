@@ -6,6 +6,7 @@ and the UI's overview: one reading of the records, two places to show it.
 from __future__ import annotations
 
 import json
+import re
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -332,7 +333,8 @@ def step_summary(tool: str, args: dict, name_of=None) -> str:
     elif tool == "send_message":
         said = " · ".join(p for p in (f"to {a.get('to', '?')}", str(a.get("attachment") or "")) if p)
     else:
-        said = " ".join(f"{k}={_short(v)}" for k, v in a.items())
+        # nothing to name ("ha_list_floors_areas" with no setting): what the tool is, in words
+        said = _plain_step(a, name_of) or tool.removeprefix("ha_").replace("_", " ")
     most = summary_chars()
     return said if len(said) <= most else said[:most - 1].rstrip() + "…"
 
@@ -406,6 +408,51 @@ def _period(a: dict) -> str | None:
     if a.get("period"):
         out.append(f"by {a['period']}")
     return ", ".join(out) or None
+
+
+_ENTITY = re.compile(r"\b([a-z_]+\.[a-z0-9_]+)\b")
+_DOMAIN_READ = re.compile(r"\bstates\.([a-z_]+)\b(?!\.)")
+
+
+def _is_template(v) -> bool:
+    return isinstance(v, str) and ("{{" in v or "{%" in v)
+
+
+def _template_said(text: str, name_of=None) -> str:
+    """A template the AI had the villa's system work out, in words: what it reads (the devices it names, by name; the
+    kinds of device it goes through, "binary sensors"), never its code — the code stays in the step's tooltip."""
+    whole = sorted(set(_DOMAIN_READ.findall(text)) & _DOMAINS)
+    ids = [i for i in dict.fromkeys(_ENTITY.findall(text)) if i.split(".", 1)[0] in _DOMAINS - set(whole)]
+    read = [f"every {d.replace('_', ' ')}" for d in whole] + ([_named(ids, name_of)] if ids else [])
+    return "worked out from " + (", ".join(read) if read else "the villa's states")
+
+
+#: the villa system's kinds of device a template may name one of ("light.kitchen"), so "states.x" or a filter is not one
+_DOMAINS = {"alarm_control_panel", "automation", "binary_sensor", "button", "calendar", "camera", "climate", "counter",
+            "cover", "device_tracker", "event", "fan", "humidifier", "image", "input_boolean", "input_button",
+            "input_datetime", "input_number", "input_select", "input_text", "lawn_mower", "light", "lock",
+            "media_player", "notify", "number", "person", "remote", "scene", "schedule", "script", "select", "sensor",
+            "siren", "sun", "switch", "text", "timer", "todo", "update", "vacuum", "valve", "water_heater", "weather",
+            "zone"}
+
+
+def _plain_step(a: dict, name_of=None) -> str:
+    """Any other tool's call in a line a person reads: a template said by what it reads (_template_said), the devices
+    it names by name, then its other settings in words ("limit 5").
+
+    ⚠️ NEVER THE CODE (owner, 2026-11-04, a reply at the tablet: "template={% for s in states.binary_sensor | sele…" —
+    "is it expected to see this?"): every tool without a line of its own showed its arguments as key=value, a
+    template's code included. The arguments as they were stay the line's tooltip."""
+    parts, ids = [], []
+    for k, v in a.items():
+        if _is_template(v):
+            parts.append(_template_said(v, name_of))
+        elif isinstance(v, (str, list)) and _ids(v) and all(_ENTITY.fullmatch(i) and i.split(".", 1)[0] in _DOMAINS
+                                                           for i in _ids(v)):
+            ids += _ids(v)
+        elif v not in (None, "", [], {}):
+            parts.append(f"{k.replace('_', ' ')} {_short(v)}")
+    return " · ".join(([_named(ids, name_of)] if ids else []) + parts)
 
 
 def _plural(word: str) -> str:

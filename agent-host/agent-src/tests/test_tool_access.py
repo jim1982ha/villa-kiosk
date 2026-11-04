@@ -533,3 +533,20 @@ def test_a_scripts_arguments_sent_as_text_run_as_the_list_they_are():
     from vesta_agent import tools
     src = inspect.getsource(tools)
     assert 'status.script_args(args.get("args")' in src and 'list(args.get("args")' not in src
+
+
+# ⚠️ A STEP'S LINE NEVER SHOWS CODE (owner, 2026-11-04, the Costs tab: "template={% for s in states.binary_sensor |
+# sele…" — "is it expected to see this?"): every tool without a line of its own showed its arguments as key=value
+def test_every_tools_step_line_says_what_it_read_never_its_code():
+    from vesta_agent.status import step_summary
+    names = {"light.example_kitchen": "Kitchen light"}.get
+    tpl = "{% for s in states.binary_sensor | selectattr('attributes.device_class', 'eq', 'motion') %}{{ s.name }}{% endfor %}"
+    assert step_summary("ha_eval_template", {"template": tpl}) == "worked out from every binary sensor"
+    said = step_summary("ha_eval_template", {"template": "{{ is_state('light.example_kitchen', 'on') }}"}, names)
+    assert said == "worked out from Kitchen light"
+    assert step_summary("ha_get_automation_traces", {"automation_id": "automation.example_gate", "limit": 5}) == \
+        "automation.example_gate · limit 5"
+    assert step_summary("ha_list_floors_areas", {}) == "list floors areas"
+    for tool in ("ha_eval_template", "ha_get_entity", "ha_config_get_script", "anything_new"):
+        line = step_summary(tool, {"template": tpl, "entity_id": "light.example_kitchen"}, names)
+        assert "{%" not in line and "{{" not in line and "=" not in line, (tool, line)

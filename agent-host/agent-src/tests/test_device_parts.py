@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from helpers import STARTER_SKILLS
 from vesta_shared import daily
-from vesta_shared.knowledge_pack import build_pack, guessed_kind, kind_from_parts
+from vesta_shared.knowledge_pack import build_pack, guessed_kind, kind_and_why
 from vesta_shared.past import History
 
 
@@ -42,14 +42,23 @@ def _pack():
 def test_a_devices_parts_decide_its_kind_before_its_name():
     a = _pack().assets
     assert a[SWITCH]["parts"] == {"light": ["light.example_bath_switch_top"], "motor": ["fan.example_bath_switch_bottom"]}
-    assert a[SWITCH]["kind"] == "motor" and kind_from_parts(a[SWITCH])
-    assert a["example_strip"]["kind"] == "lighting" and kind_from_parts(a["example_strip"])
+    assert a[SWITCH]["kind"] == "motor" and kind_and_why(a[SWITCH]) == ("motor", "system")
+    assert a["example_strip"]["kind"] == "lighting" and kind_and_why(a["example_strip"]) == ("lighting", "system")
     # two readings on the module: no parts read, its kind from its name as before
-    assert a["example_module_ch1"]["parts"] == {} and not kind_from_parts(a["example_module_ch1"])
+    assert a["example_module_ch1"]["parts"] == {} and kind_and_why(a["example_module_ch1"])[1] == "name"
 
 
 def test_a_vmc_is_a_fan_by_its_name_too():
     assert guessed_kind({"slug": "example_light_and_vmc", "name": "Example light and VMC"}) == "motor"
+    assert kind_and_why({"slug": "example_light_and_vmc", "name": "Example light and VMC"}) == ("motor", "name")
+
+
+def test_a_linked_helper_makes_a_motor_and_says_so_before_its_parts_and_its_name():
+    # architecture review 20, card 4: a strip of lights with a linked schedule is a motor because of the link, and the
+    # reason says it (Device kinds named it "Found by name"); a meter's name still speaks first
+    strip = {**_pack().assets["example_strip"], "schedule": "schedule.example_plan"}
+    assert kind_and_why(strip) == ("motor", "link") and guessed_kind(strip) == "motor"
+    assert kind_and_why({"slug": "example_main_power", "name": "Main power", "counter": "counter.example"}) == ("meter", "name")
 
 
 def test_only_a_motor_measured_with_a_light_is_a_shared_meter():

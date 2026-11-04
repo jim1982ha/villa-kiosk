@@ -40,7 +40,6 @@ export async function knowledge() {
 // for a save bar (the agent rules are the Rules tab's). The kinds' names and words are the agent's.
 let KIND_SEARCH = "";
 export function kindsCard(data, probs) {
-  const names = Object.fromEntries(data.kinds.map(([k, name]) => [k, name]));
   // ⚠️ WHAT THE SECTION IS FOR, IN FULL (owner, 2026-10-30: "I still don't understand what the Device kinds section is
   // used for"), THEN READABLE (owner, 2026-10-30: "barely understandable and very poorly formatted" — one block of six
   // run-on paragraphs): which devices are listed and why, what each kind changes as a list, where the kind comes from,
@@ -56,19 +55,27 @@ export function kindsCard(data, probs) {
     ...part("Why it matters",
       h("p", {}, "A pump that runs longer, starts more often or draws a different power than usual is often the first sign of wear, a leak or a blockage. A light left on or a meter's total is not a fault.")),
     ...part("Where the kind comes from", items([
+      ["From its link:", "a schedule, a normal power or a run hours count linked to it on Device links makes it a motor."],
       ["From the villa's system:", "what the device is made of there (a light, a fan, a climate unit)."],
-      ["Found by name:", "from its name, when the villa's system does not say."],
+      ["Found by name:", "from its name, when neither says."],
       ["Set by you:", "your choice, which always wins."]])),
     ...part("To correct a kind",
       h("p", {}, "Pick the right one in its list. It applies from the next night check and report. \"Use the one found\" undoes it.")),
     ...part("\"light + fan\"",
       h("p", {}, "A wall switch driving a light and a fan on one power reading: VESTA checks the fan by its own on and off, reads the power only while the light is off, and counts the light in the energy figures only.")));
   const list = h("div");
+  // ⚠️ WHERE A GUESS CAME FROM, THE AGENT'S ANSWER (architecture review 20, card 4): ui/kinds.py's source, its link named
+  // (knowledge_pack.kind_and_why); a device a linked schedule made a motor read "Found by name"
+  const from = (r) => (r.source === "system" ? "From the villa's system" : r.source === "link" ? `From its link: ${r.link} linked on Device links` : "Found by name");
+  const fromShort = (r) => (r.source === "system" ? "the villa's system" : r.source === "link" ? `its ${r.link} link` : "found by name");
+  // ⚠️ THE SENTENCE RECORDED, NEVER A COPY (architecture review 20, card 6): the toast is the line Page changes keeps
+  // (the answer's `what`, ui/kinds.saved)
   const save = async (r, kind) => {
     try {
-      Object.assign(data, await api("PUT", "api/kinds", { slug: r.slug, kind }));
+      const res = await api("PUT", "api/kinds", { slug: r.slug, kind });
+      Object.assign(data, res);
       fill(probs);
-      toast(kind ? `Saved: ${r.name} is ${names[kind]}` : (r.guess ? `Saved: ${r.name} back to the one found, ${names[r.guess]}` : `Removed: ${r.name}`));
+      toast(`Saved: ${res.what}`);
     } catch (e) {
       fill(probs, problemsBox(reasons(e), `${r.name} not saved:`));
       probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
@@ -78,11 +85,10 @@ export function kindsCard(data, probs) {
   const row = (r) => [
     [h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null,
       r.parts ? h("span", { class: "muted" }, ` · ${r.parts}`) : null],
-    dropdown(data.kinds.map(([k, name]) => [k, k === r.guess ? `${name} (${r.source === "system" ? "the villa's system" : "found by name"})` : name]), r.kind, (v) => save(r, v), `${r.name}, kind`),
+    dropdown(data.kinds.map(([k, name]) => [k, k === r.guess ? `${name} (${fromShort(r)})` : name]), r.kind, (v) => save(r, v), `${r.name}, kind`),
     h("span", { class: "chips" },
       r.gone ? h("span", { class: "chip warn" }, "No longer found")
-        : h("span", { class: r.chosen ? "chip" : "chip gray" },
-          r.chosen ? "Set by you" : r.source === "system" ? "From the villa's system" : "Found by name"),
+        : h("span", { class: r.chosen ? "chip" : "chip gray" }, r.chosen ? "Set by you" : from(r)),
       r.chosen ? h("button", { type: "button", class: "btn ghost", onclick: () => save(r, null) }, r.gone ? "Remove" : "Use the one found") : null),
   ];
   const draw = () => {
@@ -126,11 +132,11 @@ export function linksCard(data, probs) {
     ...part("Where a link comes from", items([
       ["Found by name:", "a helper of the villa's system whose name follows the agent's rule (the device's name, then what it is)."],
       ["Set by you:", "your choice, which always wins, None included."],
-      ["—:", "nothing found or set. That link does nothing."]])),
+      ["—:", "nothing found or set. That link does nothing."],
+      ["No longer in the villa's system:", "the helper was deleted or renamed there. That link does nothing until you pick another, or None."]])),
     ...part("To change a link",
       h("p", {}, "Press Set or Change on its device, then pick the helper in its list, or None to switch the link off. It applies from the next night check. \"Use the one found\" undoes your choice.")));
   const list = h("div");
-  const nameOf = (role, id) => ((data.options[role] || []).find(([i]) => i === id) || [id, id])[1];
   const rowOf = (slug) => data.rows.find((x) => x.slug === slug);
   // a row's cells are boxes filled in place: Set, Change and a save redraw that one device, never the page it is on
   const boxes = new Map();
@@ -144,12 +150,13 @@ export function linksCard(data, probs) {
         if (editing) draw(); else { if (was && rowOf(was)) show(rowOf(was)); show(r); } } },
       editing ? "Done" : r.links.schedule?.value || r.gone ? "Change" : "Set"));
   };
+  // the toast is the line Page changes keeps (ui/kinds.saved), as on Device kinds
   const save = async (r, role, value) => {
-    const link = roles.find((x) => x.k === role).name;
     try {
-      Object.assign(data, await api("PUT", "api/links", { slug: r.slug, role, value }));
+      const res = await api("PUT", "api/links", { slug: r.slug, role, value });
+      Object.assign(data, res);
       fill(probs);
-      toast(value === null ? `Saved: ${r.name}, ${link} back to the one found` : `Saved: ${r.name}, ${link} ${value ? nameOf(role, value) : "None"}`);
+      toast(`Saved: ${res.what}`);
     } catch (e) {
       fill(probs, problemsBox(reasons(e), `${r.name} not saved:`));
       probs.scrollIntoView?.({ behavior: "smooth", block: "center" });
@@ -158,16 +165,20 @@ export function linksCard(data, probs) {
     if (now) show(now); else { LINK_EDITING = null; draw(); }       // a gone device's last link removed: its row goes
   };
   const source = (l) => (l.source === "chosen" ? "Set by you" : "Found by name");
+  // ⚠️ A HELPER GONE FROM THE VILLA IS SAID (architecture review 20, card 3): a schedule deleted or renamed there read as
+  // its id, "Set by you", and was offered as an ordinary choice; its line says so now (ui/links.py's `gone`)
+  const GONE = "No longer in the villa's system";
   // what VESTA uses: the helper's name and where it comes from, or a dash
   const readCell = (r, role) => {
     const l = r.links[role.k] || { value: null, source: "none" };
     if (!l.value) return h("span", { class: "muted" }, l.source === "chosen" ? "None, set by you" : "—");
-    return h("span", { class: "link-read" }, h("span", {}, l.name || l.value), h("span", { class: "muted small" }, source(l)));
+    return h("span", { class: "link-read" }, h("span", {}, l.name || l.value),
+      l.gone ? h("span", { class: "chip warn" }, GONE) : h("span", { class: "muted small" }, source(l)));
   };
   const editCell = (r, role) => {
     const l = r.links[role.k] || { value: null, source: "none" };
     const opts = [["", "None"], ...(data.options[role.k] || []).map(([i, n]) => [i, i === l.guess ? `${n} (found by name)` : n])];
-    if (l.value && !opts.some(([i]) => i === l.value)) opts.push([l.value, l.name || l.value]);
+    if (l.value && !opts.some(([i]) => i === l.value)) opts.push([l.value, `${l.name || l.value} (${GONE.toLowerCase()})`]);
     return h("div", { class: "link-cell" },
       r.gone ? readCell(r, role) : dropdown(opts, l.value || "", (v) => save(r, role.k, v), `${r.name}, ${role.name}`),
       l.source === "chosen" ? h("span", { class: "chips" }, h("span", { class: "chip" }, "Set by you"),
@@ -177,7 +188,8 @@ export function linksCard(data, probs) {
     const b = { links: roles.map(() => h("div")), button: h("div", { class: "link-action" }) };
     boxes.set(r.slug, b);
     show(r);
-    return [[h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null], ...b.links, b.button];
+    return [[h("b", {}, r.name), r.area ? h("span", { class: "muted" }, ` ${r.area}`) : null,
+      !r.gone && !r.run_hours.on ? h("div", { class: "muted small" }, r.run_hours.why) : null], ...b.links, b.button];
   };
   const head = ["Device", ...roles.map((r) => withInfo(r.name, r.words)), ""];
   const group = (title, rows, open) => rows.length
@@ -189,11 +201,14 @@ export function linksCard(data, probs) {
     boxes.clear();
     const q = LINK_SEARCH.trim().toLowerCase();
     const shown = data.rows.filter((r) => !q || `${r.name} ${r.area} ${r.slug}`.toLowerCase().includes(q));
-    const off = shown.filter((r) => !r.gone && !r.links.schedule?.value);
+    // ⚠️ GROUPED BY THE NIGHT CHECK'S OWN VERDICT (architecture review 20, card 2): a linked schedule filed a device under
+    // "Schedule linked" while the night check had its run-hours check off; ui/links.py serves its run_hours
+    // (vesta_shared.run_hours), the why under each line that is off
+    const off = shown.filter((r) => !r.gone && !r.run_hours.on);
     fill(list, data.rows.length
       ? (shown.length
           ? [group("Run-hours check off", off, true),
-             group("Schedule linked", shown.filter((r) => !r.gone && r.links.schedule?.value), !off.length),
+             group("Schedule linked", shown.filter((r) => !r.gone && r.run_hours.on), !off.length),
              group("No longer found", shown.filter((r) => r.gone), true)]
           : h("p", { class: "muted" }, "No device matches the search."))
       : h("p", { class: "muted" }, data.built ? "No device with a power or energy reading." : "The agent has not read the villa's devices yet."));

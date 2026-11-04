@@ -5,8 +5,8 @@
 #
 # Who gets the villa's messages, by role (owner, 2026-11-03: one place for every VESTA blueprint and the VESTA Agent):
 # each a list of the villa's notify entities, apart by ",". Set from the VESTA Kiosk (Settings › Messages › Who gets the
-# messages); read by every VESTA blueprint (P1: both lists, P2: the facility manager's; a notice: its "Who gets the
-# message") and by the VESTA Agent (vesta_shared.villa_recipients). Helpers live in this package file, never made from
+# messages); read by the VESTA Agent (vesta_shared.villa_recipients) and, through "VESTA chats by priority" below, by
+# every VESTA blueprint (owner, 2026-11-04: P1 the owner's list, P2 the facility manager's). Helpers live in this package file, never made from
 # the screens (owner, 2026-10-18). No `initial:`, so the value set is kept across restarts.
 input_text:
   vesta_owner_targets:
@@ -38,3 +38,26 @@ template:
           {%- set expected = '<b>T &lt;1&gt;</b>' ~ '\n' ~ 'To: Owner' ~ '\n' ~ '<blockquote>A &amp; B</blockquote>'
                              ~ '\n' ~ 'Status:' ~ '\n' ~ '<blockquote><i>S</i></blockquote>' -%}
           {{ 'ok' if out == expected else ('missing' if out | trim == '' else 'changed') }}
+  # The chats each VESTA priority reaches (P1 both lists, P2 the facility manager's, P3 and P4 no chat: the tablet
+  # only; a P1 or P2 with nobody in its lists goes to every Telegram chat of the villa), and `follow`: the priority a
+  # rule set to "Follow the VESTA Agent skill" takes. Both written from the VESTA Agent's alert desk (people_roles,
+  # routes, unrouted) and read by every VESTA blueprint, so the villa sends to the right chats with or without the
+  # Agent (owner, 2026-11-04). This sensor missing, each blueprint sends as a P1, to every Telegram chat.
+  - sensor:
+      - name: VESTA chats by priority
+        unique_id: vesta_chats_by_priority
+        icon: mdi:account-arrow-right
+        state: "ok"
+        attributes:
+        # CHATS BY PRIORITY: written by vesta_shared.message_format.package_chats — python -m vesta_shared.message_format
+          P1: >-
+            {%- set ns = namespace(t=[]) -%}{%- for h in ["input_text.vesta_owner_targets", "input_text.vesta_fm_targets"] -%}{%- set ns.t = ns.t + ((states(h) | default('', true) | string).split(',') | map('trim') | map('lower') | select('match', '^notify[.]') | list) -%}{%- endfor -%}{%- set t = ns.t | select('in', states.notify | map(attribute='entity_id') | list) | unique | list -%}{{ t if t else (integration_entities('telegram_bot') | select('match', '^notify[.]') | list) }}
+          P2: >-
+            {%- set ns = namespace(t=[]) -%}{%- for h in ["input_text.vesta_fm_targets"] -%}{%- set ns.t = ns.t + ((states(h) | default('', true) | string).split(',') | map('trim') | map('lower') | select('match', '^notify[.]') | list) -%}{%- endfor -%}{%- set t = ns.t | select('in', states.notify | map(attribute='entity_id') | list) | unique | list -%}{{ t if t else (integration_entities('telegram_bot') | select('match', '^notify[.]') | list) }}
+          P3: >-
+            {{ [] }}
+          P4: >-
+            {{ [] }}
+          follow: >-
+            {{ {"blueprints": {"critical_binary_trip": "P1", "critical_condition": "P2", "critical_presence_guard": "P1", "critical_schedule": "P2", "critical_system": "P2", "critical_watchdog": "P2"}, "critical_": "P1", "other": "P2"} }}
+        # END CHATS BY PRIORITY

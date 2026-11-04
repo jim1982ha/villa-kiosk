@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Generate the knowledge pack for a villa.
 
-  python -m vesta_shared.build_pack --out pack.json [--fixture-dir DIR] [--bom bom.json] [--chats chats.json]
+  python -m vesta_shared.build_pack --out pack.json [--fixture-dir DIR] [--bom bom.json]
 
 Runs nightly (the maintenance batch calls it) and on demand. It never edits
-anything in Home Assistant. `--chats`: the agent's table of the chats of the VESTA Kiosk's lists of who gets the
-messages, each with its role, name and language (app.Vesta._build_pack writes it), kept as the pack's `chats`.
+anything in Home Assistant. ⚠️ NO TABLE OF CHATS (architecture review 20, card 7): `--chats` wrote the VESTA Kiosk's
+lists' chats into the pack, and nothing read them: who is who is the roster's (vesta_agent.roster), read from the lists.
 """
 
 from __future__ import annotations
@@ -29,7 +29,6 @@ def main(argv=None):
     ap.add_argument("--fixture-dir")
     ap.add_argument("--zone")
     ap.add_argument("--bom", help="JSON list of BOM rows (from vesta-bom-builder export)")
-    ap.add_argument("--chats", help="JSON {\"chats\": [{chat, role, name, language}]}: the VESTA Kiosk's lists' chats")
     ap.add_argument("--channels", help="JSON {owner: chat_id, fm: chat_id}")
     ap.add_argument("--store", help="SQLite path, enables the onboarding diff")
     ap.add_argument("--villa")
@@ -51,12 +50,8 @@ def main(argv=None):
         h["state"] = helper_states.get(h.get("entity_id"))
     states = cli.states()
     bom = json.load(open(args.bom)) if args.bom else None
-    chats = None
-    if args.chats:
-        with open(args.chats, encoding="utf-8") as f:
-            chats = json.load(f).get("chats", [])
     channels = json.loads(args.channels) if args.channels else None
-    pack = build_pack(registry, helpers, states, bom, chats, channels,
+    pack = build_pack(registry, helpers, states, bom, channels,
                       generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"), villa=args.villa,
                       critical=_critical(cli, args.out), detailed_days=_detailed_days(cli))
     # ⚠️ WRITTEN BESIDE, THEN SWAPPED IN (architecture review, 2026-10-21): since 0.12.309 a pack is rebuilt in the day,

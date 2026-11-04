@@ -1080,10 +1080,17 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
 
 
 def siren_minutes() -> int:
-    """How long the siren sounds: policy.yaml's siren_auto_off_min, the one place it is set
-    (owner, 2026-10-01). The engine reads the same value when it switches the siren off."""
+    """How long the siren sounds: policy.yaml's siren_auto_off_min, the one place it is set (owner, 2026-10-01), as the
+    engine hands it (VESTA_SIREN_MINUTES: its last good rules, the number it switches the siren off by).
+
+    ⚠️ NEVER READ HERE (architecture review 20, card 1): this read policy.yaml itself, and a typing slip there raised
+    after the intrusion was stored, so no card and no Approve / Refuse reached anyone, and the next signal inside the
+    cooldown was only counted. Not handed (an engine older than the desk): the rules' own default."""
     from vesta_agent.policy import Policy
-    return Policy.load(os.environ.get("VESTA_POLICY", "")).siren_auto_off_min
+    try:
+        return int(os.environ["VESTA_SIREN_MINUTES"])
+    except (KeyError, ValueError):
+        return Policy({}).siren_auto_off_min
 
 
 def signal_name(inc: dict) -> str:

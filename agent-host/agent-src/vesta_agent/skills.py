@@ -177,6 +177,10 @@ VILLA_CHOICES = "villa.skill.yaml"
 KIOSK_JOBS = {"nightly_check"}
 #: The environment variable a skill's scripts read their own Kiosk-named jobs' times from (kiosk_jobs, as json).
 KIOSK_JOBS_ENV = "VESTA_KIOSK_JOBS"
+#: How long the siren sounds (policy.yaml's siren_auto_off_min), as the engine reads it: its LAST GOOD rules.
+#: ⚠️ THE ENGINE'S NUMBER, NEVER A SECOND READER (architecture review 20, card 1): the alert desk read policy.yaml itself
+#: and stopped on a typing slip the engine survives, after storing the intrusion: no card, no Approve / Refuse.
+SIREN_MINUTES_ENV = "VESTA_SIREN_MINUTES"
 
 
 def kiosk_jobs(skill: "Skill") -> dict[str, str]:
@@ -1055,6 +1059,7 @@ def script_env(settings, skill: "Skill | None" = None) -> dict:
         "VESTA_WEB_SEARCHES": getattr(settings, "web_searches", "") or "",
         "VESTA_WEB_SEARCH_ON": getattr(settings, "web_search_on", "") or "",
         "VESTA_ASKER": getattr(settings, "asker", "") or "",
+        **({SIREN_MINUTES_ENV: str(settings.policy().siren_auto_off_min)} if hasattr(settings, "policy") else {}),
         **({KIOSK_JOBS_ENV: json.dumps(kiosk_jobs(skill))} if skill is not None else {}),
     }
 

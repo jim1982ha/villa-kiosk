@@ -148,7 +148,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Skill folders are hands-off](agent-code.md#skill-folders-are-hands-off) — edit a skill's files only when the request names that change
 - [Tools follow the asker](agent-code.md#tools-follow-the-asker) — the asker's role decides the tools; a skill never limits them
 - [The engine delivers what must be seen](agent-code.md#the-engine-delivers-what-must-be-seen) — photos and files sent by the engine; unasked actions gated by the engine
-- [Never in the critical path](agent-code.md#never-in-the-critical-path) — alerts never wait on the Agent; plain fallback kept; untranslatable stays original
+- [Never in the critical path](agent-code.md#never-in-the-critical-path) — alerts reach Telegram and the tablet without the Agent or the Kiosk app; plain fallback kept; untranslatable stays original
 - [Format changes need migrations](agent-code.md#format-changes-need-migrations) — migrate what the Agent wrote; rebuild nightly artefacts at start-up
 - [Test the real argument path](agent-code.md#test-the-real-argument-path) — test the caller with real wiring; read the app log the morning after
 - [The Agent's test environment](agent-code.md#the-agents-test-environment) — agent-host/.venv/bin/python; full test ids for mutations

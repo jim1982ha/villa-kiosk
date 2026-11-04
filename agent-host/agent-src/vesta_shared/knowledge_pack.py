@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from typing import Any
 
 from . import asset_links
@@ -81,33 +81,34 @@ def _field(a, name: str):
     return a.get(name) if isinstance(a, dict) else getattr(a, name, None)
 
 
-def guessed_kind(a) -> str:
-    """What the asset is: from its helpers first (a schedule, a runtime counter or a power baseline mark a motor), then
-    what the villa's system says its parts are (parts_of: a fan part a motor, light parts only lighting), then its name.
-    motor: pumps, fans, compressors (physics rules apply). lighting: light circuits (ROI only). meter: the main meter,
-    its phases, template aggregates (ROI only). appliance: anything else."""
+def kind_and_why(a) -> tuple[str, str]:
+    """(what the asset is, where that came from: "name", "link" or "system"): a meter's name first, then its links (a
+    schedule, a runtime counter or a normal power mark a motor: "link"), then what the villa's system says its parts are
+    (parts_of: a fan part a motor, light parts only lighting: "system"), then its name. motor: pumps, fans, compressors
+    (physics rules apply). lighting: light circuits (ROI only). meter: the main meter, its phases, template aggregates
+    (ROI only). appliance: anything else.
+    ⚠️ ONE REASONING, ITS SOURCE WITH IT (architecture review 20, card 4): the source was a second function repeating
+    these rules, and the page said "Found by name" of a device a linked schedule had made a motor."""
     text = f"{_field(a, 'slug')} {_field(a, 'name')}".lower()
     if any(w in text for w in METER_WORDS):
-        return "meter"
+        return "meter", "name"
     if _field(a, "schedule") or _field(a, "counter") or _field(a, "baseline_helper"):
-        return "motor"
+        return "motor", "link"
     parts = _field(a, "parts") or {}
     if parts.get("motor"):
-        return "motor"
+        return "motor", "system"
     if parts.get("light"):
-        return "lighting"
+        return "lighting", "system"
     if any(w in text for w in MOTOR_WORDS):
-        return "motor"
+        return "motor", "name"
     if any(w in text for w in LIGHT_WORDS):
-        return "lighting"
-    return "appliance"
+        return "lighting", "name"
+    return "appliance", "name"
 
 
-def kind_from_parts(a) -> bool:
-    """Whether the guess came from what the villa's system says the device's parts are (not from its name)."""
-    text = f"{_field(a, 'slug')} {_field(a, 'name')}".lower()
-    helpers = _field(a, "schedule") or _field(a, "counter") or _field(a, "baseline_helper")
-    return bool(_field(a, "parts")) and not helpers and not any(w in text for w in METER_WORDS)
+def guessed_kind(a) -> str:
+    """What the asset is, guessed (kind_and_why)."""
+    return kind_and_why(a)[0]
 
 
 def parts_of(entity_ids, devices: dict[str, str], visible: list[dict], power_on_device: dict[str, int]) -> dict:
@@ -226,7 +227,7 @@ class Asset:
 #: at start, so an update measures it at once instead of at the next 01:30 (owner, 2026-10-20). 5: each asset's
 #: guessed links kept beside its links (asset_links, owner 2026-10-30), so a choice of the page can be taken back.
 #: 6: the chats of the VESTA Kiosk's lists are a table of their own (`chats`), never merged into the villa's people by
-#: name (architecture review round 17, lead 6).
+#: name (architecture review round 17, lead 6); the table itself retired, read by nothing (architecture review 20).
 PACK_RULES = 6
 
 
@@ -271,11 +272,6 @@ class KnowledgePack:
     # its drops were a second fault for the same relay, and the plug behind an owner-only siren hid nothing.
     # {entity_id: device_id}; empty in a pack built before (then the rows' own device is all there is).
     entity_devices: dict[str, str] = field(default_factory=dict)
-    # ⚠️ THE CHATS, A TABLE OF THEIR OWN (architecture review round 17, lead 6): each chat of the VESTA Kiosk's lists of who
-    # gets the messages, {"chat", "role", "name", "language"} (build_pack --chats, app.Vesta._build_pack). They were
-    # merged into `people` where a chat's name matched a person's, lower-cased — a guess: "Owner group" is no person, and a
-    # person named as a chat took its role and language. [] in a pack built before.
-    chats: list[dict] = field(default_factory=list)
     # Which of build_pack's rules wrote it (PACK_RULES); 0 in a pack built before the number was kept.
     rules: int = 0
     # ⚠️ ONE LIST OF CRITICAL DEVICES (owner, 2026-10-18 — architecture review, offline devices #2): the entities the
@@ -526,7 +522,11 @@ class KnowledgePack:
         from the agent's config folder `config_dir`, else where a script finds them (ChoiceFile.path)."""
         from .asleep import listed
         with open(path, encoding="utf-8") as f:
-            pack = cls(**json.load(f))
+            doc = json.load(f)
+        # ⚠️ A TABLE RETIRED IS LEFT, NEVER A FAILED READ (architecture review 20, card 7): a pack built before keeps its
+        # `chats` until the night's rebuild, and an unknown field read as no pack at all
+        known = {f.name for f in fields(cls)}
+        pack = cls(**{k: v for k, v in doc.items() if k in known})
         pack.asleep_are(listed(path))
         # ⚠️ THE OWNER'S CHOICES, READ WITH THE PACK (owner, 2026-10-28 and 2026-10-30): a kind or a link chosen on the
         # VESTA Agent page counts from the next run, never only from the next rebuild of the device list
@@ -568,8 +568,7 @@ def _norm_entities(registry: dict, states: dict | None) -> list[dict]:
 
 
 def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
-               bom_rows: list[dict] | None = None, chats: list[dict] | None = None,
-               channels: dict | None = None, generated_at: str = "", villa: str | None = None,
+               bom_rows: list[dict] | None = None, channels: dict | None = None, generated_at: str = "", villa: str | None = None,
                critical=(), detailed_days: float | None = None) -> KnowledgePack:
     """`critical`: the entities the villa's own "critical devices offline" rule watches (vesta_shared.critical).
     `detailed_days`: how many days of every change the villa's system holds, measured (vesta_shared.retention)."""
@@ -684,7 +683,6 @@ def build_pack(registry: dict, helpers: list[dict], states: dict | None = None,
         assets={s: asdict(a) for s, a in assets.items()},
         areas=sorted({v for v in area_names.values() if v} or {r["area"] for f in families.values() for r in f if r["area"]}),
         people=ppl,
-        chats=[{k: c.get(k) for k in ("chat", "role", "name", "language")} for c in chats or [] if isinstance(c, dict)],
         channels=channels or {},
         unknown_area=unknown_area,
         unclassified=unclassified,

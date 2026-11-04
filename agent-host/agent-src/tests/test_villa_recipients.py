@@ -179,29 +179,10 @@ def test_on_a_machine_just_started_both_reads_run_at_the_first_housekeeping(tmp_
     assert faults == [10.0, 310.0] and _chats(v)["fm"] == []
 
 
-def test_the_knowledge_packs_chats_are_the_kiosks_lists_with_each_chats_language(tmp_path, monkeypatch):
-    # the skills read the pack (villa-concierge: who is talking): its chats table is the agent's entries, never a
-    # file of its own (owner, 2026-11-03)
-    import subprocess
-    import vesta_agent.app as app_module
-    v = make_agent(tmp_path, {})
-    villa_recipients.save(v.s.pack_path, {"owner": [{"chat": JM, "name": "Jm private", "entity": "notify.tg_jm"}],
-                                          "fm": [{"chat": OTHER_GROUP, "name": "Managers group", "entity": "notify.tg_other"}]})
-    v.kiosk_answered({"chatLanguages": {"notify.tg_other": "id"}})
-    seen = {}
-
-    def fake_run(cmd, **kw):
-        seen["chats"] = json.load(open(cmd[cmd.index("--chats") + 1]))["chats"]
-        return subprocess.CompletedProcess(cmd, 0, "{}", "")
-    monkeypatch.setattr(app_module.subprocess, "run", fake_run)
-    v._build_pack()
-    assert seen["chats"] == [{"chat": JM, "role": "owner", "name": "Jm private", "language": "en"},
-                             {"chat": OTHER_GROUP, "role": "fm", "name": "Managers group", "language": "id"}]
-
-
-def test_the_pack_never_takes_a_chat_for_a_person_by_its_name(tmp_path):
-    # architecture review round 17, lead 6: a chat whose name matched a person's (lower-cased) was merged into them —
-    # the person took the chat's role and language, and a group was listed among the villa's people
+def test_the_pack_lists_only_the_villas_people_and_a_pack_with_the_retired_chats_still_reads(tmp_path):
+    # architecture review round 17, lead 6: a chat whose name matched a person's (lower-cased) was merged into them;
+    # architecture review 20, card 7: the pack's own table of chats, read by nothing, is gone, and a pack built before
+    # (its `chats` still in it until the night's rebuild) reads as it did, never as no pack
     from vesta_shared.build_pack import main as build
     from vesta_shared.knowledge_pack import KnowledgePack
     fixture = tmp_path / "villa"
@@ -210,16 +191,14 @@ def test_the_pack_never_takes_a_chat_for_a_person_by_its_name(tmp_path):
     (fixture / "states.json").write_text(json.dumps({"states": {}}))
     (fixture / "helpers.json").write_text(json.dumps({"helpers": [{"entity_id": "person.example_jm", "name": "Jm Private",
                                                                    "helper_type": "person"}], "states": {}}))
-    chats = tmp_path / "chats.json"
-    chats.write_text(json.dumps({"chats": [{"chat": JM, "role": "owner", "name": "jm private", "language": "fr"},
-                                           {"chat": OTHER_GROUP, "role": "fm", "name": "Managers group",
-                                            "language": "id"}]}))
     out = tmp_path / "pack.json"
-    build(["--out", str(out), "--fixture-dir", str(fixture), "--chats", str(chats)])
+    build(["--out", str(out), "--fixture-dir", str(fixture)])
     pack = KnowledgePack.read(str(out))
     assert pack.people == [{"entity_id": "person.example_jm", "name": "Jm Private"}]
-    assert pack.chats == [{"chat": JM, "role": "owner", "name": "jm private", "language": "fr"},
-                          {"chat": OTHER_GROUP, "role": "fm", "name": "Managers group", "language": "id"}]
+    older = json.loads(out.read_text())
+    assert "chats" not in older
+    out.write_text(json.dumps({**older, "chats": [{"chat": JM, "role": "owner", "name": "jm private", "language": "fr"}]}))
+    assert KnowledgePack.read(str(out)).people == pack.people
 
 
 # ---- the lists agreed in writing (architecture review round 17, lead 2): the agreement's `recipients` section

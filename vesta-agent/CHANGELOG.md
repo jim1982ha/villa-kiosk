@@ -1,3 +1,20 @@
+## 0.12.447
+
+What you will see:
+- An intrusion while the villa is empty always brings the siren's Approve / Refuse, even with a typing mistake in
+  VESTA's rules file (the request could be lost before).
+- In a Telegram group, VESTA answers everyone, and reads their voice, in the group's language: a person with their own
+  chat no longer gets their private chat's language in the group.
+- Costs › AI runs: a step's "What it did" says in words what was read ("worked out from every binary sensor"), never
+  the template's code.
+- Knowledge › Device links: a device is under "Run-hours check off" whenever the night check does not compare its hours,
+  with the reason on its line (lighting, a schedule used only by switched-off automations, no time blocks…). A linked
+  helper deleted from the villa's system says "No longer in the villa's system", and the night check says so too.
+- Knowledge › Device kinds: a device made a Motor by a link says "From its link", never "Found by name".
+- Removing a link of a device no longer found reads "Schedule removed", on the page and in Page changes.
+- The villa's "VESTA chats by priority" sensor (its package file) now also holds what "Follow the VESTA Agent skill"
+  means, so an automation set to Follow reaches the right people with or without VESTA running.
+
 ## 0.12.446
 
 What you will see:

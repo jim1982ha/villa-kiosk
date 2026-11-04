@@ -420,3 +420,27 @@ def test_the_ultimate_rule_no_press_no_siren_whatever_becomes_of_the_request(tmp
     ap3 = _asked(v)
     assert v.actions.decide(ap3["id"], OWNER, True, chat=OWNER)["executed"] is True
     assert [c[:2] for c in calls] == [("switch", "turn_on")]
+
+
+# ⚠️ A SLIP IN policy.yaml NEVER STOPS THE REQUEST (architecture review 20, card 1): the desk read policy.yaml itself for
+# the siren's duration and raised on a typing slip the engine survives, after storing the intrusion: no card and no
+# Approve / Refuse reached anyone. The number is the engine's (its last good rules), handed in the script's environment.
+def test_a_typing_slip_in_policy_yaml_still_asks_for_the_siren_with_the_engines_duration(tmp_path, pack, monkeypatch):
+    from helpers import settings
+    from vesta_agent import skills
+    s = settings(str(tmp_path))
+    os.makedirs(os.path.dirname(s.policy_path), exist_ok=True)
+    with open(s.policy_path, "w", encoding="utf-8") as f:
+        f.write("siren_auto_off_min: 7\n")
+    assert s.policy().siren_auto_off_min == 7
+    with open(s.policy_path, "w", encoding="utf-8") as f:
+        f.write("siren_auto_off_min: 7\nsettings: {profile: 'auto\n")        # one quote left open
+    os.utime(s.policy_path, (1, 1))                                         # seen as changed, whatever the clock
+    env = skills.script_env(s)
+    for k in ("VESTA_POLICY", skills.SIREN_MINUTES_ENV):
+        monkeypatch.setenv(k, env[k])
+    store = Store(str(tmp_path / "s.sqlite"))
+    desk.intake(store, event("binary_sensor.example_drive_motion", 1), T0, occupancy_reader=lambda: "empty")
+    out = desk.intake(store, event("lock.example_entrance", 2), T0 + timedelta(minutes=1),
+                      occupancy_reader=lambda: "empty")
+    assert out["siren_gate"]["armed"] and out["siren_gate"]["prompt"].endswith("Approving sounds the siren for 7min.")

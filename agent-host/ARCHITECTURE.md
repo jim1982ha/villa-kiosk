@@ -1144,16 +1144,18 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
 - **Never read** (no file: a first start before the villa answered): nobody is listed. The agent logs it at start; a
   role's message is `unrouted` (logged); an approval request is refused with its reason, or waits on the tablet
   (`actions.Actions.request`). The villa's own alerts never depend on the agent.
-- **Each chat's language is the agent's**: policy.yaml `languages: {<chat id>: <code>}` (codes of `LANGUAGES`, named
-  otherwise). An older file's `people:` rows give their language by id (the file's own `languages:` first), nothing
-  named wrong; every page save (`changes.PageFiles.form_policy` → `policy_doc.languages_moved`) writes them in
-  `languages:` and drops `people:` and the even older `chats:`. In-chat "answer me in French" was never stored (the
-  instructions' rule 6 answers in the message's own language): nothing to move.
+- **Each chat's language is the Kiosk's** (since 0.12.442; owner, 2026-11-03: "isn't it also redundant to show … the
+  language selection?"): set beside the chat in the Kiosk, told as `chatLanguages` {notify entity: code}
+  (vesta_shared.kiosk_told) and read by `roster.chat_languages` through the entity each list row was read from; a row
+  with no entity, or one the Kiosk names no language for, is English. policy.yaml holds no one: its `people:`,
+  `chats:` and `languages:` are retired (`policy_doc.KIOSK_MOVED`). In-chat "answer me in French" was never stored
+  (the instructions' rule 6 answers in the message's own language).
 - **The page**: the People card shows the lists read only, as Knowledge's "Asleep between reports" shows the Kiosk's
-  list (`server._people`, one row per chat, its roles as a chip), the Language menu its one control. `page_policy`
-  reads the lists as the agent does.
-- **The knowledge pack's people table** (round 17: its own `chats` table, `--chats`) is the agent's entries (`app._build_pack` hands them as `--people`), refreshed
-  at each pack build.
+  list (`server._people`, one row per chat, its roles as a chip, its language's name): no control, no chat id.
+  `page_policy` reads the lists as the agent does.
+- **The knowledge pack holds no chats** (architecture review 20, card 7): its `chats` table (`build_pack --chats`,
+  written by `app._build_pack` from the roster's entries) was read by nothing and is gone; `people` is the villa's
+  person entities only. Who is who is the roster's alone.
 
 ## Who is who in one module, the lists agreed in writing, no "registered", the pack's chats (architecture review round 17, 2026-11-03, 0.12.441)
 
@@ -1163,12 +1165,12 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
   tablet's people (`tablet_*`), `listed_entries`, `role_can_approve` and `NOT_LISTED` live there. `Roster.kept(pack)`
   is the lists as last read, with `read_yet` — the one answer to "read yet?" (app's start log, the People card).
   `Roster.of(owner=[(chat, name)], fm=[…], languages={…})` writes one out (the tests' villas: `make_agent(…, roster=)`,
-  `helpers.keep_roster`). **`Policy(raw, roster=None)` holds policy.yaml's rules**; it gives the roster the file's
-  `languages` (`Roster.speaking`). Callers that need who is who ask `policy.roster.…` (config.Settings.policy and
-  ui.changes.page_policy build it with `Roster.kept`); callers that need rules only (policy_doc, setup_copy,
-  limits_tab, the alert desk's siren time) build none, and `policy.roster` raises `LookupError` there — never a silent
-  "nobody" (tests/test_roster.py). `people:` rows are read by read_policy's language read and
-  `policy_doc.languages_moved` only; no test writes them except the tests of those two.
+  `helpers.keep_roster`). **`Policy(raw, roster=None)` holds policy.yaml's rules**, and no one: each chat's language
+  is the Kiosk's, read by `Roster.kept` with the lists (`chat_languages`, since 0.12.442). Callers that need who is
+  who ask `policy.roster.…` (config.Settings.policy and ui.changes.page_policy build it with `Roster.kept`); callers
+  that need rules only (policy_doc, setup_copy, limits_tab, the alert desk's siren time) build none, and
+  `policy.roster` raises `LookupError` there — never a silent "nobody" (tests/test_roster.py). A file's retired
+  `people:`, `chats:` and `languages:` are dropped at the next page save (`policy_doc.KIOSK_MOVED`).
 - **The lists agreed in writing** (lead 2): agent-contract.json `recipients` (the Kiosk's file, copied):
   `villa_recipients.HELPERS`, `SEPARATOR`, `DOMAIN`, `MAX_CHARS`, `WHERE` are read from it, and `entities()` follows its
   rule (a bare "notify." names nobody). A test drives `entities()` over every agreement example; another holds the
@@ -1176,6 +1178,6 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
 - **No "registered"** (lead 3): a sender the lists do not name reads `NOT_LISTED` ("This chat is not on the villa's
   lists. Ask the owner to add it in" + WHERE), no Telegram id — the Kiosk picks a chat by its name. Setup copy's
   "stays" names each chat's language.
-- **The knowledge pack's chats are their own table** (lead 6): `KnowledgePack.chats` [{chat, role, name, language}]
-  from `build_pack --chats` (app._build_pack, the roster's entries); `people` is the villa's person entities only. The
-  name merge (lower-cased) is gone: a chat named like a person took that person's role. PACK_RULES 6.
+- **The knowledge pack's chats were their own table** (lead 6): `people` is the villa's person entities only. The
+  name merge (lower-cased) is gone: a chat named like a person took that person's role. PACK_RULES 6. The `chats`
+  table itself was retired in architecture review 20 (card 7): nothing read it.

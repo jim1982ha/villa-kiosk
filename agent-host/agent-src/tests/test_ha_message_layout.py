@@ -243,3 +243,62 @@ def test_the_stage_marks_are_the_agreements_one_for_every_title_word():
     assert STAGE_ICONS == marks
     # every word a title can say has its mark (notice.Notices.word: a step's title word, "existing", "watch", "closed")
     assert {s.title for s in STEPS.values()} | {"existing", "watch", "closed"} <= set(STAGE_ICONS)
+
+
+def test_every_rule_sends_to_the_chats_of_its_priority_written_once_from_the_alert_desks_table():
+    # owner, 2026-11-04 ("do this consistently"; then "keep the configuration how it was before", "Follow VESTA Agent
+    # skill" kept): 8 blueprints kept their own "P1 the owner and the facility manager" table. The villa's sensor holds
+    # each priority's chats and what Follow means, written from the desk's people_roles and routes
+    from vesta_shared import villa_recipients
+    from vesta_shared.message_format import FOLLOW_PRIORITY, PACKAGE_BEGIN, PACKAGE_END, package_chats
+    path = os.path.join(HA, "packages", "vesta_message.yaml")
+    with open(path, encoding="utf-8") as f:
+        src = f.read()
+    assert src[src.index(PACKAGE_BEGIN):src.index(PACKAGE_END) + len(PACKAGE_END)] == package_chats(), \
+        "run: python -m vesta_shared.message_format"
+    (sensor,) = [s for t in yaml.safe_load(src)["template"] for s in t.get("sensor", [])
+                 if s["unique_id"] == "vesta_chats_by_priority"]
+    owner, fm = villa_recipients.HELPERS["owner"], villa_recipients.HELPERS["fm"]
+    lists = {owner: "notify.Example_Group, light.x, notify.gone", fm: " notify.example_a,notify.example_b , notify.example_a"}
+
+    class States:
+        notify = [{"entity_id": e} for e in ("notify.example_group", "notify.example_a", "notify.example_b")]
+
+        def __call__(self, e):
+            return lists.get(e, "unknown")
+    env = _env()
+    env.tests["match"] = lambda v, pattern: re.match(pattern, str(v)) is not None      # Home Assistant's own test
+    env.globals["integration_entities"] = lambda d: ["notify.example_group", "notify.example_a", "sensor.x"] \
+        if d == "telegram_bot" else []
+    render = lambda p: env.from_string(sensor["attributes"][p]).render(states=States())
+    desk = _desk()
+    assert desk.recipients("P1") == ["owner", "fm"] and desk.recipients("P2") == ["fm"]
+    assert [render(p) for p in ("P1", "P2", "P3", "P4")] == [
+        "['notify.example_group', 'notify.example_a', 'notify.example_b']", "['notify.example_a', 'notify.example_b']",
+        "[]", "[]"]
+    lists[fm] = "light.x, notify., nonsense"                   # nobody set (or nothing valid): every Telegram chat
+    assert render("P2") == "['notify.example_group', 'notify.example_a']"
+    lists.clear()
+    assert render("P1") == render("P2") == "['notify.example_group', 'notify.example_a']"
+    # ⚠️ NEITHER THE KIOSK APP NOR THE AGENT IN AN ALERT'S PATH (owner, 2026-11-04: "I am concerned … that makes VESTA
+    # KIOSK in the critical path"): the sensor reads the villa's two lists, its notify entities and its Telegram chats
+    read = set(re.findall(r"[a-z_]+\.[a-z0-9_]+", " ".join(v for k, v in sensor["attributes"].items() if k != "follow")))
+    assert read - {"ns.t", "states.notify"} <= {owner, fm}, read
+    # "Follow the VESTA Agent skill": the villa's answer is the desk's (route_for), for every kind and by name; its own
+    # P1-P4 wins; the sensor missing, P1 (everyone)
+    import ast
+    follow = ast.literal_eval(env.from_string(sensor["attributes"]["follow"]).render())
+
+    class This:
+        def __init__(self, eid):
+            self.entity_id = eid
+
+    def villa(given, blueprint, rule, table):
+        t = env.from_string(FOLLOW_PRIORITY.replace("{blueprint}", blueprint))
+        return t.render(vesta_priority=given, this=This(rule), state_attr=lambda e, a: table)
+    kinds = [r["blueprint"] for r in desk.RULES["routes"] if r.get("blueprint")] + ["audit_coverage", "roi_runtime_cap"]
+    for bp in kinds:
+        for rule in (f"automation.{bp}---x", "automation.critical_other---x", "automation.other---x"):
+            assert villa("follow", bp, rule, follow) == desk.priority({}, desk.route_for(rule, bp)), (bp, rule)
+    assert villa("p3", "critical_binary_trip", "automation.x", follow) == "P3"
+    assert villa("follow", "critical_condition", "automation.x", None) == "P1"

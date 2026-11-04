@@ -700,8 +700,8 @@ def test_every_runs_steps_are_served_each_in_a_line_the_page_draws(ui):
         "week.json",
         "to here · fm_weekly.html",
         new[-1]["summary"]]
-    other = new[-1]["summary"]          # a tool with no line of its own: key=value, cut with an ellipsis
-    assert other.startswith("name=fm-weekly why=the owner asked") and other.endswith("…") and len(other) <= 160
+    other = new[-1]["summary"]          # a tool with no line of its own: its settings in words, cut with an ellipsis
+    assert other.startswith("name fm-weekly · why the owner asked") and other.endswith("…") and len(other) <= 160
     # the arguments as they were, for the line's tooltip: vesta_part dropped, a long text bounded
     assert json.loads(new[1]["raw"]) == {"skill": "reports", "script": "energy_period.py",
                                          "args": ["--period", "week", "--out", "week.json"]}

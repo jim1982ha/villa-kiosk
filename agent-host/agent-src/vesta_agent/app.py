@@ -483,15 +483,10 @@ class Vesta:
             return self._build_pack()
 
     def _build_pack(self) -> dict:
-        # ⚠️ THE PACK'S CHATS ARE THE AGENT'S ENTRIES (owner, 2026-11-03: who is who is the VESTA Kiosk's lists, each chat's
-        # language set there beside the chat): handed over as the pack's own table of chats — a chat, its role, its name and its
-        # language, as the roster reads them — never merged into the villa's people by name (round 17, lead 6)
-        chats = os.path.join(self.s.data_dir, "pack_chats.json")
-        with open(chats, "w", encoding="utf-8") as f:
-            json.dump({"chats": [{"chat": e.telegram_id, "role": e.role, "name": e.name, "language": e.language}
-                                 for e in self.policy().roster.entries]}, f)
+        # ⚠️ NO TABLE OF CHATS IN THE PACK (architecture review 20, card 7): the roster's entries were written beside it
+        # (pack_chats.json) and kept as the pack's `chats`, read by nothing: who is who is the roster's alone
         p = subprocess.run([sys.executable, "-m", "vesta_shared.build_pack", "--out", self.s.pack_path,
-                            "--store", self.s.store_path, "--zone", self.s.timezone, "--chats", chats],
+                            "--store", self.s.store_path, "--zone", self.s.timezone],
                            cwd=self.s.out_dir, env=script_env(self.s), capture_output=True, text=True, timeout=limit(
                                "pack.build_timeout_s", 900, unit="seconds", group="run", lo=60, hi=7200,
                                says="How long the nightly reading of the villa's devices (the skills' list of what "

@@ -215,15 +215,20 @@ class Roster:
         role = self.group_role(chat_id)
         if role is None:
             return p
+        # ⚠️ THE GROUP'S LANGUAGE, WHOEVER WRITES THERE (architecture review 20, card 5): a person with their own row
+        # was answered, and their voice read, in their private chat's language, while the group's alerts, reports and
+        # digests used the group's: one group, two languages a minute apart. A chat's language is `language_of`'s
+        language = self.language_of(chat_id, role)
         if p is not None:
             # ⚠️ NAMED AS THIS CHAT KNOWS THEM (architecture review 21): listed twice (JM_O, JM_FM), a person pressing in
             # a group of the facility manager's read "Done pressed by JM_FM" on an alert and "Approved by JM_O" on a
             # request — the name of a role they did not have there. One name, `name_in`'s, for every press and record
             name = self.name_in(p.telegram_id, chat_id) or p.name
-            return p if (p.role, p.name) == (role, name) else Person(p.telegram_id, name, role, p.language)
+            return p if (p.role, p.name, p.language) == (role, name, language) else \
+                Person(p.telegram_id, name, role, language)
         group = next((e for e in self.entries if e.telegram_id == int(chat_id) and e.role == role), None)
         return Person(int(telegram_id), (name or "").strip() or f"a member of {group.name if group else 'the group'}",
-                      role, group.language if group else "en")
+                      role, language)
 
     def may_approve_in(self, chat_id: int, required_role: str | None) -> bool:
         """Can someone acting in `chat_id` approve a request that needs `required_role`? The rule of `member`: a private
