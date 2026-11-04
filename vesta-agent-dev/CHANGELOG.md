@@ -1,3 +1,14 @@
+## 0.12.453
+
+What you will see:
+- An alert closed with "Not a problem" (or Done) keeps that close as its last line when the villa's own automation
+  reports the problem over later: it no longer becomes "Cleared on … Watch 1h" (#118).
+- A close is told once: no "- Closing note sent …" line above the close, nor twice. When the watch ends, the card
+  reads the alert, the press, then "✅ Closed on …: it did not come back within 1h."
+- Every chat ends an alert with the same last line, its watch included: the owner's group read "✅ Not a problem on …
+  (Luc)." while the facility manager's chat read "… (Luc). Watch 1h."
+- A button pressed on the tablet is said "on the tablet" on the fault's card in the Cockpit, never "on Telegram".
+
 ## 0.12.452
 
 What you will see:
