@@ -1,3 +1,11 @@
+## 2.496.692
+
+What you will see:
+- Cockpit › Recap: a device whose fault you closed as "Not a problem" no longer counts against the villa while it
+  stays as it was. For example, a door closed "Not a problem" while unlocked no longer reads "Doors locked · 1
+  unlocked". Recap now follows the same rule as Open issues: if the device changes after your close (locked, then
+  unlocked again), it counts again.
+
 ## 2.496.691
 
 What you will see:
