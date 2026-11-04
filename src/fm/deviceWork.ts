@@ -63,7 +63,7 @@ export function ticketCards(records: readonly FmTicket[], deviceOfRecord: (field
 
 /** Every button a card of open work can carry. An issue card's (the Inbox's): Done · Need help · Open Ticket (or Edit
  *  Ticket), `doneNew` / `helpNew` on a card with no record yet (only what the villa's system reports: a fault for its
- *  device is raised with the press). A Tickets card's: Done · Need help · No action needed (`ticketDone`: the resolve form, work
+ *  device is raised with the press). A Tickets card's: Close · Need help · No action needed (`ticketDone`: the resolve form, work
  *  done; `closeTicket`: that ticket's records closed with nothing done and no cost, fmCommands' closeTickets). */
 export type WorkActionKind = "done" | "needHelp" | "notAProblem" | "doneNew" | "helpNew" | "openTicket" | "raiseTicket"
   | "editTicket" | "ticketDone" | "closeTicket" | "reopen";
@@ -95,7 +95,7 @@ export const NEED_HELP = "Need help";
  *  ended, it is new. ⚠️ A BUTTON OF ITS OWN (owner, 2026-11-04: "instead of showing the button `Not a problem while it
  *  lasts` only after clicking on the `Done` Button, show it directly next to `Done`, `Need Help`"): it was the second
  *  answer to a Done's or a No action needed's question; now it follows Need help on every card that offers Done on a
- *  record, in the order VESTA's own alert offers it on Telegram, its label short ("the button label must be short":
+ *  record on the Inbox (never a Tickets card's: owner, 2026-11-04), in the order VESTA's own alert offers it on Telegram, its label short ("the button label must be short":
  *  owner, 2026-11-04), the rest of its meaning in its question. */
 export const NOT_A_PROBLEM = "Not a problem";
 /** The one words of Need help, Not a problem and a ticket's button on a narrow row (WorkActionSpec.short). */
@@ -118,9 +118,9 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // a card with no record yet (only what the villa's system reports): the same words, the ticket form for its device
   raiseTicket: { label: "Open Ticket", short: TICKET, step: { kind: "raise" } },
   editTicket: { label: "Edit Ticket", short: TICKET, step: { kind: "edit" } },
-  // ⚠️ THE TICKETS TAB SAYS DONE TOO (owner, 2026-10-30: "I agree with your recommendation"): its "Mark resolved" was
-  // the same work done as the Inbox's Done, in other words; it keeps its form (what was done, cost, photos)
-  ticketDone: { label: DONE, step: { kind: "stage", to: "resolved" } },
+  // the Tickets tab's work done, its form (what was done, cost, photos). ⚠️ SAID "CLOSE" (owner, 2026-11-04: "in the
+  // Ticket card, the `Done` shall be renamed to `Close`"): it said Done, as the Inbox's (2026-10-30), until then
+  ticketDone: { label: "Close", step: { kind: "stage", to: "resolved" } },
   // what it records in its words (owner, 2026-11-01): "Close" read as the normal end of a ticket, beside Done
   closeTicket: { label: "No action needed", short: "Dismiss", step: { kind: "close", question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "No action needed" } },
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
@@ -179,13 +179,14 @@ export function overviewActions(records: readonly WorkRecord[], device?: string)
   ];
 }
 
-/** The buttons of a ticket in progress (a Tickets card): Done (its resolve form: work done), Need help (the same "help"
- *  step as an issue card's: the VESTA Agent asks the owner to act), Not a problem and No action needed
- *  (nothing done) — each on every record of it. */
+/** The buttons of a ticket in progress (a Tickets card): Close (its resolve form: work done), Need help (the same "help"
+ *  step as an issue card's: the VESTA Agent asks the owner to act) and No action needed (nothing done) — each on every
+ *  record of it. ⚠️ NO NOT A PROBLEM (owner, 2026-11-04: "it's irrelevant here"): a ticket is work someone took on;
+ *  "not a problem" is said of an alert, on the Inbox's card, before anyone takes it on. */
 export function ticketActions(records: readonly WorkRecord[]): WorkAction[] {
   const tickets = records.filter((r) => r.stage === "ticket");
   const ids = tickets.map((r) => r.id);
-  return ids.length ? [action("ticketDone", ids), ...needHelp(tickets), action("notAProblem", ids), action("closeTicket", ids)] : [];
+  return ids.length ? [action("ticketDone", ids), ...needHelp(tickets), action("closeTicket", ids)] : [];
 }
 
 /** A closed record's one button: "Reopen" — it is a fault again, back on the Overview. */

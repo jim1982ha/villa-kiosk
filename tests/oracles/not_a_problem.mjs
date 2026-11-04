@@ -99,9 +99,10 @@ ck("one button closes as lasting: Not a problem, short, its meaning in its quest
    && !WORK_ACTIONS.notAProblem.step.work, lasting);
 const W = await import("@/fm/deviceWork");
 const order = (acts) => acts.map((a) => a.kind).join(" · ");
-ck("  ...after Need help on every card that offers Done on a record, never on a card with no record",
+// owner, 2026-11-04: "don't show the `Not a problem` button in the Ticket cards, because it's irrelevant here"
+ck("  ...after Need help on an Inbox card that offers Done on a record; never on a card with no record, nor a Tickets card",
    order(W.overviewActions([{ id: "a", stage: "fault" }])) === "done · needHelp · notAProblem · openTicket"
-   && order(W.ticketActions([{ id: "a", stage: "ticket" }])) === "ticketDone · needHelp · notAProblem · closeTicket"
+   && order(W.ticketActions([{ id: "a", stage: "ticket" }])) === "ticketDone · needHelp · closeTicket"
    && !W.overviewActions([], "switch.pump").some((a) => a.kind === "notAProblem"),
    [order(W.overviewActions([{ id: "a", stage: "fault" }])), order(W.ticketActions([{ id: "a", stage: "ticket" }]))]);
 const wb = parseTsx("components/fm/WorkButtons.tsx");

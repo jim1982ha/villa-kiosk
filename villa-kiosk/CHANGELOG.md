@@ -1,3 +1,29 @@
+## 2.496.697
+
+What you will see:
+- VESTA's conversation: an answer stays right under the question it answers. When VESTA changed an answer after
+  it was given (its buttons removed once one was pressed, or tidied when the Agent started), the answer took the
+  time of that change and moved below every later question. It now keeps the time it was first given. Answers
+  already moved keep their wrong time: the original one was not kept.
+
+## 2.496.696
+
+What you will see:
+- Cockpit cards (Inbox reports, Tickets, Recent work, Spend): the small light-grey dot at the top right of the card,
+  over its date, is gone. It was a hint that the superadmin can erase the card by pressing and holding it. That
+  still works, with no dot.
+
+## 2.496.695
+
+What you will see:
+- Cockpit cards on a laptop: the buttons are back on one line under the card's words. On the Inbox they had each
+  dropped onto a line of their own, a word wide (2.496.693).
+- The Inbox and the Tickets tab now lay their buttons out the same way: under the words, on the right, at every
+  width. The Inbox used to put them beside the words on a wide card.
+- Tickets tab: a ticket's card offers Close · Need help · No action needed. "Not a problem" is no longer offered
+  there (it stays on the Inbox's cards), and "Done" is now called "Close". It opens the same form as before: what was
+  done, the cost, photos.
+
 ## 2.496.694
 
 What you will see:

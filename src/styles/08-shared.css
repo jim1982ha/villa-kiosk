@@ -246,17 +246,12 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 @keyframes cockpit-focus-flash { 0%, 100% { box-shadow: none; } 40% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--status-warning) 35%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .fm-record-card.cockpit-focus { animation: none; } }
 /* An issue's problems, one or several (config/attention.groupAttention): one line each, inside the card's text. */
-.cockpit-attention-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;
-  container-type: inline-size; }
+.cockpit-attention-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+/* ⚠️ EACH PROBLEM'S BUTTONS UNDER ITS WORDS, AS ON THE TICKETS TAB (owner, 2026-11-04: "it's nicely rendered for the
+   ticket menu: this should NEVER be the case"): a wide Inbox card put them on the right of its words (2026-11-01), a
+   placement of its own the Tickets tab's card never had, and only that one broke when the buttons changed. */
 .cockpit-attention-sub { display: flex; flex-direction: column; gap: 8px; }
 .cockpit-attention-sub + .cockpit-attention-sub { border-top: 1px solid var(--hairline); padding-top: 10px; margin-top: 10px; }
-/* each problem's buttons on the right of its words where the card has the width (owner, 2026-11-01), under them on a phone */
-@container (min-width: 640px) {
-  .cockpit-attention-sub { flex-direction: row; align-items: flex-start; gap: 16px; }
-  .cockpit-attention-sub > .cockpit-attention-sub-line { flex: 1 1 0; min-width: 0; }
-  .cockpit-attention-sub > .fm-record-actions { flex: 0 0 auto; }
-  .fm-record-head:has(> .fm-record-lead) ~ .fm-record-body .cockpit-attention-sub .fm-work-row { margin-left: 0; }
-}
 /* no height of its own: 36 px, its text centred, was a blank line under the room on a card without buttons (owner,
    2026-10-15) — the card's text starts level with the top of its buttons (RecordCard) */
 .cockpit-attention-sub-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }

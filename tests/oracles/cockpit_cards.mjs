@@ -52,9 +52,16 @@ ck("it IS the Cockpit card: its source icons, then its name; its room as a pill 
    && !/lucide-chevron-right/.test(issue) && !/fm-record-subtitle/.test(issue), issue.slice(0, 400));
 ck("  ...its problem, then that problem's own buttons, in the same section",
    /cockpit-attention-sub"[\s\S]*#33 · Test lock unavailable[\s\S]*fm-record-actions[\s\S]*Open Ticket[\s\S]*Close/.test(inside(issue, "fm-record-body")));
-// owner, 2026-11-01: "the card themselves shall not be clickable", "next to the description of each issues" on wide screens
-ck("  ...the card is not pressed; on a wide card each problem's buttons stand on the right of its words",
-   !/role="button"|fm-openable/.test(issue) && /@container \(min-width: 640px\) \{\s*\.cockpit-attention-sub \{ flex-direction: row;/.test(readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8")));
+// owner, 2026-11-01: "the card themselves shall not be clickable". Its buttons under its words on every width, as the
+// Tickets tab's card (owner, 2026-11-04: a wide Inbox card put them beside its words, a placement of its own, and only
+// it broke when the buttons changed): no stylesheet places a problem's buttons anywhere else
+{
+  const sheets = ["07-facility.css", "08-shared.css"].map((f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8")).join("\n");
+  ck("  ...the card is not pressed; each problem's buttons stand under its words, as on the Tickets tab, at every width",
+     !/role="button"|fm-openable/.test(issue) && /\.cockpit-attention-sub \{ display: flex; flex-direction: column;/.test(sheets)
+     && (sheets.match(/^\s*\.cockpit-attention-sub \{/gm) ?? []).length === 1 && !/\.cockpit-attention-sub\s*>\s*\.fm-record-actions/.test(sheets),
+     sheets.match(/[^\n]*\.cockpit-attention-sub[^\n]*/g));
+}
 ck("  ...its name opens the device, no pill says it again", /fm-title-link/.test(issue) && !/fm-meta/.test(issue), issue);
 // owner, 2026-10-22: "instead of `Next check:` show a refresh icon, as a pill, on this same first line, on the right"
 // owner, 2026-11-01: "right after the room area pill"
@@ -252,6 +259,13 @@ ck("its state pill on the line under its title, Log and the bin inside on the ri
    /Pool filter clean/.test(inside(task, "fm-record-head")) && /Due soon/.test(pillLine(task)) && /fm-record-actions[\s\S]*Log[\s\S]*aria-label="Remove"/.test(task)
    && /class="fm-record-card state-due-soon"/.test(task), task.slice(0, 300));
 ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase on it", !/fm-erasable/.test(task));
+// owner, 2026-11-04: "what is the top right pill (light grey) for … it never disappears": the hold-to-erase hint dot,
+// drawn on every erasable row's corner over its time pill. A row that can be erased draws its content and nothing else
+{
+  const { default: ErasableRow } = await import("@/components/fm/ErasableRow");
+  const row = draw(h(ErasableRow, { intent: { title: "Erase", detail: "x" }, erase: async () => {} }, h("b", null, "the card")));
+  ck("  ...an erasable row draws no hint of it: only its own content", /^<div [^>]*class="fm-row fm-erasable"[^>]*><b>the card<\/b><\/div>$/.test(row), row);
+}
 
 // owner, 2026-10-18: a problem's words ran on, and no button showed the mouse was on it. Drawn: the words cut on one line
 // (whole on hover); in the stylesheets: every button lights under the mouse, the card does not light over a button.
