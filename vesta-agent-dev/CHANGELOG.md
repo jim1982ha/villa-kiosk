@@ -1,3 +1,10 @@
+## 0.12.448
+
+What you will see:
+- In VESTA's conversation on the tablet, an answer's "Investigate this" and "No, thanks" no longer come back once one
+  was pressed: the answer keeps its words, the buttons go, and what was chosen, by whom, is written under it, as on
+  Telegram. Answers pressed before this version lose their buttons when VESTA starts.
+
 ## 0.12.447
 
 What you will see:
