@@ -1,3 +1,12 @@
+## 0.12.449
+
+What you will see:
+- An alert's "Not a problem" pressed on the Cockpit's card is said so on Telegram, on the tablet's card and in its
+  notice ("✅ Not a problem in the Cockpit on 04/11/2026 15:11 (Owner)."), never "Done in the Cockpit".
+- Every alert on Telegram and on the tablet offers Done · Need help · Not a problem. "Not a problem" closes it with
+  nothing done and VESTA does not raise it again while it lasts, as the Cockpit's does; its fault in the Cockpit says
+  "Not a problem" too.
+
 ## 0.12.448
 
 What you will see:
