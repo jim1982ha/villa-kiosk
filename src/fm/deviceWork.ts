@@ -24,7 +24,7 @@ export function deviceWorkKey(device: string | undefined, ownId: string): string
 }
 
 /** A record's card: its entity's device, else the record alone — the same key its Overview line gets (its line's id
- *  is `fault:<record id>`, config/attention.buildAttentionItems). `deviceOfRecord`: the villa's one answer to "which
+ *  is `fault:<record id>`, config/attention.attentionOf). `deviceOfRecord`: the villa's one answer to "which
  *  device does this record's entity field name" (deviceGroups.recordDeviceOf — a list of several included). */
 export function recordWorkKey(t: Pick<FmTicket, "id" | "entityId">, deviceOfRecord: (field: string) => string): string {
   return deviceWorkKey(t.entityId ? deviceOfRecord(t.entityId) : undefined, `fault:${t.id}`);

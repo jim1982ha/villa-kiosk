@@ -11,7 +11,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const E = await import("@/fm/fmEngine");
 const R = await import("@/fm/fmDocuments");
-const { buildAttentionItems } = await import("@/config/attention");
+const { attentionOf } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 
 const DAY = 86_400_000;
@@ -56,9 +56,9 @@ ck("  ...and no word of its own", !/Overdue by|\bLate\b/.test(standing));
 console.log("\n  the Overview's late-task line says the same word:");
 {
   // late whatever the clock: one never done, one done years ago
-  const items = buildAttentionItems({ devices: (await import("../consistency/devices.mjs")).devicesOf(), entities: {}, entityMap: {},
+  const items = attentionOf({ devices: (await import("../consistency/devices.mjs")).devicesOf(), entities: {}, entityMap: {},
     resolvedRooms: {}, fmData: { ...EMPTY_FM_DATA, schedules: [sched("n", "Pest control", 30), sched("o", "AC service", 30)],
-      completions: [{ id: "c", scheduleId: "o", at: "2020-01-01T12:00:00Z", by: "Op", photoIds: [] }] } });
+      completions: [{ id: "c", scheduleId: "o", at: "2020-01-01T12:00:00Z", by: "Op", photoIds: [] }] } }).attentionItems;
   const detail = Object.fromEntries(items.filter((i) => i.kind === "schedule").map((i) => [i.title, i.detail]));
   ck("never recorded / overdue, from the table", detail["Pest control"] === E.DUE_WORDS.never.word && detail["AC service"] === E.DUE_WORDS.overdue.word, detail);
 }

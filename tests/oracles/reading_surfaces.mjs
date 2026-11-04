@@ -18,7 +18,7 @@ import { elements, parseTsx, propText } from "../consistency/jsx.mjs";
 import { devicesOf } from "../consistency/devices.mjs";
 const { rowText, alarmText, stateWords, lockPill, coverPill, readableState, chartColours } = await import("@/config/reading");
 const { readingRows } = await import("@/config/readingRows");
-const { buildAttentionItems } = await import("@/config/attention");
+const { attentionOf } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { BINARY_WORDS } = await import("@/config/binarySensorWords");
 // THE OLD PATH — what each surface called until this release.
@@ -77,7 +77,7 @@ console.log("\n  the Cockpit's alarm line");
   const bad = diff((id) => alarmText(id, E[id]) === oldAlarm(id, E[id]));
   ck("alarmText says what the alarm line said, for every fixture (alarm or not)", bad.length === 0, bad.slice(0, 5));
   const entityMap = Object.fromEntries(ids.map((id) => [id, { entityId: id, type: domainOf(id) }]));
-  const items = buildAttentionItems({ devices: devicesOf({ ids }), entities: E, entityMap, resolvedRooms: {}, fmData: EMPTY_FM_DATA }).filter((i) => i.kind === "alarm");
+  const items = attentionOf({ devices: devicesOf({ ids }), entities: E, entityMap, resolvedRooms: {}, fmData: EMPTY_FM_DATA }).attentionItems.filter((i) => i.kind === "alarm");
   const badItems = items.filter((i) => i.detail !== oldAlarm(i.entityId, E[i.entityId])).map((i) => `${i.entityId}: ${i.detail}`);
   ck(`every alarm Needs attention lists (${items.length}) is worded as before`, badItems.length === 0, badItems.slice(0, 5));
   const listed = new Set(items.map((i) => i.entityId));

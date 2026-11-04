@@ -25,7 +25,7 @@ import { effectiveMapped, visibleEntitiesOf, visibleTo } from "./villaVisibility
 import type { Role } from "@/auth/roles";
 import type { HassEntity } from "@/types/ha.types";
 import { useAgent } from "@/agent/AgentContext";
-import { buildAttentionItems, deviceIssues, recordRoom, faultsFor, groupAttention, sinceEntities, type DeviceIssues, type VillaProblems } from "./attention";
+import { attentionOf, deviceIssues, recordRoom, faultsFor, groupAttention, sinceEntities, type DeviceIssues, type VillaProblems } from "./attention";
 import { deviceRows, type DeviceRow } from "./deviceRecord";
 import { dismissedEntitySet, inventoryGaps } from "./dismissedEntities";
 
@@ -131,11 +131,9 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
   const sinceIds = useMemo(() => sinceEntities({ fmData, devices, entities, entityMap }), [fmData, devices, entities, entityMap]);
   const sinceOf = useStateSince(sinceIds);
   const attention = useMemo((): VillaProblems => {
-    const attentionItems = buildAttentionItems({
-      devices, entities, entityMap, resolvedRooms, fmData, sinceOf, cadence });
     // NOT grouped here: grouping is per profile (attentionFor), and a
     // role-blind grouping had no reader (until 2.496.268 it ran anyway).
-    return { devices, attentionItems };
+    return { devices, ...attentionOf({ devices, entities, entityMap, resolvedRooms, fmData, sinceOf, cadence }) };
   }, [devices, entities, entityMap, resolvedRooms, fmData, sinceOf, cadence]);
 
   // what is wrong with each device, from the cards themselves (role-blind: the map's badges; a profile's sign reads its

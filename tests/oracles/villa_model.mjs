@@ -15,7 +15,7 @@ ck("the Dashboard provides the model once, from the villa's own sets", /<VillaMo
    && (src("pages/Dashboard.tsx").match(/useVillaModelValue\(/g) ?? []).length === 1);
 const hook = src("components/cockpit/useVillaAttention.ts");
 ck("the attention count is the model's — computed once, for the HUD badge and the Cockpit alike",
-   /const \{ attention, visibleTo \} = useVillaModel\(\);/.test(hook) && !/buildAttentionItems\(/.test(hook) && /buildAttentionItems\(/.test(src("config/VillaModel.tsx")));
+   /const \{ attention, visibleTo \} = useVillaModel\(\);/.test(hook) && !/attentionOf\(/.test(hook) && /attentionOf\(/.test(src("config/VillaModel.tsx")));
 ck("the bottom bar counts the VISIBLE devices; the Facility the full set",
    /const \{ visibleDevices, mappedEntityIds, visibleEntities \} = useVillaModel\(\)/.test(src("components/hud/SummaryBar.tsx")) && /const \{ devices \} = useVillaModel\(\);/.test(src("components/fm/FacilitySections.tsx")));
 const cockpit = (src("components/cockpit/CockpitModal.tsx") + src("components/cockpit/MessagesTab.tsx") + src("components/cockpit/IssueCard.tsx"));
