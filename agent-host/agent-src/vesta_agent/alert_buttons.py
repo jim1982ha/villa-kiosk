@@ -23,8 +23,8 @@ log = logging.getLogger("vesta.outcome")
 # ⚠️ THE SKILL DECLARES ITS BUTTONS (architecture review, 2026-10-13): skill.yaml `buttons`, the option on_reply is
 # given and the label shown. These are the buttons of an alert-desk folder edited before 0.12.180, whose skill.yaml
 # has none and whose desk.py still reads the label (`{text}`). Owner, 2026-10-10: two buttons, Done and Need help.
-BEFORE_BUTTONS = [{"option": "done", "label": "Done", "mark": None},
-                  {"option": "need_help", "label": "Need help", "mark": "help"}]
+BEFORE_BUTTONS = [{"option": "done", "label": "Done", "mark": None, "closes": True},
+                  {"option": "need_help", "label": "Need help", "mark": "help", "closes": False}]
 #: The buttons an older message may still show: a press says what to use instead, never "Unknown button."
 RETIRED = {"not_found", "mute"}
 
@@ -118,7 +118,7 @@ class AlertButtons:
         await self.thread.close(int(iid), PRESSED.format(label=label, name=name, time="{time}"), mark=button["mark"],
                                 note_in={lang: pressed(word, name, "{time}", lang) for lang, word in labels.items()})
         # the press, for the fault's card in the Kiosk (notice.Notices.story; owner, 2026-10-14)
-        note_press(self.state, int(iid), label, name, button["mark"], button["option"], labels)
+        note_press(self.state, int(iid), label, name, button["mark"], bool(button.get("closes")), labels)
         # ⚠️ TOLD TO THE AI (owner, 2026-10-23): a press goes to the agent, never into the conversation — the AI could
         # say an alert waits for an answer that was given here a minute before
         if self.facts is not None:

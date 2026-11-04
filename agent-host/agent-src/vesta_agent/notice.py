@@ -61,12 +61,17 @@ def history_kept() -> int:
                  reached="The ones between are counted in a \"… N earlier notices\" line.", told="person")
 
 
-def note_press(state, incident: int, label: str, name: str, mark: str | None = None, option: str = "",
+def note_press(state, incident: int, label: str, name: str, mark: str | None = None, closes: bool = False,
                labels: dict | None = None) -> None:
     """A button pressed on incident `incident`'s alert, kept in its history (the Kiosk's card says it: Notices.story).
-    Done is not kept: the fault's close says "Done on Telegram (…)." already. `labels`: the button's label in other
-    languages (skill.yaml `labels`), so each chat's Status names the press in its own (owner, 2026-10-23)."""
-    if option == "done":
+    A button that closes the alert (skill.yaml `closes`: Done, Not a problem) is not kept: its close says "Done on
+    Telegram (…)." already. `labels`: the button's label in other languages (skill.yaml `labels`), so each chat's Status
+    names the press in its own (owner, 2026-10-23).
+
+    ⚠️ EVERY CLOSING BUTTON, NOT DONE BY NAME (owner, 2026-11-05, #118): Not a problem, added beside Done, was kept —
+    its card read "- Not a problem on 05/11/2026 00:19 (Jm)" above "✅ Not a problem on 05/11/2026 00:19 (Jm). Watch 1h.".
+    """
+    if closes:
         return
     history = state.incident_history(incident)
     history.append({"at": datetime.now(timezone.utc).isoformat(), "stage": PRESSED_STAGE, "label": label,

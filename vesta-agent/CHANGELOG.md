@@ -1,3 +1,9 @@
+## 0.12.451
+
+What you will see:
+- An alert closed with "Not a problem" on Telegram or the tablet says the press once, in its last line ("✅ Not a
+  problem on 05/11/2026 00:19 (Jm). Watch 1h."), as Done does; it was also listed as a line above it.
+
 ## 0.12.450
 
 What you will see:

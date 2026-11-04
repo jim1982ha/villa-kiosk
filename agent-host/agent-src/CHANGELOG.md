@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.435 (5 November 2026)
+
+- A skill's alert button may say `closes: true` (skill.yaml `buttons`): its on_reply closes the alert and the close says
+  the press, so the press is not kept as a history line (notice.note_press). The alert desk's Done and Not a problem
+  say it; note_press skipped Done by its option before, and Not a problem was listed twice.
+
 ## 0.6.434 (4 November 2026)
 
 - The alert desk's `abandoned` on a run a person already closed (desk.abandoned: "abandoned_late", the incident found

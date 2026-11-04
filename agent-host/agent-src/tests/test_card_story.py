@@ -48,8 +48,8 @@ def told(notices, state, iid, minutes_after):
     notices.record(iid, "new", [(FM, "fm")], at=at - timedelta(minutes=60))
     notices.record(iid, "reminder", [(FM, "fm")], at=at)
     notices.record(iid, "escalated", [(OWNER, "owner")], at=at + timedelta(minutes=30))
-    note_press(state, iid, "Need help", "Wayan", "help", "need_help")
-    note_press(state, iid, "Done", "Wayan", None, "done")            # Done: the fault's close says it, not a line
+    note_press(state, iid, "Need help", "Wayan", "help")
+    note_press(state, iid, "Done", "Wayan", None, closes=True)       # Done: the fault's close says it, not a line
 
 
 STORY = ["Alert sent (to: Facility Manager)", "Reminder sent (to: Facility Manager)", "Escalation sent (to: Owner)",

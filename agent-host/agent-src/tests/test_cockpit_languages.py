@@ -148,6 +148,9 @@ def test_not_a_problem_pressed_on_telegram_closes_it_as_the_cockpit_does(tmp_pat
                                             "bot": BOT}))
     assert re.fullmatch(rf"✅ Pas un problème le {T} \(Luc\)\. .+", status(v, FM_FR)[-1]), status(v, FM_FR)
     assert re.fullmatch(rf"✅ Not a problem on {T} \(Luc\)\.", status(v, GROUP)[-1]), status(v, GROUP)
+    # owner, 2026-11-05 (#118): the press said once, by its close — never also a line above it
+    assert sum("Pas un problème" in ln for ln in status(v, FM_FR)) == 1, status(v, FM_FR)
+    assert sum("Not a problem" in ln for ln in status(v, GROUP)) == 1, status(v, GROUP)
     from vesta_shared.problems import NOT_A_PROBLEM
     (task,) = [t for t in Store(v.s.store_path).tasks(None) if str(t.get("source")).startswith("incident:")]
     assert task["status"] == NOT_A_PROBLEM and task["close_note"].startswith("Not a problem on Telegram (Luc)")

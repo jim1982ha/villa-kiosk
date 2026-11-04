@@ -446,6 +446,7 @@ def test_a_skills_alert_buttons_are_checked_as_it_declares_them(tmp_path):
         [("done", "Fait", None), ("need_help", "Besoin d'aide", "help")]
     for bad in ("buttons: []\n", "buttons:\n  - {option: Done!, label: x}\n", "buttons:\n  - {option: done}\n",
                 "buttons:\n  - {option: done, label: x, mark: party}\n",
+                "buttons:\n  - {option: done, label: x, closes: maybe}\n",
                 "buttons:\n  - {option: done, label: x}\n  - {option: done, label: y}\n"):
         (d / "skill.yaml").write_text("description: x\n" + bad)
         with pytest.raises(SkillError):
