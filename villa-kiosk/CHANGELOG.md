@@ -1,3 +1,9 @@
+## 2.496.700
+
+What you will see:
+- A device that sleeps between reports and whose last report is older than the villa keeps (10 days) now draws
+  "No longer kept" across its history band, instead of "Not enough history yet" as if it had just been added.
+
 ## 2.496.699
 
 What you will see:

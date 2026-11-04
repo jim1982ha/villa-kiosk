@@ -18,7 +18,7 @@
 //     never lost, never a guessed state.
 
 import type { HassEntity } from "@/types/ha.types";
-import { contactOf } from "@/utils/stateColors";
+import { contactOf, NOT_KEPT } from "@/utils/stateColors";
 import type { StateRow } from "./historySource";
 
 /** One recorded state, as the history read returns it (minimal_response: a state and when it changed). */
@@ -42,12 +42,18 @@ function heldRows<R extends { state: string | null }>(rows: readonly R[]): R[] {
  * day before, read "Unknown" across its band): the leading "unavailable" row was dropped with the rest, the window held
  * nothing, and the chart moved it back to end at the last report, so the door's band covered another day than the
  * lock's band above it.
+ *
+ * ⚠️ ITS REPORT OLDER THAN THE VILLA KEEPS (owner, 2026-11-05: a lock's door contact, asleep since 27/10 13:50, its
+ * last report gone with the villa's 10 days, read "Not enough history yet", as if it had just been added): a window
+ * asleep throughout with no report kept before it is "No longer kept" (NOT_KEPT) across, the band every chart draws
+ * for what the villa no longer keeps — never a guessed state.
  */
 export function heldWindow<R extends RecordedState>(rows: readonly R[], before: readonly R[], from: number): R[] {
   const held = heldRows(rows);
   if (!opensAsleep(rows)) return held;
   const last = lastReport(before);
-  return last ? [{ ...(last as R), last_changed: new Date(from).toISOString() }, ...held] : held;
+  if (last) return [{ ...(last as R), last_changed: new Date(from).toISOString() }, ...held];
+  return held.length === 0 && rows.length > 0 ? [{ ...rows[0], state: NOT_KEPT, last_changed: new Date(from).toISOString() }] : held;
 }
 
 /** Does a window (led by the state at its start) open asleep — so its held report lies before it? */

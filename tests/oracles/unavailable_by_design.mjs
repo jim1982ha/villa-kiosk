@@ -211,7 +211,12 @@ const sleptThrough = await loadOne(asleepPort, { kind: "stateWindow", id: DOOR, 
 ck("  ...asleep the whole window: it holds the last report over the SAME window as the device above it, never moved back",
    sleptThrough.lastSeen === undefined && sleptThrough.data.map((p) => p.state).join() === "on" && sleptThrough.data[0].t === FROM,
    sleptThrough);
+// owner, 2026-11-05: the Master Bedroom's door contact, asleep 9 days, its last report older than the villa keeps
 beforeRows = [{ entity_id: DOOR, state: "unavailable", last_changed: "2026-10-11T00:00:00Z" }];
+const { NOT_KEPT } = await import("@/utils/stateColors");
+const gone = await loadOne(asleepPort, { kind: "stateWindow", id: DOOR, hours: 24 }, TO);
+ck("  ...asleep the whole window, no report kept before it: \"No longer kept\" across, never \"Not enough history yet\"",
+   gone.data.map((p) => p.state).join() === NOT_KEPT && gone.data[0].t === FROM, gone);
 windowRows = recordedRows;
 ck("  ...no report before it: the band starts at its first report",
    (await asleepPort.stateRows(DOOR, FROM, TO)).map((r) => r.state).join() === "off,on");
