@@ -120,7 +120,10 @@ def acted(what: str, when: str, who: str = "") -> str:
 # ⚠️ "DONE", AS THE CARD'S BUTTON SAYS IT (owner, 2026-10-30: every card offers Done · Need help · Open Ticket, Done
 # and Close doing the same): a close in the Cockpit is said "Done in the Cockpit", a Need help pressed there "Need
 # help in the Cockpit"
-COCKPIT = {"closed": "Done in the Cockpit", "help": "Need help in the Cockpit", "taken": "Ticket opened in the Cockpit",
+# ⚠️ "NOT A PROBLEM" IS NOT A DONE (owner, 2026-11-04: "Not a problem while it lasts" pressed, and Telegram, the tablet's
+# card and its notice all said "Done in the Cockpit"): its close says what was pressed ("lasting")
+COCKPIT = {"closed": "Done in the Cockpit", "lasting": "Not a problem in the Cockpit",
+           "help": "Need help in the Cockpit", "taken": "Ticket opened in the Cockpit",
            "reopened": "Reopened in the Cockpit", "look_again": "Please look again."}
 
 #: How a night check's fault that cleared moves on, as its message's Status says it (status_words writes each other
@@ -135,12 +138,16 @@ NIGHT = {"watched": "watched until {until}", "closed": "Closed", "not_back": "it
 #: close in the Cockpit): the place said once, here — done_in writes the line.
 ON_TELEGRAM, ON_TABLET, IN_COCKPIT = "telegram", "tablet", "cockpit"
 DONE_IN = {ON_TELEGRAM: "Done on Telegram", ON_TABLET: "Done on the tablet", IN_COCKPIT: COCKPIT["closed"]}
+#: …and its "Not a problem while it lasts", by the same places: a close never read again while the problem lasts.
+LASTING_IN = {ON_TELEGRAM: "Not a problem on Telegram", ON_TABLET: "Not a problem on the tablet",
+              IN_COCKPIT: COCKPIT["lasting"]}
 
 
-def done_in(place: str, who: str | None = None) -> str:
+def done_in(place: str, who: str | None = None, lasting: bool = False) -> str:
     """A person's Done as the reports and the fault's close name it: "Done on Telegram (JM)", "Done in the Cockpit (JM)"
-    — no full stop; "Done" alone for a place not known."""
-    what = DONE_IN.get(place, "Done")
+    — no full stop; "Done" alone for a place not known. `lasting`: their "Not a problem" (while it lasts: "Not a problem on
+    Telegram (JM)")."""
+    what = (LASTING_IN if lasting else DONE_IN).get(place, "Not a problem" if lasting else "Done")
     return f"{what} ({who})" if who else what
 
 

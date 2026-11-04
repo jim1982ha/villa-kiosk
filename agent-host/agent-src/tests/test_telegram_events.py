@@ -122,7 +122,7 @@ def test_a_press_on_the_agents_own_message_is_handled(agent):
     old = {"id": "cb1", "data": "i:1:not_found", "chat_id": GROUP, "user_id": FM,
            "message": {"message_id": mid, "chat": {"id": GROUP}}, "bot": BOT}
     run(agent.on_ha_event("telegram_callback", old))
-    assert agent.tg.toasts[-1][1] == "This button is no longer offered: press Done or Need help." and agent.tg.sent == [
+    assert agent.tg.toasts[-1][1] == "This button is no longer offered: press Done, Need help or Not a problem." and agent.tg.sent == [
         agent.tg.sent[0]]                                                  # nothing else happened
     press = {**old, "id": "cb2", "data": "i:1:need_help"}
     run(agent.on_ha_event("telegram_callback", press))

@@ -1,6 +1,6 @@
 ---
 name: alert-desk
-description: Receives every critical alert of the VESTA automations (the villa system's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help chase (its reminder and escalation times are rules.yaml settings), gates the siren behind several signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every few minutes; you only read its status.
+description: Receives every critical alert of the VESTA automations (the villa system's vesta_critical_event), removes duplicates, routes by severity to the owner and facility-manager chats, runs the Done / Need help / Not a problem chase (its reminder and escalation times are rules.yaml settings), gates the siren behind several signals and one human approval, and watches the villa from outside (villa silent). The engine runs it on every alert, every ladder button and every few minutes; you only read its status.
 ---
 
 # alert-desk
@@ -46,7 +46,7 @@ decides alone to act on the villa.
      to the owner at the next tick.
 2. The engine's own connection to the villa's system: while it is up, a beat every `villa.beat_seconds`. Its absence
    is how the desk knows the villa is cut off (internet, power, the villa's system down).
-3. Ladder button presses (Done / Need help) carrying the incident number.
+3. Ladder button presses (Done / Need help / Not a problem) carrying the incident number.
 
 ## Procedure per alert (`desk.py intake`)
 
@@ -93,6 +93,7 @@ message then says who pressed what, and when. Typing the word works too.
 |---|---|
 | Done | incident closed, its Kiosk fault closed; the device is read once `clear_minutes` later. Still bad (its automation names its bad states): the incident opens again, "still there" ("Done (…), but … still reads …: still open. VESTA keeps watching it."), and the desk closes it when it is right. Not knowable (an older alert, a number): the people asked are told what it reads. The same for a fault closed in the Kiosk ("Closed in the Kiosk, but …"); a fault a person REOPENS in the Kiosk asks the facility manager again at once |
 | Need help | escalated to the owner with the detail |
+| Not a problem | incident closed, its Kiosk fault closed with nothing done, never read again while the problem lasts (the Cockpit's own "Not a problem"); back after it ended, it is a new alert |
 
 ## When a critical automation runs
 

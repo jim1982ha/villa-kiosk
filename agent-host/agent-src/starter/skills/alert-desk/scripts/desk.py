@@ -1186,6 +1186,13 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         if not checks:
             pressed = watched(pressed, W.minutes(store.incident(iid)))   # and on the alert in every other chat (settle below)
         out["send"].append(here(monitoring.only(act.langs) if checks else pressed, "closed"))
+    elif option == "not_a_problem":
+        # "Not a problem" (while it lasts): closed as the Cockpit's own does (Problems.person_done, read_again False) —
+        # no read again, its fault closed with nothing done; its watch for the alert coming back is said, as at a close
+        out["actions"] += Problems(store).person_done(iid, place, who=who, at=now.isoformat(), terms=terms(params),
+                                                      read_again=False)
+        pressed = watched(pressed, W.minutes(store.incident(iid)))
+        out["send"].append(here(pressed, "closed"))
     elif option == "need_help":
         helped = need_help(store, inc, act, now, out, mark=button.get("mark"), reply=label)
         out["send"].append(here(helped, "pressed", mark=button.get("mark")))

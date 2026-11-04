@@ -26,11 +26,12 @@ from vesta_shared.message_format import IN_COCKPIT, STEPS
 log = logging.getLogger("vesta.outcome")
 
 
-def kiosk_close_note(ticket: dict, zone: str) -> kiosk_words.Words:
+def kiosk_close_note(ticket: dict, zone: str, lasting: bool = False) -> kiosk_words.Words:
     """The note a fault closed in the VESTA Kiosk leaves on its alert's messages: "Done in the Cockpit on
     10/10/2026 17:13 (Wayan)." — who (the name typed, else the profile) and when the Kiosk recorded
-    (vesta_shared.kiosk_words, plus the full stop a settle note ends with), in every chat's language (its `langs`)."""
-    return kiosk_words.closed(ticket.get("by") or "", ticket.get("resolved_at"), zone, end=True)
+    (vesta_shared.kiosk_words, plus the full stop a settle note ends with), in every chat's language (its `langs`).
+    `lasting`: closed as "Not a problem while it lasts", said so."""
+    return kiosk_words.closed(ticket.get("by") or "", ticket.get("resolved_at"), zone, end=True, lasting=lasting)
 
 
 class Tickets:
@@ -285,12 +286,13 @@ class Tickets:
             # ⚠️ A CLOSE BEFORE ITS PROBLEM CAME BACK IS NOT THIS RUN'S (architecture review 24): the task reopened after it
             if task and task["status"] == "open" and not _before(at, task.get("reopened_at")):
                 said = {"by": by, "resolved_at": at}
-                iid = problems.closed_in_kiosk(task["id"], kiosk_words.closed(by, at, self.timezone), at=at,
-                                               who=by or None, lasting=g["lasting"])
+                iid = problems.closed_in_kiosk(task["id"], kiosk_words.closed(by, at, self.timezone,
+                                                                              lasting=g["lasting"]),
+                                               at=at, who=by or None, lasting=g["lasting"])
                 if iid:
                     # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the
                     # close, each chat's copy in its language (architecture review O)
-                    note = kiosk_close_note(said, self.timezone)
+                    note = kiosk_close_note(said, self.timezone, lasting=g["lasting"])
                     await self.settle_alert(iid, note, note_in=note.langs or None)
                 log.info("Kiosk fault %s closed by a person: its task closed with it", uid)
             elif not uid.startswith(MINE) and (iid := link.standing(link.of_ticket(uid))):
@@ -393,7 +395,7 @@ class Tickets:
                     fixed += await self.kiosk.amend(uid, *amends)
                 elif card["status"] != "resolved" and (t.get("done_at") or "") >= recent:
                     n = await self.kiosk.resolve_ticket(uid, note=want["note"], **({"who": want["who"]} if want["who"] else {}),
-                                                        confirms_by=want["confirms_by"])
+                                                        confirms_by=want["confirms_by"], lasting=want["lasting"])
                     fixed += n; resolved += n
                 elif card["status"] == "resolved" and card.get("confirms_by") != want["confirms_by"]:
                     # a person's close being confirmed (owner, 2026-10-23): "VESTA confirms by …" while the alert desk

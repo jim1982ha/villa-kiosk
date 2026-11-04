@@ -18,6 +18,11 @@ buttons:                      # under every message about an open alert; a press
   - {option: need_help, label: Need help, mark: help,     # mark: its footer's icon (🆘)
      labels: {fr: Besoin d'aide, id: Butuh bantuan, de: Brauche Hilfe, es: Necesito ayuda, it: Serve aiuto,
               nl: Hulp nodig, zh: 需要帮助, ja: 助けが必要, ko: 도움 필요}}
+  # closed with nothing done, never read again while the problem lasts; back after it ended, it is a new alert (owner,
+  # 2026-11-04: beside Done and Need help, as on the Cockpit's card, never only after a Done)
+  - {option: not_a_problem, label: Not a problem,
+     labels: {fr: Pas un problème, id: Bukan masalah, de: Kein Problem, es: No es un problema, it: Non è un problema,
+              nl: Geen probleem, zh: 不是问题, ja: 問題なし, ko: 문제 아님}}
 # The alert's own words in each chat's language (owner, 2026-10-23): the villa's automations write them in English;
 # a chat whose language (set in the VESTA Kiosk beside the chat) is another gets them translated by the AI, once per sentence pattern
 # (names, numbers, times and codes stay as written and are not sent as words), then from memory with no AI. The card always

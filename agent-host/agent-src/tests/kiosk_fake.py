@@ -265,12 +265,16 @@ class FakeKiosk(Kiosk):
             self._all().append({"id": tid, "title": title or tid, "status": status, "openedAt": PERSON_AT,
                                 "photoIds": [], "updates": []})
 
-    def person_closes(self, tid: str, by: str = "Facility manager", at: str = PERSON_AT, cockpit: bool = False) -> None:
+    def person_closes(self, tid: str, by: str = "Facility manager", at: str = PERSON_AT, cockpit: bool = False,
+                      lasting: bool = False) -> None:
         """A person's close. `cockpit`: as the Cockpit's Close writes it (fmEngine.withTicketClosed: kind "cleared",
-        "Closed without action", by the profile) — else a close with no kind (a ticket's "Mark resolved")."""
+        "Closed without action", by the profile) — else a close with no kind (a ticket's "Mark resolved"). `lasting`:
+        its "Not a problem" (while it lasts: the step's `lasting`)."""
         step = {"at": at, "status": "resolved", "by": by}
-        if cockpit:
+        if cockpit or lasting:
             step.update(kind=CLEARED, note="Closed without action", photoIds=[])
+        if lasting:
+            step["lasting"] = True
         self._step(tid, step, status="resolved", resolvedAt=at)
 
     def person_does(self, tid: str, who: str = "JM", at: str = PERSON_AT) -> None:

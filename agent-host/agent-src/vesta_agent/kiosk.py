@@ -757,12 +757,14 @@ class Kiosk:
         return await self._edit(change)
 
     async def resolve_ticket(self, tid: str, note: str | None = None, who: str | None = None,
-                             confirms_by: str | None = None) -> bool:
+                             confirms_by: str | None = None, lasting: bool = False) -> bool:
         """Mark one of the agent's tickets resolved. By `who` — a person's Done: their name on the card, and the work
         recorded as the Kiosk's own "Mark resolved" records it (a completion, in Recent work; review 31: a Done on
         Telegram never appeared there). Without — the agent's own clearing of a problem gone: kind "cleared", never a
         repair in any figure. `confirms_by`: when the agent reads it again to confirm a person's close (`confirmsBy`, a
-        Kiosk that reads it only: _gated). False when it is gone or closed."""
+        Kiosk that reads it only: _gated). `lasting`: a person's "Not a problem while it lasts" (on Telegram or the
+        tablet): a close with no work done (kind "cleared", no completion) carrying `lasting`, by `who`, as the Cockpit's
+        own records it (the agreement's ticketUpdate). False when it is gone or closed."""
         def change(data: dict) -> bool:
             tickets = list(data.get("tickets") or [])
             for i, t in enumerate(tickets):
@@ -773,7 +775,9 @@ class Kiosk:
                     upd = {"at": now, "status": "resolved", "photoIds": []}
                     if note:
                         upd["note"] = note[:update_note_chars()]
-                    if who:
+                    if who and lasting:
+                        upd.update(who=who[:who_chars()], kind=CLEARED, lasting=True)
+                    elif who:
                         upd["who"] = who[:who_chars()]       # the person, on the card (faultWhen: who, else by)
                         # its `by` is the Kiosk's to stamp ("VESTA Agent"); the person is `who` (fmEngine.workedBy)
                         data["completions"] = list(data.get("completions") or []) + [{

@@ -213,7 +213,7 @@ class Problems:
     # back the fault actions to carry out.
     def close_incident(self, iid: int, state: str, now_iso: str, note: str = "", who: str | None = None, *,
                        person: str | None = None, can_come_back: bool = True, terms: dict | None = None,
-                       **fields) -> list[dict]:
+                       lasting: bool = False, **fields) -> list[dict]:
         """The incident ends in `state` (closed now), with the watch that follows (alert_watch.close: `person` — a
         person closed it, as the desk's read-again says it; `can_come_back`; `terms` — the desk's, else those it
         carries). When that state ends its Problem (Incident.ANSWERED_OR_CLEARED) its open task closes too — done by a
@@ -222,7 +222,14 @@ class Problems:
         task moved (result.moved)."""
         alert_watch.close(self.store, iid, state, now_iso, person=person, can_come_back=can_come_back, t=terms,
                           **fields)
-        moved = self.settle(f"incident:{int(iid)}", note=note, who=who)
+        last = self.store.last_task(f"incident:{int(iid)}") if lasting else None
+        if last and last["status"] == "open":
+            # "Not a problem while it lasts" (`lasting`) pressed on Telegram or the tablet: its task closes as the
+            # Cockpit's does (NOT_A_PROBLEM), never read again while the problem lasts
+            self.close(last["id"], NOT_A_PROBLEM, note, who)
+            moved = [last["id"]]
+        else:
+            moved = self.settle(f"incident:{int(iid)}", note=note, who=who)
         # an alert standing for a fault's Need help: its close closes that fault too (a Done on Telegram, the desk's)
         moved = [*moved, *self.help.closed(iid, note, who)]
         return result.moved(moved)
@@ -244,7 +251,7 @@ class Problems:
 
         ⚠️ ONE DONE, ONE ENTRY (architecture review, 2026-10-30 evening: three closes of an alert each wrote their own
         words — the reports read "Done", "Done (Closed in the Cockpit)" and "Done (Done in the Cockpit)" for one press)."""
-        words = mf.done_in(place, who)
+        words = mf.done_in(place, who, lasting=not read_again)
         when = _moment(at)
         now_iso = when.isoformat() if when else self.store.now()
         if place == mf.IN_COCKPIT:
@@ -252,7 +259,8 @@ class Problems:
                               person=kiosk_words.stored(said or words) if read_again else None, reply=words)
             return []
         return self.close_incident(iid, Incident.DONE, now_iso, f"{words}.", who=who, reply=words,
-                                   person=person or words, terms=terms)
+                                   person=(person or words) if read_again else None, terms=terms,
+                                   lasting=not read_again)
 
     def close_finding(self, finding: dict, day: str, note: str = "") -> list[dict]:
         """The night check no longer sees a finding: it closes, its task is cleared (its Kiosk fault follows: the
@@ -595,7 +603,8 @@ class Problems:
         no note). ⚠️ A TELEGRAM DONE WAS "CLOSED IN THE COCKPIT" (architecture review, 2026-10-30 evening): the facility
         manager read "Closed in the Cockpit on …, but still there" of a fault done on Telegram."""
         note = str(task.get("close_note") or "")
-        return next((w for w in mf.DONE_IN.values() if note.startswith(w)), mf.DONE_IN[mf.IN_COCKPIT])
+        return next((w for w in [*mf.LASTING_IN.values(), *mf.DONE_IN.values()] if note.startswith(w)),
+                    mf.DONE_IN[mf.IN_COCKPIT])
 
     def still_there_after_close(self, source: str) -> bool:
         """A person closed the latest task about finding `source`, and the finding was read still bad (its `seen_at`)
@@ -721,6 +730,8 @@ class Problems:
                 "check": agreed("checks", _check_word(kind, task.get("rule_id"), rechecked))
                 if kind in ("incident", "finding") else None,
                 "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None,
+                # closed as "Not a problem while it lasts" (on Telegram or the tablet): its fault says so too
+                "lasting": task.get("status") == NOT_A_PROBLEM,
                 "reopen_note": task.get("reopen_note") or None,
                 "todo": self.check_of(task)}
 

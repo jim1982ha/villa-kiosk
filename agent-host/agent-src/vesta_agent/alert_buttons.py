@@ -69,7 +69,8 @@ class AlertButtons:
         skill = self.skills.get(skill_name) if skill_name else None
         buttons = {b["option"]: b for b in self.of(skill)}
         if opt not in buttons:
-            offered = " or ".join(b["label"] for b in buttons.values())
+            labels = [b["label"] for b in buttons.values()]
+            offered = ", ".join(labels[:-1]) + " or " + labels[-1] if len(labels) > 1 else "".join(labels)
             return await toast(f"This button is no longer offered: press {offered}." if opt in RETIRED or skill
                                else "Unknown button.")
         if skill is None or not skill.on_reply:

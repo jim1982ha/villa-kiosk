@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.433 (4 November 2026)
+
+- "Not a problem" (while it lasts) is said as such: message_format.COCKPIT["lasting"] and LASTING_IN (each language in
+  status_words), kiosk_words.closed(lasting), kiosk_close_note(lasting); a Cockpit close with `lasting` no longer reads
+  "Done in the Cockpit" on the alert's messages. The alert desk offers it beside Done and Need help (skill.yaml option
+  not_a_problem, desk.reply): Problems.person_done(read_again=False) closes the incident with no read-again and its task
+  NOT_A_PROBLEM (close_incident `lasting`); its Kiosk fault is resolved as the Cockpit's own close (Kiosk.resolve_ticket
+  `lasting`: kind cleared, lasting, who, no completion; Problems.card `lasting`).
+
 ## 0.6.432 (4 November 2026)
 
 - A press on a turn of a tablet's conversation settles that turn as a Telegram message is settled (press.from_tablet

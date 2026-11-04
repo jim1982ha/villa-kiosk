@@ -123,3 +123,36 @@ def test_a_fault_reopened_in_the_cockpit_is_asked_again_in_each_chats_language(t
     run(v.run_code_job(v.skills.get("alert-desk"), f"desk.py tick --now {(now + timedelta(minutes=4)).isoformat()}", 60))
     assert re.search(rf"Rouvert dans le Cockpit le {T} \(Anna\)\. Merci de vérifier à nouveau\.", status(v, FM_FR)[-1]), status(v, FM_FR)
     assert re.search(rf"Im Cockpit wieder geöffnet am {T} \(Anna\)\. Bitte noch einmal prüfen\.", status(v, FM_DE)[-1]), status(v, FM_DE)
+
+
+def test_not_a_problem_in_the_cockpit_is_said_as_such_never_as_a_done(tmp_path):
+    # owner, 2026-11-04 (#117): "Not a problem while it lasts" pressed on the Cockpit's card, and Telegram, the tablet's
+    # card and its notice all said "✅ Done in the Cockpit on … (Owner)."
+    v, k, uid = villa(tmp_path)
+    k.person_closes(uid, by="Luc", at="2026-10-15T00:40:00.000Z", lasting=True)
+    run(v.tickets.repair())
+    assert status(v, GROUP)[-1] == "✅ Not a problem in the Cockpit on 15/10/2026 00:40 (Luc).", status(v, GROUP)
+    assert status(v, FM_FR)[-1] == "✅ Pas un problème dans le Cockpit le 15/10/2026 00:40 (Luc).", status(v, FM_FR)
+    lines = [ln for m in k.messages.values() for ln in m.get("status") or []]        # the tablet's cards of the alert
+    assert lines[-1] == "✅ Pas un problème dans le Cockpit le 15/10/2026 00:40 (Luc).", lines   # in the FM's language
+    assert not any("Done" in ln or "Terminé" in ln for ln in lines), lines
+
+
+def test_not_a_problem_pressed_on_telegram_closes_it_as_the_cockpit_does(tmp_path):
+    # owner, 2026-11-04: "Not a problem" beside Done and Need help, on Telegram as on the Cockpit's card
+    v, k, uid = villa(tmp_path)
+    labels = [b["label"] for b in next(m for m in k.messages.values() if m.get("buttons"))["buttons"]]
+    assert labels == ["Done", "Need help", "Not a problem"], labels          # the tablet's notice, as Telegram's
+    run(v.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": FM_FR, "user_id": FM_FR,
+                                            "message": {"message_id": v.thread.shown(1)[FM_FR]["mid"], "chat": {"id": FM_FR}},
+                                            "bot": BOT}))
+    assert re.fullmatch(rf"✅ Pas un problème le {T} \(Luc\)\. .+", status(v, FM_FR)[-1]), status(v, FM_FR)
+    assert re.fullmatch(rf"✅ Not a problem on {T} \(Luc\)\.", status(v, GROUP)[-1]), status(v, GROUP)
+    from vesta_shared.problems import NOT_A_PROBLEM
+    (task,) = [t for t in Store(v.s.store_path).tasks(None) if str(t.get("source")).startswith("incident:")]
+    assert task["status"] == NOT_A_PROBLEM and task["close_note"].startswith("Not a problem on Telegram (Luc)")
+    run(v.tickets.repair())
+    last = k.ticket(uid)["updates"][-1]                     # its fault in the Cockpit: closed with nothing done, lasting
+    assert (last["status"], last.get("kind"), last.get("lasting"), last.get("who")) == \
+        ("resolved", "cleared", True, "Luc"), last
+    assert not any(c.get("ticketId") == uid for c in k.doc["data"].get("completions") or [])   # never a repair
