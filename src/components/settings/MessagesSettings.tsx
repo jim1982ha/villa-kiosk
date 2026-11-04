@@ -10,6 +10,7 @@ import { announcedTitles } from "@/messages/announcements";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import SearchPicker from "@/components/common/SearchPicker";
 import Tip from "@/components/common/Tip";
+import AddOnLine from "@/components/common/AddOnLine";
 import { X } from "lucide-react";
 
 interface Props {
@@ -29,24 +30,27 @@ export function FullScreenAnnouncements({ value, onChange }: Props) {
   const offered = announcedTitles(kept, value.map((f) => f.title));
   return (
     <>
-      {/* one card: its heading says the list is every tablet's and names the seconds column, then a row per pick
-          (owner, 2026-11-03: "very poorly rendered", the rows did not line up and "For every tablet" floated alone) */}
+      {/* one card: its heading says the list is every tablet's, with its add, then a row per pick (owner, 2026-11-03:
+          "very poorly rendered", the rows did not line up and "For every tablet" floated alone). ⚠️ THE HEADING IS A ROW'S
+          COLUMNS (owner, 2026-11-04: "Seconds" stood over the ✕): the add on the heading's line at the title's right
+          (common/AddOnLine), "Seconds" over the seconds, nothing over the ✕ */}
       <div className="settings-list" style={{ marginTop: 14 }}>
-        <div className="settings-list-head">
-          <span>Announcements, on every tablet</span>
-          <span>Seconds</span>
+        <div className="settings-list-head fs-row">
+          <AddOnLine title="Announcements, on every tablet" label="Add an announcement">
+            {(done) => <SearchPicker compact startOpen placeholder="Add an announcement…"
+              onPick={(t) => { done(); onChange([...value.filter((x) => x.title !== t), { title: t, seconds: FULL_SCREEN_S_DEFAULT }]); }}
+              rows={(q) => offered.filter((t) => t.toLowerCase().includes(q.trim().toLowerCase())).map((t) => ({ key: t, label: t }))}
+              empty={offered.length > 0 ? undefined : !loaded ? "Reading what the villa has announced…"
+                : "Nothing else announced yet: each announcement the villa makes is listed here."} />}
+          </AddOnLine>
+          {/* the seconds cell drawn as a row's (its field's width, then its "s", unseen): the word stands over the field */}
+          {value.length > 0 && <span className="fs-row-seconds"><span className="fs-head-seconds">Seconds</span><span className="fs-head-unit" aria-hidden>s</span></span>}
+          {value.length > 0 && <span className="fs-head-remove" aria-hidden />}
         </div>
-        {value.length === 0 && <div className="settings-list-row muted body-text">None yet: add one below.</div>}
+        {value.length === 0 && <div className="settings-list-row muted body-text">None yet: add one with +.</div>}
         {value.map((f) => (
           <FullScreenRow key={f.title} item={f} onRemove={() => onChange(value.filter((x) => x.title !== f.title))} />
         ))}
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <SearchPicker compact placeholder="Add an announcement…"
-          onPick={(t) => onChange([...value.filter((x) => x.title !== t), { title: t, seconds: FULL_SCREEN_S_DEFAULT }])}
-          rows={(q) => offered.filter((t) => t.toLowerCase().includes(q.trim().toLowerCase())).map((t) => ({ key: t, label: t }))}
-          empty={offered.length > 0 ? undefined : !loaded ? "Reading what the villa has announced…"
-            : "Nothing else announced yet: each announcement the villa makes is listed here."} />
       </div>
     </>
   );

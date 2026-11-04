@@ -10,7 +10,7 @@ import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { confirmingFaults, confirmParts, shownUntil } = await import("@/fm/faultConfirm");
 const confirmLine = (c) => { const { did, tip } = confirmParts(c); return `${did} · ${tip}`; };
-const { buildAttentionItems, attentionFor, deviceIssues } = await import("@/config/attention");
+const { attentionOf, attentionFor, deviceIssues } = await import("@/config/attention");
 const { confirmingCards, cockpitCard } = await import("@/config/cockpitCard");
 const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
@@ -93,7 +93,7 @@ const ids = ["lock.door", "switch.pump", "lock.back", "lock.gate", "lock.side", 
 const entities = Object.fromEntries(ids.map((id) => [id, { entity_id: id, state: id === "binary_sensor.leak" ? "off" : "locked",
   attributes: { friendly_name: id.split(".")[1] }, last_changed: at(-5) }]));
 const devices = devicesOf({ ids });
-const villa = { devices, attentionItems: buildAttentionItems({ devices, entities, entityMap: {}, resolvedRooms: {}, fmData: data }) };
+const villa = { devices, attentionItems: attentionOf({ devices, entities, entityMap: {}, resolvedRooms: {}, fmData: data }).attentionItems };
 const att = attentionFor(villa, () => true);
 ck("the open issues, their count and the health line hold only the active fault",
    att.attentionGroups.length === 1 && att.attentionGroups[0].items.every((i) => i.ticketId === "a1")
@@ -205,8 +205,8 @@ console.log("\n  a hidden device: no card in any section (config/cockpitIssues, 
   const hdata = { ...data, tickets: [...data.tickets, jammed] };   // lock.door: w1 watched, h1 open
   const issuesWith = (hidden) => {
     const devs = devicesOf({ ids: ids.filter((id) => !hidden.has(id)), hidden });
-    const view = attentionFor({ devices: devs, attentionItems: buildAttentionItems({ devices: devs, entities, entityMap: {},
-      resolvedRooms: {}, fmData: hdata }) }, () => true);
+    const view = attentionFor({ devices: devs, attentionItems: attentionOf({ devices: devs, entities, entityMap: {},
+      resolvedRooms: {}, fmData: hdata }).attentionItems }, () => true);
     return cockpitIssues(view, { fmData: hdata, cadence: CADENCE, now: new Date(NOW), entities, entityMap: {}, resolvedRooms: {} });
   };
   const about = (cards) => cards.filter((c) => c.entityId === "lock.door").map((c) => c.key);
@@ -217,8 +217,8 @@ console.log("\n  a hidden device: no card in any section (config/cockpitIssues, 
   const numbered = (() => {
     const devs = devicesOf({ ids, hidden: new Set() });
     const d2 = { ...hdata, tickets: hdata.tickets.map((t) => (t.id === "w1" ? { ...t, alertNumber: 90 } : t)) };
-    const view = attentionFor({ devices: devs, attentionItems: buildAttentionItems({ devices: devs, entities, entityMap: {},
-      resolvedRooms: {}, fmData: d2 }) }, () => true);
+    const view = attentionFor({ devices: devs, attentionItems: attentionOf({ devices: devs, entities, entityMap: {},
+      resolvedRooms: {}, fmData: d2 }).attentionItems }, () => true);
     return cockpitIssues(view, { fmData: d2, cadence: CADENCE, now: new Date(NOW), entities, entityMap: {}, resolvedRooms: {} });
   })();
   ck("a watched card carries its alert's number, so VESTA's card of it is found there (and leaves Notifications)",
@@ -238,8 +238,8 @@ console.log("\n  a hidden device: no card in any section (config/cockpitIssues, 
   const ents = { "switch.pump": { entity_id: "switch.pump", state: "unavailable", attributes: {} }, "lock.door": { entity_id: "lock.door", state: "unavailable", attributes: {} } };
   const at = (t) => new Date(Date.now() + t).toISOString();
   const closing = { ...closedIn("n1", "switch.pump", at(600_000)), openedAt: at(-3_600_000) };
-  const left = buildAttentionItems({ devices: offline, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: { ...EMPTY_FM_DATA, tickets: [closing] } }).map((i) => i.entityId);
-  const past = buildAttentionItems({ devices: offline, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: { ...EMPTY_FM_DATA, tickets: [{ ...closing, confirmsBy: at(-600_000) }] } }).map((i) => i.entityId);
+  const left = attentionOf({ devices: offline, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: { ...EMPTY_FM_DATA, tickets: [closing] } }).attentionItems.map((i) => i.entityId);
+  const past = attentionOf({ devices: offline, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: { ...EMPTY_FM_DATA, tickets: [{ ...closing, confirmsBy: at(-600_000) }] } }).attentionItems.map((i) => i.entityId);
   ck("a device on Watch is no open issue while it stays offline; another offline device is", left.join() === "lock.door", left);
   ck("  ...once the watch is over and it is still offline, it is an issue again", past.includes("switch.pump"), past);
 }
@@ -276,7 +276,7 @@ console.log("\n  one place at every moment (architecture review round 16: faultC
     const onWatch = confirmingFaults(d, CADENCE, now).map((c) => c.ticket.id);
     const inClosed = closedFaults(d, CADENCE, now).map((c) => c.ticket.id);
     const hidden = watchedRecords(d, CADENCE, now).map((x) => x.id);
-    const live = buildAttentionItems({ devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: d, cadence: CADENCE, now })
+    const live = attentionOf({ devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: d, cadence: CADENCE, now }).attentionItems
       .some((i) => i.kind === "unavailable" && i.entityId === "switch.example_pump");
     return { place: afterClose(t, CADENCE, now)?.place, onWatch: onWatch.join(), inClosed: inClosed.join(), hidden: hidden.join(), live };
   };

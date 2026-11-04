@@ -18,7 +18,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceLook, drawsBadge, storeLookSource, mapLookSource } = await import("@/utils/deviceActivity");
 const { villaDevices, hiddenIn } = await import("@/config/deviceGroups");
-const { buildAttentionItems, groupAttention } = await import("@/config/attention");
+const { attentionOf, groupAttention } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { devicesOf } = await import("../consistency/devices.mjs");
 
@@ -55,7 +55,7 @@ ck("the predicate stands for the whole device: an entity whose device's entity i
    hiddenIn(new Set(["switch.relay"]), new Map([["sensor.relay_power", "switch.relay"]]))("sensor.relay_power"));
 
 // ⚠️ THE RULE THE MAP BROKE: every entity the map paints red — hidden or not — has its line in "Needs attention"
-const items = buildAttentionItems({ devices, entities, entityMap, resolvedRooms: {}, fmData: EMPTY_FM_DATA });
+const items = attentionOf({ devices, entities, entityMap, resolvedRooms: {}, fmData: EMPTY_FM_DATA }).attentionItems;
 const listed = new Set(items.map((i) => i.entityId));
 const redOnMap = Object.keys(entities).filter((id) => deviceLook(id, map).alert);
 ck("every red badge on the map has its line in Needs attention", redOnMap.every((id) => listed.has(id)),
@@ -71,8 +71,8 @@ console.log("  a device the villa's system no longer has:");
   const devs = devicesOf({ ids: ["switch.relay", "lock.door"], unavailable: ["switch.relay"], folding });
   const ticket = { id: "va-7", title: "Relay power has been offline for 3 h.", status: "open",
     openedAt: "2026-10-20T10:00:00Z", photoIds: [], updates: [], entityId: "sensor.relay_power" };
-  const groups = groupAttention(buildAttentionItems({ devices: devs, entities: ents, entityMap: {}, resolvedRooms: {},
-    fmData: { ...EMPTY_FM_DATA, tickets: [ticket] } }));
+  const groups = groupAttention(attentionOf({ devices: devs, entities: ents, entityMap: {}, resolvedRooms: {},
+    fmData: { ...EMPTY_FM_DATA, tickets: [ticket] } }).attentionItems);
   const relay = groups.find((g) => g.entityId === "switch.relay");
   ck("its ticket rides on the device's Missing line: one line, its Close kept",
      relay?.items.length === 1 && relay.items[0].detail === "Missing" && relay.items[0].fault?.ticketId === "va-7",

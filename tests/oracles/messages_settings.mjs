@@ -98,8 +98,18 @@ console.log("\n  the rows, drawn:");
     .map((m) => [m[1], /value="(\d+)"/.exec(m[0])?.[1]]);
   ck("one seconds field per picked announcement, named for it, holding its own time",
      J(fields) === J([["🔔 Visitor", "15"], ["🔥 Overload", "300"]]), fields);
-  ck("  ...each with its ✕ to take it off, and the picker to add one", (html.match(/aria-label="Take [^"]+ off full screen"/g) ?? []).length === 2
-     && /placeholder="Add an announcement…"/.test(html));
+  ck("  ...each with its ✕ to take it off", (html.match(/aria-label="Take [^"]+ off full screen"/g) ?? []).length === 2);
+  // owner, 2026-11-04: the search box under the list became an icon on the heading's line (common/AddOnLine), and the
+  // heading is a row's columns: "Seconds" over the seconds field, nothing over the ✕
+  const head = /<div class="settings-list-head fs-row">([\s\S]*?)<\/div>\s*<div class="settings-list-row/.exec(html)?.[1] ?? "";
+  ck("  ...the add is one icon on the heading's line, at the title's right, no search box until it is pressed",
+     /^<div class="add-line"><span class="add-line-title">Announcements, on every tablet<\/span>[\s\S]*aria-label="Add an announcement"/.test(head)
+     && !/placeholder="Add an announcement…"/.test(html), head);
+  const cells = (row) => [...row.matchAll(/<(?:div|span) class="(add-line|fs-row-title|fs-row-seconds|fs-head-remove|tip-anchor[^"]*)"/g)].map((m) => m[1]);
+  const firstRow = /<div class="settings-list-row fs-row">([\s\S]*?)<\/div>\s*(?:<div class="settings-list-row|$)/.exec(html)?.[1] ?? "";
+  ck("  ...\"Seconds\" heads the seconds column, the ✕ column has no heading",
+     /<span class="fs-row-seconds"><span class="fs-head-seconds">Seconds<\/span><span class="fs-head-unit" aria-hidden="true">s<\/span><\/span><span class="fs-head-remove" aria-hidden="true"><\/span>$/.test(head.trim())
+     && /<span class="fs-row-seconds"><input/.test(firstRow), [head, cells(firstRow)]);
   ck("  ...no \"Ring shown for\" anywhere", !/Ring shown for/i.test(html));
 }
 

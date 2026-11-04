@@ -25,6 +25,7 @@
 import { AGENT_STAMP, type AgentCadence } from "@/agent/agentApi";
 import { clockTime, momentText } from "@/utils/dateText";
 import { nextAt, withinLook } from "./faultTiming";
+import { NOT_A_PROBLEM } from "./deviceWork";
 import { agentOwned } from "./issueSource";
 import { closedAsLasting, isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
 import type { FmData, FmTicket } from "./fmTypes";
@@ -40,7 +41,7 @@ interface ClosedFault {
   /** How it was cleared: "Done" (a Done on Telegram, a repair recorded), "Cleared" (the Cockpit's No action needed, nothing done,
    *  with who pressed it; or the VESTA Agent's own clearing, no name: what it reported is over). Never "Closed": it is
    *  not closed until VESTA lets it go (owner, 2026-10-31). */
-  word: "Done" | "Cleared" | "Not a problem";
+  word: "Done" | "Cleared" | typeof NOT_A_PROBLEM;
   /** Who did it — the person named on its close (`who`), else the profile that recorded it (`by`); "" when unsaid or
    *  the Agent's own clearing. */
   who: string;
@@ -72,7 +73,7 @@ function closedOf(t: FmTicket): ClosedFault {
   const agents = !!close && isClearedStep(close) && !close.who && close.by === AGENT_STAMP;
   return {
     ticket: t,
-    word: close?.lasting ? "Not a problem" : close && isClearedStep(close) ? "Cleared" : "Done",
+    word: close?.lasting ? NOT_A_PROBLEM : close && isClearedStep(close) ? "Cleared" : "Done",
     who: agents ? "" : close?.who || authorWords(close),
     closedAt: Date.parse(close?.at ?? t.resolvedAt ?? ""),
   };

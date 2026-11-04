@@ -150,7 +150,7 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
      list.indexOf(`Alert sent (to: Facility Manager) · ${momentText(story[0].at)}`) >= 0
      && list.indexOf(`🆘 Need help on Telegram (Wayan) · ${momentText(story[1].at)}`) > list.indexOf("Alert sent"), list || told.slice(0, 800));
   ck("  ...none told, no story drawn", !drawn.includes("cockpit-attention-story"));
-  const { buildAttentionItems } = await import("@/config/attention");
+  const { attentionOf } = await import("@/config/attention");
   const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
   const { devicesOf } = await import("../consistency/devices.mjs");
   const ticket = { id: "c1", title: "Door unlocked", status: "open", openedAt: "2026-10-21T06:00:00Z", entityId: "lock.example",
@@ -161,18 +161,18 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
   const { sinceEntities } = await import("@/config/attention");
   const fmData = { ...EMPTY_FM_DATA, tickets: [ticket] };
   const asked = [];
-  const items = buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
-    fmData, sinceOf: (id) => (asked.push(id), { at: locked.getTime(), before: false }) });
+  const items = attentionOf({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
+    fmData, sinceOf: (id) => (asked.push(id), { at: locked.getTime(), before: false }) }).attentionItems;
   const c = items.find((i) => i.ticketId === "c1")?.closing;
   ck("  ...from the fault's closesAt and its device as it reads now, since when from its history (never the restart)",
      c?.at === closes.toISOString() && c?.word === "Locked" && c?.since?.at === locked.getTime()
      && asked.join() === "lock.example" && sinceEntities({ fmData, devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {} }).join() === "lock.example", c);
-  const unread = buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
-    fmData }).find((i) => i.ticketId === "c1")?.closing;
+  const unread = attentionOf({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {}, resolvedRooms: {},
+    fmData }).attentionItems.find((i) => i.ticketId === "c1")?.closing;
   ck("  ...no history to ask: no time said, never last_changed", unread?.since === null, unread);
   // owner's end-to-end test, 2026-10-30: a lock that was UNAVAILABLE read "Unlocked since before 19 Oct"
-  const olderState = (since) => buildAttentionItems({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {},
-    resolvedRooms: {}, fmData, sinceOf: () => since }).find((i) => i.ticketId === "c1")?.closing;
+  const olderState = (since) => attentionOf({ devices: devicesOf({ ids: ["lock.example"] }), entities, entityMap: {},
+    resolvedRooms: {}, fmData, sinceOf: () => since }).attentionItems.find((i) => i.ticketId === "c1")?.closing;
   const before = olderState({ at: Date.parse("2026-10-20T00:00:00Z"), before: false });
   const outOfReach = olderState({ at: Date.parse("2026-10-19T00:00:00Z"), before: true });
   ck("  ...a state older than the problem is not what changed: \"Back to normal\", never its state since then",

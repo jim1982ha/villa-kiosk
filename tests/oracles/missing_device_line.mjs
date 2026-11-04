@@ -5,14 +5,14 @@
 // it (one problem, one line), and the alert's card named the line by VESTA's title alone, so the word went.
 //
 // Driven by value through the production path: the villa's devices (villaDevices, over a states fixture), the items
-// (buildAttentionItems), the cards (groupAttention → cockpitCard), the Inbox's alert card drawn (issueAsTold → CockpitAttentionRow), and
+// (attentionOf), the cards (groupAttention → cockpitCard), the Inbox's alert card drawn (issueAsTold → CockpitAttentionRow), and
 // the counts (attentionFor's health). Placeholder ids.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { h, draw } from "../consistency/screen.mjs";
 const { villaDevices } = await import("@/config/deviceGroups");
-const { buildAttentionItems, attentionFor } = await import("@/config/attention");
+const { attentionOf, attentionFor } = await import("@/config/attention");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { NOT_IN_HA } = await import("@/utils/stateColors");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
@@ -33,8 +33,8 @@ const alert = parseVestaMessage({ seq: 1, key: "incident:7", title: "#7-P1 (new)
 function cockpit(entities, tickets = []) {
   const devices = villaDevices({ entityMap: {}, deviceGroups: [], dismissed: new Set(), hidden: new Set(),
     mappedEntityIds: mapped, entities, entityDeviceIds: {} });
-  const problems = { devices, attentionItems: buildAttentionItems({ devices, entities, entityMap: {}, resolvedRooms: {},
-    fmData: { ...EMPTY_FM_DATA, tickets } }) };
+  const problems = { devices, attentionItems: attentionOf({ devices, entities, entityMap: {}, resolvedRooms: {},
+    fmData: { ...EMPTY_FM_DATA, tickets } }).attentionItems };
   const view = attentionFor(problems, () => true);
   return { view, cards: view.attentionGroups.map((g) => cockpitCard(g, null)) };
 }

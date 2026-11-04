@@ -3,13 +3,13 @@
 // badge the fault RECORDS (faultDevices), the sign the Overview's cards — and they disagreed: an offline sensor with its
 // fault was an amber "!" on the map and a grey sign in its window (the fault sat inside its "Unavailable" line); a pump
 // with only late maintenance had an amber sign and no mark. Driven by value through the shipped modules, from the same
-// villa state: buildAttentionItems → attentionFor (the Overview) → deviceIssues (the badge) / issueSeverity (the sign)
+// villa state: attentionOf → attentionFor (the Overview) → deviceIssues (the badge) / issueSeverity (the sign)
 // / cockpitCard (the card's icons).
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceLook, storeLookSource } = await import("@/utils/deviceActivity");
-const { buildAttentionItems, attentionFor, deviceIssues, issueSeverity, faultsFor } = await import("@/config/attention");
+const { attentionOf, attentionFor, deviceIssues, issueSeverity, faultsFor } = await import("@/config/attention");
 const { cockpitCard } = await import("@/config/cockpitCard");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { devicesOf } = await import("../consistency/devices.mjs");
@@ -27,7 +27,7 @@ function seen(id, { state, unavailable = [], tickets = [], schedules = [] }) {
   const entityMap = { [id]: { entityId: id, type: id.split(".")[0] } };
   const devices = devicesOf({ ids: [id], unavailable });
   const fmData = { ...EMPTY_FM_DATA, tickets, schedules };
-  const items = buildAttentionItems({ devices, entities, entityMap, resolvedRooms: {}, fmData });
+  const items = attentionOf({ devices, entities, entityMap, resolvedRooms: {}, fmData }).attentionItems;
   const att = attentionFor({ devices, attentionItems: items }, () => true);
   const issues = deviceIssues(att.attentionGroups);
   const mark = deviceLook(id, storeLookSource(entities, { entityMap, isHidden: () => false,
@@ -71,7 +71,7 @@ ck("  ...nothing wrong: no mark, no sign, no card", E.mark === null && E.sign ==
   const devices = devicesOf({ ids: [], hidden: new Set([id]) });
   const fmData = { ...EMPTY_FM_DATA, tickets: [ticket("t9", id, "Old lock battery low")],
     schedules: [{ id: "s1", title: "Service the old lock", entityId: id, everyDays: 30, lastDoneAt: old }] };
-  const att = attentionFor({ devices, attentionItems: buildAttentionItems({ devices, entities, entityMap, resolvedRooms: {}, fmData }) }, () => true);
+  const att = attentionFor({ devices, attentionItems: attentionOf({ devices, entities, entityMap, resolvedRooms: {}, fmData }).attentionItems }, () => true);
   ck("a hidden device: no Cockpit card, no count, no sign — hidden everywhere",
      att.attentionGroups.length === 0 && att.health.level === "ok" && issueSeverity(att.attentionGroups, [id], (x) => x) === null,
      att.attentionGroups.map((g) => g.title));
@@ -84,7 +84,7 @@ console.log("\n  every window as its profile sees the villa (architecture review
   const entityMap = { [id]: { entityId: id, type: "sensor" } };
   const devices = devicesOf({ ids: [id], unavailable: [] });
   const fmData = { ...EMPTY_FM_DATA, tickets: [ticket("t9", id, "Cellar temp reads wrong")] };
-  const problems = { devices, attentionItems: buildAttentionItems({ devices, entities, entityMap, resolvedRooms: {}, fmData }) };
+  const problems = { devices, attentionItems: attentionOf({ devices, entities, entityMap, resolvedRooms: {}, fmData }).attentionItems };
   const guest = (x) => x !== id, owner = () => true;
   const sign = (may) => issueSeverity(attentionFor(problems, may).attentionGroups, [id], (x) => x);
   ck("a profile that may see the device: its window's badge carries the \"!\" and its sign is amber",

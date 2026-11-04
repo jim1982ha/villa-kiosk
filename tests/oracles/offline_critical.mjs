@@ -11,7 +11,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { isOffline, isUnavailable } = await import("@/utils/stateColors");
 const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
-const { buildAttentionItems, groupAttention, villaHealthFrom, attentionTone } = await import("@/config/attention");
+const { attentionOf, groupAttention, villaHealthFrom, attentionTone } = await import("@/config/attention");
 const { cockpitCard } = await import("@/config/cockpitCard");
 // a problem's icons as its card draws them (cockpitCard: the card's lead icons are its first problem's)
 const lineSources = (item) => cockpitCard(groupAttention([item])[0], null).lead;
@@ -44,9 +44,9 @@ ck("the Cockpit's offline list leaves out the unknown sensor and keeps the lost 
 
 console.log("  one list of critical devices:");
 // the villa's devices with the rule's critical list — the device list answers which are critical (villaDevices.isCritical)
-const build = (critical) => buildAttentionItems({ devices: villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), dismissed: new Set(),
+const build = (critical) => attentionOf({ devices: villaDevices({ entityMap, deviceGroups: [], hidden: new Set(), dismissed: new Set(),
   mappedEntityIds: new Set(ids), entities, entityDeviceIds: { "lock.door": "dev-door", "sensor.door_battery": "dev-door" }, folding, critical }),
-  entities, entityMap, resolvedRooms: {}, fmData: EMPTY_FM_DATA });
+  entities, entityMap, resolvedRooms: {}, fmData: EMPTY_FM_DATA }).attentionItems;
 // the rule names the lock's BATTERY sensor; the model shows the lock: the device is critical
 const items = build(new Set(["sensor.door_battery"]));
 const door = items.find((i) => i.entityId === "lock.door" || i.entityId === "sensor.door_battery");

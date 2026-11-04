@@ -1,3 +1,31 @@
+## 2.496.692
+
+What you will see:
+- Cockpit › Recap: a device whose fault you closed as "Not a problem" no longer counts against the villa while it
+  stays as it was. For example, a door closed "Not a problem" while unlocked no longer reads "Doors locked · 1
+  unlocked". Recap now follows the same rule as Open issues: if the device changes after your close (locked, then
+  unlocked again), it counts again.
+
+## 2.496.691
+
+What you will see:
+- Settings › Messages › Who gets the messages: each list's "Add a chat or phone…" box is now a + on the line of the
+  list's name (Owner, Facility Manager), at the right. Press it and the search opens on that line, its list of chats
+  shown; Escape, or tapping elsewhere with nothing typed, puts the + back.
+- Settings › Messages › Full-screen announcements: the same + on the line "Announcements, on every tablet", in place of
+  the "Add an announcement…" box under the list.
+- In that list, "Seconds" now stands over the seconds field, and nothing over the ✕.
+- On an iPhone, when the line is too narrow, the search box takes its own line under the name.
+
+## 2.496.690
+
+What you will see:
+- Cockpit and Inbox cards: "Not a problem" is now a button of its own, right after Done and Need help (Done · Need
+  help · Not a problem · Open Ticket; on the Tickets tab: Done · Need help · Not a problem · No action needed). It asks
+  "Not a problem? VESTA will not raise it again while it lasts." before it closes the card. Done and No action needed no
+  longer offer it inside their own question.
+- On an iPhone the buttons wrap: Done · Need help · Not a problem on the first line, Open Ticket under them.
+
 ## 2.496.689
 
 What you will see:

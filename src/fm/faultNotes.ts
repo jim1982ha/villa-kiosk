@@ -7,7 +7,7 @@
 // facility manager's own time and name the night the agent updated the title, and the kept "Now: …" line repeated the
 // title word for word. Each step now carries its kind (FmTicketUpdate.kind, agent-contract.json `ticketUpdate`).
 
-import { NEED_HELP } from "./deviceWork";
+import { NEED_HELP, NOT_A_PROBLEM } from "./deviceWork";
 import { ACCENT_PILL, pillClass } from "./tone";
 import { STAGE_WORDS, type FmStage, isClearedStep, isTicketResolved, recordLife, stageOf, standingHelp, statusChanges, stepsInTimeOrder } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
@@ -73,7 +73,7 @@ export function faultLatest(t: FmTicket, stamp: (at: string) => string): { text:
     return stageOf(t) === "ticket" ? said("Ticket opened", t.openedAt) : null;
   }
   const who = last.who || authorWords(last);
-  if (isTicketResolved(last)) return said(last.lasting ? "Not a problem" : isClearedStep(last) ? "Closed" : "Done", last.at, who);
+  if (isTicketResolved(last)) return said(last.lasting ? NOT_A_PROBLEM : isClearedStep(last) ? "Closed" : "Done", last.at, who);
   if (last.kind === "reopened") return said("Reopened", last.at, who);
   return last.status === "in_progress" ? said("Ticket opened", last.at, who) : null;
 }

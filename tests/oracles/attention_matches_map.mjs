@@ -6,14 +6,14 @@
 // a sensor reporting a fault word (statusKeyFor). Red on the map,
 // absent from the list the top-bar count opens. The items are now derived from
 // the map's own rule (deviceLook: `alert` = its own red "!" mark, since 2026-10-22 — the face was red before); this drives a set
-// of states through the MAP's adapter and through buildAttentionItems and
+// of states through the MAP's adapter and through attentionOf and
 // asserts red ⇔ listed, then that every count of attention reads that list.
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { deviceLook, mapLookSource } = await import("@/utils/deviceActivity");
-const { buildAttentionItems, attentionFor, villaHealthFrom, groupAttention } = await import("@/config/attention");
+const { attentionOf, attentionFor, villaHealthFrom, groupAttention } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { devicesOf } = await import("../consistency/devices.mjs");
 
@@ -42,7 +42,7 @@ const map = mapLookSource(new Map(Object.entries(entities)), new Map(Object.entr
 const redOnMap = selectableIds.filter((id) => deviceLook(id, map).alert).sort();
 const inUseDot = selectableIds.filter((id) => deviceLook(id, map).mark === "active").sort();
 const villa = devicesOf({ ids: selectableIds, unavailable: unavailableIds });
-const items = buildAttentionItems({ devices: villa, entities, entityMap, resolvedRooms, fmData: EMPTY_FM_DATA });
+const items = attentionOf({ devices: villa, entities, entityMap, resolvedRooms, fmData: EMPTY_FM_DATA }).attentionItems;
 const listed = items.filter((i) => i.kind === "alarm").map((i) => i.entityId).sort();
 // A DETECTION is red and no fault (owner, 2026-10-21: "don't create a fault in cockpit when Motion sensor are
 // triggered"): the one red badge not listed — by its class, or with none by its id, as the motion toast reads it
@@ -74,7 +74,7 @@ ck("a device merely on, active or linked is never an alarm",
 ck("an unavailable device is listed ONCE, as unavailable — never also as an alarm",
    unavailableIds.every((id) => items.filter((i) => i.entityId === id).map((i) => i.kind).join() === "unavailable"));
 ck("only selectable devices are listed (never a raw domain scan)",
-   buildAttentionItems({ devices: devicesOf({ ids: ["lock.back"] }), entities, entityMap, resolvedRooms, fmData: EMPTY_FM_DATA }).length === 0);
+   attentionOf({ devices: devicesOf({ ids: ["lock.back"] }), entities, entityMap, resolvedRooms, fmData: EMPTY_FM_DATA }).attentionItems.length === 0);
 const word = (id) => items.find((i) => i.entityId === id)?.detail;
 ck("the detail reads as the device says it: a leak \"Leak detected\", a lost link \"Disconnected\", a lock \"Jammed\"",
    word("binary_sensor.leak") === "Leak detected" && word("binary_sensor.ap") === "Disconnected" && word("lock.shed") === "Jammed", items.map((i) => [i.entityId, i.detail]));

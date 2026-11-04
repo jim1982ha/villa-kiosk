@@ -417,7 +417,7 @@ export function cardHead(device: CardDevice | undefined, title: string, recordRo
   return { title: device ? device.label : title, room: roomLabel(firstRoom(device?.room, recordRoom)) };
 }
 
-export function buildAttentionItems(opts: {
+interface AttentionInputs {
   /** The villa's devices (deviceGroups.villaDevices) — ASKED, never restated: which are not answering, which may raise
    *  an alarm (its ids), each problem's device (deviceOf, the one fold every count uses), which are critical.
    *  ⚠️ FOUR OPTIONS SAID IT AGAIN (architecture review, 2026-10-19): unavailableIds, selectableIds, the folding and
@@ -433,7 +433,12 @@ export function buildAttentionItems(opts: {
   cadence?: AgentCadence | null;
   /** The moment the list is read at (what is on Watch then); absent: now. */
   now?: number;
-}): AttentionItem[] {
+}
+
+/** What needs attention (`attentionItems`), and the devices whose live state is held as "Not a problem while it lasts"
+ *  (`held`: their fault a person closed so, the state begun before that close) — the ONE answer the open issues and the
+ *  Recap's checks read (owner, 2026-11-04: the Recap still said "1 unlocked" of a door closed "Not a problem"). */
+export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attentionItems" | "held"> {
   const { devices, entities, entityMap, resolvedRooms, fmData } = opts;
   const sinceOf = opts.sinceOf ?? (() => null);
   const items: AttentionItem[] = [];
@@ -546,16 +551,26 @@ export function buildAttentionItems(opts: {
   // ⚠️ "NOT A PROBLEM WHILE IT LASTS" HOLDS ON THE DEVICE TOO (owner, 2026-11-02): a device whose fault a person closed so
   // has its live state, begun before that close, out of the open issues; a state begun after it is a new problem
   const lasting = new Map<string, number>();
+  const began = (id: string) => Date.parse(beganAt(id, entities[id], sinceOf).openedAt ?? "") || 0;
+  const held = new Set<string>();
   for (const t of fmData.tickets) {
     if (!closedAsLasting(t)) continue;
     const id = recordEntity(t.entityId, (x) => x in entities) ?? t.entityId;
     const at = Date.parse(t.resolvedAt ?? "");
-    if (id && Number.isFinite(at)) lasting.set(devices.deviceOf(id), Math.max(at, lasting.get(devices.deviceOf(id)) ?? 0));
+    if (!id || !Number.isFinite(at)) continue;
+    lasting.set(devices.deviceOf(id), Math.max(at, lasting.get(devices.deviceOf(id)) ?? 0));
+    // the faulted entity itself, in the state it was in at the close: held, an issue item or not (an unlocked lock
+    // is none: its closed fault was all Open issues had of it, the Recap counted it still)
+    if (began(id) <= at) held.add(devices.deviceOf(id));
   }
   const live = (i: AttentionItem) => (i.kind === "unavailable" || i.kind === "alarm") && !!i.entityId;
-  return items.filter((i) => (!i.entityId || !devices.isHidden(i.entityId))
+  // a live state of the device begun before the close (another of its entities, offline since)
+  const heldLine = (i: AttentionItem) => live(i) && (Date.parse(i.openedAt ?? "") || 0) <= (lasting.get(devices.deviceOf(i.entityId!)) ?? -1);
+  for (const i of items) if (heldLine(i)) held.add(devices.deviceOf(i.entityId!));
+  const attentionItems = items.filter((i) => (!i.entityId || !devices.isHidden(i.entityId))
     && !(live(i) && watched.has(devices.deviceOf(i.entityId!)))
-    && !(live(i) && (Date.parse(i.openedAt ?? "") || 0) <= (lasting.get(devices.deviceOf(i.entityId!)) ?? -1)));
+    && !heldLine(i));
+  return { attentionItems, held };
 }
 
 /** The villa's problems, role-blind — what the villa model holds. Nothing
@@ -564,6 +579,8 @@ export interface VillaProblems {
   /** The villa's devices the items were built over (VillaModel.devices). */
   devices: VillaDevices;
   attentionItems: AttentionItem[];
+  /** The devices whose live state is held as "Not a problem while it lasts" (attentionOf); absent: none. */
+  held?: ReadonlySet<string>;
 }
 
 /** What needs attention as ONE PROFILE is shown it — and the profile's devices (`devices`: only those it may open,
@@ -599,7 +616,7 @@ export interface VillaHealth {
  */
 export function attentionFor(att: VillaProblems, may: (entityId: string) => boolean): VillaAttention {
   // ⚠️ HIDDEN, FOR THE PROFILE TOO (owner, 2026-10-25: "hidden means hidden everywhere"): the items are built without
-  // a hidden device already (buildAttentionItems, for the role-blind marks); a list built beside them, the Cockpit's
+  // a hidden device already (attentionOf, for the role-blind marks); a list built beside them, the Cockpit's
   // Watched faults, asked the profile alone and showed one. The profile's lists read this one predicate.
   const shows = (id: string) => !att.devices.isHidden(id) && may(id);
   const attentionItems = att.attentionItems.filter((i) => !i.entityId || shows(i.entityId));
@@ -609,6 +626,7 @@ export function attentionFor(att: VillaProblems, may: (entityId: string) => bool
   return {
     devices: devicesFor(att.devices, shows),
     attentionItems,
+    ...(att.held ? { held: att.held } : {}),
     attentionGroups,
     health: villaHealthFrom(attentionGroups),
     shows,

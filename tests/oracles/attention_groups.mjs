@@ -6,7 +6,7 @@
 // that same lock: a second row, and the count went up for a door already
 // listed. An offline device and its watchdog ticket did the same.
 // config/attention.groupAttention folds the problems of one device into one row;
-// this drives values through it and through buildAttentionItems, and checks
+// this drives values through it and through attentionOf, and checks
 // the corner cases the design named: nothing lost or doubled, every fault
 // keeps its Close, no-device problems stand alone, an unknown entity is its
 // own device, the profile filter runs first, the worst problem leads, the
@@ -15,7 +15,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { buildAttentionItems, groupAttention, attentionFor } = await import("@/config/attention");
+const { attentionOf, groupAttention, attentionFor } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { devicesOf } = await import("../consistency/devices.mjs");
 // A card's words, icons and buttons are what cockpitCard returns — what the Overview draws (architecture review,
@@ -40,10 +40,10 @@ const ticket = (id, title, entityId, extra = {}) => ({ id, title, status: "open"
 // The battery sensor is the lock's own entity in Home Assistant's registry.
 const folding = new Map([["sensor.door_battery", "lock.door"]]);
 const villa = devicesOf({ ids: Object.keys(entities), unavailable: ["light.lamp"], folding });
-const build = (tickets, more = {}) => buildAttentionItems({
+const build = (tickets, more = {}) => attentionOf({
   devices: villa, entities, entityMap, resolvedRooms,
   fmData: { ...EMPTY_FM_DATA, tickets }, ...more,
-});
+}).attentionItems;
 
 // owner, 2026-10-15: the card's "Next check" — the clock the Agent wrote on its fault reaches the card's problem
 {
@@ -195,11 +195,11 @@ const pumpEntities = { ...entities, "sensor.pump_power": ent("sensor.pump_power"
 const pumpMap = { ...entityMap, "sensor.pump_power": { entityId: "sensor.pump_power", type: "sensor" } };
 const registry = { "sensor.pump_power": "dev-pump", "sensor.pump_energy": "dev-pump", "lock.door": "dev-door" };
 const pumpFold = deviceFolding(pumpMap, [], registry);
-const pumpRows = groupAttention(buildAttentionItems({
+const pumpRows = groupAttention(attentionOf({
   devices: devicesOf({ ids: Object.keys(pumpMap), folding: pumpFold }), entities: pumpEntities, entityMap: pumpMap,
   resolvedRooms: { ...resolvedRooms, "sensor.pump_power": "Pool" },
   fmData: { ...EMPTY_FM_DATA, tickets: [ticket("pm-1", "Pump used 0.09 kWh/day", "sensor.pump_energy")] },
-}));
+}).attentionItems);
 const pumpRow = pumpRows.find((g) => g.items.some((i) => i.id === "fault:pm-1"));
 ck("the fold puts an unplaced entity on its Home Assistant device's placed one",
    pumpFold.get("sensor.pump_energy") === "sensor.pump_power", [...pumpFold]);
@@ -219,11 +219,11 @@ ck("every Cockpit count in the top bar and the phone menu is the number of ROWS"
    counted.length === 2 && counted.every((a) => a === "attentionGroups.length"), counted);
 // 2.496.268: grouped ONCE, per profile — the villa model's role-blind
 // grouping had no reader and ran on every state push anyway.
-ck("the villa model hands buildAttentionItems its device list (the fold and the critical list inside), and leaves the grouping to the profile's view",
+ck("the villa model hands attentionOf its device list (the fold and the critical list inside), and leaves the grouping to the profile's view",
    // never grouped for a COUNT there (a `//` once swallowed that half, review 2026-10-19); the list asked, never restated
    // (review, 2026-10-19). Grouped once, role-blind, for ONE reader only: what is wrong with each device, the map's
    // badges (attention.deviceIssues — review L, 2026-10-25: the badges read the cards, as the window's sign does)
-   /buildAttentionItems\(\{\s*devices, entities,/.test(vm) && /return \{ devices, attentionItems \};/.test(vm) && !/villaHealthFrom/.test(vm)
+   /return \{ devices, \.\.\.attentionOf\(\{ devices, entities,/.test(vm) && !/villaHealthFrom/.test(vm)
    && (vm.match(/groupAttention\(/g) ?? []).length === 1 && /deviceIssues\(groupAttention\(attention\.attentionItems\)\)/.test(vm)
    && /return attentionFor\(attention, \(id\) => sees\.has\(id\)\);/.test(src("components/cockpit/useVillaAttention.ts")));
 // HOW a card is drawn (its buttons inside, the click its own, the source icons) is checked on the drawn card:
@@ -263,14 +263,14 @@ ck("the villa model hands buildAttentionItems its device list (the fold and the 
     { id: "fault:b", kind: "fault", title: "#55 · Door unlocked", detail: "Fault", entityId: "lock.door2", ticketId: "b", stage: "fault", source: "alert", device: dev }]);
   const labels = (g) => cardActions(g).map((a) => a.label).join(" · ");
   const done = cardActions(two).find((a) => a.kind === "done");
-  ck("  a card with two problems: Done · Need help · Open Ticket on each, each Done on its own",
-     labels(two) === "Done · Need help · Open Ticket · Done · Need help · Open Ticket" && card(two).lines.every((l) => l.actions[0].ids.length === 1),
+  ck("  a card with two problems: Done · Need help · Not a problem · Open Ticket on each, each Done on its own",
+     labels(two) === "Done · Need help · Not a problem · Open Ticket · Done · Need help · Not a problem · Open Ticket" && card(two).lines.every((l) => l.actions[0].ids.length === 1),
      { labels: labels(two), done });
   const [one] = groupAttention([
     { id: "fault:c", kind: "fault", title: "#60 · Door unlocked", detail: "Fault", entityId: "lock.door3", ticketId: "c", stage: "fault", source: "alert",
       device: { key: "lock.door3", label: "Door 3", room: "Hall" } }]);
-  ck("  ...a card with one problem: the same three buttons",
-     labels(one) === "Done · Need help · Open Ticket" && cardActions(one).find((a) => a.kind === "done")?.ids.join() === "c");
+  ck("  ...a card with one problem: the same four buttons",
+     labels(one) === "Done · Need help · Not a problem · Open Ticket" && cardActions(one).find((a) => a.kind === "done")?.ids.join() === "c");
 }
 
 console.log("\n  one way a problem's entity becomes its card's device, for the open issues and the Watched cards (review N, card 6)");

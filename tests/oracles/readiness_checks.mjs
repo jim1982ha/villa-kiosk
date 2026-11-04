@@ -63,10 +63,10 @@ console.log("\n  how bad, as the top bar says it (review \"One answer per questi
      crit["devices-online"] === "fail" && crit.cameras === "fail" && crit.climate === "warn", crit);
   const rec = (id) => ({ id, title: id, status: "open", openedAt: "2026-10-19T08:00:00Z", entityId: `x.${id}`, photoIds: [] });
   const fiveData = { ...EMPTY_FM_DATA, tickets: ["a", "b", "c", "d", "e"].map(rec) };
-  const { buildAttentionItems } = await import("@/config/attention");
+  const { attentionOf } = await import("@/config/attention");
   const calmDevices = { ...devices, unavailable: [] };
-  const five = buildReadiness({}, fiveData, { devices: calmDevices, attentionItems: buildAttentionItems({ devices: calmDevices, entities: {},
-    entityMap: {}, resolvedRooms: {}, fmData: fiveData }) }, {});
+  const five = buildReadiness({}, fiveData, { devices: calmDevices, attentionItems: attentionOf({ devices: calmDevices, entities: {},
+    entityMap: {}, resolvedRooms: {}, fmData: fiveData }).attentionItems }, {});
   ck("  ...five faults: amber — a fault is a warning, however many", five.checks.find((c) => c.id === "tickets").state === "warn"
      && five.overall === "warn", five.checks.find((c) => c.id === "tickets"));
   ck("  ...and the critical rule is the Overview's: a critical entity stands for its device",
@@ -142,12 +142,12 @@ console.log("\n  an alarm makes the villa not ready, as it makes the top bar red
 
 console.log("\n  a jammed lock is ONE line of the recap, under \"Doors locked\" (owner, 2026-10-28):");
 {
-  const { buildAttentionItems } = await import("@/config/attention");
+  const { attentionOf } = await import("@/config/attention");
   const ents = Object.fromEntries([E("lock.front", "jammed"), E("lock.back", "locked"),
     E("binary_sensor.kitchen_leak", "on", { device_class: "moisture" })].map((e) => [e.entity_id, e]));
   const ids = new Set(Object.keys(ents));
   const devs = { ...devices, ids: [...ids], unavailable: [], has: (id) => ids.has(id) };
-  const items = buildAttentionItems({ devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: EMPTY_FM_DATA });
+  const items = attentionOf({ devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, fmData: EMPTY_FM_DATA }).attentionItems;
   ck("the Cockpit lists the jammed lock and the leak as alarms (the fixture reaches the rule)",
      items.filter((i) => i.kind === "alarm").map((i) => i.entityId).sort().join() === "binary_sensor.kitchen_leak,lock.front",
      items.map((i) => `${i.kind}:${i.entityId}`));
@@ -191,14 +191,14 @@ console.log("\n  one word per check state and one verdict, on the tab, in the re
 
 console.log("\n  the Recap counts what the profile is shown (architecture review, 2026-10-19):");
 {
-  const { buildAttentionItems, attentionFor } = await import("@/config/attention");
+  const { attentionOf, attentionFor } = await import("@/config/attention");
   const { devicesOf } = await import("../consistency/devices.mjs");
   const R = await import("@/fm/fmDocuments");
   const villaDev = devicesOf({ ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"] });
   const rec = (id, entityId) => ({ id, title: id, status: "open", openedAt: "2026-10-19T08:00:00Z", entityId, photoIds: [] });
   const data = { ...EMPTY_FM_DATA, tickets: [rec("cam", "camera.pool"), rec("ac", "climate.bed")] };
-  const problems = { devices: villaDev, attentionItems: buildAttentionItems({ devices: villaDev, entities, entityMap: {},
-    resolvedRooms: {}, fmData: data }) };
+  const problems = { devices: villaDev, attentionItems: attentionOf({ devices: villaDev, entities, entityMap: {},
+    resolvedRooms: {}, fmData: data }).attentionItems };
   const owner = buildReadiness(entities, data, attentionFor(problems, () => true), {});
   const noCams = buildReadiness(entities, data, attentionFor(problems, (id) => !id.startsWith("camera.")), {});
   const check = (res, id) => res.checks.find((c) => c.id === id);

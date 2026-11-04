@@ -1,5 +1,5 @@
 // A villa's devices as the app's VillaDevices answers them (config/deviceGroups.villaDevices) — for the oracles that
-// hand a device list to buildAttentionItems, attentionFor or buildReadiness. Those ASK the list (architecture review,
+// hand a device list to attentionOf, attentionFor or buildReadiness. Those ASK the list (architecture review,
 // 2026-10-19: they were handed its ids, its offline ids, the fold and the critical list beside it, and restated them).
 //
 //   devicesOf({ ids, unavailable, folding, critical, hidden })   // folding: member → the entity standing for its device

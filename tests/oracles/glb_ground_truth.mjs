@@ -15,7 +15,7 @@ import ts from "typescript";
 const { dismissedEntitySet, orphanObjects, inventoryGaps } = await import("@/config/dismissedEntities");
 const { villaDevices, deviceFolding } = await import("@/config/deviceGroups");
 const { effectiveMapped, visibleTo } = await import("@/config/villaVisibility");
-const { buildAttentionItems, attentionFor } = await import("@/config/attention");
+const { attentionOf, attentionFor } = await import("@/config/attention");
 const { missingFromHa, NOT_IN_HA } = await import("@/utils/stateColors");
 
 const TV = "media_player.tv";
@@ -35,8 +35,8 @@ const folding = deviceFolding({}, [], {});
 const d = villaDevices({ entityMap: {}, deviceGroups: [], hidden: new Set(), dismissed: dis, mappedEntityIds: mapped,
   entities, entityDeviceIds: {}, folding });
 ck("it is one of the villa's devices, and an unavailable one", d.has(TV) && d.unavailable.includes(TV), d.unavailable);
-const items = buildAttentionItems({ devices: d, entities, entityMap: {},
-  resolvedRooms: {}, fmData: emptyFm });
+const items = attentionOf({ devices: d, entities, entityMap: {},
+  resolvedRooms: {}, fmData: emptyFm }).attentionItems;
 const sees = visibleTo("owner", { mapped, entityMap: {}, entities });
 const att = attentionFor({ attentionItems: items, devices: d }, (id) => sees.has(id));
 const row = att.attentionGroups.find((g) => g.items.some((i) => i.entityId === TV));

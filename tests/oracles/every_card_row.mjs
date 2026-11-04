@@ -7,7 +7,7 @@ import { h, draw, inside, text } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
 const { devicesOf } = await import("../consistency/devices.mjs");
-const { buildAttentionItems, groupAttention, sinceEntities } = await import("@/config/attention");
+const { attentionOf, groupAttention, sinceEntities } = await import("@/config/attention");
 const { cockpitCard, confirmingCards, rowWhen, TIME_UNKNOWN } = await import("@/config/cockpitCard");
 const { InboxCard } = await import("@/components/cockpit/MessagesTab");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
@@ -30,7 +30,7 @@ const fmData = { ...EMPTY_FM_DATA,
 const devices = devicesOf({ ids: Object.keys(entities), unavailable: ["camera.offline", "camera.gone"] });
 const entityMap = {}, resolvedRooms = { "camera.offline": "Storage", "binary_sensor.leak": "Laundry" };
 const sinceOf = () => ({ at: began, before: false });
-const items = buildAttentionItems({ devices, entities, entityMap, resolvedRooms, fmData, sinceOf });
+const items = attentionOf({ devices, entities, entityMap, resolvedRooms, fmData, sinceOf }).attentionItems;
 
 console.log("  every kind of line is in this check:");
 const union = readFileSync(new URL("../../src/config/attention.ts", import.meta.url), "utf8").match(/type AttentionKind = ([^;]+);/)[1];
@@ -96,7 +96,7 @@ console.log("\n  the same device, the same room, in the Inbox and on its ticket:
 {
   const { recordRoom } = await import("@/config/attention");
   const ctx = { entities, resolvedRooms: { ...resolvedRooms, "camera.gone": "Living Room" }, deviceOf: devices.deviceOf };
-  const inbox = buildAttentionItems({ devices, entities, entityMap, resolvedRooms: ctx.resolvedRooms, fmData, sinceOf })
+  const inbox = attentionOf({ devices, entities, entityMap, resolvedRooms: ctx.resolvedRooms, fmData, sinceOf }).attentionItems
     .find((i) => i.id === "unavailable:camera.gone");
   ck("a Missing device: the room of its Inbox card", recordRoom({ entityId: "camera.gone" }, ctx) === inbox.room && inbox.room === "Living Room", inbox);
   ck("  ...a device still there: the same", recordRoom({ entityId: "camera.offline", room: "Old" }, ctx) === "Storage");
@@ -104,7 +104,7 @@ console.log("\n  the same device, the same room, in the Inbox and on its ticket:
 }
 
 console.log("\n  what the corner says, and where the moment comes from:");
-const one = (id, s) => buildAttentionItems({ devices, entities, entityMap, resolvedRooms, fmData, sinceOf: () => s }).find((i) => i.id === id);
+const one = (id, s) => attentionOf({ devices, entities, entityMap, resolvedRooms, fmData, sinceOf: () => s }).attentionItems.find((i) => i.id === id);
 const corner = (i) => rowWhen(cockpitCard(groupAttention([i])[0], null, new Date(now)));
 ck("the history's moment, never the restart's last_changed", one("unavailable:camera.offline", { at: began, before: false }).openedAt === new Date(began).toISOString());
 ck("  ...not read yet, or it cannot say: its last_changed, never an empty corner",
@@ -134,7 +134,7 @@ ck("  ...a fault on that device: the fault's moment", rowWhen(cockpitCard(told, 
   const { faultBegan } = await import("@/fm/fmEngine");
   const since = new Date(now - 200 * HOUR).toISOString(), openedAt = new Date(now - 48 * HOUR).toISOString();
   const offline = ticket("f9", "lock.taken", { status: "in_progress", openedAt, since });
-  const [i] = buildAttentionItems({ devices, entities, entityMap, resolvedRooms, fmData: { ...EMPTY_FM_DATA, tickets: [offline] }, sinceOf }).filter((x) => x.id === "fault:f9");
+  const [i] = attentionOf({ devices, entities, entityMap, resolvedRooms, fmData: { ...EMPTY_FM_DATA, tickets: [offline] }, sinceOf }).attentionItems.filter((x) => x.id === "fault:f9");
   ck("  ...a fault counting from when its device went offline: that moment, on its card and its ticket alike",
      rowWhen(cockpitCard(groupAttention([i])[0], null, new Date(now))) === momentText(since) && faultBegan(offline) === since
      && faultBegan({ openedAt }) === openedAt && faultBegan({ openedAt, since: "x" }) === openedAt);

@@ -2,7 +2,7 @@
 // IS THIS DEVICE IN TROUBLE, IN USE OR AT REST: answered once, per reading (architecture review, 2026-10-26). Every
 // surface projects the one condition this returns: the badge's face and corner mark, its linked entity's pill, the 3D
 // object's tint and pulse (utils/deviceActivity), a room's glow (babylon/motionRouting), a room's and a group's health
-// (deviceActivity.groupLook), the Cockpit's alarms (attention.buildAttentionItems) and, through its own projection
+// (deviceActivity.groupLook), the Cockpit's alarms (attention.attentionOf) and, through its own projection
 // below, a sensor's window and history bar (config/binaryLook). Pure: tests/oracles/device_condition.mjs drives a class
 // × state table through it and every projection.
 //

@@ -2,13 +2,13 @@
 // record's raw entity field up as one id, so a record naming several entities ("sensor.a,sensor.b", a rule watching
 // three phases) was never found: its pill showed the stored name or the raw list, and a tap opened nothing, while the
 // Inbox card of the same record named and opened its device. Driven by value: the record goes through the Inbox's own
-// pipeline (buildAttentionItems → groupAttention: its card's title and what its name opens) and through the Tickets
+// pipeline (attentionOf → groupAttention: its card's title and what its name opens) and through the Tickets
 // tab's pill (attention.recordDevicePill), and the two must agree. TicketsTab.tsx draws that pill and nothing else.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { elements, parseTsx, propText } from "../consistency/jsx.mjs";
-const { buildAttentionItems, groupAttention, recordDevicePill } = await import("@/config/attention");
+const { attentionOf, groupAttention, recordDevicePill } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { devicesOf } = await import("../consistency/devices.mjs");
 
@@ -34,7 +34,7 @@ const records = [
   rec("t2", "lock.example_door", "Lock 1"),                                                // renamed since it was stored
 ];
 
-const items = buildAttentionItems({ devices, entities, entityMap, resolvedRooms, fmData: { ...EMPTY_FM_DATA, tickets: records } });
+const items = attentionOf({ devices, entities, entityMap, resolvedRooms, fmData: { ...EMPTY_FM_DATA, tickets: records } }).attentionItems;
 const groups = groupAttention(items);
 const inbox = (id) => {
   const g = groups.find((x) => x.items.some((i) => i.ticketId === id));

@@ -23,6 +23,7 @@ import { CHAT_LANGUAGES, ROLE_LISTS, droppedChats, planChange, targetsOf, withCh
 import { useConfig } from "@/config/ConfigContext";
 import RemovablePill from "@/components/common/RemovablePill";
 import Dropdown from "@/components/common/Dropdown";
+import AddOnLine from "@/components/common/AddOnLine";
 import EntityPicker from "./EntityPicker";
 import { withItem } from "@/utils/listToggle";
 
@@ -75,7 +76,14 @@ export default function WhoGetsMessages({ onSaved }: {
         };
         return (
           <div key={list.role} className="settings-list-row recipients-role">
-            <span className="body-text recipients-role-name">{who}</span>
+            {/* its add on the line of its name, opening there (owner, 2026-11-04; common/AddOnLine) */}
+            {!helper ? <span className="body-text recipients-role-name">{who}</span> : (
+              <AddOnLine title={<span className="body-text recipients-role-name">{who}</span>}
+                label={`Add a chat or phone to ${who}`}>
+                {(done) => <EntityPicker domains={["notify"]} startOpen compact hideCurrentLabel placeholder="Add a chat or phone…"
+                  onChange={(id) => { done(); void save((now) => withItem(now, id, true)); }} />}
+              </AddOnLine>
+            )}
             {!helper ? (
               <span className="muted body-text">This list is not on the villa yet.</span>
             ) : (
@@ -89,8 +97,6 @@ export default function WhoGetsMessages({ onSaved }: {
                       options={Object.entries(CHAT_LANGUAGES).map(([code, words]) => ({ value: code, label: words }))} />
                   </div>
                 ))}
-                <EntityPicker domains={["notify"]} onChange={(id) => void save((now) => withItem(now, id, true))}
-                  placeholder="Add a chat or phone…" hideCurrentLabel compact />
               </>
             )}
           </div>

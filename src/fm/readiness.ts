@@ -84,7 +84,7 @@ export const AVAILABILITY_CHECK_LABEL = "All devices reporting";
  *  those it may open, with the villa's fold and critical list) and its problems (the alarms; the faults it is shown).
  *  ⚠️ IT TOOK THE ROLE-BLIND DEVICE LIST BESIDE THE PROFILE'S ALARMS (architecture review, 2026-10-19): the Recap counted
  *  devices offline Open issues did not list for the same person, and every fault record, seen or not. */
-type ReadinessView = Pick<VillaAttention, "devices" | "attentionItems">;
+type ReadinessView = Pick<VillaAttention, "devices" | "attentionItems" | "held">;
 
 export interface ReadinessResult {
   checks: ReadinessCheck[];
@@ -134,8 +134,13 @@ export function buildReadiness(
   // the Overview's card, and was absent from Cameras and Air conditioning — the scan went over the entities, where it
   // is not. Each device with its state; one the system does not have (missingFromHa) reads as lost, and is NAMED as
   // the card names it (NOT_IN_HA).
+  // ⚠️ "NOT A PROBLEM" HOLDS HERE TOO (owner, 2026-11-04: Recap said "Doors locked · 1 unlocked" of the Master
+  // Bedroom door closed "Not a problem while it lasts", gone from Open issues): a device the open issues hold so
+  // (attentionOf's `held`, the one answer) is counted by no check while it lasts.
+  const held = (id: string) => !!view.held?.has(devices.deviceOf(id));
   const own: Record<string, HassEntity> = {};
   for (const id of devices.ids) {
+    if (held(id)) continue;
     const e = entities[id] ?? (missingFromHa(entities, id) ? lostDevice(id) : undefined);
     if (e) own[id] = e;
   }
@@ -178,7 +183,7 @@ export function buildReadiness(
   // check counted raw candidates with no device-folding or debris filtering,
   // so a two-entity combo sensor could read as two broken devices here and
   // one on the HUD badge); see unavailableDeviceIds's docstring.
-  const offline = devices.unavailable as string[];
+  const offline = devices.unavailable.filter((id) => !held(id));
   checks.push({
     id: "devices-online",
     label: AVAILABILITY_CHECK_LABEL,

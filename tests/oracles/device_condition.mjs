@@ -18,7 +18,7 @@ const { deviceLook, storeLookSource, readingOf, meshLookFor, groupLook } = await
 const { roomHealth } = await import("@/babylon/summaryLook");
 const { binaryLook } = await import("@/config/binaryLook");
 const { statusKeyFor } = await import("@/utils/stateColors");
-const { buildAttentionItems } = await import("@/config/attention");
+const { attentionOf } = await import("@/config/attention");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { devicesOf } = await import("../consistency/devices.mjs");
 
@@ -78,8 +78,8 @@ const seen = TABLE.map(([type, id, dc, state, want, windowRed]) => {
   const src = storeLookSource(entities, { entityMap, isHidden: () => false });
   const look = deviceLook(id, src);
   const mesh = meshLookFor(readingOf(id, src));
-  const items = buildAttentionItems({ devices: devicesOf({ ids: [id] }), entities, entityMap, resolvedRooms: {},
-    fmData: EMPTY_FM_DATA });
+  const items = attentionOf({ devices: devicesOf({ ids: [id] }), entities, entityMap, resolvedRooms: {},
+    fmData: EMPTY_FM_DATA }).attentionItems;
   const window = type === "binary_sensor" ? binaryLook(id, dc).danger(state) : statusKeyFor(state, type) === "alert";
   return {
     row: `${type}${dc ? `/${dc}` : ""} ${id.split(".")[1]} ${state}`, want, windowRed,

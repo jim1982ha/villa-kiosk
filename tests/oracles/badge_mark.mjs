@@ -17,7 +17,7 @@ const {
 } = await import("@/utils/deviceActivity");
 const { STATUS_COLOR } = await import("@/utils/stateColors");
 const { markSurface, categorySurface } = await import("@/config/EntityCategories");
-const { buildAttentionItems, deviceIssues, groupAttention } = await import("@/config/attention");
+const { attentionOf, deviceIssues, groupAttention } = await import("@/config/attention");
 const { devicesOf } = await import("../consistency/devices.mjs");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
 const { UnavailableByDesign } = await import("@/ha/unavailableByDesign");
@@ -266,7 +266,7 @@ console.log("\n  the open faults, folded onto their devices (attention.deviceIss
   const ids = ["sensor.pump_energy", "switch.pump", "light.hall", "switch.y"];
   const entities = Object.fromEntries(ids.map((id) => [id, ent(id, "on")]));
   const devices = devicesOf({ ids, folding: new Map([["sensor.pump_energy", "switch.pump"]]) });
-  const set = deviceIssues(groupAttention(buildAttentionItems({ devices, entities, entityMap: {}, resolvedRooms: {}, fmData: fm }))).amber;
+  const set = deviceIssues(groupAttention(attentionOf({ devices, entities, entityMap: {}, resolvedRooms: {}, fmData: fm }).attentionItems)).amber;
   ck("an open fault marks its entity AND its device; a closed one marks nothing; a list names the first the system has",
      set.has("sensor.pump_energy") && set.has("switch.pump") && !set.has("light.hall") && set.has("switch.y") && !set.has("sensor.gone"),
      [...set]);

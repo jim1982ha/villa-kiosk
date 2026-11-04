@@ -28,14 +28,15 @@ export type RaisedFault = Omit<FmTicket, "id" | "openedAt" | "status">;
 /** The steps of one list's cards, carried out — one per list, keyed by card, so a second card's Close puts the first
  *  one's buttons back. */
 interface CardWork {
-  /** The card whose Close question is being asked. */
-  asking: string | null;
+  /** The card whose close question is being asked, and which button asked it (Done, Not a problem while it lasts, No
+   *  action needed). */
+  asking: { key: string; kind: WorkActionKind } | null;
   /** Why the last step on this card did not land; null when it did, or none was tried. */
   problemFor: (cardKey: string) => string | null;
-  ask: (cardKey: string) => void;
+  ask: (cardKey: string, kind: WorkActionKind) => void;
   cancel: () => void;
   /** `work`: resolved as work done (a completion), else closed with no action; `lasting`: closed with no action as
-   *  "Not a problem while it lasts" (FmTicketUpdate.lasting), work or not. */
+   *  "Not a problem while it lasts" (FmTicketUpdate.lasting). */
   close: (cardKey: string, ids: readonly string[], work?: boolean, lasting?: boolean) => Promise<void>;
   /** A step that stays on the card: a stage change (its form), Need help, or a raise with Done or Need help
    *  (`raised`: the fault to raise for the device the action names). */
@@ -59,7 +60,7 @@ export function stepWrite(a: WorkAction, writers: Pick<FmDataContextValue, "help
 export function useCardWork(): CardWork {
   const fm = useFmData();
   const { data, closeTickets, advanceTickets } = fm;
-  const [asking, setAsking] = useState<string | null>(null);
+  const [asking, setAsking] = useState<CardWork["asking"]>(null);
   const [problem, setProblem] = useState<{ key: string; text: string } | null>(null);
   const [staging, setStaging] = useState<CardWork["staging"]>(null);
   /** A write, and why it did not land on its card. On success the records say it: the card leaves its list, or
@@ -72,7 +73,7 @@ export function useCardWork(): CardWork {
   return {
     asking,
     problemFor: (key) => (problem?.key === key ? problem.text : null),
-    ask: (key) => { setProblem(null); setAsking(key); },
+    ask: (key, kind) => { setProblem(null); setAsking({ key, kind }); },
     cancel: () => setAsking(null),
     close: async (key, ids, work, lasting) => {
       setProblem(null);
@@ -142,17 +143,16 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
     {staging && <FaultStageModal tickets={staging.tickets} to={staging.to} onClose={work.endStaging} />}
   </>;
   if (actions.length === 0) return after || null;
-  const confirming = work.asking === cardKey ? actions.find((a) => a.step.kind === "close") : undefined;
+  const confirming = work.asking?.key === cardKey ? actions.find((a) => a.kind === work.asking?.kind) : undefined;
   if (confirming && confirming.step.kind === "close") {
     const { question, confirmLabel, work: asWork, lasting } = confirming.step;
     return <InlineConfirm question={question} confirmLabel={confirmLabel}
-      onConfirm={() => work.close(cardKey, confirming.ids, asWork)} onCancel={work.cancel}
-      alternative={lasting ? { label: lasting, onConfirm: () => work.close(cardKey, confirming.ids, false, true) } : undefined} />;
+      onConfirm={() => work.close(cardKey, confirming.ids, asWork, lasting)} onCancel={work.cancel} />;
   }
   const buttons = actions.map((a) => (
     <button key={a.kind} type="button" className={ACCENT[a.kind] ? "btn primary" : CARD_BUTTON}
       aria-label={a.step.kind === "close" && name ? `${a.label} “${name}”` : undefined}
-      onClick={() => (a.step.kind === "close" ? work.ask(cardKey) : leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised))}>
+      onClick={() => (a.step.kind === "close" ? work.ask(cardKey, a.kind) : leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised))}>
       <WorkLabel kind={a.kind} />
     </button>
   ));
