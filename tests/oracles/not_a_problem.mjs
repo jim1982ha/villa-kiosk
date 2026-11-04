@@ -58,12 +58,24 @@ ck("  ...offline again after it: a new problem", live(held, "2026-11-02T11:00:00
 ck("  ...a plain close hides nothing (Watch does, from the Agent's cadence only)", live(plain, "2026-11-01T01:00:00.000Z").length === 1);
 
 console.log("  where a person says it:");
-ck("Done and No action needed both offer it, nothing else does",
-   JSON.stringify(Object.entries(WORK_ACTIONS).filter(([, a]) => a.step?.lasting === NOT_A_PROBLEM).map(([n]) => n).sort())
-   === JSON.stringify(["closeTicket", "done"]));
+// owner, 2026-11-04: "show it directly next to `Done`, `Need Help`" — a button of its own, its label short ("the button
+// label must be short"), no longer the second yes of Done's or No action needed's question
+const lasting = Object.entries(WORK_ACTIONS).filter(([, a]) => a.step?.lasting).map(([n]) => n);
+ck("one button closes as lasting: Not a problem, short, its meaning in its question, no work done",
+   JSON.stringify(lasting) === JSON.stringify(["notAProblem"]) && WORK_ACTIONS.notAProblem.label === NOT_A_PROBLEM
+   && NOT_A_PROBLEM === "Not a problem" && /while it lasts/.test(WORK_ACTIONS.notAProblem.step.question)
+   && !WORK_ACTIONS.notAProblem.step.work, lasting);
+const W = await import("@/fm/deviceWork");
+const order = (acts) => acts.map((a) => a.kind).join(" · ");
+ck("  ...after Need help on every card that offers Done on a record, never on a card with no record",
+   order(W.overviewActions([{ id: "a", stage: "fault" }])) === "done · needHelp · notAProblem · openTicket"
+   && order(W.ticketActions([{ id: "a", stage: "ticket" }])) === "ticketDone · needHelp · notAProblem · closeTicket"
+   && !W.overviewActions([], "switch.pump").some((a) => a.kind === "notAProblem"),
+   [order(W.overviewActions([{ id: "a", stage: "fault" }])), order(W.ticketActions([{ id: "a", stage: "ticket" }]))]);
 const wb = parseTsx("components/fm/WorkButtons.tsx");
 const confirm = elements(wb, "InlineConfirm")[0];
-ck("the question draws it as its second yes, closing with lasting", !!confirm
-   && /work\.close\(cardKey, confirming\.ids, false, true\)/.test(propText(confirm, "alternative") ?? ""), confirm && propText(confirm, "alternative"));
+ck("  ...its question closes with lasting; no question offers a second yes any more", !!confirm
+   && propText(confirm, "onConfirm") === "() => work.close(cardKey, confirming.ids, asWork, lasting)"
+   && propText(confirm, "alternative") == null, confirm && propText(confirm, "onConfirm"));
 
 done();

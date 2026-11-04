@@ -118,8 +118,8 @@ console.log("\n  Done · Need help · Open Ticket on every issue card (owner, 20
        && WORK_ACTIONS.doneNew.step.kind === "raiseThen" && WORK_ACTIONS.doneNew.step.then === "done");
     const wb = (await import("node:fs")).readFileSync(new URL("../../src/components/fm/WorkButtons.tsx", import.meta.url), "utf8");
     ck("  ...the one confirm flow sends a work Done through the resolving command, a Close through the no-action one",
-       /work \? advanceTickets\(ids, "resolved", DONE_STEP\) : closeTickets\(ids\)/.test(wb)
-       && /work\.close\(cardKey, confirming\.ids, asWork\)/.test(wb));
+       /lasting \? closeTickets\(ids, true\)\s*: work \? advanceTickets\(ids, "resolved", DONE_STEP\) : closeTickets\(ids\)/.test(wb)
+       && /work\.close\(cardKey, confirming\.ids, asWork, lasting\)/.test(wb));
   }
   ck("  ...Need help on it: raised and asked for help in ONE write, still open",
      helpNew.tickets[0].status === "open" && last(helpNew.tickets[0]).kind === "help", helpNew.tickets[0]);

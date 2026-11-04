@@ -263,14 +263,14 @@ ck("the villa model hands buildAttentionItems its device list (the fold and the 
     { id: "fault:b", kind: "fault", title: "#55 · Door unlocked", detail: "Fault", entityId: "lock.door2", ticketId: "b", stage: "fault", source: "alert", device: dev }]);
   const labels = (g) => cardActions(g).map((a) => a.label).join(" · ");
   const done = cardActions(two).find((a) => a.kind === "done");
-  ck("  a card with two problems: Done · Need help · Open Ticket on each, each Done on its own",
-     labels(two) === "Done · Need help · Open Ticket · Done · Need help · Open Ticket" && card(two).lines.every((l) => l.actions[0].ids.length === 1),
+  ck("  a card with two problems: Done · Need help · Not a problem · Open Ticket on each, each Done on its own",
+     labels(two) === "Done · Need help · Not a problem · Open Ticket · Done · Need help · Not a problem · Open Ticket" && card(two).lines.every((l) => l.actions[0].ids.length === 1),
      { labels: labels(two), done });
   const [one] = groupAttention([
     { id: "fault:c", kind: "fault", title: "#60 · Door unlocked", detail: "Fault", entityId: "lock.door3", ticketId: "c", stage: "fault", source: "alert",
       device: { key: "lock.door3", label: "Door 3", room: "Hall" } }]);
-  ck("  ...a card with one problem: the same three buttons",
-     labels(one) === "Done · Need help · Open Ticket" && cardActions(one).find((a) => a.kind === "done")?.ids.join() === "c");
+  ck("  ...a card with one problem: the same four buttons",
+     labels(one) === "Done · Need help · Not a problem · Open Ticket" && cardActions(one).find((a) => a.kind === "done")?.ids.join() === "c");
 }
 
 console.log("\n  one way a problem's entity becomes its card's device, for the open issues and the Watched cards (review N, card 6)");

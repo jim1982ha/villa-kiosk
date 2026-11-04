@@ -1,3 +1,12 @@
+## 2.496.690
+
+What you will see:
+- Cockpit and Inbox cards: "Not a problem" is now a button of its own, right after Done and Need help (Done · Need
+  help · Not a problem · Open Ticket; on the Tickets tab: Done · Need help · Not a problem · No action needed). It asks
+  "Not a problem? VESTA will not raise it again while it lasts." before it closes the card. Done and No action needed no
+  longer offer it inside their own question.
+- On an iPhone the buttons wrap: Done · Need help · Not a problem on the first line, Open Ticket under them.
+
 ## 2.496.689
 
 What you will see:
