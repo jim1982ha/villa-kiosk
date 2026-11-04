@@ -1150,6 +1150,19 @@ ck("  ...nor its stores, its retention setting or its answering rule",
    and ("vesta_agent", "message_retention_days") in proxy.REMOVED_OPTIONS
    and set(proxy.RETIRED_DATA_FILES) == {"agent-messages.json", "agent-choices.json"})
 
+# owner, 2026-11-04: "all the responses appear stacked despite arrived after the request" — an answer rewritten (its
+# buttons gone after a press, tidied at the Agent's start) took the rewrite's time and moved under later questions
+_q1 = {"seq": 1, "key": "ask:1", "from": "person", "at": "2026-11-03T09:52:00+00:00", "text": "first question"}
+_a1 = {"seq": 2, "key": "turn:7", "from": "vesta", "at": "2026-11-03T09:52:30+00:00", "text": "its answer", "buttons": ["x"]}
+_q2 = {"seq": 3, "key": "ask:2", "from": "person", "at": "2026-11-03T09:54:00+00:00", "text": "second question"}
+_rewritten = {"seq": 4, "key": "turn:7", "from": "vesta", "at": "2026-11-04T09:10:00+00:00", "text": "its answer"}
+_after = proxy._turns_with([_q1, _a1, _q2], _rewritten)
+_turn7 = [t for t in _after if t["key"] == "turn:7"]
+ck("a VESTA turn rewritten keeps the time it was first said, so it stays under its question",
+   len(_turn7) == 1 and _turn7[0]["at"] == _a1["at"] and "buttons" not in _turn7[0] and len(_after) == 3)
+ck("  ...and a new turn keeps its own time",
+   proxy._turns_with([_q1], _a1)[-1]["at"] == _a1["at"])
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

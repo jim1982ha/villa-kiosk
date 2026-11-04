@@ -4709,8 +4709,15 @@ def _with_heard(stored: list, rec: dict) -> list:
 
 def _turns_with(stored: list, rec: dict) -> list:
     """The conversation with `rec` added — or REPLACING the turn of its key, whole (a "being prepared" answer becomes its
-    result; a withdrawn one keeps no picture). Pure — tests/store-doors.py drives it."""
-    return [t for t in stored if not (isinstance(t, dict) and t.get("key") == rec["key"])] + [rec]
+    result; a withdrawn one keeps no picture), at the time it was first said. Pure — tests/proxy-rules.py drives it.
+
+    ⚠️ A REPLACED TURN KEPT THE TIME OF ITS REWRITE (owner, 2026-11-04: "all the responses appear stacked despite
+    arrived after the request"): the tablet orders the thread by time, so an answer whose buttons went after a press, or
+    tidied when the Agent started, moved under every question asked since, stamped with the rewrite's minute."""
+    was = next((t for t in stored if isinstance(t, dict) and t.get("key") == rec["key"]), None)
+    first = was.get("at") if was is not None else None
+    kept = {**rec, "at": first} if isinstance(first, str) and _iso_epoch(first) is not None else rec
+    return [t for t in stored if not (isinstance(t, dict) and t.get("key") == rec["key"])] + [kept]
 
 
 def _turn_record(body, seq: int, now_iso: str) -> dict | None:
