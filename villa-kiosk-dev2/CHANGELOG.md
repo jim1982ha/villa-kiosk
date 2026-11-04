@@ -1,3 +1,10 @@
+## 2.496.694
+
+What you will see:
+- A ceiling fan turning on the map spins in place again: its blades turn round their hub instead of swinging round it.
+  This happened on fans whose model has the blades alone (the bedrooms' fans in the latest model). Every fan's centre
+  is now found from the circle its blade tips draw, whatever the model's shape.
+
 ## 2.496.693
 
 What you will see:
