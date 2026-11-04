@@ -1,3 +1,11 @@
+## 2.496.697
+
+What you will see:
+- VESTA's conversation: an answer stays right under the question it answers. When VESTA changed an answer after
+  it was given (its buttons removed once one was pressed, or tidied when the Agent started), the answer took the
+  time of that change and moved below every later question. It now keeps the time it was first given. Answers
+  already moved keep their wrong time: the original one was not kept.
+
 ## 2.496.696
 
 What you will see:
