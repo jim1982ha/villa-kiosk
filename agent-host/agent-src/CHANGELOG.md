@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.432 (4 November 2026)
+
+- A press on a turn of a tablet's conversation settles that turn as a Telegram message is settled (press.from_tablet
+  takes the turn: tablet.Tablet.pressed_turn gives its id, words and buttons, kiosk_messages.rows_of): only the open page
+  hid the buttons before, so every later read offered them again. A press of an offer already used takes its two buttons
+  off the message pressed (CommandOffers._gone); at start, turns still offering a used offer lose those buttons
+  (Tablet.settle_spent, State.tablet_turns).
+
 ## 0.6.431 (4 November 2026)
 
 - Architecture review 20: the alert desk takes the siren's duration from the engine (VESTA_SIREN_MINUTES, its last good

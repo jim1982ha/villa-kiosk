@@ -374,6 +374,11 @@ class Vesta:
             told = self.thread.tell_open(open_incidents(self.s.store_path))
             if told:
                 log.info("VESTA Kiosk: %s open alert card(s) kept for the tablet as they stand", told)
+            # an answer pressed before 0.12.448 kept its Investigate buttons on the tablet: taken off now (tablet.py)
+            settled = await self.tablet.settle_spent(self.command_offers.spent)
+            if settled:
+                log.info("VESTA Kiosk: %s answer(s) of the tablet's conversations no longer offer buttons already pressed",
+                         settled)
         await self.refresh_server_tools()
         # a device still being followed when the agent stopped (an approved curtain): followed again (approvals.py)
         await self._safe(self.approvals.resume())
@@ -715,7 +720,8 @@ class Vesta:
                 await self.tablet.answer(chat, ask.get("seq"), text)
             return await self._safe(self._pressed(
                 f"{pressed.get('kind')}:{pressed.get('id')}", chat, self.policy().roster.member(chat, chat), toast,
-                lambda who, parts: press.from_tablet(chat, who, parts, toast, name=person.name)))
+                lambda who, parts: press.from_tablet(chat, who, parts, toast, name=person.name,
+                                                     turn=self.tablet.pressed_turn(chat, pressed.get("key")))))
         # a spoken question (ticket 23 of "One inbox", hold to talk): read as a voice note, its audio the tablet's
         spoken = isinstance(ask.get("voice"), str) and bool(ask["voice"])
         # its steps timed, from the moment the add-on kept the recording (`at`) to its answer's voice (answering.Timeline)

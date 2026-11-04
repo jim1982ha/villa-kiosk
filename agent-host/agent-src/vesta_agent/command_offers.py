@@ -116,11 +116,25 @@ class CommandOffers:
         return rows
 
     # ------------------------------------------------------------------ pressed
+    def spent(self, chat: int, button: dict) -> bool:
+        """Whether a record's button (kiosk_messages.buttons_of) is one of an offer that can no longer be pressed in
+        `chat`: pressed, declined, or pruned with the records (tablet.Tablet.settle_spent)."""
+        return button.get("kind") in (button_data.COMMAND, button_data.DECLINE) and \
+            self.state.command_offer(str(button.get("id") or ""), chat) is None
+
+    async def _gone(self, p, used: str) -> None:
+        """A press of an offer that cannot run: told why, and the offer's two buttons taken off the message pressed (its
+        words kept), so it is never offered there again."""
+        await p.toast(_spent(self.state, p.parts[0], used))
+        if p.mid:
+            kept = _without_offer(p.rows, p.parts[0])
+            await self.delivery.buttons(p.chat, p.mid, {"inline_keyboard": kept} if kept else None)
+
     async def press(self, p) -> None:
         """What typing "/<command> <question>" in this chat would do — once, whoever presses first, if they may."""
         offer = self.state.command_offer(p.parts[0], p.chat)
         if not offer:
-            return await p.toast(_spent(self.state, p.parts[0], "Already started."))
+            return await self._gone(p, "Already started.")
         sk = self.skills.get(offer["skill"])
         if sk is None or not sk.command:
             return await p.toast(f"The {offer['skill']} skill is not available on this villa now.")
@@ -128,7 +142,7 @@ class CommandOffers:
             # judged again at the press, for the person pressing: one who may not write its command here starts nothing
             return await p.toast(f"You cannot start /{sk.command} here.")
         if not self.state.claim_command_offer(p.parts[0], p.chat):
-            return await p.toast(_spent(self.state, p.parts[0], "Already started."))
+            return await self._gone(p, "Already started.")
         said = f"{(sk.offer or {}).get('pressed') or '/' + sk.command}: “{offer['question']}”"
         await p.toast(said[:toast_chars()])
         kept = _without_offer(p.rows, p.parts[0])
@@ -141,7 +155,7 @@ class CommandOffers:
         """The offer's "No" (skill.yaml `offer: decline`): used up like a press, both its buttons gone, nothing run."""
         offer = self.state.command_offer(p.parts[0], p.chat)
         if not offer or not self.state.claim_command_offer(p.parts[0], p.chat):
-            return await p.toast(_spent(self.state, p.parts[0], "Already answered."))
+            return await self._gone(p, "Already answered.")
         sk = self.skills.get(offer["skill"])
         said = ((sk.offer or {}).get("decline") if sk else None) or "Declined"
         await p.toast(said[:toast_chars()])

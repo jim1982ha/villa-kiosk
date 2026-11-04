@@ -244,6 +244,33 @@ class Tablet:
             return False
         return await self._write({**was, "text": (f"{was['text']}\n\n" if was.get("text") else "") + line}, mid)
 
+    def pressed_turn(self, chat: int, record_key) -> tuple[int, dict] | None:
+        """The turn of `chat`'s conversation a tablet's press names (its key at the Kiosk): its message id and its record
+        as last written. None for any other record (one of VESTA's messages, settled by its own thread), another
+        profile's turn, or one no longer remembered."""
+        prefix = key("turn", "")
+        of = str(record_key or "")
+        if not of.startswith(prefix) or not of[len(prefix):].isdigit():
+            return None
+        was = self._was(of[len(prefix):])
+        return (int(of[len(prefix):]), was) if was and was.get("profile") == profile_of(chat) else None
+
+    async def settle_spent(self, spent: Callable[[int, dict], bool]) -> int:
+        """Every remembered turn without the buttons `spent(chat, button)` says can no longer be pressed, its words kept:
+        how many were rewritten. ⚠️ A PRESS BEFORE 0.12.448 LEFT THEM (owner, 2026-11-04): a turn pressed then still
+        offered "Investigate this" and "No, thanks" at every later read (see press.from_tablet)."""
+        done = 0
+        for mid, was in self.state.tablet_turns():
+            chat = chat_of(was.get("profile"))
+            buttons = was.get("buttons") or []
+            kept = [b for b in buttons if not (chat is not None and spent(chat, b))]
+            if chat is None or len(kept) == len(buttons):
+                continue
+            await self._write({**{k: v for k, v in was.items() if k != "buttons"}, **({"buttons": kept} if kept else {})},
+                              mid)
+            done += 1
+        return done
+
     async def answer(self, chat: int, press: int | None, text: str) -> bool:
         """A press's short answer (Telegram's toast), back to the tablet that pressed: a turn naming the press, shown
         under its button, never as a line of the conversation."""

@@ -430,3 +430,36 @@ def test_an_edit_after_a_restart_keeps_the_turns_pictures(agent, kiosk):
     assert asyncio.run(again.delivery.edit(chat, mid, "The gate is closed."))
     (turn,) = kiosk.conversation("owner")
     assert turn["text"] == "The gate is closed." and turn["photos"] == [jpeg], turn
+
+
+@pytest.mark.parametrize("label", ["🔎 Investigate this", "No, thanks"])
+def test_a_button_pressed_on_a_tablet_answer_never_comes_back(agent, kiosk, monkeypatch, label):
+    # owner, 2026-11-04 (a screenshot of the tablet's conversation): "the offered buttons are coming back, even if i
+    # previously already clicked on them" — only the open page hid them; the turn itself kept them at every later read
+    FakeAI(lambda run: "Read. For a full analysis write /investigate followed by your question.").install(monkeypatch)
+    kiosk.person_asks("owner", "Why did the pool pump keep starting?")
+    collect(agent)
+    (offered,) = [t for t in kiosk.conversation("owner") if t.get("buttons")]
+    button = next(b for b in offered["buttons"] if b["label"] == label)
+    kiosk.person_presses("owner", offered["key"], button["kind"], button["id"])
+    collect(agent)
+    now = next(t for t in kiosk.conversation("owner") if t["key"] == offered["key"])
+    assert "buttons" not in now, now                                        # what every later read of it shows
+    # …and says what was chosen, by whom, under its words, as Telegram's copy does
+    assert now["text"].startswith("Read. For a full analysis") and "\nStatus:\n" in now["text"], now["text"]
+    assert now["text"].endswith("(Owner at the tablet)"), now["text"]
+
+
+def test_an_answer_pressed_before_the_fix_loses_its_buttons_at_the_start(agent, kiosk, monkeypatch):
+    # a turn pressed before 0.12.448 kept its buttons: the next start takes off the ones that can no longer be pressed
+    FakeAI(lambda run: "Read. For a full analysis write /investigate followed by your question.").install(monkeypatch)
+    kiosk.person_asks("owner", "Why did the pool pump keep starting?")
+    kiosk.person_asks("owner", "And the jacuzzi?")
+    collect(agent)
+    pressed, other = [t for t in kiosk.conversation("owner") if t.get("buttons")]
+    oid = pressed["buttons"][0]["id"]
+    assert agent.state.claim_command_offer(oid, tablet.chat_of("owner"))   # pressed, as a release before the fix did
+    assert asyncio.run(agent.tablet.settle_spent(agent.command_offers.spent)) == 1
+    held = {t["key"]: t for t in kiosk.conversation("owner")}
+    assert "buttons" not in held[pressed["key"]] and held[pressed["key"]]["text"] == pressed["text"]
+    assert held[other["key"]]["buttons"] == other["buttons"]                # one still to press keeps its buttons

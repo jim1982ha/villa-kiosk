@@ -6,8 +6,8 @@ raw Telegram callback themselves — the presser's first name (approvals, comman
 its words were a file's caption (Delivery.settle) — so a press made anywhere else (the tablet, ticket 22 of "One inbox")
 would have had to be dressed up as a Telegram callback, field by field. Here a press is what the handlers need to know,
 read from Telegram in ONE place (`from_telegram`); the tablet's press (ticket 22 of "One inbox") is the second reading
-(`from_tablet`): a press on a VESTA message the tablet keeps, or on a turn of the presser's own conversation — no
-Telegram message, so no message id, words or rows to settle (each copy of the record is settled by its own thread).
+(`from_tablet`): a press on a VESTA message the tablet keeps (each copy of the record is settled by its own thread, so
+no message id), or on a turn of the presser's own conversation (its id, words and buttons: settled as a message is).
 """
 from __future__ import annotations
 
@@ -49,7 +49,14 @@ def from_telegram(q: dict, chat: int, person: Person | None, parts: list[str],
 
 
 def from_tablet(chat: int, person: Person | None, parts: list[str], toast: Callable[[str], Awaitable],
-                name: str | None = None) -> Press:
+                name: str | None = None, turn: tuple[int, dict] | None = None) -> Press:
     """A press on a tablet (tablet.Tablet.collect: the Kiosk stamped who pressed): its conversation is the chat, the
-    signed-in profile the presser (Roster.member knows the owner and the facility manager there)."""
-    return Press(chat=chat, mid=None, presser=chat, person=person, parts=parts, toast=toast, name=name, place=TABLET)
+    signed-in profile the presser (Roster.member knows the owner and the facility manager there). `turn`: the turn of
+    that conversation it was pressed on (tablet.Tablet.pressed_turn: its message id and record), settled as a Telegram
+    message is. ⚠️ (owner, 2026-11-04: "the offered buttons are coming back, even if i previously already clicked on
+    them"): a press on a turn had no message to settle, so the turn kept its buttons; only the open page hid them, and
+    every later read of the conversation offered them again."""
+    from .kiosk_messages import rows_of
+    mid, rec = turn or (None, {})
+    return Press(chat=chat, mid=mid, presser=chat, person=person, parts=parts, toast=toast, name=name,
+                 words=str(rec.get("text") or ""), rows=rows_of(rec.get("buttons")), place=TABLET)

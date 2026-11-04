@@ -428,6 +428,17 @@ class State:
         v = self.get(f"tabletturn:{int(mid)}")
         return json.loads(v) if v else None
 
+    def tablet_turns(self) -> list[tuple[int, dict]]:
+        """Every tablet turn remembered (tablet.Tablet), oldest first: (its message id, its record as last written)."""
+        rows = self.db.execute("select k, v from kv where substr(k, 1, 11) = 'tabletturn:' order by at, rowid")
+        out = []
+        for r in rows:
+            try:
+                out.append((int(r["k"][len("tabletturn:"):]), json.loads(r["v"])))
+            except ValueError:
+                continue
+        return out
+
     def set_tablet_turn(self, mid: int, record: dict, most: int) -> None:
         self.put(f"tabletturn:{int(mid)}", json.dumps(record))
         self._capped("tabletturn:", most, kiosk_copies_bytes())

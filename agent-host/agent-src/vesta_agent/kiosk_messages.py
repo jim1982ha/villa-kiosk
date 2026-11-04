@@ -72,6 +72,16 @@ def buttons_of(keyboard: dict | None) -> list[dict]:
     return out
 
 
+def rows_of(buttons) -> list[list[dict]]:
+    """A record's buttons (buttons_of) as Telegram's rows, one row: what a press settles them from (press.Press.rows)."""
+    row = []
+    for b in buttons or ():
+        kind, parts = button_data.read(f"{b.get('kind')}:{b.get('id')}" if isinstance(b, dict) else "")
+        if kind:
+            row.append({"text": b.get("label") or "", "callback_data": button_data.make(kind, *parts)})
+    return [row] if row else []
+
+
 def roles_of(to: str) -> list[str]:
     """The roles a "To:" line names ("Owner & FM")."""
     return [r.strip() for r in (to or "").split(AND.strip()) if r.strip()]
