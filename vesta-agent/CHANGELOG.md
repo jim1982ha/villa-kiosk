@@ -1,3 +1,10 @@
+## 0.12.452
+
+What you will see:
+- The Cockpit card of an automation watching a hidden device now says why it is there: the device no longer answers
+  ("… watches 1 device hidden in the villa's system that no longer answers: Tapo Server Room Person Detection
+  (offline)."), and what to do first: bring it back online; only if a copy replaced it, point the automation at the copy.
+
 ## 0.12.451
 
 What you will see:

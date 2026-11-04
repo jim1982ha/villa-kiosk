@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.436 (5 November 2026)
+
+- PM-HIDDEN-IN-RULE says each hidden device's standing, "(offline)" or "(no longer in the villa's system)"
+  (rules.hidden_in_rule_rules `gone`), and its check starts with bringing it back online.
+
 ## 0.6.435 (5 November 2026)
 
 - A skill's alert button may say `closes: true` (skill.yaml `buttons`): its on_reply closes the alert and the close says

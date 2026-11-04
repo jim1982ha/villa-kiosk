@@ -420,11 +420,16 @@ def ids_named(config, ids) -> set[str]:
     return {i for i in ids if re.search(r"(?<![\w])" + re.escape(i) + r"(?![\w])", text)}
 
 
-def hidden_in_rule_rules(rules: list[dict], hidden, name_of) -> list[Finding]:
+def hidden_in_rule_rules(rules: list[dict], hidden, name_of, gone=()) -> list[Finding]:
     """PM-HIDDEN-IN-RULE: one finding per villa rule (automation or script) that names a device hidden in the villa's
-    system. A hidden device is left out of every VESTA check (the pack), but a rule naming it still alerts on it — the
-    owner had a false "offline" alert from a rule still watching a device replaced by a copy and hidden (owner,
-    2026-10-20). `rules`: [{"entity_id", "kind", "config"}]; `name_of(entity_id)`: a device's name."""
+    system that no longer answers. A hidden device is left out of every VESTA check (the pack), but a rule naming it
+    still alerts on it — the owner had a false "offline" alert from a rule still watching a device replaced by a copy
+    and hidden (owner, 2026-10-20). `rules`: [{"entity_id", "kind", "config"}]; `name_of(entity_id)`: a device's name;
+    `gone`: the hidden devices the villa's system no longer has (the others are offline).
+
+    ⚠️ IT SAYS WHY (owner, 2026-11-05): "watches 1 device hidden in the villa's system: Tapo … Person Detection" left out
+    that it is offline — the only reason it is a fault (a hidden device that answers is none) — and told to point the
+    automation elsewhere, when the camera's detection had only gone offline at a restart."""
     out = []
     for r in rules:
         named = sorted(ids_named(r.get("config") or {}, hidden))
@@ -433,13 +438,15 @@ def hidden_in_rule_rules(rules: list[dict], hidden, name_of) -> list[Finding]:
         alias = (r.get("config") or {}).get("alias") or name_of(r["entity_id"])
         rule = AW.name(alias, r["entity_id"])
         n = len(named)
-        names = ", ".join(name_of(e) for e in named)
+        names = ", ".join(f"{name_of(e)} ({'no longer in the villa' + chr(39) + 's system' if e in gone else 'offline'})"
+                          for e in named)
         # "automation" or "script", never "rule" in what a person reads (owner, 2026-10-22); its own name in apostrophes
         # (vesta_shared.automation_words)
         kind = "script" if str(r.get("kind") or "") == "script" else "automation"
         out.append(Finding(HIDDEN_IN_RULE, r["entity_id"], r["entity_id"], "configuration", P3,
-                           f"The {AW.words(alias, r['entity_id'], kind)} watches {n} device{'s' if n > 1 else ''} hidden in the villa's system: {names}.",
+                           f"The {AW.words(alias, r['entity_id'], kind)} watches {n} device{'s' if n > 1 else ''} hidden in "
+                           f"the villa's system that no longer answer{'' if n > 1 else 's'}: {names}.",
                            {"name": rule, "kind": r.get("kind"), "hidden": named, "count": n},
-                           f"Point the {kind} at the device you see instead (a hidden device is left out of every check), "
-                           f"or take the hidden one out of the {kind}."))
+                           f"Bring {'them' if n > 1 else 'it'} back online; if a copy replaced {'them' if n > 1 else 'it'}, "
+                           f"point the {kind} at the copy instead (a hidden device is left out of every other check)."))
     return out

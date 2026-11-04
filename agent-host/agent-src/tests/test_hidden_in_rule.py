@@ -61,8 +61,10 @@ def test_a_rule_watching_a_hidden_device_is_one_fault_naming_it(tmp_path):
     # the watchdog only: the copy's rule names a LONGER id, the script names it only in its prose
     assert [f["entity_id"] for f in got] == ["automation.critical_watchdog_devices"]
     # its own name without the blueprint's prefix, in apostrophes (vesta_shared.automation_words, round 11 card 3)
-    assert got[0]["summary"] == ("The automation 'Devices' watches 1 device hidden in the villa's system: "
-                                 "Front Door Raw.")
+    # why it is a fault: the hidden device no longer answers (owner, 2026-11-05: the camera's detection was offline)
+    assert got[0]["summary"] == ("The automation 'Devices' watches 1 device hidden in the villa's system that no "
+                                 "longer answers: Front Door Raw (offline).")
+    assert json.loads(got[0]["detail"])["check"].startswith("Bring it back online; if a copy replaced it")
     assert json.loads(got[0]["detail"])["hidden"] == [RAW]
     assert "Home Assistant" not in got[0]["summary"]
 
@@ -135,3 +137,5 @@ def test_a_script_is_called_a_script_and_never_a_rule():
     script = {**SCRIPT, "config": {**SCRIPT["config"], "sequence": [{"action": "lock.lock", "target": {"entity_id": RAW}}]}}
     (f,) = R.hidden_in_rule_rules([script], [RAW], lambda e: "Front Door Raw")
     assert f.summary.startswith("The script 'Alert photo' watches 1 device") and "rule" not in (f.summary + f.check).lower()
+    (g,) = R.hidden_in_rule_rules([script], [RAW], lambda e: "Front Door Raw", gone={RAW})
+    assert g.summary.endswith("no longer answers: Front Door Raw (no longer in the villa's system).")

@@ -382,7 +382,8 @@ def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[
         # detection, each live and rightly watched by its rule. The case this rule is for (2026-10-20) is a rule still
         # watching a device replaced by its copy: that one is offline or gone.
         now = cli.states(hidden)
-        hidden = [e for e in hidden if pack.standing(e, (now.get(e) or {}).get("state")) in (ABSENT, OFFLINE_NOW)]
+        standing = {e: pack.standing(e, (now.get(e) or {}).get("state")) for e in hidden}
+        hidden = [e for e in hidden if standing[e] in (ABSENT, OFFLINE_NOW)]
         if not hidden:
             return [], []
         rules = cli.rules_mentioning(hidden)
@@ -392,7 +393,7 @@ def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[
                           json.loads(o["detail"] or "{}").get("check", ""))
                 for o in store.findings(status="open") if o["rule_id"] == R.HIDDEN_IN_RULE]
         return kept, [f"The villa's automations could not be read for hidden devices ({type(e).__name__}): nothing changed."]
-    return R.hidden_in_rule_rules(rules, hidden, name_of), []
+    return R.hidden_in_rule_rules(rules, hidden, name_of, gone={e for e in hidden if standing[e] == ABSENT}), []
 
 
 #: The devices a person said were removed on purpose (a PM-MISSING fault's Done), {entity_id: when}: never missing
