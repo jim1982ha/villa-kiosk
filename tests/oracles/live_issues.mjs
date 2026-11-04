@@ -67,10 +67,10 @@ ck("  ...pressed, Open Ticket opens the Tickets tab's ticket form pointed at the
    && JSX.propText(icButtons, "raised") === "(entityId) => raisedFor({ title: card.title, lines: [line] }, place(entityId, card.title))"
    && /onRaiseTicket=\{onRaiseTicket\}/.test(MT) && !/<FaultForm /.test(MT));
 // owner, 2026-10-30: the Tickets tab's "Mark resolved" is the Inbox's Done (work done, its form kept), with Need help
-ck("a ticket in progress (Tickets): Done (its resolve form), Need help, Not a problem, Close — each on every record of it, its own Close question",
+ck("a ticket in progress (Tickets): Close (its resolve form; owner, 2026-11-04), Need help, No action needed, never Not a problem (owner, 2026-11-04) — each on every record of it, its own Close question",
    said(W.ticketActions([{ id: "a", stage: "ticket" }, { id: "b", stage: "ticket" }])).join(" | ")
-   === `Done → a,b (resolved) | Need help → a,b | Not a problem → a,b ${NAP} | No action needed → a,b ${TK_CLOSE}`
-   && W.WORK_ACTIONS.ticketDone.label === W.WORK_ACTIONS.done.label && W.ticketActions([{ id: "a", stage: "ticket" }])[1].step.kind === "help");
+   === `Close → a,b (resolved) | Need help → a,b | No action needed → a,b ${TK_CLOSE}`
+   && W.WORK_ACTIONS.ticketDone.label === "Close" && W.ticketActions([{ id: "a", stage: "ticket" }])[1].step.kind === "help");
 ck("  ...a closed record: Reopen, on it alone — and nothing else on a record that is not where the card expects it",
    said(W.closedActions({ id: "r", stage: "closed" })).join() === "Reopen → r (open)"
    && W.closedActions({ id: "r", stage: "fault" }).length === 0 && W.ticketActions([{ id: "f", stage: "fault" }]).length === 0
@@ -134,7 +134,7 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
      tickets.map((t) => [t.key, t.records.map((r) => r.id)]));
   ck("  ...the Tickets card's buttons are its records', the Overview card's each its problem's",
      said(W.ticketActions(tickets.find((t) => t.key === "device:sensor.pump_power").records.map(W.workRecord))).join(" | ")
-       === `Done → p2 (resolved) | Need help → p2 | Not a problem → p2 ${NAP} | No action needed → p2 ${TK_CLOSE}`
+       === `Close → p2 (resolved) | Need help → p2 | No action needed → p2 ${TK_CLOSE}`
      && said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))).join(" | ")
        === `Done → p1 ${OV_DONE} | Need help → p1 | Not a problem → p1 ${NAP} | Open Ticket → p1 (in_progress) | Done → p2 ${OV_DONE} | Need help → p2 | Not a problem → p2 ${NAP} | Edit Ticket → p2`,
      said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))));
@@ -567,18 +567,18 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
      && /aria-label="Done “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })) && /aria-label="Open Ticket"/.test(drawButtons(ovActs)), seen(drawButtons(ovActs)));
   // owner, 2026-11-04 (iPhone screenshot): "use 1 word label and icon in the button … open/edit a ticket shall also
   // appear on the same line"
-  ck("  ...on a narrow row, one word each under its icon: Done · Help · Ignore · Ticket, and the Tickets tab's Done · Help · Ignore · Dismiss",
+  ck("  ...on a narrow row, one word each under its icon: Done · Help · Ignore · Ticket, and the Tickets tab's Close · Help · Dismiss",
      seen(drawButtons(ovActs), true) === "|[icon] Done|[icon] Help|[icon] Ignore|[icon] Ticket|"
      && seen(drawButtons(W.overviewActions([{ id: "a", stage: "ticket" }])), true) === "|[icon] Done|[icon] Help|[icon] Ignore|[icon] Ticket|"
-     && seen(drawButtons(tkActs), true) === "|[icon] Done|[icon] Help|[icon] Ignore|[icon] Dismiss|",
+     && seen(drawButtons(tkActs), true) === "|[icon] Close|[icon] Help|[icon] Dismiss|",
      [seen(drawButtons(ovActs), true), seen(drawButtons(tkActs), true)]);
   // owner, 2026-10-31 (iPhone screenshot): Open Ticket wrapped under Done · Need help. Measured on that screenshot, a
   // 390 px wide iPhone: the card 354 px wide (the screen less 36 px); the labels' own widths at 15 px: Done 34, Need
   // help 68, the wrench and Open Ticket 101 (the icon 14 px and the button's 8 px gap: 22). ⚠️ A FOURTH BUTTON (owner,
   // 2026-11-04): with Not a problem (98 px, Need help's width per letter) the four wrapped, Open Ticket on a second line;
   // the owner asked one word and its icon instead, all four on one line. Every label in full shows only where the row
-  // holds the widest card's four (the Tickets tab's No action needed, 121 px); below, the one words under their icons
-  // share the row equally, and the widest of them (Dismiss, 53 px) fits a quarter of a 360 px phone's row.
+  // holds the widest card's buttons (an issue's four; a ticket's three, No action needed 121 px); below, the one words
+  // under their icons share the row equally, and the widest of them (Dismiss, 53 px) fits a quarter of a 360 px phone's row.
   {
     const { readFileSync } = await import("node:fs");
     const css = (f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8");
@@ -595,16 +595,18 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     const ICON = 22;
     const line = (labels) => labels.reduce((w, label) => w + label + ICON + 2 * pad + 2, 0) + (labels.length - 1) * gap;
     const room = (screen) => screen - 36 - 2 * cardPad - gutter + lent;
-    const full = Math.max(line([34, 68, 98, 101 - ICON]), line([34, 68, 98, 121]));
+    const full = Math.max(line([34, 68, 98, 101 - ICON]), line([40, 68, 121]));
     const tiles = 4 * (53 + 2 * tilePad + 2) + 3 * gap;
     ck("  ...every label in full only on a row that holds the widest card's four; one words below, the four on one line on every phone, 360 to 430 px",
        pad > 0 && gap > 0 && lent === gutter && !!tile && full <= narrowBelow
        && [360, 375, 390, 412, 430].every((w) => room(w) < narrowBelow && tiles <= room(w))
-       && /\.work-short \{ display: none; \}/.test(fac) && /container: work-row \/ inline-size;/.test(fac),
+       && /\.work-short \{ display: none; \}/.test(fac) && /^\.fm-record \{ container: work-row \/ inline-size; \}$/m.test(fac)
+       // the CARD is measured: a row sized by its buttons (right of the words on a wide card) measured 0 px (owner, 2026-11-04)
+       && (fac.match(/container(-type|-name)?:/g) ?? []).length === 1,
        { pad, gap, lent, gutter, full, narrowBelow, tiles, room360: room(360) });
   }
-  ck("  ...a ticket: Done, Need help, Not a problem and No action needed, each with its icon; a closed record: Reopen",
-     seen(drawButtons(tkActs)) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] No action needed|" && seen(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|[icon] Reopen|", seen(drawButtons(tkActs)));
+  ck("  ...a ticket: Close, Need help and No action needed, each with its icon; a closed record: Reopen",
+     seen(drawButtons(tkActs)) === "|[icon] Close|[icon] Need help|[icon] No action needed|" && seen(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|[icon] Reopen|", seen(drawButtons(tkActs)));
   // each close asks the question of the button pressed (owner, 2026-11-04: Not a problem a button of its own, no
   // longer a second yes under Done's question; tests/oracles/not_a_problem.mjs)
   const asked = (kind, key = "device:x") => ({ key, kind });
@@ -614,12 +616,12 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
      && seen(drawButtons(tkActs, asked("closeTicket"))) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|No action needed|",
      [seen(drawButtons(ovActs, asked("done"))), seen(drawButtons(ovActs, asked("notAProblem"))), seen(drawButtons(tkActs, asked("closeTicket")))]);
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
-     seen(drawButtons(tkActs, asked("closeTicket", "device:y"))) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] No action needed|" && drawButtons([]) === "");
+     seen(drawButtons(tkActs, asked("closeTicket", "device:y"))) === "|[icon] Close|[icon] Need help|[icon] No action needed|" && drawButtons([]) === "");
   const { momentText } = await import("@/utils/dateText");
   const at = "2026-10-30T09:20:00.000Z";
   ck("  ...a Need help that stands is said above the buttons, when and by whom; a step that did not land, under them",
-     seen(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })) === `|🆘 Need help asked ${momentText(at)} (Owner)|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] No action needed|`
-     && seen(drawButtons(tkActs, null, { problem: "Not saved." })) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] No action needed|Not saved.|",
+     seen(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })) === `|🆘 Need help asked ${momentText(at)} (Owner)|[icon] Close|[icon] Need help|[icon] No action needed|`
+     && seen(drawButtons(tkActs, null, { problem: "Not saved." })) === "|[icon] Close|[icon] Need help|[icon] No action needed|Not saved.|",
      [seen(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })), seen(drawButtons(tkActs, null, { problem: "Not saved." }))]);
 }
 
@@ -642,7 +644,7 @@ console.log("\n  a Need help pressed is said on its card, and asked once (archit
      [inbox(after).asked, said(inbox(after).actions)]);
   ck("  ...the Tickets tab's card the same, from the same records",
      JSON.stringify(W.helpAsked(ticket(after))) === JSON.stringify({ at, by: "Owner" })
-     && said(W.ticketActions(ticket(after))).join(" | ") === `Done → b (resolved) | Not a problem → b ${NAP} | No action needed → b ${TK_CLOSE}`
+     && said(W.ticketActions(ticket(after))).join(" | ") === `Close → b (resolved) | No action needed → b ${TK_CLOSE}`
      && said(W.ticketActions(ticket(before))).some((x) => x.startsWith("Need help")), said(W.ticketActions(ticket(after))));
   ck("  ...in words: \"🆘 Need help asked <when> (Owner)\"",
      W.helpLine(W.helpAsked(ticket(after)), momentText) === `🆘 Need help asked ${momentText(at)} (Owner)`, W.helpLine(W.helpAsked(ticket(after)), momentText));

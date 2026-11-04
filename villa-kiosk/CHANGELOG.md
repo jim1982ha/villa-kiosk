@@ -1,3 +1,14 @@
+## 2.496.695
+
+What you will see:
+- Cockpit cards on a laptop: the buttons are back on one line under the card's words. On the Inbox they had each
+  dropped onto a line of their own, a word wide (2.496.693).
+- The Inbox and the Tickets tab now lay their buttons out the same way: under the words, on the right, at every
+  width. The Inbox used to put them beside the words on a wide card.
+- Tickets tab: a ticket's card offers Close · Need help · No action needed. "Not a problem" is no longer offered
+  there (it stays on the Inbox's cards), and "Done" is now called "Close". It opens the same form as before: what was
+  done, the cost, photos.
+
 ## 2.496.694
 
 What you will see:

@@ -192,9 +192,13 @@
    instead of the 18 of a .btn, and under a card with an icon column the row takes that column's width too (it is
    empty under the buttons). Each button's icon, then its label; on a row narrower than every label in full needs, the
    buttons share the row equally, each its one word under its icon (WorkLabel's .work-short). A browser without
-   container queries keeps the labels, wrapping whole, never cut. */
-.fm-work-row { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
-  container: work-row / inline-size; }
+   container queries keeps the labels, wrapping whole, never cut.
+   ⚠️ THE CARD IS MEASURED, NEVER THE ROW (owner, 2026-11-04, the laptop's Open issues: each button alone on its line,
+   a word wide): on a wide card the buttons sit right of the words at their own width (08-shared.css, 640 px), and a
+   row measuring itself there measured nothing: 0 px, the narrow look. The card's width is the row's under its words
+   (the icon column lent back), and decides alike on every card. */
+.fm-record { container: work-row / inline-size; }
+.fm-work-row { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .fm-work-row > .btn { padding: 0 12px; white-space: nowrap; }
 .work-short { display: none; }
 @container work-row (max-width: 559px) {
