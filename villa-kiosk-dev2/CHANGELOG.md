@@ -1,3 +1,11 @@
+## 2.496.688
+
+What you will see:
+- Settings › Messages › Who gets the messages, its (i): urgent (P1) alerts go to the Owner list only, P2 alerts to the
+  Facility Manager list only. A list with nobody in it hands its alerts to the other list; with both empty, they go to
+  every Telegram chat. The villa sends them itself, with or without this tablet or VESTA.
+- Advanced Settings › Villa › Maintenance mode, its (i): urgent alerts still reach the Owner list.
+
 ## 2.496.687
 
 What you will see:
