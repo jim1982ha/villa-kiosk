@@ -1,3 +1,10 @@
+## 2.496.696
+
+What you will see:
+- Cockpit cards (Inbox reports, Tickets, Recent work, Spend): the small light-grey dot at the top right of the card,
+  over its date, is gone. It was a hint that the superadmin can erase the card by pressing and holding it. That
+  still works, with no dot.
+
 ## 2.496.695
 
 What you will see:
