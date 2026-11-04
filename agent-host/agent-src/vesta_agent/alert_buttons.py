@@ -116,9 +116,11 @@ class AlertButtons:
         # skill's `labels`); a language it has none for reads the whole line in English, never half
         labels = button.get("labels") or {}
         await self.thread.close(int(iid), PRESSED.format(label=label, name=name, time="{time}"), mark=button["mark"],
-                                note_in={lang: pressed(word, name, "{time}", lang) for lang, word in labels.items()})
+                                note_in={lang: pressed(word, name, "{time}", lang) for lang, word in labels.items()},
+                                interim=True)
         # the press, for the fault's card in the Kiosk (notice.Notices.story; owner, 2026-10-14)
-        note_press(self.state, int(iid), label, name, button["mark"], bool(button.get("closes")), labels)
+        note_press(self.state, int(iid), label, name, button["mark"], bool(button.get("closes")), labels,
+                   place=place or ON_TELEGRAM)
         # ⚠️ TOLD TO THE AI (owner, 2026-10-23): a press goes to the agent, never into the conversation — the AI could
         # say an alert waits for an answer that was given here a minute before
         if self.facts is not None:

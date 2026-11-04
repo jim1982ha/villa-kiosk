@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.437 (5 November 2026)
+
+- Architecture review 21: a press's receipt is interim (IncidentThread.close `interim`), replaced in every copy by the
+  skill's settle; note_press keeps `place`; Notices.record keeps no second closing step, history_lines leaves out a
+  closing step standing, note_step's cleared line takes the closing step's place; result.ha_message `as_it_stands`
+  (the alert desk's resolved_late and abandoned_late: desk._close_again) keeps each copy's close word for word; a test
+  checks skill.yaml `closes` against the desk's reply.
+
 ## 0.6.436 (5 November 2026)
 
 - PM-HIDDEN-IN-RULE says each hidden device's standing, "(offline)" or "(no longer in the villa's system)"

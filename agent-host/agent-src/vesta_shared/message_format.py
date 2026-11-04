@@ -137,9 +137,12 @@ NIGHT = {"watched": "watched until {until}", "closed": "Closed", "not_back": "it
 #: (Closed in the Cockpit)" or "Done (Done in the Cockpit)" for the same press, and a Telegram Done was later called a
 #: close in the Cockpit): the place said once, here — done_in writes the line.
 ON_TELEGRAM, ON_TABLET, IN_COCKPIT = "telegram", "tablet", "cockpit"
-DONE_IN = {ON_TELEGRAM: "Done on Telegram", ON_TABLET: "Done on the tablet", IN_COCKPIT: COCKPIT["closed"]}
+#: Each place as a line names it after the button: "Need help on the tablet (JM)" (the Kiosk card's story too)
+ON_PLACE = {ON_TELEGRAM: "on Telegram", ON_TABLET: "on the tablet", IN_COCKPIT: "in the Cockpit"}
+DONE_IN = {ON_TELEGRAM: f"Done {ON_PLACE[ON_TELEGRAM]}", ON_TABLET: f"Done {ON_PLACE[ON_TABLET]}",
+           IN_COCKPIT: COCKPIT["closed"]}
 #: …and its "Not a problem while it lasts", by the same places: a close never read again while the problem lasts.
-LASTING_IN = {ON_TELEGRAM: "Not a problem on Telegram", ON_TABLET: "Not a problem on the tablet",
+LASTING_IN = {ON_TELEGRAM: f"Not a problem {ON_PLACE[ON_TELEGRAM]}", ON_TABLET: f"Not a problem {ON_PLACE[ON_TABLET]}",
               IN_COCKPIT: COCKPIT["lasting"]}
 
 

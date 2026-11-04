@@ -246,7 +246,7 @@ class IncidentThread:
             return True
 
     async def close(self, iid: int | str, note: str, body: str | None = None, mark: str | None = None,
-                    note_in: dict | None = None, final: bool = False) -> int:
+                    note_in: dict | None = None, final: bool = False, interim: bool = False) -> int:
         """Every message of incident `iid`, in every chat, loses its buttons and shows `note` (who did what, when;
         "{time}": the villa's time now) — a copy without buttons too (owner, 2026-10-11: one incident, one picture);
         `note_in`: the same in other languages ({code: text}), each chat showing the one it reads (owner, 2026-10-23).
@@ -257,7 +257,12 @@ class IncidentThread:
 
         `final`: its watch is over (the desk's watch_over, owner 2026-10-25) — every copy, settled or not, once: where it
         stood (its close, "Cleared on … Watch 1h.") becomes a line of its Status, in each chat's language, and `note`
-        ("Closed on …: it did not come back within 1h.") the line under it; its title "(closed)", its alert struck."""
+        ("Closed on …: it did not come back within 1h.") the line under it; its title "(closed)", its alert struck.
+
+        `interim`: the engine's receipt of a press, its buttons gone at once — the skill's answer that follows (its
+        settle) replaces it in every copy. ⚠️ ONE LAST LINE IN EVERY CHAT (architecture review 21 card 1): "Not a problem"
+        pressed in the FM's chat ended "… (Luc). Watch 1h." there and "… (Luc)." in the owner's group — the receipt
+        settled the group's copy first, and the desk's own words, its watch, were then dropped as "settled already"."""
         if final:
             return await self._finish(iid, note, note_in)
         async with self._lock(iid):
@@ -266,15 +271,13 @@ class IncidentThread:
             for chat, rec in self.state.incident_chats(iid):
                 said = pick(note, note_in, self._lang(chat))
                 said = layout.fill_time(said, now, self.tz) if said else said           # 10/10/2026 17:13, as every notice
-                if rec.get("settled"):
+                if rec.get("settled") and not rec.get("interim"):
                     # ⚠️ SETTLED BEFORE ITS INCIDENT CLOSED (owner, 2026-10-11): a press settles every copy at once, the desk
                     # closes the incident just after — the group's copy kept "New" above "Done pressed by Fabien"
                     p = layout.of(rec)
                     head = self.words.retitle(iid, p.get("head") or "", chat)
                     if head != (p.get("head") or ""):
                         n += await self._show(iid, chat, rec, {**p, "head": head})
-                    continue
-                if rec.get("settled"):
                     continue
                 if not said:
                     self.state.set_incident_message(iid, chat, {**rec, "settled": True})
@@ -287,7 +290,8 @@ class IncidentThread:
                     p["said"] = layout.note_said(note, note_in, now, self.tz)
                 p = {**p, "head": self._head_now(iid, chat, p.get("head") or "")}      # "Closed" once its incident is (notice.py)
                 p = self._own_words(iid, chat, p)
-                n += await self._show(iid, chat, {**rec, "settled": True}, p)
+                kept = {k: v for k, v in rec.items() if k != "interim"}
+                n += await self._show(iid, chat, {**kept, "settled": True, **({"interim": True} if interim else {})}, p)
             self._tell_alone(iid, status=layout.fill_time(note, now, self.tz) if note else None, body=body, mark=mark)
             return n
 

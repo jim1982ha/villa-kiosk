@@ -1122,3 +1122,12 @@ def test_maintenance_mode_is_the_kiosks_switch_and_lets_only_p1_through(store, t
     again = desk.intake(store, event(rule="automation.critical_condition_back_door", entities=("lock.back",)),
                         T0 + timedelta(minutes=1), occupancy_reader=lambda: "occupied")
     assert again["decision"] in ("counted", "repeat") and again["incident_id"] is not None
+
+
+def test_a_button_that_says_it_closes_is_exactly_one_whose_answer_closes_the_alert(store):
+    # architecture review 21 card 3: skill.yaml `closes` keeps a closing press out of the Status (notice.note_press) and
+    # the desk's reply closes by option; a closing button declared on one side only was told twice (#118) or vanished
+    for option, b in desk.BUTTONS.items():
+        iid = desk.intake(store, event(entities=(f"sensor.example_{option}",)), T0)["incident_id"]
+        desk.reply(store, iid, option, "owner", T0 + timedelta(minutes=7), name="Owner")
+        assert bool(store.incident(iid).get("closed_at")) is bool(b.get("closes")), option

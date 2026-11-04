@@ -33,7 +33,8 @@ named who a message was for. The skill now writes only what happened; this write
 """
 from __future__ import annotations
 
-from vesta_shared.message_format import MARK_ICONS, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED, audience
+from vesta_shared.message_format import (MARK_ICONS, ON_PLACE, ON_TELEGRAM, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED,
+                                         audience)
 from vesta_shared import status_words
 from vesta_shared.limits import limit
 from vesta_shared.messaging import incident_tag
@@ -50,6 +51,8 @@ from . import layout
 #: card says it already, as its own step — and an alert's close once its watch is over (incident_thread.py).
 TAKEN_STAGE = "taken"
 CLEARED_STAGE = "cleared"
+#: The step of a close (message_format.STEPS "closed"): told by its bottom line while it stands (Notices.history_lines)
+CLOSED_STEP = "closed"
 #: Between a step's line and the desk's words on the bottom line.
 STEP_SEP = ", "
 EXISTING = "existing"
@@ -62,11 +65,12 @@ def history_kept() -> int:
 
 
 def note_press(state, incident: int, label: str, name: str, mark: str | None = None, closes: bool = False,
-               labels: dict | None = None) -> None:
+               labels: dict | None = None, place: str = ON_TELEGRAM) -> None:
     """A button pressed on incident `incident`'s alert, kept in its history (the Kiosk's card says it: Notices.story).
     A button that closes the alert (skill.yaml `closes`: Done, Not a problem) is not kept: its close says "Done on
     Telegram (…)." already. `labels`: the button's label in other languages (skill.yaml `labels`), so each chat's Status
-    names the press in its own (owner, 2026-10-23).
+    names the press in its own (owner, 2026-10-23). `place`: where it was pressed (message_format ON_TELEGRAM, ON_TABLET),
+    as the Kiosk card's story says it — architecture review 21: a press on the tablet read "on Telegram" there.
 
     ⚠️ EVERY CLOSING BUTTON, NOT DONE BY NAME (owner, 2026-11-05, #118): Not a problem, added beside Done, was kept —
     its card read "- Not a problem on 05/11/2026 00:19 (Jm)" above "✅ Not a problem on 05/11/2026 00:19 (Jm). Watch 1h.".
@@ -75,7 +79,8 @@ def note_press(state, incident: int, label: str, name: str, mark: str | None = N
         return
     history = state.incident_history(incident)
     history.append({"at": datetime.now(timezone.utc).isoformat(), "stage": PRESSED_STAGE, "label": label,
-                    "name": name, **({"mark": mark} if mark else {}), **({"labels": dict(labels)} if labels else {})})
+                    "name": name, **({"mark": mark} if mark else {}), **({"labels": dict(labels)} if labels else {}),
+                    **({"place": place} if place != ON_TELEGRAM else {})})
     state.set_incident_history(incident, _kept(history))
 
 
@@ -85,8 +90,15 @@ def note_step(state, incident: int, stage: str, note: str, note_in: dict | None 
     (owner, 2026-10-15). `note_in`: the same words in other languages ({code: text}), each chat's line in its own."""
     history = state.incident_history(incident)
     langs = {k: str(v).rstrip(".") for k, v in (note_in or {}).items() if isinstance(v, str) and v}
-    history.append({"at": datetime.now(timezone.utc).isoformat(), "stage": stage, "note": note.rstrip("."),
-                    **({"note_in": langs} if langs else {})})
+    step = {"at": datetime.now(timezone.utc).isoformat(), "stage": stage, "note": note.rstrip("."),
+            **({"note_in": langs} if langs else {})}
+    if stage == CLEARED_STAGE and history and history[-1].get("stage") == CLOSED_STEP:
+        # ⚠️ ONE LINE PER CLOSE (owner, 2026-11-05, #118): "- Closing note sent 00:19 (to: Owner & FM)" stood above
+        # "- Cleared on … Watch 1h", one close told twice. The close's own words take its closing step's place, told in
+        # every chat as the close was (its copy in each said it)
+        history[-1] = step
+    else:
+        history.append(step)
     state.set_incident_history(incident, _kept(history))
 
 
@@ -279,7 +291,13 @@ class Notices:
         history = self.state.incident_history(incident)
         # `latest_excluded`: the last steps recorded, left out — a copy refreshed with the notice just sent, whose own
         # bottom line already says it (Outcome's refresh of the other chats)
-        for h in history[:len(history) - latest_excluded] if latest_excluded else history:
+        shown = history[:len(history) - latest_excluded] if latest_excluded else history
+        # ⚠️ A CLOSE STANDING IS ITS BOTTOM LINE (owner, 2026-11-05, #118): redrawn while closed, the card listed
+        # "- Closing note sent 00:19" above "✅ Not a problem on 00:19 (Jm). Watch 1h." — the same close. Its step shows
+        # once something came after it (it came back), or as the close's own words once its watch is over (note_step)
+        if shown and shown[-1].get("stage") == CLOSED_STEP and self._closed_now(incident):
+            shown = shown[:-1]
+        for h in shown:
             roles = self._roles(h) if h.get("chats") or h.get("to") else set()
             if mine and roles and not roles & mine:
                 continue
@@ -288,6 +306,12 @@ class Notices:
             # a step is kept as facts (stage, moment, roles, count) and worded by `_line`, the Kiosk's card's writer too
             lines.append(f"- {self._line(h, lang)}")
         return lines
+
+    def _closed_now(self, incident: int) -> bool:
+        try:
+            return bool(self.closed(int(incident)))
+        except Exception:  # noqa: BLE001 — not knowable: every step listed, as before
+            return False
 
     def story_of(self, incident: int, chat: int, shown) -> tuple[int, list[str]] | None:
         """A copy of `incident` in `chat` that showed the Status lines `shown` (its own steps), told for everyone: (how
@@ -369,7 +393,9 @@ class Notices:
         label = (h.get("labels") or {}).get(lang) if lang != "en" else None
         lang = lang if label else "en"
         what = f"{MARK_ICONS.get(h.get('mark') or '', '')} {label or h.get('label')}".strip()
-        return status_words.acted(what, at, h.get("name") or "", lang) if at else f"{what} on Telegram ({h.get('name')})"
+        # a press kept before its place was (0.12.453): on Telegram, the only place then recorded
+        where = ON_PLACE.get(h.get("place") or ON_TELEGRAM, ON_PLACE[ON_TELEGRAM])
+        return status_words.acted(what, at, h.get("name") or "", lang) if at else f"{what} {where} ({h.get('name')})"
 
     def story(self, incident: int) -> list[dict]:
         """What a fault's card in the Kiosk tells of incident `incident`'s Telegram life, oldest first: [{at, note,
@@ -441,6 +467,10 @@ class Notices:
             # "Update sent", it told the same press as two events (architecture review, 2026-10-15)
             return
         history = self.state.incident_history(incident)
+        if stage == CLOSED_STEP and self._closed_again(history):
+            # ⚠️ ONE CLOSE, ONE STEP (owner, 2026-11-05, #118): the villa's own all-clear at 00:27 of an alert closed with
+            # "Not a problem" at 00:19 was a second "Closing note sent" — the same close, its message taken over
+            return
         reach = self._reach(int(incident))
         # the roles it was for — the chat's own only when the desk did not say whom the priority reaches: a step to
         # no role (a P3's own message, taken over) records what the priority does instead ("digest"), so no later
@@ -460,6 +490,11 @@ class Notices:
                 line["run"] = run
         history.append(line)
         self.state.set_incident_history(incident, _kept(history))
+
+    @staticmethod
+    def _closed_again(history: list[dict]) -> bool:
+        """The incident's last step is its close already: nothing happened since (no return, no reopening)."""
+        return bool(history) and history[-1].get("stage") in (CLOSED_STEP, CLEARED_STAGE)
 
     def _roles(self, h: dict) -> set[str]:
         """The roles a history line's notice went to, as recorded. A line recorded before 0.12.181 named people (`to`,

@@ -1181,3 +1181,19 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
 - **The knowledge pack's chats were their own table** (lead 6): `people` is the villa's person entities only. The
   name merge (lower-cased) is gone: a chat named like a person took that person's role. PACK_RULES 6. The `chats`
   table itself was retired in architecture review 20 (card 7): nothing read it.
+
+## One press, one close, one line per moment (architecture review 21, 2026-11-05, 0.12.453)
+
+- **A button that closes says so in skill.yaml** (`buttons[].closes`, card 3): notice.note_press keeps no line of a
+  closing press (its close says it). test_alert_desk checks `closes` is true exactly when the desk's reply closes.
+- **The press's receipt is interim** (card 1): alert_buttons settles every copy at once with `interim`; the skill's
+  settle that follows replaces it in every copy (IncidentThread.close), so every chat ends with the same last line,
+  its watch included. A copy settled for good only takes the new heading, as before.
+- **A close is told once** (#118): Notices.record keeps no second closing step right after one; a closing step
+  standing is the card's bottom line, never also a line above it (history_lines); at the watch's end the close's own
+  words take its closing step's place (note_step). A rule's late all-clear or giving up on an alert closed already
+  carries `as_it_stands` (result.ha_message): each copy keeps the close it shows, word for word (Outcome._close_shown).
+- **Where a button was pressed is kept** (card 2): note_press records `place`; the Kiosk card's story says "on the
+  tablet" (message_format.ON_PLACE, the one place word).
+- Not done: the Cockpit's close still says no watch (its watch words are the desk's, words.yaml; the Cockpit close is
+  the engine's), and card 4, one "kind of close" owning Done / Not a problem, waits for a third kind.

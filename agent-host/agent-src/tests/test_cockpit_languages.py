@@ -147,7 +147,8 @@ def test_not_a_problem_pressed_on_telegram_closes_it_as_the_cockpit_does(tmp_pat
                                             "message": {"message_id": v.thread.shown(1)[FM_FR]["mid"], "chat": {"id": FM_FR}},
                                             "bot": BOT}))
     assert re.fullmatch(rf"✅ Pas un problème le {T} \(Luc\)\. .+", status(v, FM_FR)[-1]), status(v, FM_FR)
-    assert re.fullmatch(rf"✅ Not a problem on {T} \(Luc\)\.", status(v, GROUP)[-1]), status(v, GROUP)
+    # the same last line in every chat, its watch included (architecture review 21 card 1: the group's ended "(Luc).")
+    assert re.fullmatch(rf"✅ Not a problem on {T} \(Luc\)\. Watch .+", status(v, GROUP)[-1]), status(v, GROUP)
     # owner, 2026-11-05 (#118): the press said once, by its close — never also a line above it
     assert sum("Pas un problème" in ln for ln in status(v, FM_FR)) == 1, status(v, FM_FR)
     assert sum("Not a problem" in ln for ln in status(v, GROUP)) == 1, status(v, GROUP)

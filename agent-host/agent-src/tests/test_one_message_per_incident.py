@@ -429,7 +429,8 @@ def test_every_copy_carries_the_incidents_word_and_its_own_status_lines(agent):
     tick(agent, 5)
     assert words() == {GROUP: "#1-P2 (existing)", FM_CHAT: "#1-P2 (existing)"}, words()
     group, fm = (agent.thread.shown(iid)[c]["text"] for c in (GROUP, FM_CHAT))
-    assert re.fullmatch(r"Done on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\.", status(group)), group   # its own last line
+    # its own last line, its watch said as in every chat (architecture review 21 card 1)
+    assert re.fullmatch(r"Done on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\. Watch 4h\.", status(group)), group
     assert status(fm).startswith("Reopen request sent ") and "Reopened in the Cockpit" in status(fm), fm
     assert "Reopen" not in group and "Done on" not in fm.rsplit("\n", 1)[1]
     assert group.split("\n")[1] == fm.split("\n")[1] == "To: FM"

@@ -350,6 +350,14 @@ class Outcome:
                 log.warning("The Kiosk's faults could not be brought up to date (%s: %s)", type(e).__name__, e)
         return done
 
+    def _close_shown(self, iid: int, chat: int) -> tuple[str, dict | None] | None:
+        """The close chat `chat`'s copy of incident `iid`, closed already, shows (its bottom line, and the step it was
+        drawn from, kept for the next redraw); None when it shows none. Not by its `settled` mark: the answer to a press
+        replaces the copy the press settled."""
+        rec = self.state.incident_message(iid, chat) if self.thread is not None else None
+        p = layout.of(rec) if rec else {}
+        return (p["status"], p.get("said")) if p.get("status") else None
+
     async def adopt_ha(self, h: dict, skill_name: str | None = None, also=None, told=None) -> list[tuple[int, set[str]]]:
         """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages). `also`:
         the roles the incident's other messages of this result go to; `told`: those of this same step. Returns each
@@ -380,7 +388,12 @@ class Outcome:
             # chat the rule posts in (a P3's message in the owner's group read "To: Owner")
             roles = self.notices.went_to(int(iid), chat, told, also) if self.notices else set(told or ())
             said = None
-            if self.notices:
+            held = self._close_shown(int(iid), chat) if h.get("as_it_stands") else None
+            if held:
+                # ⚠️ THE CLOSE IT SHOWS, WORD FOR WORD (owner, 2026-11-05, #118): "Not a problem" pressed at 00:19, the
+                # rule's own all-clear at 00:27 rewrote the card "Cleared on 00:27. Watch 1h" — the person's close gone
+                status, said = held
+            elif self.notices:
                 # ⚠️ IN THE CHAT'S LANGUAGE (owner, 2026-10-23): the villa's own message is English (its template); taken
                 # over, its Status reads as the chat's other copies do, and the step is kept for the next redraw
                 lang = self.notices.lang(chat)

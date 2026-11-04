@@ -216,12 +216,14 @@ def settle(incident: int, note: str, mark: str | None = None, note_in: dict | No
 
 
 def ha_message(incident: int, text: str, context: str | None, stage: str | None = None, status: str | None = None,
-               status_in: dict | None = None) -> dict:
+               status_in: dict | None = None, as_it_stands: bool = False) -> dict:
     """Home Assistant's own messages of the automation run `context` (the event's context) become `incident`'s
     messages, rewritten as `text` under the incident's heading, like every other notice about it (`stage`: STAGES;
-    `status_in`: as `message`'s)."""
+    `status_in`: as `message`'s). `as_it_stands`: the incident closed before this message (the rule's late all-clear)
+    — a chat's copy keeps the close it shows, word for word; `status` is for a chat that shows none."""
     m = {"incident_id": int(incident), "text": text, "context": context,
-         **({"status": status, **_in("status_in", status_in)} if status else {})}
+         **({"status": status, **_in("status_in", status_in)} if status else {}),
+         **({"as_it_stands": True} if as_it_stands else {})}
     if stage is not None:
         if stage not in STAGES:
             raise ValueError(f"stage must be one of {', '.join(STAGES)}")

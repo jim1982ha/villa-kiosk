@@ -132,8 +132,9 @@ def test_a_closing_note_a_note_and_a_long_story_say_what_telegram_says(tmp_path)
     told(notices, state, iid, 1)
     note_step(state, iid, "cleared", "Cleared in the villa's system on 28/10/2026 10:00.")
     notices.record(iid, "closed", [(FM, "fm")])
+    # the same close told once (owner, 2026-11-05, #118): a closing note after it is no step of its own
     assert [x["note"] for x in notices.story(iid)][-2:] == [
-        "Cleared in the villa's system on 28/10/2026 10:00", "Closing note sent (to: Facility Manager)"]
+        "🆘 Need help on Telegram (Wayan)", "Cleared in the villa's system on 28/10/2026 10:00"]
     # a ticket taken on in the Cockpit is the Kiosk's own step already ("in progress since … by …"): never told twice
     note_step(state, iid, "taken", "Ticket opened in the Cockpit on 28/10/2026 10:05 (JM)")
     assert "Ticket opened" in notices.history_lines(iid)[-1]

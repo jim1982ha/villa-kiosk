@@ -679,8 +679,11 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
         late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=W.late_close_days()), now=now)
         if late:
             out["incident_id"], out["decision"] = late["id"], "resolved_late"
+            # ⚠️ ITS CLOSE SAID AGAIN, NEVER "CLEARED" (owner, 2026-11-05, #118): "Not a problem" pressed at 00:19, the
+            # rule's all-clear at 00:27 made the card "Cleared on 00:27. Watch 1h" — the person's close replaced
             out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
-                                               **about(late, watched(ended(), W.minutes(late))))]
+                                               **about(late, watched(_close_again(late), W.minutes(late))),
+                                               as_it_stands=True)]
         return out
     over = _close(store, inc, now, out, ended(), terms=terms(params))
     out["incident_id"], out["decision"] = inc["id"], "resolved"
@@ -693,6 +696,12 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
                                        **about(inc, over))]
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
+
+
+def _close_again(inc: dict):
+    """How incident `inc`, closed already, was closed, said again on a later message of its run (the rule's late
+    all-clear, or its giving up): a person's close in its words ("Not a problem on Telegram (Jm)."), else its end."""
+    return Said(f"{inc['reply']}.") if inc.get("reply") else ended()
 
 
 def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str,
@@ -1061,9 +1070,9 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
         late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=W.late_close_days()), now=now)
         if late:
             out["incident_id"], out["decision"] = late["id"], "abandoned_late"
-            said = Said(f"{late.get('reply') or ended()}.") if late.get("reply") else ended()
             out["ha_messages"] = [R.ha_message(late["id"], context=ev.get("_context_id"), stage="closed",
-                                               **about(late, watched(said, W.minutes(late))))]
+                                               **about(late, watched(_close_again(late), W.minutes(late))),
+                                               as_it_stands=True)]
         return out
     out["incident_id"] = inc["id"]
     if str(ev.get("still_true")).lower() == "false":

@@ -82,6 +82,15 @@ def test_a_press_on_the_tablets_notice_is_handed_to_the_desk_as_the_tablets(tmp_
     person = SimpleNamespace(telegram_id=1, name="Marie", role="fm")
     run(b.press(4503601096569778, ["5", "done"], person, toast, anywhere=True))
     assert [v["place"] for v in handed] == ["tablet"]
+    # ...and its fault card in the Kiosk says it was the tablet (architecture review 21: "Need help on Telegram")
+    run(thread.post(6, GROUP, 71, layout.parts(body="Incident #6 · pump"), buttons=True))
+    d.state.set_alert_skill(6, GROUP, "desk")
+    run(b.press(4503601096569778, ["6", "need_help"], person, toast, anywhere=True))
+    from vesta_agent.notice import Notices
+    from vesta_agent.policy import Policy
+    from vesta_agent.roster import Roster
+    notices = Notices(d.state, lambda: Policy({}, Roster.of(fm=[(1, "Marie")])), "UTC")
+    assert [x["note"] for x in notices.story(6)] == ["🆘 Need help on the tablet (Marie)"]
     with open(os.path.join(STARTER_SKILLS, "alert-desk", "skill.yaml"), encoding="utf-8") as f:
         assert "--place {place}" in f.read()                         # the shipped skill hands it on
 

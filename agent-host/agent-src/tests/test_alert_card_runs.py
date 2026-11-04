@@ -105,9 +105,30 @@ def test_the_rules_all_clear_and_the_closing_note_are_one_line(agent):
     rule(agent, "resolved", 1, 501)
     # read where these steps went (owner, 2026-10-18, #55 "each chat its own steps"): the FM's chat
     hist = head_text(agent.notices.heading(FM_CHAT, 1)).split("\n")[2:]
-    assert len(hist) == 2 and re.fullmatch(rf"- Alert sent {T} \(to: FM\)", hist[0]), hist
-    assert re.fullmatch(rf"- Closing note sent {T} \(to: FM\)", hist[1]), hist
-    assert not any("Update sent" in ln for ln in hist)
+    # the close standing is the card's bottom line, never also a line above it (owner, 2026-11-05, #118); its step is
+    # kept once, with whom it went to, for when the alert comes back (below)
+    assert len(hist) == 1 and re.fullmatch(rf"- Alert sent {T} \(to: FM\)", hist[0]), hist
+    assert [h["stage"] for h in agent.state.incident_history(1)] == ["new", "closed"]
+    assert status_lines(card(agent, FM_CHAT))[-1].startswith("✅ Cleared on "), card(agent, FM_CHAT)
+    assert not any("Update sent" in ln or "Closing note" in ln for ln in status_lines(card(agent, FM_CHAT)))
+
+
+def test_not_a_problem_then_the_rules_late_all_clear_then_its_watch_tell_the_press_once(agent):
+    # owner, 2026-11-05 (#118): "Not a problem" at 00:19; the rule's all-clear at 00:27 made the card "Cleared on 00:27.
+    # Watch 1h" with "- Closing note sent" twice above it, and its watch's end summed up that "Cleared"
+    rule(agent, "opened", 1, 500, priority="P1")                          # to the owner too: the group lists it
+    run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": GROUP,
+                                                "user_id": OWNER, "message": {"message_id": 500, "chat": {"id": GROUP}},
+                                                "bot": BOT}))
+    rule(agent, "resolved", 1, 501)
+    lines = status_lines(card(agent, GROUP))
+    assert len(lines) == 2 and lines[0].startswith("- Alert sent "), lines
+    assert re.fullmatch(rf"✅ Not a problem on {T} \(Owner\)\. Watch .+", lines[1]), lines   # as pressed, word for word
+    tick(agent, 24 * 60)                                                   # its watch is over
+    lines = status_lines(card(agent, GROUP))
+    assert len(lines) == 3 and lines[1].startswith("- Not a problem on "), lines
+    assert lines[2].startswith("✅ Closed on ") and "did not come back" in lines[2], lines
+    assert not any("Cleared" in ln or "Closing note" in ln for ln in lines), lines
 
 
 def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_its_own_time(agent):

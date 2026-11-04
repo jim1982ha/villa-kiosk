@@ -125,7 +125,7 @@ def test_a_press_reaches_a_chat_its_answer_does_not_concern_in_that_chats_langua
     v = villa(tmp_path, "id")
     rule(v, "opened", 700)
     press(v, FM_DE)
-    assert re.fullmatch(rf"✅ Selesai pada {T} \(Anna\)\.", status(card(v, GROUP), "Status")[-1]), card(v, GROUP)
+    assert re.fullmatch(rf"✅ Selesai pada {T} \(Anna\)\. Dipantau .+", status(card(v, GROUP), "Status")[-1]), card(v, GROUP)
 
 
 def test_the_desks_end_carries_every_language(tmp_path):
@@ -163,7 +163,8 @@ def test_a_press_is_told_in_each_chats_language(agent):
     press(agent, FM_FR)
     assert re.fullmatch(rf"✅ Terminé le {T} \(Luc\)\. Surveillance 4h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
     assert re.fullmatch(rf"✅ Erledigt am {T} \(Luc\)\. 4Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
-    assert re.fullmatch(rf"✅ Done on {T} \(Luc\)\.", status(card(agent, GROUP), "Status")[-1]), card(agent, GROUP)
+    # the group's last line says the watch too, as every chat's (architecture review 21 card 1)
+    assert re.fullmatch(rf"✅ Done on {T} \(Luc\)\. Watch 4h\.", status(card(agent, GROUP), "Status")[-1]), card(agent, GROUP)
 
 
 def test_a_need_help_press_is_listed_in_each_chats_language(agent):
