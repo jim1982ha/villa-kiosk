@@ -41,18 +41,20 @@ interface Props {
    *  GroupedDevices' "add another member" row, alongside the member pills
    *  themselves) instead of its normal standalone-field size. */
   compact?: boolean;
+  /** Drawn open, the focus in its box (SearchPicker startOpen). */
+  startOpen?: boolean;
 }
 
 
 export default function EntityPicker({
-  value, onChange, domains, placeholder, allowCustom, hideCurrentLabel, onClear, compact,
+  value, onChange, domains, placeholder, allowCustom, hideCurrentLabel, onClear, compact, startOpen,
 }: Props) {
   const { entities } = useHA();
   const { entityMap } = useConfig().config;
   const nameOf = (id: string) => labelOf(id, entityMap, entities);
   const search = useDeviceSearch();
   // the list's open state is the shell's (SearchPicker); the selection's words show while it is closed
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!startOpen);
 
   const rows = (query: string): SearchRow[] => entitySearch(query, search, domains)
     // Worded as every other row (deviceRowText): "Normal", "21.4 °C" — not "off", "21.4"
@@ -73,6 +75,7 @@ export default function EntityPicker({
         rows={rows}
         onPick={onChange}
         compact={compact}
+        startOpen={startOpen}
         placeholder={selectedLabel ?? placeholder ?? "Search entities…"}
         before={(query) => (allowCustom && ENTITY_ID_RE.test(query.trim()) && !entities[query.trim()]
           ? { key: query.trim(), label: `Use "${query.trim()}"`, sub: "entity not there yet, will activate when it appears", strong: true }

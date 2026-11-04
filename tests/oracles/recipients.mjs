@@ -56,6 +56,17 @@ console.log("\n  two changes in a row, the second before the villa shows the fir
 const view = readFileSync(new URL("../../src/components/settings/WhoGetsMessages.tsx", import.meta.url), "utf8");
 ck("each role picks among the villa's notify entities, never typed",
    /ROLE_LISTS\.map\(/.test(view) && /<EntityPicker[^>]*domains=\{\["notify"\]\}/.test(view) && !/allowCustom/.test(view));
+// owner, 2026-11-04: each role's add is an icon on the line of its name, opening there into the picker (common/AddOnLine,
+// the one shared with Full-screen announcements)
+{
+  const { elements: els, parseTsx: parse, propText: prop } = await import("../consistency/jsx.mjs");
+  const [line] = els(parse("components/settings/WhoGetsMessages.tsx"), "AddOnLine");
+  const [ann] = els(parse("components/settings/MessagesSettings.tsx"), "AddOnLine");
+  ck("each role's add is the shared icon on its name's line, named for the role, opening into the picker",
+     !!line && prop(line, "label") === "`Add a chat or phone to ${who}`" && /<EntityPicker[^>]*startOpen/.test(view)
+     && /done\(\); void save/.test(view) && !!ann && prop(ann, "label") === '"Add an announcement"',
+     line && prop(line, "label"));
+}
 ck("a change is saved to that role's list, planned over the villa's latest text and what this tablet sent",
    /HAServices\.setText\(ws, list\.entityId, plan\.text\)/.test(view)
    && /planChange\(getEntitiesSnapshot\(\)\[list\.entityId\]\?\.state, sentRef\.current\[list\.role\]/.test(view)

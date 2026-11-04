@@ -30,7 +30,7 @@ export interface SearchRow {
 export const SEARCH_ROWS = 60;
 
 export default function SearchPicker({
-  rows, onPick, placeholder, compact, before, empty, none, trailing, onOpenChange, text,
+  rows, onPick, placeholder, compact, before, empty, none, trailing, onOpenChange, text, startOpen,
 }: {
   /** The rows matching what is typed ("" when nothing is). */
   rows: (query: string) => readonly SearchRow[];
@@ -51,11 +51,13 @@ export default function SearchPicker({
   /** FREE TEXT: the box's words are the value (a device or a description typed as is), kept when the list closes;
    *  without it the box only searches, and closing clears it. */
   text?: { value: string; onChange: (text: string) => void };
+  /** Drawn open, the focus in its box: a box shown because a person asked for it (AddOnLine's icon pressed). */
+  startOpen?: boolean;
 }) {
   const [own, setOwn] = useState("");
   const query = text ? text.value : own;
   const setQuery = text ? text.onChange : setOwn;
-  const [open, setOpenState] = useState(false);
+  const [open, setOpenState] = useState(!!startOpen);
   const setOpen = (o: boolean) => { setOpenState(o); onOpenChange?.(o); };
   const containerRef = useRef<HTMLDivElement>(null);
   const close = () => { setOpen(false); if (!text) setOwn(""); };
@@ -69,6 +71,8 @@ export default function SearchPicker({
         <Search size={compact ? 13 : 16} />
         <input
           placeholder={placeholder}
+          aria-label={placeholder}
+          autoFocus={startOpen}
           value={query}
           // ⚠️ A TAP OPENS IT, NEVER THE FOCUS ALONE (owner, 2026-11-02: "Open a ticket" showed Who's handling it's list
           // open, never tapped): a window puts the focus in its first field (useModalA11y), and the list opened on it.

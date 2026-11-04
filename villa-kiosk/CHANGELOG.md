@@ -1,3 +1,14 @@
+## 2.496.691
+
+What you will see:
+- Settings › Messages › Who gets the messages: each list's "Add a chat or phone…" box is now a + on the line of the
+  list's name (Owner, Facility Manager), at the right. Press it and the search opens on that line, its list of chats
+  shown; Escape, or tapping elsewhere with nothing typed, puts the + back.
+- Settings › Messages › Full-screen announcements: the same + on the line "Announcements, on every tablet", in place of
+  the "Add an announcement…" box under the list.
+- In that list, "Seconds" now stands over the seconds field, and nothing over the ✕.
+- On an iPhone, when the line is too narrow, the search box takes its own line under the name.
+
 ## 2.496.690
 
 What you will see:

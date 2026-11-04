@@ -699,7 +699,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
 /* A settings list in one card (Settings › Messages, owner 2026-11-03: "very poorly rendered … messy"): a small heading
    line, then one row per item, each row's parts in the same columns, a hairline between rows. */
-.settings-list { border: 1px solid var(--hairline); border-radius: var(--radius-squircle); overflow: hidden; }
+/* ⚠️ NOTHING CLIPPED (owner, 2026-11-04): a list's add opens on its heading line with its dropdown below it
+   (common/AddOnLine), so the card shows what overflows it; no row paints a background its corners would cut. */
+.settings-list { border: 1px solid var(--hairline); border-radius: var(--radius-squircle); }
 .settings-list-head {
   display: flex; justify-content: space-between; gap: 12px; padding: 8px 14px;
   font-size: var(--text-2xs); color: var(--text-muted); border-bottom: 1px solid var(--hairline);
@@ -711,6 +713,17 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fs-row-title { min-width: 0; overflow-wrap: anywhere; }
 .fs-row-seconds { display: inline-flex; align-items: center; gap: 6px; }
 .modal .fs-row-seconds input { width: 64px; padding: 8px 6px; text-align: center; }
+/* the heading a row's columns: "Seconds" over the seconds (the field's width, its "s" after), nothing over the ✕ */
+.settings-list-head.fs-row { display: grid; align-items: center; }
+.fs-head-seconds { width: 64px; text-align: center; }
+.fs-head-unit { visibility: hidden; }
+.fs-head-remove { width: 36px; }
+/* A list's title line with its add (common/AddOnLine): the title at the left, the icon at the right, opening into
+   the search box over the line's width; too narrow (an iPhone), the box takes a line of its own under the title. */
+.add-line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.add-line-title { flex: 0 1 auto; min-width: 0; }
+.add-line-icon { margin-left: auto; }
+.add-line-field { flex: 1 1 180px; min-width: 0; }
 .icon-btn-sm { width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 /* Who gets the messages: a list per role, its name above, its chats as pills from the left, its picker under them. */
 .recipients-role { display: flex; flex-direction: column; gap: 8px; }
