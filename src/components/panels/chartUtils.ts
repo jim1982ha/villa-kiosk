@@ -106,7 +106,9 @@ export function chartAbout(shows: ChartShows, stepMs: number, from?: number, kep
   if (stepMs <= finest) return `Every reading, in ${fmtDuration(finest)} steps. Striped: unavailable at least once in those ${fmtDuration(finest)}.`;
   const finer = stepMs >= 7 * DAY_MS ? "day" : stepMs >= DAY_MS ? "hour" : null;
   // ⚠️ SHORT (owner, 2026-11-05: "make this tooltip description shorter"): what is drawn, what may not show, in a few words
-  return `${cap(stepWords(stepMs))} averages. Striped: unavailable at least once that ${step}. Outages under ${fmtDuration(finest)} may not show.${
+  // ⚠️ EVERY OUTAGE WHILE THE DETAIL IS KEPT (owner, 2026-11-06): it said "Outages under 5min may not show", true while
+  // only the five-minute figures told them (historySource.outagesInside reads the detail now); before it, the figures'
+  return `${cap(stepWords(stepMs))} averages. Striped: unavailable at least once that ${step}.${
     !before ? "" : unkept ? ` Before ${before}: no longer kept.`
       : ` Before ${before}: ${finer ? `only whole-${finer} outages show` : "no outages show"}.`}`;
 }

@@ -91,7 +91,7 @@ console.log("\n  one window, from one clock reading:");
   const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
   ck("the source and its adapter never read the clock themselves", !/Date\.now\(\)/.test(code("ha/historySource.ts")) && !/Date\.now\(\)/.test(code("ha/HAHistoryAPI.ts")));
   const hook = code("hooks/useHistorySource.ts");
-  ck("  ...the panels' hook reads it ONCE per load, for every request in it", (hook.match(/Date\.now\(\)/g) ?? []).length === 1 && /loadHistory\(port, requests!, Date\.now\(\)\)/.test(hook));
+  ck("  ...the panels' hook reads it ONCE per load, for every request in it", (hook.match(/Date\.now\(\)/g) ?? []).length === 1 && /loadHistory\(port, requests!, Date\.now\(\), early\)/.test(hook));
   const key = (hours, fields = ["mean"]) => historyKey({ c: { kind: "statistics", ids: ["sensor.r"], period: "hour", fields, hours } });
   ck("a request's key names what it is: another range or field is another key", key(24) === key(24) && key(24) !== key(168) && key(24) !== key(24, ["max"]));
 }

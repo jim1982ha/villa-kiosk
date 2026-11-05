@@ -10,9 +10,14 @@ import {
 import { ingressApiBase } from "./ingress";
 import { backendFetch } from "@/auth/sessionLost";
 import { heldWindow, opensAsleep } from "./unavailableByDesign";
+import type { HistoryGap } from "@/types/ha.types";
 
 /** Anything that can read the recorder's statistics — the HA websocket. */
 type StatisticsPort = Pick<HistoryPort, "getStatisticsDuringPeriod">;
+
+/** Each finished villa day's outages, per entity (HistoryPort.outageDays): ONE for every chart's port, so a device
+ *  window opened again, or its 1w then its 1m, reads only today's detail. In memory: a reload reads them again. */
+const outageDays = new Map<string, readonly HistoryGap[]>();
 
 /** `asleep`: the devices asleep by design (the entity store's list) — their sleep is no change on a chart
  *  (unavailableByDesign.heldWindow). */
@@ -30,6 +35,7 @@ export function haHistoryPort(ws: StatisticsPort, asleep: ReadonlySet<string> = 
     getStatisticsDuringPeriod: (...args) => ws.getStatisticsDuringPeriod(...args),
     keptFrom: villaKeptFrom,
     asleep: (entityId) => asleep.has(entityId),
+    outageDays,
   };
 }
 

@@ -30,7 +30,7 @@ import { windowEndingAt } from "@/utils/lineChart";
 import { isNoHistory, NO_RECORD, NOT_KEPT, UNKNOWN_STATES } from "@/utils/stateColors";
 import type { HistoryGap, HistorySeries, StateHistoryPoint, StatisticPeriod } from "@/types/ha.types";
 import { momentText } from "@/utils/dateText";
-import { HOUR_MS } from "@/utils/localDay";
+import { DAY_MS, HOUR_MS, localMidnight } from "@/utils/localDay";
 import { bandEnd } from "@/utils/timelineCells";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
 import { FINER, type FinerSeries } from "@/utils/rangeFilter";
@@ -61,6 +61,10 @@ export interface HistoryPort {
    *  its charts — its changes held (unavailableByDesign.heldWindow), its figures' missing steps and finer slots alike.
    *  Optional: a port without it (a test's fake) knows no sleeping device. */
   asleep?(entityId: string): boolean;
+  /** Where the outages of each finished villa day are kept between reads, per entity and day (`${id}|${midnight}`):
+   *  a past day's outages never change, so a second open, or 1w then 1m, reads only what is new (detailDrops).
+   *  Optional: a port without it reads every day each time. The tablet's is one for every chart (HAHistoryAPI). */
+  outageDays?: Map<string, readonly HistoryGap[]>;
 }
 
 /** A history a chart asks for. `hours` is a window ending now; `since` (epoch
@@ -459,21 +463,85 @@ export function withNotKept(s: HistorySeries, kept: number | undefined): History
   return { ...s, gaps: [{ from: s.window.from, to, notKept: true }, ...s.gaps.filter((g) => g.to > to)] };
 }
 
+/** The outages of a chart's steps: what is known at once (`first`, from the recorder's figures) and the whole answer
+ *  (`final`, once the detail is read). */
+interface StagedOutages { first: Promise<Record<string, HistoryGap[]>>; final: Promise<Record<string, HistoryGap[]>> }
+
+/** How far back the detail is read for a chart's outages, at most: a month's window whole. A villa's system that keeps
+ *  more (or one whose keeping is not known) has its older steps told by its figures, as before what it keeps. */
+const DETAIL_MAX_MS = 31 * DAY_MS;
+
+/** Where a chart's outages are read from every change, at `now`: what the villa's system keeps, a month at most. */
+export function detailFrom(kept: number | undefined, now: number): number {
+  return Math.max(kept ?? -Infinity, now - DETAIL_MAX_MS);
+}
+
 /**
  * ⚠️ A STEP OFFLINE INSIDE IT (owner, 2026-11-05: a meter offline 22min showed nothing on its 1w chart): per id, the
- * steps of its `figures` (an hour, a day, a week) the device was offline inside, where the finest figures still kept
- * miss a slot (statisticsSeries.finerOutages): the five-minute ones for the recent days (kept ~10 days: any outage that
- * empties a slot), the next finer step (rangeFilter FINER) beyond. One read per step for every id; none for a finer
- * step (5minute: its trend reads every change). Every chart of measured figures asks it: a device's trend and the
- * Weather window's figures alike.
+ * steps of its `figures` (an hour, a day, a week) the device was offline inside. Every chart of measured figures asks
+ * it: a device's trend and the Weather window's figures alike.
+ *
+ * ⚠️ EVERY DROP THE 24H CHART SHOWS (owner, 2026-11-06: a pool pump's 24h chart striped two drops, around 03:00 and
+ * 06:30, its 1w chart neither — "It shall be visible by design"). The figures marked a step only where a five-minute
+ * figure was MISSING, and the recorder writes one whenever the device reported at all in those five minutes: a drop
+ * of seconds, or a minute or two, never emptied one. So the steps younger than the detail kept (detailFrom) are told
+ * from the detail itself, the 24h chart's rule (readings' gaps): each drop marks its step with its real time and
+ * length (HistoryGap.drops, "Unavailable at 06:58, for 10s"). Older steps: where the finest figures still kept miss a
+ * slot (statisticsSeries.finerOutages), "at least once" (nothing else is kept there). A step across that edge: the
+ * figures', or "at least once" when the detail saw a drop in its part.
+ *
+ * ⚠️ THE LINE FIRST: `first` is the figures' part, given before the detail is read (loadHistory `early`); a detail
+ * that cannot be read leaves the figures' rule for every step (figureOutages), never a half answer.
  */
-async function outagesInside(port: HistoryPort, ids: readonly string[], period: StatisticsPeriod,
+function outagesInside(port: HistoryPort, ids: readonly string[], period: StatisticsPeriod,
   figures: Record<string, Partial<Record<StatisticField, HistorySeries>>>, window: { from: number; to: number }, now: number,
-  kept: number | undefined): Promise<Record<string, HistoryGap[]>> {
+  kept: number | undefined): StagedOutages {
   const marked = period === "hour" || period === "day" || period === "week" ? period : null;
   // a device asleep by design: its sleep is no outage (heldFigures)
   ids = ids.filter((id) => !port.asleep?.(id));
-  if (!marked || ids.length === 0) return {};
+  if (!marked || ids.length === 0) return { first: Promise.resolve({}), final: Promise.resolve({}) };
+  const P = PERIOD_MS[marked];
+  // the detail covers whole steps from here: the villa's midnight, so a finished day is read once (detailDrops);
+  // the part of a day before it read on its own only for steps of an hour (a day's or a week's step there crosses it)
+  const edge = detailFrom(kept, now), S = Math.max(edge, window.from), day = localMidnight(S);
+  const readFrom = day >= edge ? day : marked === "hour" ? edge : localMidnight(S, 1);
+  const coarseOf = (id: string) => Object.values(figures[id] ?? {}).find((x) => x && x.points.length);
+  const older = ids.filter((id) => coarseOf(id)?.points.some((p) => p.t < readFrom));
+  const before = older.length ? figureOutages(port, older, marked, figures, window, now, kept, readFrom)
+    : Promise.resolve<Record<string, HistoryGap[]>>({});
+  const final = (async () => {
+    const old = await before;
+    const told = await Promise.all(ids.map(async (id) => {
+      let drops: HistoryGap[] | null;
+      try { drops = await detailDrops(port, id, readFrom, now); } catch { drops = null; }
+      return [id, drops] as const;
+    }));
+    // the detail not read (failed, or the villa's system keeps no change of it): the figures' rule for every step
+    const unread = told.filter(([, d]) => d === null).map(([id]) => id);
+    const fallback: Record<string, HistoryGap[]> = unread.length ? await figureOutages(port, unread, marked, figures, window, now, kept) : {};
+    return Object.fromEntries(told.map(([id, drops]) => {
+      if (drops === null) return [id, fallback[id] ?? []];
+      const coarse = coarseOf(id), mine = old[id] ?? [];
+      const out: HistoryGap[] = [...mine];
+      for (const p of coarse?.points ?? []) {
+        const to = Math.min(p.t + P, window.to), d = dropsOf(drops, p.t, to);
+        if (d.length === 0 || to <= readFrom) continue;
+        if (p.t >= readFrom) out.push({ from: p.t, to, within: marked, drops: d });
+        // across the edge: the detail saw only its part, so "at least once"
+        else if (!mine.some((g) => g.from === p.t)) out.push({ from: p.t, to, within: marked });
+      }
+      return [id, out.sort((a, b) => a.from - b.from)];
+    }));
+  })();
+  return { first: before, final };
+}
+
+/** The figures' rule (finerOutages): the steps where the finest figures still kept miss a slot — the five-minute ones
+ *  for the recent days, the next finer step (rangeFilter FINER) beyond — with their real drops read around those slots
+ *  where the detail is kept (withDrops). `before`: only the steps that begin before it. */
+async function figureOutages(port: HistoryPort, ids: readonly string[], marked: "hour" | "day" | "week",
+  figures: Record<string, Partial<Record<StatisticField, HistorySeries>>>, window: { from: number; to: number }, now: number,
+  kept: number | undefined, before = Infinity): Promise<Record<string, HistoryGap[]>> {
   const steps = [...new Set<StatisticsPeriod>(["5minute", FINER[marked] as StatisticsPeriod])];
   const fine = await Promise.all(steps.map(async (step) => ({ step, figures: await statistics(port, ids, step, ["mean"], window) })));
   return Object.fromEntries(await Promise.all(ids.map(async (id) => {
@@ -481,11 +549,71 @@ async function outagesInside(port: HistoryPort, ids: readonly string[], period: 
     const all = coarse ? fine.flatMap(({ step, figures: f }) => { const s = f[id]?.mean;
       return s ? finerOutages(coarse, s, marked, PERIOD_MS[step], now, step === "5minute" ? kept : undefined) : []; }) : [];
     // a step marked by both readings is one band
-    const marks = all.filter((g, i) => all.findIndex((x) => x.from === g.from) === i);
+    const marks = all.filter((g, i) => g.from < before && all.findIndex((x) => x.from === g.from) === i);
     const slots = fine.flatMap(({ step, figures: f }) => { const s = f[id]?.mean;
       return s ? missingSlots(s, PERIOD_MS[step], now, step === "5minute" ? kept : undefined) : []; });
     return [id, await withDrops(port, id, marks, slots, kept, now)] as const;
   })));
+}
+
+/** How long after its midnight a finished day's detail is taken as written for good (the recorder's late writes). */
+const DAY_SETTLED_MS = COMPILE_GRACE_MS;
+
+/**
+ * Every drop of `id` from `from` to `now`, from every change kept (the 24h chart's rule: readings' gaps), one still
+ * running at `now` open-ended (to: Infinity). Null when the villa's system keeps no change of it there (no row at all:
+ * every read of a device it has is led by its state at the start).
+ *
+ * ⚠️ MEASURED (2026-11-05, a pump's power sensor on the owner's villa): 35,078 changes in a week, about 2MB of history
+ * (gzipped by the add-on on the way). So it is read ONCE per villa day: each finished day's drops are kept
+ * (`port.outageDays`), and only the days not kept yet are read — in one request for each run of them, today's always.
+ */
+async function detailDrops(port: HistoryPort, id: string, from: number, now: number): Promise<HistoryGap[] | null> {
+  if (!(from < now)) return [];
+  const cache = port.outageDays;
+  // the villa days from `from` to now: [start, end), `whole` when it is a finished day begun at its midnight
+  const days: { start: number; end: number; whole: boolean }[] = [];
+  for (let t = from; t < now;) {
+    const next = Math.min(localMidnight(t, 1), now);
+    days.push({ start: t, end: next, whole: t === localMidnight(t) && next < now && next + DAY_SETTLED_MS <= now });
+    t = next;
+  }
+  const key = (d: { start: number }) => `${id}|${d.start}`;
+  const known = (d: (typeof days)[number]) => d.whole && !!cache?.has(key(d));
+  // the days not kept yet, as runs of days side by side: one read each
+  const runs: { from: number; to: number }[] = [];
+  for (const d of days) {
+    if (known(d)) continue;
+    const last = runs[runs.length - 1];
+    if (last && last.to === d.start) last.to = d.end; else runs.push({ from: d.start, to: d.end });
+  }
+  const read: HistoryGap[] = [];
+  let rows = 0;
+  for (const r of runs) {
+    const got = await port.stateRows(id, r.from, r.to);
+    rows += got.length;
+    read.push(...gapsFrom(got.map((x) => ({ t: new Date(x.last_changed).getTime(), v: numericState(x.state) })), r.to));
+  }
+  if (runs.length && rows === 0 && !days.some(known)) return null;
+  const clip = (gs: readonly HistoryGap[], a: number, b: number) =>
+    gs.filter((g) => g.from < b && g.to > a).map((g) => ({ from: Math.max(g.from, a), to: Math.min(g.to, b) }));
+  const all: HistoryGap[] = [];
+  for (const d of days) {
+    const mine = known(d) ? cache!.get(key(d))! : clip(read, d.start, d.end);
+    if (cache && d.whole && !known(d) && rows > 0) cache.set(key(d), mine);
+    all.push(...mine);
+  }
+  if (cache) {
+    // what is older than any chart reads is let go
+    for (const k of cache.keys()) if (Number(k.slice(k.lastIndexOf("|") + 1)) < now - DETAIL_MAX_MS - 2 * DAY_MS) cache.delete(k);
+  }
+  // a drop across midnight was cut in two by the days: one drop again
+  const merged: HistoryGap[] = [];
+  for (const g of all) {
+    const last = merged[merged.length - 1];
+    if (last && last.to >= g.from) last.to = Math.max(last.to, g.to); else merged.push({ ...g });
+  }
+  return merged.map((g) => (g.to >= now ? { from: g.from, to: Infinity } : g));
 }
 
 /** How much of the detail is read on each side of a missing slot: one slot, where the drop that emptied it began. */
@@ -536,14 +664,18 @@ const withInside = (s: HistorySeries, inside: readonly HistoryGap[] | undefined)
  *  long-term figures (they are kept for good) — or, for a device it keeps none of, from every change kept, in that
  *  step. Whatever is older than the detail kept and not in the figures is marked "no longer kept". */
 async function trend(port: HistoryPort, ids: readonly string[], period: StatisticsPeriod,
-  window: { from: number; to: number }, now: number): Promise<Record<string, HistorySeries>> {
+  window: { from: number; to: number }, now: number, early?: Early<Record<string, HistorySeries>>): Promise<Record<string, HistorySeries>> {
   const kept = await keptFrom(port, now);
   const figures = period === "5minute" ? {} : await statistics(port, ids, period, ["mean"], window);
-  const inside = await outagesInside(port, ids.filter((id) => figures[id]?.mean?.points.length), period, figures, window, now, kept);
+  const staged = outagesInside(port, ids.filter((id) => figures[id]?.mean?.points.length), period, figures, window, now, kept);
   const out: Record<string, HistorySeries> = {};
+  const drawn = (inside: Record<string, HistoryGap[]>) => Object.fromEntries(ids.map((id) => {
+    const fig = figures[id]?.mean;
+    return [id, fig && fig.points.length ? withInside(fig, inside[id]) : out[id]];
+  }));
   for (const id of ids) {
     const fig = figures[id]?.mean;
-    if (fig && fig.points.length) { out[id] = withInside(fig, inside[id]); continue; }
+    if (fig && fig.points.length) continue;
     const raw = await readings(port, id, window);
     const drawn = period === "5minute" ? fiveMinuteSeries(raw) : intervalSeries(raw, PERIOD_MS[period]);
     // an outage inside a step looks as the figures' does (stepsOfflineInside)
@@ -552,8 +684,12 @@ async function trend(port: HistoryPort, ids: readonly string[], period: Statisti
       ? stepsOfflineInside(drawn, period, PERIOD_MS[period], raw.gaps) : drawn;
     out[id] = withNotKept(marked, kept);
   }
-  return out;
+  early?.(drawn(await staged.first));
+  return drawn(await staged.final);
 }
+
+/** Given the answer known before the detail is read (the line, from the figures): a chart draws it first. */
+type Early<T> = (first: T) => void;
 
 /** The finer values of a trend of `period` (rangeFilter FINER), over the same window: one reader with `trend` (the
  *  readings, the recorder's figures, and the same fallback to every change kept for a device with no figures). */
@@ -575,14 +711,16 @@ async function finer(port: HistoryPort, ids: readonly string[], period: Statisti
   return out;
 }
 
-/** Answer one request at `now`. */
-export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R, now: number): Promise<HistoryAnswer<R>> {
+/** Answer one request at `now`. `early`: given the answer known before the detail is read, when there is one (a
+ *  chart of figures: its line first, the outages the detail tells added after). */
+export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R, now: number,
+  early?: Early<HistoryAnswer<R>>): Promise<HistoryAnswer<R>> {
   const window = requestWindow(r, now);
   const each = async <T>(ids: readonly string[], f: (id: string) => Promise<T>) =>
     Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await f(id)] as const)));
   switch (r.kind) {
     case "trend":
-      return await trend(port, r.ids, r.period ?? "5minute", window, now) as HistoryAnswer<R>;
+      return await trend(port, r.ids, r.period ?? "5minute", window, now, early as Early<Record<string, HistorySeries>> | undefined) as HistoryAnswer<R>;
     case "finer":
       return await finer(port, r.ids, r.period ?? "5minute", window) as HistoryAnswer<R>;
     case "readings":
@@ -599,9 +737,11 @@ export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R,
       // outage, its next reading carrying what was used, so its step stays right
       if (!r.fields.includes("mean")) return figures as HistoryAnswer<R>;
       const measured = r.ids.filter((id) => Object.values(figures[id] ?? {}).some((x) => x?.points.length));
-      const inside = await outagesInside(port, measured, r.period, figures, window, now, await keptFrom(port, now));
-      return Object.fromEntries(r.ids.map((id) => [id, Object.fromEntries(Object.entries(figures[id] ?? {})
-        .map(([f, s]) => [f, s && withInside(s, inside[id])]))])) as HistoryAnswer<R>;
+      const staged = outagesInside(port, measured, r.period, figures, window, now, await keptFrom(port, now));
+      const drawn = (inside: Record<string, HistoryGap[]>) => Object.fromEntries(r.ids.map((id) => [id, Object.fromEntries(
+        Object.entries(figures[id] ?? {}).map(([f, s]) => [f, s && withInside(s, inside[id])]))])) as HistoryAnswer<R>;
+      early?.(drawn(await staged.first));
+      return drawn(await staged.final);
     }
     case "since":
       return await each(r.ids, (id) => since(port, id, now)) as HistoryAnswer<R>;
@@ -612,9 +752,21 @@ export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R,
 
 /** Answer several requests together, over the SAME `now` — so two charts
  *  drawn side by side (the Weather window's measurements and its rain) cover
- *  exactly the same span. Rejects if any one fails. */
-export async function loadHistory<Q extends HistoryRequests>(port: HistoryPort, q: Q, now: number): Promise<HistoryAnswers<Q>> {
+ *  exactly the same span. Rejects if any one fails.
+ *  `early`: given once, the answers known before the detail is read, when a request has more to come (loadOne). */
+export async function loadHistory<Q extends HistoryRequests>(port: HistoryPort, q: Q, now: number,
+  early?: Early<HistoryAnswers<Q>>): Promise<HistoryAnswers<Q>> {
   const keys = Object.keys(q) as (keyof Q)[];
-  const answers = await Promise.all(keys.map((k) => loadOne(port, q[k], now)));
-  return Object.fromEntries(keys.map((k, i) => [k, answers[i]])) as unknown as HistoryAnswers<Q>;
+  const all = (answers: readonly unknown[]) => Object.fromEntries(keys.map((k, i) => [k, answers[i]])) as unknown as HistoryAnswers<Q>;
+  let settled = false, staged = false;
+  const firsts = keys.map(() => { let give!: (a: unknown) => void; const p = new Promise<unknown>((r) => { give = r; }); return { p, give }; });
+  const finals = keys.map((k, i) => {
+    const p = loadOne(port, q[k], now, (a) => { staged = true; firsts[i].give(a); });
+    p.then(firsts[i].give, () => {});
+    return p;
+  });
+  if (early) void Promise.all(firsts.map((f) => f.p)).then((a) => { if (!settled && staged) early(all(a)); });
+  const answers = await Promise.all(finals);
+  settled = true;
+  return all(answers);
 }

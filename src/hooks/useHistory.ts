@@ -22,11 +22,13 @@ export interface HistoryResult<T> {
 
 /**
  * Run `load` whenever `key` changes; keep the last answer until the next one
- * lands (a failure clears it). `key === null` means "nothing to fetch": ready, with `initial`.
+ * lands (a failure clears it). `load` may give an answer early (its `early`):
+ * shown at once, ready, until the whole one lands (a chart's line from the
+ * figures, its outages from the detail after: historySource.loadHistory). `key === null` means "nothing to fetch": ready, with `initial`.
  * `load` is read from the latest render, so it may close over anything —
  * only `key` decides when it runs.
  */
-export function useHistory<T>(key: string | null, load: () => Promise<T>, initial: T): HistoryResult<T> {
+export function useHistory<T>(key: string | null, load: (early: (first: T) => void) => Promise<T>, initial: T): HistoryResult<T> {
   const [data, setData] = useState<T>(initial);
   const [status, setStatus] = useState<HistoryStatus>(key === null ? "ready" : "loading");
   const loadRef = useRef(load);
@@ -36,7 +38,7 @@ export function useHistory<T>(key: string | null, load: () => Promise<T>, initia
     if (key === null) { setData(initialRef.current); setStatus("ready"); return; }
     let cancelled = false;
     setStatus("loading");
-    loadRef.current()
+    loadRef.current((first) => { if (!cancelled) { setData(first); setStatus("ready"); } })
       .then((d) => { if (!cancelled) { setData(d); setStatus("ready"); } })
       // The previous answer was for another key (another range): showing it
       // under this one's heading would be a chart of the wrong week.
