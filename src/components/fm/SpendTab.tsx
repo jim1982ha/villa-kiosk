@@ -43,7 +43,7 @@ import { useListEditor } from "./ListEditor";
 export default function SpendTab(
   { onOpenEntity, deviceOptions, inputs }: {
     onOpenEntity?: (id: string) => void;
-    /** What the statement is made from, built once by FacilitySections (monthlyDocument.DocumentInputs). */
+    /** What the recap is made from, built once by FacilitySections (monthlyDocument.DocumentInputs). */
     inputs: DocumentInputs;
     /** Built once by FacilitySections and shared with the ticket form, so
      *  both offer exactly the same devices. */
@@ -68,12 +68,12 @@ export default function SpendTab(
   const [note, setNote] = useState("");
   const [category, setCategory] = useState<"minor" | "major">("minor");
   const [photoIds, setPhotoIds] = useState<string[]>([]);
-  // The month's statement — the recap's "explicit Generate, then optionally
-  // Save" (useMonthlyDocument), so a statement is a point-in-time record of
-  // this month's spend rather than something that silently changes if an
-  // entry is edited or deleted afterwards. Its month is the whole tab's.
-  const statement = useMonthlyDocument("spend", inputs);
-  const month = statement.month;
+  // ⚠️ THE MONTH'S RECAP, ONE DOCUMENT (owner, 2026-11-05: "merge the Monthly recap and the Spend report into a single
+  // report, in the Spend tab"): the recap's §2 is the spend statement, so the statement went and the recap came here.
+  // An explicit Generate, then optionally Save (useMonthlyDocument): a point-in-time record, never silently changed by
+  // an entry edited afterwards. Its month is the whole tab's.
+  const recap = useMonthlyDocument("recap", inputs);
+  const month = recap.month;
 
   const b = budgetStatus(data.costs, month, terms);
   const amountIdr = parseAmount(amount);
@@ -160,27 +160,31 @@ export default function SpendTab(
       {/* The terms are the villa's agreement, set by whoever administers the
           kiosk — the shared config only the owner may write. */}
       {roleCan(role, "editConfig") && <ContractTermsEditor />}
-      {/* The month, on the same line as its statement's buttons (owner, 2026-10-14): it chooses what this whole tab
-          shows, and the statement is of that month. */}
-      {/* ⚠️ THE STATEMENT'S THREE BUTTONS ARE ONE GROUP (owner, 2026-10-14: Download .md fell alone onto a second
-          line): they never part; on a narrow screen the group goes under the Month as a whole. "Save", not "Save
-          statement": beside "Generate statement" it says the same, and the three fit one line on the iPad. */}
+      {/* The month, on the same line as its recap's buttons (owner, 2026-10-14): it chooses what this whole tab shows,
+          and the recap is of that month. */}
+      {/* ⚠️ THE RECAP'S THREE BUTTONS ARE ONE GROUP (owner, 2026-10-14: Download .md fell alone onto a second line): they
+          never part; on a narrow screen the group goes under the Month as a whole. "Save", not "Save recap": beside
+          "Generate recap" it says the same, and the three fit one line on the iPad. */}
       <div className="fm-statement-row">
         <span className="fm-inline-label with-tip">Month
-          {kept && <InfoTip label="How long spend is kept">{kept}</InfoTip>}</span>
+          <InfoTip label="About the recap">
+            The month's recap, to attach to the owner's monthly statement: maintenance performed against the schedule,
+            spend against the monthly cap, faults and response times. Revenue, commissions and payout are out of scope.
+            {kept ? ` ${kept}` : ""}
+          </InfoTip></span>
         <div style={{ minWidth: 130 }}>
-          <Dropdown value={month} ariaLabel="Month" onChange={statement.setMonth}
-            options={statement.months.map((m) => ({ value: m, label: m }))} />
+          <Dropdown value={month} ariaLabel="Month" onChange={recap.setMonth}
+            options={recap.months.map((m) => ({ value: m, label: m }))} />
         </div>
         <div className="fm-statement-buttons">
-          <button className="btn ghost" onClick={statement.generate}>
-            <Sparkles size={16} /> {statement.markdown ? "Regenerate statement" : "Generate statement"}
+          <button className="btn ghost" onClick={recap.generate}>
+            <Sparkles size={16} /> {recap.markdown ? "Regenerate recap" : "Generate recap"}
           </button>
-          {/* only with a statement to save or download (owner, 2026-10-22: never greyed out beside nothing) */}
-          <DocumentButtons markdown={statement.markdown} saved={statement.saved} saveLabel="Save" onSave={() => void statement.save()} onDownload={statement.download} />
+          {/* only with a recap to save or download (owner, 2026-10-22: never greyed out beside nothing) */}
+          <DocumentButtons markdown={recap.markdown} saved={recap.saved} saveLabel="Save" onSave={() => void recap.save()} onDownload={recap.download} />
         </div>
       </div>
-      {statement.markdown && <MarkdownPreview markdown={statement.markdown} />}
+      {recap.markdown && <MarkdownPreview markdown={recap.markdown} />}
 
       <div className={`fm-cap ${toneClass(TONE_OF.cap[b.state])}`}>
         {/* the month's money on ONE line — minor (against the cap), major (outside it), total — and Record spend at
@@ -239,10 +243,9 @@ export default function SpendTab(
       </div>
 
 
-      {/* The month's statement (its buttons sit with the Month, above): the same explicit Generate -> Save shape as
-          the recap (fmDocuments.buildSpendStatement), for handing this month's spend over on its own, and keeping a
-          point-in-time copy even after entries are edited or removed. Its saved copies: */}
-      <SavedDocumentsList kind="spend" onOpen={statement.reopen} />
+      {/* The month's recap (its buttons sit with the Month, above): its saved copies, the statements saved before the
+          two were one among them (fmTypes.recapKind) */}
+      <SavedDocumentsList kind="recap" onOpen={recap.reopen} />
     </div>
   );
 }

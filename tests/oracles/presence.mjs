@@ -78,8 +78,9 @@ ck("  ...older than the villa keeps: \"before\" its first kept day — honest, n
    P.sinceText({ at: 9, before: true }, dt, dm) === "before M9");
 ck("  ...while the history is read: a neutral mark, never a time", P.sinceText("loading", dt, dm) === P.SINCE_LOADING
    && !/\d/.test(P.SINCE_LOADING));
-ck("the Recap's line", P.recapPresenceText(off, "14:20") === "Villa occupied since 14:20"
-   && P.recapPresenceText(on, "") === "Villa empty" && P.recapPresenceText(P.presenceOf(S, {}), "x") === "Villa presence unknown");
+// owner, 2026-11-05: no "Villa occupied since …" in the Recap tab: its line went with its only reader
+ck("the Recap says no presence line", !("recapPresenceText" in P)
+   && !/usePresence|recap-presence/.test(readFileSync(new URL("../../src/components/fm/FacilitySections.tsx", import.meta.url), "utf8")));
 
 console.log("\n  drawn:");
 const { PresenceButton } = await import("@/components/hud/PresenceTile");

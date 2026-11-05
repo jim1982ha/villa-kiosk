@@ -110,8 +110,9 @@ ck("the fault step, the Spend tab and logging a completion all ask for a cost wi
    ["components/fm/FaultStageModal.tsx", "components/fm/SpendTab.tsx", "components/fm/TodayTab.tsx"].every((f) => /<CostFields amount=\{amount\} onAmount=\{setAmount\}/.test(src(f)))
    && /projectedSpend\(data\.costs, \{ amount: value, category, replacing \}, terms\)/.test(src("components/fm/CostFields.tsx")));
 // One document state for the three (useMonthlyDocument, 2.496.403).
-ck("the three 'Saved' labels still show only when saved (not when queued)",
+// The recap and the statement are one document since 2.496.707 (the Spend tab's).
+ck("the two 'Saved' labels still show only when saved (not when queued)",
    /=== "saved"\) setSaved\(true\);/.test(src("fm/useMonthlyDocument.ts"))
-   && [["ReadinessTab", "readiness"], ["RecapTab", "recap"], ["SpendTab", "spend"]].every(([f, k]) => src(`components/fm/${f}.tsx`).includes(`useMonthlyDocument("${k}"`)));
+   && [["ReadinessTab", "readiness"], ["SpendTab", "recap"]].every(([f, k]) => src(`components/fm/${f}.tsx`).includes(`useMonthlyDocument("${k}"`)));
 
 done("✅ a Facility write says what happened");

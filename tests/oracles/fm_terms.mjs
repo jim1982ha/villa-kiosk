@@ -60,8 +60,11 @@ console.log("\n  the report speaks the owner's terms:");
      text.includes("Minor") && text.includes("Major") && /€|EUR/.test(text) && !/Routine|Capital/.test(text), text);
   ck("the month's total is minor plus major, counted once, by the engine", b.totalSpend === b.minorSpend + b.majorSpend && b.totalSpend > 0, b);
   ck("no account is named that the owner did not name", !/Owner's account/.test(text));
-  const statement = R.buildSpendStatement({ costs, schedules: [], completions: [], tickets: [], savedDocuments: [] }, "2026-09", "V", t);
-  ck("the spend statement uses the same terms", statement.includes("Minor") && /€|EUR/.test(statement));
+  // the spend statement is the recap's §2 since 2.496.707 (owner, 2026-11-05: one document)
+  const recap = R.buildMonthlyRecap({ fm: { costs, schedules: [], completions: [], tickets: [], savedDocuments: [] }, month: "2026-09",
+    villaName: "V", terms: t, readiness: { checks: [], availability: { total: 0, offline: [] } }, deviceOfRecord: (id) => id });
+  const spend = recap.slice(recap.indexOf("## 2. Maintenance spend"), recap.indexOf("## 3."));
+  ck("the recap's spend uses the same terms", spend.includes("Minor") && /€|EUR/.test(spend), spend);
 }
 
 console.log("\n  the month's money said one way (architecture review, 2026-10-19): the cap's sentence per state, everywhere:");

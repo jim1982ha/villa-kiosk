@@ -881,6 +881,7 @@ export default function Dashboard() {
           onTicketEditOpened={() => go({ type: "ticketEditOpened" })}
           onReportProblem={() => go({ type: "reportProblem" })}
           focusFaults={screen.faultsFocus ?? undefined}
+          onOpenFaults={(ids) => go({ type: "openFaults", ids })}
         />
       )}
 

@@ -32,11 +32,6 @@
   .fm-tab:hover { background: var(--bg-input); }
 }
 .fm-tab.active { background: var(--accent); color: var(--text-on-accent); }
-/* Keeps the Recap tab's own height roughly stable across the empty-
-   placeholder <-> generated-recap swap — see RecapTab's docstring on the
-   button. */
-.fm-doc-preview-area { min-height: 260px; }
-
 .fm-stack { display: flex; flex-direction: column; gap: 16px; }
 
 /* Summary numbers — the glance layer above the detail. ⚠️ ONE LINE, HOWEVER
@@ -92,6 +87,10 @@
 .fm-ticket-records > .fm-record + .fm-record > .fm-record-head > .fm-record-lead { top: 10px; }
 /* an issue's name: the way to its device, not underlined (owner, 2026-11-02) */
 .fm-title-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+/* A word of a line that opens the place it names ("faults" Inbox › Open issues, "tickets" the Tickets tab: a readiness
+   check's line, owner 2026-11-05): the line's own text, in the accent, underlined */
+.fm-text-link { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline;
+  text-underline-offset: 2px; cursor: pointer; }
 .fm-record-head .fm-record-check { margin-top: 2px; margin-left: auto; }
 /* a folded card's line, cut with "…" (RecordCard `folded`): the one place a card's words are cut */
 .fm-card-folded { display: block; font-size: var(--text-xs); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -436,14 +435,8 @@
   padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
 .fm-headline-icon { flex: 0 0 auto; display: flex; color: var(--status-on); }
-/* The verdict is the checks' fold (owner, 2026-10-14): icon, words and chevron as one button, Save snapshot beside it. */
-.fm-headline-toggle {
-  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 14px;
-  background: none; border: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
-}
-/* the chevron right after the words, where the eye reads "this opens" (owner, 2026-10-14) — not at the far end */
-.fm-headline-toggle > svg { flex: 0 0 auto; color: var(--text-secondary); }
-.fm-headline-text { display: flex; flex-direction: column; gap: 2px; }
+/* The verdict, its checks always under it (owner, 2026-11-05), Save snapshot beside it. */
+.fm-headline-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .fm-headline strong { font-size: var(--text-lg); }
 /* its icon in its tone's colour (.tone-*, 08-shared.css) */
 :is(.tone-warn, .tone-danger) .fm-headline-icon { color: var(--tone); }

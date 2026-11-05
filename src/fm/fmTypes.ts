@@ -243,15 +243,15 @@ export interface FmTicket extends FmProvenance {
 }
 
 /** A generated markdown document the operator chose to keep — the monthly
- *  monthly recap (RecapTab), a spend statement (SpendTab), or a
+ *  recap (the Spend tab: its spend and the month's operations, one document) or a
  *  point-in-time readiness snapshot (ReadinessTab). Kept
  *  verbatim as generated (not recomputed live) so a saved document stays a
  *  point-in-time record even if the underlying schedules/costs/tickets
- *  change afterwards — the same reasoning RecapTab's own "Generate" button
+ *  change afterwards — the same reasoning the recap's own "Generate" button
  *  (an explicit action, not a live re-render) already follows. */
 export interface FmSavedDocument extends FmProvenance {
   id: string;
-  kind: "recap" | "spend" | "readiness";
+  kind: "recap" | "readiness";
   /** The period the document is ABOUT ("2026-06"), not when it was saved. */
   month: string;
   markdown: string;
@@ -259,11 +259,12 @@ export interface FmSavedDocument extends FmProvenance {
 }
 
 /** ⚠️ A RECAP SAVED BEFORE 2.496.274 IS STORED AS kind "report" (the tab was
- *  renamed: "report" is what the VESTA Agent sends). It is read as "recap"
- *  in fmApi.parseFmData, the one door every stored record comes in by, so the saved list
- *  keeps showing it and no screen ever meets the old word. */
+ *  renamed: "report" is what the VESTA Agent sends), and a spend statement saved before 2.496.707 as kind "spend"
+ *  (owner, 2026-11-05: the monthly recap and the spend statement are ONE document, in the Spend tab). Both are read as
+ *  "recap" in fmApi.parseFmData, the one door every stored record comes in by, so the saved list keeps showing them
+ *  and no screen ever meets an old word. */
 export function recapKind(d: FmSavedDocument): FmSavedDocument {
-  return (d.kind as string) === "report" ? { ...d, kind: "recap" } : d;
+  return ["report", "spend"].includes(d.kind as string) ? { ...d, kind: "recap" } : d;
 }
 
 export interface FmData {

@@ -145,7 +145,10 @@ console.log("\n  a document's dates are locale-free; the month's bounds computed
      && Number.isNaN(E.monthBounds("2026-13").start) && Number.isNaN(E.monthBounds("not-a-month").end) && Number.isNaN(E.monthBounds("2026-9").start), b);
   ck("  ...the Period heading and the documents' default month read them (a malformed key is echoed)",
      E.monthLabel("2026-13") === "2026-13" && /2026/.test(E.monthLabel("2026-09"))
-     && (await import("@/fm/monthlyDocument")).defaultMonth("recap", new Date(2026, 0, 15).getTime()) === "2025-12");
+     // the recap opens on the month running (one Month for the Spend tab, 2026-11-05) and offers the one just finished,
+     // across the new year
+     && (await import("@/fm/monthlyDocument")).defaultMonth("recap", new Date(2026, 0, 15).getTime()) === "2026-01"
+     && (await import("@/fm/monthlyDocument")).monthsOffered("recap", { completions: [], costs: [] }, new Date(2026, 0, 15).getTime()).join() === "2026-01,2025-12");
   // a fault as it stood at a month's end: resolved mid-September, reopened mid-October
   const t = { id: "m", title: "m", status: "open", openedAt: "2026-09-01T12:00:00.000Z", photoIds: [], updates: [
     { at: "2026-09-15T12:00:00.000Z", status: "resolved", photoIds: [] }, { at: "2026-10-15T12:00:00.000Z", status: "open", kind: "reopened", photoIds: [] }] };

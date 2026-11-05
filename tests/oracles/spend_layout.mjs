@@ -15,10 +15,11 @@ ck("  ...sharing the width equally, Record spend at their right",
    /\.fm-cap-totals \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) auto;/.test(css)
    && /\.fm-cap-total \{ display: flex; flex-direction: column;/.test(css));
 
-console.log("\n  the statement's buttons:");
+console.log("\n  the recap's buttons (the recap and the statement one document, owner 2026-11-05):");
 const group = tab.match(/<div className="fm-statement-buttons">([\s\S]*?)\n        <\/div>/);
-// Save and Download .md are DocumentButtons since 2026-10-22: drawn only with a statement (document_buttons below)
-ck("Generate, Save and Download .md are ONE group", !!group && /Generate statement/.test(group[1]) && /<DocumentButtons markdown=\{statement\.markdown\}/.test(group[1]));
+// Save and Download .md are DocumentButtons since 2026-10-22: drawn only with a recap (document_buttons below)
+ck("Generate, Save and Download .md are ONE group", !!group && /Generate recap/.test(group[1]) && /<DocumentButtons markdown=\{recap\.markdown\}/.test(group[1])
+   && !/statement/i.test(group[1]));
 
 console.log("\n  Save and Download .md only with something to save (owner, 2026-10-22):");
 {
@@ -29,9 +30,7 @@ console.log("\n  Save and Download .md only with something to save (owner, 2026-
   ck("nothing generated: neither button is drawn (never greyed out beside nothing)", !/<button/.test(none), none);
   ck("  ...a recap generated: Save recap and Download .md, both live",
      /Save recap/.test(shown) && /Download \.md/.test(shown) && !/disabled/.test(shown), shown);
-  ck("  ...the Recap and the Spend statement both draw them through it",
-     /<DocumentButtons markdown=\{markdown\} saved=\{doc\.saved\} saveLabel="Save recap"/.test(readFileSync(new URL("../../src/components/fm/RecapTab.tsx", import.meta.url), "utf8"))
-     && /<DocumentButtons markdown=\{statement\.markdown\}/.test(tab));
+  ck("  ...the Spend tab's recap draws them through it", /<DocumentButtons markdown=\{recap\.markdown\}/.test(tab));
 }
 ck("  ...that does not wrap apart (a phone excepted)", /\.fm-statement-buttons \{ display: flex; flex-wrap: nowrap;/.test(css));
 

@@ -12,25 +12,28 @@ const { SavedDocumentRows } = await import("@/components/fm/SavedDocumentsList")
 
 console.log("  each kind, by value:");
 const row = (k) => `${k}: ${D.DOCUMENT_KINDS[k].noun}/${D.DOCUMENT_KINDS[k].plural} → ${D.documentFileName(k, "Villa Example", "2026-10")}`;
-ck("recap, statement, snapshot — each its own words and file",
-   ["recap", "spend", "readiness"].map(row).join(" | ")
-   === "recap: recap/recaps → villa-example-operations-2026-10.md | spend: statement/statements → villa-example-spend-2026-10.md"
-   + " | readiness: snapshot/snapshots → villa-example-readiness-2026-10.md", ["recap", "spend", "readiness"].map(row));
+// owner, 2026-11-05: the monthly recap and the spend statement are ONE document (the Spend tab's): two kinds left
+ck("recap, snapshot: each its own words and file, and no statement any more",
+   Object.keys(D.DOCUMENT_KINDS).map(row).join(" | ")
+   === "recap: recap/recaps → villa-example-operations-2026-10.md | readiness: snapshot/snapshots → villa-example-readiness-2026-10.md",
+   Object.keys(D.DOCUMENT_KINDS).map(row));
 const NOW = new Date(2026, 9, 17, 12).getTime();
 const data = { schedules: [], tickets: [], savedDocuments: [],
   completions: [{ at: new Date(2026, 6, 3).toISOString() }], costs: [{ at: new Date(2026, 7, 9).toISOString() }] };
-ck("the months offered: a recap the finished month first, then the current one and any with work or spend",
-   D.monthsOffered("recap", data, NOW).join() === "2026-10,2026-09,2026-08,2026-07" && D.defaultMonth("recap", NOW) === "2026-09",
+// the recap's month is the Spend tab's (its spend listed): the month running first, the one just finished offered
+ck("the months offered: a recap the current month first, the finished one, and any with work or spend",
+   D.monthsOffered("recap", data, NOW).join() === "2026-10,2026-09,2026-08,2026-07" && D.defaultMonth("recap", NOW) === "2026-10",
    D.monthsOffered("recap", data, NOW));
-ck("  ...a statement the current month and any with spend; a snapshot now only",
-   D.monthsOffered("spend", data, NOW).join() === "2026-10,2026-08" && D.defaultMonth("spend", NOW) === "2026-10"
-   && D.monthsOffered("readiness", data, NOW).join() === "2026-10" && D.defaultMonth("readiness", NOW) === "2026-10");
+ck("  ...a snapshot now only",
+   D.monthsOffered("readiness", data, NOW).join() === "2026-10" && D.defaultMonth("readiness", NOW) === "2026-10");
 
 console.log("\n  the saved list, drawn:");
 const doc = (id, kind, month, at) => ({ id, kind, month, markdown: "# x", generatedAt: at });
 const docs = [doc("a", "readiness", "2026-10", "2026-10-16T09:00:00Z"), doc("b", "readiness", "2026-10", "2026-10-17T09:00:00Z"),
   doc("c", "recap", "2026-09", "2026-10-02T09:00:00Z"), doc("d", "spend", "2026-09", "2026-10-02T09:00:00Z")];
-const list = (kind) => draw(h(SavedDocumentRows, { kind, docs, onOpen: () => {}, onRemove: () => {} }));
+// as the record is read (fmApi.parseFmData: fmTypes.recapKind): a statement saved before the merge is a recap
+const { recapKind } = await import("@/fm/fmTypes");
+const list = (kind) => draw(h(SavedDocumentRows, { kind, docs: docs.map(recapKind), onOpen: () => {}, onRemove: () => {} }));
 // ⚠️ A SNAPSHOT IS OF A MOMENT, NOT A MONTH (architecture review, 2026-10-19): two taken this month were both titled
 // "October 2026". Titled by the moment it was taken, in the documents' fixed form (momentText, the "Generated:" stamp).
 const at16 = momentText("2026-10-16T09:00:00Z"), at17 = momentText("2026-10-17T09:00:00Z");
@@ -43,11 +46,11 @@ ck("  ...the moment in the agreement's fixed form (day first, as Telegram), neve
 ck("  ...and its delete button says snapshot, and which", new RegExp(`aria-label="Delete saved snapshot for ${at17}"`).test(list("readiness"))
    && /<Tip text=\{`Delete this saved \$\{noun\}`\}>/.test(readFileSync(new URL("../../src/components/fm/SavedDocumentsList.tsx", import.meta.url), "utf8")),
    (list("readiness").match(/aria-label="[^"]*"/g) ?? []));
-ck("what a kind is about: the recap and the statement a month, the snapshot a moment",
-   ["recap", "spend", "readiness"].map((k) => D.DOCUMENT_KINDS[k].about).join() === "month,month,moment");
-ck("the recap's and the statement's lists keep their words, titled by their month", text(list("recap")).startsWith("|Saved recaps (1)|September 2026|")
-   && text(list("spend")).startsWith("|Saved statements (1)|") && /Delete saved statement for September 2026/.test(list("spend")));
-ck("  ...and a kind with nothing saved draws nothing", draw(h(SavedDocumentRows, { kind: "spend", docs: docs.slice(0, 2), onOpen: () => {}, onRemove: () => {} })) === "");
+ck("what a kind is about: the recap a month, the snapshot a moment",
+   ["recap", "readiness"].map((k) => D.DOCUMENT_KINDS[k].about).join() === "month,moment");
+ck("the recaps' list, titled by their month, the statement saved before the merge among them",
+   text(list("recap")).startsWith("|Saved recaps (2)|September 2026|") && /Delete saved recap for September 2026/.test(list("recap")), text(list("recap")));
+ck("  ...and a kind with nothing saved draws nothing", draw(h(SavedDocumentRows, { kind: "recap", docs: docs.slice(0, 2), onOpen: () => {}, onRemove: () => {} })) === "");
 
 console.log("\n  one set of inputs, built once; each kind makes its own document from it (architecture review, 2026-10-19):");
 {
@@ -60,17 +63,16 @@ console.log("\n  one set of inputs, built once; each kind makes its own document
   const strip = (md) => md.replace(/^\*\*Generated:\*\* .*$/m, "");   // the moment it is made
   ck("each kind's build is its document, from the one set of inputs",
      strip(D.DOCUMENT_KINDS.recap.build(inputs, "2026-09")) === strip(R.buildMonthlyRecap({ ...inputs, month: "2026-09" }))
-     && strip(D.DOCUMENT_KINDS.spend.build(inputs, "2026-09")) === strip(R.buildSpendStatement(inputs.fm, "2026-09", "V", inputs.terms))
      && strip(D.DOCUMENT_KINDS.readiness.build(inputs, "2026-10")) === strip(R.buildReadinessSnapshot(readiness, "V", "2026-10")));
   ck("  ...and the recap's device section is the readiness' own devices", D.DOCUMENT_KINDS.recap.build(inputs, "2026-09").includes("**3 of 4** devices reporting"));
   const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
   const fs = src("components/fm/FacilitySections.tsx");
-  const tabs = ["RecapTab", "SpendTab", "ReadinessTab"].map((t) => src(`components/fm/${t}.tsx`).replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, ""));
-  ck("the inputs are built once, in FacilitySections, and handed to the three tabs; each tab only draws",
+  const tabs = ["SpendTab", "ReadinessTab"].map((t) => src(`components/fm/${t}.tsx`).replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, ""));
+  ck("the inputs are built once, in FacilitySections, and handed to the two tabs; each tab only draws",
      (fs.match(/: DocumentInputs => \(\{ fm: data, terms, readiness, villaName, deviceOfRecord \}\)/g) ?? []).length === 1
-     && (fs.match(/inputs=\{inputs\}/g) ?? []).length === 3
-     && tabs.every((t) => /useMonthlyDocument\("(recap|spend|readiness)", inputs\)/.test(t) && !/build(MonthlyRecap|SpendStatement|ReadinessSnapshot)|useDeviceIdentity|resolveSiteTitle/.test(t)));
+     && (fs.match(/inputs=\{inputs\}/g) ?? []).length === 2
+     && tabs.every((t) => /useMonthlyDocument\("(recap|readiness)", inputs\)/.test(t) && !/build(MonthlyRecap|ReadinessSnapshot)|useDeviceIdentity|resolveSiteTitle/.test(t)));
 }
 
-done("✅ recaps, statements and snapshots: one way to make, save, reopen and download, each by its own name");
+done("✅ recaps and snapshots: one way to make, save, reopen and download, each by its own name");
 

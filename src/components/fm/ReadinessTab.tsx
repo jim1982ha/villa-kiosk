@@ -5,16 +5,16 @@
 // villa's ACTUAL live state, which is the one thing a paper checklist can't do.
 // A failing check names the devices behind it and opens them directly.
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import SaveButton from "@/components/common/SaveButton";
-import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronRight, Camera, Download } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, ChevronRight, Camera, Download } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useMonthlyDocument } from "@/fm/useMonthlyDocument";
 import type { DocumentInputs } from "@/fm/monthlyDocument";
 import SavedDocumentsList from "./SavedDocumentsList";
 import MarkdownPreview from "./MarkdownPreview";
 import { SourceIconRow } from "./sourceIcons";
-import { CHECK_WORDS, VERDICT_WORDS, type CheckState, type CheckTarget, type ReadinessCheck, type ReadinessResult } from "@/fm/readiness";
+import { CHECK_WORDS, VERDICT_WORDS, type CheckLink, type CheckState, type CheckTarget, type ReadinessCheck, type ReadinessResult } from "@/fm/readiness";
 import { toneClass } from "@/fm/tone";
 import RecordCard from "./RecordCard";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
@@ -27,7 +27,7 @@ const ICON: Record<CheckState, typeof CheckCircle2> = {
 const CHECK_CHIPS = 8;
 
 export default function ReadinessTab({
-  inputs, onOpenEntity, onOpenCheck,
+  inputs, onOpenEntity, onOpenCheck, onGo,
 }: {
   /** What the snapshot is made from — the live readiness among it (monthlyDocument.DocumentInputs). */
   inputs: DocumentInputs;
@@ -35,6 +35,8 @@ export default function ReadinessTab({
   /** Opens a check's own devices as a list (readiness.CheckTarget) — every
    *  check the same way. */
   onOpenCheck: (target: CheckTarget) => void;
+  /** Opens the place a check's linked word names (readiness.CheckLink). */
+  onGo: (to: CheckLink["to"]) => void;
 }) {
   const label = useEntityLabel();
   // Freezing the check turns it from a live readout into evidence (see
@@ -44,7 +46,7 @@ export default function ReadinessTab({
   const { readiness } = inputs;
   return (
     <div className="fm-stack">
-      <ReadinessChecks readiness={readiness} label={label} onOpenEntity={onOpenEntity} onOpenCheck={onOpenCheck}
+      <ReadinessChecks readiness={readiness} label={label} onOpenEntity={onOpenEntity} onOpenCheck={onOpenCheck} onGo={onGo}
         save={<SaveButton saved={snapshot.saved} label="Save snapshot" icon={<Camera size={16} />} style={{ marginLeft: "auto" }}
           onClick={() => void snapshot.generateAndSave()} />} />
 
@@ -64,22 +66,20 @@ export default function ReadinessTab({
   );
 }
 
-/** The verdict and, folded under it, the checks — each with its own devices' button (readiness.CheckTarget) and,
- *  unless its list is the view itself, a chip per device. Drawn by tests/oracles/readiness_checks.mjs. */
-export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, save, startOpen = false }: {
+/** The verdict and, under it, the checks — each with its own devices' button (readiness.CheckTarget) and a chip per
+ *  device. Drawn by tests/oracles/readiness_checks.mjs. */
+export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, onGo, save }: {
   readiness: ReadinessResult;
   /** A device's name on its chip. */
   label: (id: string) => string;
   onOpenEntity: (id: string) => void;
   onOpenCheck: (target: CheckTarget) => void;
+  onGo: (to: CheckLink["to"]) => void;
   /** The verdict line's Save snapshot. */
   save?: ReactNode;
-  /** Open at first (a test drawing the checks); the tab opens folded. */
-  startOpen?: boolean;
 }) {
-  // ⚠️ THE CHECKS FOLD UNDER THEIR VERDICT (owner, 2026-10-14): "Not ready · 3 of 6" says it; the six cards under it
-  // pushed the monthly recap off the screen. A tap on the verdict opens them.
-  const [showChecks, setShowChecks] = useState(startOpen);
+  // ⚠️ THE CHECKS ARE ALWAYS SHOWN (owner, 2026-11-05: "always expanded, remove the capability to collapse"): they
+  // folded under their verdict while the monthly recap was under them (owner, 2026-10-14); the recap is the Spend tab's
 
   // the verdict's ONE sentence (readiness.VERDICT_WORDS — the saved snapshot's too)
   const headline = VERDICT_WORDS[readiness.overall];
@@ -93,19 +93,15 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
           and spend statement, and it lands in the same saved-documents store,
           so a handover pack can include the check actually run on the day. */}
       <div className={`fm-headline ${toneClass(CHECK_WORDS[readiness.overall].tone)}`}>
-        <button type="button" className="fm-headline-toggle" aria-expanded={showChecks}
-          onClick={() => setShowChecks((v) => !v)}>
-          <span className="fm-headline-icon"><HeadlineIcon size={22} /></span>
-          <span className="fm-headline-text">
-            <strong>{headline}</strong>
-            <span className="muted">{readiness.passed} of {readiness.total} checks passing</span>
-          </span>
-          {showChecks ? <ChevronDown size={18} aria-hidden /> : <ChevronRight size={18} aria-hidden />}
-        </button>
+        <span className="fm-headline-icon"><HeadlineIcon size={22} /></span>
+        <span className="fm-headline-text">
+          <strong>{headline}</strong>
+          <span className="muted">{readiness.passed} of {readiness.total} checks passing</span>
+        </span>
         {save}
       </div>
 
-      {showChecks && <div className="fm-list">
+      <div className="fm-list">
         {readiness.checks.map((c) => {
           const Icon = ICON[c.state];
           const opens = c.entityIds?.length ? c.opens : undefined;
@@ -124,23 +120,34 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, s
                 </button>
               ) : undefined}
               body={<>
-                <div className="fm-row-sub muted"><CheckDetail check={c} /></div>
+                <div className="fm-row-sub muted"><CheckDetail check={c} onGo={onGo} /></div>
                 {chips && c.entityIds && <CheckDevices ids={c.entityIds} label={label} onOpenEntity={onOpenEntity} />}
               </>} />
           );
         })}
-      </div>}
+      </div>
 
     </>
   );
 }
 
-/** A check's line — with the open faults' source icons after "Check the", as the Overview shows them (owner,
+/** A check's line — its linked words opening the place they name (readiness.CheckLink: "faults" Open issues, "tickets"
+ *  the Tickets tab, owner 2026-11-05), the open faults' source icons before "faults", as the Overview shows them (owner,
  *  2026-10-14). */
-function CheckDetail({ check }: { check: ReadinessCheck }) {
-  const lead = "Check the faults";
-  if (!check.sources?.length || !check.detail.startsWith(lead)) return <>{check.detail}</>;
-  return <>Check the <SourceIconRow sources={check.sources} severity={check.state === "fail" ? "danger" : "warn"} /> faults{check.detail.slice(lead.length)}</>;
+function CheckDetail({ check, onGo }: { check: ReadinessCheck; onGo: (to: CheckLink["to"]) => void }) {
+  const out: ReactNode[] = [];
+  let rest = check.detail;
+  for (const link of check.goes ?? []) {
+    const at = rest.search(new RegExp(`\\b${link.word}\\b`));
+    if (at < 0) continue;
+    out.push(rest.slice(0, at));
+    if (link.word === "faults" && check.sources?.length) {
+      out.push(<SourceIconRow key={`${link.word}-icons`} sources={check.sources} severity={check.state === "fail" ? "danger" : "warn"} />, " ");
+    }
+    out.push(<button key={link.word} type="button" className="fm-text-link" onClick={() => onGo(link.to)}>{link.word}</button>);
+    rest = rest.slice(at + link.word.length);
+  }
+  return <>{out}{rest}</>;
 }
 
 /** A check's devices as chips: the first eight, then the rest a page of ten at a time, with a way back (the one

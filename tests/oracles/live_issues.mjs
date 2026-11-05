@@ -302,15 +302,22 @@ ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass
 {
   const { ReadinessChecks } = await import("@/components/fm/ReadinessTab");
   const result = { checks: [mixedOpen], passed: 0, total: 1, overall: "warn" };
-  const checks = (startOpen) => draw(h(ReadinessChecks, { readiness: result, label: (id) => id, onOpenEntity: () => {}, onOpenCheck: () => {}, ...(startOpen ? { startOpen } : {}) }));
-  ck("  ...the Recap draws those icons in the line, after \"Check the\"",
-     text(checks(true)).includes('|Check the |G|[icon][icon]| faults in Inbox › Open issues, or the tickets in Tickets.|'), text(checks(true)));
-  const folded = checks();   // as the tab draws it: no startOpen
-  ck("  ...the checks fold under their verdict, closed at first; a tap on the verdict opens them (owner, 2026-10-14)",
-     /class="fm-headline-toggle" aria-expanded="false"/.test(folded) && text(folded).includes("|Ready, with things worth fixing|0 of 1 checks passing|")
-     && !folded.includes("4 open faults") && checks(true).includes("4 open faults")
-     // its chevron right after the words (owner, 2026-10-14), not pushed to the far end — a stylesheet rule
-     && /\.fm-headline-toggle > svg \{ flex: 0 0 auto; color/.test(readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")), text(folded));
+  const drawn = draw(h(ReadinessChecks, { readiness: result, label: (id) => id, onOpenEntity: () => {}, onOpenCheck: () => {}, onGo: () => {} }));
+  // owner, 2026-11-05: "faults" opens Inbox › Open issues on them, "tickets" the Tickets tab; the icons before "faults"
+  ck("  ...the Recap draws those icons in the line, before \"faults\", and its two words open their place",
+     text(drawn).includes('|Check the |G|[icon][icon]| |faults| in Inbox › Open issues, or the |tickets| in Tickets.|')
+     && (drawn.match(/<button type="button" class="fm-text-link">(faults|tickets)<\/button>/g) ?? []).length === 2
+     && JSON.stringify(mixedOpen.goes) === JSON.stringify([{ word: "faults", to: { place: "faults", ids: ["x.n1", "x.n2", "x.a1", "x.g"] } },
+       { word: "tickets", to: { place: "tickets" } }]), text(drawn));
+  // owner, 2026-11-05: "always expanded (remove the capability to collapse the card)"
+  ck("  ...the checks are always shown under their verdict: nothing folds",
+     text(drawn).includes("|Ready, with things worth fixing|0 of 1 checks passing|") && drawn.includes("4 open faults")
+     && !/aria-expanded|fm-headline-toggle/.test(drawn), text(drawn));
+  // owner, 2026-11-05: "show the device pills concerned by either the Ticket or Faults … never duplicate device"
+  const pump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
+  ck("  ...its devices as chips, as All devices reporting's: each device once (a pump's ticket and fault are one chip)",
+     mixedOpen.entityIds.join() === "x.n1,x.n2,x.a1,x.g,x.t" && pump.entityIds.join() === "switch.pump"
+     && (drawn.match(/class="fm-entity-chip"/g) ?? []).length === 5 && !mixedOpen.opens, [mixedOpen.entityIds, pump.entityIds]);
 }
 
 const recent = readFileSync(new URL("../../src/components/fm/RecentWorkList.tsx", import.meta.url), "utf8");
