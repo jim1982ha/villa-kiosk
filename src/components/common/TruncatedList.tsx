@@ -23,8 +23,8 @@
 // now: the first few and a count, then the rest a page of ten at a time (paging.ts, the Pager), and "Show fewer".
 
 import { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
 import { Pager } from "./Paged";
+import { FoldToggle } from "./FoldedList";
 import { PAGE_ROWS, pageOf, type PageView } from "./paging";
 
 /** How many rows a truncated list shows before the button. ⚠️ NOT PER CALLER:
@@ -85,14 +85,12 @@ export function ShowAll<T>({ list, noun, plural = `${noun}s` }: { list: Truncate
     <>
       {/* more than a page: where the reader stands and the arrows (the count alone would repeat the button's) */}
       {list.paged && list.paged.lastPage > 0 && <Pager paged={{ ...list.paged, go: list.go }} />}
-      <button className="btn ghost mt" onClick={list.toggle}
-              aria-expanded={list.expanded}>
-        <ChevronDown size={16}
-                     style={{ transform: list.expanded ? "rotate(180deg)" : undefined }} />
+      {/* the one "this opens more" (common/FoldedList FoldToggle; owner, 2026-11-06: it was an outlined button) */}
+      <FoldToggle className="mt" open={list.expanded} onToggle={list.toggle}>
         {list.expanded
           ? "Show fewer"
           : `Show all, ${list.hidden} more ${list.hidden === 1 ? noun : plural}`}
-      </button>
+      </FoldToggle>
     </>
   );
 }

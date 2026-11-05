@@ -17,7 +17,9 @@
 
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import { FoldToggle } from "@/components/common/FoldedList";
+import IdText from "@/components/common/IdText";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import EntityPicker from "./EntityPicker";
 import Fold from "./Fold";
@@ -32,7 +34,7 @@ import { useDeviceIdentity } from "@/config/VillaModel";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { countOf } from "@/utils/countOf";
 
-export default function BindingsTable({ heading }: { heading?: ReactNode } = {}) {
+export default function BindingsTable({ title, tip }: { title: string; tip?: ReactNode }) {
   // THE name a device is shown by (useEntityLabel) — this list printed HA's raw friendly_name.
   const entityLabel = useEntityLabel();
   const { config, update } = useConfig();
@@ -98,7 +100,7 @@ export default function BindingsTable({ heading }: { heading?: ReactNode } = {})
           were another section — it is this section's way to add an entity. */}
       {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
 
-      <Fold heading={heading} summary={`${bound.length} bound · ${unbound.length} unbound · ${unmappedHaEntities.length} not shown`}>
+      <Fold title={title} tip={tip} summary={`${bound.length} bound · ${unbound.length} unbound · ${unmappedHaEntities.length} not shown`}>
 
       <div style={{ marginBottom: 20 }}>
         <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
@@ -122,7 +124,7 @@ export default function BindingsTable({ heading }: { heading?: ReactNode } = {})
             )}
           </div>
           <button
-            className="btn primary"
+            className="btn ghost"
             onClick={() => newId && addEntity(newId)}
             disabled={!newId || !!config.entityMap[newId]}
             style={{ flexShrink: 0 }}
@@ -138,24 +140,21 @@ export default function BindingsTable({ heading }: { heading?: ReactNode } = {})
 
       {/* ⚠️ THE THREE LISTS' BUTTONS ON ONE LINE (owner, 2026-10-14), each list opening under them; the unmapped
           list is the inverse audit — informational only, there is no mesh here to bind those TO. */}
-      <div className="row mt" style={{ gap: 8, flexWrap: "wrap" }}>
+      <div className="row mt" style={{ gap: 4, flexWrap: "wrap" }}>
         {bound.length > 0 && (
-          <button className="btn ghost" onClick={() => setShowBound((s) => !s)}>
-            {showBound ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <FoldToggle open={showBound} onToggle={() => setShowBound((s) => !s)}>
             {countOf(bound.length, "bound object")}
-          </button>
+          </FoldToggle>
         )}
         {catalog.length > 0 && (
-          <button className="btn ghost" onClick={() => setShowUnbound((s) => !s)}>
-            {showUnbound ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <FoldToggle open={showUnbound} onToggle={() => setShowUnbound((s) => !s)}>
             {countOf(unbound.length, "unbound object")}
-          </button>
+          </FoldToggle>
         )}
         {unmappedHaEntities.length > 0 && (
-          <button className="btn ghost" onClick={() => setShowUnmappedHa((s) => !s)}>
-            {showUnmappedHa ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <FoldToggle open={showUnmappedHa} onToggle={() => setShowUnmappedHa((s) => !s)}>
             {countOf(unmappedHaEntities.length, "entity", "entities")} not shown
-          </button>
+          </FoldToggle>
         )}
       </div>
 
@@ -171,33 +170,16 @@ export default function BindingsTable({ heading }: { heading?: ReactNode } = {})
 
       {showUnbound &&
         unbound.map((mesh) => (
-          <div
-            key={mesh}
-            className="row spread"
-            style={{
-              gap: 12,
-              padding: "10px 0",
-              borderTop: "1px solid var(--hairline)",
-            }}
-          >
-            <div
-              style={{
-                flex: "0 0 34%",
-                fontSize: "var(--text-xs)",
-                color: "var(--text-secondary)",
-                wordBreak: "break-all",
-              }}
-            >
-              {mesh}
-            </div>
-            <div style={{ flex: 1 }}>
+          <div key={mesh} className="binding-row">
+            <div className="binding-row-object"><IdText id={mesh} /></div>
+            <div className="binding-row-entity">
               <EntityPicker
                 onChange={(id) => bind(mesh, id)}
                 placeholder="Bind to entity…"
                 allowCustom
               />
             </div>
-            <span style={{ width: 36 }} />
+            <span aria-hidden />
           </div>
         ))}
 
@@ -216,8 +198,8 @@ export default function BindingsTable({ heading }: { heading?: ReactNode } = {})
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: "var(--text-sm)" }}>{entityLabel(id)}</div>
-                <div style={{ fontSize: "var(--text-2xs)", color: "var(--text-secondary)", wordBreak: "break-all" }}>
-                  {id}
+                <div style={{ fontSize: "var(--text-2xs)", color: "var(--text-secondary)" }}>
+                  <IdText id={id} />
                 </div>
               </div>
               {entityAreaNames[id] && (

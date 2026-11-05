@@ -22,6 +22,7 @@ import InfoTip from "@/components/common/InfoTip";
 import { memo, type RefObject } from "react";
 import { Pencil, Trash2, Check, X, ChevronDown, ChevronRight } from "lucide-react";
 import EntityPicker from "./EntityPicker";
+import IdText from "@/components/common/IdText";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import MappingFields, { ConfirmToggle, useMappingDraft } from "./MappingFields";
@@ -130,7 +131,7 @@ function EntityMapRow({
             {/* ⚠️ ONE FIRST LINE (owner, 2026-11-05): the id, never more than 2 lines (its whole text on hover), the
                 pencil and the chevron at its right; "Confirm before toggling" on the line under it */}
             <span className="entity-id-text" title={[m.entityId, ...(objects ?? [])].join(" · ")}>
-              {m.entityId}
+              <IdText id={m.entityId} />
               {!!objects?.length && (
                 <span className="muted entity-id-link" title="This device's 3D object, linked by name">
                   {" "}· 3D object: {objects.join(", ")}
@@ -138,20 +139,21 @@ function EntityMapRow({
               )}
             </span>
             <span className="entity-id-tools">
+              {/* the one small icon button of a list's row (owner, 2026-11-06) */}
               <button
-                className="icon-btn"
-                title="Redirect this 3D mesh to a different entity ID"
+                type="button" className="icon-btn-sm"
+                title="Redirect this 3D mesh to a different entity ID" aria-label={`Redirect ${m.entityId} to another entity ID`}
                 onClick={(e) => { e.stopPropagation(); onStartRemap(entryKey); }}
               >
-                <Pencil size={16} />
+                <Pencil size={16} aria-hidden />
               </button>
               {onRemove && (
                 <button
-                  className="icon-btn icon-btn-danger"
-                  title="Remove this entity"
+                  type="button" className="icon-btn-sm danger"
+                  title="Remove this entity" aria-label={`Remove ${m.entityId}`}
                   onClick={(e) => { e.stopPropagation(); onRemove(entryKey); }}
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={16} aria-hidden />
                 </button>
               )}
               {expanded ? <ChevronDown size={16} className="muted" /> : <ChevronRight size={16} className="muted" />}

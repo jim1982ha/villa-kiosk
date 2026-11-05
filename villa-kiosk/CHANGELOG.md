@@ -1,3 +1,23 @@
+## 2.496.716
+
+What you will see:
+- Settings and Advanced Settings look the same everywhere, on a phone as on a laptop. Every setting's name stays on
+  one line ("Night dimming", "Full screen on this tablet", "Maintenance mode"), its icon, name and (i) at the left and
+  its control at the right.
+- Every slider shows its value at the end of its name's line, the track under it (beside the track where three
+  sliders share a laptop line). Every multiplier reads the same way: "0.50×", "1.00×"; the eye height "1.70 m".
+- Every On | Off, Map look's Icon | Card, Villa lighting's icons and the Interface theme are the same size of
+  control, and an On | Off is the same width on every line.
+- Grouped devices, Asleep between reports and Bound 3D objects open like the Cockpit's sections: a chevron before the
+  title, what they hold after it. Their lists and "Show all, … more" open the same way, with no box around them.
+- Settings › Messages: each list's "+ Add" sits at the right of its title's line; the announcements' table heads read
+  "Announcement" and "Time", each time shows as "10s" in one box, and the ✕ to take one off is a small round button.
+- Advanced Settings' Upload Model and Log Out All sit in one rounded group like the Interface theme in Settings; the
+  telemetry's buttons too. Its times read as everywhere else, on the villa's clock: "05/11/2026 17:55:13".
+- A device's name in Devices breaks only after a "." or "_", never in the middle of a word.
+- Villa: the latitude and longitude show 6 decimals; "Set North" is the same light button as the others. System: "Days
+  records are kept" with its number at the right (the full sentence is in the section's (i)).
+
 ## 2.496.715
 
 What you will see:

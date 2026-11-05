@@ -89,10 +89,9 @@
    modal (520 → 780) so the 3-across device-icon grid and the two-column
    slider/coordinate rows breathe on desktop/tablet; still capped at the
    viewport so mobile is unaffected (the media query below takes over). */
-.settings-modal { max-width: 780px; }
-/* The Config Editor holds full-width entity/binding cards — give it the most
-   room the viewport allows. */
-.config-editor-modal { max-width: 780px; }
+.settings-modal { max-width: var(--settings-width); }
+/* ⚠️ ONE WIDTH FOR THE FAMILY (owner, 2026-11-06): Settings, Advanced Settings and every window drawn in their shell
+   (.settings-modal) are --settings-width wide on a laptop, said once (01-base.css). */
 /* Fixed height on desktop/tablet, for a modal whose BODY content varies a lot
    between views (a tabbed workspace switching from a two-row list to a dozen
    rows). `.modal` alone only caps height (max-height: 90vh) and otherwise
@@ -245,13 +244,13 @@
    off it as a plain --bg-modal chip, NOT a solid accent block — three green
    blocks per screen used to compete with each other and with the app's real
    accent moments (VESTA-DESIGN.md §1.7). */
-.segmented { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-pill); background: var(--bg-input); }
-.segmented button {
+.segmented, .tool-group { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-pill); background: var(--bg-input); }
+.segmented button, .tool-group > button, .tool-group > div > button {
   flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 7px;
   min-height: 40px; border-radius: var(--radius-pill); font-size: var(--text-base); font-weight: 500;
   color: var(--text-secondary); transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
-.segmented button svg { flex: 0 0 auto; }
+.segmented button svg, .tool-group > button svg, .tool-group > div > button svg { flex: 0 0 auto; }
 /* Selected segment: a soft ACCENT tint with an accent-coloured glyph — the
    exact treatment the HUD's category filter chips already use, so "this one
    is on" looks the same everywhere in the app.
@@ -272,8 +271,22 @@
 
 /* Icon-only variant (theme selector in the Settings header): compact, not
    full-width, square buttons — the Sun/Moon/Monitor glyphs are self-explanatory. */
-.segmented-icons { flex: 0 0 auto; gap: 3px; padding: 3px; }
-.segmented-icons button { flex: 0 0 auto; width: 38px; min-height: 34px; gap: 0; }
+.segmented-icons { flex: 0 0 auto; }
+.segmented-icons button { flex: 0 0 auto; width: 44px; gap: 0; }
+
+/* THE TOOL GROUP (owner, 2026-11-06: "the header's icon buttons the same style as the Settings header's theme
+   control"): Advanced Settings' header buttons and the telemetry's toolbar are one .segmented track, each tool a
+   segment at its height, its glyph and, where there is room, its word; on a phone the glyph alone (.btn-label), its
+   name in its aria-label and title. Nothing is "selected" in it: a tool is pressed, never chosen. */
+.tool-group { flex: 0 0 auto; }
+.tool-group > button, .tool-group > div > button { flex: 0 0 auto; min-width: 44px; padding: 0 14px; color: var(--text-primary); }
+.tool-group .btn-label { margin-left: 0; }
+@media (hover: hover) { :is(.tool-group > button, .tool-group > div > button):hover:not(:disabled) { background: var(--bg-modal); } }
+:is(.tool-group > button, .tool-group > div > button):disabled { opacity: 0.4; cursor: not-allowed; }
+.tool-group .modal-actions { gap: 4px; }
+@media (max-width: 640px) {
+  .tool-group > button, .tool-group > div > button { padding: 0 10px; }
+}
 
 /* Timeline header: the range label and its preset picker on one line. The
    picker reuses .segmented (so it inherits the selected-segment treatment)
@@ -317,32 +330,53 @@
 /* the moved window's last report: under the heading, never in it (HistoryHeader `note`) */
 .chart-note { font-size: var(--text-xs); color: var(--text-secondary); margin: calc(-1 * var(--field-label-gap) + 2px) 0 var(--field-label-gap); }
 
-/* Day/Auto/Night control (SettingsModal, beside Brightness/Night dimming): shorter than the ordinary .segmented-icons
-   sizing above so it matches the sliders' TRACK/THUMB (the thumb is 28px: 2px padding + a 24px button lands on it). */
-.daynight-segmented { padding: 2px; }
-/* ⚠️ IT FILLS ITS SETTING LINE'S CONTROL COLUMN (common/SettingRow), its three icons in equal centred segments. */
-.daynight-segmented button { min-height: 24px; flex: 1 1 0; width: auto; }
-
+/* ⚠️ ONE SEGMENTED CONTROL (owner, 2026-11-06: the On | Off pills, Map look's Icon | Card and Villa lighting's icons were
+   three sizes): every .segmented in a setting line is the one above, its height, padding, radius and selected look;
+   an icon group filling its line shares it in equal centred segments. */
+.setting-row-control > .segmented-icons button { flex: 1 1 0; width: auto; }
 
 /* ⚠️ A CHOICE STANDING AS ITS SECTION'S OWN LINE FILLS IT (owner, 2026-11-03: "using the whole width of the modal and
    the values inside it are well centred"): the group spans the line, its segments share it equally, each centred. On
    a phone, segments that no longer fit wrap onto another line of the group, which still fills the width (iPhone and
    Android alike: grouped, never stripped of their words). A group beside other controls on its line keeps its own
-   sizing (.settings-row-half, .daynight-segmented). tests/oracles/ui_dry.mjs. */
+   sizing (a setting line's own, common/SettingRow). tests/oracles/ui_dry.mjs. */
 .settings-modal .row > .segmented:only-child { flex: 1 1 100%; flex-wrap: wrap; }
 .settings-modal .row > .segmented:only-child button { flex: 1 1 0; min-width: 88px; justify-content: center; }
 
 /* THE line of one setting (common/SettingRow; owner, 2026-11-03: "the same layout, for consistency"): its icon and
-   name at the left, taking what is left and wrapping its words, its control at the right in a column of ONE width on
-   every line, so the sliders, choices and On | Off line up; on a phone both shrink, the line never wraps. */
-.setting-row { display: flex; align-items: center; gap: 12px; min-width: 0; margin-top: 12px; }
-.setting-row-name { display: inline-flex; align-items: center; gap: 7px; flex: 1 1 140px; min-width: 0; color: var(--text-secondary); }
+   name at the left, its control at the right in a column of ONE width on every line, so the sliders, choices and
+   On | Off line up.
+   ⚠️ THE NAME IS ONE LINE AT EVERY WIDTH (owner, 2026-11-06): it never shrinks below its words (nowrap, flex-shrink
+   0); a control that no longer fits beside it wraps under it and takes the whole line (its grow; the name's far larger
+   grow keeps the space beside it on its own line). Every row is at least a touch target tall; every icon the same size.
+   tests/oracles/settings_grammar.mjs measures every name of both dialogs at 360px. */
+.setting-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; min-height: var(--touch-min); margin-top: 12px; }
+.setting-row-name { display: inline-flex; align-items: center; gap: 8px; flex: 1000 0 auto; max-width: 100%; min-height: 24px; color: var(--text-secondary); white-space: nowrap; }
+.setting-row-name > svg { flex: 0 0 auto; width: 16px; height: 16px; }
 .setting-row-name > .info-tip > .info-btn { width: 24px; height: 24px; }
-.setting-row-control { flex: 0 1 var(--setting-control); display: flex; justify-content: flex-end; min-width: 0; }
+/* a slider's value, at the right end of its name's line (after the name, which takes the line's room) */
+.setting-row-value { flex: 0 0 auto; margin-left: auto; padding-left: 12px; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.setting-row-control { flex: 1 1 var(--setting-control); max-width: 100%; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .setting-row-control > input[type="range"], .setting-row-control > .segmented { flex: 1 1 auto; width: 100%; min-width: 0; }
+.setting-row-control > .btn { flex: 0 0 auto; white-space: nowrap; }
 .modal { --setting-control: 240px; --on-off-width: 120px; }
+/* A SLIDER: its name and value over its track, the whole width, on every screen (owner, 2026-11-06: one look for every
+   slider; the value never in the name, where it made the name wrap). */
+.setting-row.setting-slider { min-height: 0; }
+.setting-slider > .setting-row-name { flex-basis: auto; }
+.setting-slider > .setting-row-control { flex-basis: 100%; justify-content: flex-start; }
+/* On a phone, a choice of several (Map look, Villa lighting, the tablet's language) lies under its name as a slider does,
+   the whole width: beside a name it was squeezed or pushed under it at some widths only. An On | Off stays at the right. */
+@media (max-width: 640px) {
+  .setting-row:not(.on-off):not(.setting-field) > .setting-row-control { flex-basis: 100%; }
+  /* two 44px targets, so "Full screen on this tablet" keeps its line beside it on a 360px phone (settings_grammar.mjs) */
+  .modal { --on-off-width: 100px; }
+}
 /* THE on/off setting (common/OnOffToggle): On | Off at the right of its line, half as wide as when it filled the rest
-   of the line (owner, 2026-11-03: "50% less wide"), still two thumb-sized targets. */
+   of the line (owner, 2026-11-03: "50% less wide"), still two thumb-sized targets; the same width on every line. */
+.setting-row.on-off > .setting-row-control { flex: 0 0 var(--on-off-width); margin-left: auto; }
+/* a short field (Days records are kept): at the right like an On | Off, at the joined-unit field's width */
+.setting-row.setting-field > .setting-row-control { flex: 0 0 var(--unit-field); margin-left: auto; }
 .setting-row-control > .segmented.on-off-switch { flex: 0 0 var(--on-off-width); width: var(--on-off-width); }
 /* ⚠️ ON A WIDE SCREEN, SEVERAL SETTINGS TO A LINE (owner, 2026-11-03: Clickable Glow, Room glow and Natural Scroll;
    Brightness, Night dimming and Villa lighting; Map look and Summary bar; Eye height and Walk speed): a .setting-line
@@ -350,9 +384,15 @@
    On a phone a .setting-line is nothing of its own: each setting keeps its own line. */
 @media (min-width: 721px) {
   .setting-line { display: flex; gap: 24px; align-items: flex-start; margin-top: 12px; }
-  .setting-line > .setting-row { flex: 1 1 0; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 0; }
+  .setting-line > .setting-row { flex: 1 1 0; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 0; min-width: 0; }
   .setting-line > .setting-row > .setting-row-name { flex: none; }
-  .setting-line > .setting-row > .setting-row-control { flex: none; justify-content: flex-start; }
+  .setting-line > .setting-row > .setting-row-control { flex: none; justify-content: flex-start; margin-left: 0; }
+  /* three sliders to a line leave a third each: the value right of the track, the name alone on its line */
+  .setting-line > .setting-slider { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name name" "control value";
+    align-items: center; column-gap: 12px; }
+  .setting-line > .setting-slider > .setting-row-name { grid-area: name; }
+  .setting-line > .setting-slider > .setting-row-control { grid-area: control; }
+  .setting-line > .setting-slider > .setting-row-value { grid-area: value; padding-left: 0; }
 }
 
 
@@ -593,17 +633,13 @@ label.toggle span { user-select: none; line-height: 1.4; }
   grid-template-areas: "name confirm tools"; align-items: center; gap: 6px 8px; width: 100%; color: var(--text-secondary);
   container-type: inline-size; }
 .entity-id-text { grid-area: name; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-  line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+  line-clamp: 2; overflow: hidden; overflow-wrap: break-word; }
 .entity-id-tools { grid-area: tools; display: flex; align-items: center; gap: 4px; }
-.entity-id-tools .icon-btn { width: 30px; height: 30px; }
 .entity-id-confirm { grid-area: confirm; white-space: nowrap; }
 @container (max-width: 520px) {
-  .entity-id-confirm .setting-row-name > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .entity-id-confirm .setting-row-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .entity-id-confirm .on-off.config-confirm .on-off-switch { min-width: 84px; }
   .entity-id-confirm .on-off.config-confirm .on-off-switch button { padding: 0 8px; }
-}
-@media (hover: hover) {
-  .icon-btn-danger:hover { color: var(--status-danger); }
 }
 
 /* Collapsed-by-default device card header: Shown checkbox + entity id/remap
@@ -704,27 +740,53 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* its (i): what the chart shows and what it may not (ChartStep, chartUtils.chartAbout) */
 .chart-step .chart-about { margin-left: 4px; vertical-align: middle; }
 
-/* A label and its one short field on the same line, the field on the right (owner, 2026-10-22). */
-.settings-field-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.settings-field-row > label { margin: 0; }
+/* A setting whose name is a field's label (Days records are kept): the label reads as every name; its short field at the
+   right, at the joined-unit field's width. */
+.modal-body .setting-row-label > label { display: inline; margin: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: none; }
+.setting-row-control > input.field-narrow { flex: 0 0 var(--unit-field); width: var(--unit-field); text-align: center; }
 
 /* "Confirm" on a device card's own line, beside the pencil: the Settings toggle buttons' look, at the icon buttons'
    height (owner, 2026-10-22). */
 /* "Confirm before toggling" on a device's line (MappingFields ConfirmToggle): the on/off toggle at the line's own
    compact height, beside the device's name. */
-.on-off.config-confirm { flex: 0 0 auto; font-size: var(--text-xs); margin-top: 0; }
+.on-off.config-confirm { flex: 0 0 auto; font-size: var(--text-xs); margin-top: 0; min-height: 0; flex-wrap: nowrap; }
 .on-off.config-confirm .setting-row-control { flex: 0 0 auto; }
 .on-off.config-confirm .on-off-switch { flex: 0 0 auto; width: auto; min-width: 110px; padding: 2px; }
 .on-off.config-confirm .on-off-switch button { min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--text-xs); }
 /* a picker in a device card takes the card's width, like the fields above it (owner, 2026-10-22) */
 .config-table td > .picker { flex: 1 1 auto; min-width: 0; }
 
-/* A folded section's title and its closed line on one line (Fold heading, owner 2026-10-22). */
-.fold-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; margin: 24px 0 12px; }
-.fold-heading > .settings-section-title { margin: 0; }
+/* THE "this opens more" (common/FoldedList FoldToggle): a chevron before the words, no box; a section's in its title's
+   style (.settings-section-title), a list's inside a section in the body's. */
+.fold-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: var(--touch-min); padding: 0; border: 0;
+  background: none; font-family: inherit; color: var(--text-secondary); cursor: pointer; text-align: left; }
+.fold-toggle:not(.settings-section-title) { font-size: var(--text-sm); font-weight: 500; }
+@media (hover: hover) { .fold-toggle:hover { color: var(--text-primary); } }
+.fold-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.fold-toggle > svg { flex: 0 0 auto; }
+/* a section's title never wraps; what it holds may go under it */
+.messages-section-toggle { flex-wrap: wrap; row-gap: 0; }
+.fold-toggle-words { white-space: nowrap; }
+/* what a folded section holds, after its title, in the body's case */
+.section-summary { margin-left: 8px; font-size: var(--text-xs); font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
+.fold-body { margin-top: 8px; }
+/* A 3D object's row (Bound 3D objects): the object, its entity, its small icon in fixed columns; on a phone the object
+   over the other two. */
+.binding-row { display: grid; grid-template-columns: minmax(0, 34%) minmax(0, 1fr) var(--row-icon); align-items: center;
+  gap: 8px 12px; padding: 10px 0; border-top: 1px solid var(--hairline); }
+.binding-row-object { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--text-xs); color: var(--text-secondary); overflow-wrap: break-word; }
+.binding-row-entity { min-width: 0; }
+@media (max-width: 640px) {
+  .binding-row { grid-template-columns: minmax(0, 1fr) var(--row-icon); }
+  .binding-row-object { grid-column: 1 / -1; }
+}
+/* a folded section among Advanced Settings' titles: the same room above it as theirs (its toggle is a touch target tall) */
+.config-editor-modal .messages-section { margin-top: 10px; }
 
 /* The version beside a modal's title, small (owner, 2026-10-22: it left the footer for "Log out all devices"). */
-.modal-title-version { font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); margin-left: 8px; letter-spacing: 0; }
+.modal-title-version { font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); letter-spacing: 0; white-space: nowrap; }
+/* the title on one line, its version after it, or under it at the left where the line is too short (a phone) */
+.config-editor-modal .modal-header h2 { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; white-space: nowrap; min-width: 0; }
 
 /* A settings list in one card (Settings › Messages, owner 2026-11-03: "very poorly rendered … messy"): a small heading
    line, then one row per item, each row's parts in the same columns, a hairline between rows. */
@@ -737,30 +799,43 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .settings-list-row { padding: 10px 14px; }
 .settings-list-row + .settings-list-row { border-top: 1px solid var(--hairline); }
-/* A full-screen announcement: its title (wrapping, never pushing the rest), its seconds, its ✕, in fixed columns. */
-.fs-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; }
+/* A full-screen announcement: its title (wrapping, never pushing the rest), its time, its ✕, in fixed columns. */
+.fs-row { display: grid; grid-template-columns: minmax(0, 1fr) var(--unit-field) var(--row-icon); align-items: center; gap: 10px; }
 .fs-row-title { min-width: 0; overflow-wrap: anywhere; }
-.fs-row-seconds { display: inline-flex; align-items: center; gap: 6px; }
-.modal .fs-row-seconds input { width: 64px; padding: 8px 6px; text-align: center; }
-/* the heading a row's columns: "Seconds" over the seconds (the field's width, its "s" after), nothing over the ✕ */
+/* the heading holds the columns' words only: "Time" over the time, nothing over the ✕ */
 .settings-list-head.fs-row { display: grid; align-items: center; }
-.fs-head-seconds { width: 64px; text-align: center; }
-.fs-head-unit { visibility: hidden; }
-.fs-head-remove { width: 36px; }
-/* A list's title line with its add (common/AddOnLine): the title at the left, the icon at the right, opening into
-   the search box over the line's width; too narrow (an iPhone), the box takes a line of its own under the title. */
-.add-line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.fs-head-time { text-align: center; }
+.modal { --unit-field: 76px; --row-icon: 32px; }
+/* A number and its unit joined in one box, "10s" (common/UnitField). */
+.unit-field { display: inline-flex; align-items: baseline; justify-content: center; width: var(--unit-field); box-sizing: border-box;
+  padding: 0 10px; border-radius: 10px; background: var(--bg-input); border: 1px solid var(--hairline); min-height: 40px; align-items: center; }
+.modal .unit-field input { flex: 0 1 auto; width: 4ch; min-width: 0; padding: 8px 0; border: 0; background: transparent; text-align: right; }
+.modal .unit-field input:focus { outline: none; }
+.unit-field:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.unit-field-unit { color: var(--text-secondary); }
+/* A list's title line with its add (common/AddOnLine): the title at the left, "+ Add …" at the right (Schedule's "Add a
+   task" look), opening into the search box over the line's width; too narrow, the box takes a line under the title. */
+.add-line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; margin: 4px 0 8px; }
 .add-line-title { flex: 0 1 auto; min-width: 0; }
-.add-line-icon { margin-left: auto; }
+.add-line-button { margin-left: auto; white-space: nowrap; }
 .add-line-field { flex: 1 1 180px; min-width: 0; }
-.icon-btn-sm { width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.settings-list-title { color: var(--text-secondary); }
+/* THE small icon button of a list's row (owner, 2026-11-06: "remove buttons are the same small icon button
+   everywhere", they were big outlined squares): a round, borderless glyph; its touch target the row's height. */
+.icon-btn-sm { width: var(--row-icon); height: var(--row-icon); padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; border: 0; border-radius: 50%; background: transparent; color: var(--text-secondary); cursor: pointer; position: relative; }
+.icon-btn-sm::after { content: ""; position: absolute; inset: -6px; }
+@media (hover: hover) { .icon-btn-sm:hover:not(:disabled) { background: var(--bg-input); color: var(--text-primary); } }
+@media (hover: hover) { .icon-btn-sm.danger:hover { color: var(--status-danger); } }
+.icon-btn-sm:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Who gets the messages: a list per role, its name above, its chats as pills from the left, its picker under them. */
 .recipients-role { display: flex; flex-direction: column; gap: 8px; }
 .recipients-role-name { font-weight: 600; }
 /* a chat of the list: its pill at the left, its name on one line, its language at the right at its own short width.
    ⚠️ THE MENU IS NOT A FORM FIELD HERE (owner, 2026-11-03, iPhone: the names stood one letter per line): the shared
    .dropdown is width: 100% (08-shared.css, after this file), so the menu took the line and squeezed the pill. */
-.recipients-chat { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.recipients-chat { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 10px; }
+.recipients-chat > .dropdown.recipients-language { margin-left: auto; }
 .recipients-chat .fm-entity-chip { white-space: nowrap; }
 .recipients-chat > .dropdown.recipients-language {
   flex: 0 0 auto; width: 150px; min-height: 36px; padding: 6px 12px; font-size: var(--text-sm);

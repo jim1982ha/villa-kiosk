@@ -99,17 +99,20 @@ console.log("\n  the rows, drawn:");
   ck("one seconds field per picked announcement, named for it, holding its own time",
      J(fields) === J([["🔔 Visitor", "15"], ["🔥 Overload", "300"]]), fields);
   ck("  ...each with its ✕ to take it off", (html.match(/aria-label="Take [^"]+ off full screen"/g) ?? []).length === 2);
-  // owner, 2026-11-04: the search box under the list became an icon on the heading's line (common/AddOnLine), and the
-  // heading is a row's columns: "Seconds" over the seconds field, nothing over the ✕
-  const head = /<div class="settings-list-head fs-row">([\s\S]*?)<\/div>\s*<div class="settings-list-row/.exec(html)?.[1] ?? "";
-  ck("  ...the add is one icon on the heading's line, at the title's right, no search box until it is pressed",
-     /^<div class="add-line"><span class="add-line-title">Announcements, on every tablet<\/span>[\s\S]*aria-label="Add an announcement"/.test(head)
-     && !/placeholder="Add an announcement…"/.test(html), head);
-  const cells = (row) => [...row.matchAll(/<(?:div|span) class="(add-line|fs-row-title|fs-row-seconds|fs-head-remove|tip-anchor[^"]*)"/g)].map((m) => m[1]);
+  // owner, 2026-11-04: the search box under the list became an add on the list's title line (common/AddOnLine);
+  // owner, 2026-11-06: that line sits ABOVE the card, its add a "+ Add" button as Schedule's "Add a task", and the card's
+  // heading holds its columns' words only: "Time" over the time, nothing over the ✕; the time and its unit joined, "15s"
+  const before = html.slice(0, html.indexOf('<div class="settings-list">'));
+  const head = /<div class="settings-list-head fs-row">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
+  ck("  ...the add on the list's title line above the card, a worded \"+ Add\" (no search box until it is pressed)",
+     /<div class="add-line"><span class="add-line-title"><span class="settings-list-title">On every tablet<\/span><\/span>[\s\S]*<button[^>]*class="btn ghost add-line-button"[^>]*aria-label="Add an announcement"[^>]*><svg[\s\S]*?<\/svg> Add<\/button>/.test(before)
+     && !/placeholder="Add an announcement…"/.test(html), before.slice(-600));
   const firstRow = /<div class="settings-list-row fs-row">([\s\S]*?)<\/div>\s*(?:<div class="settings-list-row|$)/.exec(html)?.[1] ?? "";
-  ck("  ...\"Seconds\" heads the seconds column, the ✕ column has no heading",
-     /<span class="fs-row-seconds"><span class="fs-head-seconds">Seconds<\/span><span class="fs-head-unit" aria-hidden="true">s<\/span><\/span><span class="fs-head-remove" aria-hidden="true"><\/span>$/.test(head.trim())
-     && /<span class="fs-row-seconds"><input/.test(firstRow), [head, cells(firstRow)]);
+  ck("  ...the card's heading: its columns' words only, \"Time\" over the time, nothing over the ✕",
+     head.trim() === '<span>Announcement</span><span class="fs-head-time">Time</span><span class="fs-head-remove" aria-hidden="true"></span>', head);
+  ck("  ...a row's time: its number and its \"s\" joined in one field (\"15s\"), its ✕ the small icon button",
+     /<span class="unit-field"><input[^>]*value="15"[^>]*\/><span class="unit-field-unit" aria-hidden="true">s<\/span><\/span>/.test(firstRow)
+     && /<button type="button" class="icon-btn-sm" aria-label="Take 🔔 Visitor off full screen"/.test(firstRow), firstRow);
   ck("  ...no \"Ring shown for\" anywhere", !/Ring shown for/i.test(html));
 }
 

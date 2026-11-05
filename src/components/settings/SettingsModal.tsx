@@ -15,7 +15,7 @@ import RemoteReplacedNote from "./RemoteReplacedNote";
 import { useAppNotice } from "@/components/hud/AppNotice";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
 import OnOffToggle from "@/components/common/OnOffToggle";
-import SettingRow from "@/components/common/SettingRow";
+import SettingRow, { SettingSlider, settingValue } from "@/components/common/SettingRow";
 import {
   Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Radar,
   Settings2, MessageSquare, Maximize, SunDim, MoonStar, CloudSun, Lightbulb, Map as MapIcon, Eye, Footprints, Languages,
@@ -282,31 +282,21 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           icon={<Move size={16} />} label="Natural Scroll" />
       </div>
 
-      {/* Brightness/Night dimming apply to every villa */}
+      {/* Brightness/Night dimming apply to every villa. ⚠️ A SLIDER'S VALUE AT THE END OF ITS NAME'S LINE, ITS TRACK UNDER
+          (common/SettingSlider, owner 2026-11-06: "Night dimming · / 0.5×" wrapped on a phone) */}
       <div className="setting-line">
-        <SettingRow icon={<SunDim size={16} />} label={`Brightness · ${v.render.exposure.toFixed(2)}×`}
-          tip="The overall exposure of the 3D view. Updates live.">
-          <input aria-label="Brightness"
-            type="range" min={0.6} max={2} step={0.05} value={v.render.exposure}
-            onChange={(e) => applyRender({ exposure: Number(e.target.value) })}
-          />
-        </SettingRow>
-        <SettingRow icon={<MoonStar size={16} />} label={`Night dimming · ${v.render.nightDimming.toFixed(1)}×`}
-          tip="How much extra dimming applies at night. Updates live.">
-          <input aria-label="Night dimming"
-            type="range" min={0} max={1} step={0.1} value={v.render.nightDimming}
-            onChange={(e) => applyRender({ nightDimming: Number(e.target.value) })}
-          />
-        </SettingRow>
+        <SettingSlider icon={<SunDim size={16} />} label="Brightness" value={settingValue.times(v.render.exposure)}
+          tip="The overall exposure of the 3D view. Updates live." min={0.6} max={2} step={0.05} at={v.render.exposure}
+          onChange={(exposure) => applyRender({ exposure })} />
+        <SettingSlider icon={<MoonStar size={16} />} label="Night dimming" value={settingValue.times(v.render.nightDimming)}
+          tip="How much extra dimming applies at night. Updates live." min={0} max={1} step={0.1} at={v.render.nightDimming}
+          onChange={(nightDimming) => applyRender({ nightDimming })} />
         {/* Light effect strength scales a lit fixture's room illumination in BOTH villa flavours (2.31.0): the floor
             "light pool" decal in baked-lighting villas (babylon/LightPools.ts), the real PointLight's intensity in
             non-baked ones. */}
-        <SettingRow icon={<Lightbulb size={16} />} label={`Light effect strength · ${v.render.lightPoolIntensity.toFixed(1)}×`}>
-          <input aria-label="Light effect strength"
-            type="range" min={0.3} max={2} step={0.1} value={v.render.lightPoolIntensity}
-            onChange={(e) => applyRender({ lightPoolIntensity: Number(e.target.value) })}
-          />
-        </SettingRow>
+        <SettingSlider icon={<Lightbulb size={16} />} label="Light effect strength" value={settingValue.times(v.render.lightPoolIntensity)}
+          min={0.3} max={2} step={0.1} at={v.render.lightPoolIntensity}
+          onChange={(lightPoolIntensity) => applyRender({ lightPoolIntensity })} />
       </div>
 
       {/* ⚠️ NO PARAGRAPH UNDER AN OPTION (owner, 2026-10-22): its explanation is ONE (i) on its name (common/InfoTip).
@@ -315,7 +305,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
       <div className="setting-line">
         <SettingRow icon={<MapIcon size={16} />} label="Map look" tipLabel="About the map look" tip={<>
           Icon: a badge with a value pill. Card: a coloured card with icon and value inline. Both show the same
-          information, purely a look preference. Badge size, {config.entityIconScale.toFixed(2)}×, is set with the
+          information, purely a look preference. Badge size, {settingValue.times(config.entityIconScale)}, is set with the
           +/- buttons next to the category filters in the top bar.
         </>}>
           <SegmentedGroup ariaLabel="Floating badge style" active={v.badgeStyle} onChange={(badgeStyle) => slice.set({ badgeStyle }, { now: true })} options={[
@@ -336,7 +326,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
             Forces this villa's baked day or night look, or follows the real cycle on Auto. It relights the 3D
             model, unlike the Interface theme in the header, which only recolours the panels.
           </>}>
-            <SegmentedGroup ariaLabel="Villa lighting" className="segmented-icons daynight-segmented"
+            <SegmentedGroup ariaLabel="Villa lighting" className="segmented-icons"
               active={v.render.dayNightPreview ?? "auto"} onChange={(dayNightPreview) => applyRender({ dayNightPreview })} options={[
               { key: "day", title: "Light the villa as daytime", label: <Sunrise size={17} /> },
               { key: "night", title: "Light the villa as night", label: <Moon size={17} /> },
@@ -349,18 +339,10 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
       {/* ── Camera & movement: first-person walk-through comfort (Natural scrolling, a bird's-eye setting, is above). */}
       <div className="settings-section-title">First-person view</div>
       <div className="setting-line">
-        <SettingRow icon={<Eye size={16} />} label={`Eye height · ${eyeHeight.toFixed(2)} m`}>
-          <input aria-label="Eye height"
-            type="range" min={0.8} max={2.2} step={0.05} value={eyeHeight}
-            onChange={(e) => applyEyeHeight(Number(e.target.value))}
-          />
-        </SettingRow>
-        <SettingRow icon={<Footprints size={16} />} label={`Walk speed · ${v.walkSpeed.toFixed(1)}×`}>
-          <input aria-label="Walk speed"
-            type="range" min={0.3} max={3} step={0.1} value={v.walkSpeed}
-            onChange={(e) => applyWalkSpeed(Number(e.target.value))}
-          />
-        </SettingRow>
+        <SettingSlider icon={<Eye size={16} />} label="Eye height" value={settingValue.metres(eyeHeight)}
+          min={0.8} max={2.2} step={0.05} at={eyeHeight} onChange={applyEyeHeight} />
+        <SettingSlider icon={<Footprints size={16} />} label="Walk speed" value={settingValue.times(v.walkSpeed)}
+          min={0.3} max={3} step={0.1} at={v.walkSpeed} onChange={applyWalkSpeed} />
       </div>
 
       </>

@@ -19,14 +19,15 @@ const villa = advanced.slice(advanced.indexOf('tab === "villa"'));
 ck("Advanced Settings shows it right under the villa's coordinates",
    /<VillaCoordinates \/>[\s\S]{0,400}<NorthOffset /.test(villa));
 // owner, 2026-11-03: Set North BEFORE the slider, both under the one title that names their group
-ck("  ...Set North, then its slider", /function NorthOffset[\s\S]*Set North[\s\S]*type="range"/.test(advanced)
-   && /update\(\{ northOffsetDeg:/.test(advanced));
+// owner, 2026-11-06: the one slider line (common/SettingSlider), Set North a secondary button at its track's left
+ck("  ...Set North, then its slider", /function NorthOffset[\s\S]*<SettingSlider label="Model north offset" value=\{settingValue\.degrees\(deg\)\}[\s\S]*before=\{[\s\S]*<button className="btn ghost"[\s\S]*Set North/.test(advanced)
+   && /update\(\{ northOffsetDeg: northOffsetFacing\(h\) \}\)/.test(advanced) && /onChange=\{\(northOffsetDeg\) => update\(\{ northOffsetDeg \}\)\}/.test(advanced));
 ck("  ...and the Dashboard hands it the view's heading", /viewHeadingDeg=\{manager \? \(\) => manager\.viewHeadingDeg\(\) : undefined\}/.test(src("pages/Dashboard.tsx")));
 
 ck("Bound 3D objects has no second heading of its own", !/Pre-configure a new entity/.test(bindings));
 // its explanation is its title's (i) since 2026-10-22 (owner: no visible description text)
 ck("  ...and its title's ONE (i) says both what it does and how to prepare an entity — no paragraph of its own",
-   /<TipTitle title="Bound 3D objects" tip=\{<>[\s\S]*?To prepare\s+an entity whose 3D object is not in the model yet/.test(advanced)
+   /<BindingsTable title="Bound 3D objects" tip=\{<>[\s\S]*?To prepare\s+an entity whose 3D object is not in the model yet/.test(advanced)
    && !/To prepare an entity/.test(bindings));
 
 const rule = css.match(/\.telemetry-row > \.telemetry-summary \{([^}]*)\}/)?.[1] ?? "";
@@ -48,7 +49,7 @@ console.log("\n  Villa location on one line where there is room:");
   ck("  ...the three in that one row, each label above its field",
      /<div className="villa-location-row">\s*<VillaCoordinates \/>\s*<NorthOffset viewHeadingDeg=\{viewHeadingDeg\} \/>\s*<\/div>/.test(advanced)
      && /<div className="villa-location-coord">\s*<label htmlFor=\{id\}>/.test(advanced)
-     && /<div className="villa-location-north" role="group" aria-labelledby="villa-north-title">\s*<label id="villa-north-title" className="with-tip">Model north offset/.test(advanced));
+     && /<div className="villa-location-north">\s*<SettingSlider label="Model north offset"/.test(advanced));
   // owner, 2026-11-03: the slider half as wide, the width it gave up to the coordinates (their values were cut)
   ck("  ...the offset's group takes no more of the line than the two coordinates together",
      north <= 2 * coord && /\.villa-location-north \{ flex: 1 1/.test(modals), { coord, north });
@@ -62,11 +63,13 @@ console.log("\n  one line per setting, its name left and its control right (owne
   // every slider and every segmented choice of the dialog's body sits directly in a SettingRow (Interface, the header's
   // theme, is not a setting line; the Messages tab's chat grid stands as its section's own line)
   const inRow = (e) => { for (let n = e.parent; n; n = n.parent) { if (/^<SettingRow\b/.test(n.getText?.() ?? "")) return true; } return false; };
-  const sliders = elements(tree, "input").filter((e) => propText(e, "type") === '"range"');
-  const names = sliders.map((e) => propText(e, "aria-label"));
-  ck("every slider is a setting line: its name for assistive technology, in a SettingRow",
+  // every slider is the one slider line (common/SettingSlider: a SettingRow, its value at the end of its name's line)
+  const sliders = elements(tree, "SettingSlider");
+  const names = sliders.map((e) => propText(e, "label"));
+  ck("every slider is a setting line: the one SettingSlider, its name its words alone, its value beside it",
      JSON.stringify(names) === JSON.stringify(['"Brightness"', '"Night dimming"', '"Light effect strength"', '"Eye height"', '"Walk speed"'])
-     && sliders.every(inRow), names);
+     && sliders.every((e) => /^settingValue\.(times|metres)\(/.test(propText(e, "value") ?? ""))
+     && elements(tree, "input").every((e) => propText(e, "type") !== '"range"'), names);
   const choices = elements(tree, "SegmentedGroup").map((e) => [propText(e, "ariaLabel"), inRow(e)]);
   ck("  ...and Villa lighting, Map look's Icon | Card and the tablet's language, each with a name of its own",
      ['"Villa lighting"', '"Floating badge style"', '"Language on this tablet"'].every((n) => choices.some(([c, r]) => c === n && r))
@@ -85,8 +88,10 @@ console.log("\n  one line per setting, its name left and its control right (owne
   ck("  ...only on a wide screen (a phone keeps one per line), each its name over its control, in equal shares",
      !!wide && Number(wide[1]) > 560 && /\.setting-line > \.setting-row \{ flex: 1 1 0; flex-direction: column;/.test(modals)
      && !/^\.setting-line \{/m.test(modals), wide?.[1]);
-  ck("  ...its control in a column of one width on every line, the name taking what is left",
-     /\.setting-row-control \{ flex: 0 1 var\(--setting-control\);/.test(modals) && /\.setting-row-name \{[^}]*flex: 1 1 \d+px; min-width: 0;/.test(modals));
+  // owner, 2026-11-06: the name never shrinks below its words; the control takes the column, under the name when it
+  // does not fit beside it (measured: settings_grammar.mjs)
+  ck("  ...its control in a column of one width on every line, the name one line taking what is left",
+     /\.setting-row-control \{ flex: 1 1 var\(--setting-control\);/.test(modals) && /\.setting-row-name \{[^}]*flex: 1000 0 auto;[^}]*white-space: nowrap;/.test(modals));
   const toggle = src("components/common/OnOffToggle.tsx");
   const onOff = Number(/--on-off-width: (\d+)px/.exec(modals)?.[1]), column = Number(/--setting-control: (\d+)px/.exec(modals)?.[1]);
   ck("an On | Off is that line too, half the control column wide (owner: \"50% less wide\")",
@@ -113,9 +118,11 @@ console.log("\n  every field's text, one size:");
 }
 
 console.log("\n  Maintenance records:");
-ck("its (i) is the section title's, listing everything it deletes; the field's label is the owner's words, with no (i)",
-   /<TipTitle title="Maintenance records" tip=\{<>\s*Photos, repaired faults, work done, money spent and messages/.test(advanced)
-   && /<label htmlFor="records-kept">How many days faults, tickets, attachments and messages are kept<\/label>/.test(advanced)
+// owner, 2026-11-06: a setting line like every other, its name one line ("Days records are kept"); the owner's sentence
+// (2026-10-22) leads the section title's (i)
+ck("its (i) is the section title's, the owner's words then everything it deletes; the field's label is one short line, with no (i)",
+   /<TipTitle title="Maintenance records" tip=\{<>\s*How many days faults, tickets, attachments and messages are kept: photos, repaired faults, work done, money\s+spent and messages/.test(advanced)
+   && /<SettingRow className="setting-field" icon=\{<CalendarClock size=\{16\} \/>\} label=\{<label htmlFor="records-kept">Days records are kept<\/label>\}>/.test(advanced)
    && !/<InfoTip/.test(advanced.slice(advanced.indexOf("function RecordsKept"), advanced.indexOf("function LogoutAll"))));
 
 done("✅ north under the coordinates, one Bound 3D objects section, one line per telemetry event");

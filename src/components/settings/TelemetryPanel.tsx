@@ -15,6 +15,8 @@ import { usePaged, Pager } from "@/components/common/Paged";
 import { downloadFile } from "@/utils/download";
 import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity, ChevronDown, Info } from "lucide-react";
 import { ingressPath } from "@/ha/ingress";
+import { momentText } from "@/utils/dateText";
+import ToolGroup from "@/components/common/ToolGroup";
 import { buildReport } from "@/utils/diagnostics";
 import { copyText } from "@/utils/clipboard";
 import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfProbe";
@@ -298,6 +300,12 @@ function summarise(e: TelemetryEvent): string {
   }
 }
 
+/** When an event happened, as every moment in the app is written, its seconds kept (events seconds apart are told
+ *  apart): "05/11/2026 17:55:13", on the villa's clock. "" for an event with no time or one that is not a time. Pure. */
+export function telemetryTime(at: string | undefined): string {
+  return at ? momentText(at, true) : "";
+}
+
 const TONE: Record<string, string> = {
   error: "var(--status-danger)",
   freeze: "var(--status-danger)",
@@ -431,24 +439,25 @@ export default function TelemetryPanel() {
   return (
     <div>
 
-      {/* ⚠️ ICONS ONLY ON A PHONE (owner, 2026-10-14): six labelled buttons overflowed their pills there
-          (.telemetry-actions .btn-label); each keeps its name as aria-label and title. */}
-      <div className="row telemetry-actions" style={{ gap: 8, marginBottom: 12 }}>
-        <button className="btn ghost" onClick={() => void load()} disabled={busy}
+      {/* ⚠️ ICONS ONLY ON A PHONE (owner, 2026-10-14): six labelled buttons overflowed their pills there; each keeps
+          its name as aria-label and title. ⚠️ THE ONE TOOL GROUP (owner, 2026-11-06: outlined squares here, filled squares
+          in the header): Advanced Settings' header's look (.tool-group), each word hidden on a phone. */}
+      <ToolGroup label="Device telemetry" className="telemetry-actions">
+        <button type="button" onClick={() => void load()} disabled={busy}
           title="Re-read the events from the add-on" aria-label="Refresh">
-          <RefreshCw size={16} /> <span className="btn-label">Refresh</span>
+          <RefreshCw size={16} aria-hidden /><span className="btn-label">Refresh</span>
         </button>
-        <button className="btn ghost" onClick={() => void copyAll()} disabled={busy || !events?.length}
+        <button type="button" onClick={() => void copyAll()} disabled={busy || !events?.length}
           title="Copy every event, every field, as JSON" aria-label="Copy">
-          {copied ? <Check size={16} /> : <Copy size={16} />} <span className="btn-label">{copied ? "Copied" : "Copy"}</span>
+          {copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}<span className="btn-label">{copied ? "Copied" : "Copy"}</span>
         </button>
-        <button className="btn ghost" onClick={downloadAll} disabled={busy || !events?.length}
+        <button type="button" onClick={downloadAll} disabled={busy || !events?.length}
           title="Save every event as a .json file" aria-label="Download">
-          <Download size={16} /> <span className="btn-label">Download</span>
+          <Download size={16} aria-hidden /><span className="btn-label">Download</span>
         </button>
-        <button className="btn ghost" onClick={() => void load(true)} disabled={busy}
+        <button type="button" onClick={() => void load(true)} disabled={busy}
           title="Empty the add-on's event store. Copy or Download first if you want to keep them." aria-label="Clear">
-          <Trash2 size={16} /> <span className="btn-label">Clear</span>
+          <Trash2 size={16} aria-hidden /><span className="btn-label">Clear</span>
         </button>
         {/* THIS device, right now, and the frame-cost probe — one "Diagnose" menu (owner, 2026-10-14), each result
             copied where the button was pressed.
@@ -457,11 +466,11 @@ export default function TelemetryPanel() {
             limits that explain a slow load). The probe has a console form too, and neither an iPad nor an iPhone
             has a console — nor, inside the companion app or an installed PWA, a URL `?debug` can be added to. */}
         <div className="telemetry-diag" ref={diagRef}>
-          <button className="btn ghost" aria-haspopup="menu" aria-expanded={diagOpen} disabled={probing}
+          <button type="button" aria-haspopup="menu" aria-expanded={diagOpen} disabled={probing}
             onClick={() => setDiagOpen((o) => !o)} title="This device's report, or the frame-cost probe"
             aria-label="Diagnose">
-            <Stethoscope size={16} /> <span className="btn-label">{probing ? "Measuring…" : "Diagnose"}</span>
-            <ChevronDown size={14} />
+            <Stethoscope size={16} aria-hidden /><span className="btn-label">{probing ? "Measuring…" : "Diagnose"}</span>
+            <ChevronDown size={14} aria-hidden />
           </button>
           {diagOpen && (
             <div className="hud-menu telemetry-diag-menu" role="menu">
@@ -477,7 +486,7 @@ export default function TelemetryPanel() {
             </div>
           )}
         </div>
-      </div>
+      </ToolGroup>
 
       {probeText && (
         <div className="field">
@@ -528,9 +537,9 @@ export default function TelemetryPanel() {
                 {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}{e.v ? ` · v${e.v}` : ""}
               </span>
               <span className="telemetry-summary" title={summarise(e)}>{summarise(e)}</span>
-              <span className="muted telemetry-time">
-                {e.at?.replace("T", " ").replace("+00:00", "Z") ?? ""}
-              </span>
+              {/* the app's one moment, on the villa's clock, with its seconds (owner, 2026-11-06: it was the store's
+                  "2026-11-05 17:55:13Z") */}
+              <span className="muted telemetry-time">{telemetryTime(e.at)}</span>
             </div>
           ))}
         </div>

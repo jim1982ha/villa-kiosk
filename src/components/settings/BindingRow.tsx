@@ -8,6 +8,8 @@
 import { Unlink, Link2 } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { memo } from "react";
+import IdText from "@/components/common/IdText";
+import Tip from "@/components/common/Tip";
 
 interface Props {
   mesh: string;
@@ -18,31 +20,21 @@ interface Props {
 
 function BindingRow({ mesh, entityId, onBind, onUnbind }: Props) {
   return (
-    <div style={{ padding: "14px 0", borderTop: "1px solid var(--hairline)" }}>
-      {/* Row 1 — object ↔ entity */}
-      <div className="row spread" style={{ gap: 12 }}>
-        <div
-          style={{
-            flex: "0 0 34%", fontSize: "var(--text-xs)", color: "var(--text-secondary)",
-            wordBreak: "break-all", display: "flex", alignItems: "center", gap: 6,
-          }}
-        >
-          <Link2 size={16} style={{ flexShrink: 0, opacity: 0.5 }} />
-          {mesh}
-        </div>
-        <div style={{ flex: 1 }}>
-          <EntityPicker value={entityId} onChange={(id) => onBind(mesh, id)} allowCustom />
-        </div>
-        <button
-          className="icon-btn"
-          style={{ width: 36, height: 36 }}
-          onClick={() => onUnbind(mesh)}
-          title="Remove binding"
-        >
-          <Unlink size={16} />
-        </button>
+    // ⚠️ ONE ROW SHAPE WITH THE UNBOUND OBJECTS' (.binding-row): the object, its entity, its small icon; on a phone the
+    // object's name over the other two, never a picker pushed past the window's edge (owner, 2026-11-06)
+    <div className="binding-row">
+      <div className="binding-row-object">
+        <Link2 size={16} style={{ flexShrink: 0, opacity: 0.5 }} />
+        <span style={{ minWidth: 0 }}><IdText id={mesh} /></span>
       </div>
-
+      <div className="binding-row-entity">
+        <EntityPicker value={entityId} onChange={(id) => onBind(mesh, id)} allowCustom />
+      </div>
+      <Tip text="Remove binding">
+        <button type="button" className="icon-btn-sm danger" onClick={() => onUnbind(mesh)} aria-label="Remove binding">
+          <Unlink size={16} aria-hidden />
+        </button>
+      </Tip>
     </div>
   );
 }

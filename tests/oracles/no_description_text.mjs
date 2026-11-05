@@ -52,8 +52,9 @@ const all = files.map((f) => readFileSync(f, "utf8")).join("\n");
 ck("  ...the old hint classes are gone", !/fm-form-intro|fm-kept-note|fm-card-text/.test(all));
 const advanced = readFileSync(ROOT + "components/settings/ConfigEditorModal.tsx", "utf8");
 const settings = readFileSync(ROOT + "components/settings/SettingsModal.tsx", "utf8");
-ck("  ...each section's explanation is its title's (i) (TipTitle), and Settings' options carry theirs",
-   (advanced.match(/<TipTitle title=/g) ?? []).length >= 7 // a setting line's (i) is its `tip` (common/SettingRow): every tip= that is not a section title's
+ck("  ...each section's explanation is its title's (i) (TipTitle, or a folded section's `tip`: settings/Fold), and Settings' options carry theirs",
+   (advanced.match(/<TipTitle title=/g) ?? []).length + (advanced.match(/<(?:BindingsTable|GroupedDevices|UnavailableByDesign) title="[^"]+" tip=\{/g) ?? []).length >= 7
+   // a setting line's (i) is its `tip` (common/SettingRow): every tip= that is not a section title's
    && (settings.match(/\btip=[{"]/g) ?? []).length - (settings.match(/<TipTitle\b[^\n]*\btip=/g) ?? []).length >= 6);
 {
   const { h, draw } = await import("../consistency/screen.mjs");

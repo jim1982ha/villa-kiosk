@@ -7,7 +7,10 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import AskDialog from "@/components/common/AskDialog";
-import { ChevronDown, ChevronRight, Plus, Search, Trash2, Sparkles } from "lucide-react";
+import { Plus, Search, Trash2, Sparkles } from "lucide-react";
+import { FoldToggle } from "@/components/common/FoldedList";
+import IdText from "@/components/common/IdText";
+import Tip from "@/components/common/Tip";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import EntityPicker from "./EntityPicker";
 import Fold from "./Fold";
@@ -23,7 +26,7 @@ import { countOf } from "@/utils/countOf";
 import { groupMatches } from "@/config/deviceRecord";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 
-export default function GroupedDevices({ heading }: { heading?: ReactNode } = {}) {
+export default function GroupedDevices({ title, tip }: { title: string; tip?: ReactNode }) {
   const { config, update } = useConfig();
   const { entityDeviceIds } = useHA();
   const entityLabel = useEntityLabel();
@@ -82,7 +85,7 @@ export default function GroupedDevices({ heading }: { heading?: ReactNode } = {}
       )}
       {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
 
-      <Fold heading={heading} summary={countOf(config.deviceGroups.length, "group")
+      <Fold title={title} tip={tip} summary={countOf(config.deviceGroups.length, "group")
         + (suggestions.length ? ` · ${suggestions.length} suggested` : "")}>
 
       {/* New group — first, since creating one is the primary action here;
@@ -134,18 +137,19 @@ export default function GroupedDevices({ heading }: { heading?: ReactNode } = {}
       {shown.visible.map((group) => (
         <div key={group.id} style={{ padding: "14px 0", borderTop: "1px solid var(--hairline)" }}>
           <div className="row spread" style={{ gap: 12 }}>
-            {/* flex:1 + minWidth:0 + overflowWrap so a long entity_id with no
-                friendly_name (one unbreakable underscore-joined token) wraps
-                inside the row instead of pushing the delete button off-screen. */}
-            <div style={{ fontSize: "var(--text-sm)", fontWeight: 500, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+            {/* flex:1 + minWidth:0 so a long entity_id wraps inside the row instead of pushing the delete button
+                off-screen, at its dots and underscores (common/IdText), never mid-word */}
+            <div style={{ fontSize: "var(--text-sm)", fontWeight: 500, flex: 1, minWidth: 0 }}>
               {entityLabel(group.primaryEntityId)}
-              <div className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginTop: 2, overflowWrap: "anywhere" }}>
-                {group.primaryEntityId}, primary (keeps the map badge)
+              <div className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginTop: 2 }}>
+                <IdText id={group.primaryEntityId} />, primary (keeps the map badge)
               </div>
             </div>
-            <button className="icon-btn icon-btn-danger" style={{ flexShrink: 0 }} title="Delete group" onClick={() => deleteGroup(group.id)}>
-              <Trash2 size={16} />
-            </button>
+            <Tip text="Delete group">
+              <button type="button" className="icon-btn-sm danger" aria-label="Delete group" onClick={() => deleteGroup(group.id)}>
+                <Trash2 size={16} aria-hidden />
+              </button>
+            </Tip>
           </div>
 
           {/* Member pills + the "add another" picker share one row — the
@@ -173,13 +177,9 @@ export default function GroupedDevices({ heading }: { heading?: ReactNode } = {}
       {/* Suggestions — collapsed by default: this section only shows what's
           already grouped unless you go looking for more. */}
       {suggestions.length > 0 && (
-        <button
-          className="btn ghost mt"
-          onClick={() => setShowSuggestions((s) => !s)}
-        >
-          {showSuggestions ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <Sparkles size={16} /> {countOf(suggestions.length, "suggested group")}
-        </button>
+        <FoldToggle open={showSuggestions} onToggle={() => setShowSuggestions((s) => !s)}>
+          <Sparkles size={16} aria-hidden /> {countOf(suggestions.length, "suggested group")}
+        </FoldToggle>
       )}
 
       {showSuggestions && suggestions.map((s) => (

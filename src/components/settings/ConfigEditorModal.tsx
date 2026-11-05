@@ -11,7 +11,9 @@ import { roleCan } from "@/auth/permissions";
 import { useState, type ReactNode } from "react";
 import { FIELD_COMMIT_MS, PendingFields, usePendingField, type PendingField } from "@/hooks/usePendingField";
 import { RECORDS_KEPT_DAYS_MAX, type AppConfig } from "@/config/AppConfig";
-import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
+import { Boxes, CalendarClock, Home, LogOut, Upload, Wrench } from "lucide-react";
+import SettingRow, { SettingSlider, settingValue } from "@/components/common/SettingRow";
+import ToolGroup from "@/components/common/ToolGroup";
 import InfoTip, { TipTitle } from "@/components/common/InfoTip";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { DialogEdits, useConfig } from "@/config/ConfigContext";
@@ -91,7 +93,7 @@ function VillaCoordinates() {
     <div className="villa-location-coord">
       <label htmlFor={id}>{label}</label>
       <input
-        id={id} inputMode="decimal" value={field.shown ?? String(config[key])}
+        id={id} inputMode="decimal" value={field.shown ?? coordinateText(config[key])}
         onChange={(e) => field.draft(e.target.value, coordinateWrite(key, e.target.value))}
         onBlur={field.flush}
         onKeyDown={(e) => e.key === "Enter" && field.flush()}
@@ -106,6 +108,12 @@ function VillaCoordinates() {
       {coord("longitude", "villa-lng", "Longitude", lng)}
     </>
   );
+}
+
+/** A stored coordinate as the field shows it while it is not being typed: six decimals at most, about 10 cm on the
+ *  ground (owner, 2026-11-06: the villa's system hands it with thirteen); the stored number is never rounded. */
+export function coordinateText(n: number): string {
+  return String(Number(n.toFixed(6)));
 }
 
 /** What a coordinate typed writes: the number, or nothing while it is not one yet. */
@@ -126,36 +134,26 @@ function NorthOffset({ viewHeadingDeg }: { viewHeadingDeg?: () => number | null 
   const { config, update } = useConfig();
   const deg = config.northOffsetDeg;
   return (
-    // ⚠️ ONE LABELLED GROUP, Set North THEN ITS SLIDER (owner, 2026-11-03: the title "shall be associated to both", the
-    // slider half as wide so the coordinates are no longer cut): the title names the group, the slider keeps its own
-    <div className="villa-location-north" role="group" aria-labelledby="villa-north-title">
-      <label id="villa-north-title" className="with-tip">Model north offset · {deg}°
-        <InfoTip label="About the model north offset">
+    // ⚠️ ONE SETTING LINE, Set North THEN ITS SLIDER (owner, 2026-11-03: the title "shall be associated to both", the
+    // slider half as wide so the coordinates are no longer cut; owner, 2026-11-06: every slider the one SettingSlider,
+    // its value at the end of its name's line, Set North a secondary button like every other)
+    <div className="villa-location-north">
+      <SettingSlider label="Model north offset" value={settingValue.degrees(deg)} min={0} max={359} step={1} at={deg}
+        tip={<>
           Face the villa's real north side and press Set North, or drag the slider until the shadows match. Only fixes
           which wall the light comes from: sunrise and sunset times are already right.
-        </InfoTip>
-      </label>
-      {/* One control in two forms: the button measures it from the view, the slider sets it by hand. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button
-          className="btn"
-          // keeps its 44px target: flex would otherwise squeeze the padding out on a phone
-          style={{ flexShrink: 0, whiteSpace: "nowrap" }}
-          disabled={!viewHeadingDeg}
-          onClick={() => {
-            const h = viewHeadingDeg?.();
-            if (h != null) update({ northOffsetDeg: northOffsetFacing(h) });
-          }}
-        >
-          Set North
-        </button>
-        <input
-          type="range" min={0} max={359} step={1} value={deg}
-          aria-label="Model north offset"
-          style={{ flex: "1 1 auto", minWidth: 0 }}
-          onChange={(e) => update({ northOffsetDeg: Number(e.target.value) })}
-        />
-      </div>
+        </>}
+        onChange={(northOffsetDeg) => update({ northOffsetDeg })}
+        before={
+          // One control in two forms: the button measures it from the view, the slider sets it by hand.
+          <button className="btn ghost" disabled={!viewHeadingDeg}
+            onClick={() => {
+              const h = viewHeadingDeg?.();
+              if (h != null) update({ northOffsetDeg: northOffsetFacing(h) });
+            }}>
+            Set North
+          </button>
+        } />
     </div>
   );
 }
@@ -188,12 +186,10 @@ function RecordsKept() {
     const n = Number(text);
     return text.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= RECORDS_KEPT_DAYS_MAX ? { recordsKeptDays: n } : null;
   };
-  // label and field on one line, the field on the right (owner, 2026-10-22)
+  // label and field on one line, the field on the right (owner, 2026-10-22): a setting line like every other, its name
+  // one line at every width (owner, 2026-11-06), the owner's whole sentence in the section's (i)
   return (
-    <div className="settings-field-row">
-      {/* the owner's words (2026-10-22), widened to messages (2026-10-28: one number for every record kept); its (i)
-          is the section title's */}
-      <label htmlFor="records-kept">How many days faults, tickets, attachments and messages are kept</label>
+    <SettingRow className="setting-field" icon={<CalendarClock size={16} />} label={<label htmlFor="records-kept">Days records are kept</label>}>
       <input
         id="records-kept" inputMode="numeric" className="field-narrow"
         value={field.shown ?? String(config.recordsKeptDays)}
@@ -201,7 +197,7 @@ function RecordsKept() {
         onBlur={field.flush}
         onKeyDown={(e) => e.key === "Enter" && field.flush()}
       />
-    </div>
+    </SettingRow>
   );
 }
 
@@ -228,7 +224,7 @@ function LogoutAll() {
           }}
           onCancel={() => setConfirming(false)} />
       ) : (
-        <button className="btn" onClick={() => setConfirming(true)} aria-label="Log Out All">
+        <button type="button" onClick={() => setConfirming(true)} title="Log Out All" aria-label="Log Out All">
           <LogOut size={18} aria-hidden /><span className="btn-label">Log Out All</span>
         </button>
       )}
@@ -247,11 +243,14 @@ export function HeaderActions({ glbUpload, logout }: {
 }) {
   return (
     <div className="modal-header-actions">
+      {/* ⚠️ ONE GROUP IN THE THEME CONTROL'S LOOK (owner, 2026-11-06: Advanced Settings' header buttons were filled
+          squares beside Settings' pill): the one tool group (.tool-group), each word hidden on a phone */}
+      <ToolGroup label="The model and the sessions">
       {glbUpload && (
         <>
           <ModelFileInput upload={glbUpload} />
           <button
-            className="btn"
+            type="button"
             onClick={glbUpload.openPicker}
             disabled={glbUpload.uploadBusy !== null}
             title="Upload a GLB model"
@@ -265,6 +264,7 @@ export function HeaderActions({ glbUpload, logout }: {
         </>
       )}
       {logout}
+      </ToolGroup>
       <InfoTip label="About these buttons">
         {glbUpload && <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} />}
         {logout && (
@@ -370,14 +370,14 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             {/* No collapse: `BindingsTable` already opens on its three counts
                 with the lists themselves behind their own toggles, so this
                 tab states how much is bound without a click. */}
-            <BindingsTable heading={<TipTitle title="Bound 3D objects" tip={<>
+            <BindingsTable title="Bound 3D objects" tip={<>
               Each bound 3D object controls a device's entity when tapped in the villa: change which entity here,
               without reloading the model; its name and display settings are with the device, in Devices. To prepare
               an entity whose 3D object is not in the model yet, add it here: its settings apply as soon as a model
               with an object named after its entity ID is uploaded. To bind one, expand the unbound objects and pick
               an entity for it. The entities not shown on the map have no 3D object: add one in the 3D model, or bind
               an unbound object to one, to control it from the villa.
-            </>} />} />
+            </>} />
           </>
         )}
 
@@ -400,19 +400,19 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             </>} />
             <ConfigEditor initialSearch={focusEntityId} />
 
-            <GroupedDevices heading={<TipTitle title="Grouped devices" tip={<>
+            <GroupedDevices title="Grouped devices" tip={<>
               Fold several entities that are really one physical device (e.g. a combo sensor with separate
               temperature and humidity entities) into a single map badge. Only the primary entity keeps a badge on the
               map; every other member's value and 24-hour history appear in that badge's detail view instead. To make
               one, pick the entity that should keep the map badge (e.g. temperature) under New group, then add the rest
               as members.
-            </>} />} />
+            </>} />
 
-            <UnavailableByDesign heading={<TipTitle title="Asleep between reports" tip={<>
+            <UnavailableByDesign title="Asleep between reports" tip={<>
               Devices that sleep between reports, such as a battery door sensor: their "unavailable" is normal. VESTA
               shows what each one last reported, never "Unavailable", and raises no fault for it; the VESTA Agent skips
               its offline checks for them too.
-            </>} />} />
+            </>} />
           </>
         )}
 
@@ -423,7 +423,8 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
         {tab === "system" && roleCan(role, "editConfig") && (
           <>
             <TipTitle title="Maintenance records" tip={<>
-              Photos, repaired faults, work done, money spent and messages older than this are deleted.
+              How many days faults, tickets, attachments and messages are kept: photos, repaired faults, work done, money
+              spent and messages older than this are deleted.
               0 keeps them for ever. A task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
             </>} />
             <RecordsKept />

@@ -127,17 +127,21 @@ ck("  ...and on a phone: the device lists one height, every other window of cont
   ck("  ...one (i) for Upload Model and Log Out All, after both buttons",
      tips.length === 1 && /Upload Model[\s\S]*Log Out All[\s\S]*class="info-btn"/.test(both), both.slice(0, 600));
   ck("  ...its words cover both", /<strong>Upload Model<\/strong>/.test(tipText) && /<strong>Log Out All<\/strong> signs every device out/.test(tipText));
-  ck("  ...Upload Model is a .btn with a .btn-label word (hidden on a phone), like Log Out All",
-     /<button class="btn"[^>]*>[\s\S]*?<span class="btn-label">Upload Model<\/span>/.test(both)
-     && /<button className="btn" onClick=\{\(\) => setConfirming\(true\)\} aria-label="Log Out All">\s*<LogOut size=\{18\} aria-hidden \/><span className="btn-label">Log Out All<\/span>/.test(ce));
+  // owner, 2026-11-06: "the header's icon buttons the same style as the Settings header's theme control": both in the
+  // one tool group (common/ToolGroup, the segmented track's look), each a glyph and a .btn-label word hidden on a phone
+  ck("  ...Upload Model and Log Out All are tools of one group (the theme control's look), each word a .btn-label",
+     /^<div class="modal-header-actions"><div class="tool-group" role="group" aria-label="The model and the sessions">[\s\S]*?<button type="button"[^>]*aria-label="Upload Model"[^>]*>[\s\S]*?<span class="btn-label">Upload Model<\/span>[\s\S]*?Log Out All[\s\S]*?<\/div><span class="info-tip/.test(both)
+     && /<button type="button" onClick=\{\(\) => setConfirming\(true\)\} title="Log Out All" aria-label="Log Out All">\s*<LogOut size=\{18\} aria-hidden \/><span className="btn-label">Log Out All<\/span>/.test(ce), both.slice(0, 500));
   ck("  ...the upload has left the footer", !/actions=\{canUploadModel/.test(ce) && !/header-icon-btn/.test(ce));
   const CentralModelInfo = (await import("@/components/settings/CentralModelInfo")).default;
   const tip = draw(h("div", {}, h(CentralModelInfo, { addonCfg: { model_path: "x.glb" }, loadedModel: null })));
   ck("  ...its words send to Upload Model beside it, never to a top bar that has no such button",
      /Upload Model, beside this \(i\)/.test(tip) && !/top bar/i.test(tip), tip.slice(-300));
   const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
-  ck("  ...on a phone the header's worded buttons go square, like the footer's",
-     /\.modal-footer \.btn:has\(> \.btn-label\),\s*\.modal-header-actions \.btn:has\(> \.btn-label\) \{ width: var\(--touch-min\); padding: 0; \}/.test(css));
+  const modals = readFileSync(new URL("../../src/styles/04-modals.css", import.meta.url), "utf8");
+  ck("  ...the tool group is the segmented control's track, and on a phone its words go (the glyph and its name stay)",
+     /^\.segmented, \.tool-group \{ display: flex; gap: 4px; padding: 4px; border-radius: var\(--radius-pill\); background: var\(--bg-input\); \}/m.test(modals)
+     && /@media \(max-width: 640px\) \{[^@]*?\.btn-label \{ display: none; \}/.test(css));
   ck("  ...the same Back component as a device window's", /<BackButton onClick=\{back\.go\} label=\{back\.label\} \/>/.test(bp)
      && !/className="btn panel-back"/.test(bp + ce));
 }

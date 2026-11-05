@@ -7,6 +7,7 @@
 // device something else. It SHOWS the name every screen shows (labelOf), and its search finds BOTH names, the room and
 // the id (deviceRecord.deviceSearchTexts, every device search's), so renaming a device never makes it unfindable.
 
+import IdText from "@/components/common/IdText";
 import { useState } from "react";
 import { X } from "lucide-react";
 import SearchPicker, { type SearchRow } from "@/components/common/SearchPicker";
@@ -98,7 +99,7 @@ export default function EntityPicker({
 
       {!hideCurrentLabel && value && !open && (
         <div className="muted body-text" style={{ marginTop: 6 }}>
-          Bound to <strong>{value}</strong>
+          Bound to <strong><IdText id={value} /></strong>
         </div>
       )}
     </>

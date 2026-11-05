@@ -74,11 +74,9 @@
    column sits comfortably away from the edge. */
 @media (min-width: 1024px) {
   .modal { max-width: 560px; }
-  /* These come AFTER `.modal { max-width: 560px }` at equal specificity, so they
-     win — without them the desktop rule above clamped the (wider) Settings and
-     Config Editor modals back to 560. */
-  .settings-modal { max-width: 780px; }
-  .config-editor-modal { max-width: 780px; }
+  /* This comes AFTER `.modal { max-width: 560px }` at equal specificity, so it
+     wins — without it the desktop rule above clamped the (wider) Settings family back to 560. */
+  .settings-modal { max-width: var(--settings-width); }
   .teleport-grid .tp-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   :root { --hud-side-pad: 24px; }
   .hud-topbar { padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px)); }
