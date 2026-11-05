@@ -21,10 +21,13 @@ const ticket = draw(h(RecordCard, { title: "#33 · Test lock unavailable",
   notes: ["What to do: power", "Reminder sent to Facility Manager (00:24)"], amount: "IDR 1,000",
   erase: { title: "Erase", detail: "x", run: async () => {} }, onOpen: () => {},
   actions: h(React.Fragment, null, btn("Mark resolved"), btn("Close")) }));
-const head = inside(ticket, "fm-record-head"), body = inside(ticket, "fm-record-main"), strip = (html) => inside(html, "fm-record-strip");
-// ⚠️ STATUS ON TOP (owner, 2026-11-05): the strip, the title, the quiet line, the words, who moved it, the bar
-ck("its state in its strip, in its tone's colour (.strip-warn, 07-facility.css), never under its title",
-   head.includes("#33 · Test lock unavailable") && !body.includes("In progress") && /fm-record-status">In progress</.test(strip(ticket))
+const body = inside(ticket, "fm-record-main"), strip = (html) => inside(html, "fm-record-strip");
+const name = (html) => inside(inside(html, "fm-record-strip"), "fm-record-name");
+// ⚠️ NAME ON TOP, STATE FIRST (owner, 2026-11-05): the strip names it, the card's first line says where it stands, the
+// quiet line, the words, who moved it, the bar
+ck("its name in its strip, its state the card's first line, both in its tone's colour (.strip-warn, 07-facility.css)",
+   text(name(ticket)) === "|#33 · Test lock unavailable|" && !text(body).includes("Test lock unavailable") && !strip(ticket).includes("In progress")
+   && body.startsWith('<div class="fm-record-main"><div class="fm-record-state strip-warn"><span class="fm-record-status">In progress</span></div>')
    && /class="fm-record-strip strip-warn"/.test(ticket) && !/due-soon/.test(ticket), ticket);
 ck("  ...its buttons INSIDE the card, its bar along its bottom edge: its last part (owner, 2026-11-05)",
    /fm-record-main[\s\S]*<\/div><div class="fm-record-actions"><button[^>]*>Mark resolved<\/button><button[^>]*>Close<\/button><\/div><\/div><\/div>$/.test(ticket), ticket);
@@ -54,9 +57,9 @@ const issue = draw(h(AttentionCard, { card: cockpitCard(group, CADENCE), onOpenE
 // owner, 2026-10-22: "show the area right after the device name, as the Spend tab's pills … to save one line"; "remove
 // the chevron, it's redundant"
 const meta = (html) => inside(html, "fm-record-meta");
-ck("it IS the Cockpit card: its source icons in its strip, then its name; its room quiet on the line under — no chevron",
-   /class="fm-record-card"/.test(issue) && /fm-record-lead[\s\S]*<svg/.test(strip(issue)) && !/<svg/.test(inside(issue, "fm-record-head"))
-   && /<strong><button[^>]*fm-title-link[^>]*>Test lock<\/button><\/strong><\/div>/.test(issue) && /^<div class="fm-record-meta"><span>Hall<\/span>/.test(meta(issue))
+ck("it IS the Cockpit card: its source icons in its strip, then its name, a link; its room quiet on a line under — no chevron",
+   /class="fm-record-card"/.test(issue) && /fm-record-lead[\s\S]*<svg[\s\S]*<\/span><span class="fm-record-name">/.test(strip(issue))
+   && /^<span class="fm-record-name"><button[^>]*fm-title-link[^>]*>Test lock<\/button><\/span>$/.test(name(issue)) && /^<div class="fm-record-meta"><span>Hall<\/span>/.test(meta(issue))
    && !/lucide-chevron-right/.test(issue) && !/fm-record-subtitle/.test(issue), issue.slice(0, 400));
 ck("  ...its problem, then that problem's own buttons, the card's bar, its last part",
    /fm-record-main[\s\S]*#33 · Test lock unavailable[\s\S]*<\/div><div class="fm-record-actions"><button[^>]*>Open Ticket<\/button><button[^>]*>Close<\/button><\/div><\/div><\/div>$/.test(issue), issue);
@@ -261,8 +264,8 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
 console.log("\n  a scheduled task — the same card:");
 const task = draw(h(RecordCard, { title: "Pool filter clean", tone: "state-due-soon", status: { text: "Due soon", tone: "due-soon" },
   when: "due in 3 days · every 30 days", actions: h(React.Fragment, null, btn("Log"), h("button", { className: "icon-btn", "aria-label": "Remove" })) }));
-ck("its state in its strip, Log and the bin its bar, its tint on the card",
-   /Pool filter clean/.test(inside(task, "fm-record-head")) && /fm-record-status">Due soon</.test(strip(task)) && /fm-record-actions[\s\S]*Log[\s\S]*aria-label="Remove"/.test(task)
+ck("its name in its strip, its state its first line, Log and the bin its bar, its tint on the card",
+   text(name(task)) === "|Pool filter clean|" && /fm-record-main"><div class="fm-record-state strip-neutral"><span class="fm-record-status">Due soon</.test(task) && /fm-record-actions[\s\S]*Log[\s\S]*aria-label="Remove"/.test(task)
    && /class="fm-record-card state-due-soon"/.test(task), task.slice(0, 300));
 ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase on it", !/fm-erasable/.test(task));
 // owner, 2026-11-04: "what is the top right pill (light grey) for … it never disappears": the hold-to-erase hint dot,
@@ -300,9 +303,10 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   const CARD = /fm-record|fm-row|cockpit-attention|messages-card|messages-detail|announcement/;
   // owner, 2026-11-01: the line under a title was cut at the time's column; it spans the row, on one line, cut with "…"
   ck("a folded card's first words are one line cut with \"…\", over the card's width", cuts.includes(".fm-card-folded"), cuts);
-  // owner, 2026-11-05 ("Status on top"): the strip never wraps, its status words the one thing that gives way
-  ck("  ...an opened card: no text of it is ever cut but its strip's status words (no other rule cuts a card's text)",
-     cuts.filter((sel) => sel !== ".fm-card-folded" && sel !== ".fm-record-status").every((sel) => !CARD.test(sel))
+  // owner, 2026-11-05: the strip's name two lines at most, then "…"; a part's header line its state's words give way
+  ck("  ...an opened card: no text of it is ever cut but its strip's name and a part's state (no other rule cuts a card's text)",
+     cuts.includes(".fm-record-name") && cuts.includes(".fm-record-part-head .fm-record-status")
+     && cuts.filter((sel) => ![".fm-card-folded", ".fm-record-name", ".fm-record-part-head .fm-record-status"].includes(sel)).every((sel) => !CARD.test(sel))
      && /\.cockpit-attention-sub-text \{[^}]*overflow-wrap: anywhere;/.test(shared), cuts.filter((sel) => CARD.test(sel)));
   // owner, 2026-11-01: one column, a tap opening a card in its place: no pane is left, and every section draws InboxCard
   const tab = parseTsx("components/cockpit/MessagesTab.tsx");
@@ -313,7 +317,8 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
     // owner, 2026-11-01: two or three stacked icons made the name's line that tall, an empty line above the room
   // owner, 2026-11-01: stacked icons made the name's line that tall; 2026-11-05: they are the strip's, side by side
   ck("a card's icons take no line of their own: in its strip, side by side, never stacked, no column of their own",
-     /\.fm-record-lead \{ flex: none; display: inline-flex;/.test(fac) && /\.cockpit-source-icons \{ flex-direction: row;/.test(fac)
+     /:is\(\.fm-record-lead, [^)]*\) \{\s*flex: none; white-space: nowrap; min-height: var\(--strip-line\); display: inline-flex;/.test(fac)
+     && /\.cockpit-source-icons \{ flex-direction: row;/.test(fac)
      && !/fm-record-gutter|padding-left: 30px/.test(fac));
   ck("every button lights under the mouse, and the card does not light while the mouse is on any of its buttons",
      /@media \(hover: hover\) \{\s*\.btn:hover:not\(:disabled\) \{/.test(base)
@@ -358,8 +363,8 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   const card = draw(h(RecordCard, { title: "Pump", room: "Kitchen", device: h("span", { className: "fm-entity-chip" }, "DEVICE"),
     pills: h("span", { className: "fm-clause" }, "Cl. 3") }));
   const room = '<div class="fm-record-meta"><span>Kitchen</span>';
-  ck("a card's title alone on its line; its quiet line: its device, its room, then its tags (architecture review, 2026-11-05)",
-     text(inside(card, "fm-row-title")) === "|Pump|" && text(meta(card)) === "|DEVICE|Kitchen|Cl. 3|"
+  ck("a card's name in its strip; its quiet line: its device, its room, then its tags (architecture review, 2026-11-05)",
+     text(name(card)) === "|Pump|" && text(meta(card)) === "|DEVICE|Kitchen|Cl. 3|"
      && (card.match(/Kitchen/g) ?? []).length === 1, card);
   const issue = draw(h(AttentionCard, { card: { key: "k", title: "Pump", room: "Kitchen", lead: null, nextCheck: null, actions: [],
     lines: [{ key: "l", text: "Stopped", story: [], closing: null, openedAt: null }] }, onOpenEntity() {} }));
@@ -381,7 +386,7 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
   const walk = (d) => readdirSync(d).flatMap((f) => { const p = `${d}/${f}`; return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(f) ? [p] : []; });
   const root = new URL("../../src", import.meta.url).pathname;
   const badges = walk(root).filter((p) => /fm-record-status|fm-badge/.test(readFileSync(p, "utf8")));
-  ck("a card's state is drawn in one place (RecordCard's strip)", badges.length === 1 && badges[0].endsWith("components/fm/RecordCard.tsx"), badges);
+  ck("a card's state is drawn in one place (RecordCard's first line, a part's header)", badges.length === 1 && badges[0].endsWith("components/fm/RecordCard.tsx"), badges);
   const { cockpitCard } = await import("@/config/cockpitCard");
   const said = (item) => { const c = cockpitCard({ key: "device:d", title: "D", items: [item] }, null); return { text: c.lines.map((l) => l.text).join("|"), pills: c.status.map((s) => s.text) }; };
   const f = { id: "fault:x", kind: "fault", title: "Door stuck", detail: "", ticketId: "x" };
@@ -401,8 +406,9 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
   ck("  ...and the Inbox draws no state of its own: its cards are RecordCard's", !/CardPillLine|fm-badge|fm-record-status|StatusPill/.test(row));
 }
 
-// owner, 2026-11-05 ("Status on top"): a card's state is said ONCE, in its strip, on every card of every tab, whatever
-// its width; its bar holds its buttons and nothing else; who moved it is its who line, never its stage or its time again
+// owner, 2026-11-05 ("Status on top", then "state first"): a card's state is said ONCE, its first line, on every card of
+// every tab, whatever its width; its bar holds its buttons and nothing else; who moved it is its who line, never its
+// stage or its time again
 {
   const bar = (html) => inside(html, "fm-record-actions");
   const { moveWho, moveState } = await import("@/fm/faultNotes");
@@ -412,9 +418,11 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
     lines: [{ key: "a", text: "", actions: [], story: [], openedAt: "2026-10-31T05:11:00Z", move: reopened }] };
   const withButtons = draw(h(AttentionCard, { card: unavailable, onOpenEntity: () => {}, buttons: () => btn("Done") }));
   const without = draw(h(AttentionCard, { card: unavailable, onOpenEntity: () => {} }));
-  ck("a card's states in its strip, joined: the device's and how it was last moved; its bar only its buttons",
-     /fm-record-status">Unavailable · Reopened</.test(strip(withButtons)) && /strip-warn/.test(strip(withButtons))
-     && text(bar(withButtons)) === "|Done|" && !/Unavailable|Reopened/.test(inside(withButtons, "fm-record-main")), withButtons);
+  const first = (html) => inside(html, "fm-record-state");
+  ck("a card's states its first line, joined: the device's and how it was last moved; its bar only its buttons",
+     text(first(withButtons)) === "|Unavailable · Reopened|" && /fm-record-state strip-warn/.test(withButtons) && /strip-warn/.test(strip(withButtons))
+     && text(bar(withButtons)) === "|Done|" && !/Unavailable|Reopened/.test(strip(withButtons) + inside(withButtons, "fm-record-meta")
+       + inside(withButtons, "cockpit-attention-sub-text")), withButtons);
   ck("  ...who moved it its who line, its time and its word dropped when the strip says them",
      /fm-record-who"><svg[\s\S]*?<\/svg><span>By VESTA Agent<\/span>/.test(withButtons)
      && moveWho(reopened, ["Reopened"], momentText(reopened.at), momentText) === "By VESTA Agent"
@@ -422,7 +430,8 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
      && moveWho({ ...reopened, kind: "opened", word: "Ticket opened", who: "Fab & Jm", stage: "ticket" }, ["Ticket in progress"], momentText(reopened.at), momentText) === "Opened by Fab & Jm"
      && moveWho({ ...reopened, kind: "help", word: "Need help asked", who: "Owner" }, [], "x", momentText) === `Need help asked by Owner, on ${momentText(reopened.at)}`
      && moveState({ ...reopened, kind: "help", word: "Need help asked" }) === null && moveWho(null, [], "x", momentText) === null);
-  ck("  ...a card with no buttons says them in the same place, no bar", strip(without) === strip(withButtons) && !/fm-record-actions/.test(without), without);
+  ck("  ...a card with no buttons says them in the same place, no bar", strip(without) === strip(withButtons) && first(without) === first(withButtons)
+     && !/fm-record-actions/.test(without), without);
   const task = draw(h(RecordCard, { title: "Pool filter clean", status: { text: "Due soon", tone: "tone-warn" }, actions: btn("Done") }));
   const tk = draw(h(RecordCard, { title: "Pump", status: { text: "Ticket in progress", tone: "tone-accent" }, who: "Opened by Owner", actions: btn("Close") }));
   const closed = draw(h(RecordCard, { title: "Pump", status: { text: "Resolved", tone: "tone-quiet" }, who: "Done by Wayan" }));
@@ -430,13 +439,20 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
   const kinds = { "an Inbox card's state": times(withButtons, "Unavailable"), "an Inbox problem's move": times(withButtons, "Reopened"),
     "an Inbox card with no buttons": times(without, "Unavailable"), "a task's due state": times(task, "Due soon"),
     "a ticket's stage": times(tk, "Ticket in progress"), "a closed ticket's": times(closed, "Resolved") };
-  ck("  ...every kind of card says its state exactly once, in its strip, in its colour (green handled, grey closed)",
-     Object.values(kinds).every((n) => n === 1) && /strip-ok/.test(strip(tk)) && /strip-neutral/.test(strip(closed))
-     && /strip-warn/.test(strip(task)) && text(inside(tk, "fm-record-who")) === "|[icon]|Opened by Owner|", kinds);
+  ck("  ...every kind of card says its state exactly once, its first line, in its colour as its strip (green handled, grey closed)",
+     Object.values(kinds).every((n) => n === 1) && [withButtons, without, task, tk, closed].every((c) => text(first(c)).length > 1 && !/fm-record-status/.test(strip(c)))
+     && /strip-ok/.test(strip(tk)) && /strip-neutral/.test(strip(closed)) && /strip-warn/.test(strip(task))
+     && /fm-record-state strip-ok/.test(tk) && /fm-record-state strip-neutral/.test(closed) && /fm-record-state strip-warn/.test(task) && text(inside(tk, "fm-record-who")) === "|[icon]|Opened by Owner|", kinds);
   const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
-  ck("  ...its strip never wraps: the words give way with \"…\", its alert's name and its time never shrink",
-     /\.fm-record-status \{ flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; \}/.test(css)
-     && /\.fm-record-when \{ flex: none;/.test(css) && /\.fm-record-number \{ flex: none; white-space: nowrap;/.test(css));
+  // a ticket's title can be a sentence: "Device_2623 has been offline for over 8d 3h." (owner, 2026-11-05)
+  const long = draw(h(RecordCard, { title: "A device with a long name has been offline for over 8d 3h.", number: "#91-P1", when: "05/11/2026 08:56",
+    status: { text: "Ticket in progress", tone: "tone-accent" } }));
+  ck("  ...a long name stays in its strip, between its chip and its time; its first line its state alone",
+     /fm-record-number">#91-P1<\/span><span class="fm-record-name">A device with a long name has been offline for over 8d 3h\.<\/span><span class="fm-record-when">05\/11\/2026 08:56<\/span><\/div>/.test(long)
+     && text(first(long)) === "|Ticket in progress|", long);
+  ck("  ...its name wraps two lines at most, then \"…\"; its chip and time never shrink and stay on the first line",
+     /\.fm-record-name \{[^}]*-webkit-line-clamp: 2;[^}]*overflow: hidden;/.test(css) && !/white-space: nowrap|text-overflow/.test(/\.fm-record-name \{([^}]*)\}/.exec(css)?.[1] ?? "nowrap") && /\.fm-record-strip, \.fm-record-part-head \{[^}]*align-items: flex-start;/.test(css)
+     && /:is\(\.fm-record-lead, \.fm-record-number, \.fm-record-when,[^)]*\) \{\s*flex: none; white-space: nowrap;/.test(css));
   ck("  ...short words on a narrow card, the full ones on a wide one: the card is measured, never the bar",
      /\.fm-record \{ container: work-row \/ inline-size; \}/.test(css) && /@container work-row \(max-width: 519px\) \{\s*\.work-long \{ display: none; \}\s*\.work-short \{ display: inline; \}/.test(css));
 }

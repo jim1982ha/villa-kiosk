@@ -16,7 +16,10 @@ ck("5 tabs: Inbox, then Tickets, Schedule (today's board + the schedule), Recap 
    /const MESSAGES_TAB: ModalTab<CockpitTab> = \{ id: "messages", label: "Inbox"/.test(cockpit) && !/"overview"/.test(cockpit)
    && ids.join() === "Tickets,Schedule,Recap,Spend", ids);
 ck("  ...the merged tabs show both their parts",
-   /tab === "schedule" && \([\s\S]{0,40}<TodayTab[\s\S]{0,160}<ScheduleEditor \/>/.test(fm)
+   /tab === "schedule" && \([\s\S]{0,40}<TodayTab[\s\S]{0,400}<ScheduleEditor \/>/.test(fm)
+   // owner, 2026-11-05: the Maintenance schedule folded at first, as Recent work, its buttons inside it
+   && /<ListSection title="Maintenance schedule"[^>]*open=\{scheduleOpen\}[\s\S]{0,120}<ScheduleEditor \/>\s*<\/ListSection>/.test(fm)
+   && /\[scheduleOpen, setScheduleOpen\] = useState\(false\)/.test(fm)
    // owner, 2026-11-05: the Recap tab is the readiness alone, no "Villa occupied since …"; the monthly recap and the
    // spend statement are one document, the Spend tab's
    && /tab === "recap" && \(\s*<ReadinessTab [^\n]*\/>\s*\)\}/.test(fm) && !/recap-presence|usePresence|RecapTab/.test(fm)
@@ -37,7 +40,11 @@ ck("a device's 'report a fault' (shown by the profile's door, a value) opens the
 ck("the top bar opens it on Messages; Back from a device returns to the tab it left (the tab is held by the page)",
    /onOpenCockpit=\{\(\) => go\(\{ type: "openWindow", window: "cockpit", tab: "messages" \}\)\}/.test(dash)
    && /tab=\{screen\.cockpitTab\}\s*onTab=\{\(tab\) => go\(\{ type: "cockpitTab", tab \}\)\}/.test(dash));
-// Readiness's "View unavailable devices" opens its own list now, in Recap (readiness_checks.mjs, by value); it never
+// The devices not reporting's linked word opens its own list, in Recap (readiness_checks.mjs, by value); it never
 // opens a second Cockpit over the first.
 ck("Facility's tabs never open a second Cockpit", !/CockpitModal/.test(fm));
+ck("  ...a check's linked word for its devices opens their list there (owner, 2026-11-05: a word, not a button)",
+   /to\.place === "devices" \? setCheckList\(to\.list\)/.test(fm));
+// owner, 2026-11-05: a person is on a ticket; when VESTA looks again is its fault's Inbox card's
+ck("a ticket's card says no next check", !/check=|checkPill/.test(rd("components/fm/TicketsTab.tsx")));
 done("✅ one Cockpit: its view and Facility's six tabs");

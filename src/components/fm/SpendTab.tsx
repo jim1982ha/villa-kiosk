@@ -159,32 +159,6 @@ export default function SpendTab(
       {/* The terms are the villa's agreement, set by whoever administers the
           kiosk — the shared config only the owner may write. */}
       {roleCan(role, "editConfig") && <ContractTermsEditor />}
-      {/* The month, on the same line as its recap's buttons (owner, 2026-10-14): it chooses what this whole tab shows,
-          and the recap is of that month. */}
-      {/* ⚠️ THE RECAP'S THREE BUTTONS ARE ONE GROUP (owner, 2026-10-14: Download .md fell alone onto a second line): they
-          never part; on a narrow screen the group goes under the Month as a whole. "Save", not "Save recap": beside
-          "Generate recap" it says the same, and the three fit one line on the iPad. */}
-      <div className="fm-statement-row">
-        <span className="fm-inline-label with-tip">Month
-          <InfoTip label="About the recap">
-            The month's recap, to attach to the owner's monthly statement: maintenance performed against the schedule,
-            spend against the monthly cap, faults and response times. Revenue, commissions and payout are out of scope.
-            {kept ? ` ${kept}` : ""}
-          </InfoTip></span>
-        <div style={{ minWidth: 130 }}>
-          <Dropdown value={month} ariaLabel="Month" onChange={recap.setMonth}
-            options={recap.months.map((m) => ({ value: m, label: m }))} />
-        </div>
-        <div className="fm-statement-buttons">
-          <button className="btn ghost" onClick={recap.generate}>
-            <Sparkles size={16} /> {recap.markdown ? "Regenerate recap" : "Generate recap"}
-          </button>
-          {/* only with a recap to save or download (owner, 2026-10-22: never greyed out beside nothing) */}
-          <DocumentButtons markdown={recap.markdown} saved={recap.saved} saveLabel="Save" onSave={() => void recap.save()} onDownload={recap.download} />
-        </div>
-      </div>
-      {recap.markdown && <MarkdownPreview markdown={recap.markdown} />}
-
       <div className={`fm-cap ${toneClass(TONE_OF.cap[b.state])}`}>
         {/* the month's money on ONE line — minor (against the cap), major (outside it), total — and Record spend at
             its right (owner, 2026-10-14: "what about total or major spend?"); the three share the width equally, each
@@ -235,7 +209,35 @@ export default function SpendTab(
       </div>
 
 
-      {/* The month's recap (its buttons sit with the Month, above): its saved copies, the statements saved before the
+      {/* ⚠️ THE MONTHLY RECAP, A SECTION OF ITS OWN UNDER THE SPEND (owner, 2026-11-05): its title, then the Month on the
+          same line as its recap's buttons (owner, 2026-10-14), its preview, its saved copies. The Month still chooses
+          what this whole tab shows, the money card and the list above included, and the recap is of that month. */}
+      <div className="settings-section-title">Monthly recap</div>
+      {/* ⚠️ THE RECAP'S THREE BUTTONS ARE ONE GROUP (owner, 2026-10-14: Download .md fell alone onto a second line): they
+          never part; on a narrow screen the group goes under the Month as a whole. "Save", not "Save recap": beside
+          "Generate recap" it says the same, and the three fit one line on the iPad. */}
+      <div className="fm-statement-row">
+        <span className="fm-inline-label with-tip">Month
+          <InfoTip label="About the recap">
+            The month's recap, to attach to the owner's monthly statement: maintenance performed against the schedule,
+            spend against the monthly cap, faults and response times. Revenue, commissions and payout are out of scope.
+            {kept ? ` ${kept}` : ""}
+          </InfoTip></span>
+        <div style={{ minWidth: 130 }}>
+          <Dropdown value={month} ariaLabel="Month" onChange={recap.setMonth}
+            options={recap.months.map((m) => ({ value: m, label: m }))} />
+        </div>
+        <div className="fm-statement-buttons">
+          <button className="btn ghost" onClick={recap.generate}>
+            <Sparkles size={16} /> {recap.markdown ? "Regenerate recap" : "Generate recap"}
+          </button>
+          {/* only with a recap to save or download (owner, 2026-10-22: never greyed out beside nothing) */}
+          <DocumentButtons markdown={recap.markdown} saved={recap.saved} saveLabel="Save" onSave={() => void recap.save()} onDownload={recap.download} />
+        </div>
+      </div>
+      {recap.markdown && <MarkdownPreview markdown={recap.markdown} />}
+
+      {/* The month's recap (its buttons sit with the Month, just above): its saved copies, the statements saved before the
           two were one among them (fmTypes.recapKind) */}
       <SavedDocumentsList kind="recap" onOpen={recap.reopen} />
     </div>

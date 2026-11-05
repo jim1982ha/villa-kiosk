@@ -65,8 +65,9 @@ console.log("\n  the Overview's late-task line says the same word:");
 
 console.log("\n  the screens read the table (wiring a drawing cannot reach — the tab needs the Facility data):");
 const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
-// owner, 2026-11-05 ("Status on top"): the state in the card's strip, the day it is due as its time; the sentence
-// ("3 days overdue") is the recap's, never the card's, whose strip says it already. ⚠️ ONE TASK, ONE CARD (architecture
+// owner, 2026-11-05 ("Status on top", then "state first"): the task's name in the card's strip, the day it is due as its
+// time, its state the card's first line; the sentence ("3 days overdue") is the recap's, never the card's, which says it
+// already. ⚠️ ONE TASK, ONE CARD (architecture
 // review, 2026-11-05): the Schedule tab drew the same overdue task grey with no state; both tabs draw TaskCard.
 {
   const { h, draw, inside, text } = await import("../consistency/screen.mjs");
@@ -76,8 +77,9 @@ const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "ut
     [{ id: "c", scheduleId: "t", at: "2020-01-01T12:00:00Z", by: "Op", photoIds: [] }]);
   const card = draw(h(TaskCard, { status: st, room: "Hall", actions: null }));
   const strip = inside(card, "fm-record-strip");
-  ck("a task's strip: the table's word in the table's tone, the day it is due as its time; who last did it its who line",
-     st.state === "overdue" && strip.includes(`>${E.DUE_WORDS.overdue.word}<`) && /strip-danger/.test(card)
+  ck("a task's strip: its name, the day it is due as its time; its first line the table's word in the table's tone; who last did it its who line",
+     st.state === "overdue" && text(inside(strip, "fm-record-name")) === "|AC service|" && /fm-record-strip strip-danger/.test(card)
+     && text(inside(card, "fm-record-state")) === `|${E.DUE_WORDS.overdue.word}|` && /fm-record-state strip-danger/.test(card)
      && text(inside(strip, "fm-record-when")).includes(`Due ${E.shortDate(st.dueAt)}`) && !card.includes(E.dueLine(st))
      && card.includes("Last done by Op"), card);
   const uses = (f) => [elements(parseTsx(`components/fm/${f}.tsx`), "TaskCard").length, elements(parseTsx(`components/fm/${f}.tsx`), "RecordCard").length];

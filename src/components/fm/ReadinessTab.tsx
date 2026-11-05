@@ -41,14 +41,20 @@ export default function ReadinessTab({
   const label = useEntityLabel();
   // Freezing the check turns it from a live readout into evidence (see
   // buildReadinessSnapshot): made and saved in one tap, then shown, saved,
-  // reopened and downloaded like the recap and the statement.
+  // reopened and downloaded like the recap and the statement. It lands in the
+  // same saved-documents store, so a handover pack can include the check
+  // actually run on the day.
   const snapshot = useMonthlyDocument("readiness", inputs);
   const { readiness } = inputs;
   return (
     <div className="fm-stack">
-      <ReadinessChecks readiness={readiness} label={label} onOpenEntity={onOpenEntity} onOpenCheck={onOpenCheck} onGo={onGo}
-        save={<SaveButton saved={snapshot.saved} label="Save snapshot" icon={<Camera size={16} />} style={{ marginLeft: "auto" }}
-          onClick={() => void snapshot.generateAndSave()} />} />
+      <ReadinessChecks readiness={readiness} label={label} onOpenEntity={onOpenEntity} onOpenCheck={onOpenCheck} onGo={onGo} />
+      {/* ⚠️ SAVE SNAPSHOT AFTER THE LAST CHECK (owner, 2026-11-05): a row of its own at the right, above the snapshots it
+          saves; it was in the verdict's card at the top */}
+      <div className="fm-save-row">
+        <SaveButton saved={snapshot.saved} label="Save snapshot" icon={<Camera size={16} />}
+          onClick={() => void snapshot.generateAndSave()} />
+      </div>
 
       <SavedDocumentsList kind="readiness" onOpen={snapshot.reopen} />
       {snapshot.markdown && (
@@ -68,15 +74,13 @@ export default function ReadinessTab({
 
 /** The verdict and, under it, the checks — each with its own devices' button (readiness.CheckTarget) and a chip per
  *  device. Drawn by tests/oracles/readiness_checks.mjs. */
-export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, onGo, save }: {
+export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, onGo }: {
   readiness: ReadinessResult;
   /** A device's name on its chip. */
   label: (id: string) => string;
   onOpenEntity: (id: string) => void;
   onOpenCheck: (target: CheckTarget) => void;
   onGo: (to: CheckLink["to"]) => void;
-  /** The verdict line's Save snapshot. */
-  save?: ReactNode;
 }) {
   // ⚠️ THE CHECKS ARE ALWAYS SHOWN (owner, 2026-11-05: "always expanded, remove the capability to collapse"): they
   // folded under their verdict while the monthly recap was under them (owner, 2026-10-14); the recap is the Spend tab's
@@ -88,17 +92,12 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, o
 
   return (
     <>
-      {/* Freezing the check turns it from a live readout into evidence — see
-          buildReadinessSnapshot. Same generate-and-keep shape as the recap
-          and spend statement, and it lands in the same saved-documents store,
-          so a handover pack can include the check actually run on the day. */}
       <div className={`fm-headline ${toneClass(CHECK_WORDS[readiness.overall].tone)}`}>
         <span className="fm-headline-icon"><HeadlineIcon size={22} /></span>
         <span className="fm-headline-text">
           <strong>{headline}</strong>
           <span className="muted">{readiness.passed} of {readiness.total} checks passing</span>
         </span>
-        {save}
       </div>
 
       <div className="fm-list">
@@ -110,8 +109,8 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, o
           const chips = !!c.entityIds?.length;
           return (
             // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22: "wherever there is a card, the same style")
-            // its word in its strip, as every card's state ("Pass", "Warning", "Fail"), and what it opens a segment of its
-            // bar: every button of a card is in its bar (the "Status on top" card; it sat beside the title)
+            // its name in its strip ("No alarm"), its word its first line, as every card's state ("Pass", "Warning", "Fail"),
+            // and what it opens a segment of its bar: every button of a card is in its bar (the "Status on top" card)
             <RecordCard key={c.id} tone={toneClass(CHECK_WORDS[c.state].tone)}
               status={{ text: CHECK_WORDS[c.state].word, tone: pillClass(CHECK_WORDS[c.state].tone) }}
               lead={<span className={`fm-check-icon ${c.state}`}><Icon size={16} /></span>}

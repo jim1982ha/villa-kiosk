@@ -27,12 +27,9 @@ import FaultForm from "./FaultForm";
 import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
 import { faultMove, faultNoteLines, moveState, moveWho, stagePillClass } from "@/fm/faultNotes";
-import { checkPill } from "@/fm/faultTiming";
 import { closedTold } from "@/fm/faultConfirm";
 import { SourceIcons } from "./sourceIcons";
 import { faultSource } from "@/fm/issueSource";
-import { useAgent } from "@/agent/AgentContext";
-import { useNow } from "@/hooks/useInterval";
 import WorkButtons, { CARD_BUTTON, WorkLabel, useCardWork } from "./WorkButtons";
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
@@ -58,8 +55,6 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const { entities } = useHA();
   /** Every card's buttons carried out: Done's form, Need help, Close's question, Reopen's form (WorkButtons). */
   const work = useCardWork();
-  const cadence = useAgent().status?.cadence ?? null;
-  const now = useNow(60_000);
 
   const tickets = useMemo(() => ticketCards(data.tickets, deviceOfRecord), [data.tickets, deviceOfRecord]);
   // ⚠️ THE CLOSED ONES ARE A SECTION OF THEIR OWN, FOLDED AND PAGED (owner, 2026-10-14): the VESTA Agent clears several
@@ -115,8 +110,8 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
         who={stated ? moveWho(move, said, when, momentText) : null}
         // where it comes from, the icon its Inbox card leads with (owner, 2026-11-01, the audit)
         lead={<SourceIcons sources={[faultSource(t)]} severities={["warn"]} />}
-        // a ticket in progress is read again as its Inbox card is; a closed one is not
-        check={stageOf(t) === "ticket" ? checkPill([{ source: faultSource(t), check: t.check }], cadence, new Date(now)) ?? undefined : undefined}
+        // ⚠️ NO "NEXT CHECK" ON A TICKET (owner, 2026-11-05: a person is on it; the Inbox card of its fault says when
+        // VESTA looks again)
         when={when} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
         pages={t.documentIds?.map((id, i, all) => (all.length > 1 ? { id, label: `Investigation report ${i + 1}`, short: `Report ${i + 1}` }
           : { id, label: "Investigation report", short: "Report" }))}

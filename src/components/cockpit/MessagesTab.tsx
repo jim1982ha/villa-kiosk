@@ -30,7 +30,8 @@ import { Pager, usePaged } from "@/components/common/Paged";
 import FoldedList, { ListSection } from "@/components/common/FoldedList";
 import { AnnouncementContent, RecordButtons } from "@/components/messages/AnnouncementContent";
 import RecordCard, { type RecordCardProps } from "@/components/fm/RecordCard";
-import { eraseMessage, type Announcement } from "@/messages/announcements";
+import { eraseMessage, titleSentences, type Announcement } from "@/messages/announcements";
+import { QUIET_PILL } from "@/fm/tone";
 import { CockpitAttentionRow } from "./IssueCard";
 import { useCockpitIssues } from "./useVillaAttention";
 
@@ -211,9 +212,11 @@ export function NoteDetail({ announcement: a, canOpenPage = false, folded, onTog
   // ⚠️ ITS PAGE WITH ITS BUTTONS, FOLDED TOO (owner, 2026-11-03: "show the button directly in the collapsed version of
   // the card"): the card's own button row (RecordCard `actions`) is drawn folded or opened, so a report's or a
   // notification's page is one tap away without opening it first
-
+  const said = titleSentences(a.title);
   return (
-    <RecordCard title={a.title} folded={folded} onOpen={onToggle}
+    // its strip names it by its title's first sentence, its first line says the rest (titleSentences)
+    <RecordCard title={said.name} status={said.rest ? { text: said.rest, tone: QUIET_PILL } : undefined}
+      folded={folded} onOpen={onToggle}
       lead={isReport(a) ? <FileText size={18} aria-hidden="true" /> : <Bell size={18} aria-hidden="true" />}
       when={a.at ? momentText(a.at) : undefined}
       erase={{ title: "Delete message", detail: a.title, run: (token) => eraseMessage(a, token, backendFetch) }}

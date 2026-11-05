@@ -34,6 +34,30 @@ console.log("\n  Save and Download .md only with something to save (owner, 2026-
 }
 ck("  ...that does not wrap apart (a phone excepted)", /\.fm-statement-buttons \{ display: flex; flex-wrap: nowrap;/.test(css));
 
+console.log("\n  the tab's order (owner, 2026-11-05):");
+{
+  const { parseTsx, elements, propText } = await import("../consistency/jsx.mjs");
+  const fn = parseTsx("components/fm/SpendTab.tsx").statements.find((st) => st.name?.getText() === "SpendTab");
+  const ret = fn.body.statements.at(-1);   // its drawing: the last statement, `return (…)`
+  const divs = elements(ret, "div");
+  const at = (pick) => { const e = divs.find((d) => pick(String(propText(d, "className") ?? ""))); return e ? e.getStart() : -1; };
+  const recapTitle = divs.find((d) => propText(d, "className") === '"settings-section-title"');
+  const formAt = ret.getText().indexOf("{editor.adding && form}") + ret.getStart();
+  const order = [
+    ["Spend settings", elements(ret, "ContractTermsEditor")[0]?.getStart() ?? -1],
+    ["the month's money", at((c) => c.startsWith("`fm-cap "))],
+    ["a new entry's form", formAt],
+    ["the entries", at((c) => c === '"fm-list"')],
+    ["the section title", recapTitle?.getStart() ?? -1],
+    ["the Month and its recap's buttons", at((c) => c === '"fm-statement-row"')],
+    ["the recap's preview", elements(ret, "MarkdownPreview")[0]?.getStart() ?? -1],
+    ["the saved recaps", elements(ret, "SavedDocumentsList")[0]?.getStart() ?? -1],
+  ];
+  ck("settings, the month's money card, a new entry's form, the entries, then \"Monthly recap\": the Month, its preview, its saved copies",
+     order.every(([, n], i) => n >= 0 && (i === 0 || order[i - 1][1] < n)) && recapTitle?.children.map((c) => c.getText()).join("").trim() === "Monthly recap",
+     order);
+}
+
 console.log("\n  Spend settings:");
 // owner, 2026-10-22: no visible description text — the words are the title's ONE (i)
 ck("its words are ONE (i) on its title, no paragraph", (terms.match(/<p className/g) || []).length === 0

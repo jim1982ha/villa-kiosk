@@ -19,12 +19,14 @@ const entities = Object.fromEntries([
 const villa = new Set(Object.keys(entities));
 const devices = { ids: [...villa], unavailable: ["climate.bed", "camera.pool", "sensor.door_battery"], has: (id) => villa.has(id), deviceOf: (id) => id, deviceOfRecord: (id) => id, isCritical: () => false, isHidden: () => false };
 const r = buildReadiness(entities, EMPTY_FM_DATA, { devices: devices, attentionItems: [] }, {});
-const opens = (c) => c.opens ? `${c.opens.label} → ${c.opens.group.title} [${c.opens.group.entityIds.join(",")}]${c.opens.health ? " (health)" : ""}` : "-";
+const list = (t) => `${t.label} → ${t.group.title} [${t.group.entityIds.join(",")}]${t.health ? " (health)" : ""}`;
+// a check's list behind its button, or behind a linked word of its line (the devices not reporting: owner, 2026-11-05)
+const opens = (c) => c.opens ? list(c.opens) : c.goes?.find((g) => g.to.place === "devices") ? `"${c.goes.find((g) => g.to.place === "devices").word}" ${list(c.goes.find((g) => g.to.place === "devices").to.list)}` : "-";
 
 console.log("  each check's own list, by value:");
 const said = Object.fromEntries(r.checks.map((c) => [c.id, opens(c)]));
 ck("devices not reporting: their own list, a health list (every device, no \"turn all\")",
-   said["devices-online"] === "View unavailable devices → Unavailable devices [climate.bed,camera.pool,sensor.door_battery] (health)", said["devices-online"]);
+   said["devices-online"] === '"devices" Unavailable devices → Unavailable devices [climate.bed,camera.pool,sensor.door_battery] (health)', said["devices-online"]);
 ck("doors and lights: EVERY lock and light, as the summary tiles open them",
    said.locks === "View doors → Locks [lock.front,lock.back]" && said.lights === "View lights → Lights [light.hall,light.bed]", [said.locks, said.lights]);
 ck("air conditioning and cameras: their own lists too", said.climate === "View air conditioning → Air conditioning [climate.living,climate.bed]"
@@ -36,16 +38,36 @@ const opened = [];
 const html = draw(h(ReadinessChecks, { readiness: r, label: (id) => id.split(".")[1], onOpenEntity: () => {}, onOpenCheck: (t) => opened.push(t), startOpen: true }));
 const rows = html.split('<div class="fm-row ').slice(1).map(text);
 const rowOf = (title) => rows.find((x) => x.includes(`|${title}|`)) ?? "";
-ck("every failing check about devices has its button, with its own words",
-   rowOf("All devices reporting").includes("|View unavailable devices [icon]|") && rowOf("Doors locked").includes("|View doors [icon]|")
+ck("every failing check about devices opens its list: the devices not reporting by the linked word of their line (owner, 2026-11-05), the others by their button",
+   rowOf("All devices reporting").includes("|3 |devices| offline or not reporting.|") && !rowOf("All devices reporting").includes("View unavailable") && rowOf("Doors locked").includes("|View doors [icon]|")
    && rowOf("Lights off before arrival").includes("|View lights [icon]|") && rowOf("Air conditioning reachable").includes("|View air conditioning [icon]|")
    && rowOf("Cameras online").includes("|View cameras [icon]|"), rows);
-// architecture review, 2026-11-05: its button a segment of its bar, as every card's; its state its strip's word
+// architecture review, 2026-11-05: its button a segment of its bar, as every card's; owner, 2026-11-05 (the second
+// card): its name in its strip ("No alarm"), its state the card's first line ("Pass")
 {
   const card = html.split('<div class="fm-row ').find((x) => x.includes("All devices reporting")) ?? "";
-  ck("  ...its button in its bar, never beside its title; its state the first words of its strip",
-     inside(card, "fm-record-actions").includes("View unavailable devices") && !inside(card, "fm-row-title").includes("<button")
-     && /fm-record-status">(Pass|Warning|Fail)</.test(card), card);
+  const doors = html.split('<div class="fm-row ').find((x) => x.includes("Doors locked")) ?? "";
+  const strip = inside(card, "fm-record-strip");
+  ck("  ...a button in its bar, never in its strip; no bar under the devices not reporting; its name in its strip, its state its first line",
+     inside(doors, "fm-record-actions").includes("View doors") && !card.includes("fm-record-actions") && !strip.includes("<button")
+     && /<button type="button" class="fm-text-link">devices<\/button> offline/.test(card)
+     && text(inside(strip, "fm-record-name")) === "|All devices reporting|" && !strip.includes("fm-record-status")
+     && /<div class="fm-record-main"><div class="fm-record-state strip-\w+"><span class="fm-record-status">(Pass|Warning|Fail)<\/span><\/div>/.test(card), card);
+}
+// owner, 2026-11-05: Save snapshot left the verdict's card for a row of its own at the right, after the last check and
+// above the snapshots it saves
+{
+  const { parseTsx, elements, propText } = await import("../consistency/jsx.mjs");
+  const tab = parseTsx("components/fm/ReadinessTab.tsx").statements.find((st) => st.name?.getText() === "ReadinessTab");
+  const order = ["ReadinessChecks", "SaveButton", "SavedDocumentsList"].map((t) => elements(tab, t)[0]?.getStart() ?? -1);
+  const save = elements(tab, "SaveButton");
+  const row = save[0]?.parent;
+  const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
+  ck("  ...Save snapshot after the last check, a row of its own at the right, above the saved snapshots; none in the verdict's card",
+     save.length === 1 && order.every((at, i) => at >= 0 && (i === 0 || order[i - 1] < at))
+     && propText(row, "className") === '"fm-save-row"' && /\.fm-save-row \{ display: flex; justify-content: flex-end; \}/.test(css)
+     && propText(elements(tab, "ReadinessChecks")[0], "save") === null && !/<button/.test(inside(html, "fm-headline"))
+     && /fm-headline[\s\S]*?<\/div><div class="fm-list">/.test(html), [order, propText(row, "className")]);
 }
 // (owner, 2026-10-18: the devices not reporting as pills, "the same way the unlocked device or on lights are shown")
 ck("  ...every check names its devices as chips — the devices not reporting too",
@@ -109,10 +131,12 @@ console.log("\n  one tinted card (fm/tone): each state says its tone, the styles
   const { CHECK_WORDS } = await import("@/fm/readiness");
   const drawnRow = (state) => draw(h(ReadinessChecks, { readiness: { ...r, checks: [{ ...r.checks[0], state }] }, label: (id) => id,
     onOpenEntity: () => {}, onOpenCheck: () => {}, startOpen: true }));
-  // owner, 2026-11-05 ("Status on top"): its tone is its strip's colour, the frame itself plain
+  // owner, 2026-11-05 ("Status on top"): its tone is its strip's colour and its first line's, the frame itself plain
   ck("a Recap check drawn amber or red by its tone, never by the Schedule's words",
      /class="fm-record-card"><div class="fm-row fm-record"><div class="fm-record-strip strip-warn">/.test(drawnRow("warn"))
      && /class="fm-record-strip strip-danger"/.test(drawnRow("fail")) && /class="fm-record-strip strip-ok"/.test(drawnRow("pass")) /* "Pass" green, as a task's "On schedule" */
+     // owner, 2026-11-05 (the second card): its first line, its state, in the same colour
+     && ["warn", "fail", "pass"].every((st, i) => drawnRow(st).includes(`<div class="fm-record-state strip-${["warn", "danger", "ok"][i]}">`))
      && !/state-|fm-record-card tone-/.test(drawnRow("fail")));
   ck("  ...the same three tones for a task, a check and the spending cap",
      [DUE_WORDS["due-soon"].tone, CHECK_WORDS.warn.tone, TONE_OF.cap.approaching].every((t) => toneClass(t) === "tone-warn")

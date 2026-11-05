@@ -7,18 +7,20 @@
 // ⚠️ ONE CARD, NOT FOUR (architecture review, 2026-10-15): the Overview, Schedule and Spend each drew their own, so a
 // layout request ("buttons inside, on the right", "a note never runs out of the card") was made up to four times.
 //
-// ⚠️ STATUS ON TOP (owner, 2026-11-05: the "Status on top" card, six rules, every kind of card alike):
-//   1. the strip, the card's top band in its status colour: its source icons (`lead`), its alert's name (`number`), where
-//      it stands (`status`, several joined " · "), its time at the right (`when`). It never wraps: the words give way, the
-//      name and the time never do. A card with nothing to say still has its strip and its time.
-//   2. the title names the thing (`title`), alone on its line: a device is the quiet line's, a button the bar's; the
-//      status is never said again under it;
+// ⚠️ NAME ON TOP, STATE FIRST (owner, 2026-11-05: the "Status on top" card, six rules, every kind of card alike; then
+// the second card the same day: the strip names the thing, the card's first line says where it stands):
+//   1. the strip, the card's top band in its status colour: its source icons (`lead`), its alert's name (`number`), the
+//      thing's name (`title`: a device, a ticket, a task, a check, a notification's first sentence), its time at the
+//      right (`when`). The name wraps to two lines at most, then "…"; the icons, the chip and the time never shrink and
+//      stay on its first line. A card with nothing to say still has its strip and its time.
+//   2. the card's first line says where it stands (`status`, several joined " · "), bold, in its tone's colour, its
+//      (i) after it (`statusTip`: a Watch card's "Closes 15:06"); a card with no status has no such line;
 //   3. one quiet line: its device (`device`), its room, its next check (`check`), its tags (`pills`), " · " between them;
 //   4. its words (`body` or `notes`), photos and cost;
-//   5. who moved it, one quiet line (`who`): never its time or its stage again when the strip says them;
+//   5. who moved it, one quiet line (`who`): never its time or its stage again when the card says them;
 //   6. the bar along its bottom edge (ActionsRow): every button a segment, the main action first and green.
 // A card of several problems (an Inbox device with two) draws each as a part (`parts`): its header line (its icons, its
-// state, its time), its words, who moved it, its own bar; its strip says how many. One part is the card itself.
+// state, its time), its words, who moved it, its own bar; the card's first line says how many. One part is the card itself.
 //
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
 // faults of one device: RecordGroup). `tone`: the strip's colour when its status says none (fm/tone's
@@ -54,18 +56,19 @@ export interface CardPart {
 }
 
 export interface RecordCardProps {
+  /** What it is, named in its strip (a link when it opens something: an issue's device, .fm-title-link). */
   title: ReactNode;
-  /** Where it stands, said in its strip (several joined " · "); the strip's colour is the worst of their tones. */
+  /** Where it stands, the card's first line (several joined " · "); the strip's colour is the worst of their tones. */
   status?: RecordStatus | RecordStatus[];
-  /** What its status means, in words: an (i) after it in the strip (a Watch card's "Closes 15:06"). */
+  /** What its status means, in words: an (i) after it on its first line (a Watch card's "Closes 15:06"). */
   statusTip?: string;
   /** Its source icons, first in its strip. */
   lead?: ReactNode;
-  /** Its alert's name ("#91-P1"), a small chip in its strip before its status. */
+  /** Its alert's name ("#91-P1"), a small chip in its strip before its name. */
   number?: string;
   /** The device a record names, first on its quiet line: a link that opens it (DeviceChip). */
   device?: ReactNode;
-  /** Its room, quiet text on the line under the title: every card that shows a room. */
+  /** Its room, quiet text on its quiet line: every card that shows a room. */
   room?: string;
   /** Its next check, after the room: the refresh icon and when, `tip` on hover (CheckPill). */
   check?: { when: string; tip: string };
@@ -86,7 +89,7 @@ export interface RecordCardProps {
   amount?: string;
   /** Who last moved it ("Opened by Wayan", "By VESTA Agent"): one quiet line under its words (faultNotes.moveWho). */
   who?: string | null;
-  /** Its problems, when it holds several (an Inbox device's): one part each, under its title and quiet line. */
+  /** Its problems, when it holds several (an Inbox device's): one part each, under its state and quiet line. */
   parts?: CardPart[];
   actions?: ReactNode;
   erase?: { title: string; detail: string; run: (token: string) => Promise<unknown> };
@@ -189,17 +192,40 @@ export function WhoLine({ who }: { who?: string | null }) {
   return <div className="fm-record-who"><UserRound size={14} aria-hidden="true" /><span>{who}</span></div>;
 }
 
-/** A card's strip, or a part's header line (`part`): icons, alert name, states, the (i), the time. */
-function CardStrip({ lead, number, status, tip, when, tone, part }: {
-  lead?: ReactNode; number?: string; status: readonly RecordStatus[]; tip?: string; when?: string; tone: StripTone; part?: boolean;
-}) {
+/** The words of where it stands, several joined " · ", its (i) after them: a card's first line, a part's header. */
+function StateWords({ status, tip }: { status: readonly RecordStatus[]; tip?: string }) {
   const words = status.map((s) => s.text).join(" · ");
   return (
-    <div className={`${part ? "fm-record-part-head" : "fm-record-strip"} strip-${tone}`}>
+    <>
+      {words && <span className="fm-record-status">{words}</span>}
+      {words && tip && <InfoTip label={tip}>{tip}</InfoTip>}
+    </>
+  );
+}
+
+/** A card's strip: its icons, its alert's name, the thing's name, its time. */
+function CardStrip({ lead, number, name, when, tone }: {
+  lead?: ReactNode; number?: string; name: ReactNode; when?: string; tone: StripTone;
+}) {
+  return (
+    <div className={`fm-record-strip strip-${tone}`}>
       {lead && <span className="fm-record-lead">{lead}</span>}
       {number && <span className="fm-record-number">{number}</span>}
-      {words && <span className="fm-record-status">{words}</span>}
-      {tip && <InfoTip label={tip}>{tip}</InfoTip>}
+      {name !== undefined && name !== null && name !== "" && <span className="fm-record-name">{name}</span>}
+      {when && <span className="fm-record-when">{when}</span>}
+    </div>
+  );
+}
+
+/** A part's header line, in a card of several problems: its icons, its alert's name, its state, its time. */
+function PartHead({ lead, number, status, when, tone }: {
+  lead?: ReactNode; number?: string; status: readonly RecordStatus[]; when?: string; tone: StripTone;
+}) {
+  return (
+    <div className={`fm-record-part-head strip-${tone}`}>
+      {lead && <span className="fm-record-lead">{lead}</span>}
+      {number && <span className="fm-record-number">{number}</span>}
+      <StateWords status={status} />
       {when && <span className="fm-record-when">{when}</span>}
     </div>
   );
@@ -217,16 +243,15 @@ export default function RecordCard({ title, status, statusTip, lead, number, dev
   const bar = (pages?.length ?? 0) > 0 || actions || single?.actions;
   const toneWords = (tone ?? "").split(" ").filter(Boolean);
   const frame = toneWords.filter((w) => !w.startsWith("tone-")).join(" ");
+  const strip = stripTone(statuses, toneWords.find((w) => w.startsWith("tone-")));
   const inside = (
     <>
-      <CardStrip lead={lead} number={number} status={statuses} tip={statusTip} when={when}
-        tone={stripTone(statuses, toneWords.find((w) => w.startsWith("tone-")))} />
+      <CardStrip lead={lead} number={number} name={title} when={when} tone={strip} />
       <div className="fm-record-main">
-        <div className="fm-record-head">
-          <div className="fm-row-title">
-            <strong>{title}</strong>
-          </div>
-        </div>
+        {/* its first line: where it stands, in its tone's colour (rule 2); none when it says nothing */}
+        {statuses.some((s) => s.text) && (
+          <div className={`fm-record-state strip-${strip}`}><StateWords status={statuses} tip={statusTip} /></div>
+        )}
         {/* its quiet line: " · " between its pieces (07-facility.css), nothing drawn when it has none */}
         {(device || room || check || pills) && (
           <div className="fm-record-meta">
@@ -244,7 +269,7 @@ export default function RecordCard({ title, status, statusTip, lead, number, dev
       </div>
       {whole && several.map((p) => (
         <section key={p.key} className="fm-record-part">
-          <CardStrip part lead={p.lead} number={p.number} status={p.status ?? []} when={p.when} tone={stripTone(p.status ?? [], p.tone)} />
+          <PartHead lead={p.lead} number={p.number} status={p.status ?? []} when={p.when} tone={stripTone(p.status ?? [], p.tone)} />
           {(p.text || p.who) && <div className="fm-record-part-text">{p.text}<WhoLine who={p.who} /></div>}
           {p.actions && <ActionsRow>{p.actions}</ActionsRow>}
         </section>

@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { h, draw } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
-const { readLayout, parseAnnouncement, ANNOUNCEMENT_NOTICE_MS, noticeFor, pressOf, PRESS_SAID } =
+const { readLayout, parseAnnouncement, ANNOUNCEMENT_NOTICE_MS, noticeFor, pressOf, PRESS_SAID, titleSentences } =
   await import("@/messages/announcements");
 const { watchFeed } = await import("@/messages/feed");
 const { afterRead, announcementWords } = await import("@/messages/messagesModel");
@@ -446,6 +446,24 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
   ck("  ...the chats' menus under a column named \"Language VESTA writes in\"",
      /<div className="settings-list-head">\s*<span>Chat<\/span>\s*<span>Language VESTA writes in<\/span>/.test(
        readFileSync(new URL("../../src/components/settings/WhoGetsMessages.tsx", import.meta.url), "utf8")));
+}
+
+// owner, 2026-11-05: a message's card names it by its title's FIRST sentence (its strip), the rest its first line; a
+// sentence ends at a period then a space or the end, never inside a number or a date
+console.log("\n  a message's title, its name and the rest:");
+{
+  const cases = [
+    ["The Example House, daily report on 05/11/2026.", "The Example House, daily report on 05/11/2026", ""],
+    ["The Example House, devices offline on 4 Nov, 08:56. All back to normal.", "The Example House, devices offline on 4 Nov, 08:56", "All back to normal."],
+    ["Pump drew 2.5 kW for 1.5h. Check it. Then reset", "Pump drew 2.5 kW for 1.5h", "Check it. Then reset"],
+    ["🔔 Visitor", "🔔 Visitor", ""],
+    ["Pressure 1.2 bar", "Pressure 1.2 bar", ""],
+    ["Wait... then go.", "Wait... then go", ""],                                  // an ellipsis ends no sentence
+    ["  Spaced title.  ", "Spaced title", ""],
+  ];
+  const got = cases.map(([t]) => titleSentences(t));
+  ck("its first sentence its name, the rest as written; a number or a date never cut", cases.every(([, name, rest], i) =>
+    got[i].name === name && got[i].rest === rest), cases.map(([t], i) => [t, got[i]]));
 }
 
 done("✅ the villa's announcements: read into words, shown once, each in the one notice");

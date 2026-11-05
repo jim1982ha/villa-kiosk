@@ -35,6 +35,7 @@ import { resolveSiteTitle } from "@/config/AppConfig";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import { buildDeviceOptions } from "./DeviceSearchPicker";
 import TodayTab from "./TodayTab";
+import { ListSection } from "@/components/common/FoldedList";
 import ReadinessTab from "./ReadinessTab";
 import TicketsTab from "./TicketsTab";
 import SpendTab from "./SpendTab";
@@ -90,6 +91,7 @@ export default function FacilitySections({
 
   // The list a readiness check opens — its own devices (readiness.CheckTarget).
   const [checkList, setCheckList] = useState<CheckTarget | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   // ONE profile view (useVillaAttention): the devices this profile is shown and its problems, Open issues' — so the
   // Recap counts what Open issues lists for the same person, and readiness and the top bar agree
   const view = useVillaAttention();
@@ -106,9 +108,9 @@ export default function FacilitySections({
     [devices, config.entityMap, entities, resolvedRooms],
   );
   const canControl = roleCan(role, "controlEntities");
-  // a check's linked word: Open issues on its faults' devices (a whole-villa fault names none: Inbox as it opens), or
-  // the Tickets tab
-  const go = (to: CheckLink["to"]) => (to.place === "tickets" ? onTab("tickets")
+  // a check's linked word: Open issues on its faults' devices (a whole-villa fault names none: Inbox as it opens), the
+  // Tickets tab, or its devices' list (the devices not reporting)
+  const go = (to: CheckLink["to"]) => (to.place === "tickets" ? onTab("tickets") : to.place === "devices" ? setCheckList(to.list)
     : to.ids.length ? onOpenFaults(to.ids) : onTab("messages"));
 
   return (
@@ -117,8 +119,11 @@ export default function FacilitySections({
       {ready && tab === "schedule" && (
         <>
           <TodayTab onOpenEntity={onOpenEntity} />
-          <div className="settings-section-title">Maintenance schedule</div>
-          <ScheduleEditor />
+          {/* folded at first, as Recent work (owner, 2026-11-05): the tasks and their buttons behind its name */}
+          <ListSection title="Maintenance schedule" count={data.schedules.length} open={scheduleOpen}
+            onToggle={() => setScheduleOpen((v) => !v)}>
+            <ScheduleEditor />
+          </ListSection>
         </>
       )}
       {/* ⚠️ NO "VILLA OCCUPIED SINCE …" HERE (owner, 2026-11-05: removed from this tab) */}

@@ -7,7 +7,7 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { applyFmCommand } = await import("@/fm/fmCommands");
 const { faultMove, moveState, moveWho } = await import("@/fm/faultNotes");
-// what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its strip's state, then its who
+// what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its state line, then its who
 // line, never the stage or the word twice (faultNotes.moveState, moveWho)
 const cardMove = (t, s) => { const m = faultMove(t), st = moveState(m); return [st?.text, moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
 const faultWhen = cardMove;

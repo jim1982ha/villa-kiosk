@@ -4,20 +4,19 @@
 // (2.496.199). The caller keeps its own `saved` flag (it is set only when the
 // store confirms the write — see FmWriteResult).
 
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Download, Save } from "lucide-react";
 
-export default function SaveButton({ saved, label, icon, onClick, disabled, style }: {
+export default function SaveButton({ saved, label, icon, onClick, disabled }: {
   saved: boolean;
   /** The verb phrase while unsaved: "Save report". */
   label: string;
   icon: ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  style?: CSSProperties;
 }) {
   return (
-    <button className="btn ghost" onClick={onClick} disabled={disabled || saved} style={style}>
+    <button className="btn ghost" onClick={onClick} disabled={disabled || saved}>
       {icon} {saved ? "Saved" : label}
     </button>
   );

@@ -313,7 +313,7 @@ export function recordsByStage(records: readonly { status?: FmTicket["status"] }
  *  ⚠️ THREE SPELLINGS (architecture review, 2026-10-19): the pill said "In progress" in the Schedule's due-soon colour,
  *  the recap printed the stored status ("in progress"), and the Overview's item carried a "Fault" nothing read. */
 export const STAGE_WORDS: Record<FmStage, { word: string; tone: Tone; card: string }> = {
-  // `card`: the stage as a card's strip says it, among the Inbox's other states (owner, 2026-11-05)
+  // `card`: the stage as a card's state line says it, among the Inbox's other states (owner, 2026-11-05)
   fault: { word: "Open", tone: "warn", card: "Open" },
   ticket: { word: "In progress", tone: "warn", card: "Ticket in progress" },
   closed: { word: "Resolved", tone: "ok", card: "Resolved" },

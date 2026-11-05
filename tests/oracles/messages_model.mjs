@@ -4,7 +4,7 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-import { h, draw, inside } from "../consistency/screen.mjs";
+import { h, draw, inside, text } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
 const { messagesView, mergeAnnouncements, FILTERS, messagePlaces, readAtOpening, openingFilter, followingFilter, shownTogether,
   afterRead, cardsOfIssue } = await import("@/messages/messagesModel");
@@ -125,10 +125,12 @@ const { InboxCard } = await import("@/components/cockpit/MessagesTab");
 const listed = (item) => draw(h(InboxCard, { item, opened: item.kind === "issue", onToggle: item.kind === "issue" ? undefined : () => {}, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
 const issueLine = listed({ kind: "issue", key: "a", card: card("a", { room: "Kitchen",
   lines: [{ key: "l", text: "Too warm", icons: null, story: [], closing: null, actions: [] }] }) });
-// owner, 2026-11-01: the room on its own line, then its first problem; 2026-11-05 ("Status on top"): its quiet line
+// owner, 2026-11-01: the room on its own line, then its first problem; 2026-11-05 ("Status on top"): its quiet line;
+// 2026-11-05 (the second card): its device named in its strip
 const room = '<div class="fm-record-meta"><span>Kitchen</span></div>';
-ck("an open issue: its device; its room, quiet text on the line under; then its first problem",
-   /class="fm-record-card/.test(issueLine) && issueLine.includes("<strong>Device a</strong>") && !/role="button"/.test(issueLine)
+const nameOf = (html) => inside(inside(html, "fm-record-strip"), "fm-record-name");
+ck("an open issue: its device in its strip; its room, quiet text on a line under; then its first problem",
+   /class="fm-record-card/.test(issueLine) && nameOf(issueLine) === '<span class="fm-record-name">Device a</span>' && !/role="button"/.test(issueLine)
    && issueLine.includes(room)
    && issueLine.includes('<span class="cockpit-attention-sub-title">Too warm</span>')
    && issueLine.indexOf("fm-record-meta") < issueLine.indexOf("cockpit-attention-sub-title"), issueLine);
@@ -140,8 +142,8 @@ ck("an open issue: its device; its room, quiet text on the line under; then its 
 }
 const noteLine = listed({ kind: "notification", key: "n1", announcement: ann(1, { title: "🔔 Visitor",
   text: "Someone is at the door.\nGate A", at: "2026-10-28T10:00:00+08:00" }) });
-ck("  ...a notification, folded: the same card: its title, its first words, when it came, in its strip",
-   /class="fm-record-card/.test(noteLine) && noteLine.includes("<strong>🔔 Visitor</strong>") && !noteLine.includes("fm-record-meta") && noteLine.includes('<span class="fm-card-folded">Someone is at the door.</span>')
+ck("  ...a notification, folded: the same card: its title and when it came in its strip, its first words",
+   /class="fm-record-card/.test(noteLine) && nameOf(noteLine) === '<span class="fm-record-name">🔔 Visitor</span>' && !noteLine.includes("fm-record-state") && !noteLine.includes("fm-record-meta") && noteLine.includes('<span class="fm-card-folded">Someone is at the door.</span>')
    && !noteLine.includes("Gate A") && /fm-record-when">28\/10\/2026 \d\d:00</.test(inside(noteLine, "fm-record-strip")), noteLine);
 
 {
@@ -264,11 +266,22 @@ const opened = draw(h(NoteDetail, { announcement: weekly, canOpenPage: true }));
   const ring = ann(9, { title: "🔔 Visitor", text: "Someone is at the door.", key: "R1",
     buttons: [{ label: "Unlock", command: "/unlock" }] });
   const card = draw(h(NoteDetail, { announcement: ring }));
-  ck("an open notification is the shared card (RecordCard): its title in the card's head, its words in its body, its "
-     + "buttons in the card's own bar, its last part", /class="fm-record-card"/.test(card) && /fm-record-head[\s\S]*🔔 Visitor/.test(card)
+  ck("an open notification is the shared card (RecordCard): its title in the card's strip, its words in its body, its "
+     + "buttons in the card's own bar, its last part", /class="fm-record-card"/.test(card) && text(nameOf(card)) === "|🔔 Visitor|"
      && /fm-record-main[\s\S]*Someone is at the door\.[\s\S]*fm-record-actions[\s\S]*Unlock/.test(card)
      && /fm-record-actions[^<]*>[\s\S]*Unlock<\/button><\/span><\/div><\/div><\/div>$/.test(card), card);
   ck("  ...a report too", /class="fm-record-card"/.test(opened));
+  // owner, 2026-11-05: its strip its title's first sentence, its first line the rest, then its words; none, its words
+  // directly; the title kept whole (its delete question says it)
+  const back = draw(h(NoteDetail, { announcement: ann(10, { title: "The Example House, devices offline on 4 Nov, 08:56. All back to normal.",
+    text: "Two devices came back." }) }));
+  const daily = draw(h(NoteDetail, { announcement: ann(11, { title: "The Example House, daily report on 05/11/2026.", text: "New since yesterday: none." }) }));
+  ck("  ...its strip names it by its title's first sentence, its first line the rest, then its words; no rest, its words directly",
+     text(nameOf(back)) === "|The Example House, devices offline on 4 Nov, 08:56|"
+     && /<div class="fm-record-main"><div class="fm-record-state strip-neutral"><span class="fm-record-status">All back to normal\.<\/span><\/div><div class="messages-card-body">/.test(back)
+     && text(nameOf(daily)) === "|The Example House, daily report on 05/11/2026|"
+     && /<div class="fm-record-main"><div class="messages-card-body">/.test(daily) && !daily.includes("fm-record-state"), [back, daily]);
+
   // it owns its press (architecture review 2026-10-29 #4): no screen passes one, so a card wherever it shows (an issue's
   // VESTA card, a report) draws the buttons it carries
   ck("  ...its buttons drawn with no press handed in: the card presses them itself",
@@ -289,8 +302,8 @@ const opened = draw(h(NoteDetail, { announcement: weekly, canOpenPage: true }));
     note: "SHORT STORY" }], alertNumber: 92 }] });
   const told = (c, kept = [alert]) => issueAsTold(c, kept);
   const drawn = draw(h(AttentionCard, { card: told(issue), onOpenEntity() {} }));
-  ck("an alert's issue is ONE card: the issue's head, VESTA's message inside its line, in place of its short story",
-     (drawn.match(/class="fm-record-card/g) ?? []).length === 1 && /fm-record-head[\s\S]*Device p/.test(drawn)
+  ck("an alert's issue is ONE card: the issue's strip, VESTA's message inside its line, in place of its short story",
+     (drawn.match(/class="fm-record-card/g) ?? []).length === 1 && text(nameOf(drawn)) === "|Device p|"
      && drawn.includes("The pool pump stopped.") && !drawn.includes("SHORT STORY"), drawn);
   const watched = draw(h(AttentionCard, { card: told({ ...issue, look: "watched", lines: [{ ...issue.lines[0],
     text: "#92-P2 · LINE WORDS", closing: "CLOSING WORDS" }] }), onOpenEntity() {} }));
@@ -316,11 +329,13 @@ const opened = draw(h(NoteDetail, { announcement: weekly, canOpenPage: true }));
      at("Also: Pump ran shorter than expected") > -1 && at("Also: Pump ran shorter than expected") < at('fm-record-number">#92-P2<')
      && at('fm-record-number">#92-P2<') < at("The pool pump stopped.")
      && (two.match(/class="fm-record-part"/g) ?? []).length === 2, two);
-  // owner, 2026-11-05 ("Status on top"): its strip says every source and "2 problems"; each problem's header line its own
+  // owner, 2026-11-05 ("Status on top"): its strip says every source, its first line "2 problems"; each problem's header
+  // line its own icon and its own state
   const strip = inside(two, "fm-record-strip"), heads = [...two.matchAll(/class="fm-record-part-head[\s\S]*?fm-record-when/g)].map((m) => m[0]);
   const iconsIn = (html) => (html.match(/cockpit-attention-icon/g) ?? []).length;
-  ck("  ...its strip: each source once and how many problems; each problem's header: its own icon",
-     iconsIn(strip) === 2 && strip.includes(">2 problems<") && heads.length === 2 && heads.every((x) => iconsIn(x) === 1), [strip, heads]);
+  ck("  ...its strip: each source once and its name; its first line how many problems; each problem's header: its own icon",
+     iconsIn(strip) === 2 && text(nameOf(two)) === "|Device p|" && !strip.includes("problems")
+     && text(inside(two, "fm-record-state")) === "|2 problems|" && heads.length === 2 && heads.every((x) => iconsIn(x) === 1), [strip, heads]);
   ck("  ...every icon inside the card: in its strip or a problem's header", (two.match(/class="fm-record-lead"/g) ?? []).length === 3, two);
   ck("  ...a card with only the alert says no \"Also\"", !draw(h(AttentionCard, { card: told(issue), onOpenEntity() {} })).includes("Also:"));
   // owner, 2026-10-30: "a unique configuration … Done / Need Help / Open Ticket consistently for all of them" — the alert's
@@ -446,7 +461,7 @@ ck("  ...no page link for a profile the add-on serves no page to, nor for a repo
      /Open the page/.test(actionsOf(opened)) && opened.split("Open the page").length === 2, opened);
 }
 const reportLine = listed(onReports.reports[0]);
-ck("  ...folded: its title and first words", reportLine.includes("<strong>Rapport</strong>") && reportLine.includes('<span class="fm-card-folded">Trois choses</span>'), reportLine);
+ck("  ...folded: its title in its strip and its first words", text(nameOf(reportLine)) === "|Rapport|" && reportLine.includes('<span class="fm-card-folded">Trois choses</span>'), reportLine);
 const sections = elements(parseTsx("components/cockpit/MessagesTab.tsx"), "ListSection").map((e) => propText(e, "title"));
 ck("the tab draws a Reports section, its lines from the model's reports",
    sections.includes('"Reports"') && /reportsPaged = usePaged\(view\.reports\)/.test(tab), sections);

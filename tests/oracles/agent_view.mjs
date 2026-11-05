@@ -125,7 +125,7 @@ ck("every Facility card: its tags on its one quiet line", cardPutsPillsInMeta &&
   // review 26: a step says what it is (agent-contract.json ticketUpdate) — the card read the agent's title changes by
   // their first words and took them for status steps. Driven through the functions, with a fixed clock.
   const { faultNoteLines, faultMove, moveState, moveWho } = await import("../../src/fm/faultNotes.ts");
-  // what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its strip's state, then its who
+  // what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its state line, then its who
   // line, never the stage or the word twice (faultNotes.moveState, moveWho)
   const cardMove = (t, s) => { const m = faultMove(t), st = moveState(m); return [st?.text, moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
   const faultWhen = cardMove;

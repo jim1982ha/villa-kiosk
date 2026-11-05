@@ -413,7 +413,7 @@ ck("  ...the time open counts status changes only: 2 h, never a title or a Teleg
 
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
-// what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its strip's state, then its who
+// what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its state line, then its who
 // line, never the stage or the word twice (faultNotes.moveState, moveWho)
 const drawnMove = (m, s) => { const st = N.moveState(m); return [st?.text, N.moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
 const told = { ...rec("s", "switch.pump"), status: "open", updates: [
