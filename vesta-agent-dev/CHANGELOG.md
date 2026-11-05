@@ -1,3 +1,18 @@
+## 0.12.457
+
+What you will see:
+- A device that keeps dropping and reconnecting stays a fault after the night check that found it: in a villa ahead of
+  UTC, the 5-minute check just after midnight counted none of the last day's drops, closed the fault minutes after the
+  night check opened it, and the next night opened it again "(2nd time in 7 days)".
+- The night check's message says a close made on Telegram or on the tablet in the chat's language: "Terminé sur
+  Telegram le … (JM)." in a French chat, no longer "Done on Telegram on … (JM)." in English.
+- Done then Reopen pressed in the Cockpit while VESTA was restarting: the facility manager's chat and the tablet's
+  alert card keep the "Done in the Cockpit on … (Luc). Watch 4h" line above "Reopened in the Cockpit …", as when the
+  two are pressed apart.
+- "No action needed" pressed in the Cockpit is said as such in every chat and on the tablet's alert card: "✅ No action
+  needed in the Cockpit on … (Owner). Watch 4h.", as the Kiosk's own card says it, no longer "Done in the Cockpit". It
+  is still checked again, as a Done is.
+
 ## 0.12.456
 
 What you will see:
