@@ -18,7 +18,7 @@
 import type { ReactNode } from "react";
 import { useNow } from "@/hooks/useInterval";
 import { CloudSun } from "lucide-react";
-import { aggregationWords, chartAbout, fmtChartValue, fmtChartTick, fmtChartTime, fmtDuration, fmtStepStamp } from "./chartUtils";
+import { aggregationWords, chartAbout, drawsUnkept, fmtChartValue, fmtChartTick, fmtChartTime, fmtDuration, fmtStepStamp } from "./chartUtils";
 import { formatUnitValue } from "@/utils/entityValue";
 import BarChart from "./BarChart";
 import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
@@ -431,7 +431,7 @@ function ChartTile({ title, legend, note, lines, win, status, stepMs, picker }: 
   const kept = useKeptFrom();
   const head = (
     <div className="weather-chart-head">
-      <div className="weather-eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} about={chartAbout("average", stepMs, win.from, kept)} /></div>
+      <div className="weather-eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} about={chartAbout("average", stepMs, win.from, kept, drawsUnkept(present.map((l) => l.s)))} /></div>
       {legend && <div className="weather-legend">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
       {note && <div className="weather-legend">{note}</div>}
     </div>

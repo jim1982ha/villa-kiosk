@@ -506,7 +506,7 @@ async function trend(port: HistoryPort, ids: readonly string[], period: Statisti
     const raw = await readings(port, id, window);
     const drawn = period === "5minute" ? fiveMinuteSeries(raw) : intervalSeries(raw, PERIOD_MS[period]);
     // an outage inside a step looks as the figures' does (stepsOfflineInside)
-    const marked = period === "hour" || period === "day" || period === "week" ? stepsOfflineInside(drawn, period, PERIOD_MS[period]) : drawn;
+    const marked = period === "hour" || period === "day" || period === "week" ? stepsOfflineInside(drawn, period, PERIOD_MS[period], raw.gaps) : drawn;
     out[id] = withNotKept(marked, kept);
   }
   return out;
