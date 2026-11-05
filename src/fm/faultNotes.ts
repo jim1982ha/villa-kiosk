@@ -1,5 +1,5 @@
 // src/fm/faultNotes.ts
-// What a fault's card says about its history: the pill of its latest status and the notes below it. Pure, so the
+// What a fault's card says about its history: who last moved it (its strip's state, its who line) and its notes. Pure, so the
 // oracle drives it (tests/oracles/agent_view.mjs).
 //
 // ⚠️ A STEP SAYS WHAT IT IS (architecture review 26): the card used to recognise the VESTA Agent's title changes by
@@ -41,18 +41,6 @@ export function notedStory(t: Pick<FmTicket, "updates">): { note: string; at: st
   return stepsInTimeOrder(t).filter((x) => x.kind === "noted" && x.note).map((x) => ({ note: x.note as string, at: x.at }));
 }
 
-/**
- * ⚠️ WHO LAST MOVED IT, AND WHEN, IN ONE PILL (owner, 2026-11-01: "Opened by Wayan, on 31/10/2026 09:55", in place of
- * "by VESTA Agent", confusing and redundant, and of the words "in progress since … by Wayan"): the
- * latest of its status steps said in one form, so the pill follows it: ticket opened, help asked, reopened, done, closed.
- * Who: the name typed for who does the work, else the profile that recorded it. null while it is only a fault nobody
- * moved. ⚠️ ITS STAGE IN IT, IN ITS COLOUR (owner, 2026-11-02: "Ticket opened by … -- In Progress", the separate "In
- * progress" pill then redundant): its stage's word and tone (fmEngine.STAGE_WORDS), the card's only stage pill.
- * ⚠️ A STAGE ONLY FOR A TICKET (owner, 2026-11-04: "Reopened by VESTA Agent … · Open": "it doesn't make sense to show a
- * state for such card. The status in the pill shall only appear for real ticket opened in the Ticket tab"): a ticket,
- * in progress or closed as one (recordLife.ticket), says its stage; any other fault says who moved it and when. Its
- * colour is its stage's (stagePillClass), a fault's kept as it was (owner, 2026-11-04). Pure.
- */
 /** A stage's pill colour: its tone (fmEngine.STAGE_WORDS), a ticket in progress the buttons' accent (tone.ACCENT_PILL),
  *  the colour of its Edit Ticket. The Tickets tab's stage pill and every card's who-moved-it pill alike. */
 export function stagePillClass(stage: FmStage): string {
@@ -60,14 +48,11 @@ export function stagePillClass(stage: FmStage): string {
   return stage === "ticket" ? ACCENT_PILL : stage === "closed" ? QUIET_PILL : pillClass(STAGE_WORDS[stage].tone);
 }
 
-export function faultLatest(t: FmTicket, stamp: (at: string) => string): { text: string; tone: string } | null {
-  const m = faultMove(t);
-  return m ? { text: moveText(m, stamp), tone: m.tone } : null;
-}
-
 /** ⚠️ WHO LAST MOVED IT, IN PARTS (owner, 2026-11-05, the "Status on top" card): the card's strip says where it stands
- *  and since when, its who line only who moved it. The pill above was one sentence; the card now draws its parts in two
- *  places (moveState, moveWho), never by cutting that sentence. `word`: what the step did ("Ticket opened", "Reopened",
+ *  and since when, its who line only who moved it (moveState, moveWho). It was one sentence in one pill ("Ticket opened
+ *  by Wayan, on 31/10/2026 09:55 · In progress"); that sentence went with the pill (architecture review, 2026-11-05): nothing
+ *  draws it. Who: the name typed for who does the work, else the profile that recorded it. A stage only for a ticket
+ *  (owner, 2026-11-04: "the status in the pill shall only appear for real ticket opened in the Ticket tab"). `word`: what the step did ("Ticket opened", "Reopened",
  *  "Done", "Need help asked", a close's word); `stage`: a ticket's, said on a ticket only; `tone`: its stage's colour. */
 export interface FaultMove {
   kind: "help" | "opened" | "reopened" | "closed";
@@ -97,11 +82,6 @@ export function faultMove(t: FmTicket): FaultMove | null {
   const who = last.who || authorWords(last);
   if (last.kind === "reopened") return said("reopened", "Reopened", last.at, who);
   return last.status === "in_progress" ? said("opened", "Ticket opened", last.at, who) : null;
-}
-
-/** The move in one sentence: "Ticket opened by Wayan, on 31/10/2026 09:55 · In progress" (the recap's, a check's). */
-export function moveText(m: FaultMove, stamp: (at: string) => string): string {
-  return `${m.word}${m.who ? ` by ${m.who},` : ""} on ${stamp(m.at)}${m.stage ? ` · ${STAGE_WORDS[m.stage].word}` : ""}`;
 }
 
 /** What the card's strip says of the move: a ticket its stage ("Ticket in progress", "Resolved"), a reopening or a

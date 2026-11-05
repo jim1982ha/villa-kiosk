@@ -182,10 +182,13 @@ ck("  ...and a guest cannot be sent to the Tickets tab", screenReducer(START, { 
 
 console.log("\n  the alert's number, as Telegram writes it (owner, 2026-10-14):");
 const numbered = attentionOf({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([{ ...rec("n", "switch.pump"), title: "House Pump Power has not run", alertNumber: 5 }, rec("p", "lock.door")]) }).attentionItems;
-ck("a fault from a VESTA Agent alert reads \"#5 · …\" on its card; one without a number, its title alone",
-   numbered.find((i) => i.ticketId === "n")?.title === "#5 · House Pump Power has not run" && numbered.find((i) => i.ticketId === "p")?.title === "fault p",
-   numbered.map((i) => i.title));
-ck("  ...and the same in the Tickets tab", /<RecordCard key=\{t\.id\} framed=\{framed\} title=\{faultTitle\(t\)\}/.test(readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8")));
+// ⚠️ THE CHIP IS THE NAME (architecture review, 2026-11-05): "#5" is its card's strip chip, never its words again
+ck("a fault from a VESTA Agent alert carries \"#5\" for its card's strip, its words its title alone; one without a number, no name",
+   numbered.find((i) => i.ticketId === "n")?.title === "House Pump Power has not run" && numbered.find((i) => i.ticketId === "n")?.alertLabel === "#5"
+   && numbered.find((i) => i.ticketId === "p")?.title === "fault p" && numbered.find((i) => i.ticketId === "p")?.alertLabel === undefined,
+   numbered.map((i) => [i.title, i.alertLabel]));
+ck("  ...and the same in the Tickets tab: its title the fault's name, its alert's name the strip's chip",
+   ((tt) => /<RecordCard[^>]*title=\{faultName\(t\)\}/.test(tt) && /<RecordCard[^>]*number=\{faultAlertLabel\(t\)\}/.test(tt))(readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8")));
 ck("  ...with its priority, named as Telegram names it (agent-contract.json ticket.alertLabel): \"#5-P2 · …\" (owner, 2026-10-28)",
    E.faultTitle({ title: "x", alertNumber: 5, alertPriority: "P2" }) === "#5-P2 · x"
    && E.faultTitle({ title: "x", alertNumber: 5, alertPriority: "high" }) === "#5 · x"
@@ -333,10 +336,10 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
   const [open, shut] = JSX.elements(JSX.parseTsx("components/fm/TicketsTab.tsx"), "WorkButtons");
   // owner, 2026-11-05 ("Status on top"): its bar the card's last part, under every record of it
   ck("a ticket is ONE card: its first record says its stage, its buttons the card's bar, under every record, the closed one its Reopen, no device name above",
-     /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /const records = g\.records\.map\(workRecord\);/.test(ticketsTab)
+     /<RecordGroup key=\{g\.key\} actions=\{buttons\}>/.test(ticketsTab) && /const records = g\.records\.map\(workRecord\);/.test(ticketsTab)
      && /const buttons = <WorkButtons actions=\{ticketActions\(records\)\}/.test(ticketsTab)
      && /if \(g\.records\.length === 1\) return <Fragment key=\{g\.key\}>\{record\(g\.records\[0\], stagePill\(g\.records\[0\]\), buttons\)\}<\/Fragment>;/.test(ticketsTab)
-     && /\{g\.records\.map\(\(t, i\) => record\(t, i === 0 \? stagePill\(t\) : undefined, undefined, false, i === 0\)\)\}\s*<\/div>\s*<ActionsRow>\{buttons\}<\/ActionsRow>\s*<\/div>/.test(ticketsTab)
+     && /\{g\.records\.map\(\(t, i\) => record\(t, i === 0 \? stagePill\(t\) : undefined, undefined, false, i === 0\)\)\}\s*<\/RecordGroup>/.test(ticketsTab)
      && JSX.propText(open, "actions") === "ticketActions(records)" && JSX.propText(shut, "actions") === "closedActions(workRecord(t), closedTold(t).reopen)"
      // its standing Need help said on it, from the same records as its buttons (checked by value below)
      && JSX.propText(open, "asked") === "helpAsked(records)"
@@ -410,6 +413,9 @@ ck("  ...the time open counts status changes only: 2 h, never a title or a Teleg
 
 console.log("\n  what happened on Telegram, on the card (owner, 2026-10-14: reminders, escalation, Need help):");
 const N = await import("@/fm/faultNotes");
+// what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its strip's state, then its who
+// line, never the stage or the word twice (faultNotes.moveState, moveWho)
+const drawnMove = (m, s) => { const st = N.moveState(m); return [st?.text, N.moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
 const told = { ...rec("s", "switch.pump"), status: "open", updates: [
   { at: "2026-10-14T08:00:00.000Z", status: "open", photoIds: [], title: "fault s" },
   { at: "2026-10-14T08:49:00.000Z", status: "open", photoIds: [], kind: "noted", note: "Escalation sent to Owner" },
@@ -428,8 +434,8 @@ ck("  ...a fault the Agent told nothing about has none (no line drawn)",
    attentionOf({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {}, fmData: fm([{ ...told, updates: [told.updates[0]] }]) }).attentionItems[0]
      .story.length === 0);
 ck("  ...a noted line is never a status change: \"Reopened by Owner\" still read under it",
-   N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /^Reopened by Owner, on /.test(N.faultLatest(reopenedThenTold, (a) => a.slice(11, 16))?.text),
-   N.faultLatest(reopenedThenTold, (a) => a.slice(11, 16)));
+   N.statusSteps(reopenedThenTold).every((u) => u.kind !== "noted") && /^Reopened \| By Owner, on /.test(drawnMove(N.faultMove(reopenedThenTold), (a) => a.slice(11, 16))),
+   N.faultMove(reopenedThenTold));
 ck("  ...and each one is a note in the Tickets tab, with its time",
    N.faultNoteLines(told, (a) => a.slice(11, 16)).join("|") === "Escalation sent to Owner (08:49)|🆘 Need help pressed by Fabien (09:10)",
    N.faultNoteLines(told, (a) => a.slice(11, 16)));
@@ -672,7 +678,7 @@ console.log("\n  a Need help pressed is said on its card, and asked once (archit
   const ticket = (d) => d.tickets.filter((t) => t.id === "b").map(W.workRecord);
   // ⚠️ SAID ONCE (architecture review 23): the card's pill says it; the line above the buttons said it again
   const pillOf = (d) => cockpitCard(groupAttention(attentionOf({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {},
-    fmData: d }).attentionItems).find((g) => g.items.some((i) => i.ticketId === "a")), null).lines.map((l) => (l.move ? N.moveText(l.move, momentText) : ""));
+    fmData: d }).attentionItems).find((g) => g.items.some((i) => i.ticketId === "a")), null).lines.map((l) => (l.move ? drawnMove(l.move, momentText) : ""));
   ck("pressed on the Inbox: its card's pill says who asked and when, no line repeats it, and no second Need help",
      inbox(before).asked === null && inbox(after).asked === null
      && pillOf(after).includes(`Need help asked by Owner, on ${momentText(at)}`)
@@ -725,10 +731,16 @@ console.log("\n  one line per problem (owner, 2026-10-17: \"#49 · One mains pha
   const g = groups.find((x) => x.items.some((i) => i.title.includes("phase lost")));
   const card = draw(h(AttentionCard, { card: cockpitCard(g, { checkMinutes: 5, nightlyAt: "02:00" }), onOpenEntity: () => {} }));
   const said = text(card);
-  ck("six records saying the same are ONE line, counted", (said.match(/#49 · One mains phase lost/g) || []).length === 1
-     && /#49 · One mains phase lost \(6 times\)/.test(said), said);
+  ck("six records saying the same are ONE line, counted, its alert's name once (the strip's chip)", (said.match(/One mains phase lost/g) || []).length === 1
+     && /One mains phase lost \(6 times\)/.test(said) && (said.match(/#49/g) || []).length === 1, said);
   ck("  ...and its card's buttons still reach all six", cardRecords(g).length === 6, cardRecords(g));
   ck("  ...a different problem keeps its own line", groups.some((x) => x.items.some((i) => i.title === "Door unlocked")));
+  // ...two alerts saying the same words are two problems: their names left the words for the strip (architecture review,
+  // 2026-11-05), so the words alone would fold #49 and #50 into one line under one chip
+  const twoAlerts = groupAttention(attentionOf({ devices: devicesOf(), entities: ents, entityMap: {}, resolvedRooms: {},
+    fmData: fm([lost("a"), { ...lost("b"), alertNumber: 50 }]) }).attentionItems).find((x) => x.items.some((i) => i.title.includes("phase lost")));
+  ck("  ...two alerts with the same words: two lines, each its own name", twoAlerts.items.length === 2
+     && twoAlerts.items.map((i) => i.alertLabel).join() === "#49,#50", twoAlerts.items.map((i) => [i.alertLabel, i.twins]));
   ck("a record naming several devices (\"a,b\") is the first the villa has, never a device called \"…,sensor\"",
      g.entityId === "sensor.phase_b_voltage" && !/,sensor/.test(g.title), g.entityId, g.title);
 }

@@ -104,11 +104,14 @@ const taken = groupAttention(build([{ ...ticket("va-5", "Back door stiff", "lock
 // card's strip, in the accent's green, the card counted as handled
 {
   const { cardStrip } = await import("@/config/cockpitCard");
-  const { moveText } = await import("@/fm/faultNotes");
+  const { moveState, moveWho } = await import("@/fm/faultNotes");
+  // what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its strip's state, then its who
+  // line, never the stage or the word twice (faultNotes.moveState, moveWho)
+  const drawnMove = (m, s) => { const st = moveState(m); return [st?.text, moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
   const c = taken && cockpitCard(taken, null);
   ck("  ...an open fault's line is its text alone; one taken in hand too, \"Ticket in progress\" in its strip, in that colour",
      taken && lineText(taken) === "Back door stiff" && !c.status?.length
-     && /^Ticket opened on .* · In progress$/.test(moveText(c.lines[0].move, (x) => x)) && c.lines[0].move?.tone === "tone-accent"
+     && /^Ticket in progress \| Opened on /.test(drawnMove(c.lines[0].move, (x) => x)) && c.lines[0].move?.tone === "tone-accent"
      && JSON.stringify(cardStrip(c).status) === JSON.stringify([{ text: "Ticket in progress", tone: "tone-accent" }]) && c.tone === "handled"
      && !cockpitCard(loneFault, null).status?.length && cockpitCard(loneFault, null).tone === "warn", taken?.items);
 }

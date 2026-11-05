@@ -15,7 +15,7 @@ import { alarmText, rowText } from "@/config/reading";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
-import { alertLabel, alertNumberOf, closedAsLasting, DUE_WORDS, faultBegan, faultTitle, fmAttention, helpIsLatest, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
+import { alertNumberOf, closedAsLasting, DUE_WORDS, faultAlertLabel, faultBegan, faultName, fmAttention, helpIsLatest, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import type { AgentCadence } from "@/agent/agentApi";
 import { watchedRecords } from "@/fm/faultConfirm";
 import { faultMove, notedStory, type FaultMove } from "@/fm/faultNotes";
@@ -332,7 +332,8 @@ function foldTwins(items: AttentionItem[]): AttentionItem[] {
   const first = new Map<string, AttentionItem>();
   const out: AttentionItem[] = [];
   for (const i of items) {
-    const key = i.kind === "fault" ? `${i.stage ?? ""}|${i.title}` : undefined;
+    // the same words of the same alert: two alerts saying the same are two problems (their names are their chips)
+    const key = i.kind === "fault" ? `${i.stage ?? ""}|${i.alertLabel ?? ""}|${i.title}` : undefined;
     const kept = key !== undefined ? first.get(key) : undefined;
     if (kept && i.ticketId) {
       kept.twins = [...(kept.twins ?? []), i.ticketId];
@@ -468,7 +469,8 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
     items.push({
       id: `fault:${t.id}`,
       kind: "fault",
-      title: faultTitle(t),
+      // what it is about; its alert's name is its strip's chip (alertLabel), never its words again
+      title: faultName(t),
       room: t.room,
       entityId,
       ticketId: t.id,
@@ -478,7 +480,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       help: standingHelp(t),
       ...(helpIsLatest(t) ? { helpInPill: true as const } : {}),
       openedAt: faultBegan(t),
-      ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t), alertLabel: alertLabel(alertNumberOf(t)!, t.alertPriority) } : {}),
+      ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t), alertLabel: faultAlertLabel(t) } : {}),
       source: faultSource(t),
       check: t.check,
       closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf, t.openedAt),

@@ -60,15 +60,15 @@ console.log("  a device the villa's system no longer has:");
     canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
   // owner, 2026-11-01: never before the alert's name: one format for every card
   // owner, 2026-11-01: a state is every card's status pill, never the words of a line
-  ck(`  ...and the Inbox's alert card says "${NOT_IN_HA}" in the status pill every card has, VESTA's title alone on its line, its message under it`,
-     /class="fm-record-status">Missing</.test(drawn) && drawn.includes(">#7-P1 (new)<") && !drawn.includes(`${NOT_IN_HA}, #7`)
+  ck(`  ...and the Inbox's alert card says "${NOT_IN_HA}" in the status pill every card has, VESTA's alert name its strip's chip (as VESTA's title writes it, the record knowing no priority), its message under it`,
+     /class="fm-record-status">Missing</.test(drawn) && drawn.includes('fm-record-number">#7-P1<') && !drawn.includes("(new)") && !drawn.includes(`${NOT_IN_HA}, #7`)
      && drawn.includes("The door was unlocked while the villa was vacant."), drawn);
   const strip = cockpit(live, [{ ...alertTicket, id: "t-2", entityId: STRIP, alertNumber: 8, title: "Strip offline" }]).cards;
   const alert8 = { ...alert, key: "incident:8", title: "#8-P2 (new)" };
   const stripDrawn = draw(h(CockpitAttentionRow, { card: issueAsTold(cardOf(strip, STRIP), [alert8]),
     onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
   ck("  ...an unavailable device's alert card unchanged: its alert says it is offline, no second word",
-     stripDrawn.includes("#8-P2 (new)") && !stripDrawn.includes("Unavailable, #8"), stripDrawn);
+     stripDrawn.includes('fm-record-number">#8-P2<') && !stripDrawn.includes("Unavailable, #8"), stripDrawn);
 }
 console.log("  before the villa's system has sent its states:");
 {

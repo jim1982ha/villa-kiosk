@@ -6,9 +6,11 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { applyFmCommand } = await import("@/fm/fmCommands");
-const { faultLatest } = await import("@/fm/faultNotes");
-// the pill's words; its tone is its stage's (owner, 2026-11-02: "Ticket opened by … -- In Progress")
-const faultWhen = (t, s) => faultLatest(t, s)?.text ?? "";
+const { faultMove, moveState, moveWho } = await import("@/fm/faultNotes");
+// what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its strip's state, then its who
+// line, never the stage or the word twice (faultNotes.moveState, moveWho)
+const cardMove = (t, s) => { const m = faultMove(t), st = moveState(m); return [st?.text, moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
+const faultWhen = cardMove;
 const { ROLE_LABELS } = await import("@/auth/roles");
 const { faultSource } = await import("@/fm/issueSource");
 
@@ -37,32 +39,32 @@ ck("  ...and a card reads it back through the same table (its source icon: the O
    faultSource(t) === "owner" && faultSource({ ...t, updates: [{ ...t.updates[0], by: "x", role: "ops" }] }) === "fm"
    && faultSource({ ...t, updates: [{ at: t.openedAt, status: "open", photoIds: [], by: "Facility manager" }] }) === "fm"
    && faultWhen({ ...t, status: "in_progress", updates: [{ at: t.openedAt, status: "in_progress", photoIds: [], by: "Facility manager" }] }, stamp)
-     === "Ticket opened by Facility Manager, on 06:20 · In progress");
+     === "Ticket in progress | Opened by Facility Manager, on 06:20");
 
 const opened = applyFmCommand(EMPTY, { type: "addTicket", ticket: { title: "Pump capacitor", photoIds: [] }, asTicket: true }, k("owner"));
 const tk = opened.tickets[0];
 ck("\"Open a ticket\" (owner, 2026-10-14): a TICKET at once — in progress, taken on by whoever opened it",
    tk.status === "in_progress" && tk.updates.length === 1 && tk.updates[0].status === "in_progress" && tk.updates[0].by === "Owner");
-ck("  ...its card says when and by whom", faultWhen(tk, stamp) === "Ticket opened by Owner, on 06:20 · In progress", faultWhen(tk, stamp));
+ck("  ...its card says when and by whom", faultWhen(tk, stamp) === "Ticket in progress | Opened by Owner, on 06:20", faultWhen(tk, stamp));
 // owner, 2026-11-01: "Opened by Wayan, on 31/10/2026 09:55" tracks "the latest status updated for this ticket"
 {
   const step = (x) => ({ at: "2026-10-14T07:00:00.000Z", photoIds: [], ...x });
   const later = (x) => step({ at: "2026-10-14T08:00:00.000Z", ...x });
   const taken = step({ status: "in_progress", who: "Wayan", by: "Owner" });
   ck("the pill: the name typed for who does the work, before the profile",
-     faultWhen({ ...tk, updates: [taken] }, stamp) === "Ticket opened by Wayan, on 07:00 · In progress", faultWhen({ ...tk, updates: [taken] }, stamp));
+     faultWhen({ ...tk, updates: [taken] }, stamp) === "Ticket in progress | Opened by Wayan, on 07:00", faultWhen({ ...tk, updates: [taken] }, stamp));
   ck("  ...follows the latest status: done", faultWhen({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", who: "Made" })] }, stamp)
-     === "Done by Made, on 08:00 · Resolved");
+     === "Resolved | Done by Made, on 08:00");
   ck("  ...closed with nothing done", faultWhen({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", kind: "cleared", by: "Owner" })] }, stamp)
-     === "No action needed by Owner, on 08:00 · Resolved");
+     === "Resolved | No action needed by Owner, on 08:00");
   // the stage in its colour: a ticket in progress the buttons' accent (owner, 2026-11-04), a closed one quiet grey (owner,
   // 2026-11-05: "Closed cards grey")
-ck("  ...its stage's colour, a closed one's too", faultLatest({ ...tk, updates: [taken] }, stamp)?.tone === "tone-accent"
-   && faultLatest({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", who: "Made" })] }, stamp)?.tone === "tone-quiet");
-ck("  ...reopened, and help asked", faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "reopened", by: "Owner" })] }, stamp) === "Reopened by Owner, on 08:00 · In progress"
-     && faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "help", by: "Owner" })] }, stamp) === "Need help asked by Owner, on 08:00 · In progress");
+ck("  ...its stage's colour, a closed one's too", faultMove({ ...tk, updates: [taken] })?.tone === "tone-accent"
+   && faultMove({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", who: "Made" })] })?.tone === "tone-quiet");
+ck("  ...reopened, and help asked", faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "reopened", by: "Owner" })] }, stamp) === "Ticket in progress | Reopened by Owner, on 08:00"
+     && faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "help", by: "Owner" })] }, stamp) === "Ticket in progress | Need help asked by Owner, on 08:00");
   ck("  ...a note from Telegram or a new title is no status: it stays", faultWhen({ ...tk, updates: [taken, later({ status: "in_progress", kind: "noted", note: "Reminder sent" }),
-     later({ status: "in_progress", kind: "retitled", title: "x", by: "VESTA Agent" })] }, stamp) === "Ticket opened by Wayan, on 07:00 · In progress");
+     later({ status: "in_progress", kind: "retitled", title: "x", by: "VESTA Agent" })] }, stamp) === "Ticket in progress | Opened by Wayan, on 07:00");
 }
 
 console.log("\n  every write, one way:");

@@ -11,7 +11,8 @@
 //   1. the strip, the card's top band in its status colour: its source icons (`lead`), its alert's name (`number`), where
 //      it stands (`status`, several joined " · "), its time at the right (`when`). It never wraps: the words give way, the
 //      name and the time never do. A card with nothing to say still has its strip and its time.
-//   2. the title names the thing (`title`, `titlePills` after it); the status is never said again under it;
+//   2. the title names the thing (`title`), alone on its line: a device is the quiet line's, a button the bar's; the
+//      status is never said again under it;
 //   3. one quiet line: its device (`device`), its room, its next check (`check`), its tags (`pills`), " · " between them;
 //   4. its words (`body` or `notes`), photos and cost;
 //   5. who moved it, one quiet line (`who`): never its time or its stage again when the strip says them;
@@ -20,7 +21,7 @@
 // state, its time), its words, who moved it, its own bar; its strip says how many. One part is the card itself.
 //
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
-// faults of one device: TicketsTab draws the frame). `tone`: the strip's colour when its status says none (fm/tone's
+// faults of one device: RecordGroup). `tone`: the strip's colour when its status says none (fm/tone's
 // toneClass), with any other class of the frame (a fault being confirmed, the card a warning opened on).
 //
 // ⚠️ ONE FOLD (owner, 2026-11-01): `folded`, a notification's or a report's until tapped: its caller hands its card whole
@@ -62,8 +63,6 @@ export interface RecordCardProps {
   lead?: ReactNode;
   /** Its alert's name ("#91-P1"), a small chip in its strip before its status. */
   number?: string;
-  /** Pills right after the title, on its line (a spend's device, a readiness check's way to its place). */
-  titlePills?: ReactNode;
   /** The device a record names, first on its quiet line: a link that opens it (DeviceChip). */
   device?: ReactNode;
   /** Its room, quiet text on the line under the title: every card that shows a room. */
@@ -123,6 +122,18 @@ export function ActionsRow({ children }: { children: ReactNode }) {
     // a press on a button is the button's: never the card's hold-to-erase, never its tap-to-open
     <div className="fm-record-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
       {children}
+    </div>
+  );
+}
+
+/** ⚠️ ONE CARD HOLDING SEVERAL RECORDS (a ticket taken on for several faults of one device: TicketsTab): one frame, its
+ *  records (each a RecordCard with `framed={false}`) divided by a hairline, its bar after all of them. Drawn here with
+ *  every other part of a card (architecture review, 2026-11-05: the Tickets tab drew this frame itself). */
+export function RecordGroup({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="fm-record-card">
+      <div className="fm-record-group">{children}</div>
+      {actions && <ActionsRow>{actions}</ActionsRow>}
     </div>
   );
 }
@@ -194,7 +205,7 @@ function CardStrip({ lead, number, status, tip, when, tone, part }: {
   );
 }
 
-export default function RecordCard({ title, status, statusTip, lead, number, titlePills, device, room, when, check, pills,
+export default function RecordCard({ title, status, statusTip, lead, number, device, room, when, check, pills,
   notes, body, folded, photoIds, pages, amount, who, parts, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const whole = folded === undefined;
   const statuses = [status ?? []].flat();
@@ -214,7 +225,6 @@ export default function RecordCard({ title, status, statusTip, lead, number, tit
         <div className="fm-record-head">
           <div className="fm-row-title">
             <strong>{title}</strong>
-            {titlePills}
           </div>
         </div>
         {/* its quiet line: " · " between its pieces (07-facility.css), nothing drawn when it has none */}

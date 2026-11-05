@@ -127,6 +127,19 @@ console.log("\n  every card of the app, wherever it is drawn:");
   const bare = draw(h(RecordCard, { title: "T", when: "01/01/2026 10:00" }));
   ck("  ...a card with no status and no icon still has its strip, its time in it (one card, every case)",
      /^<div class="fm-record-card"><div class="fm-row fm-record"><div class="fm-record-strip strip-neutral"><span class="fm-record-when">01\/01\/2026 10:00<\/span><\/div>/.test(bare), bare);
+  // ⚠️ EVERY FRAME IS RECORDCARD'S (architecture review, 2026-11-05): a ticket of several records was framed by the
+  // Tickets tab itself; its records, then one bar after all of them, are RecordGroup's
+  const { RecordGroup } = await import("@/components/fm/RecordCard");
+  const group = draw(h(RecordGroup, { actions: h("button", { className: "btn" }, "Close") },
+    h(RecordCard, { title: "A", when: "1", framed: false }), h(RecordCard, { title: "B", when: "2", framed: false })));
+  ck("  ...a card of several records: one frame, its records, one bar after all of them",
+     /^<div class="fm-record-card"><div class="fm-record-group">(<div class="fm-row fm-record">.*?){2}<\/div><div class="fm-record-actions"[^>]*><button class="btn">Close<\/button><\/div><\/div>$/.test(group), group);
+  // architecture review, 2026-11-05: a spend's device was a chip beside its title, the one card left that way
+  const named = ["fm/TicketsTab.tsx", "fm/SpendTab.tsx"].filter((f) => !cards.find((c) => c.f === f)?.all
+    .some((e) => /<DeviceChip /.test(propText(e, "device") ?? "")));
+  ck("  ...a card that names a device: its link first on its quiet line (Tickets, Spend)", named.length === 0, named);
+  const framing = files.filter((f) => /className="fm-record-(card|group)"/.test(readFileSync(new URL(f, root), "utf8")));
+  ck("  ...and no list draws a card's frame of its own", framing.length === 0, framing);
 }
 
 console.log("\n  the same device, the same room, in the Inbox and on its ticket:");

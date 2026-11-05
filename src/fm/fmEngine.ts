@@ -339,17 +339,28 @@ export function alertLabel(number: number, priority?: string): string {
   return form.replace("{number}", String(number)).replace("{priority}", priority ?? "");
 }
 
-/** A fault's title as every list shows it: "#5-P2 · House Pump Power …" when it came from a VESTA Agent alert — its name
- *  as its Telegram messages carry it (alertLabel) — else its title alone. A duration in it is worded now,
- *  from its `since` ("offline for 6 d 2 h"), in the Kiosk's duration words (chartUtils.fmtDuration): the title the
- *  Agent wrote at 02:00 said "129 h" all day (architecture review, 2026-10-15). */
+/** A fault's alert name ("#5-P2") when it came from a VESTA Agent alert, else undefined: the chip of its card's strip. */
+export function faultAlertLabel(t: Pick<FmTicket, "alertNumber" | "alertPriority">): string | undefined {
+  const n = alertNumberOf(t);
+  return n !== undefined ? alertLabel(n, t.alertPriority) : undefined;
+}
+
+/** What a fault is about, as a card's title or line says it beside its strip's alert name: "House Pump Power …". A
+ *  duration in it is worded now, from its `since` ("offline for 6 d 2 h"), in the Kiosk's duration words
+ *  (chartUtils.fmtDuration): the title the Agent wrote at 02:00 said "129 h" all day (architecture review, 2026-10-15).
+ *  ⚠️ NEVER ITS ALERT'S NAME (architecture review, 2026-11-05: "#91-P1 · …" under the strip's "#91-P1" chip). */
+export function faultName(t: Pick<FmTicket, "title" | "titlePattern" | "since">, now: number = Date.now()): string {
+  const from = t.since ? Date.parse(t.since) : NaN;
+  return t.titlePattern?.includes("{since}") && Number.isFinite(from)
+    ? t.titlePattern.replace("{since}", fmtDuration(now - from)) : t.title;
+}
+
+/** A fault's title where no strip carries its alert's name (a form's banner, a picker): "#5-P2 · House Pump Power …"
+ *  — its name as its Telegram messages carry it (alertLabel) — else its name alone. */
 export function faultTitle(t: Pick<FmTicket, "title" | "alertNumber" | "alertPriority" | "titlePattern" | "since">,
   now: number = Date.now()): string {
-  const from = t.since ? Date.parse(t.since) : NaN;
-  const title = t.titlePattern?.includes("{since}") && Number.isFinite(from)
-    ? t.titlePattern.replace("{since}", fmtDuration(now - from)) : t.title;
-  const n = alertNumberOf(t);
-  return n !== undefined ? `${alertLabel(n, t.alertPriority)} · ${title}` : title;
+  const label = faultAlertLabel(t);
+  return label ? `${label} · ${faultName(t, now)}` : faultName(t, now);
 }
 
 /** Who did a piece of work: the person, when someone else recorded it (a VESTA Agent completion for a Done on
@@ -837,7 +848,7 @@ export function standingHelp(t: Pick<FmTicket, "status" | "updates">): HelpAsked
   return { at: ups[i].at, ...(by ? { by } : {}) };
 }
 
-/** Its standing Need help is the last thing that moved it, so its card's pill says it (faultNotes.faultLatest): no
+/** Its standing Need help is the last thing that moved it, so its card's who line says it (faultNotes.faultMove): no
  *  status step after it. ⚠️ SAID ONCE (architecture review 23): the pill said "Need help asked by Owner, on …" and the
  *  line above the buttons "🆘 Need help asked … (Owner)" again; that line now says only a help the pill does not
  *  (deviceWork.helpAsked). */

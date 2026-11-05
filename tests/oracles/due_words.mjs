@@ -65,12 +65,26 @@ console.log("\n  the Overview's late-task line says the same word:");
 
 console.log("\n  the screens read the table (wiring a drawing cannot reach — the tab needs the Facility data):");
 const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
-const today = code("components/fm/TodayTab.tsx");
 // owner, 2026-11-05 ("Status on top"): the state in the card's strip, the day it is due as its time; the sentence
-// ("3 days overdue") is the recap's, never the card's, whose strip says it already
-ck("the Schedule tab's state is the table's word in the table's tone; its strip's time the day it is due",
-   /status=\{\{ text: DUE_WORDS\[s\.state\]\.word, tone: pillClass\(DUE_WORDS\[s\.state\]\.tone\) \}\}/.test(today)
-   && /when=\{s\.dueAt \? `Due \$\{shortDate\(s\.dueAt\)\}` : undefined\}/.test(today) && !/dueLine\(s\)/.test(today));
+// ("3 days overdue") is the recap's, never the card's, whose strip says it already. ⚠️ ONE TASK, ONE CARD (architecture
+// review, 2026-11-05): the Schedule tab drew the same overdue task grey with no state; both tabs draw TaskCard.
+{
+  const { h, draw, inside, text } = await import("../consistency/screen.mjs");
+  const { default: TaskCard } = await import("@/components/fm/TaskCard");
+  const { elements, parseTsx } = await import("../consistency/jsx.mjs");
+  const st = E.scheduleStatus({ id: "t", title: "AC service", everyDays: 30, enabled: true, createdAt: "2020-01-01T00:00:00Z" },
+    [{ id: "c", scheduleId: "t", at: "2020-01-01T12:00:00Z", by: "Op", photoIds: [] }]);
+  const card = draw(h(TaskCard, { status: st, room: "Hall", actions: null }));
+  const strip = inside(card, "fm-record-strip");
+  ck("a task's strip: the table's word in the table's tone, the day it is due as its time; who last did it its who line",
+     st.state === "overdue" && strip.includes(`>${E.DUE_WORDS.overdue.word}<`) && /strip-danger/.test(card)
+     && text(inside(strip, "fm-record-when")).includes(`Due ${E.shortDate(st.dueAt)}`) && !card.includes(E.dueLine(st))
+     && card.includes("Last done by Op"), card);
+  const uses = (f) => [elements(parseTsx(`components/fm/${f}.tsx`), "TaskCard").length, elements(parseTsx(`components/fm/${f}.tsx`), "RecordCard").length];
+  ck("  ...the Today tab and the Schedule tab both draw it, neither a task card of its own",
+     JSON.stringify(uses("TodayTab")) === "[1,1]" /* and "Nothing due" */ && JSON.stringify(uses("ScheduleEditor")) === "[1,0]",
+     [uses("TodayTab"), uses("ScheduleEditor")]);
+}
 const words = Object.values(E.DUE_WORDS).map((w) => w.word);
 const literal = new RegExp(`"(${words.join("|")}|Overdue by|No completion recorded yet)`);
 ck("  ...and no screen or document spells a due word itself",

@@ -14,15 +14,13 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCardRoom } from "@/config/VillaModel";
-import { scheduleStatus, shortDate } from "@/fm/fmEngine";
+import { scheduleStatus } from "@/fm/fmEngine";
 import type { FmSchedule } from "@/fm/fmTypes";
-import AgentMark from "./AgentMark";
 import { EMPTY_SCHEDULE_DRAFT as EMPTY, scheduleToDraft as toDraft, draftDays, scheduleWrite, type ScheduleDraft as Draft } from "@/fm/scheduleDraft";
 import FormActions from "./FormActions";
 import Tip from "@/components/common/Tip";
-import RecordCard from "./RecordCard";
+import TaskCard from "./TaskCard";
 import FmForm from "./FmForm";
-import { pillClass } from "@/fm/tone";
 import { useListEditor } from "./ListEditor";
 
 /** How the obligation is usually WRITTEN, mapped to days. Anything that isn't a
@@ -143,17 +141,8 @@ export default function ScheduleEditor() {
           // never done) from when it was created. See fmEngine.scheduleStatus.
           const due = scheduleStatus(s, data.completions);
           return editor.inPlace(s.id, (
-            // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22: "wherever there is a card, the same style")
-            <RecordCard key={s.id} title={s.title}
-              // its state, the status pill every card has (owner, 2026-11-01), never a grey tag
-              status={s.enabled ? undefined : { text: "Paused", tone: pillClass("warn") }}
-              when={due.dueAt ? `Due ${shortDate(due.dueAt)}` : undefined}
-              room={roomOf(s)}
-              pills={<>
-                <span>every {s.everyDays} days</span>
-                {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
-                <AgentMark record={s} />
-              </>}
+            // THE task's card, the Today tab's too (TaskCard): its state, due day and who last did it on both
+            <TaskCard key={s.id} status={due} room={roomOf(s)}
               actions={<>
                 <button className="btn ghost" onClick={() => void updateSchedule(s.id, { enabled: !s.enabled })}>
                   {s.enabled ? "Pause" : "Resume"}
