@@ -5,7 +5,7 @@
 // has read it again. Driven through the real modules: which faults are being confirmed and their line
 // (fm/faultConfirm), the open-issue counts and the map's fault marks that must NOT take them (config/attention), their
 // cards drawn (cockpitCard → IssueCard) and where Messages puts them.
-import { h, draw } from "../consistency/screen.mjs";
+import { h, draw, inside } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync } from "node:fs";
 const { confirmingFaults, confirmParts, shownUntil } = await import("@/fm/faultConfirm");
@@ -122,18 +122,19 @@ ck("  ...only the faults whose device the profile may open (as the open issues)"
 const drawn = draw(h(AttentionCard, { card: cards[1], onOpenEntity: () => {} }));
 // ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … same style and same card layout"):
 // RecordCard's frame (marked), its title and room pill, the open issues' next-check pill, the check as its lead
-ck("  ...drawn by the open issues' own card: marked frame, a check, its device and room, its alert's name in its strip, its fault, who closed it its who line",
+ck("  ...drawn by the open issues' own card: marked frame, a check, its device in its strip and its room, its alert's name in its strip, its fault, who closed it its who line",
    /^<div class="fm-record-card fault-watched">/.test(drawn) && /class="[^"]*fault-watched-icon/.test(drawn)
-   && /<strong><button[^>]*>door<\/button><\/strong><\/div>/.test(drawn) && /<div class="fm-record-meta"><span>Hall<\/span><\/div>/.test(drawn)
+   && /<span class="fm-record-name"><button[^>]*>door<\/button><\/span><span class="fm-record-when">/.test(inside(drawn, "fm-record-strip")) && /<div class="fm-record-meta"><span>Hall<\/span><\/div>/.test(drawn)
    // its alert's name the strip's chip, never its words again (architecture review, 2026-11-05)
    && /<span class="fm-record-number">#65<\/span>/.test(drawn) && /Door unlocked/.test(drawn) && !/#65 ·/.test(drawn) && /class="fm-record-who"><svg[\s\S]*?<\/svg><span>Done[^<]* \(JM\)<\/span>/.test(drawn)
    && drawn.includes(`<span>Done${on(-2)} (JM)</span>`), drawn.slice(0, 900));
-// owner, 2026-11-05 ("Status on top"): a Watch card's strip says when it closes, in green, with its (i)
-const stripOf = (html) => /class="fm-record-strip strip-(\w+)">[\s\S]*?<span class="fm-record-status">([^<]*)<\/span><span class="info-tip"><button type="button" class="info-btn" aria-label="([^"]*)"/.exec(html);
+// owner, 2026-11-05 ("Status on top", then "state first"): a Watch card's first line says when it closes, in green, with
+// its (i), under a green strip
+const stripOf = (html) => /class="fm-record-strip strip-ok">[\s\S]*?<div class="fm-record-main"><div class="fm-record-state strip-(\w+)"><span class="fm-record-status">([^<]*)<\/span><span class="info-tip"><button type="button" class="info-btn" aria-label="([^"]*)"/.exec(html);
 const checkOf = (html) => /<span class="fm-record-check" aria-label="([^"]*)">/.exec(html);
 {
   const strip = stripOf(drawn);
-  ck("  ...its strip says \"Closes\" and its time, in green, what VESTA does then in its (i)",
+  ck("  ...its first line says \"Closes\" and its time, in green, what VESTA does then in its (i)",
      !!strip && strip[2] === `Closes ${clockTime(NOW + 8 * 60_000)}` && strip[3] === closesAt(8) && strip[1] === "ok", strip?.slice(1));
   ck("  ...said once: no next check on its quiet line", checkOf(drawn) === null, checkOf(drawn));
 }
@@ -326,7 +327,7 @@ console.log("\n  a closed record told once, on both Closed sections (architectur
   const { closedCards } = await import("@/config/cockpitCard");
   const { closedTold } = await import("@/fm/faultConfirm");
   const { faultMove, moveState, moveWho } = await import("@/fm/faultNotes");
-  // what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its strip's state, then its who
+  // what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its state line, then its who
   // line, never the stage or the word twice (faultNotes.moveState, moveWho)
   const drawnMove = (m, s) => { const st = moveState(m); return [st?.text, moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
   const { closedActions, workRecord } = await import("@/fm/deviceWork");

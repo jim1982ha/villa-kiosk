@@ -42,14 +42,32 @@ ck("every failing check about devices opens its list: the devices not reporting 
    rowOf("All devices reporting").includes("|3 |devices| offline or not reporting.|") && !rowOf("All devices reporting").includes("View unavailable") && rowOf("Doors locked").includes("|View doors [icon]|")
    && rowOf("Lights off before arrival").includes("|View lights [icon]|") && rowOf("Air conditioning reachable").includes("|View air conditioning [icon]|")
    && rowOf("Cameras online").includes("|View cameras [icon]|"), rows);
-// architecture review, 2026-11-05: its button a segment of its bar, as every card's; its state its strip's word
+// architecture review, 2026-11-05: its button a segment of its bar, as every card's; owner, 2026-11-05 (the second
+// card): its name in its strip ("No alarm"), its state the card's first line ("Pass")
 {
   const card = html.split('<div class="fm-row ').find((x) => x.includes("All devices reporting")) ?? "";
   const doors = html.split('<div class="fm-row ').find((x) => x.includes("Doors locked")) ?? "";
-  ck("  ...a button in its bar, never beside its title; no bar under the devices not reporting; its state the first words of its strip",
-     inside(doors, "fm-record-actions").includes("View doors") && !card.includes("fm-record-actions") && !inside(card, "fm-row-title").includes("<button")
+  const strip = inside(card, "fm-record-strip");
+  ck("  ...a button in its bar, never in its strip; no bar under the devices not reporting; its name in its strip, its state its first line",
+     inside(doors, "fm-record-actions").includes("View doors") && !card.includes("fm-record-actions") && !strip.includes("<button")
      && /<button type="button" class="fm-text-link">devices<\/button> offline/.test(card)
-     && /fm-record-status">(Pass|Warning|Fail)</.test(card), card);
+     && text(inside(strip, "fm-record-name")) === "|All devices reporting|" && !strip.includes("fm-record-status")
+     && /<div class="fm-record-main"><div class="fm-record-state strip-\w+"><span class="fm-record-status">(Pass|Warning|Fail)<\/span><\/div>/.test(card), card);
+}
+// owner, 2026-11-05: Save snapshot left the verdict's card for a row of its own at the right, after the last check and
+// above the snapshots it saves
+{
+  const { parseTsx, elements, propText } = await import("../consistency/jsx.mjs");
+  const tab = parseTsx("components/fm/ReadinessTab.tsx").statements.find((st) => st.name?.getText() === "ReadinessTab");
+  const order = ["ReadinessChecks", "SaveButton", "SavedDocumentsList"].map((t) => elements(tab, t)[0]?.getStart() ?? -1);
+  const save = elements(tab, "SaveButton");
+  const row = save[0]?.parent;
+  const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
+  ck("  ...Save snapshot after the last check, a row of its own at the right, above the saved snapshots; none in the verdict's card",
+     save.length === 1 && order.every((at, i) => at >= 0 && (i === 0 || order[i - 1] < at))
+     && propText(row, "className") === '"fm-save-row"' && /\.fm-save-row \{ display: flex; justify-content: flex-end; \}/.test(css)
+     && propText(elements(tab, "ReadinessChecks")[0], "save") === null && !/<button/.test(inside(html, "fm-headline"))
+     && /fm-headline[\s\S]*?<\/div><div class="fm-list">/.test(html), [order, propText(row, "className")]);
 }
 // (owner, 2026-10-18: the devices not reporting as pills, "the same way the unlocked device or on lights are shown")
 ck("  ...every check names its devices as chips — the devices not reporting too",
@@ -113,10 +131,12 @@ console.log("\n  one tinted card (fm/tone): each state says its tone, the styles
   const { CHECK_WORDS } = await import("@/fm/readiness");
   const drawnRow = (state) => draw(h(ReadinessChecks, { readiness: { ...r, checks: [{ ...r.checks[0], state }] }, label: (id) => id,
     onOpenEntity: () => {}, onOpenCheck: () => {}, startOpen: true }));
-  // owner, 2026-11-05 ("Status on top"): its tone is its strip's colour, the frame itself plain
+  // owner, 2026-11-05 ("Status on top"): its tone is its strip's colour and its first line's, the frame itself plain
   ck("a Recap check drawn amber or red by its tone, never by the Schedule's words",
      /class="fm-record-card"><div class="fm-row fm-record"><div class="fm-record-strip strip-warn">/.test(drawnRow("warn"))
      && /class="fm-record-strip strip-danger"/.test(drawnRow("fail")) && /class="fm-record-strip strip-ok"/.test(drawnRow("pass")) /* "Pass" green, as a task's "On schedule" */
+     // owner, 2026-11-05 (the second card): its first line, its state, in the same colour
+     && ["warn", "fail", "pass"].every((st, i) => drawnRow(st).includes(`<div class="fm-record-state strip-${["warn", "danger", "ok"][i]}">`))
      && !/state-|fm-record-card tone-/.test(drawnRow("fail")));
   ck("  ...the same three tones for a task, a check and the spending cap",
      [DUE_WORDS["due-soon"].tone, CHECK_WORDS.warn.tone, TONE_OF.cap.approaching].every((t) => toneClass(t) === "tone-warn")

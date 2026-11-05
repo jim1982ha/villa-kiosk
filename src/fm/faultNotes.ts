@@ -1,5 +1,5 @@
 // src/fm/faultNotes.ts
-// What a fault's card says about its history: who last moved it (its strip's state, its who line) and its notes. Pure, so the
+// What a fault's card says about its history: who last moved it (its state line, its who line) and its notes. Pure, so the
 // oracle drives it (tests/oracles/agent_view.mjs).
 //
 // ⚠️ A STEP SAYS WHAT IT IS (architecture review 26): the card used to recognise the VESTA Agent's title changes by
@@ -48,8 +48,8 @@ export function stagePillClass(stage: FmStage): string {
   return stage === "ticket" ? ACCENT_PILL : stage === "closed" ? QUIET_PILL : pillClass(STAGE_WORDS[stage].tone);
 }
 
-/** ⚠️ WHO LAST MOVED IT, IN PARTS (owner, 2026-11-05, the "Status on top" card): the card's strip says where it stands
- *  and since when, its who line only who moved it (moveState, moveWho). It was one sentence in one pill ("Ticket opened
+/** ⚠️ WHO LAST MOVED IT, IN PARTS (owner, 2026-11-05, the "Status on top" card): the card says where it stands
+ *  (its first line) and since when (its strip), its who line only who moved it (moveState, moveWho). It was one sentence in one pill ("Ticket opened
  *  by Wayan, on 31/10/2026 09:55 · In progress"); that sentence went with the pill (architecture review, 2026-11-05): nothing
  *  draws it. Who: the name typed for who does the work, else the profile that recorded it. A stage only for a ticket
  *  (owner, 2026-11-04: "the status in the pill shall only appear for real ticket opened in the Ticket tab"). `word`: what the step did ("Ticket opened", "Reopened",
@@ -84,7 +84,7 @@ export function faultMove(t: FmTicket): FaultMove | null {
   return last.status === "in_progress" ? said("opened", "Ticket opened", last.at, who) : null;
 }
 
-/** What the card's strip says of the move: a ticket its stage ("Ticket in progress", "Resolved"), a reopening or a
+/** What the card's state line says of the move: a ticket its stage ("Ticket in progress", "Resolved"), a reopening or a
  *  close its word; a Need help nothing (its who line says it, with when). Pure. */
 export function moveState(m: FaultMove | null | undefined): { text: string; tone: string } | null {
   if (!m) return null;
@@ -94,7 +94,7 @@ export function moveState(m: FaultMove | null | undefined): { text: string; tone
 }
 
 /** ⚠️ WHO MOVED IT, SAID ONCE (owner, 2026-11-05: "Opened by Fab & Jm", "By VESTA Agent", "Done by Wayan"): the move's
- *  word unless the strip says it (`strip`: the strip's words; a ticket's opening is "Opened" under its stage), who, and
+ *  word unless the card's state says it (`strip`: the state's words; a ticket's opening is "Opened" under its stage), who, and
  *  its moment unless the strip's time is that moment (`when`). null when nothing is left to say. Pure. */
 export function moveWho(m: FaultMove | null | undefined, strip: readonly string[], when: string | undefined,
   stamp: (at: string) => string): string | null {

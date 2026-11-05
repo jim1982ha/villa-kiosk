@@ -102,7 +102,7 @@ export function messageOfLine(line: CardView["lines"][number], kept: readonly An
 
 /** A message's title split as its line draws it: its alert's name as Telegram writes it ("#100-P1": the strip's chip,
  *  the record's own name when the record knows no priority), and its other words (Telegram's step word, "(existing)",
- *  which the strip's state says, dropped). ⚠️ THE CHIP IS THE NAME (architecture review, 2026-11-05: "#100-P1
+ *  which the card's state says, dropped). ⚠️ THE CHIP IS THE NAME (architecture review, 2026-11-05: "#100-P1
  *  (existing)" under the strip's "#100-P1"). A title not opening with alert `n`'s name is all words. Pure. */
 export function toldTitle(title: string, n: number): { name?: string; words: string } {
   const m = new RegExp(`^#${n}(?:-[A-Za-z0-9]+)?(?![A-Za-z0-9])`).exec(title);

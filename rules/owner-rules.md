@@ -191,8 +191,9 @@ being planned for faults that clear themselves while the "being confirmed" card 
 ## One card, every case
 
 Every Cockpit card says the same things at the same place, folded or opened, in the Inbox or on Tickets (owner,
-2026-11-05, "Status on top"): its strip (its state and when it began, in the state's colour), its name, its room and
-next check, its words, who moved it, then its buttons along its bottom edge, the main one first. One card per device in
+2026-11-05, "Status on top", then the second card that day): its strip (its name and when it began, in the state's
+colour), its state on its first line, its room and next check, its words, who moved it, then its buttons along its
+bottom edge, the main one first. One card per device in
 Open issues and Watch alike. A state never repeats the card's words; a state says something real (no next check
 without a time). A change to a card is
 checked across every kind of card and every screen before it ships, so the owner never has to find the next mismatch.

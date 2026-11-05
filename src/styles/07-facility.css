@@ -56,33 +56,43 @@
     background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
   }
 }
-/* 1. ITS STRIP: a band of its status colour, never a border (rule 1). ONE LINE, ALWAYS: the status words give way with
-   "…"; its alert's name and its time never shrink. Its words mixed with the text colour, so they read on the light
-   theme's pale tint and the dark one's alike (4.5:1). */
+/* 1. ITS STRIP: a band of its status colour, never a border (rule 1): its icons, its alert's chip, the thing's NAME,
+   its time. The name wraps to TWO LINES AT MOST, then "…" (a ticket's title can be a sentence); the icons, the chip and
+   the time never shrink and stay on its first line (each a first line's height, the row aligned to its top). Its words
+   mixed with the text colour, so they read on the light theme's pale tint and the dark one's alike (4.5:1). */
 .strip-danger { --strip: var(--status-danger); }
 .strip-warn { --strip: var(--status-warning); }
 .strip-ok { --strip: var(--accent); }
 .strip-neutral { --strip: var(--status-lost); }
 .fm-record-strip, .fm-record-part-head {
-  display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden;
+  --strip-line: 22px;
+  display: flex; align-items: flex-start; gap: 8px; min-width: 0; line-height: var(--strip-line);
   font-size: var(--text-sm); font-weight: 600; color: color-mix(in srgb, var(--strip) 62%, var(--text-primary));
 }
-.fm-record-strip { min-height: 38px; padding: 0 14px; background: color-mix(in srgb, var(--strip) 13%, var(--bg-card)); }
-.fm-record-strip.strip-neutral { color: var(--text-secondary); }
-.fm-record-lead { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+.fm-record-strip { min-height: 38px; padding: 8px 14px; background: color-mix(in srgb, var(--strip) 13%, var(--bg-card)); }
+.fm-record-strip.strip-neutral, .fm-record-part-head.strip-neutral { color: var(--text-secondary); }
+:is(.fm-record-lead, .fm-record-number, .fm-record-when, .fm-record-strip .info-tip, .fm-record-part-head .info-tip) {
+  flex: none; white-space: nowrap; min-height: var(--strip-line); display: inline-flex; align-items: center;
+}
+.fm-record-lead { gap: 4px; }
 /* a line's two source icons side by side in a strip (they stack beside a list's line: 08-shared.css) */
 :is(.fm-record-strip, .fm-record-part-head) .cockpit-source-icons { flex-direction: row; gap: 4px; }
-.fm-record-number { flex: none; white-space: nowrap; font-size: var(--text-xs); padding: 1px 7px; border-radius: 999px;
-  background: color-mix(in srgb, var(--strip) 22%, transparent); }
-.fm-record-status { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.fm-record-strip .info-tip, .fm-record-part-head .info-tip { flex: none; }
-.fm-record-when { flex: none; margin-left: auto; white-space: nowrap; font-size: var(--text-xs); font-weight: 500;
-  color: var(--text-secondary); }
-/* 2-5. its title, its quiet line, its words and who moved it, padded inside the frame */
+.fm-record-number { font-size: var(--text-xs); line-height: 1.4; min-height: 0; margin-top: 2px; padding: 1px 7px;
+  border-radius: 999px; background: color-mix(in srgb, var(--strip) 22%, transparent); }
+.fm-record-name { flex: 0 1 auto; min-width: 0; color: var(--text-primary); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.fm-record-when { margin-left: auto; font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); }
+/* a part's state, on its header line: one line, its words give way with "…" */
+.fm-record-part-head .fm-record-status { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 2. ITS FIRST LINE, where it stands (rule 2): bold, in its tone's colour, its (i) after it */
+.fm-record-state { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--text-md); font-weight: 600;
+  line-height: 1.35; color: color-mix(in srgb, var(--strip) 62%, var(--text-primary)); }
+.fm-record-state.strip-neutral { color: var(--text-secondary); }
+.fm-record-state .fm-record-status { min-width: 0; overflow-wrap: anywhere; }
+.fm-record-state .info-tip { flex: none; margin-block: -6px; }
+/* 3-5. its quiet line, its words and who moved it, padded inside the frame; nothing to say, no padding */
 .fm-record-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 12px 16px 14px; }
-.fm-record-head { display: flex; align-items: flex-start; min-width: 0; }
-.fm-record-head .fm-row-title { flex: 1 1 auto; min-width: 0; }
-.fm-record-head .fm-row-title strong { font-weight: 600; font-size: var(--text-md); line-height: 1.35; overflow-wrap: anywhere; }
+.fm-record-main:empty { display: none; }
 /* an issue's name: the way to its device, not underlined (owner, 2026-11-02) */
 .fm-title-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 /* A word of a line that opens the place it names ("faults" Inbox › Open issues, "tickets" the Tickets tab: a readiness
@@ -112,7 +122,6 @@
 /* A CARD OF SEVERAL PROBLEMS: each a part, its own header line, words and bar, divided by a hairline */
 .fm-record-part { border-top: 1px solid var(--hairline); display: flex; flex-direction: column; }
 .fm-record-part-head { padding: 10px 16px 0; min-height: 28px; }
-.fm-record-part-head.strip-neutral { color: var(--text-secondary); }
 .fm-record-part-text { padding: 4px 16px 10px; display: flex; flex-direction: column; gap: 4px; }
 .fm-record-part-head:has(+ .fm-record-actions) { padding-bottom: 10px; }
 /* 6. ITS BAR (rule 6): its buttons joined along its bottom edge, equal segments split by hairlines (the bar's own
@@ -173,6 +182,8 @@
 /* The Spend tab's Month and its statement's three buttons; the buttons are one group that never splits. */
 .fm-statement-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .fm-statement-buttons { display: flex; flex-wrap: nowrap; gap: 8px; }
+/* a button of its own under a list, at the right (the Recap tab's Save snapshot, owner 2026-11-05) */
+.fm-save-row { display: flex; justify-content: flex-end; }
 @media (max-width: 640px) { .fm-statement-buttons { flex-wrap: wrap; } }
 /* A description with its action at the right of the same line (Schedule's "Add a task"); wraps on a phone. */
 .fm-desc-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -214,7 +225,6 @@
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
-.fm-row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 /* A row's own "sure?" (the fault's one-step close): a line of its own under
    the record, its question and buttons wrapping on a phone. */
 .fm-row-confirm { flex: 1 1 100%; }

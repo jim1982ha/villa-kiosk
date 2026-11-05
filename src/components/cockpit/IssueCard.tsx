@@ -41,7 +41,7 @@ export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicke
 }
 
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
- *  strip (its source icons, its alert's name, where it stands, its time), its name, its room and next check, its
+ *  strip (its source icons, its alert's name, its name, its time), where it stands, its room and next check, its
  *  problems. Its name opens the device. Draws `card` (config/cockpitCard) and nothing else: what it says is decided
  *  there, by value (cardStrip, lineStrip, faultNotes.moveWho). Pure: a check draws it. */
 export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
@@ -55,7 +55,7 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
 }) {
   const icons = cardIcons(card);
   const strip = cardStrip(card);
-  // ⚠️ A WATCH CARD'S STRIP SAYS WHEN IT CLOSES (owner, 2026-11-05: "Closes 15:06" with its (i)); how it was cleared,
+  // ⚠️ A WATCH CARD'S FIRST LINE SAYS WHEN IT CLOSES (owner, 2026-11-05: "Closes 15:06" with its (i)); how it was cleared,
   // when and by whom, is its who line
   const watch = card.look === "watched" && card.nextCheck ? card.nextCheck : null;
   const status = watch ? [{ text: watch.when, tone: ACCENT_PILL }] : strip.status;
@@ -63,7 +63,7 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
   const parts: CardPart[] = card.lines.map((line, i) => {
     const own = lineStrip(line);
     const alone = card.lines.length === 1;
-    // its time and its words as its strip says them: the card's for one problem, its header's for one of several
+    // its time and its state as the card says them: the card's for one problem, its header's for one of several
     const said = alone ? status : own.status, at = alone ? when : rowWhen({ lines: [line] });
     return {
       key: line.key, status: own.status, number: own.number, when: at, tone: own.tone,

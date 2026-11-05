@@ -219,6 +219,18 @@ export function readLayout(message: string): Pick<Announcement, "title" | "to" |
   return { title: plain(title[1]), to: to ? plain(to[1]) : "", text: quotes.filter(Boolean).join("\n"), status: plain(tail) };
 }
 
+/** ⚠️ A MESSAGE'S CARD: ITS NAME, THEN THE REST (owner, 2026-11-05): VESTA's title is a sentence or two; its card's strip
+ *  names it by the FIRST sentence, its first line says the rest ("The Example House, devices offline on 04/11/2026 08:56. All
+ *  back to normal." → "The Example House, devices offline on 04/11/2026 08:56" | "All back to normal."). A sentence ends at a
+ *  period followed by a space or the end ("05/11/2026." ends one), never inside a number ("2.5"). A view of the stored
+ *  title, which stays as it came. Pure: tests/oracles/announcements.mjs drives it. */
+export function titleSentences(title: string): { name: string; rest: string } {
+  const t = title.trim();
+  const end = /^([\s\S]*?[^.\s])\.(?=\s|$)/.exec(t);
+  if (!end) return { name: t, rest: "" };
+  return { name: end[1].trim(), rest: t.slice(end[0].length).trim() };
+}
+
 const PHOTO_ID = /^[0-9a-f]{32}\.(?:jpg|png)$/;
 
 /** The add-on's kept buttons ([[label, command], …] per row), in one list; a malformed one left out. */

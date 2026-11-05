@@ -104,35 +104,39 @@ Two overlap fixes (2.496.552-553) were made without the phone's pose, the second
 
 ## A card's state is one pill
 
-Every Cockpit card says its state only in RecordCard's strip (`status`): the coloured band on top, its words joined
-" · ", in the strip's tone (red act now, amber a fault, green handled, grey quiet or closed). A line of text says what is
-wrong, never the state; who moved it is the who line (`who`, faultNotes.moveWho), never its stage or its time again.
-Never add a case to a shared format that makes one kind of card read differently.
+Every Cockpit card says its state only on its first line (RecordCard's `status`), under the strip: its words joined
+" · ", bold, in the tone of the strip above it (red act now, amber a fault, green handled, grey quiet or closed); a card
+with no state has no such line. The strip names the thing (`title`) and says when. A line of text says what is wrong,
+never the state; who moved it is the who line (`who`, faultNotes.moveWho), never its stage or its time again. Never add
+a case to a shared format that makes one kind of card read differently.
 
 **Why:** owner, 2026-11-01: "Missing, #100-P1" was a special case inside the shared code, so one kind of card had its own
-format; the same code path does not mean the same format. Owner, 2026-11-05 ("Status on top"): the state, then the
-name, then where, then what, then who, then the buttons, the same on every card.
+format; the same code path does not mean the same format. Owner, 2026-11-05 ("Status on top", then the second card the
+same day): the name and the time in the strip, then the state, then where, then what, then who, then the buttons, the
+same on every card.
 
 **How to apply:** before adding a condition to anything every card goes through, ask whether it creates a second format;
 if so, ask the owner first. `tests/oracles/cockpit_cards.mjs` fails on a state said twice, in the bar or in a line's words.
 
 ## A row's every field, on every kind of card
 
-A card's anatomy is the same whatever kind of problem it is: the strip (its source icons, its alert's name, its state,
-its time at the right, on one line that never wraps), the title, one quiet line (room, then next check, then its tags,
-" · " between them), its words, who moved it, its bar (the main action first and green). A new field, or a change to
-one, is proven on EVERY kind (offline, Missing, red device, late task, fault, ticket, Watch), not on the kinds the change
-touched; a time comes from `beganAt` or the record, never a per-kind blank. A card with no status and no icon still has
-its strip and its time.
+A card's anatomy is the same whatever kind of problem it is: the strip (its source icons, its alert's name, the thing's
+name, its time at the right; the name wraps to two lines at most, the icons, chip and time never shrink and stay on its
+first line), the state its first line, one quiet line (room, then next check, then its tags, " · " between them), its
+words, who moved it, its bar (the main action first and green). A notification's or a report's name is its title's first
+sentence, the rest its first line (announcements.titleSentences). A new field, or a change to one, is proven on EVERY
+kind (offline, Missing, red device, late task, fault, ticket, Watch), not on the kinds the change touched; a time comes
+from `beganAt` or the record, never a per-kind blank. A card with no status and no icon still has its strip, its name
+and its time.
 
 **Why:** owner, 2026-11-01: an offline camera's row had no time. The review after the one-pill change compared state and
 words only, and the time existed on faults alone, so "consistent everywhere" was claimed over a field nobody had asked.
 
 **How to apply:** `tests/oracles/every_card_row.mjs` draws the real card of each kind through the real path and fails when
 a kind of line is not in its table; add a new field there, and prove it red on one kind. The Inbox's card and the card
-drawn alone draw the same strip and quiet line.
+drawn alone draw the same strip, first line and quiet line.
 
-Every `RecordCard` in the tree counts, not only the Inbox's: its strip its state and time, its quiet line its room
+Every `RecordCard` in the tree counts, not only the Inbox's: its strip its name and time, its first line its state, its quiet line its room
 (`useCardRoom`, "Other" with none) first. The check derives the cards from the source tree, so a card on another tab
 cannot be skipped; a card with no place is listed there with why. Before saying "every card", name the tabs that were
 checked; never accept a gap by describing it.

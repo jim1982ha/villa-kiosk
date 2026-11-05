@@ -1,3 +1,19 @@
+## 2.496.712
+
+What you will see:
+- Every card names its thing in its coloured band at the top: the device, the ticket, the task, the Recap check, the
+  saved document, the spend, with the time at the right. A long name takes two lines at most, then "…". The device's
+  name still opens the device.
+- The first line inside the card says where it stands, in bold and in the band's colour: "Reopened", "Ticket in
+  progress", "Resolved", "Overdue", "Pass", "2 problems", or on Watch "Closes 15:06" with its (i). A card with nothing to
+  say about its state starts straight with its details.
+- A notification or a report is named in its band by the first sentence of its title ("The Example House, devices
+  offline on 04/11/2026 08:56"); the rest of the title ("All back to normal.") is its first line. Telegram is unchanged.
+- Spend: the month's money and the spend entries come first, under Spend settings; then a "Monthly recap" section with
+  the Month, its recap buttons, the recap and the saved recaps.
+- Recap: "Save snapshot" moved from the verdict at the top to its own row at the right, after the last check and just
+  above the saved snapshots.
+
 ## 2.496.711
 
 What you will see:

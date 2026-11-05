@@ -23,7 +23,7 @@ export const TONE_OF = {
 /** A tone's class on a card: none when all is well. */
 export const toneClass = (t: Tone): string => (t === "ok" ? "" : `tone-${t}`);
 
-/** A tone's class on a card's state (RecordCard `status.tone`: its strip's colour, 07-facility.css .strip-*): its ok
+/** A tone's class on a card's state (RecordCard `status.tone`: its strip's and its state line's colour, 07-facility.css .strip-*): its ok
  *  is drawn too (green, as a task's "ok" state) — only a card's tone is left plain when all is well. */
 export const pillClass = (t: Tone): string => `tone-${t}`;
 

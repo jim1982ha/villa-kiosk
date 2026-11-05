@@ -47,7 +47,7 @@ const lineWork = (records: WorkRecord[], device: string | undefined): Pick<CardL
   ({ records, actions: overviewActions(records, device), asked: helpAsked(records) });
 
 /** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");
- *  in a row that is the problem itself (no device), nothing: its title is the row's (its stage is its strip's,
+ *  in a row that is the problem itself (no device), nothing: its title is the row's (its stage is its state line's,
  *  faultNotes.moveState). Every row shows its problems this way, one or several. */
 function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
   return group.key.startsWith("device:") ? attentionLine(item) : "";
@@ -221,7 +221,7 @@ export interface CardLine {
   story: { note: string; at: string }[];
   /** When its fault began (fmEngine.faultBegan, ISO); null for a live state with no fault. */
   openedAt: string | null;
-  /** Who last moved its fault, when, and its stage (faultNotes.faultMove): the strip's state and the who line; absent
+  /** Who last moved its fault, when, and its stage (faultNotes.faultMove): the card's state and the who line; absent
    *  or null: nobody yet. */
   move?: FaultMove | null;
   /** Its own state words (a device's "Unavailable", a task's "Overdue"): its header's on a card of several. */

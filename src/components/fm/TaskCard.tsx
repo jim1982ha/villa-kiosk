@@ -22,8 +22,8 @@ export default function TaskCard({ status: st, room, actions }: {
 }) {
   const s = taskState(st);
   return (
-    // the day it is due in its strip, its interval on its quiet line, the last time it was done its who line
-    // (the "Status on top" card, owner 2026-11-05)
+    // its name and the day it is due in its strip, its state its first line, its interval on its quiet line, the last
+    // time it was done its who line (the "Status on top" card and the second card, owner 2026-11-05)
     <RecordCard tone={toneClass(s.tone)} title={st.schedule.title}
       status={{ text: s.word, tone: pillClass(s.tone) }}
       when={st.dueAt ? `Due ${shortDate(st.dueAt)}` : undefined}
