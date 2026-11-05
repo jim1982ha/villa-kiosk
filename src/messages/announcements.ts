@@ -125,6 +125,13 @@ const STAGE_MARKS: readonly [string, Stage][] = (Object.entries(AGENT_CONTRACT.s
   .flatMap(([stage, mark]): [string, Stage][] => (AS_STAGE[stage] ? [[mark, AS_STAGE[stage]]] : []))
   .sort(([x], [y]) => y.length - x.length);
 
+/** A bottom line's words without its stage's mark ("⚠️ New alert" → "New alert"): where a screen says the stage by
+ *  colour (a card's state line, cockpitCard.toldState). Pure. */
+export function statusWords(status: string): string {
+  const mark = STAGE_MARKS.find(([m]) => status.startsWith(m))?.[0];
+  return (mark ? status.slice(mark.length) : status).trim();
+}
+
 /** An announcement's stage, read from its bottom line; null without one. Pure: tests/oracles/announcements.mjs. */
 export function stageOf(status: string): Stage | null {
   return STAGE_MARKS.find(([mark]) => status.startsWith(mark))?.[1] ?? null;

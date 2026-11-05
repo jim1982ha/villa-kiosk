@@ -61,8 +61,18 @@ console.log("  a device the villa's system no longer has:");
   // owner, 2026-11-01: never before the alert's name: one format for every card
   // owner, 2026-11-01: a state is every card's status pill, never the words of a line
   ck(`  ...and the Inbox's alert card says "${NOT_IN_HA}" in the status pill every card has, VESTA's alert name its strip's chip (as VESTA's title writes it, the record knowing no priority), its message under it`,
-     /class="fm-record-status">Missing</.test(drawn) && drawn.includes('fm-record-number">#7-P1<') && !drawn.includes("(new)") && !drawn.includes(`${NOT_IN_HA}, #7`)
+     /class="fm-record-status">Missing · New alert</.test(drawn) && drawn.includes('fm-record-number">#7-P1<') && !drawn.includes("(new)") && !drawn.includes(`${NOT_IN_HA}, #7`)
      && drawn.includes("The door was unlocked while the villa was vacant."), drawn);
+  // architecture review 29 (2026-11-06): where its alert stands, VESTA's Status, is its state line's, said once: never
+  // again under its words, the stage's mark read as the line's colour
+  ck("  ...where its alert stands (VESTA's Status, \"New alert\") is its state line, once: not again under its words",
+     !/announcement-full-status|⚠️ New alert/.test(drawn), drawn);
+  {
+    const watched = draw(h(CockpitAttentionRow, { card: { ...issueAsTold(card, [alert]), look: "watched", nextCheck: { when: "Closes 15:06", tip: "t" } },
+      onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
+    ck("  ...on the Watch list its state is when it closes, and VESTA's Status stays under its words",
+       /fm-record-status">Closes 15:06</.test(watched) && watched.includes("⚠️ New alert"), watched);
+  }
   const strip = cockpit(live, [{ ...alertTicket, id: "t-2", entityId: STRIP, alertNumber: 8, title: "Strip offline" }]).cards;
   const alert8 = { ...alert, key: "incident:8", title: "#8-P2 (new)" };
   const stripDrawn = draw(h(CockpitAttentionRow, { card: issueAsTold(cardOf(strip, STRIP), [alert8]),

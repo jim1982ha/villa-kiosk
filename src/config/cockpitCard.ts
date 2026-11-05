@@ -27,7 +27,7 @@ import { alertNumberOf, faultAlertLabel, faultBegan, faultName } from "@/fm/fmEn
 import { faultMove, moveState, type FaultMove } from "@/fm/faultNotes";
 import type { FmData, FmTicket } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
-import type { Announcement } from "@/messages/announcements";
+import { alertStage, statusWords, type Announcement } from "@/messages/announcements";
 import { labelOf } from "./EntityMap";
 import { recordEntity, type VillaDevices } from "./deviceGroups";
 import { attentionSeverity, cardDevice, cardHead, type AttentionGroup, type AttentionItem, type AttentionSeverity } from "./attention";
@@ -173,21 +173,45 @@ function cardTone(lead: LineSources | null, lines: readonly CardLine[]): CardTon
  *  stands: its states and, for one problem, how it was last moved (a ticket's stage, "Reopened", a close's word:
  *  faultNotes.moveState); "2 problems" in its worst colour when it holds several, each problem's own in its header line
  *  (lineStrip). `tone`: the colour when nothing is said. Pure. */
-export function cardStrip(card: Pick<CardView, "lines" | "status" | "tone">): { status: RecordStatus[]; number?: string; tone: string } {
+export function cardStrip(card: Pick<CardView, "lines" | "status" | "tone" | "look">): { status: RecordStatus[]; number?: string; tone: string } {
   const tone = CARD_TONE_PILL[card.tone ?? "warn"];
   if (card.lines.length > 1) return { status: [{ text: `${card.lines.length} problems`, tone }], tone };
   const lead = leadLine(card);
-  const status = dedupe([...(card.status ?? []), ...(lead ? lineMoveState(lead) : [])]);
+  const status = dedupe([...(card.status ?? []), ...(lead ? lineState(lead, tone, card.look) : [])]);
   return { status, tone, ...(lead?.alertLabel ? { number: lead.alertLabel } : {}) };
 }
 
 /** A problem's header line on a card of several: its own states and how it was last moved, its alert's name. Pure. */
 export function lineStrip(line: CardLine): { status: RecordStatus[]; number?: string; tone: string } {
-  return { status: dedupe([...(line.state ?? []), ...lineMoveState(line)]), tone: CARD_TONE_PILL[cardTone(line.own ?? null, [line])],
-    ...(line.alertLabel ? { number: line.alertLabel } : {}) };
+  const tone = CARD_TONE_PILL[cardTone(line.own ?? null, [line])];
+  return { status: dedupe([...(line.state ?? []), ...lineState(line, tone)]), tone, ...(line.alertLabel ? { number: line.alertLabel } : {}) };
 }
 
-const lineMoveState = (l: CardLine): RecordStatus[] => { const m = moveState(l.move); return m ? [m] : []; };
+/** How a problem was last moved (a ticket's stage, "Reopened", a close's word: faultNotes.moveState), else where its
+ *  alert stands as VESTA's message says it (toldState). */
+const lineState = (l: CardLine, tone: string, look?: CardView["look"]): RecordStatus[] => {
+  const m = moveState(l.move);
+  return m ? [m] : toldState(l, tone, look);
+};
+
+/** ⚠️ AN ALERT'S CARD SAYS WHERE IT STANDS FIRST (architecture review 29, 2026-11-06): with nothing moved on its record,
+ *  its card's state line was empty and its stage ("⚠️ New alert", Telegram's Status) a small line under its words,
+ *  while every other card says its state first and the "(new)" of Telegram's title was dropped as "the card's state
+ *  says it" (round 26). VESTA's Status, its mark read as the colour: the problem's while it is open, grey once over.
+ *  Not on the Watch list, whose state is when it closes. Pure. */
+function toldState(l: CardLine, tone: string, look?: CardView["look"]): RecordStatus[] {
+  const words = look === "watched" || !l.told ? "" : statusWords(l.told.status);
+  if (!words) return [];
+  const over = ["watch", "closed"].includes(alertStage(l.told!) ?? "");
+  return [{ text: words, tone: over ? QUIET_PILL : tone }];
+}
+
+/** VESTA's message of a problem as its words draw it: its Status said once, by the state line when that line says it
+ *  (toldState), as Telegram says it once under "Status:". Pure. */
+export function toldShown(l: CardLine, look?: CardView["look"]): Announcement | undefined {
+  if (!l.told) return undefined;
+  return !moveState(l.move) && toldState(l, "", look).length ? { ...l.told, status: "" } : l.told;
+}
 const dedupe = (all: RecordStatus[]) => all.filter((s, i) => all.findIndex((x) => x.text === s.text) === i);
 
 /** ⚠️ A FAULT WAITING TO CLOSE SAYS SO (owner, 2026-10-21): a door locked at 14:38:50 was still a fault at 14:45 under

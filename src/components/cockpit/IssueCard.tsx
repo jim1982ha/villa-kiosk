@@ -9,7 +9,7 @@ import { CheckCircle2 } from "lucide-react";
 import WorkButtons, { useCardWork, type RaisedFault } from "@/components/fm/WorkButtons";
 import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
-import { cardIcons, cardStrip, lineStrip, rowWhen, type CardLine, type CardView } from "@/config/cockpitCard";
+import { cardIcons, cardStrip, lineStrip, rowWhen, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
 import RecordCard, { type CardPart } from "@/components/fm/RecordCard";
 import { moveWho } from "@/fm/faultNotes";
@@ -68,7 +68,7 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
     return {
       key: line.key, status: own.status, number: own.number, when: at, tone: own.tone,
       lead: icons.lines[i] ? <SourceIcons {...icons.lines[i]!} size={14} /> : undefined,
-      text: <LineWords line={line} watched={card.look === "watched"} />,
+      text: <LineWords line={line} look={card.look} />,
       who: card.look === "watched" ? line.closing : moveWho(line.move, said.map((s) => s.text), at, momentText),
       actions: buttons?.(line) ?? undefined,
     };
@@ -100,7 +100,8 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
 }
 
 /** A problem's words: what is wrong, VESTA's message of its alert or its short story on Telegram, when it closes. */
-function LineWords({ line, watched }: { line: CardLine; watched: boolean }) {
+function LineWords({ line, look }: { line: CardLine; look: CardView["look"] }) {
+  const watched = look === "watched", told = toldShown(line, look);
   return (
     <div className="cockpit-attention-sub-text">
       {/* its words whole, over as many lines as they need: no hover repeats them (owner, 2026-10-31) */}
@@ -109,7 +110,8 @@ function LineWords({ line, watched }: { line: CardLine; watched: boolean }) {
           VESTA's message of its alert, joined once (messagesModel issueAsTold), says it all here, as Telegram shows
           it (its "To:", "What to do", its Status: the same story); else what happened about it on Telegram — the
           alert sent, a reminder, an escalation, a button pressed (owner, 2026-10-14; ticket 19 of "One inbox") */}
-      {line.told ? <div className="messages-card-body"><AnnouncementContent announcement={line.told} /></div> : (line.story.length > 0 && (
+      {/* its Status once: the state line says where it stands (cockpitCard.toldShown) */}
+      {told ? <div className="messages-card-body"><AnnouncementContent announcement={told} /></div> : (line.story.length > 0 && (
         <ul className="cockpit-attention-story">
           {line.story.map((s) => <li key={`${s.at} ${s.note}`} className="cockpit-attention-latest">{s.note} · {momentText(s.at)}</li>)}
         </ul>
