@@ -32,9 +32,9 @@ ck("  ...what is no longer kept, a moved window's last report: the app's moment"
 const SRC = fileURLToPath(new URL("../../src/", import.meta.url));
 const locale = tsFiles(SRC).flatMap((f) => [...readFileSync(f, "utf8").matchAll(/toLocale(?:Date)?String\([^)]*\{[^}]*\bday:[^}]*\}/g)]
   .map((m) => `${f.slice(SRC.length)}: ${m[0]}`));
-// a weekday bucket ("Wed 4", the Energy window's bars) names a day of the week, not a date (dateText's note)
-const allowed = locale.filter((l) => !/weekday:/.test(l));
-ck("no locale day form left anywhere in the app (a weekday bucket aside)", allowed.length === 0, allowed);
+// ⚠️ NO EXCEPTION (architecture review 28): "Wed 4", the Energy window's week and month bars, was let through as a
+// weekday; it named a day of the month, a month of them no month. A weekday ALONE ("Wed") names no day: not matched.
+ck("no locale day form left anywhere in the app", locale.length === 0, locale);
 const T2 = Object.keys(T).sort().join();
 ck("  ...dateText offers the agreement's forms and the months' names, nothing else",
    T2 === "clockTime,dayShort,docDate,momentText,monthShort,monthYear", T2);

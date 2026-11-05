@@ -64,8 +64,9 @@ export type MarkedPeriod = "hour" | "day" | "week";
  * ⚠️ AN OUTAGE INSIDE ONE STEP OF THE FIGURES (owner, 2026-11-05: a power meter offline 22 minutes showed nothing on its
  * 1w chart, and an hourly mean hides it): each step of `coarse` that HAS its mean, inside which the recorder wrote no
  * finer figure for a slot (`finer`, one figure per `finerMs`: the device said nothing all that slot), marked the
- * step's whole width with `within`: drawn as a band, the line still drawn through it, its tooltip "Unavailable during
- * this hour". Only BETWEEN the finer figures (none before the first: older than the recorder keeps them, `keptFrom`
+ * step's whole width with `within`: drawn as a band, the line still drawn through it, its tooltip its real drops when
+ * the detail is kept (historySource.withDrops: "Unavailable at 06:58, for 10s"), else "Unavailable at least once that
+ * hour". Only BETWEEN the finer figures (none before the first: older than the recorder keeps them, `keptFrom`
  * for the five-minute ones, or before the device existed) and after the last only once its slot is compiled
  * (COMPILE_GRACE_MS: a slot not written yet is no outage). Pure.
  */

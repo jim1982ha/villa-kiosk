@@ -316,7 +316,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
   return (
     <div className="weather-history">
       <div className="weather-figures">
-        {historyFigures(p, unit, label, costUnit).map((f) => <Figure key={f.label} label={f.label} value={f.value} />)}
+        {historyFigures(p, unit, range.bucketName, costUnit).map((f) => <Figure key={f.label} label={f.label} value={f.value} />)}
       </div>
 
       <div className="weather-tile chart energy-wide">

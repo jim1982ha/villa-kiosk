@@ -70,6 +70,6 @@ const panel = readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx"
 ck("the first screen renders energyToday's words", /const T = energyToday\(setup, todayP, weekP, now, fmtChartTime\(now\), costUnit\);/.test(panel) && /<ObservationCards cards=\{T\.cards\} \/>/.test(panel) && /\{T\.headline\}/.test(panel));
 ck("the overlap note and card are one rule", /\{overlapShows\(split\) && \(/.test(panel) && !/split\.overlap > split\.used \* 0\.05/.test(panel));
 ck("no card, threshold or percent rule is left in the view", !/cards\.push/.test(panel) && !/Math\.round\(\([^)]*\) \* 100\)/.test(panel));
-ck("the history figures are historyFigures'", /historyFigures\(p, unit, label, costUnit\)\.map/.test(panel));
+ck("the history figures are historyFigures'", /historyFigures\(p, unit, range\.bucketName, costUnit\)\.map/.test(panel));
 
 done("✅ what the Energy window says, as rules");
