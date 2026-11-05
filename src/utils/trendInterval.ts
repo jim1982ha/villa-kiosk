@@ -94,7 +94,11 @@ export function knownSpans(s: HistorySeries): { a: number; b: number; v: number 
  * the device said nothing all of it: statisticsSeries.finerOutages). A step is marked only when the outage emptied a
  * whole five-minute slot of it (emptiesSlot), the one rule of both; the 1h and 24h charts still draw every outage.
  */
-export function stepsOfflineInside(s: HistorySeries, period: "hour" | "day" | "week", B: number): HistorySeries {
+export function stepsOfflineInside(s: HistorySeries, period: "hour" | "day" | "week", B: number,
+  /** The outages as they were (the changes' gaps, before widening): widened to whole steps, two outages in steps side
+   *  by side merge into one gap whose `actual` spans both, and a 50 ms drop the day before a long one read as that
+   *  whole span. Absent: each gap's own `actual`. */
+  outages?: readonly HistoryGap[]): HistorySeries {
   const { from, to } = s.window;
   if (!(to > from) || !s.gaps.some((g) => !g.notKept)) return s;
   const edges = cellEdges(from, to, B);
@@ -108,7 +112,8 @@ export function stepsOfflineInside(s: HistorySeries, period: "hour" | "day" | "w
       const a = Math.max(edges[k], g.from), b = Math.min(edges[k + 1], g.to);
       if (hasMean.has(k)) {
         run = null;
-        if (emptiesSlot(Math.max(real.from, edges[k]), Math.min(real.to, edges[k + 1]))) gaps.push({ from: a, to: b, within: period });
+        const seen = (outages ?? [real as HistoryGap]).some((o) => !o.notKept && emptiesSlot(Math.max(o.from, edges[k]), Math.min(o.to, edges[k + 1])));
+        if (seen) gaps.push({ from: a, to: b, within: period });
         continue;
       }
       if (run) { run.to = b; run.actual = { from: run.actual!.from, to: Math.min(real.to, b) }; continue; }

@@ -1,4 +1,4 @@
-## 2.496.703
+## 2.496.704
 
 What you will see:
 - A device's charts over a week or a month: a sensor the villa's system keeps no averages of (a template sensor) no
