@@ -104,10 +104,10 @@ ck("  ...and the map's fault marks (the amber \"!\") only its device",
 
 console.log("\n  in the Open issues list, last, uncounted, marked:");
 const cards = confirmingCards(conf, { devices, entities, entityMap: {}, resolvedRooms: { "lock.door": "Hall" }, may: () => true });
-ck("one card per fault, titled by its device, its fault's title its line, the confirm line under it, no buttons; one about to be watched, no pill",
+ck("one card per fault, titled by its device, its fault's title its line (its alert's name its chip), the confirm line under it, no buttons; one about to be watched, no pill",
    cards.length === 4 && cards.every((c) => c.look === "watched" && c.lines.every((l) => l.actions.length === 0))
    && cards.slice(0, 3).every((c) => c.nextCheck?.when) && cards[3].nextCheck === null && cards[3].lines[0].closing === `Done${on(-2)} (JM)`
-   && cards[1].title === "door" && cards[1].room === "Hall" && cards[1].lines[0].text === "#65 · Door unlocked"
+   && cards[1].title === "door" && cards[1].room === "Hall" && cards[1].lines[0].text === "Door unlocked" && cards[1].lines[0].alertLabel === "#65"
    && cards[1].lines[0].closing === `Done${on(-2)} (JM)` && cards[1].nextCheck.tip === line("w1").split(" · ")[1], cards[1]);
 {
   // owner, 2026-11-02: two LED Strip cards on Watch, "the same issue being reported in 2 distinct cards"
@@ -122,10 +122,11 @@ ck("  ...only the faults whose device the profile may open (as the open issues)"
 const drawn = draw(h(AttentionCard, { card: cards[1], onOpenEntity: () => {} }));
 // ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … same style and same card layout"):
 // RecordCard's frame (marked), its title and room pill, the open issues' next-check pill, the check as its lead
-ck("  ...drawn by the open issues' own card: marked frame, a check, its device and room, its fault, who closed it its who line",
+ck("  ...drawn by the open issues' own card: marked frame, a check, its device and room, its alert's name in its strip, its fault, who closed it its who line",
    /^<div class="fm-record-card fault-watched">/.test(drawn) && /class="[^"]*fault-watched-icon/.test(drawn)
    && /<strong><button[^>]*>door<\/button><\/strong><\/div>/.test(drawn) && /<div class="fm-record-meta"><span>Hall<\/span><\/div>/.test(drawn)
-   && /#65 · Door unlocked/.test(drawn) && /class="fm-record-who"><svg[\s\S]*?<\/svg><span>Done[^<]* \(JM\)<\/span>/.test(drawn)
+   // its alert's name the strip's chip, never its words again (architecture review, 2026-11-05)
+   && /<span class="fm-record-number">#65<\/span>/.test(drawn) && /Door unlocked/.test(drawn) && !/#65 ·/.test(drawn) && /class="fm-record-who"><svg[\s\S]*?<\/svg><span>Done[^<]* \(JM\)<\/span>/.test(drawn)
    && drawn.includes(`<span>Done${on(-2)} (JM)</span>`), drawn.slice(0, 900));
 // owner, 2026-11-05 ("Status on top"): a Watch card's strip says when it closes, in green, with its (i)
 const stripOf = (html) => /class="fm-record-strip strip-(\w+)">[\s\S]*?<span class="fm-record-status">([^<]*)<\/span><span class="info-tip"><button type="button" class="info-btn" aria-label="([^"]*)"/.exec(html);
@@ -324,7 +325,10 @@ console.log("\n  a closed record told once, on both Closed sections (architectur
 {
   const { closedCards } = await import("@/config/cockpitCard");
   const { closedTold } = await import("@/fm/faultConfirm");
-  const { faultLatest, moveText } = await import("@/fm/faultNotes");
+  const { faultMove, moveState, moveWho } = await import("@/fm/faultNotes");
+  // what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its strip's state, then its who
+  // line, never the stage or the word twice (faultNotes.moveState, moveWho)
+  const drawnMove = (m, s) => { const st = moveState(m); return [st?.text, moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
   const { closedActions, workRecord } = await import("@/fm/deviceWork");
   const T0 = NOW, iso = (ms) => new Date(ms).toISOString();
   const devs = devicesOf({ ids: ["switch.example_pump"] });
@@ -338,14 +342,14 @@ console.log("\n  a closed record told once, on both Closed sections (architectur
   const later = new Date(T0 + 3 * 86_400_000);
   const told = (t) => {
     const inbox = closedCards({ ...EMPTY_FM_DATA, tickets: [t] }, null, later, { devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, may: () => true })[0]?.lines[0];
-    return { inbox: (inbox?.move ? moveText(inbox.move, momentText) : null) ?? inbox?.closing, inboxReopen: (inbox?.actions ?? []).map((a) => a.label).join(),
-      tickets: faultLatest(t, momentText)?.text, ticketsReopen: closedActions(workRecord(t), closedTold(t).reopen).map((a) => a.label).join() };
+    return { inbox: (inbox?.move ? drawnMove(inbox.move, momentText) : null) ?? inbox?.closing, inboxReopen: (inbox?.actions ?? []).map((a) => a.label).join(),
+      tickets: faultMove(t) ? drawnMove(faultMove(t), momentText) : undefined, ticketsReopen: closedActions(workRecord(t), closedTold(t).reopen).map((a) => a.label).join() };
   };
   const [m, v, c] = [told(mine), told(vestas), told(cleared)];
   ck("the same words on Inbox › Closed and Tickets › Closed, by the action pressed and who",
-     m.inbox === m.tickets && m.inbox === `No action needed by Owner, on ${momentText(T0)} · Resolved`
-     && v.inbox === v.tickets && v.inbox === `Done by JM, on ${momentText(T0)} · Resolved`
-     && c.inbox === c.tickets && c.inbox === `Cleared on ${momentText(T0)}`, [m, v, c]);
+     m.inbox === m.tickets && m.inbox === `Resolved | No action needed by Owner, on ${momentText(T0)}`
+     && v.inbox === v.tickets && v.inbox === `Resolved | Done by JM, on ${momentText(T0)}`
+     && c.inbox === c.tickets && c.inbox === `Cleared | On ${momentText(T0)}`, [m, v, c]);
   ck("  ...and the same Reopen on both: a person's own ticket (nothing checks it again), never one VESTA checks",
      m.inboxReopen === "Reopen" && m.ticketsReopen === "Reopen" && v.inboxReopen === "" && v.ticketsReopen === ""
      && c.inboxReopen === "" && c.ticketsReopen === "", [m, v, c]);

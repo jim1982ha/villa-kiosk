@@ -294,8 +294,11 @@ const opened = draw(h(NoteDetail, { announcement: weekly, canOpenPage: true }));
      && drawn.includes("The pool pump stopped.") && !drawn.includes("SHORT STORY"), drawn);
   const watched = draw(h(AttentionCard, { card: told({ ...issue, look: "watched", lines: [{ ...issue.lines[0],
     text: "#92-P2 · LINE WORDS", closing: "CLOSING WORDS" }] }), onOpenEntity() {} }));
-  ck("  ...each thing said once: the line named by VESTA's title, its words and how it closed in VESTA's message "
-     + "(owner, 2026-10-29 screenshot)", watched.includes("#92-P2 (new)") && !watched.includes("LINE WORDS")
+  // ⚠️ THE CHIP IS THE NAME (architecture review, 2026-11-05): VESTA's title's alert name in the strip, Telegram's step
+  // word "(new)" said by the strip's state, never a line's words again
+  ck("  ...each thing said once: the alert named by VESTA's title in its strip, its words and how it closed in VESTA's message "
+     + "(owner, 2026-10-29 screenshot)", watched.includes('<span class="fm-record-number">#92-P2</span>') && !watched.includes("(new)")
+     && (watched.match(/#92-P2/g) ?? []).length === 1 && !watched.includes("LINE WORDS")
      && !watched.includes("CLOSING WORDS"), watched);
   ck("  ...an open issue's \"closes at about …\" kept (VESTA's message does not say it)",
      draw(h(AttentionCard, { card: told({ ...issue, lines: [{ ...issue.lines[0], closing: "CLOSES SOON" }] }),
@@ -310,8 +313,8 @@ const opened = draw(h(NoteDetail, { announcement: weekly, canOpenPage: true }));
   const two = draw(h(AttentionCard, { card: told(both), onOpenEntity() {} }));
   const at = (t) => two.indexOf(t);
   ck("  ...a device's other problem comes first, \"Also: …\", then the alert's message, never under its Status",
-     at("Also: Pump ran shorter than expected") > -1 && at("Also: Pump ran shorter than expected") < at("#92-P2 (new)")
-     && at("#92-P2 (new)") < at("The pool pump stopped.")
+     at("Also: Pump ran shorter than expected") > -1 && at("Also: Pump ran shorter than expected") < at('fm-record-number">#92-P2<')
+     && at('fm-record-number">#92-P2<') < at("The pool pump stopped.")
      && (two.match(/class="fm-record-part"/g) ?? []).length === 2, two);
   // owner, 2026-11-05 ("Status on top"): its strip says every source and "2 problems"; each problem's header line its own
   const strip = inside(two, "fm-record-strip"), heads = [...two.matchAll(/class="fm-record-part-head[\s\S]*?fm-record-when/g)].map((m) => m[0]);
@@ -345,12 +348,14 @@ const opened = draw(h(NoteDetail, { announcement: weekly, canOpenPage: true }));
   const v = messagesView({ open: [lock], watched: [pumpWatch], announcements: [msg100, msg92], filter: "issues", selected: null });
   const words = (html, cls) => (html.match(new RegExp(`class="${cls}">([^<]*)<`)) ?? [])[1];
   const lines = (html) => [...html.matchAll(/class="cockpit-attention-sub-title">([^<]*)</g)].map((m) => m[1]);
+  const chips = (html) => [...html.matchAll(/class="fm-record-number">([^<]*)</g)].map((m) => m[1]);
   for (const [what, item, Card] of [["an open issue", v.issues[0], CockpitAttentionRow], ["a watched one", v.watched[0], AttentionCard]]) {
     const row = listed(item);
     const opened = draw(h(Card, { card: item.card, onOpenEntity() {}, canManage: false, onEditTicket() {}, onRaiseTicket() {} }));
-    const alertName = lines(opened).find((l) => l.includes("#"));
-    ck(`${what}: listed and drawn alone it names the alert as Telegram does, in the same words`,
-       !!alertName && lines(row).includes(alertName) && /^#(100-P1|92-P2) \(/.test(alertName), { row: lines(row), card: lines(opened) });
+    const alertName = chips(opened)[0];
+    ck(`${what}: listed and drawn alone it names the alert as Telegram does, in its strip's chip, never in its words`,
+       !!alertName && chips(row).includes(alertName) && /^#(100-P1|92-P2)$/.test(alertName)
+       && ![...lines(row), ...lines(opened)].some((l) => l.includes("#")), { row: [chips(row), lines(row)], card: [chips(opened), lines(opened)] });
   }
   {
     // owner, 2026-11-01: "isn't it already covered by the 2 above lines ?"
@@ -360,7 +365,8 @@ const opened = draw(h(NoteDetail, { announcement: weekly, canOpenPage: true }));
       { key: "o", text: "Battery low", story: [], closing: null, own: { sources: ["night"], severities: ["warn"] } }] });
     const told = messagesView({ open: [same], watched: [], announcements: [msg100], filter: "issues", selected: null }).issues[0].card;
     ck("a problem an alert tells already is no \"Also\": its words go, its icon stays on the alert; another stays",
-       told.lines.map((l) => l.text).join("|") === "Also: Battery low|#100-P1 (existing)" && told.lines[1].own.sources.join() === "alert,night", told.lines);
+       told.lines.map((l) => l.text).join("|") === "Also: Battery low|" && told.lines[1].alertLabel === "#100-P1"
+       && told.lines[1].own.sources.join() === "alert,night", told.lines);
     ck("  ...and its record: the alert's Done closes both", told.lines[1].actions.find((x) => x.kind === "done")?.ids.join() === "r1,r2", told.lines[1]);
   }
   {
@@ -412,7 +418,7 @@ const opened = draw(h(NoteDetail, { announcement: weekly, canOpenPage: true }));
   ck("  ...a state its words say is no pill, on the card; a state nothing says stays one",
      !stated.test(opened) && !stated.test(listed(v.issues[0])) && stated.test(listed(messagesView({ open: [quiet], watched: [], announcements: [], filter: "issues", selected: null }).issues[0])));
   ck("  ...the open one: the alert named alone, the other problem as \"Also\", VESTA's words in it",
-     JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low", "#100-P1 (existing)"])
+     JSON.stringify(lines(opened)) === JSON.stringify(["Also: Battery low"]) && JSON.stringify(chips(opened)) === JSON.stringify(["#100-P1"])
      && opened.includes("The outdoor entrance lock is missing."), lines(opened));
   const rowTimeShown = words(listed(v.issues[0]), "fm-record-when");
   ck("  ...and its time pill is its alert's, not the other problem's", !!rowTimeShown && rowTimeShown.length > 0, rowTimeShown);

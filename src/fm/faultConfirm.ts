@@ -71,7 +71,7 @@ export function shownUntil(at: number, cadence: AgentCadence | null): number {
 /** ⚠️ ONE TELLING OF A CLOSE, ON EVERY TAB (architecture review 23): Inbox › Closed said "Cleared on … (Owner)" with no
  *  Reopen, Tickets › Closed "Closed by Owner, on … · Resolved" with one, of the same record. How `t` was closed (its
  *  last resolution: the word of the action, who, when), read by both Closed sections, the Watch list and every card's
- *  pill (faultNotes.faultLatest); `reopen`: it may be taken back, exactly when nothing will check it again: closed as
+ *  strip (faultNotes.faultMove); `reopen`: it may be taken back, exactly when nothing will check it again: closed as
  *  "Not a problem while it lasts" (owner, 2026-11-04), or a record a person raised, which VESTA has no check of. */
 export function closedTold(t: FmTicket): ClosedFault & { reopen: boolean } {
   const close = lastResolution(t);

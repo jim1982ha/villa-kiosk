@@ -20,7 +20,7 @@
 // state, its time), its words, who moved it, its own bar; its strip says how many. One part is the card itself.
 //
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
-// faults of one device: TicketsTab draws the frame). `tone`: the strip's colour when its status says none (fm/tone's
+// faults of one device: RecordGroup). `tone`: the strip's colour when its status says none (fm/tone's
 // toneClass), with any other class of the frame (a fault being confirmed, the card a warning opened on).
 //
 // ⚠️ ONE FOLD (owner, 2026-11-01): `folded`, a notification's or a report's until tapped: its caller hands its card whole
@@ -123,6 +123,18 @@ export function ActionsRow({ children }: { children: ReactNode }) {
     // a press on a button is the button's: never the card's hold-to-erase, never its tap-to-open
     <div className="fm-record-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
       {children}
+    </div>
+  );
+}
+
+/** ⚠️ ONE CARD HOLDING SEVERAL RECORDS (a ticket taken on for several faults of one device: TicketsTab): one frame, its
+ *  records (each a RecordCard with `framed={false}`) divided by a hairline, its bar after all of them. Drawn here with
+ *  every other part of a card (architecture review, 2026-11-05: the Tickets tab drew this frame itself). */
+export function RecordGroup({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="fm-record-card">
+      <div className="fm-record-group">{children}</div>
+      {actions && <ActionsRow>{actions}</ActionsRow>}
     </div>
   );
 }

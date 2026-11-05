@@ -23,7 +23,7 @@ import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, dayMonth, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
 import { closedFaults, closedTold, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
-import { alertLabel, alertNumberOf, faultBegan, faultTitle } from "@/fm/fmEngine";
+import { alertNumberOf, faultAlertLabel, faultBegan, faultName } from "@/fm/fmEngine";
 import { faultMove, moveState, type FaultMove } from "@/fm/faultNotes";
 import type { FmData, FmTicket } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
@@ -47,8 +47,8 @@ const lineWork = (records: WorkRecord[], device: string | undefined): Pick<CardL
   ({ records, actions: overviewActions(records, device), asked: helpAsked(records) });
 
 /** A problem's line inside ITS row: under a device, what attentionLine says ("Unlocked", "Entrance door unlocked");
- *  in a row that is the problem itself (no device), nothing: its title is the row's (its stage is its pill,
- *  faultNotes.faultLatest). Every row shows its problems this way, one or several. */
+ *  in a row that is the problem itself (no device), nothing: its title is the row's (its stage is its strip's,
+ *  faultNotes.moveState). Every row shows its problems this way, one or several. */
 function attentionLineIn(group: AttentionGroup, item: AttentionItem): string {
   return group.key.startsWith("device:") ? attentionLine(item) : "";
 }
@@ -83,8 +83,6 @@ function cardSources(items: readonly AttentionItem[]): LineSources | null {
  *  - Every line of one kind (or one line): the icons before the card's name (its `lead`), none on the lines.
  *  - Lines of several kinds: each line its own icons, none before the name — each icon drawn once, beside what it
  *    says.
- *  `column`: the card keeps its icon column (the lines' text lines up, the icons stay inside the card) whenever any
- *  icon is drawn. The list's row, which draws no line, draws `lead` whole.
  *  ⚠️ ONE PLACE FOR THE ICONS (owner, 2026-10-30, review round 4: three icon fixes in one afternoon — "a card's icons
  *  say every problem", "i see twice the same icons", "the icons appear outside the cards"): a line's icon was decided
  *  before the lines were put in their order, then patched three times (the first line's dropped for the name, given
@@ -140,10 +138,9 @@ function attentionLine(item: AttentionItem): string {
 /** ⚠️ A CARD'S STATE IS ITS PILLS, NEVER ITS WORDS (owner, 2026-11-01, option A): the Inbox wrote it three ways, "In
  *  progress: …", "Missing, #100-P1", "Unavailable", while Tickets and Schedule draw a status pill. Each distinct state
  *  of its problems, once: its device's own word its fault does not say (stateBesideFault: "Missing"), a state with no
- *  fault ("Unavailable", "Unlocked", a task's "Overdue"). A ticket's stage is no pill of its own: it is said in the
- *  pill of who last moved it (owner, 2026-11-02: faultNotes.faultLatest, "Ticket opened by … · In progress"). The line
- *  under them only ever says what is wrong (attentionLine, issueAsTold). Drawn by RecordCard's StatusPill on the opened
- *  card and on its row. Pure. */
+ *  fault ("Unavailable", "Unlocked", a task's "Overdue"). A ticket's stage is said with them by how it was last moved
+ *  (faultNotes.moveState, cardStrip). The line under them only ever says what is wrong (attentionLine, issueAsTold).
+ *  Drawn in the card's strip (RecordCard). Pure. */
 function cardStatuses(items: readonly AttentionItem[]): RecordStatus[] {
   const out = new Map<string, RecordStatus>();
   for (const s of items.flatMap(itemState)) out.set(s.text, s);
@@ -395,8 +392,8 @@ function oneCardPerDevice(cards: readonly CardView[]): CardView[] {
  *  check, the last closed first (faultConfirm.closedFaults).
  *  ⚠️ TAKEN BACK WHEN NOTHING CHECKS IT AGAIN (owner, 2026-11-04: "just add this button for the faults that have been
  *  closed with the Not a problem while it lasts status"; architecture review 23: one rule with Tickets › Closed,
- *  faultConfirm.closedTold): such a close had no way back. ⚠️ TOLD AS TICKETS › CLOSED TELLS IT (review 23): its pill,
- *  who closed it, how and when (faultNotes.faultLatest), never words of its own. */
+ *  faultConfirm.closedTold): such a close had no way back. ⚠️ TOLD AS TICKETS › CLOSED TELLS IT (review 23): its strip
+ *  and who line, who closed it, how and when (faultNotes.faultMove), never words of its own. */
 export function closedCards(fmData: FmData, cadence: AgentCadence | null, now: Date, opts: CardsOpts): CardView[] {
   return closedFaults(fmData, cadence, now.getTime()).flatMap((c) => clearedCard(c.ticket, "", opts,
     { key: `closed:${c.ticket.id}`, look: "closed", nextCheck: null,
@@ -420,7 +417,7 @@ function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardVi
   if (entityId && !may(entityId)) return [];
   // its device, title and room as an open issue's card has them (attention cardDevice / cardHead)
   const device = entityId ? cardDevice(entityId, t.room, { devices, entityMap, entities, resolvedRooms }) : undefined;
-  const title = faultTitle(t);
+  const title = faultName(t);
   return [{
     ...own,
     ...cardHead(device, title, t.room),
@@ -430,7 +427,7 @@ function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardVi
       closing: own.look === "closed" ? null : did, state: [],
       ...(own.look === "closed" ? { move: faultMove(t) } : {}),
       ...alertNumberIn(alertNumberOf(t)),
-      ...(alertNumberOf(t) !== undefined ? { alertLabel: alertLabel(alertNumberOf(t)!, t.alertPriority) } : {}) }],
+      ...(faultAlertLabel(t) ? { alertLabel: faultAlertLabel(t) } : {}) }],
     // a watched one is being handled (VESTA closes it), a closed one is over: both quiet but the watch's green
     tone: own.look === "watched" ? "handled" : "lost",
   }];

@@ -9,7 +9,10 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 const { applyFmCommand } = await import("@/fm/fmCommands");
 const { closedAsLasting } = await import("@/fm/fmEngine");
-const { faultLatest } = await import("@/fm/faultNotes");
+const { faultMove, moveState, moveWho } = await import("@/fm/faultNotes");
+// what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its strip's state, then its who
+// line, never the stage or the word twice (faultNotes.moveState, moveWho)
+const cardMove = (t, s) => { const m = faultMove(t), st = moveState(m); return [st?.text, moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
 const { confirmingFaults, watchedRecords } = await import("@/fm/faultConfirm");
 const { attentionOf } = await import("@/config/attention");
 const { WORK_ACTIONS, NOT_A_PROBLEM } = await import("@/fm/deviceWork");
@@ -33,8 +36,8 @@ ck("  ...a plain close says nothing of lasting", !("lasting" in plain.updates.at
 ck("  ...the agreement tells the VESTA Agent what lasting means",
    /`lasting`: true/.test(JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"))._ticketUpdate));
 // a fault never taken on as a ticket says no state (owner, 2026-11-04: a state is a real ticket's alone)
-ck("its pill: Not a problem by the person, no state (it was never a ticket)", faultLatest(held, (a) => a.slice(11, 16))?.text
-   === "Not a problem by Owner, on 10:00", faultLatest(held, (a) => a.slice(11, 16)));
+ck("its strip: Not a problem, its who line the person, no stage (it was never a ticket)", cardMove(held, (a) => a.slice(11, 16))
+   === "Not a problem | By Owner, on 10:00", cardMove(held, (a) => a.slice(11, 16)));
 
 console.log("  nothing watches it:");
 const cadence = { checkMinutes: 5, nightlyAt: "02:00" };

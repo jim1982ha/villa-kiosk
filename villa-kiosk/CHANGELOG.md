@@ -1,3 +1,16 @@
+## 2.496.709
+
+What you will see:
+- An alert's number ("#91-P1") is said once on its card: in the coloured band on top. The words under it no longer
+  start with "#91-P1 · …" or "#100-P1 (existing)"; they say what is wrong, then VESTA's message.
+- The number in the band is written as Telegram writes it, priority included ("#7-P1"), even for an older alert the
+  tablet knew only as "#7".
+- A ticket from an alert now shows its number in the band too, as its Inbox card does, and its title is only what is
+  wrong.
+- Two alerts that say the same words on one device stay two lines, each with its own number.
+- Nothing else changes on screen: the card of a ticket holding several faults is now drawn by the same piece as every
+  other card.
+
 ## 2.496.708
 
 What you will see:

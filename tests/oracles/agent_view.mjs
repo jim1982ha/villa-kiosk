@@ -124,8 +124,11 @@ ck("every Facility card: its tags on its one quiet line", cardPutsPillsInMeta &&
 {
   // review 26: a step says what it is (agent-contract.json ticketUpdate) — the card read the agent's title changes by
   // their first words and took them for status steps. Driven through the functions, with a fixed clock.
-  const { faultNoteLines, faultLatest } = await import("../../src/fm/faultNotes.ts");
-  const faultWhen = (t, s) => faultLatest(t, s)?.text ?? "";
+  const { faultNoteLines, faultMove, moveState, moveWho } = await import("../../src/fm/faultNotes.ts");
+  // what a card draws of who last moved it (owner, 2026-11-05, the "Status on top" card): its strip's state, then its who
+  // line, never the stage or the word twice (faultNotes.moveState, moveWho)
+  const cardMove = (t, s) => { const m = faultMove(t), st = moveState(m); return [st?.text, moveWho(m, st ? [st.text] : [], undefined, s)].filter(Boolean).join(" | "); };
+  const faultWhen = cardMove;
   const at = (h) => `2026-10-10T${String(h).padStart(2, "0")}:00:00Z`;
   const stamp = (s) => s.slice(5, 13).replace("T", " ");
   const t = { id: "t", status: "in_progress", openedAt: at(1), title: "Motion battery at 7%", note: "Check: Replace the battery.",
@@ -140,7 +143,7 @@ ck("every Facility card: its tags on its one quiet line", cardPutsPillsInMeta &&
      JSON.stringify(lines) === JSON.stringify(["Check: Replace the battery.", "Battery ordered (10-10 02)", "Was: Motion battery at 8% (renamed by VESTA Agent, 10-10 04)"]), lines);
   ck("  ...the title it has now is never repeated under it", !lines.some((l) => l.includes(t.title)), lines);
   const when = faultWhen(t, stamp);
-  ck("the pill's latest status is the person's, never the agent's title change", when === "Ticket opened by Fabien, on 10-10 02 · In progress", when);
+  ck("the pill's latest status is the person's, never the agent's title change", when === "Ticket in progress | Opened by Fabien, on 10-10 02", when);
   const reading = { ...t, title: "Front door — part ordered", updates: [...t.updates,
     { at: at(5), status: "in_progress", by: "VESTA Agent", kind: "reading", title: "Front door unavailable", photoIds: [] }] };
   const renamedByHand = { ...t, title: "Motion battery — ordered", updates: [...t.updates,
@@ -166,19 +169,19 @@ ck("every Facility card: its tags on its one quiet line", cardPutsPillsInMeta &&
     { at: at(4), status: "in_progress", note: "Now: Motion battery at 7%", photoIds: [] }] };
   ck("a history written before the kinds: its last \"Now: …\" is read as a title change, never as a status step",
      JSON.stringify(faultNoteLines(old, stamp).slice(1)) === JSON.stringify(["Battery ordered (10-10 02)", "Was: Motion battery at 8% (10-10 04)"])
-     && faultWhen(old, stamp) === "Ticket opened by Fabien, on 10-10 02 · In progress", [faultNoteLines(old, stamp), faultWhen(old, stamp)]);
+     && faultWhen(old, stamp) === "Ticket in progress | Opened by Fabien, on 10-10 02", [faultNoteLines(old, stamp), faultWhen(old, stamp)]);
   const reopened = { ...t, status: "open", updates: [...t.updates,
     { at: at(6), status: "resolved", by: "Facility manager", photoIds: [] },
     { at: at(7), status: "open", by: "Owner", kind: "reopened", note: "Still beeping", photoIds: [] }] };
-  ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Reopened by Owner, on 10-10 07", faultWhen(reopened, stamp));
+  ck("a reopened fault says when and by whom", faultWhen(reopened, stamp) === "Reopened | By Owner, on 10-10 07", faultWhen(reopened, stamp));
   // owner, 2026-11-04: a state only on a real ticket's pill; a fault's colour kept, a ticket in progress in the buttons'
   // accent, as its Edit Ticket
   const { ACCENT_PILL } = await import("../../src/fm/tone.ts");
   const ticketed = { ...reopened, status: "in_progress", updates: [...reopened.updates,
     { at: at(8), status: "in_progress", by: "Owner", photoIds: [] }] };
   ck("  ...no state on a fault's pill, its colour kept; a ticket's pill keeps its stage, in the buttons' accent",
-     faultLatest(reopened, stamp)?.tone === "tone-warn" && faultWhen(ticketed, stamp) === "Ticket opened by Owner, on 10-10 08 · In progress"
-     && faultLatest(ticketed, stamp)?.tone === ACCENT_PILL, [faultLatest(reopened, stamp), faultLatest(ticketed, stamp)]);
+     faultMove(reopened)?.tone === "tone-warn" && faultWhen(ticketed, stamp) === "Ticket in progress | Opened by Owner, on 10-10 08"
+     && faultMove(ticketed)?.tone === ACCENT_PILL, [faultMove(reopened), faultMove(ticketed)]);
   // ONE place says a stage's colour (faultNotes.stagePillClass): the Tickets tab's stage pill wrote its own copy
   const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
   ck("  ...the Tickets tab's card reads that same move (faultMove), and its stage asks the one colour rule",

@@ -19,10 +19,10 @@ import { recordDevicePill } from "@/config/attention";
 import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
 import { useFmData } from "@/fm/FmDataContext";
 import { useHA } from "@/ha/HAStateStore";
-import { closedTickets, faultBegan, faultTitle, STAGE_WORDS, stageOf } from "@/fm/fmEngine";
+import { closedTickets, faultAlertLabel, faultBegan, faultName, STAGE_WORDS, stageOf } from "@/fm/fmEngine";
 import { closedActions, helpAsked, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
-import RecordCard, { ActionsRow, DeviceChip, type RecordCardProps } from "./RecordCard";
+import RecordCard, { DeviceChip, RecordGroup, type RecordCardProps } from "./RecordCard";
 import FaultForm from "./FaultForm";
 import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
@@ -109,7 +109,9 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     const state = stated ? moveState(move) ?? status : undefined;
     const said = [state ?? []].flat().map((s) => s.text);
     return (
-      <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={state} actions={actions}
+      <RecordCard key={t.id} framed={framed} title={faultName(t)} status={state} actions={actions}
+        // its alert's name, the chip of its strip as on its Inbox card (architecture review, 2026-11-05)
+        number={faultAlertLabel(t)}
         who={stated ? moveWho(move, said, when, momentText) : null}
         // where it comes from, the icon its Inbox card leads with (owner, 2026-11-01, the audit)
         lead={<SourceIcons sources={[faultSource(t)]} severities={["warn"]} />}
@@ -149,12 +151,9 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
     if (g.records.length === 1) return <Fragment key={g.key}>{record(g.records[0], stagePill(g.records[0]), buttons)}</Fragment>;
     // several records of one device: one frame, its buttons its last part, under every record (RecordCard rule 6)
     return (
-      <div key={g.key} className="fm-record-card">
-        <div className="fm-ticket-records">
-          {g.records.map((t, i) => record(t, i === 0 ? stagePill(t) : undefined, undefined, false, i === 0))}
-        </div>
-        <ActionsRow>{buttons}</ActionsRow>
-      </div>
+      <RecordGroup key={g.key} actions={buttons}>
+        {g.records.map((t, i) => record(t, i === 0 ? stagePill(t) : undefined, undefined, false, i === 0))}
+      </RecordGroup>
     );
   };
 

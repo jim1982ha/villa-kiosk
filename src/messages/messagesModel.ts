@@ -100,6 +100,17 @@ export function messageOfLine(line: CardView["lines"][number], kept: readonly An
     : kept.find((a) => a.feed === "vesta" && a.key === incidentKey(line.alertNumber!)) ?? null;
 }
 
+/** A message's title split as its line draws it: its alert's name as Telegram writes it ("#100-P1": the strip's chip,
+ *  the record's own name when the record knows no priority), and its other words (Telegram's step word, "(existing)",
+ *  which the strip's state says, dropped). ⚠️ THE CHIP IS THE NAME (architecture review, 2026-11-05: "#100-P1
+ *  (existing)" under the strip's "#100-P1"). A title not opening with alert `n`'s name is all words. Pure. */
+export function toldTitle(title: string, n: number): { name?: string; words: string } {
+  const m = new RegExp(`^#${n}(?:-[A-Za-z0-9]+)?(?![A-Za-z0-9])`).exec(title);
+  if (!m) return { words: title };
+  const rest = title.slice(m[0].length).replace(/^\s*·\s*/, "").trim();
+  return { name: m[0], words: /^\([^)]*\)$/.test(rest) ? "" : rest };
+}
+
 /**
  * ⚠️ AN ISSUE AS TOLD: JOINED TO VESTA'S MESSAGES ONCE (architecture review round 13, 2026-11-01): the card was put
  * together before VESTA's messages were joined to it, then each screen reworded it on its own, or did not. The Inbox's
@@ -107,8 +118,8 @@ export function messageOfLine(line: CardView["lines"][number], kept: readonly An
  * "#92-P2 · …" or "#92-P2 (cleared)"; four fixes in a row were this one cause ("said once", "Missing beside its alert",
  * "icons say every problem", "an alert leads its row").
  *
- * Each line VESTA holds a message for is named as Telegram names the alert: the message's title ("#100-P1 (existing)"),
- * and nothing else, whatever the device (owner, 2026-11-01: "Missing, #100-P1" was one kind of card with its own format:
+ * Each line VESTA holds a message for is named as Telegram names the alert, by its strip's chip ("#100-P1"; its words
+ * the title's others: toldTitle), and nothing else, whatever the device (owner, 2026-11-01: "Missing, #100-P1" was one kind of card with its own format:
  * a device's state is the card's status pill, CardView.status). The message is the line's (`told`: its words in place of its short story) and, on the Watch list, its Status says how it closed (no
  * closing line of the card's own: said once, owner 2026-10-29). The card's other problems come first as "Also: …"
  * (othersFirst, owner 2026-10-30). The card and the Watch card read THIS card. Pure.
@@ -116,7 +127,9 @@ export function messageOfLine(line: CardView["lines"][number], kept: readonly An
 export function issueAsTold(card: CardView, kept: readonly Announcement[]): CardView {
   const lines = card.lines.map((l) => {
     const a = messageOfLine(l, kept);
-    return a ? { ...l, text: a.title, closing: card.look === "watched" ? null : l.closing, told: a } : l;
+    if (!a) return l;
+    const { name, words } = toldTitle(a.title, l.alertNumber!);
+    return { ...l, text: words, ...(name ? { alertLabel: name } : {}), closing: card.look === "watched" ? null : l.closing, told: a };
   });
   // ⚠️ A PILL NEVER REPEATS THE CARD'S WORDS (owner, 2026-11-01: "Missing" beside "… is missing from the villa's system"):
   // a state its lines say already is no pill; a state nothing says stays one (a device with no fault: "Unavailable")
