@@ -127,7 +127,9 @@ function EntityMapRow({
               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleExpanded(entryKey); }
             }}
           >
-            <span className="entity-id-text">
+            {/* ⚠️ ONE FIRST LINE (owner, 2026-11-05): the id, never more than 2 lines (its whole text on hover), the
+                pencil and the chevron at its right; "Confirm before toggling" on the line under it */}
+            <span className="entity-id-text" title={[m.entityId, ...(objects ?? [])].join(" · ")}>
               {m.entityId}
               {!!objects?.length && (
                 <span className="muted entity-id-link" title="This device's 3D object, linked by name">
@@ -135,10 +137,7 @@ function EntityMapRow({
                 </span>
               )}
             </span>
-            <span className="entity-id-actions">
-              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                <ConfirmToggle m={m} draftField={draftField} />
-              </span>
+            <span className="entity-id-tools">
               <button
                 className="icon-btn"
                 title="Redirect this 3D mesh to a different entity ID"
@@ -155,8 +154,11 @@ function EntityMapRow({
                   <Trash2 size={16} />
                 </button>
               )}
+              {expanded ? <ChevronDown size={16} className="muted" /> : <ChevronRight size={16} className="muted" />}
             </span>
-            {expanded ? <ChevronDown size={16} className="muted" /> : <ChevronRight size={16} className="muted" />}
+            <span className="entity-id-confirm" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+              <ConfirmToggle m={m} draftField={draftField} />
+            </span>
           </div>
         )}
       </td>

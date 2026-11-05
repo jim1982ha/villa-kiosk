@@ -845,6 +845,10 @@ input[type="range"]::-moz-range-thumb {
 /* the ribbon: in the strip under the plot the chart already has, so it adds no height and shifts nothing */
 /* a step of the figures offline inside it (LineChart, HistoryGap.within): striped over the plot, under the tooltip */
 .chart-within { position: absolute; opacity: 0.45; pointer-events: none; }
+/* an outage's tooltip row: the band it describes, as a swatch (LineChart outageKey); a border keeps the faint grey
+   and the stripes readable on the tooltip's dark ground */
+.key-outage { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-secondary) 60%, transparent); }
 .chart-range-ribbon { position: absolute; left: 0; right: 0; height: 4px; border-radius: 999px; background: var(--bg-input); overflow: hidden; pointer-events: none; }
 .chart-range-ribbon i { position: absolute; top: 0; bottom: 0; background: var(--accent); }
 .chart-range-none { position: absolute; inset: 0 12px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: var(--text-xs); color: var(--text-secondary); pointer-events: none; }

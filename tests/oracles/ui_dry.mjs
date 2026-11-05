@@ -113,10 +113,18 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
   ck("a chat's name keeps its line and its language menu its own short width",
      /\.recipients-chat \.fm-entity-chip \{ white-space: nowrap; \}/.test(css)
      && /\.recipients-chat > \.dropdown\.recipients-language \{\s*flex: 0 0 auto; width: \d+px;/.test(css));
-  // owner, 2026-11-03: a device's id was cut every few letters beside "Confirm before toggling" on a phone
-  ck("a device's id keeps a readable width: its actions wrap onto their own line first",
-     /\.entity-id-display \{ display: flex; flex-wrap: wrap;/.test(css) && /\.entity-id-text \{ flex: 1 1 1\d\dpx; min-width: 0; overflow-wrap: anywhere; \}/.test(css)
-     && !/\.entity-id-text \{[^}]*break-all/.test(css));
+  // owner, 2026-11-03: a device's id was cut every few letters beside "Confirm before toggling" on a phone. Owner,
+  // 2026-11-05: the pencil and the chevron on the id's own line, at its right; the id never more than 2 lines (a long
+  // id with its "· 3D object: …" pushed the toggle and the pencil down a line of their own)
+  const row = srcOf("components/settings/EntityMapRow.tsx");
+  const tools = row.match(/<span className="entity-id-tools">([\s\S]*?)\n {12}<\/span>/)?.[1] ?? "";
+  ck("a device's id: pencil and chevron on its first line at the right, the toggle under it, the id at most 2 lines",
+     /<Pencil /.test(tools) && /<ChevronDown /.test(tools) && /<ChevronRight /.test(tools) && !/ConfirmToggle/.test(tools)
+     && /<span className="entity-id-confirm" onClick=\{[^}]*\} onKeyDown=\{[^}]*\}>\s*<ConfirmToggle /.test(row)
+     && /\.entity-id-display \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;\s*grid-template-areas: "name tools" "confirm confirm";/.test(css)
+     && /\.entity-id-text \{[^}]*-webkit-line-clamp: 2;[^}]*overflow: hidden;[^}]*overflow-wrap: anywhere;/.test(css)
+     && /title=\{\[m\.entityId, \.\.\.\(objects \?\? \[\]\)\]\.join/.test(row)
+     && !/\.entity-id-text \{[^}]*break-all/.test(css), tools);
 }
 done("✅ one segmented group, one on/off, one save button, one outside-close, one ticker");
 

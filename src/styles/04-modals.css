@@ -571,10 +571,18 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* ⚠️ THE ID KEEPS A READABLE WIDTH (owner, 2026-11-03: on a phone "fan.cei / ling_fa / n_mas…" was cut every few
    letters beside "Confirm before toggling"): the id takes at least 180px, and the actions wrap onto their own line,
    on the right, when the two no longer fit; a long id breaks at its dots and underscores first. */
-.entity-id-display { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; color: var(--text-secondary); }
-.entity-id-text { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
-.entity-id-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-left: auto; }
-.entity-id-actions .icon-btn { width: 30px; height: 30px; }
+/* ⚠️ ONE FIRST LINE (owner, 2026-11-05): the id, at most 2 lines, with the pencil and the chevron at its right; the
+   toggle on the line under it, at the right. On a wide screen all four keep one line. */
+.entity-id-display { display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name tools" "confirm confirm"; align-items: center; gap: 6px 8px; width: 100%; color: var(--text-secondary); }
+.entity-id-text { grid-area: name; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.entity-id-tools { grid-area: tools; display: flex; align-items: center; gap: 4px; }
+.entity-id-tools .icon-btn { width: 30px; height: 30px; }
+.entity-id-confirm { grid-area: confirm; justify-self: end; }
+@media (min-width: 721px) {
+  .entity-id-display { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name confirm tools"; }
+}
 @media (hover: hover) {
   .icon-btn-danger:hover { color: var(--status-danger); }
 }

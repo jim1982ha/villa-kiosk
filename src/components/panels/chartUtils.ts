@@ -5,8 +5,8 @@
 import { wallClock } from "@/utils/villaClock";
 import type { HistoryGap, HistorySeries, StateHistoryPoint } from "@/types/ha.types";
 import { clockTime, dayMonth, dayTime, monthShort } from "@/utils/dateText";
-import { NOT_KEPT_WORDS } from "@/utils/stateColors";
-import { nextEdge } from "@/utils/timelineCells";
+import { NOT_KEPT_COLOR, NOT_KEPT_WORDS, STATUS_COLOR } from "@/utils/stateColors";
+import { cellBackground, nextEdge } from "@/utils/timelineCells";
 import { DAY_MS, HOUR_MS, MINUTE_MS } from "@/utils/localDay";
 import { PERIOD_MS } from "@/utils/statisticsSeries";
 
@@ -96,18 +96,19 @@ export function chartAbout(shows: ChartShows, stepMs: number, from?: number, kep
   const before = kept !== undefined && from !== undefined && from < kept ? dayMonth(kept) : null;
   if (shows === "total") {
     // ⚠️ SAID AS DRAWN (architecture review 24): it read "left empty" over the grey "No reading" bar (barChart)
-    return `${cap(stepWords(stepMs))} totals. ${a(step)} with no total written is a grey band, "No reading". A meter counts on through a shorter outage, so a total written stays right: no outage is shown inside it.`;
+    return `${cap(stepWords(stepMs))} totals. Grey: no total, "No reading". No outage shows: a meter keeps counting through it.`;
   }
   if (shows === "states") {
-    return `Each ${step} shows the states it saw: striped when it saw several, grey among them when the device was unavailable, at any length.${before ? ` Before ${before}, the villa's system no longer keeps its changes.` : ""}`;
+    return `Each ${step} shows its states: striped when several, grey when unavailable.${before ? ` Before ${before}: no longer kept.` : ""}`;
   }
   // ⚠️ AS WIDE AS DRAWN (architecture review 25): it said "at its real length" over a band five minutes wide for a 0.46s
   // drop (trendInterval.widenGaps: every outage covers the five minutes it touched); the tooltip says the real length
-  if (stepMs <= finest) return `Every reading, in ${fmtDuration(finest)} steps. A grey band covers each ${fmtDuration(finest)} in which the device was unavailable, however briefly: its tooltip says when and for how long.`;
+  if (stepMs <= finest) return `Every reading, in ${fmtDuration(finest)} steps. Grey: unavailable at least once in those ${fmtDuration(finest)}.`;
   const finer = stepMs >= 7 * DAY_MS ? "day" : stepMs >= DAY_MS ? "hour" : null;
-  return `${cap(stepWords(stepMs))} averages. ${a(step)} striped grey had the device unavailable for part of it. An outage shorter than ${fmtDuration(finest)} may not show: averages do not keep it.${
-    !before ? "" : unkept ? ` Before ${before}, the villa's system no longer keeps its readings.`
-      : ` Before ${before}, ${finer ? `only an outage of a whole ${finer} shows` : "no outage shows"}: the villa's system keeps finer figures since then.`}`;
+  // ⚠️ SHORT (owner, 2026-11-05: "make this tooltip description shorter"): what is drawn, what may not show, in a few words
+  return `${cap(stepWords(stepMs))} averages. Striped: unavailable at least once that ${step}. Outages under ${fmtDuration(finest)} may not show.${
+    !before ? "" : unkept ? ` Before ${before}: no longer kept.`
+      : ` Before ${before}: ${finer ? `only whole-${finer} outages show` : "no outages show"}.`}`;
 }
 
 /** Does a chart of these series draw "No longer kept" (a series with no figures, before `kept`)? chartAbout's `unkept`,
@@ -117,8 +118,6 @@ export function drawsUnkept(series: readonly (Pick<HistorySeries, "gaps"> | unde
 }
 
 const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
-/** "An hour", "A day". */
-const a = (noun: string) => `${/^h/.test(noun) ? "An" : "A"} ${noun}`;
 
 export function aggregationWords(stepMs: number, aggregation: Aggregation): string {
   return aggregation ? `${stepWords(stepMs)} ${aggregation}` : stepWords(stepMs);
@@ -134,18 +133,29 @@ export function cellSummary(spent: Record<string, number>, entered: Record<strin
 }
 
 /** The words of a step of the figures offline inside it (HistoryGap.within). */
-const DURING: Record<NonNullable<HistoryGap["within"]>, string> = { hour: "this hour", day: "this day", week: "this week" };
+const DURING: Record<NonNullable<HistoryGap["within"]>, string> = { hour: "that hour", day: "that day", week: "that week" };
+
+/** How an outage is painted, on the chart and as its tooltip row's key (LineChart): a step of the figures offline
+ *  inside it in the stripes of a state timeline's cell that saw more than one state, unavailable and clear; an outage
+ *  grey; what is no longer kept its own colour. ⚠️ ONE LOOK FOR THE BAND AND ITS KEY (owner, 2026-11-05: "make sure the
+ *  legend is correct for this second line"): the outage row was keyed by the line's green dot. */
+export function outageLook(gap: Pick<HistoryGap, "within" | "notKept">): { background: string; opacity: number } {
+  if (gap.within) return { background: cellBackground(["unavailable", ""], (s) => (s ? STATUS_COLOR.unavailable : "transparent")), opacity: 0.45 };
+  return gap.notKept ? { background: NOT_KEPT_COLOR, opacity: 0.5 } : { background: STATUS_COLOR.unavailable, opacity: 0.18 };
+}
 
 /** An outage in a chart's tooltip: "Unavailable · 05:21–05:24 (3min)", "Unavailable since 05:21" for one still
- *  running at `now` (the window's end), "Unavailable during this day · 3 Nov" for a step of the figures offline
- *  inside it. ⚠️ ONE MINUTE, NOT A SPAN (owner, 2026-11-05: "Unavailable · 13:40–13:40 (1s)" for a 0.46s drop): within
+ *  running at `now` (the window's end), "Unavailable at least once that day" for a step of the figures
+ *  offline inside it. ⚠️ ONE MINUTE, NOT A SPAN (owner, 2026-11-05: "Unavailable · 13:40–13:40 (1s)" for a 0.46s drop): within
  *  one minute it says when and how long, "Unavailable at 13:40, under 1s". `spanHours`: the chart's window, a time
  *  naming its day beyond one day (fmtChartStamp), as a "13:40" on a week's chart names none. */
 export function fmtOutage(gap: Pick<HistoryGap, "from" | "to" | "actual" | "notKept" | "within">,
   now: number, spanHours = 24): string {
   // older than the villa's system keeps: not an outage (historySource.keptFrom, owner 2026-10-20)
   if (gap.notKept) return `${NOT_KEPT_WORDS} · before ${dayTime(gap.to)}`;
-  if (gap.within) return `Unavailable during ${DURING[gap.within]} · ${gap.within === "hour" ? dayTime(gap.from) : dayMonth(gap.from)}`;
+  // ⚠️ AT LEAST ONCE, ITS DAY ONCE (owner, 2026-11-05): "Unavailable during this day · 3 Nov" over the tooltip's own
+  // "3 Nov" said the day twice, and "during" read as the whole day
+  if (gap.within) return `Unavailable at least once ${DURING[gap.within]}`;
   // The real times, when the band was widened to whole five-minute intervals.
   const g = gap.actual ?? gap;
   const at = (t: number) => fmtChartStamp(t, spanHours);
