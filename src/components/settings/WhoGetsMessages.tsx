@@ -78,7 +78,7 @@ export default function WhoGetsMessages({ onSaved }: {
           <div key={list.role} className="settings-list-row recipients-role">
             {/* its add on the line of its name, opening there (owner, 2026-11-04; common/AddOnLine) */}
             {!helper ? <span className="body-text recipients-role-name">{who}</span> : (
-              <AddOnLine title={<span className="body-text recipients-role-name">{who}</span>}
+              <AddOnLine title={<span className="body-text recipients-role-name">{who}</span>} words="Add"
                 label={`Add a chat or phone to ${who}`}>
                 {(done) => <EntityPicker domains={["notify"]} startOpen compact hideCurrentLabel placeholder="Add a chat or phone…"
                   onChange={(id) => { done(); void save((now) => withItem(now, id, true)); }} />}

@@ -125,8 +125,11 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
      // toggle's words kept for screen readers and hidden on a narrow row (its shield and On | Off stay)
      && /\.entity-id-display \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto auto;\s*grid-template-areas: "name confirm tools";[^}]*container-type: inline-size;/.test(css)
      && !/grid-template-areas: "name tools"/.test(css)
-     && /@container \(max-width: \d+px\) \{\s*\.entity-id-confirm \.setting-row-name > span \{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\);/.test(css)
-     && /\.entity-id-text \{[^}]*-webkit-line-clamp: 2;[^}]*overflow: hidden;[^}]*overflow-wrap: anywhere;/.test(css)
+     && /@container \(max-width: \d+px\) \{\s*\.entity-id-confirm \.setting-row-label \{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\);/.test(css)
+     // owner, 2026-11-06: "fan.example_house_guest_roo / m": the id breaks after its dots and underscores only
+     // (common/IdText), a part longer than the line alone breaking within it
+     && /\.entity-id-text \{[^}]*-webkit-line-clamp: 2;[^}]*overflow: hidden;[^}]*overflow-wrap: break-word;/.test(css)
+     && /<IdText id=\{m\.entityId\} \/>/.test(row)
      && /title=\{\[m\.entityId, \.\.\.\(objects \?\? \[\]\)\]\.join/.test(row)
      && !/\.entity-id-text \{[^}]*break-all/.test(css), tools);
 }

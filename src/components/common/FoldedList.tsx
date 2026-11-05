@@ -13,26 +13,42 @@ import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Pager, usePaged, PAGE_CARDS } from "./Paged";
 
+/** THE "this opens more" control (owner, 2026-11-06: a chevron after the title in one place, an outlined button in
+ *  another): its chevron before its words, pointing down while open. A section's title (ListSection) and a list inside
+ *  a section ("3 unbound objects", "Show all, 114 more entities") are each this one button, the section's in its
+ *  title's style. */
+export function FoldToggle({ open, onToggle, children, className = "" }: {
+  open: boolean; onToggle: () => void; children: ReactNode; className?: string;
+}) {
+  return (
+    <button type="button" className={`fold-toggle${className ? ` ${className}` : ""}`} onClick={onToggle} aria-expanded={open}>
+      {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+      {children}
+    </button>
+  );
+}
+
 /** One section of a list — Open issues, Notifications, Closed, Recent work — its name and count, its (i) right after
  *  them (`tip`, owner 2026-10-31: next to the words, not at the far end), folded or open by its chevron (owner,
- *  2026-10-28: each collapsible). */
-export function ListSection({ title, count, open, onToggle, tip, children }: {
-  title: string; count?: number; open: boolean; onToggle: () => void; tip?: ReactNode;
-  children: ReactNode;
+ *  2026-10-28: each collapsible). Advanced Settings' folded sections are this too (settings/Fold): `summary` says what
+ *  is inside where a count alone would not ("1 group · 2 suggested"), `bare` leaves its content as it is drawn (a
+ *  section's working part, not a list of cards). */
+export function ListSection({ title, count, summary, open, onToggle, tip, bare = false, children }: {
+  title: string; count?: number; summary?: string; open: boolean; onToggle: () => void; tip?: ReactNode;
+  bare?: boolean; children: ReactNode;
 }) {
   return (
     <section className="messages-section">
       <div className="cockpit-issues-head">
         <div className="with-tip">
-          <button type="button" className="messages-section-toggle settings-section-title" onClick={onToggle}
-            aria-expanded={open}>
-            {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-            {title}{count ? ` (${count})` : ""}
-          </button>
+          <FoldToggle className="messages-section-toggle settings-section-title" open={open} onToggle={onToggle}>
+            <span className="fold-toggle-words">{title}{count ? ` (${count})` : ""}</span>
+            {summary && <span className="section-summary">{summary}</span>}
+          </FoldToggle>
           {tip}
         </div>
       </div>
-      {open && <div className="fm-list">{children}</div>}
+      {open && <div className={bare ? "fold-body" : "fm-list"}>{children}</div>}
     </section>
   );
 }

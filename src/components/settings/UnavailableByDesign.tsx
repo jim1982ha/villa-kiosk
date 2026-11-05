@@ -13,7 +13,7 @@ import { countOf } from "@/utils/countOf";
 import { withItem } from "@/utils/listToggle";
 
 
-export default function UnavailableByDesign({ heading }: { heading?: ReactNode } = {}) {
+export default function UnavailableByDesign({ title, tip }: { title: string; tip?: ReactNode }) {
   const { config, update } = useConfig();
   const ids = config.unavailableByDesign;
   // as every screen names a device (owner, 2026-10-28: one owner of a device's name; it printed the platform's)
@@ -21,7 +21,7 @@ export default function UnavailableByDesign({ heading }: { heading?: ReactNode }
   const set = (id: string, on: boolean) => update({ unavailableByDesign: withItem(ids, id, on) });
   // folded under its title like Grouped devices (owner, 2026-10-22: the same chevron and closed line)
   return (
-    <Fold heading={heading} summary={countOf(ids.length, "device")}>
+    <Fold title={title} tip={tip} summary={countOf(ids.length, "device")}>
       <div className="row" style={{ flexWrap: "wrap", gap: 6, alignItems: "center" }}>
         {ids.map((id) => (
           <RemovablePill key={id} label={name(id)} tip={id} removeLabel={`Take ${name(id)} off this list`}

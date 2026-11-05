@@ -38,8 +38,9 @@ const written = (format: string, t: string | number | Date): string => {
   const d = at(t);
   if (!valid(d)) return "";
   const w = wallClock(d);
-  const part: Record<string, string> = { d: two(w.day), m: two(w.month), Y: String(w.year), H: two(w.hour), M: two(w.minute) };
-  return format.replace(/%([dmYHM])/g, (_, c: string) => part[c]);
+  const part: Record<string, string> = { d: two(w.day), m: two(w.month), Y: String(w.year), H: two(w.hour), M: two(w.minute),
+    S: two(w.second) };
+  return format.replace(/%([dmYHMS])/g, (_, c: string) => part[c]);
 };
 
 /** "14:05" — a time of day: the HUD's clock, a chart's axis, "closes at about 14:49" (the agreement's time). */
@@ -76,6 +77,7 @@ export function monthYear(t: string | number | Date): string {
 /** "20/10/2026 02:00" — a moment, as the VESTA Agent's messages write it on Telegram (its timeutil.moment_label, the
  *  agreement's form): a card's steps, a ticket's history, a document's "Generated:", the Overview's "Next check", a
  *  chart's tooltip beyond today, an upload's or an Agent edit's time. */
-export function momentText(t: string | number | Date = Date.now()): string {
-  return written(MOMENT.format, t);
+export function momentText(t: string | number | Date = Date.now(), seconds = false): string {
+  // `seconds`: the moment and its seconds, "20/10/2026 02:00:41" (a device's telemetry: events seconds apart)
+  return written(seconds ? MOMENT.format.replace("%M", "%M:%S") : MOMENT.format, t);
 }

@@ -53,10 +53,12 @@ const chunks = {};
 const parts = modal.split(/\{tab === "(\w+)" &&/);
 for (let i = 1; i < parts.length; i += 2) chunks[parts[i]] = (chunks[parts[i]] ?? "") + parts[i + 1];
 
-// a section's title is a heading, or (owner, 2026-10-22) a TipTitle — the heading with its (i)
+// a section's title is a heading, or (owner, 2026-10-22) a TipTitle — the heading with its (i) — or (owner, 2026-11-06)
+// a folded section's own title and (i) (settings/Fold, the Cockpit's folded section)
 const titleIn = (chunk, title) =>
   new RegExp(`<div className="settings-section-title">\\s*${title}\\s*</div>`).test(chunk)
-  || new RegExp(`<TipTitle title="${title}"`).test(chunk);
+  || new RegExp(`<TipTitle title="${title}"`).test(chunk)
+  || new RegExp(`<(?:BindingsTable|GroupedDevices|UnavailableByDesign) title="${title}" tip=`).test(chunk);
 
 const misplaced = [];
 for (const [title, want] of SECTIONS) {

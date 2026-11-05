@@ -11,6 +11,7 @@ import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import SearchPicker from "@/components/common/SearchPicker";
 import Tip from "@/components/common/Tip";
 import AddOnLine from "@/components/common/AddOnLine";
+import UnitField from "@/components/common/UnitField";
 import { X } from "lucide-react";
 
 interface Props {
@@ -30,24 +31,24 @@ export function FullScreenAnnouncements({ value, onChange }: Props) {
   const offered = announcedTitles(kept, value.map((f) => f.title));
   return (
     <>
-      {/* one card: its heading says the list is every tablet's, with its add, then a row per pick (owner, 2026-11-03:
-          "very poorly rendered", the rows did not line up and "For every tablet" floated alone). ⚠️ THE HEADING IS A ROW'S
-          COLUMNS (owner, 2026-11-04: "Seconds" stood over the ✕): the add on the heading's line at the title's right
-          (common/AddOnLine), "Seconds" over the seconds, nothing over the ✕ */}
-      <div className="settings-list" style={{ marginTop: 14 }}>
+      {/* ⚠️ ITS TITLE AND ITS ADD ON ONE LINE ABOVE THE CARD, THE CARD'S HEAD ITS COLUMNS' WORDS ONLY (owner, 2026-11-06:
+          the add button sat in the head beside "Seconds", over two lines on a phone): the list's add is where every
+          list's is (common/AddOnLine: Schedule's "Add a task", Who gets the messages' "Add a chat"), "Time" over the
+          time, nothing over the ✕ */}
+      <AddOnLine title={<span className="settings-list-title">On every tablet</span>} label="Add an announcement" words="Add">
+        {(done) => <SearchPicker compact startOpen placeholder="Add an announcement…"
+          onPick={(t) => { done(); onChange([...value.filter((x) => x.title !== t), { title: t, seconds: FULL_SCREEN_S_DEFAULT }]); }}
+          rows={(q) => offered.filter((t) => t.toLowerCase().includes(q.trim().toLowerCase())).map((t) => ({ key: t, label: t }))}
+          empty={offered.length > 0 ? undefined : !loaded ? "Reading what the villa has announced…"
+            : "Nothing else announced yet: each announcement the villa makes is listed here."} />}
+      </AddOnLine>
+      <div className="settings-list">
         <div className="settings-list-head fs-row">
-          <AddOnLine title="Announcements, on every tablet" label="Add an announcement">
-            {(done) => <SearchPicker compact startOpen placeholder="Add an announcement…"
-              onPick={(t) => { done(); onChange([...value.filter((x) => x.title !== t), { title: t, seconds: FULL_SCREEN_S_DEFAULT }]); }}
-              rows={(q) => offered.filter((t) => t.toLowerCase().includes(q.trim().toLowerCase())).map((t) => ({ key: t, label: t }))}
-              empty={offered.length > 0 ? undefined : !loaded ? "Reading what the villa has announced…"
-                : "Nothing else announced yet: each announcement the villa makes is listed here."} />}
-          </AddOnLine>
-          {/* the seconds cell drawn as a row's (its field's width, then its "s", unseen): the word stands over the field */}
-          {value.length > 0 && <span className="fs-row-seconds"><span className="fs-head-seconds">Seconds</span><span className="fs-head-unit" aria-hidden>s</span></span>}
+          <span>Announcement</span>
+          {value.length > 0 && <span className="fs-head-time">Time</span>}
           {value.length > 0 && <span className="fs-head-remove" aria-hidden />}
         </div>
-        {value.length === 0 && <div className="settings-list-row muted body-text">None yet: add one with +.</div>}
+        {value.length === 0 && <div className="settings-list-row muted body-text">None yet: add one above.</div>}
         {value.map((f) => (
           <FullScreenRow key={f.title} item={f} onRemove={() => onChange(value.filter((x) => x.title !== f.title))} />
         ))}
@@ -73,7 +74,9 @@ function FullScreenRow({ item, onRemove }: { item: FullScreenAnnouncement; onRem
   return (
     <div className="settings-list-row fs-row">
       <span className="body-text fs-row-title">{item.title}</span>
-      <span className="fs-row-seconds">
+      {/* the seconds and their unit joined, "10s" (owner, 2026-11-06: a box and a separate "s"; rules: durations are
+          joined), in one field (common/UnitField) */}
+      <UnitField unit="s">
         <input
           inputMode="numeric" aria-label={`Seconds ${item.title} fills the screen`}
           value={field.shown ?? String(item.seconds)}
@@ -81,10 +84,9 @@ function FullScreenRow({ item, onRemove }: { item: FullScreenAnnouncement; onRem
           onBlur={field.flush}
           onKeyDown={(e) => e.key === "Enter" && field.flush()}
         />
-        <span className="muted">s</span>
-      </span>
+      </UnitField>
       <Tip text={removeLabel}>
-        <button type="button" className="btn ghost icon-btn-sm" aria-label={removeLabel} onClick={onRemove}>
+        <button type="button" className="icon-btn-sm" aria-label={removeLabel} onClick={onRemove}>
           <X size={16} aria-hidden />
         </button>
       </Tip>

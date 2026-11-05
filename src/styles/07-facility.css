@@ -311,19 +311,6 @@
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
-/* A section header that folds its own content away — used for the offline
-   shortlist, which is a useful shortcut when the fault IS one of those
-   devices and pure noise otherwise. */
-.fm-disclosure {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: none; border: none; padding: 4px 0; cursor: pointer;
-  color: var(--text-secondary); font-size: var(--text-xs); text-align: left;
-  min-height: var(--touch-min);
-}
-@media (hover: hover) {
-  .fm-disclosure:hover { color: var(--text-primary); }
-}
-
 /* Marks a report filed by a guest: a symptom noticed from inside the villa,
    not a diagnosis — which is how the row should be read when triaging. */
 .fm-clause.guest {

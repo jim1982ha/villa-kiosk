@@ -1,5 +1,6 @@
 // src/components/common/AddOnLine.tsx
-// A list's title line with its "add" as one icon at the right, which opens IN PLACE on that line into the list's
+// A list's title line with its "add" at the right (owner, 2026-11-06: a "+ Add …" button in Schedule's "Add a task" look,
+// the same place on every list of Settings; it was an outlined square), which opens IN PLACE on that line into the list's
 // search box (its dropdown open), the title kept at the left (owner, 2026-11-04: Settings › Messages, "Who gets the
 // messages" and "Full-screen announcements", each search box under its list became an icon on the line of the list's
 // title). Escape, or leaving it with nothing typed, closes it back to the icon; a pick closes it too (`done`).
@@ -14,11 +15,13 @@ import { Plus } from "lucide-react";
 import { useOutsideClose } from "@/hooks/useOutsideClose";
 import Tip from "./Tip";
 
-export default function AddOnLine({ title, label, children }: {
+export default function AddOnLine({ title, label, words, children }: {
   /** The list's title, at the left of the line. */
   title: ReactNode;
-  /** What the icon does, for a screen reader and its tip ("Add a chat or phone to Owner"). */
+  /** What the button does, for a screen reader and its tip ("Add a chat or phone to Owner"). */
   label: string;
+  /** The button's own words, beside its +, as Schedule's "Add a task" ("Add a chat"). */
+  words: string;
   /** The search box, drawn while open; `done` closes it (after a pick). */
   children: (done: () => void) => ReactNode;
 }) {
@@ -53,9 +56,9 @@ export default function AddOnLine({ title, label, children }: {
         </div>
       ) : (
         <Tip text={label}>
-          <button ref={button} type="button" className="btn ghost icon-btn-sm add-line-icon" aria-label={label}
+          <button ref={button} type="button" className="btn ghost add-line-button" aria-label={label}
             onClick={() => setOpen(true)}>
-            <Plus size={16} aria-hidden />
+            <Plus size={16} aria-hidden /> {words}
           </button>
         </Tip>
       )}

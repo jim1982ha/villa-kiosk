@@ -1,34 +1,30 @@
 // src/components/settings/Fold.tsx
-// A settings section's working part, folded under its description until asked for.
+// A settings section's working part, folded under its title until asked for.
 //
 // ⚠️ FOLDED BY DEFAULT (owner, 2026-10-14): Grouped Devices and Bound 3D objects opened on their whole working
 // surface — a picker, a filter, every group, three list buttons — under a description that already says what the
-// section is for. Folded, a section reads as its description and one line saying what is inside, in the grey
-// disclosure style (.fm-disclosure): a section's working part, not a list's name (a list folds under its section's
-// name: common/FoldedList).
-
+// section is for. Folded, a section reads as its title and what is inside.
+// ⚠️ THE COCKPIT'S FOLDED SECTION (owner, 2026-11-06: "one look for this opens more"): the title is the toggle, its
+// chevron before it and what is inside after it, its (i) right after (common/FoldedList ListSection); it was a grey
+// line with a chevron after the title.
 import { useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import InfoTip from "@/components/common/InfoTip";
+import { ListSection } from "@/components/common/FoldedList";
 
-export default function Fold({ summary, heading, children }: {
-  /** What is inside, said in the closed line ("9 groups · 15 suggested"). */
+export default function Fold({ title, tip, summary, children }: {
+  /** The section's title. */
+  title: string;
+  /** Its (i): what the section is for (owner, 2026-10-22: no visible description). */
+  tip?: ReactNode;
+  /** What is inside, after the title ("9 groups · 15 suggested"). */
   summary: string;
-  /** The section's title (and its (i)): the closed line sits on the title's line, after it (owner, 2026-10-22: the
-   *  description is an (i) now, so the line under it had nothing left to sit under). */
-  heading?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const toggle = (
-    <button type="button" className="fm-disclosure" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-      {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-      {summary}
-    </button>
-  );
   return (
-    <>
-      {heading ? <div className="fold-heading">{heading}{toggle}</div> : toggle}
-      {open && <div style={{ marginTop: 8 }}>{children}</div>}
-    </>
+    <ListSection title={title} summary={summary} open={open} onToggle={() => setOpen((v) => !v)} bare
+      tip={tip ? <InfoTip label={`About ${title}`}>{tip}</InfoTip> : undefined}>
+      {children}
+    </ListSection>
   );
 }
