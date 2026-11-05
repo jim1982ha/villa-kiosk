@@ -86,14 +86,21 @@ const quiet = (f) => { const e = console.error; console.error = () => {}; try { 
 const drawIn = (el) => quiet(() => draw(h(ConfigCtx.Provider, { value: cfg }, h(HACtx.Provider, { value: ha },
   h(VillaModelProvider, { value: villa }, h(PendingFields, { pending: new PendingEdits(noop) }, el))))));
 
-/** Every card drawn: its frame's whole markup, its strip's name, its bar's words. */
+const unescape = (t) => t.replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+/** A strip's remove: its icon and its words (its tooltip and aria-label are one `label`); null when it has none. */
+const removeOf = (strip) => {
+  const m = /<button type="button" class="icon-btn-sm fm-record-remove( danger)?" aria-label="([^"]*)" data-icon="(bin|x)"><svg[^>]*lucide-(trash-2|x)\b/.exec(strip);
+  return m ? { icon: m[3], glyph: m[4], label: unescape(m[2]), danger: !!m[1], last: strip.endsWith("</svg></button></div>") } : null;
+};
+/** Every card drawn: its frame's whole markup, its strip's name, its bar's words, its strip's remove. */
 const cards = (html) => {
   const out = []; let at = 0;
   for (;;) {
     const i = html.indexOf('class="fm-record-card', at);
     if (i < 0) return out;
     const card = inside(html.slice(i - 12), "fm-record-card");
-    out.push({ name: text(inside(card, "fm-record-name")).replace(/\|/g, ""), bar: text(inside(card, "fm-record-actions")).replace(/\[icon\]/g, "").replace(/\|/g, " ").trim(), card });
+    out.push({ name: text(inside(card, "fm-record-name")).replace(/\|/g, ""), remove: removeOf(inside(card, "fm-record-strip")),
+      bars: (card.match(/class="fm-record-actions"/g) ?? []).length, bar: text(inside(card, "fm-record-actions")).replace(/\[icon\]/g, "").replace(/\|/g, " ").trim(), card });
     at = i + card.length;
   }
 };
@@ -104,24 +111,39 @@ const { default: UnavailableByDesign } = await import("@/components/settings/Una
 const { default: ConfigEditor } = await import("@/components/settings/ConfigEditor");
 const { FullScreenAnnouncements } = await import("@/components/settings/MessagesSettings");
 const { default: WhoGetsMessages } = await import("@/components/settings/WhoGetsMessages");
+const { ROLE_LABELS } = await import("@/auth/roles");
 const bindings = (view) => { globalThis.__view = view; return drawIn(h(BindingsTable, { title: "Bound 3D objects" })); };
 
+// [kind, drawn, its name, its bar's words ("" no bar), its remove at its strip's right ([icon, tooltip]) or none]
 const KINDS = [
-  ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", "Remove group"],
+  ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", "", ["bin", "Delete the group Kitchen Temperature"]],
   ["  ...a suggested group, its main action first", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Pool Pump Power + Pool Pump", "Create this group"],
-  ["a bound 3D object (named after its entity)", bindings("bound"), "Terrace Lamp", "Unbind"],
+  ["a bound 3D object (named after its entity)", bindings("bound"), "Terrace Lamp", "", ["x", "Unbind Lamp_Kitchen from Terrace Lamp"]],
   ["an object bound to nothing", bindings("unbound"), "Mesh_Unnamed_042", "Bind"],
   ["an entity no object shows", bindings("unshown"), "Ceiling Fan", "Bind"],
-  ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "Take off the list Remove"],
-  ["a device of Devices", drawIn(h(ConfigEditor)), "Pool Pump", "Remove"],
+  ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "", ["x", "Take Back Door off the Asleep list"]],
+  ["a device of Devices", drawIn(h(ConfigEditor)), "Pool Pump", "", ["bin", "Remove Pool Pump's settings"]],
   ["a 3D object whose entity is gone", drawIn(h(ConfigEditor)), "fan.example_gone_fan", "Point it there"],
-  ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", "Remove"],
-  ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", "Remove"],
+  ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", "", ["bin", "Delete this announcement"]],
+  ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", "", ["x", `Take Example House FM group off the ${ROLE_LABELS.ops}'s list`]],
 ];
 console.log("  every record of Settings is the Cockpit's card:");
-for (const [kind, html, name, action] of KINDS) {
+for (const [kind, html, name, action, remove] of KINDS) {
   const card = cards(html).find((c) => c.name === name);
-  ck(`${kind}: a card named "${name}" in its strip, "${action}" in its bar`, !!card && card.bar === action, cards(html).map(({ name, bar }) => ({ name, bar })));
+  const said = remove ? `its ${remove[0] === "bin" ? "bin" : "✕"} "${remove[1]}" at its strip's right` : "no remove";
+  ck(`${kind}: a card named "${name}" in its strip, ${action ? `"${action}" in its bar` : "no bar"}, ${said}`,
+     !!card && card.bar === action && card.bars === (action ? 1 : 0)
+     && (remove ? !!card.remove && card.remove.icon === remove[0] && card.remove.glyph === (remove[0] === "bin" ? "trash-2" : "x")
+       && card.remove.label === remove[1] && card.remove.last && card.remove.danger === (remove[0] === "bin") : card.remove === null),
+     cards(html).map(({ name, bar, bars, remove }) => ({ name, bar, bars, remove })));
+}
+// owner, 2026-11-06: a remove is an icon in the band, never a word in a bar; a bar holding nothing is not drawn
+{
+  const every = KINDS.flatMap(([, html]) => cards(html));
+  const worded = every.filter((c) => /remove|unbind|take off|delete/i.test(c.bar));
+  ck("  ...no removing word left in any Settings card's bar (Remove, Unbind, Take off the list, Delete)", worded.length === 0, worded.map((c) => [c.name, c.bar]));
+  const empty = every.filter((c) => [...c.card.matchAll(/<div class="fm-record-actions"[^>]*>(?=<\/div>)/g)].length > 0 || (c.bars > 0 && c.bar === ""));
+  ck("  ...and no empty bar", empty.length === 0, empty.map((c) => c.name));
 }
 // the screens these replaced: the entity table, the 3D objects' rows, the announcements' and chats' bordered lists
 const all = KINDS.map(([, html]) => html).join("");
@@ -136,6 +158,45 @@ ck("  ...none of the rows and tables they were (a table, .binding-row, .settings
   ck("  ...the files drawing them, each through RecordCard",
      JSON.stringify(drawing) === JSON.stringify(["BindingRow.tsx", "ConfigEditor.tsx", "EntityMapRow.tsx", "GroupedDevices.tsx", "MessagesSettings.tsx", "UnavailableByDesign.tsx", "WhoGetsMessages.tsx"]), drawing);
   ck("  ...and none frames a card of its own", files.every(([, t]) => !/className="fm-record-(card|strip|actions)/.test(t)), files.filter(([, t]) => /className="fm-record-(card|strip|actions)/.test(t)).map(([f]) => f));
+}
+
+console.log("\n  the remove icon (owner, 2026-11-06): a press is the button's, Settings' alone, the band's height kept:");
+{
+  // RecordCard's tree expanded (its plain parts called; the tooltip's child read), the remove found and pressed
+  const { default: RecordCard } = await import("@/components/fm/RecordCard");
+  const expand = (el) => {
+    if (Array.isArray(el)) return el.flatMap(expand);
+    if (!el || typeof el !== "object") return [];
+    if (typeof el.type === "function") return expand(el.type.name === "Tip" ? el.props.children : el.type(el.props));
+    return [el, ...expand(el.props?.children)];
+  };
+  const ran = [], opened = [];
+  const tree = expand(h(RecordCard, { title: "Kitchen Temperature", onOpen: () => opened.push(1),
+    remove: { icon: "bin", label: "Delete the group Kitchen Temperature", run: () => ran.push(1) } }).type({ title: "Kitchen Temperature",
+    onOpen: () => opened.push(1), remove: { icon: "bin", label: "Delete the group Kitchen Temperature", run: () => ran.push(1) } }));
+  const button = tree.find((e) => e.type === "button" && /fm-record-remove/.test(e.props.className ?? ""));
+  const stopped = [];
+  const ev = (k) => ({ stopPropagation: () => stopped.push(k) });
+  button?.props.onPointerDown?.(ev("down"));
+  button?.props.onClick?.(ev("click"));
+  ck("pressing the remove runs it once, and neither its press nor its tap reaches the card (its open, its hold)",
+     !!button && ran.length === 1 && opened.length === 0 && JSON.stringify(stopped) === JSON.stringify(["down", "click"]), [!!button, ran, stopped]);
+  // the Cockpit's cards never pass it: the files giving RecordCard a `remove` are Settings' own
+  const { readdirSync, statSync } = await import("node:fs");
+  const walk = (d) => readdirSync(d).flatMap((f) => { const p = new URL(f, d); return statSync(p).isDirectory() ? walk(new URL(f + "/", d)) : f.endsWith(".tsx") ? [p] : []; });
+  const giving = walk(new URL("../../src/", import.meta.url)).filter((u) => { const t = readFileSync(u, "utf8"); return /<RecordCard\b/.test(t) && /^\s*remove=\{/m.test(t); })
+    .map((u) => u.pathname.split("/src/")[1]).sort();
+  ck("  ...the files giving a card its remove are Settings' alone, never a Cockpit card",
+     JSON.stringify(giving) === JSON.stringify(["components/settings/BindingRow.tsx", "components/settings/EntityMapRow.tsx", "components/settings/GroupedDevices.tsx",
+       "components/settings/MessagesSettings.tsx", "components/settings/UnavailableByDesign.tsx", "components/settings/WhoGetsMessages.tsx"]), giving);
+  // its glyph drawn into the strip's padding so the band keeps its height; its touch target 44px
+  const facility = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
+  const px = (re) => Number(re.exec(facility)?.[1]);
+  const size = px(/\.fm-record-strip \.fm-record-remove \{ width: (\d+)px; height: \1px;/), lift = px(/\.fm-record-strip \.fm-record-remove \{[^}]*margin: -(\d+)px -\d+px -\1px auto;/);
+  const line = px(/\.fm-record-strip, \.fm-record-part-head \{\s*--strip-line: (\d+)px;/), pad = px(/\.fm-record-strip \{ min-height: \d+px; padding: (\d+)px/);
+  const reach = px(/\.fm-record-strip \.fm-record-remove::after \{ inset: -(\d+)px; \}/);
+  ck("  ...a round icon no taller than the name's line in the strip (its overhang inside the strip's padding), a 44px touch target",
+     size - 2 * lift <= line && lift <= pad && size + 2 * reach >= 44, { size, lift, line, pad, reach });
 }
 
 console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and offers its devices:");
@@ -253,9 +314,9 @@ console.log("\n  Bound 3D objects: a bound object's card is its entity's:");
   ck("its strip its entity's name with the list's icon, its quiet line room · id, as an asleep device's",
      /fm-record-lead"><svg[^>]*lucide-link2?/.test(inside(card, "fm-record-strip")) && text(inside(card, "fm-record-name")) === "|Terrace Lamp|"
      && text(inside(card, "fm-record-meta")).replace(/\|/g, "") === "Otherlight.example_terrace_lamp", [text(inside(card, "fm-record-strip")), text(inside(card, "fm-record-meta"))]);
-  ck("  ...its words \"<object> is bound to <entity>\", then the search that changes it, Unbind in its bar",
+  ck("  ...its words \"<object> is bound to <entity>\", then the search that changes it, its ✕ unbinding it",
      /<p class="binding-said">/.test(card) && text(inside(card, "binding-said")).replace(/\|/g, "") === "Lamp_Kitchen is bound to Terrace Lamp"
-     && card.indexOf("binding-said") < card.indexOf('class="picker"') && cards(bindings("bound"))[0].bar === "Unbind", text(inside(card, "fm-record-main")));
+     && card.indexOf("binding-said") < card.indexOf('class="picker"') && cards(bindings("bound"))[0].remove?.label === "Unbind Lamp_Kitchen from Terrace Lamp", text(inside(card, "fm-record-main")));
   const loose = cards(bindings("unbound"))[0]?.card ?? "";
   ck("  ...an object bound to nothing: its name, the search, Bind; no quiet line",
      text(inside(loose, "fm-record-name")).replace(/\|/g, "") === "Mesh_Unnamed_042" && !/fm-record-meta/.test(loose) && /class="picker"/.test(loose), loose);
@@ -281,4 +342,4 @@ console.log("\n  Device telemetry: a log list, its columns time, kind, device, w
      && !/\.telemetry-[a-z]+ \{[^}]*order:/.test(css));
 }
 
-done("✅ Settings' records are the Cockpit's card; the telemetry a log in time order; Bound 3D objects' counts open its lists");
+done("✅ Settings' records are the Cockpit's card, each remove an icon at its strip's right; the telemetry a log in time order; Bound 3D objects' counts open its lists");

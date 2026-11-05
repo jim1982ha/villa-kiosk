@@ -146,8 +146,12 @@ checked; never accept a gap by describing it.
 
 Settings' and Advanced Settings' records are the same card (owner, 2026-11-06): a device group and a suggested one, a
 bound 3D object, an object bound to nothing, an entity no object shows, an asleep device, a device of Devices, a 3D
-object whose entity is gone, a full-screen announcement, a chat. Its remove or its main action is a segment of its bar,
-never a corner icon; a control (On | Off, a slider, a setting line) stays a setting line, a log (Device telemetry) a
+object whose entity is gone, a full-screen announcement, a chat. Its main action (Bind, Create this group, Point it there)
+is a segment of its bar; its remove is never a word in the bar but a small round icon at its strip's right end
+(RecordCard's `remove`, owner 2026-11-06), a bin when it deletes the thing (a group, a device's settings, an
+announcement), an ✕ when it takes it off a list or undoes a link (a chat, an asleep device, an unbind), its tooltip and
+name saying what goes ("Delete the group …", "Take … off the Asleep list"); a card whose bar holds nothing has none. The
+Cockpit's cards never use it. A control (On | Off, a slider, a setting line) stays a setting line, a log (Device telemetry) a
 list. A device of Devices is never folded and has no room line (owner, 2026-11-06: redundant); on a phone its "Confirm
 before toggling" is a line of its own under its id, the box and the id always on one line. A card's fields start at
 one x (one name column, `--card-field-label`; on a phone the name above its control). Each list has ONE field

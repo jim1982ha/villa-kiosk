@@ -82,6 +82,12 @@
 .fm-record-name { flex: 0 1 auto; min-width: 0; color: var(--text-primary); overflow-wrap: anywhere;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .fm-record-when { margin-left: auto; font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); }
+/* a Settings card's remove (RecordCard `remove`, owner 2026-11-06): the small round icon button at the strip's right end,
+   where a Cockpit card says its time; drawn 30px into the strip's padding so the band keeps its height, its touch
+   target 44px (the ::after), its glyph centred on the name's first line */
+.fm-record-strip .fm-record-remove { width: 30px; height: 30px; margin: -4px -8px -4px auto; }
+.fm-record-strip .fm-record-remove::after { inset: -7px; }
+.fm-record-when + .fm-record-remove { margin-left: 0; }
 /* a part's state, on its header line: one line, its words give way with "…" */
 .fm-record-part-head .fm-record-status { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 2. ITS FIRST LINE, where it stands (rule 2): bold, in its tone's colour, its (i) after it */

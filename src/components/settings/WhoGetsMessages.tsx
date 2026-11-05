@@ -22,7 +22,7 @@ import { ROLE_LABELS } from "@/auth/roles";
 import { CHAT_LANGUAGES, ROLE_LISTS, droppedChats, planChange, targetsOf, withChatLanguage, type SentLists } from "@/messages/recipients";
 import { useConfig } from "@/config/ConfigContext";
 import RecordCard from "@/components/fm/RecordCard";
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import Dropdown from "@/components/common/Dropdown";
 import AddOnLine from "@/components/common/AddOnLine";
 import EntityPicker from "./EntityPicker";
@@ -85,7 +85,7 @@ export default function WhoGetsMessages({ onSaved }: {
               // ⚠️ EACH CHAT THE COCKPIT'S CARD (owner, 2026-11-06): its name in the strip (its list is the line above
               // it), the language VESTA writes to it its one field (owner, 2026-11-03: named once, short; 2026-11-06 "Language":
               // the card names the chat and the section says VESTA writes to it, so the name fits the cards' one name
-              // column), Remove its bar
+              // column), its ✕ at its strip's right takes it off the list
               <div className="fm-list">
                 {ids.map((id) => (
                   <RecordCard key={id} title={name(id)} lead={<MessageCircle size={16} aria-hidden />}
@@ -97,12 +97,7 @@ export default function WhoGetsMessages({ onSaved }: {
                           options={Object.entries(CHAT_LANGUAGES).map(([code, words]) => ({ value: code, label: words }))} />
                       </div>
                     }
-                    actions={
-                      <button type="button" className="btn ghost" aria-label={`Take ${name(id)} off the ${who}'s list`}
-                        onClick={() => void save((now) => withItem(now, id, false))}>
-                        <X size={16} aria-hidden />Remove
-                      </button>
-                    } />
+                    remove={{ icon: "x", label: `Take ${name(id)} off the ${who}'s list`, run: () => void save((now) => withItem(now, id, false)) }} />
                 ))}
               </div>
             )}
