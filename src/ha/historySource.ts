@@ -25,7 +25,7 @@
 
 import { gapsFrom } from "@/utils/historyGaps";
 import { finerOutages, PERIOD_MS, statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
-import { fiveMinuteSeries, intervalSeries } from "@/utils/trendInterval";
+import { fiveMinuteSeries, intervalSeries, stepsOfflineInside } from "@/utils/trendInterval";
 import { windowEndingAt } from "@/utils/lineChart";
 import { isNoHistory, NO_RECORD, NOT_KEPT, UNKNOWN_STATES } from "@/utils/stateColors";
 import type { HistoryGap, HistorySeries, StateHistoryPoint, StatisticPeriod } from "@/types/ha.types";
@@ -57,6 +57,10 @@ export interface HistoryPort {
   /** Where the villa's system's detail begins at `now` (keptFromRows over KEPT_PROBE's history) — undefined when not
    *  known. Optional: a port without it (a test's fake) greys nothing. */
   keptFrom?(now: number): Promise<number | undefined>;
+  /** Whether `entityId` is a device asleep by design (AppConfig.unavailableByDesign): its sleep is no outage on any of
+   *  its charts — its changes held (unavailableByDesign.heldWindow), its figures' missing steps and finer slots alike.
+   *  Optional: a port without it (a test's fake) knows no sleeping device. */
+  asleep?(entityId: string): boolean;
 }
 
 /** A history a chart asks for. `hours` is a window ending now; `since` (epoch
@@ -284,7 +288,19 @@ async function statistics(
   const res = await port.getStatisticsDuringPeriod(
     [...ids], new Date(window.from).toISOString(), period, undefined, fields);
   return Object.fromEntries(ids.map((id) => [id, Object.fromEntries(
-    fields.map((f) => [f, statisticsSeries(res[id], f, period, window)]))]));
+    fields.map((f) => [f, heldFigures(port, id, f, statisticsSeries(res[id], f, period, window))]))]));
+}
+
+/**
+ * ⚠️ A SLEEPING DEVICE'S FIGURES MISS THEIR STEPS BY DESIGN (architecture review 24): a battery sensor that sleeps
+ * between reports leaves the recorder no figure for the steps it slept through, and its week's line broke at each and
+ * every hour of it was striped "Unavailable during this hour" — the sleep its changes already hold (heldWindow). A
+ * measured figure of a device asleep by design keeps only what is no longer kept; a total keeps its own (no reading is
+ * no reading). Its line holds across, as its changes do.
+ */
+function heldFigures(port: HistoryPort, id: string, field: StatisticField, s: HistorySeries): HistorySeries {
+  if (field === "change" || s.points.length === 0 || !port.asleep?.(id)) return s;
+  return { ...s, gaps: s.gaps.filter((g) => g.notKept) };
 }
 
 // ── When the current state began ──────────────────────────────────────────
@@ -457,6 +473,8 @@ async function outagesInside(port: HistoryPort, ids: readonly string[], period: 
   figures: Record<string, Partial<Record<StatisticField, HistorySeries>>>, window: { from: number; to: number }, now: number,
   kept: number | undefined): Promise<Record<string, HistoryGap[]>> {
   const marked = period === "hour" || period === "day" || period === "week" ? period : null;
+  // a device asleep by design: its sleep is no outage (heldFigures)
+  ids = ids.filter((id) => !port.asleep?.(id));
   if (!marked || ids.length === 0) return {};
   const steps = [...new Set<StatisticsPeriod>(["5minute", FINER[marked] as StatisticsPeriod])];
   const fine = await Promise.all(steps.map(async (step) => ({ step, figures: await statistics(port, ids, step, ["mean"], window) })));
@@ -486,7 +504,10 @@ async function trend(port: HistoryPort, ids: readonly string[], period: Statisti
     const fig = figures[id]?.mean;
     if (fig && fig.points.length) { out[id] = withInside(fig, inside[id]); continue; }
     const raw = await readings(port, id, window);
-    out[id] = withNotKept(period === "5minute" ? fiveMinuteSeries(raw) : intervalSeries(raw, PERIOD_MS[period]), kept);
+    const drawn = period === "5minute" ? fiveMinuteSeries(raw) : intervalSeries(raw, PERIOD_MS[period]);
+    // an outage inside a step looks as the figures' does (stepsOfflineInside)
+    const marked = period === "hour" || period === "day" || period === "week" ? stepsOfflineInside(drawn, period, PERIOD_MS[period]) : drawn;
+    out[id] = withNotKept(marked, kept);
   }
   return out;
 }

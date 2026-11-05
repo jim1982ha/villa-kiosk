@@ -91,7 +91,8 @@ export function chartAbout(shows: ChartShows, stepMs: number, from?: number, kep
   const step = stepNoun(stepMs), finest = PERIOD_MS["5minute"];
   const before = kept !== undefined && from !== undefined && from < kept ? dayMonth(kept) : null;
   if (shows === "total") {
-    return `${cap(stepWords(stepMs))} totals. ${a(step)} with no total written is left empty. A meter counts on through an outage, so its total stays right and no outage is shown.`;
+    // ⚠️ SAID AS DRAWN (architecture review 24): it read "left empty" over the grey "No reading" bar (barChart)
+    return `${cap(stepWords(stepMs))} totals. ${a(step)} with no total written is a grey band, "No reading". A meter counts on through a shorter outage, so a total written stays right: no outage is shown inside it.`;
   }
   if (shows === "states") {
     return `Each ${step} shows the states it saw: striped when it saw several, grey among them when the device was unavailable, at any length.${before ? ` Before ${before}, the villa's system no longer keeps its changes.` : ""}`;
@@ -138,7 +139,8 @@ export function fmtOutage(gap: Pick<HistoryGap, "from" | "to" | "actual" | "notK
   if (!Number.isFinite(g.to) || g.to >= now) return `Unavailable since ${at(g.from)} (${fmtDuration(now - g.from)})`;
   const ms = g.to - g.from;
   if (at(g.from) === at(g.to)) return `Unavailable at ${at(g.from)}, ${ms < 1000 ? "under 1s" : `for ${fmtDuration(ms)}`}`;
-  return `Unavailable · ${at(g.from)}–${at(g.to)} (${fmtDuration(ms)})`;
+  // ⚠️ ITS DAY ONCE (architecture review 24): "Unavailable · 3 Nov, 06:13–3 Nov, 06:40" said the day twice
+  return `Unavailable · ${at(g.from)}–${sameVillaDay(g.from, g.to) ? fmtChartTime(g.to) : at(g.to)} (${fmtDuration(ms)})`;
 }
 
 /** An x-axis tick: the time of day while the window is two days or less,
@@ -162,6 +164,12 @@ export function fmtChartTick(t: number, spanHours: number): string {
  * to when it was last seen, so a "24h" chart there can sit entirely in the
  * past).
  */
+/** Whether two moments fall on the same day of the villa's clock. */
+function sameVillaDay(a: number, b: number): boolean {
+  const x = wallClock(a), y = wallClock(b);
+  return x.year === y.year && x.month === y.month && x.day === y.day;
+}
+
 export function fmtChartStamp(t: number, spanHours: number): string {
   // the villa's day (utils/villaClock), as every time on the chart is the villa's
   const d = wallClock(t), today = wallClock(Date.now());

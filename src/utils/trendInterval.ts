@@ -80,6 +80,35 @@ export function knownSpans(s: HistorySeries): { a: number; b: number; v: number 
   return spans;
 }
 
+/**
+ * ⚠️ ONE LOOK FOR AN OUTAGE INSIDE A STEP, WHEREVER THE STEP CAME FROM (architecture review 24): a device the recorder
+ * keeps figures of had its week's hour striped "Unavailable during this hour", its line drawn through (historySource
+ * outagesInside), while one drawn from its changes (no figures: intervalSeries) had the same hour a plain grey band,
+ * its line broken, and its tooltip a span of times. Of `s` drawn in `period` steps, each widened outage's step that
+ * still has its mean is marked offline inside it (`within`, the same as the figures'); a run of steps with no mean at
+ * all stays a break with its real span (`actual`), as a missing figure is. "No longer kept" is left as it is. Pure.
+ */
+export function stepsOfflineInside(s: HistorySeries, period: "hour" | "day" | "week", B: number): HistorySeries {
+  const { from, to } = s.window;
+  if (!(to > from) || !s.gaps.some((g) => !g.notKept)) return s;
+  const edges = cellEdges(from, to, B);
+  const hasMean = new Set(s.points.map((p) => cellIndex(edges, p.t)));
+  const gaps: HistoryGap[] = [];
+  for (const g of s.gaps) {
+    if (g.notKept) { gaps.push(g); continue; }
+    const real = g.actual ?? { from: g.from, to: g.to };
+    let run: HistoryGap | null = null;
+    for (let k = Math.max(0, cellIndex(edges, g.from)); k + 1 < edges.length && edges[k] < g.to; k++) {
+      const a = Math.max(edges[k], g.from), b = Math.min(edges[k + 1], g.to);
+      if (hasMean.has(k)) { run = null; gaps.push({ from: a, to: b, within: period }); continue; }
+      if (run) { run.to = b; run.actual = { from: run.actual!.from, to: Math.min(real.to, b) }; continue; }
+      run = { from: a, to: b, actual: { from: Math.max(real.from, a), to: Math.min(real.to, b) } };
+      gaps.push(run);
+    }
+  }
+  return { ...s, gaps };
+}
+
 /** Outages widened to whole five-minute intervals (merged where they then
  *  meet), each with its real span in `actual`. */
 export function widenGaps(gaps: readonly HistoryGap[], from: number, to: number, B = TREND_INTERVAL_MS): HistoryGap[] {
