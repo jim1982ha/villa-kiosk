@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.444 (5 November 2026)
+
+- One date format in every text a person reads (owner, 2026-11-05): `timeutil.day_label` writes the agreement's date
+  (`MOMENT["date"]`, "05/10/2026"; weekday "Mon 05/10/2026"), `day_time_label` and `clock(days=True)` its moment
+  ("05/10/2026 09:30"), so `said`, the reports, the investigation pages, the night check's and the alert desk's lines
+  follow; `day_label`'s `long`, `year` and `numeric` switches went (no "Monday 5 October"); investigate.py's two
+  hand-written `%d %b` days go through `day_label`. `test_one_day_format` pins the words and refuses a `%d %b` /
+  `%d %B` day in a skill script or the agent's code (the AI's own "[Villa time: …]" kept).
+
 ## 0.6.443 (5 November 2026)
 
 - A step that undoes an ending reaches every copy of its alert (`message_format.Step.every_copy`, the reopening's;

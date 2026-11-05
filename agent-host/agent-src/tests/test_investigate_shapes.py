@@ -243,7 +243,7 @@ def test_a_change_that_began_before_its_days_before_is_said_from_the_daily_figur
     changed = [9, 28, 3, 2.5, 4.5, 8.4, 6, 5, 9, 70, 81, 125, 103, 113]          # 7 to 20 October
     said = inv.timeline(_WithDays(pump(False), changed), ["sensor.x"], FROM, E, 3, Z, now=E)["lines"]
     day = [ln for ln in said if "day by day" in ln]
-    assert day and "⟵ since 16 Oct" in day[0] and "already like this" in day[0], said
+    assert day and "⟵ since 16/10/2026 about" in day[0] and "16 Oct" not in day[0] and "already like this" in day[0], said
     steady = [9, 8, 3, 2.5, 4.5, 8.4, 6, 5, 9, 7, 8, 6, 9, 7]
     said = inv.timeline(_WithDays(pump(False), steady), ["sensor.x"], FROM, E, 3, Z, now=E)["lines"]
     day = [ln for ln in said if "day by day" in ln]

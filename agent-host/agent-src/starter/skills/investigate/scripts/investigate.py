@@ -39,7 +39,7 @@ from vesta_shared.critical import run_when  # noqa: E402  (a rule's "When this r
 from vesta_shared import daily  # noqa: E402  (the villa's one "running")
 from vesta_shared.params import VillaParams  # noqa: E402
 from vesta_shared import periods as kinds  # noqa: E402  (the period kinds and their words, read by the report page too)
-from vesta_shared.timeutil import clock, lasting  # noqa: E402  (the one clock, the one duration wording)
+from vesta_shared.timeutil import clock, day_label, lasting  # noqa: E402  (the one clock, day, duration wording)
 from vesta_shared import past  # noqa: E402  (a read of the past with how far it got; the one "could not be read whole")
 from vesta_shared import retention  # noqa: E402  (where the villa's detail ends, and the figures that take over)
 from vesta_shared.store import Notes, notes_of  # noqa: E402  (an alert's notes: one reader)
@@ -131,7 +131,7 @@ def parse_time(text: str, zone: ZoneInfo) -> datetime:
 
 def at(t: datetime, zone: ZoneInfo, day: bool = False) -> str:
     """A moment as the lines the AI reads write it: "03:09:46" — WITH its seconds (a 71-second drop, a run of 8 s:
-    the AI reasons on them) — and its day when the period spans several ("9 Oct, 03:09:46"). The one clock
+    the AI reasons on them) — and its day when the period spans several ("09/10/2026 03:09:46"). The one clock
     (timeutil.clock): the page says the same moment "03:09", and the AI's own rows the same way."""
     return clock(t, zone, days=day, seconds=True)
 
@@ -397,7 +397,7 @@ def days_line(client, eid: str, start: datetime, end: datetime, baseline_days: f
     recent = [(d, v) for d, v in days if d + timedelta(days=1) > split]
     if len(earlier) < th("days_context_min") or not recent:
         return None
-    line = "  day by day, its average (long-term figures): " + " · ".join(f"{d:%d %b} {v:.3g}" for d, v in days)
+    line = "  day by day, its average (long-term figures): " + " · ".join(f"{day_label(d)} {v:.3g}" for d, v in days)
     usual, ratio = statistics.median(earlier), th("days_change_ratio")
     now = statistics.median(v for _, v in recent)
     if usual > 0 and (now >= usual * ratio or now <= usual / ratio):
@@ -407,7 +407,7 @@ def days_line(client, eid: str, start: datetime, end: datetime, baseline_days: f
             if not far(v):
                 break
             since = d
-        line += (f"  ⟵ since {since:%d %b} about {now / usual:.2g}× its average of the days before ({usual:.3g}): "
+        line += (f"  ⟵ since {day_label(since)} about {now / usual:.2g}× its average of the days before ({usual:.3g}): "
                  f"the days before used as \"usual\" above were already like this")
     return line
 

@@ -518,7 +518,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         # ⚠️ WHAT IT SAYS NOW (owner, 2026-10-13, the house pump's #5: "last confirmed: 2026-10-01" every morning while
         # Home Assistant's own message said 2026-10-11): a repeat carries the alert's latest words, claim and priority
         cur = _restated(store, cur, ev, sev, now, route, out)
-        # the villa's time, written as every message writes one ("Mon 5 Oct, 08:00"): it showed "2026-10-03T00:00", UTC
+        # the villa's time, written as every message writes one ("Mon 05/10/2026 08:00"): it showed "2026-10-03T00:00", UTC
         since = day_time_label(villa_time(cur["opened_at"], zone or "UTC"), weekday=True)
         status = say("still_count", count=cur["count"] + 1, since=since)
         # Home Assistant's own new message for it takes the incident's number, and replaces its older ones

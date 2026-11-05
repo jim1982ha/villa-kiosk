@@ -285,7 +285,7 @@ def from_names(pack, params, read, load, a, b, prev_a, prev_b) -> dict:
 def headline(r: dict) -> str:
     if r["total_kwh"] is None:
         return "Total not known: the villa's Energy settings name no grid meter."
-    # whole figures and the one day format (timeutil.day_label: "5 Oct", never 2026-10-05), as every page says them
+    # whole figures and the one day format (timeutil.day_label: "05/10/2026", never 2026-10-05), as every page says them
     a, b = (day_label(date.fromisoformat(str(r[k])[:10])) for k in ("start", "end"))
     s = f"{r['villa']}: {number(r['total_kwh'], 'kWh', whole=True)} from {a} to {b}"
     if r["total_cost"] is not None:

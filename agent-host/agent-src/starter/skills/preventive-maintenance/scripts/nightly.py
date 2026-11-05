@@ -885,7 +885,7 @@ def told_now(res: dict, title: str | None = None, store=None, at: datetime | Non
                 for label, ds in (("New", res["new_findings"]), ("Back again", res["again"]))]
     if not any(items for _, items in sections):
         return []
-    title = title or f"{res.get('villa') or 'The villa'}, night check on {day_label(date.fromisoformat(res['as_of']), numeric=True)}."
+    title = title or f"{res.get('villa') or 'The villa'}, night check on {day_label(date.fromisoformat(res['as_of']))}."
     key = None
     ids = [i for _, items in sections for i, _ in items]
     if store is not None and all(isinstance(i, int) for i in ids):

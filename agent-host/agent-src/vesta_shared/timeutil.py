@@ -51,27 +51,6 @@ def villa_day(zone: "str | ZoneInfo", as_of: str | None = None, last_finished: b
     return today - timedelta(days=1) if last_finished else today
 
 
-def day_label(d: date, weekday: bool = False, long: bool = False, year: bool = False, numeric: bool = False,
-              short: bool = False) -> str:
-    """A day as every message and report writes it: "5 Oct", never "05 Oct". weekday: "Mon 5 Oct"; long:
-    "Monday 5 October"; year: "… 2026"; numeric: "05/10/2026", as a message's title and its notices say it; short:
-    the weekday alone, "Mon" (a column of days).
-
-    ⚠️ ONE FORMAT (2026-10-05): seven hand-written strftime("%d %b") calls in the skills, four stripping
-    the leading zero and three not, so the same report said "05 Oct" in one line and "5 Oct" in the next.
-    (Seven helpers here — ms_to_local, parse_iso, fmt_day… — had no caller at all; they went.) Seven more
-    ("%a %d %b": "Mon 05 Oct") were found by the architecture review of 2026-10-07: weekday and long are here
-    so no skill needs its own."""
-    if short:
-        return f"{d:%a}"
-    if numeric:
-        return d.strftime(MOMENT["date"])
-    out = f"{d.day} {d:%B}" if long else f"{d.day} {d:%b}"
-    if weekday or long:
-        out = f"{d:%A} {out}" if long else f"{d:%a} {out}"
-    return f"{out} {d.year}" if year else out
-
-
 #: How every notice writes a moment ("11/10/2026 07:05") and a day ("11/10/2026"): ⚠️ THE AGREEMENT'S, the tablet writes
 #: the same (agent-contract.json `moment`; owner, 2026-10-29: alert #83 said "24/10/2026 19:05" on Telegram and
 #: "2026-10-24 19:05" on the tablet). `moment_label`, and the villa's own alert template, which fills "Cleared on
@@ -92,9 +71,28 @@ def moment_label(d: datetime, zone: "str | ZoneInfo") -> str:
     return t.strftime(MOMENT_FORMAT)
 
 
-def day_time_label(d: datetime, weekday: bool = False, year: bool = False) -> str:
-    """A day and a time: "5 Oct, 09:30" (weekday: "Mon 5 Oct, 09:30")."""
-    return f"{day_label(d, weekday=weekday, year=year)}, {d:%H:%M}"
+def day_label(d: date, weekday: bool = False, short: bool = False) -> str:
+    """A day as every message, notice and page writes it: the agreement's date, "05/10/2026"; weekday: "Mon 05/10/2026";
+    short: the weekday alone, "Mon" (a column of days).
+
+    ⚠️ ONE FORMAT (2026-10-05): seven hand-written strftime("%d %b") calls in the skills, four stripping
+    the leading zero and three not, so the same report said "05 Oct" in one line and "5 Oct" in the next.
+    (Seven helpers here — ms_to_local, parse_iso, fmt_day… — had no caller at all; they went.) Seven more
+    ("%a %d %b": "Mon 05 Oct") were found by the architecture review of 2026-10-07: weekday is here so no skill
+    needs its own. ⚠️ AND IT IS THE AGREEMENT'S (owner, 2026-11-05: "one date format everywhere"): a message's title
+    said "04/11/2026" and its lines "4 Nov"; every day is now the Kiosk's and the titles' (MOMENT["date"]), so the
+    words "5 Oct", "Monday 5 October" and their `long`, `year` and `numeric` switches went."""
+    if short:
+        return f"{d:%a}"
+    out = d.strftime(MOMENT["date"])
+    return f"{d:%a} {out}" if weekday else out
+
+
+def day_time_label(d: datetime, weekday: bool = False) -> str:
+    """A day and a time, the agreement's moment as `d` holds it (already in the villa's time): "05/10/2026 09:30"
+    (weekday: "Mon 05/10/2026 09:30"). moment_label converts to the villa's zone first."""
+    out = d.strftime(MOMENT_FORMAT)
+    return f"{d:%a} {out}" if weekday else out
 
 
 def month_label(d: date) -> str:
@@ -104,21 +102,21 @@ def month_label(d: date) -> str:
 
 def clock(t: datetime, zone: "str | ZoneInfo", *, days: bool, seconds: bool = False) -> str:
     """A moment on an investigation, in the villa's time: "03:09" — with its day when the period spans several
-    ("9 Oct, 03:09", day_time_label) — and with its seconds where they matter ("03:09:46": the lines the AI reads,
-    where a 71-second drop must keep its seconds).
+    ("09/10/2026 03:09", the agreement's moment) — and with its seconds where they matter ("03:09:46": the lines the
+    AI reads, where a 71-second drop must keep its seconds).
 
     ⚠️ ONE CLOCK (architecture review round 3, 2026-10-19): the lines the AI read said "09/10 03:09:46", the page's
     log "9 Oct, 03:09" and its charts "03:09", and SKILL.md asked the AI to write "09/10 07:30" — which the page then
-    put in the same column as "9 Oct, 03:09"."""
+    put in the same column as "9 Oct, 03:09". Its day is day_label's since 2026-11-05 (one date format)."""
     t = t.astimezone(ZoneInfo(zone) if isinstance(zone, str) else zone)
     hm = f"{t:%H:%M:%S}" if seconds else f"{t:%H:%M}"
-    return f"{day_label(t.date())}, {hm}" if days else hm
+    return f"{day_label(t.date())} {hm}" if days else hm
 
 
 def said(value, zone: "str | ZoneInfo | None" = None, *, weekday: bool = False, day: bool = False):
-    """A figure as a report page says it: an ISO day ("2026-10-05") reads "5 Oct", an ISO moment
-    ("2026-10-05T09:30", with or without its zone) "5 Oct, 09:30" — in the villa's `zone` when the moment carries
-    one; `weekday`: "Mon 5 Oct…"; `day`: a moment reads as its day alone ("Since 5 Oct."). Anything else, as it is.
+    """A figure as a report page says it: an ISO day ("2026-10-05") reads "05/10/2026", an ISO moment
+    ("2026-10-05T09:30", with or without its zone) "05/10/2026 09:30" — in the villa's `zone` when the moment carries
+    one; `weekday`: "Mon 05/10/2026…"; `day`: a moment reads as its day alone ("Since 05/10/2026."). Anything else, as it is.
 
     ⚠️ ONE READER OF A STORED TIME (architecture review round 3, 2026-10-19): the playbook's `_fill.show` and the
     composer's `day()` / `when()` each sniffed the ISO strings facts.json keeps, by their lengths, with their own

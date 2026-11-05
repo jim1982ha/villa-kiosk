@@ -192,7 +192,7 @@ def test_the_playbook_turns_the_villas_data_into_one_list_of_what_needs_doing(tm
     (step,) = [r for r in rows if "sensor.example_pump_power" in r["entity_ids"]]
     assert step["kind"] == "PM-POWER-CHANGE" and step["title"].startswith("Garden pump draws 13% lower")
     lock = next(r for r in rows if r["kind"] == "locks_and_doors/a safety device offline")
-    assert lock["title"] == "Front door lock offline since 4 Oct, 10:00"
+    assert lock["title"] == "Front door lock offline since 04/10/2026 10:00"
     # no record of the agent listening that week: only the rules whose every run is an alert can say so
     assert facts["sections"]["quiet"]["did_not_happen"] == ["no door left unlocked and no supply left open"]
     assert {w["id"] for w in facts["to_write"]} >= {f"{step['id']}.reading", f"{step['id']}.ask", "quiet"}
@@ -280,7 +280,7 @@ def test_a_group_that_started_in_the_same_minute_says_one_cause(tmp_path):
                   "playbook": {"means": "m", "check": "c"}} for k in range(4)], [])
     (row,) = [r for r in facts.todo(c) if r["kind"] == "monitoring/a device of the monitoring offline"]
     assert row["title"] == "4 monitoring devices offline"
-    assert "All since 1 Oct, 09:28: one cause is likely" in row["why"]
+    assert "All since 01/10/2026 09:28: one cause is likely" in row["why"]
 
 
 class _Book(HABase):
@@ -518,7 +518,7 @@ def test_the_one_list_is_built_from_plain_inputs():
                           {"PM-SILENT": "{n} sensors silent", "same_time": "All since {since}: one cause."})
     assert [r["title"] for r in rows] == ["Pump: power down", "3 sensors silent"]      # clue + task merged; 3 grouped
     assert rows[0]["severity"] == "P2" and rows[0]["task_ids"] == ["finding-1"]       # Now → P2; the task kept with it
-    assert rows[1]["members"] == ["S2", "S3", "S4"] and "All since 1 Oct, 09:28: one cause." in rows[1]["why"]
+    assert rows[1]["members"] == ["S2", "S3", "S4"] and "All since 01/10/2026 09:28: one cause." in rows[1]["why"]
 
 
 def test_a_report_made_without_the_ai_says_so_and_never_uses_old_readings(tmp_path):

@@ -50,7 +50,7 @@ def _when(row: dict) -> datetime | None:
 
 # ---------------------------------------------------------------- the clues (reports.yaml playbook)
 def _fill(text, figures: dict) -> str:
-    """A playbook text with the clue's figures in it; a date as a person writes it ("23 Sep", timeutil.said)."""
+    """A playbook text with the clue's figures in it; a date as a person writes it ("23/09/2026", timeutil.said)."""
     try:
         return str(text or "").format(**{k: said(v) for k, v in figures.items() if not isinstance(v, (list, dict))})
     except (KeyError, IndexError, ValueError):

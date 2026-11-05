@@ -87,13 +87,14 @@ def test_float_noise_never_hangs_an_axis():
 
 
 def test_one_day_format_everywhere():
-    # 2026-10-05: four skills wrote "5 Oct", three "05 Oct" — sometimes in the same report
+    # 2026-10-05: four skills wrote "5 Oct", three "05 Oct" — sometimes in the same report; 2026-11-05: the agreement's
+    # date, "05/10/2026", the one the titles and the tablet write
     import re
     from datetime import date, datetime
     from helpers import STARTER_SKILLS
     from vesta_shared.timeutil import day_label, day_time_label
-    assert day_label(date(2026, 10, 5)) == "5 Oct" and day_label(date(2026, 10, 15)) == "15 Oct"
-    assert day_time_label(datetime(2026, 10, 5, 9, 30)) == "5 Oct, 09:30"
+    assert day_label(date(2026, 10, 5)) == "05/10/2026" and day_label(date(2026, 10, 15)) == "15/10/2026"
+    assert day_time_label(datetime(2026, 10, 5, 9, 30)) == "05/10/2026 09:30"
     hand = []
     for root, _d, files in os.walk(STARTER_SKILLS):
         for f in files:

@@ -94,7 +94,7 @@ def send(to: str, doc: str, **k) -> dict:
 
 def title(villa: str, name: str, on: date) -> str:
     """A report message's title (owner, 2026-10-11): "Villa Example, daily report on 11/10/2026." """
-    return f"{villa}, {name} report on {day_label(on, numeric=True)}."
+    return f"{villa}, {name} report on {day_label(on)}."
 
 
 def fm_daily(pack: KnowledgePack, store: Store, as_of: date) -> str:

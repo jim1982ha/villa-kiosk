@@ -192,7 +192,7 @@ def test_a_repeated_alert_says_since_when_in_the_villas_time(store, monkeypatch)
     # owner, 2026-10-07: "(4 times since 2026-10-03T00:00)" — UTC, written as a machine writes it
     desk.intake(store, event(), T0, occupancy_reader=lambda: "occupied", zone="Asia/Makassar")
     res = desk.intake(store, event(), T0 + timedelta(hours=6), occupancy_reader=lambda: "occupied", zone="Asia/Makassar")
-    assert res["send"][0]["status"].endswith("since Thu 1 Oct, 17:00")  # 09:00 UTC is 17:00 in the villa
+    assert res["send"][0]["status"].endswith("since Thu 01/10/2026 17:00")  # 09:00 UTC is 17:00 in the villa
 
 
 def test_only_done_and_need_help_and_an_old_not_found_is_chased_again(tmp_path):

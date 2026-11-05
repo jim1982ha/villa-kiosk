@@ -12,11 +12,36 @@ from helpers import STARTER_SKILLS
 from vesta_shared.timeutil import day_label, day_time_label, villa_day
 
 
-def test_a_day_is_written_one_way_never_with_a_leading_zero():
+def test_a_day_is_written_one_way_the_agreements():
+    # owner, 2026-11-05: "one date format everywhere", the app's "04/11/2026 08:56", never "4 Nov, 08:56": a message's
+    # title said one and its lines the other
     d = date(2026, 10, 5)
-    assert (day_label(d), day_label(d, weekday=True), day_label(d, long=True, year=True)) == \
-        ("5 Oct", "Mon 5 Oct", "Monday 5 October 2026")
-    assert day_time_label(datetime(2026, 10, 5, 9, 30), weekday=True) == "Mon 5 Oct, 09:30"
+    assert (day_label(d), day_label(d, weekday=True), day_label(d, short=True)) == ("05/10/2026", "Mon 05/10/2026", "Mon")
+    assert day_time_label(datetime(2026, 10, 5, 9, 30), weekday=True) == "Mon 05/10/2026 09:30"
+    assert day_time_label(datetime(2026, 10, 5, 9, 30)) == "05/10/2026 09:30"
+    from vesta_shared.timeutil import MOMENT, moment_label
+    assert day_label(d) == d.strftime(MOMENT["date"])                                   # the agreement's, not a copy
+    assert day_time_label(datetime(2026, 10, 5, 9, 30, tzinfo=ZoneInfo("UTC"))) == \
+        moment_label(datetime(2026, 10, 5, 9, 30, tzinfo=ZoneInfo("UTC")), "UTC")
+
+
+def test_no_text_a_person_reads_writes_a_month_name_for_a_day():
+    # the skills' scripts and the agent's own words: a "%b" or "%B" beside a day is the old "4 Nov" (a month's name
+    # alone, "October 2026", is month_label's)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    files = glob.glob(os.path.join(STARTER_SKILLS, "*", "scripts", "*.py")) + glob.glob(os.path.join(root, "vesta_*", "*.py"))
+    # the one exception: the villa's time at the head of what the AI is sent (runner.with_time), read by the AI only
+    kept = {os.path.join("vesta_agent", "runner.py"): "Villa time:"}
+    bad = []
+    for f in files:
+        rel = os.path.relpath(f, root)
+        if rel == os.path.join("vesta_shared", "timeutil.py"):
+            continue                                                  # the helper itself: its words are the test above
+        for n, line in enumerate(open(f), 1):
+            if re.search(r"strftime\([\"'][^\"']*%-?d %[bB]|\{[^{}]*:[^{}]*%-?d %[bB]|\.day\} \{[^{}]*:%[bB]", line) \
+                    and not (rel in kept and kept[rel] in line):
+                bad.append(f"{rel}:{n}")
+    assert not bad, bad
 
 
 def test_no_skill_script_writes_a_day_by_hand():
@@ -46,7 +71,7 @@ def test_a_home_assistant_time_on_the_report_is_the_villas():
     import compose
     html = compose.page({"zone": "Asia/Makassar", "order": ["monitoring"], "sections": {"monitoring": {
         "listening_since": "2026-10-06T08:15+00:00", "ai_cost_usd": None}}}, {})
-    assert "Listening since Tue 6 Oct, 16:15" in html
+    assert "Listening since Tue 06/10/2026 16:15" in html
     # ⚠️ never the villa's devices (owner, 2026-10-19): an offline sensor given to it is not drawn
     html = compose.page({"zone": "Asia/Makassar", "order": ["monitoring"], "sections": {"monitoring": {
         "offline": [{"item": "Pool pump", "since": "2026-10-06T08:15+00:00", "critical": False}],
@@ -119,8 +144,8 @@ def test_every_point_of_a_reports_chart_says_its_day_and_value():
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import compose
     svg = compose.line([("2026-09-21", 100), ("2026-09-22", 59.4), ("2026-09-23", None), ("2026-09-24", 61)], "W")
-    assert svg.count('class="pt"') == 3 and 'aria-label="Mon 21 Sep · 100 W"' not in svg
-    assert 'aria-label="21 Sep · 100 W"' in svg and "<script" not in svg
+    assert svg.count('class="pt"') == 3 and 'aria-label="Mon 21/09/2026 · 100 W"' not in svg
+    assert 'aria-label="21/09/2026 · 100 W"' in svg and "<script" not in svg
     bars = compose.bars([{"label": "W1", "value": 30}, {"label": "W2", "value": None}])
     assert bars.count('class="pt"') == 1 and 'aria-label="W1 · 30"' in bars
     pairs = compose.pairs([{"day": "Mon", "kwh": 12.5, "prev_kwh": 10}])
@@ -131,8 +156,8 @@ def test_the_alerts_are_folded_with_their_count_in_every_report():
     # owner, 2026-10-19: "Alerts that fired" collapsed by default, in every report with it (the monthly's "What happened")
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import compose
-    rows = [{"when_h": "Mon 12 Oct, 22:28", "what": "Leak", "lasted": "1 min", "outcome": "Cleared", "times": 2},
-            {"when_h": "Tue 13 Oct, 10:00", "what": "Door", "lasted": "", "outcome": "Cleared", "times": 1}]
+    rows = [{"when_h": "Mon 12/10/2026 22:28", "what": "Leak", "lasted": "1 min", "outcome": "Cleared", "times": 2},
+            {"when_h": "Tue 13/10/2026 10:00", "what": "Door", "lasted": "", "outcome": "Cleared", "times": 1}]
     for sid, title in (("alerts", "Alerts that fired"), ("happened", "What happened")):
         html = compose.page({"zone": "UTC", "order": [sid], "sections": {sid: {"rows": rows}}}, {})
         assert f'<details class="fold">\n  <summary><h2>{title} (3)</h2></summary>' in html, sid
@@ -144,24 +169,24 @@ def test_a_moment_on_an_investigation_is_one_clock():
     from vesta_shared.timeutil import clock
     z = ZoneInfo("Asia/Makassar")
     t = datetime(2026, 10, 8, 19, 9, 46, tzinfo=ZoneInfo("UTC"))                   # 03:09:46 on 9 Oct at the villa
-    assert clock(t, z, days=False) == "03:09" and clock(t, z, days=True) == "9 Oct, 03:09"
+    assert clock(t, z, days=False) == "03:09" and clock(t, z, days=True) == "09/10/2026 03:09"
     assert clock(t, z, days=False, seconds=True) == "03:09:46" and clock(t, "Asia/Makassar", days=True, seconds=True) \
-        == "9 Oct, 03:09:46"
+        == "09/10/2026 03:09:46"
 
 
 def test_a_stored_day_or_moment_is_read_into_words_once():
     # the playbook's _fill.show and the composer's day()/when() each sniffed facts.json's ISO strings their own way
     from vesta_shared.timeutil import month_label, said
-    assert said("2026-10-05") == "5 Oct" and said("2026-10-05", weekday=True) == "Mon 5 Oct"
-    assert said("2026-10-06T16:15") == "6 Oct, 16:15" and said("2026-10-06T16:15", weekday=True, day=True) == "Tue 6 Oct"
-    assert said("2026-10-06T08:15+00:00", "Asia/Makassar", weekday=True) == "Tue 6 Oct, 16:15"   # an aware time: the villa's
-    assert said("2026-10-06T08:15+00:00", weekday=True) == "Tue 6 Oct, 08:15"                    # no zone given: as it is
+    assert said("2026-10-05") == "05/10/2026" and said("2026-10-05", weekday=True) == "Mon 05/10/2026"
+    assert said("2026-10-06T16:15") == "06/10/2026 16:15" and said("2026-10-06T16:15", weekday=True, day=True) == "Tue 06/10/2026"
+    assert said("2026-10-06T08:15+00:00", "Asia/Makassar", weekday=True) == "Tue 06/10/2026 16:15"   # an aware time: the villa's
+    assert said("2026-10-06T08:15+00:00", weekday=True) == "Tue 06/10/2026 08:15"                    # no zone given: as it is
     assert said("not a day") == "not a day" and said(12) == 12 and said(None) is None and said("2026-13-45") == "2026-13-45"
     assert month_label(date(2026, 10, 5)) == "October 2026" and day_label(date(2026, 10, 5), short=True) == "Mon"
     sys.path.insert(0, os.path.join(STARTER_SKILLS, "reports", "scripts"))
     import playbook
     assert playbook._fill("since {a}, on {b}: {c}", {"a": "2026-10-06T16:15", "b": "2026-10-05", "c": 3}) == \
-        "since 6 Oct, 16:15, on 5 Oct: 3"
+        "since 06/10/2026 16:15, on 05/10/2026: 3"
 
 
 def test_a_figure_is_written_by_one_rule_on_every_page_and_headline():
@@ -180,4 +205,4 @@ def test_a_figure_is_written_by_one_rule_on_every_page_and_headline():
     said = energy_period.headline({"villa": "V", "total_kwh": 123.4, "start": "2026-10-05", "end": "2026-10-11",
                                    "total_cost": None, "total_vs_prev_pct": None, "period": "week", "unmetered_pct": 12.6,
                                    "loads": [{"family": "energy", "name": "Pool pump", "share_pct": 35.4}]})
-    assert said == "V: 123 kWh from 5 Oct to 11 Oct. Largest: Pool pump 35%. Not metered: 13%."
+    assert said == "V: 123 kWh from 05/10/2026 to 11/10/2026. Largest: Pool pump 35%. Not metered: 13%."

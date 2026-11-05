@@ -119,7 +119,7 @@ with the facts; if one seems misleading, say why in "cannot_tell".
    - `summary`: the message shows it under the line of recorded times and durations: explain them, in other words
      than theirs, rather than give them again.
    - `timeline`: only what a person saw or did that the records do not show (the page draws the recorded one); leave it
-     out when there is none. Its `time` as the rules below say: "07:30", or "9 Oct, 07:30" when the account spans
+     out when there is none. Its `time` as the rules below say: "07:30", or "09/10/2026 07:30" when the account spans
      several days: the page lists it beside the recorded moments, worded the same way.
    - `causes`: most likely first. A cause that came from a lead also has `"source"`, written `"[2]"` for a web page (its
      place in `sources`) or `"the records"`, and `"verdict"`: `"consistent"` (the records fit it), `"not supported"`

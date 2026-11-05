@@ -1079,8 +1079,8 @@ def test_one_clock_the_ais_reported_row_and_the_recorded_row_word_their_time_the
     import investigation_facts
     from vesta_shared.timeutil import clock
     skill = open(os.path.join(STARTER_SKILLS, "investigate", "SKILL.md")).read()
-    assert '"time": "07:30"' in skill and '"9 Oct, 07:30"' in skill and "09/10" not in skill
-    assert clock(T(9, 7, 30), Z, days=False) == "07:30" and clock(T(9, 7, 30), Z, days=True) == "9 Oct, 07:30"
+    assert '"time": "07:30"' in skill and '"09/10/2026 07:30"' in skill and "9 Oct" not in skill   # the agreement's moment (2026-11-05)
+    assert clock(T(9, 7, 30), Z, days=False) == "07:30" and clock(T(9, 7, 30), Z, days=True) == "09/10/2026 07:30"
     client = _Around()
     read = investigate.timeline(client, ["sensor.heater_power"], T(9, 2), T(9, 15), 3, Z, series=True)
     data = json.loads(json.dumps({"start": T(9, 2).isoformat(), "end": T(9, 15).isoformat(), "zone": "UTC", **read},
@@ -1091,15 +1091,15 @@ def test_one_clock_the_ais_reported_row_and_the_recorded_row_word_their_time_the
     rows = investigation_facts.facts(data, around, {"timeline": [{"time": "07:30", "text": "Water on the floor"}]})["log"]
     assert {r["pill"] for r in rows} >= {"unusual", "reported"} and all(re.match(one_day, r["time"]) for r in rows), rows
     # the same investigation over several days: the day on every row, the AI's included, as SKILL.md asks for it
-    days = r"^\d{1,2} [A-Z][a-z]{2}, \d\d:\d\d$"
+    days = r"^\d\d/\d\d/\d{4} \d\d:\d\d$"                         # the agreement's moment (2026-11-05)
     long = {**data, "end": T(10, 15).isoformat()}
-    rows = investigation_facts.facts(long, around, {"timeline": [{"time": "9 Oct, 07:30", "text": "Water"}]})["log"]
+    rows = investigation_facts.facts(long, around, {"timeline": [{"time": "09/10/2026 07:30", "text": "Water"}]})["log"]
     assert all(re.match(days, r["time"]) for r in rows), rows
-    assert ("9 Oct, 03:09", "unusual") in {(r["time"], r["pill"]) for r in rows}
-    # the lines the AI reads: the same moment with its seconds — "9 Oct, 03:09:46" is the page's "9 Oct, 03:09"
+    assert ("09/10/2026 03:09", "unusual") in {(r["time"], r["pill"]) for r in rows}
+    # the lines the AI reads: the same moment with its seconds — "09/10/2026 03:09:46" is the page's "09/10/2026 03:09"
     lines = [x.strip() for x in investigate.timeline(client, ["sensor.heater_power"], T(9, 2), T(10, 15), 3, Z)["lines"]]
-    line = next(x for x in lines if x.startswith("9 Oct, 03:09:46"))
-    assert line[:len("9 Oct, 03:09")] == "9 Oct, 03:09" and not any("09/10" in x for x in lines)
+    line = next(x for x in lines if x.startswith("09/10/2026 03:09:46"))
+    assert line[:len("09/10/2026 03:09")] == "09/10/2026 03:09" and not any("9 Oct" in x for x in lines)
 
 
 def test_a_rule_that_runs_only_while_the_villa_is_empty_says_so():
@@ -1135,8 +1135,8 @@ def test_a_repeated_problem_is_one_row_and_the_finding_after_it_stays_on_the_pag
     bursts = [("stops and restarts 8 times", 3 * 1440 + 60 * i, 10, "runs of about 30s each") for i in range(2)]
     f = mod.facts(_periods_data(drops + bursts), {})
     log = [r["text"] for r in f["log"]]
-    assert log[0] == ("Pump Power: 100 times “stopped reporting”, from 14 Oct, 00:00 to 14 Oct, 16:31, the longest "
-                      "2min at 14 Oct, 01:10, it stopped reporting")
+    assert log[0] == ("Pump Power: 100 times “stopped reporting”, from 14/10/2026 00:00 to 14/10/2026 16:31, the longest "
+                      "2min at 14/10/2026 01:10, it stopped reporting")
     assert [x for x in log if x.startswith("Pump Power stopped and restarted 8 times in 10min")] == log[1:]
     assert f["established"] == log                                    # what the AI reads back is what the page says
 

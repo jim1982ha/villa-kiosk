@@ -364,8 +364,8 @@ def s_header(c: Ctx) -> dict:
     title = (f"{c.pack.villa}, week {c.start.isocalendar()[1]}" if c.kind == "fm-weekly"
              else f"{c.pack.villa}, {month_label(c.start)}")
     return {"villa": c.pack.villa, "title": title,
-            "dates": f"{day_label(c.start, long=True)} to {day_label(c.end, long=True, year=True)}",
-            "generated": day_time_label(c.now.astimezone(c.Z), weekday=True, year=True) + f" {c.Z.key}"}
+            "dates": f"{day_label(c.start, weekday=True)} to {day_label(c.end, weekday=True)}",
+            "generated": day_time_label(c.now.astimezone(c.Z), weekday=True) + f" {c.Z.key}"}
 
 
 def s_headline(c: Ctx) -> dict:

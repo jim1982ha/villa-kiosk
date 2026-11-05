@@ -190,11 +190,12 @@ being planned for faults that clear themselves while the "being confirmed" card 
 
 ## One card, every case
 
-Every Cockpit card says the same things at the same place, folded or opened, in the Inbox or on Tickets: first line its
-name and when the problem began, second line its room, its next check and its state, then its words and its buttons
-(a ticket's stage is said in the pill of who last moved it, in the stage's colour). One card per device in Open issues
-and Watch alike. A
-pill never repeats the card's words; a pill says something real (no next check without a time). A change to a card is
+Every Cockpit card says the same things at the same place, folded or opened, in the Inbox or on Tickets (owner,
+2026-11-05, "Status on top", then the second card that day): its strip (its name and when it began, in the state's
+colour), its state on its first line, its room and next check, its words, who moved it, then its buttons along its
+bottom edge, the main one first. One card per device in
+Open issues and Watch alike. A state never repeats the card's words; a state says something real (no next check
+without a time). A change to a card is
 checked across every kind of card and every screen before it ships, so the owner never has to find the next mismatch.
 
 **Why:** owner, 2026-11-01: "always shows consistent and relevant information always at the same positions and in every
