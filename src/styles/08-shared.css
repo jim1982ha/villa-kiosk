@@ -277,9 +277,12 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   padding: 8px 0; font-size: var(--text-sm);
 }
 .telemetry-row + .telemetry-row { border-top: 1px solid var(--hairline); }
-.telemetry-row > .telemetry-kind { flex: 0 0 auto; font-weight: 600; white-space: nowrap; }
+/* ⚠️ TIME, KIND, DEVICE, WORDS (owner, 2026-11-06): the time and the kind are columns of one width, so every row's
+   device and words start at the same place: the time in figures of one width, the kind as wide as the page's longest
+   (--telemetry-kind, set by the list) */
+.telemetry-row > .telemetry-time { flex: 0 0 auto; font-size: var(--text-2xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.telemetry-row > .telemetry-kind { flex: 0 0 var(--telemetry-kind, auto); font-weight: 600; white-space: nowrap; }
 .telemetry-row > .telemetry-meta { flex: 0 0 auto; font-size: var(--text-2xs); white-space: nowrap; }
-.telemetry-row > .telemetry-time { flex: 0 0 auto; font-size: var(--text-2xs); white-space: nowrap; }
 /* ONE LINE PER EVENT, every row the same height (owner, 2026-10-12): the
    summary ends in "…" when it does not fit — its full text is the span's
    tooltip, and Copy/Download give every field. It used to wrap, so a frames
@@ -291,13 +294,10 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 
 @media (max-width: 640px) {
   /* Give the summary the whole of its own line instead of the sliver left
-     over after the other three. `order` moves it below them without changing
-     DOM order (which stays the natural reading order on a wide screen), and
-     the timestamp is pushed to the right end of the first line so that line
-     reads "kind · device · when". */
+     over after the other three: the first line reads "when · kind · device", the words under it. */
   .telemetry-row { flex-wrap: wrap; row-gap: 4px; }
-  .telemetry-row > .telemetry-summary { flex: 1 1 100%; order: 1; }
-  .telemetry-row > .telemetry-time { margin-left: auto; }
+  .telemetry-row > .telemetry-summary { flex: 1 1 100%; }
+  .telemetry-row > .telemetry-meta { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 }
 /* "Diagnose ▾" and its two items, opening under the button inside the dialog. */
 .telemetry-diag { position: relative; display: flex; }

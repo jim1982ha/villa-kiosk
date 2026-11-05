@@ -82,7 +82,7 @@ ck("a change is saved to that role's list, planned over the villa's latest text 
      JSON.stringify(set) === JSON.stringify({ "notify.a": "de", "notify.b": "fr" })
      && JSON.stringify(r.withChatLanguage(set, "notify.a", "en")) === JSON.stringify({ "notify.b": "fr" }));
   ck("  ...a menu beside each chat of the list, its choices the agreement's",
-     /\{ids\.map\(\(id\) => \([\s\S]*<RemovablePill[\s\S]*<Dropdown className="recipients-language"[\s\S]*onChange=\{\(code\) => setLanguage\(id, code\)\}/.test(view)
+     /\{ids\.map\(\(id\) => \([\s\S]*<RecordCard[\s\S]*<Dropdown className="recipients-language"[\s\S]*onChange=\{\(code\) => setLanguage\(id, code\)\}/.test(view)
      && /Object\.entries\(CHAT_LANGUAGES\)/.test(view));
   // architecture review round 18, card 1: a chat was saved at once and its language with Save, so ✕ said "nothing was
   // kept" over a chat that was

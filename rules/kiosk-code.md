@@ -140,3 +140,9 @@ Every `RecordCard` in the tree counts, not only the Inbox's: its strip its name 
 (`useCardRoom`, "Other" with none) first. The check derives the cards from the source tree, so a card on another tab
 cannot be skipped; a card with no place is listed there with why. Before saying "every card", name the tabs that were
 checked; never accept a gap by describing it.
+
+Settings' and Advanced Settings' records are the same card (owner, 2026-11-06): a device group and a suggested one, a
+bound 3D object, an object bound to nothing, an entity no object shows, an asleep device, a device of Devices, a 3D
+object whose entity is gone, a full-screen announcement, a chat. Its remove or its main action is a segment of its bar,
+never a corner icon; a control (On | Off, a slider, a setting line) stays a setting line, a log (Device telemetry) a
+list. `tests/oracles/settings_cards.mjs` draws each kind through its real section.

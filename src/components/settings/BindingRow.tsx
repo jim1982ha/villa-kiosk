@@ -1,42 +1,83 @@
 // src/components/settings/BindingRow.tsx
-// One row of BindingsTable's bound-objects list: the 3D object, the entity it
-// shows, and Unlink — the LINK only. The device's name and display settings
-// are edited in ONE place, its row in Devices (config/deviceRecord; architecture
-// review 2026-10-12): this row used to carry the same fields (MappingFields), a
-// second editor for the same record. React.memo'd, as EntityMapRow.
+// The cards of BindingsTable's three lists (Advanced Settings › Villa › Bound 3D objects): a bound 3D object, an object
+// bound to nothing, and an entity no object shows. Each holds the LINK only: the device's name and display settings are
+// edited in ONE place, its card in Devices (config/deviceRecord; architecture review 2026-10-12) — the bound row used to
+// carry the same fields (MappingFields), a second editor for the same record. React.memo'd, as EntityMapRow.
+//
+// ⚠️ THE COCKPIT'S CARD (owner, 2026-11-06: "the same card in Settings and Advanced Settings"): the object's or the
+// entity's name in the strip, what it is bound to on the quiet line, the picker its words, its one action in its bar
+// (Unbind, Bind). They were rows of fixed columns with a small icon at the end.
 
-import { Unlink, Link2 } from "lucide-react";
+import { Link2, Unlink, Box, EyeOff } from "lucide-react";
 import EntityPicker from "./EntityPicker";
-import { memo } from "react";
+import { memo, useState } from "react";
 import IdText from "@/components/common/IdText";
-import Tip from "@/components/common/Tip";
+import SearchPicker from "@/components/common/SearchPicker";
+import RecordCard from "@/components/fm/RecordCard";
 
-interface Props {
+/** A bound 3D object: "Bound to" its entity, which its picker changes at once; Unbind in its bar. */
+function BoundObjectCardInner({ mesh, entityId, room, onBind, onUnbind }: {
   mesh: string;
   entityId: string;
+  /** Its entity's room, every card's (useCardRoom). */
+  room: string;
   onBind: (mesh: string, entityId: string) => void;
   onUnbind: (mesh: string) => void;
-}
-
-function BindingRow({ mesh, entityId, onBind, onUnbind }: Props) {
+}) {
   return (
-    // ⚠️ ONE ROW SHAPE WITH THE UNBOUND OBJECTS' (.binding-row): the object, its entity, its small icon; on a phone the
-    // object's name over the other two, never a picker pushed past the window's edge (owner, 2026-11-06)
-    <div className="binding-row">
-      <div className="binding-row-object">
-        <Link2 size={16} style={{ flexShrink: 0, opacity: 0.5 }} />
-        <span style={{ minWidth: 0 }}><IdText id={mesh} /></span>
-      </div>
-      <div className="binding-row-entity">
-        <EntityPicker value={entityId} onChange={(id) => onBind(mesh, id)} allowCustom />
-      </div>
-      <Tip text="Remove binding">
-        <button type="button" className="icon-btn-sm danger" onClick={() => onUnbind(mesh)} aria-label="Remove binding">
-          <Unlink size={16} aria-hidden />
+    <RecordCard title={<IdText id={mesh} />} lead={<Link2 size={16} aria-hidden />} room={room}
+      pills={<span>Bound to <IdText id={entityId} /></span>}
+      body={<EntityPicker value={entityId} onChange={(id) => onBind(mesh, id)} allowCustom hideCurrentLabel />}
+      actions={
+        <button type="button" className="btn ghost" aria-label={`Unbind ${mesh}`} onClick={() => onUnbind(mesh)}>
+          <Unlink size={16} aria-hidden />Unbind
         </button>
-      </Tip>
-    </div>
+      } />
   );
 }
+export const BoundObjectCard = memo(BoundObjectCardInner);
 
-export default memo(BindingRow);
+/** A 3D object bound to nothing: an entity picked, then Bind, the card's main action. */
+function UnboundObjectCardInner({ mesh, onBind }: { mesh: string; onBind: (mesh: string, entityId: string) => void }) {
+  const [picked, setPicked] = useState<string | undefined>(undefined);
+  return (
+    <RecordCard title={<IdText id={mesh} />} lead={<Box size={16} aria-hidden />}
+      pills={<span>Bound to nothing</span>}
+      body={<EntityPicker value={picked} onChange={setPicked} placeholder="Bind to entity…" allowCustom hideCurrentLabel />}
+      actions={
+        <button type="button" className="btn ghost fm-bar-main" disabled={!picked} aria-label={`Bind ${mesh}`}
+          onClick={() => { if (picked) { onBind(mesh, picked); setPicked(undefined); } }}>
+          <Link2 size={16} aria-hidden />Bind
+        </button>
+      } />
+  );
+}
+export const UnboundObjectCard = memo(UnboundObjectCardInner);
+
+/** An entity no 3D object shows: one of the unbound objects picked, then Bind (the object then shows it). */
+function UnshownEntityCardInner({ entityId, name, room, objects, onBind }: {
+  entityId: string;
+  /** Its name on every screen (useEntityLabel). */
+  name: string;
+  room: string;
+  /** The 3D objects bound to nothing, to pick from. */
+  objects: readonly string[];
+  onBind: (mesh: string, entityId: string) => void;
+}) {
+  const [picked, setPicked] = useState<string | undefined>(undefined);
+  return (
+    <RecordCard title={name} lead={<EyeOff size={16} aria-hidden />} room={room}
+      pills={<span><IdText id={entityId} /></span>}
+      body={objects.length > 0 && (
+        <SearchPicker placeholder={picked ?? "Pick the 3D object that shows it…"} onPick={setPicked}
+          rows={(q) => objects.filter((o) => o.toLowerCase().includes(q.trim().toLowerCase())).map((o) => ({ key: o, label: <IdText id={o} /> }))} />
+      )}
+      actions={objects.length > 0 && (
+        <button type="button" className="btn ghost fm-bar-main" disabled={!picked} aria-label={`Bind ${name} to a 3D object`}
+          onClick={() => { if (picked) { onBind(picked, entityId); setPicked(undefined); } }}>
+          <Link2 size={16} aria-hidden />Bind
+        </button>
+      )} />
+  );
+}
+export const UnshownEntityCard = memo(UnshownEntityCardInner);

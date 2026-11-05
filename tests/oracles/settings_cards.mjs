@@ -1,0 +1,172 @@
+// Settings and Advanced Settings show their records as the Cockpit's card (owner, 2026-11-06: "the same card in Settings
+// and Advanced Settings"): a device group and a suggested one, a bound 3D object, an object bound to nothing, an entity
+// no object shows, a device asleep between reports, a device of Devices and a 3D object whose entity is gone, a
+// full-screen announcement, a chat that gets the messages. Each is drawn here through its real section and read: its
+// frame is RecordCard's, its name is in the strip, its action is in the bar; the rows and tables it replaced are gone.
+// The telemetry stays a log list, its columns reordered (time, kind, device, words), and Bound 3D objects' title counts
+// open its lists (the line of three toggles under the title is gone).
+//
+// The sections fold their content until tapped and keep their contexts private: a loader (below) opens the folds for
+// the drawing and exports the contexts, as the screenshot harness does. Nothing else of the code is changed.
+import { readFileSync } from "node:fs";
+import { register } from "node:module";
+import { ck, done } from "../consistency/check.mjs";
+const { h, draw, inside, text } = await import("../consistency/screen.mjs");
+
+// Runs before the alias hook (registered last, asked first): its transpiled module, opened and with its context exported
+const HOOK = `
+const PATCH = {
+  "/src/config/ConfigContext.tsx": [["", "export { ConfigContext as __Ctx };"]],
+  "/src/ha/HAStateStore.tsx": [["", "export { HAStateContext as __Ctx };"]],
+  "/src/components/settings/Fold.tsx": [["useState(false)", "useState(true)"]],
+  "/src/components/settings/GroupedDevices.tsx": [["useState(false)", "useState(true)"]],
+  "/src/components/settings/BindingsTable.tsx": [['useState("bound")', 'useState(globalThis.__view ?? "bound")']],
+};
+export async function load(url, context, next) {
+  const r = await next(url, context);
+  const key = Object.keys(PATCH).find((k) => url.endsWith(k));
+  if (!key) return r;
+  let src = String(r.source);
+  for (const [a, b] of PATCH[key]) {
+    if (!a) { src += "\\n" + b; continue; }
+    if (!src.includes(a)) throw new Error("settings_cards: " + key + " no longer has " + a);
+    src = src.replace(a, b);
+  }
+  return { ...r, source: src, shortCircuit: true };
+}`;
+register(`data:text/javascript,${encodeURIComponent(HOOK)}`);
+
+globalThis.localStorage = globalThis.localStorage ?? (() => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k) }; })();
+localStorage.setItem("villa-kiosk:mesh-catalog", JSON.stringify(["Lamp_Kitchen", "Mesh_Unnamed_042"]));
+const { __Ctx: ConfigCtx } = await import("@/config/ConfigContext");
+const { __Ctx: HACtx } = await import("@/ha/HAStateStore");
+const { VillaModelProvider } = await import("@/config/VillaModel");
+const { DEFAULT_CONFIG } = await import("@/config/AppConfig");
+const { PendingFields } = await import("@/hooks/usePendingField");
+const { PendingEdits } = await import("@/config/pendingEdits");
+
+const ent = (id, name, state = "on") => ({ entity_id: id, state, attributes: { friendly_name: name }, last_changed: "2026-11-05T09:00:00Z",
+  last_updated: "2026-11-05T09:00:00Z", context: { id: "x" } });
+const entities = Object.fromEntries([
+  ent("input_text.vesta_owner_targets", "Owner targets", "notify.example_owner_chat"),
+  ent("input_text.vesta_fm_targets", "FM targets", "notify.example_fm_group"),
+  ent("notify.example_owner_chat", "Example Owner"), ent("notify.example_fm_group", "Example House FM group"),
+  ent("sensor.example_kitchen_temperature", "Kitchen Temperature", "24"), ent("sensor.example_kitchen_humidity", "Kitchen Humidity", "60"),
+  ent("switch.example_pool_pump", "Pool Pump"), ent("sensor.example_pool_pump_power", "Pool Pump Power", "600"),
+  ent("light.example_terrace_lamp", "Terrace Lamp"), ent("binary_sensor.example_back_door", "Back Door", "off"),
+  ent("fan.example_ceiling_fan", "Ceiling Fan"),
+].map((e) => [e.entity_id, e]));
+const map = (id, type) => ({ entityId: id, type });
+const config = {
+  ...DEFAULT_CONFIG,
+  fullScreen: [{ title: "Front gate doorbell", seconds: 10 }],
+  entityMap: { "sensor.example_kitchen_temperature": map("sensor.example_kitchen_temperature", "sensor"),
+    "switch.example_pool_pump": map("switch.example_pool_pump", "switch"), "sensor.example_pool_pump_power": map("sensor.example_pool_pump_power", "sensor"),
+    "light.example_terrace_lamp": map("light.example_terrace_lamp", "light") },
+  meshBindings: { Lamp_Kitchen: "light.example_terrace_lamp" },
+  deviceGroups: [{ id: "g1", primaryEntityId: "sensor.example_kitchen_temperature", memberEntityIds: ["sensor.example_kitchen_humidity"] }],
+  unavailableByDesign: ["binary_sensor.example_back_door"],
+};
+const noop = () => {};
+const cfg = { config, update: noop, editByDialog: noop, onDialogEdit: () => noop, mergeRemote: noop, onRemoteChange: () => noop,
+  saveProblem: null, setSaveProblem: noop, resolvedRooms: { "switch.example_pool_pump": "Pool" }, setResolvedRooms: noop };
+const ha = { entities, suppressedEntityIds: new Set(), hiddenInHaEntityIds: new Set(), unavailableByDesign: new Set(), entityAreaNames: {},
+  entityFloorNumbers: {}, entityDeviceIds: { "sensor.example_kitchen_temperature": "d1", "sensor.example_kitchen_humidity": "d1",
+    "switch.example_pool_pump": "d2", "sensor.example_pool_pump_power": "d2" }, deviceUnits: {},
+  connection: "connected", haConfig: { location_name: "The Example House" }, lastError: null, serviceError: null,
+  getEntitiesSnapshot: () => entities, connected: true, ws: null, subscribe: () => noop, subscribeAll: () => noop, callService: async () => ({ ok: true }),
+  connect: async () => {}, setUnavailableByDesign: noop };
+const rows = Object.entries(config.entityMap).map(([id, mapping]) => ({ id, mapping, objects: [] }));
+const villa = { settings: { rows, stale: [], orphans: ["fan.example_gone_fan"] }, sceneEntityIds: new Set() };
+const quiet = (f) => { const e = console.error; console.error = () => {}; try { return f(); } finally { console.error = e; } };
+const drawIn = (el) => quiet(() => draw(h(ConfigCtx.Provider, { value: cfg }, h(HACtx.Provider, { value: ha },
+  h(VillaModelProvider, { value: villa }, h(PendingFields, { pending: new PendingEdits(noop) }, el))))));
+
+/** Every card drawn: its frame's whole markup, its strip's name, its bar's words. */
+const cards = (html) => {
+  const out = []; let at = 0;
+  for (;;) {
+    const i = html.indexOf('class="fm-record-card', at);
+    if (i < 0) return out;
+    const card = inside(html.slice(i - 12), "fm-record-card");
+    out.push({ name: text(inside(card, "fm-record-name")).replace(/\|/g, ""), bar: text(inside(card, "fm-record-actions")).replace(/\[icon\]/g, "").replace(/\|/g, " ").trim(), card });
+    at = i + card.length;
+  }
+};
+
+const { default: GroupedDevices } = await import("@/components/settings/GroupedDevices");
+const { default: BindingsTable } = await import("@/components/settings/BindingsTable");
+const { default: UnavailableByDesign } = await import("@/components/settings/UnavailableByDesign");
+const { default: ConfigEditor } = await import("@/components/settings/ConfigEditor");
+const { FullScreenAnnouncements } = await import("@/components/settings/MessagesSettings");
+const { default: WhoGetsMessages } = await import("@/components/settings/WhoGetsMessages");
+const bindings = (view) => { globalThis.__view = view; return drawIn(h(BindingsTable, { title: "Bound 3D objects" })); };
+
+const KINDS = [
+  ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", "Remove group"],
+  ["  ...a suggested group, its main action first", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Pool Pump Power + Pool Pump", "Create this group"],
+  ["a bound 3D object", bindings("bound"), "Lamp_Kitchen", "Unbind"],
+  ["an object bound to nothing", bindings("unbound"), "Mesh_Unnamed_042", "Bind"],
+  ["an entity no object shows", bindings("unshown"), "Ceiling Fan", "Bind"],
+  ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "Take off the list Remove"],
+  ["a device of Devices", drawIn(h(ConfigEditor)), "Pool Pump", "Remove"],
+  ["a 3D object whose entity is gone", drawIn(h(ConfigEditor)), "fan.example_gone_fan", "Point it there"],
+  ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", "Remove"],
+  ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", "Remove"],
+];
+console.log("  every record of Settings is the Cockpit's card:");
+for (const [kind, html, name, action] of KINDS) {
+  const card = cards(html).find((c) => c.name === name);
+  ck(`${kind}: a card named "${name}" in its strip, "${action}" in its bar`, !!card && card.bar === action, cards(html).map(({ name, bar }) => ({ name, bar })));
+}
+// the screens these replaced: the entity table, the 3D objects' rows, the announcements' and chats' bordered lists
+const all = KINDS.map(([, html]) => html).join("");
+ck("  ...none of the rows and tables they were (a table, .binding-row, .settings-list, a bin in a corner)",
+   !/<table|binding-row|settings-list"|settings-list-row|fs-row|recipients-chat/.test(all), all.match(/<table|binding-row|settings-list[\w-]*|fs-row|recipients-chat/g));
+// every settings file that draws a record draws RecordCard, none a card of its own
+{
+  const { readdirSync } = await import("node:fs");
+  const dir = new URL("../../src/components/settings/", import.meta.url);
+  const files = readdirSync(dir).filter((f) => f.endsWith(".tsx")).map((f) => [f, readFileSync(new URL(f, dir), "utf8")]);
+  const drawing = files.filter(([, t]) => /<RecordCard\b/.test(t)).map(([f]) => f).sort();
+  ck("  ...the files drawing them, each through RecordCard",
+     JSON.stringify(drawing) === JSON.stringify(["BindingRow.tsx", "ConfigEditor.tsx", "EntityMapRow.tsx", "GroupedDevices.tsx", "MessagesSettings.tsx", "UnavailableByDesign.tsx", "WhoGetsMessages.tsx"]), drawing);
+  ck("  ...and none frames a card of its own", files.every(([, t]) => !/className="fm-record-(card|strip|actions)/.test(t)), files.filter(([, t]) => /className="fm-record-(card|strip|actions)/.test(t)).map(([f]) => f));
+}
+
+console.log("\n  Bound 3D objects: its title's counts open its lists:");
+{
+  const head = (html) => inside(html, "cockpit-issues-head");
+  // what each list holds: the object bound, the one bound to nothing, the entities no object shows
+  const LISTS = { bound: ["Lamp_Kitchen"], unbound: ["Mesh_Unnamed_042"], unshown: ["Back Door", "Ceiling Fan"] };
+  const views = (html) => [...head(html).matchAll(/<button type="button" class="section-view( shown)?" aria-pressed="(true|false)">([^<]*)<\/button>/g)].map((m) => [m[3], m[2] === "true"]);
+  ck("its three counts are buttons after its title, the list shown marked (bound first)",
+     JSON.stringify(views(bindings("bound"))) === JSON.stringify([["1 bound", true], ["1 unbound", false], ["2 not shown", false]]), views(bindings("bound")));
+  ck("  ...each count shows its own list, one at a time",
+     Object.entries(LISTS).every(([v, names], i) => { const html = bindings(v); const shown = views(html).map(([, s]) => s);
+       return shown.filter(Boolean).length === 1 && shown[i] && JSON.stringify(cards(html).map((c) => c.name)) === JSON.stringify(names); }),
+     ["bound", "unbound", "unshown"].map((v) => [views(bindings(v)), cards(bindings(v)).map((c) => c.name)]));
+  const body = inside(bindings("bound"), "fold-body");
+  ck("  ...and the line of three toggles under the title is gone (no \"bound object\" fold, no summary line)",
+     !/fold-toggle|bound object|section-summary">/.test(body.replace(/Show all[^<]*/g, "")) && !/class="section-summary">/.test(head(bindings("bound"))), body.slice(0, 400));
+}
+
+console.log("\n  Device telemetry: a log list, its columns time, kind, device, words:");
+{
+  const { TelemetryRow } = await import("@/components/settings/TelemetryPanel");
+  const row = draw(h(TelemetryRow, { e: { kind: "freeze", at: "2026-11-06T03:52:43Z", ua: "Mozilla/5.0 (Macintosh)", role: "owner", v: "2.496.718", ms: 1240 } }));
+  const order = [...row.matchAll(/<span class="(?:muted )?(telemetry-[a-z]+)"/g)].map((m) => m[1]);
+  ck("an event's time first, then its kind, its device, its words", JSON.stringify(order) === JSON.stringify(["telemetry-time", "telemetry-kind", "telemetry-meta", "telemetry-summary"]), order);
+  ck("  ...a row, not a card, its kind in its colour (freeze red)", !/fm-record/.test(row) && /class="telemetry-kind" style="color:var\(--status-danger\)">freeze/.test(row), row);
+  const css = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
+  const rule = (sel) => css.match(new RegExp(`\\n${sel.replace(/[.>]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
+  ck("  ...the time and the kind columns of one width, so the rows align (the kind as wide as the page's longest)",
+     /tabular-nums/.test(rule(".telemetry-row > .telemetry-time")) && /flex: 0 0 var\(--telemetry-kind/.test(rule(".telemetry-row > .telemetry-kind"))
+     && /"--telemetry-kind" as string\]: `\$\{Math\.max\(\.\.\.paged\.page\.map\(\(e\) => e\.kind\.length\)\)\}ch`/.test(readFileSync(new URL("../../src/components/settings/TelemetryPanel.tsx", import.meta.url), "utf8")));
+  const phone = css.slice(css.indexOf(".telemetry-row > .telemetry-summary {"));
+  ck("  ...on a phone the time, kind and device on the first line, the words under them (never moved by `order`)",
+     /@media \(max-width: 640px\) \{[^@]*\.telemetry-row \{ flex-wrap: wrap;[^@]*\.telemetry-row > \.telemetry-summary \{ flex: 1 1 100%; \}[^@]*\.telemetry-row > \.telemetry-meta \{ flex: 1 1 0; min-width: 0;/.test(phone)
+     && !/\.telemetry-[a-z]+ \{[^}]*order:/.test(css));
+}
+
+done("✅ Settings' records are the Cockpit's card; the telemetry a log in time order; Bound 3D objects' counts open its lists");

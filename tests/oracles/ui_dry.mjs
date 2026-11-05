@@ -110,14 +110,14 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
      /options\.length > 4 \? " segmented-grid"/.test(sg)
      && /\.settings-modal \.row > \.segmented\.segmented-grid:only-child \{\s*display: grid; grid-template-columns: repeat\(auto-fill, minmax\(\d+px, 1fr\)\)/.test(css));
   // owner, 2026-11-03: a chat's name stood one letter per line beside a language menu as wide as the line
-  ck("a chat's name keeps its line and its language menu its own short width",
-     /\.recipients-chat \.fm-entity-chip \{ white-space: nowrap; \}/.test(css)
-     && /\.recipients-chat > \.dropdown\.recipients-language \{\s*flex: 0 0 auto; width: \d+px;/.test(css));
+  // owner, 2026-11-06: each chat the Cockpit's card, its name the strip's; its menu its own short width in the card
+  ck("a chat's language menu keeps its own short width in its card",
+     /\.card-field > \.dropdown\.recipients-language \{ flex: 1 1 \d+px; max-width: \d+px; \}/.test(css));
   // owner, 2026-11-03: a device's id was cut every few letters beside "Confirm before toggling" on a phone. Owner,
   // 2026-11-05: the pencil and the chevron on the id's own line, at its right; the id never more than 2 lines (a long
   // id with its "· 3D object: …" pushed the toggle and the pencil down a line of their own)
   const row = srcOf("components/settings/EntityMapRow.tsx");
-  const tools = row.match(/<span className="entity-id-tools">([\s\S]*?)\n {12}<\/span>/)?.[1] ?? "";
+  const tools = row.match(/<span className="entity-id-tools">([\s\S]*?)\n\s*<\/span>/)?.[1] ?? "";
   ck("a device's id: toggle, pencil and chevron on its one line at the right at every width, the id at most 2 lines",
      /<Pencil /.test(tools) && /<ChevronDown /.test(tools) && /<ChevronRight /.test(tools) && !/ConfirmToggle/.test(tools)
      && /<span className="entity-id-confirm" onClick=\{[^}]*\} onKeyDown=\{[^}]*\}>\s*<ConfirmToggle /.test(row)

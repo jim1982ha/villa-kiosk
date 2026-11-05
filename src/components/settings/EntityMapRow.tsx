@@ -23,6 +23,7 @@ import { memo, type RefObject } from "react";
 import { Pencil, Trash2, Check, X, ChevronDown, ChevronRight } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import IdText from "@/components/common/IdText";
+import RecordCard from "@/components/fm/RecordCard";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import MappingFields, { ConfirmToggle, useMappingDraft } from "./MappingFields";
@@ -50,7 +51,11 @@ interface Props {
    *  every non-editing row so their props stay stable while the one row being
    *  remapped re-renders on its own picker's every keystroke. */
   remapNewId: string | undefined;
-  matchedRowRef?: RefObject<HTMLTableRowElement>;
+  matchedRowRef?: RefObject<HTMLDivElement>;
+  /** The device's name on every screen (useEntityLabel, read by the list: a row reads no live table of its own). */
+  name: string;
+  /** Its room, every card's (useCardRoom). */
+  room: string;
   onToggleExpanded: (key: string) => void;
   onStartRemap: (key: string) => void;
   onRemapChange: (id: string | undefined) => void;
@@ -61,7 +66,7 @@ interface Props {
 }
 
 function EntityMapRow({
-  entryKey, mapping, entity, stale, objects, expanded, editing, remapNewId, matchedRowRef,
+  entryKey, mapping, entity, stale, objects, expanded, editing, remapNewId, matchedRowRef, name, room,
   onToggleExpanded, onStartRemap, onRemapChange, onRemapApply, onRemapCancel, onRemove,
 }: Props) {
   // A change waits in the dialog's one pending store under this row's entity
@@ -71,114 +76,108 @@ function EntityMapRow({
   // Not-yet-committed edits show at once (MappingFields.useMappingDraft).
   const { draftField, m } = useMappingDraft(entryKey, mapping);
 
+  // ⚠️ THE COCKPIT'S CARD (owner, 2026-11-06: "the same card in Settings and Advanced Settings"): the device's name in
+  // its strip, its room on its quiet line; its first line of words the decided one (owner, 2026-11-05: the shown box,
+  // the id at most 2 lines, the toggle, the pencil and the chevron at its right); its fields under it when opened; its
+  // Remove in the card's bar. A device the villa's system no longer has says so as the card's state.
   return (
-    <tr
-      ref={matchedRowRef}
-      className={stale ? "config-row-stale" : undefined}
-      style={m.disabled ? { opacity: 0.5 } : undefined}
-      title={stale ? `${m.entityId} no longer exists` : undefined}
-    >
-      <td data-label="" className="device-card-header">
-        <input
-          type="checkbox"
-          checked={!m.disabled}
-          onChange={(e) => draftField({ disabled: !e.target.checked })}
-          title="Show this device in the 3D view (badge, highlight, tap). Turn off for devices modelled but not yet installed."
-          aria-label={`Show ${m.entityId} in the 3D view`}
-        />
-        {editing ? (
-          /* ── inline remap picker — one line on desktop, wraps on mobile ── */
-          <div className="remap-row">
-            <div className="remap-picker">
-              <EntityPicker
-                value={remapNewId}
-                onChange={onRemapChange}
-                allowCustom
-                hideCurrentLabel
-                placeholder="New entity ID…"
-              />
-            </div>
-            <div className="remap-actions">
-              <button
-                className="btn primary"
-                style={{ padding: "5px 8px", fontSize: "var(--text-xs)" }}
-                disabled={!remapNewId || remapNewId === entryKey}
-                onClick={() => remapNewId && onRemapApply(entryKey, remapNewId)}
+    <RecordCard title={name} room={room} tone={m.disabled ? "device-card-off" : undefined}
+      status={stale ? { text: "No longer exists", tone: "tone-warn" } : undefined}
+      body={
+        <div className="device-card" ref={matchedRowRef} title={stale ? `${m.entityId} no longer exists` : undefined}>
+          <div className="device-first-line">
+            <input
+              type="checkbox"
+              checked={!m.disabled}
+              onChange={(e) => draftField({ disabled: !e.target.checked })}
+              title="Show this device in the 3D view (badge, highlight, tap). Turn off for devices modelled but not yet installed."
+              aria-label={`Show ${m.entityId} in the 3D view`}
+            />
+            {editing ? (
+              /* ── inline remap picker — one line on desktop, wraps on mobile ── */
+              <div className="remap-row">
+                <div className="remap-picker">
+                  <EntityPicker
+                    value={remapNewId}
+                    onChange={onRemapChange}
+                    allowCustom
+                    hideCurrentLabel
+                    placeholder="New entity ID…"
+                  />
+                </div>
+                <div className="remap-actions">
+                  <button
+                    className="btn primary"
+                    style={{ padding: "5px 8px", fontSize: "var(--text-xs)" }}
+                    disabled={!remapNewId || remapNewId === entryKey}
+                    onClick={() => remapNewId && onRemapApply(entryKey, remapNewId)}
+                  >
+                    <Check size={16} /> Apply
+                  </button>
+                  <button
+                    className="btn ghost"
+                    style={{ padding: "5px 8px", fontSize: "var(--text-xs)" }}
+                    onClick={onRemapCancel}
+                  >
+                    <X size={16} /> Cancel
+                  </button>
+                  {/* an explanation is an (i), never a visible line (owner, 2026-10-22) */}
+                  <InfoTip label="About redirecting this object">The 3D object stays and its entity ID changes: no model rebuild is needed.</InfoTip>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="entity-id-display entity-id-toggle"
+                role="button"
+                tabIndex={0}
+                aria-expanded={expanded}
+                title="Click to expand, use the pencil to redirect this mesh to a different entity ID"
+                onClick={() => onToggleExpanded(entryKey)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleExpanded(entryKey); }
+                }}
               >
-                <Check size={16} /> Apply
-              </button>
-              <button
-                className="btn ghost"
-                style={{ padding: "5px 8px", fontSize: "var(--text-xs)" }}
-                onClick={onRemapCancel}
-              >
-                <X size={16} /> Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="entity-id-display entity-id-toggle"
-            role="button"
-            tabIndex={0}
-            aria-expanded={expanded}
-            title="Click to expand, use the pencil to redirect this mesh to a different entity ID"
-            onClick={() => onToggleExpanded(entryKey)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleExpanded(entryKey); }
-            }}
-          >
-            {/* ⚠️ ONE FIRST LINE (owner, 2026-11-05): the id, never more than 2 lines (its whole text on hover), the
-                pencil and the chevron at its right; "Confirm before toggling" on the line under it */}
-            <span className="entity-id-text" title={[m.entityId, ...(objects ?? [])].join(" · ")}>
-              <IdText id={m.entityId} />
-              {!!objects?.length && (
-                <span className="muted entity-id-link" title="This device's 3D object, linked by name">
-                  {" "}· 3D object: {objects.join(", ")}
+                {/* ⚠️ ONE FIRST LINE (owner, 2026-11-05): the id, never more than 2 lines (its whole text on hover), the
+                    toggle, the pencil and the chevron at its right */}
+                <span className="entity-id-text" title={[m.entityId, ...(objects ?? [])].join(" · ")}>
+                  <IdText id={m.entityId} />
+                  {!!objects?.length && (
+                    <span className="muted entity-id-link" title="This device's 3D object, linked by name">
+                      {" "}· 3D object: {objects.join(", ")}
+                    </span>
+                  )}
                 </span>
-              )}
-            </span>
-            <span className="entity-id-tools">
-              {/* the one small icon button of a list's row (owner, 2026-11-06) */}
-              <button
-                type="button" className="icon-btn-sm"
-                title="Redirect this 3D mesh to a different entity ID" aria-label={`Redirect ${m.entityId} to another entity ID`}
-                onClick={(e) => { e.stopPropagation(); onStartRemap(entryKey); }}
-              >
-                <Pencil size={16} aria-hidden />
-              </button>
-              {onRemove && (
-                <button
-                  type="button" className="icon-btn-sm danger"
-                  title="Remove this entity" aria-label={`Remove ${m.entityId}`}
-                  onClick={(e) => { e.stopPropagation(); onRemove(entryKey); }}
-                >
-                  <Trash2 size={16} aria-hidden />
-                </button>
-              )}
-              {expanded ? <ChevronDown size={16} className="muted" /> : <ChevronRight size={16} className="muted" />}
-            </span>
-            <span className="entity-id-confirm" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-              <ConfirmToggle m={m} draftField={draftField} />
-            </span>
+                <span className="entity-id-tools">
+                  {/* the one small icon button of a list's row (owner, 2026-11-06) */}
+                  <button
+                    type="button" className="icon-btn-sm"
+                    title="Redirect this 3D mesh to a different entity ID" aria-label={`Redirect ${m.entityId} to another entity ID`}
+                    onClick={(e) => { e.stopPropagation(); onStartRemap(entryKey); }}
+                  >
+                    <Pencil size={16} aria-hidden />
+                  </button>
+                  {expanded ? <ChevronDown size={16} className="muted" /> : <ChevronRight size={16} className="muted" />}
+                </span>
+                <span className="entity-id-confirm" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                  <ConfirmToggle m={m} draftField={draftField} />
+                </span>
+              </div>
+            )}
           </div>
-        )}
-      </td>
-
-      {editing && (
-        <td data-label="">
-          {/* an explanation is an (i), never a visible line (owner, 2026-10-22) */}
-          <InfoTip label="About redirecting this object">The 3D object stays and its entity ID changes: no model rebuild is needed.</InfoTip>
-        </td>
-      )}
-
-      {expanded && !editing && (
-        <MappingFields entryKey={entryKey} entityId={m.entityId} mapping={m} entity={entity}
-          cell={(key, label, field) => (
-            <td key={key} data-label={label}>{field}</td>
-          )} />
-      )}
-    </tr>
+          {expanded && !editing && (
+            <MappingFields entryKey={entryKey} entityId={m.entityId} mapping={m} entity={entity}
+              cell={(key, label, field) => (
+                <div key={key} className="card-field"><span className="card-field-label">{label}</span>{field}</div>
+              )} />
+          )}
+        </div>
+      }
+      // its bin in the card's bar, with its word (owner, 2026-11-06); an object the 3D model names is never removed here
+      actions={onRemove && (
+        <button type="button" className="btn ghost" aria-label={`Remove ${m.entityId}`} onClick={() => onRemove(entryKey)}>
+          <Trash2 size={16} aria-hidden />Remove
+        </button>
+      )} />
   );
 }
 

@@ -145,10 +145,15 @@ console.log("\n  the rows' parts:");
 const { default: UnitField } = await import("@/components/common/UnitField");
 const unit = draw(h(UnitField, { unit: "s" }, h("input", { value: "10", readOnly: true })));
 ck("a time and its unit joined in one field: \"10s\"", unit === '<span class="unit-field"><input readonly="" value="10"/><span class="unit-field-unit" aria-hidden="true">s</span></span>', unit);
-ck("  ...the small icon button of a row: round, borderless, one size (the announcements' ✕, a device's pencil and bin, a group's bin, an unbind)",
+// owner, 2026-11-06: a record's remove is its card's bar (RecordCard: "Remove", "Remove group", "Unbind"), never a corner
+// icon; the small icon button stays a line's own tool (a device's pencil)
+const recordFiles = ["MessagesSettings", "EntityMapRow", "GroupedDevices", "BindingRow", "UnavailableByDesign", "WhoGetsMessages"]
+  .map((n) => [n, readFileSync(new URL(`../../src/components/settings/${n}.tsx`, import.meta.url), "utf8")]);
+ck("  ...the small icon button of a line: round, borderless, one size (a device's pencil); a record's remove in its card's bar",
    /\.icon-btn-sm \{ width: var\(--row-icon\); height: var\(--row-icon\);[^}]*border: 0; border-radius: 50%; background: transparent;/.test(modals)
-   && ["MessagesSettings", "EntityMapRow", "GroupedDevices", "BindingRow"].every((n) => /className="icon-btn-sm/.test(readFileSync(new URL(`../../src/components/settings/${n}.tsx`, import.meta.url), "utf8")))
-   && ["EntityMapRow", "GroupedDevices", "BindingRow"].every((n) => !/className="icon-btn( |")/.test(readFileSync(new URL(`../../src/components/settings/${n}.tsx`, import.meta.url), "utf8"))));
+   && /className="icon-btn-sm"/.test(recordFiles.find(([n]) => n === "EntityMapRow")[1])
+   && recordFiles.every(([, t]) => !/className="icon-btn(-sm)? danger"|className="icon-btn( |")/.test(t)),
+   recordFiles.filter(([, t]) => /className="icon-btn(-sm)? danger"|className="icon-btn( |")/.test(t)).map(([n]) => n));
 const { default: AddOnLine } = await import("@/components/common/AddOnLine");
 const add = quiet(() => draw(h(AddOnLine, { title: "Owner", label: "Add a chat or phone to Owner", words: "Add" }, () => null)));
 ck("  ...a list's add: \"+ Add\" at the right of its title's line (Schedule's \"Add a task\" look), never an outlined square",

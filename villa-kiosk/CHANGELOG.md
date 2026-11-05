@@ -1,3 +1,30 @@
+## 2.496.720
+
+What you will see:
+- Settings and Advanced Settings now show each of their lists as the same cards as the Cockpit: a band on top with
+  the thing's name (and its icon), a quiet line under it, its fields, and its buttons along the bottom edge with their
+  words, the main one first in green.
+- Devices: each device is a card named as the villa shows it, its room on the quiet line; the line with its box, its
+  id, "Confirm before toggling", the pencil and the arrow is unchanged inside it. Its bin is now "Remove" along the
+  bottom. A 3D object whose device no longer exists is a card saying "No such entity" (its (i) says why), with
+  "Point it there" along the bottom.
+- Grouped devices: each group is a card named after its main device, with the group icon; its id and "primary (keeps the
+  map badge)" on the quiet line; its members and "Add another entity…" inside; "Remove group" along the bottom.
+  Each suggested group is a card too, with "Create this group" along the bottom.
+- Asleep between reports: "Add a device…" on top, then a card per device with "Take off the list" along the bottom.
+- Villa › Bound 3D objects: the line "1 bound object > 3 unbound objects > 1 entity not shown" under the title is
+  gone. The counts in the title ("4 bound · 829 unbound · 88 not shown") are now the way to open each list: tap one
+  and its list shows below, the one shown underlined in green; bound objects first. Each bound object is a card
+  ("Bound to …" on its quiet line, its entity's search box, "Unbind" along the bottom). An unbound object is a card
+  where you pick an entity, then tap "Bind". An entity not shown on the map is a card where you pick one of the
+  unbound 3D objects, then tap "Bind". Each list shows its first few, then pages of ten.
+- Settings › Messages: each full-screen announcement is a card with its time on screen ("10s") and "Remove"; each chat
+  under Owner and Facility Manager is a card with "Language VESTA writes in" and "Remove".
+- Advanced Settings › System › Device telemetry: each line now starts with its time, then its kind (freeze still in
+  red), the device, then the text, with the times and kinds lined up in columns. On a phone the time, kind and device
+  are on the first line and the text under it.
+- Everything else (the On | Off switches, sliders and setting lines, Days records are kept) is unchanged.
+
 ## 2.496.719
 
 What you will see:
