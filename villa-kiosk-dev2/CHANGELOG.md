@@ -1,3 +1,17 @@
+## 2.496.702
+
+What you will see:
+- A device's charts over a week, a month or a year: a device listed under "Asleep between reports" no longer has every
+  hour or day striped "Unavailable during this …": its sleep is not an outage, and its line holds across it, as its
+  24h chart already did.
+- A sensor the villa's system keeps no averages of shows an outage on its week, month or year chart as every other
+  device does: the step striped, its line drawn through, "Unavailable during this hour". It was a plain grey band, the
+  line broken, with a span of times.
+- An outage on a chart of several days says its day once: "Unavailable · 3 Nov, 06:13–06:40 (27min)", no longer
+  "3 Nov, 06:13–3 Nov, 06:40".
+- The (i) of the Energy and rain charts says what they draw for a step with no total: a grey band, "No reading". It
+  said "left empty".
+
 ## 2.496.701
 
 What you will see:
