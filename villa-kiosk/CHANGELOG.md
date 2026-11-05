@@ -1,3 +1,15 @@
+## 2.496.703
+
+What you will see:
+- A device's charts over a week or a month: a sensor the villa's system keeps no averages of (a template sensor) no
+  longer has a whole hour, or a whole day, striped "Unavailable" each time the villa's system reloads its virtual
+  devices (a drop of a fraction of a second). Its steps are striped by the same rule as every other sensor's: an
+  outage that lasted a whole five minutes.
+- The (i) of a month's or a year's chart of such a sensor says "Before 26 Oct, the villa's system no longer keeps its
+  readings.", as the chart draws, instead of "only an outage of a whole hour shows".
+- The (i) of the 1h and 24h charts says the grey band covers each 5min in which the device was unavailable, however
+  briefly, and that its tooltip says how long. It said "at its real length" over a band 5min wide for a 0.46s drop.
+
 ## 2.496.702
 
 What you will see:

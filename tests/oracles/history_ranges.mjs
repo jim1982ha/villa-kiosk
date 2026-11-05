@@ -231,6 +231,18 @@ console.log("\n  an outage inside a step looks the same whatever drew it, and a 
   ck("  ...a sensor with no figures: the hour offline 22min striped as the figures' (\"during this hour\"), the whole hour a break",
      inside.some((x) => x.from <= off && x.to > off && x.within === "hour") && fmtOutage(inside[0], now, 168).startsWith("Unavailable during this hour")
      && breaks.some((x) => x.from <= gone + 30 * MIN && x.to > gone + 30 * MIN && x.actual), { inside, breaks });
+  // a 50 ms drop (the villa's system reloading its virtual devices): no figure would miss it, so no step is striped
+  // (architecture review 25: a template sensor's whole day was striped on its month for each reload)
+  const blink = now - 5 * DAY + 14 * HOUR + 3 * MIN;   // a day with no other outage
+  const reloaded = [...changes, { state: "unavailable", last_changed: iso(blink) }, { state: "20", last_changed: iso(blink + 50) }]
+    .sort((a, b) => Date.parse(a.last_changed) - Date.parse(b.last_changed));
+  const port2 = { ...plain, stateRows: async (e, from, to) => reloaded.filter((r) => { const t = Date.parse(r.last_changed); return t >= from && t <= to; }) };
+  for (const [hours, period, B] of [[168, "hour", HOUR], [720, "day", DAY]]) {
+    const gg = (await loadOne(port2, { kind: "trend", ids: ["sensor.x"], hours, period }, now))["sensor.x"].gaps;
+    ck(`  ...a reload's 50 ms drop marks no ${period} (only an outage emptying a whole five-minute slot, as a figure's)`,
+       !gg.some((x) => x.within && x.from <= blink && x.to > blink) && gg.some((x) => x.within && x.from <= off && x.to > off),
+       gg.filter((x) => x.within));
+  }
 }
 
 console.log("\n  every chart's (i): what it shows and what it may not (owner, 2026-11-05):");
@@ -240,14 +252,29 @@ console.log("\n  every chart's (i): what it shows and what it may not (owner, 20
   // architecture review 24: a total's (i) says what its chart draws for a step with no total, the grey "No reading"
   const { barTipRows, barLayout } = await import("@/utils/barChart");
   const about = Object.fromEntries(RANGES.map((r) => [r.key, chartAbout("average", r.grainMs, now - r.hours * HOUR, kept)]));
-  ck("1h and 24h: every reading, each outage at its real length",
-     about["1h"] === about["24h"] && about["24h"] === "Every reading. A grey band is each time the device was unavailable, at its real length.", about["24h"]);
+  ck("1h and 24h: every reading in five-minute steps, a band over each five minutes an outage touched",
+     about["1h"] === about["24h"] && about["24h"] === "Every reading, in 5min steps. A grey band covers each 5min in which the device was unavailable, however briefly: its tooltip says when and for how long."
+     // as wide as drawn: a 0.46s drop is a band of the five minutes it touched (widenGaps), its tooltip the real length
+     && widenGaps([{ from: 1_000_056_000, to: 1_000_056_460 }], 0, 2e9)[0].to - widenGaps([{ from: 1_000_056_000, to: 1_000_056_460 }], 0, 2e9)[0].from === PERIOD_MS["5minute"], about["24h"]);
   ck("  ...1w: hourly averages, an hour striped when unavailable part of it, an outage under the finest figures' 5min may not show",
      about["1w"] === "Hourly averages. An hour striped grey had the device unavailable for part of it. An outage shorter than 5min may not show: averages do not keep it.", about["1w"]);
   const keptDay = (await import("@/utils/dateText")).dayMonth(kept);
   ck("  ...1m and 1y: days and weeks, and before what the villa's system keeps, only an outage of a whole hour (day)",
      about["1m"].startsWith("Daily averages. A day striped grey") && about["1m"].endsWith(`Before ${keptDay}, only an outage of a whole hour shows: the villa's system keeps finer figures since then.`)
      && about["1y"].startsWith("Weekly averages. A week striped grey") && about["1y"].includes("only an outage of a whole day shows"), [about["1m"], about["1y"]]);
+  {
+    // a sensor with no figures: before what is kept its month is the "No longer kept" band, and its (i) says so, never
+    // "only an outage of a whole hour shows" of figures it has none of (architecture review 25)
+    const { drawsUnkept } = await import("@/components/panels/chartUtils");
+    const rows = []; for (let t = kept; t < now; t += 10 * MIN) rows.push({ state: "20", last_changed: new Date(t).toISOString() });
+    const bare = { keptFrom: async () => kept, getStatisticsDuringPeriod: async () => ({}),
+      stateRows: async (e, from, to) => rows.filter((r) => { const t = Date.parse(r.last_changed); return t >= from && t <= to; }) };
+    const s = (await loadOne(bare, { kind: "trend", ids: ["sensor.t"], hours: 720, period: "day" }, now))["sensor.t"];
+    const words = chartAbout("average", PERIOD_MS.day, now - 30 * DAY, kept, drawsUnkept([s]));
+    ck("  ...a month with no figures, drawn \"No longer kept\" before what is kept, says so in its (i)",
+       s.gaps.some((g) => g.notKept) && words.endsWith(`Before ${keptDay}, the villa's system no longer keeps its readings.`)
+       && !drawsUnkept([{ gaps: [{ from: 0, to: 1 }] }, undefined]), words);
+  }
   ck("  ...a window inside what is kept says nothing of before",
      !chartAbout("average", PERIOD_MS.day, kept + DAY, kept).includes("Before"));
   ck("  ...a state band: each step's states, unavailable at any length; a total: why it shows no outage",
@@ -271,6 +298,10 @@ console.log("\n  every chart's (i): what it shows and what it may not (owner, 20
     || (f === "historyRange.tsx" && /about=\{about\}/.test(el))));
   ck("every chart with a title (derived from the tree) carries its (i), from the one text builder",
      charts.length >= 5 && untitled.length === 0 && noAbout.length === 0 && /about: string/.test(src("historyRange.tsx")), { charts, untitled, noAbout });
+  // every chart of averages says what it draws before what is kept (drawsUnkept): its call, wherever it is
+  const averages = files.flatMap((f) => [...src(f).matchAll(/chartAbout\("average",[^\n]*(\n[^\n]*)?/g)].map((m) => [f, m[0]]));
+  ck("  ...every chart of averages tells its (i) whether it draws \"No longer kept\" (drawsUnkept)",
+     averages.length >= 2 && averages.every(([, c]) => /drawsUnkept\(/.test(c)), averages);
 }
 
 done("✅ five periods, each in its step; older than kept is said");

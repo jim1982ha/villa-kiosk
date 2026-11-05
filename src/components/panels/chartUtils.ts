@@ -3,7 +3,7 @@
 // utils/chartGeometry's hover answer, not a helper here.
 
 import { wallClock } from "@/utils/villaClock";
-import type { HistoryGap, StateHistoryPoint } from "@/types/ha.types";
+import type { HistoryGap, HistorySeries, StateHistoryPoint } from "@/types/ha.types";
 import { clockTime, dayMonth, dayTime, monthShort } from "@/utils/dateText";
 import { NOT_KEPT_WORDS } from "@/utils/stateColors";
 import { nextEdge } from "@/utils/timelineCells";
@@ -86,8 +86,12 @@ function stepNoun(stepMs: number): string {
  * its window starts; `kept`: where the villa's system's finer record begins (historySource.keptFrom): before it, only
  * an outage of a whole finer step shows (statisticsSeries.finerOutages). The five minutes are the recorder's finest
  * figures (PERIOD_MS). Pure: tests/oracles/history_ranges.mjs drives every range.
+ *
+ * ⚠️ `unkept`: THE CHART DRAWS "NO LONGER KEPT" BEFORE `kept` (architecture review 25): a sensor the villa's system
+ * keeps no figures of is drawn from its changes, and before `kept` its chart is the "No longer kept" band — while its
+ * (i) said "only an outage of a whole hour shows" there, of figures it has none of. Said as drawn.
  */
-export function chartAbout(shows: ChartShows, stepMs: number, from?: number, kept?: number): string {
+export function chartAbout(shows: ChartShows, stepMs: number, from?: number, kept?: number, unkept = false): string {
   const step = stepNoun(stepMs), finest = PERIOD_MS["5minute"];
   const before = kept !== undefined && from !== undefined && from < kept ? dayMonth(kept) : null;
   if (shows === "total") {
@@ -97,10 +101,19 @@ export function chartAbout(shows: ChartShows, stepMs: number, from?: number, kep
   if (shows === "states") {
     return `Each ${step} shows the states it saw: striped when it saw several, grey among them when the device was unavailable, at any length.${before ? ` Before ${before}, the villa's system no longer keeps its changes.` : ""}`;
   }
-  if (stepMs <= finest) return "Every reading. A grey band is each time the device was unavailable, at its real length.";
+  // ⚠️ AS WIDE AS DRAWN (architecture review 25): it said "at its real length" over a band five minutes wide for a 0.46s
+  // drop (trendInterval.widenGaps: every outage covers the five minutes it touched); the tooltip says the real length
+  if (stepMs <= finest) return `Every reading, in ${fmtDuration(finest)} steps. A grey band covers each ${fmtDuration(finest)} in which the device was unavailable, however briefly: its tooltip says when and for how long.`;
   const finer = stepMs >= 7 * DAY_MS ? "day" : stepMs >= DAY_MS ? "hour" : null;
   return `${cap(stepWords(stepMs))} averages. ${a(step)} striped grey had the device unavailable for part of it. An outage shorter than ${fmtDuration(finest)} may not show: averages do not keep it.${
-    before ? ` Before ${before}, ${finer ? `only an outage of a whole ${finer} shows` : "no outage shows"}: the villa's system keeps finer figures since then.` : ""}`;
+    !before ? "" : unkept ? ` Before ${before}, the villa's system no longer keeps its readings.`
+      : ` Before ${before}, ${finer ? `only an outage of a whole ${finer} shows` : "no outage shows"}: the villa's system keeps finer figures since then.`}`;
+}
+
+/** Does a chart of these series draw "No longer kept" (a series with no figures, before `kept`)? chartAbout's `unkept`,
+ *  asked by every chart of averages (NumericHistory, the Weather window). */
+export function drawsUnkept(series: readonly (Pick<HistorySeries, "gaps"> | undefined)[]): boolean {
+  return series.some((s) => !!s?.gaps.some((g) => g.notKept));
 }
 
 const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);

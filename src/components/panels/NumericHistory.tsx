@@ -22,7 +22,7 @@ import { useState } from "react";
 import LineChart, { type ChartFilter } from "./LineChart";
 import { useHistoryRange, HistoryHeader, ChartStep, useKeptFrom } from "./historyRange";
 import { ExpandableChart } from "./ChartWindow";
-import { aggregationWords, chartAbout } from "./chartUtils";
+import { aggregationWords, chartAbout, drawsUnkept } from "./chartUtils";
 import { HOUR_MS } from "@/utils/localDay";
 import { useHistorySource } from "@/hooks/useHistorySource";
 import type { TimeWindow } from "@/utils/lineChart";
@@ -87,7 +87,9 @@ export default function NumericHistory({ series, named = false, name }: {
   // the chart, larger (owner, 2026-10-29): the same chart, its header, toggle and slider bound to the same choices
   // (ExpandableChart: the larger one belongs to the chart, every layout and the Weather window alike)
   const kept = useKeptFrom();
-  const about = chartAbout("average", range.grainMs, Date.now() - range.hours * HOUR_MS, kept);
+  // drawn "No longer kept" before `kept` (a series with no figures): its (i) says so (chartAbout `unkept`)
+  const about = chartAbout("average", range.grainMs, Date.now() - range.hours * HOUR_MS, kept,
+    drawsUnkept(series.map((s) => history[s.id])));
   const header = (title: string) => <HistoryHeader title={title} picker={picker} step={step} about={about} />;
   /** A one-line chart, small (110px) or at the window's height, with its filter. */
   const oneLine = (s: NumericSeries, label: string) => {

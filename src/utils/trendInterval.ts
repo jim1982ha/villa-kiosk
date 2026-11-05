@@ -87,6 +87,12 @@ export function knownSpans(s: HistorySeries): { a: number; b: number; v: number 
  * its line broken, and its tooltip a span of times. Of `s` drawn in `period` steps, each widened outage's step that
  * still has its mean is marked offline inside it (`within`, the same as the figures'); a run of steps with no mean at
  * all stays a break with its real span (`actual`), as a missing figure is. "No longer kept" is left as it is. Pure.
+ *
+ * ⚠️ AN OUTAGE THE FIGURES WOULD SEE, NO SHORTER (architecture review 25): a 50 ms drop — the villa's system reloading
+ * its virtual devices, several times a day — striped a template sensor's whole hour on its week and its whole day on
+ * its month, while a sensor kept in figures showed nothing for the same drop (a five-minute figure is written unless
+ * the device said nothing all of it: statisticsSeries.finerOutages). A step is marked only when the outage emptied a
+ * whole five-minute slot of it (emptiesSlot), the one rule of both; the 1h and 24h charts still draw every outage.
  */
 export function stepsOfflineInside(s: HistorySeries, period: "hour" | "day" | "week", B: number): HistorySeries {
   const { from, to } = s.window;
@@ -100,13 +106,23 @@ export function stepsOfflineInside(s: HistorySeries, period: "hour" | "day" | "w
     let run: HistoryGap | null = null;
     for (let k = Math.max(0, cellIndex(edges, g.from)); k + 1 < edges.length && edges[k] < g.to; k++) {
       const a = Math.max(edges[k], g.from), b = Math.min(edges[k + 1], g.to);
-      if (hasMean.has(k)) { run = null; gaps.push({ from: a, to: b, within: period }); continue; }
+      if (hasMean.has(k)) {
+        run = null;
+        if (emptiesSlot(Math.max(real.from, edges[k]), Math.min(real.to, edges[k + 1]))) gaps.push({ from: a, to: b, within: period });
+        continue;
+      }
       if (run) { run.to = b; run.actual = { from: run.actual!.from, to: Math.min(real.to, b) }; continue; }
       run = { from: a, to: b, actual: { from: Math.max(real.from, a), to: Math.min(real.to, b) } };
       gaps.push(run);
     }
   }
   return { ...s, gaps };
+}
+
+/** Did an outage from `from` to `to` cover one whole five-minute slot of the clock — the slot a figure is written for
+ *  (statisticsSeries PERIOD_MS["5minute"], the same five minutes as TREND_INTERVAL_MS)? */
+export function emptiesSlot(from: number, to: number): boolean {
+  return Math.ceil(from / TREND_INTERVAL_MS) * TREND_INTERVAL_MS + TREND_INTERVAL_MS <= to;
 }
 
 /** Outages widened to whole five-minute intervals (merged where they then
