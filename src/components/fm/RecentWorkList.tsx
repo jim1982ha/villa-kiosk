@@ -51,7 +51,9 @@ export default function RecentWorkList() {
       {({ completion: c, title, cost }) => (
         <RecordCard key={c.id} title={title}
           room={roomOf(data.schedules.find((s) => s.id === c.scheduleId) ?? {})}
-          when={`${momentText(c.at)}${workedBy(c) !== "—" ? ` · ${workedBy(c)}` : ""}`}
+          when={momentText(c.at)}
+          // who did it, its who line (the "Status on top" card, owner 2026-11-05)
+          who={workedBy(c) !== "—" ? `Done by ${workedBy(c)}` : null}
           pills={<AgentMark record={c} />} notes={[c.note]} photoIds={c.photoIds}
           amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
           erase={{ title: "Erase this completion", detail: `${title}, ${momentText(c.at)}`,

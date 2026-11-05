@@ -114,7 +114,8 @@ ck("  ...never while the device has a ticket in progress, on its Inbox card as o
    && !W.ticketActions([{ id: "b", stage: "ticket" }]).some((a) => a.kind === "notAProblem"),
    order(W.overviewActions([{ id: "a", stage: "fault" }, { id: "b", stage: "ticket" }])));
 const wb = parseTsx("components/fm/WorkButtons.tsx");
-const confirm = elements(wb, "InlineConfirm")[0];
+// owner, 2026-11-05: the card's own question, its bar [the main action][Cancel] (RecordCard CardAsk)
+const confirm = elements(wb, "CardAsk")[0];
 ck("  ...a question (Done's, No action needed's) closes as its button says; no question offers a second yes any more", !!confirm
    && propText(confirm, "onConfirm") === "() => work.close(cardKey, confirming.ids, asWork, lasting)"
    && propText(confirm, "alternative") == null, confirm && propText(confirm, "onConfirm"));

@@ -20,8 +20,8 @@ import { WORK_ACTIONS, helpLine, type WorkAction, type WorkActionKind } from "@/
 import type { HelpAsked } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import { momentText } from "@/utils/dateText";
-import InlineConfirm from "@/components/common/InlineConfirm";
 import FaultStageModal from "./FaultStageModal";
+import { CardAsk } from "./RecordCard";
 
 /** The fault a card with no record raises for its device (IssueCard.raisedFor). */
 export type RaisedFault = Omit<FmTicket, "id" | "openedAt" | "status">;
@@ -127,9 +127,10 @@ export function WorkLabel({ kind }: { kind: WorkActionKind }) {
   return <>{ICON[kind]}{short ? <><span className="work-long">{label}</span><span className="work-short">{short}</span></> : label}</>;
 }
 
-/** The buttons drawn in the accent (owner, 2026-11-04: Edit Ticket "with this same green accent style", the colour of
- *  its ticket's pill: faultNotes.stagePillClass). */
-const ACCENT: Partial<Record<WorkActionKind, true>> = { editTicket: true };
+/** ⚠️ THE MAIN ACTION, FIRST AND GREEN (owner, 2026-11-05, the "Status on top" card): Done on a fault, Close on a
+ *  ticket, the first segment of the card's bar and of its question's (fm/deviceWork lists it first). It was Edit Ticket
+ *  in the accent (2026-11-04); the strip now says a ticket is in progress, in that green. */
+const MAIN: Partial<Record<WorkActionKind, true>> = { done: true, doneNew: true, ticketDone: true };
 
 /** Does pressing it open a form the card does not hold (the caller's `onOpen`)? */
 const leavesCard = (a: WorkAction) => a.step.kind === "raise" || a.step.kind === "edit";
@@ -158,7 +159,7 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
   const confirming = work.asking?.key === cardKey ? actions.find((a) => a.kind === work.asking?.kind) : undefined;
   if (confirming && confirming.step.kind === "close" && confirming.step.ask) {
     const { ask: { question, confirmLabel }, work: asWork, lasting } = confirming.step;
-    return <InlineConfirm question={question} confirmLabel={confirmLabel}
+    return <CardAsk question={question} confirmLabel={confirmLabel} icon={ICON[confirming.kind]}
       onConfirm={() => work.close(cardKey, confirming.ids, asWork, lasting)} onCancel={work.cancel} />;
   }
   /** A close with a question asks it; one without (Not a problem) closes as pressed. */
@@ -168,7 +169,7 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
     return step.ask ? () => work.ask(cardKey, a.kind) : () => void work.close(cardKey, a.ids, step.work, step.lasting);
   };
   const buttons = actions.map((a) => (
-    <button key={a.kind} type="button" className={ACCENT[a.kind] ? "btn primary" : CARD_BUTTON}
+    <button key={a.kind} type="button" className={MAIN[a.kind] ? `${CARD_BUTTON} fm-bar-main` : CARD_BUTTON}
       aria-label={a.step.kind === "close" && name ? `${a.label} “${name}”` : a.short ? a.label : undefined}
       onClick={closing(a) ?? (() => (leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised)))}>
       <WorkLabel kind={a.kind} />
@@ -179,9 +180,9 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
       {/* what a Need help did, on the card it was pressed on: the same line on the Inbox and the Tickets tab */}
       {asked && <div className="fm-work-asked">{helpLine(asked, momentText)}</div>}
       {/* ONE ROW, every card alike (owner, 2026-10-31, iPhone: Open Ticket dropped under Done · Need help; 2026-11-04:
-          Open Ticket "on the same line"): the buttons are grouped in a row of their own, which the card's icon column
-          lends its width, their one words under their icons where it is too narrow for the labels (07-facility.css) */}
-      <div className="fm-work-row">{buttons}</div>
+          Open Ticket "on the same line"; 2026-11-05: the card's bar): each button a segment of the card's bar
+          (RecordCard ActionsRow), their one words where it is too narrow for the labels (07-facility.css) */}
+      {buttons}
       {after}
     </>
   );

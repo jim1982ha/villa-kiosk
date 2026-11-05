@@ -38,7 +38,8 @@ const list = (kind) => draw(h(SavedDocumentRows, { kind, docs: docs.map(recapKin
 // "October 2026". Titled by the moment it was taken, in the documents' fixed form (momentText, the "Generated:" stamp).
 const at16 = momentText("2026-10-16T09:00:00Z"), at17 = momentText("2026-10-17T09:00:00Z");
 ck("the readiness list reads \"Saved snapshots\", newest first, each titled by its moment, to Reopen or delete",
-   text(list("readiness")).startsWith(`|Saved snapshots (2)|${at17}|Saved ${at17}`) && text(list("readiness")).includes(`|${at16}|`)
+   // its strip first, when it was saved (owner, 2026-11-05: "Status on top"), then its title
+   text(list("readiness")).startsWith(`|Saved snapshots (2)|Saved ${at17}|${at17}|`) && text(list("readiness")).includes(`|${at16}|`)
    && !text(list("readiness")).includes("October 2026") && (text(list("readiness")).match(/Reopen/g) ?? []).length === 2,
    text(list("readiness")));
 ck("  ...the moment in the agreement's fixed form (day first, as Telegram), never a locale's",
@@ -49,7 +50,7 @@ ck("  ...and its delete button says snapshot, and which", new RegExp(`aria-label
 ck("what a kind is about: the recap a month, the snapshot a moment",
    ["recap", "readiness"].map((k) => D.DOCUMENT_KINDS[k].about).join() === "month,moment");
 ck("the recaps' list, titled by their month, the statement saved before the merge among them",
-   text(list("recap")).startsWith("|Saved recaps (2)|September 2026|") && /Delete saved recap for September 2026/.test(list("recap")), text(list("recap")));
+   /^\|Saved recaps \(2\)\|Saved [^|]+\|September 2026\|/.test(text(list("recap"))) && /Delete saved recap for September 2026/.test(list("recap")), text(list("recap")));
 ck("  ...and a kind with nothing saved draws nothing", draw(h(SavedDocumentRows, { kind: "recap", docs: docs.slice(0, 2), onOpen: () => {}, onRemove: () => {} })) === "");
 
 console.log("\n  one set of inputs, built once; each kind makes its own document from it (architecture review, 2026-10-19):");

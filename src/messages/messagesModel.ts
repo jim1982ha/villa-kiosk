@@ -121,8 +121,11 @@ export function issueAsTold(card: CardView, kept: readonly Announcement[]): Card
   // ⚠️ A PILL NEVER REPEATS THE CARD'S WORDS (owner, 2026-11-01: "Missing" beside "… is missing from the villa's system"):
   // a state its lines say already is no pill; a state nothing says stays one (a device with no fault: "Unavailable")
   const said = lines.flatMap((l) => [l.text, l.told?.title ?? "", l.told?.text ?? ""]);
-  const status = card.status?.filter((s) => !said.some((words) => saysWord(words, s.text)));
-  return othersFirst({ ...card, lines, ...(status ? { status } : {}) }, (l) => l.told !== undefined);
+  const unsaid = (s: { text: string }) => !said.some((words) => saysWord(words, s.text));
+  const status = card.status?.filter(unsaid);
+  // ...nor a problem's own state, in its header on a card of several (cockpitCard.lineStrip)
+  return othersFirst({ ...card, lines: lines.map((l) => (l.state ? { ...l, state: l.state.filter(unsaid) } : l)), ...(status ? { status } : {}) },
+    (l) => l.told !== undefined);
 }
 
 // the list's one order (feed.byTime): two feeds' numbers do not compare

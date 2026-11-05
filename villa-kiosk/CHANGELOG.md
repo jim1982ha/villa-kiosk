@@ -1,3 +1,23 @@
+## 2.496.708
+
+What you will see:
+- Every card in the Cockpit has a new look, the same on every tab (Inbox, Tickets, Schedule, Recap and Spend). On top, a coloured band says where it stands: red when you must act now, amber for a fault or
+  a late task, green when someone is handling it, grey when it is quiet or closed. The band holds the source icons, the
+  alert's number (for example "#91-P1"), the state ("Reopened", "Ticket in progress", "Unavailable") and, at its right,
+  the time. It always stays on one line.
+- Under it: the name of the device or the ticket, then one quiet line with the room and when VESTA checks again (for a
+  ticket, the device's name first, underlined: tap it to open the device), then the words, then who moved it last
+  ("Opened by Wayan", "By VESTA Agent", "Done by Wayan") without repeating the state or the time.
+- The buttons now form one bar along the bottom of the card, all the same width and easy to tap. The main action is
+  always first and in green: Done on an issue, Close on a ticket. On a phone the buttons show one word (Help, Ignore,
+  Ticket, Dismiss), on a computer the full words. A ticket's report is in the same bar.
+- Pressing Done (or No action needed on a ticket) shows the question on its own line, with Done first and Cancel second.
+- A device with several problems says "2 problems" on top; each problem then has its own small header (its icon, its
+  state, its time), its words and its own buttons.
+- A card on Watch says "Closes 15:06" on top, with its (i), and who closed it under its name.
+- Open issues are listed red first, then amber, then grey, then what is being handled.
+- The light theme uses the same look, in lighter colours.
+
 ## 2.496.707
 
 What you will see:

@@ -12,7 +12,7 @@
 
 import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { recordDevicePill } from "@/config/attention";
@@ -22,11 +22,11 @@ import { useHA } from "@/ha/HAStateStore";
 import { closedTickets, faultBegan, faultTitle, STAGE_WORDS, stageOf } from "@/fm/fmEngine";
 import { closedActions, helpAsked, ticketActions, ticketCards, workRecord, type DeviceWork } from "@/fm/deviceWork";
 import type { FmTicket } from "@/fm/fmTypes";
-import RecordCard, { DeviceChip, type RecordCardProps } from "./RecordCard";
+import RecordCard, { ActionsRow, DeviceChip, type RecordCardProps } from "./RecordCard";
 import FaultForm from "./FaultForm";
 import { useListEditor } from "./ListEditor";
 import type { DeviceOption } from "./DeviceSearchPicker";
-import { faultLatest, faultNoteLines, stagePillClass } from "@/fm/faultNotes";
+import { faultMove, faultNoteLines, moveState, moveWho, stagePillClass } from "@/fm/faultNotes";
 import { checkPill } from "@/fm/faultTiming";
 import { closedTold } from "@/fm/faultConfirm";
 import { SourceIcons } from "./sourceIcons";
@@ -101,37 +101,39 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   const card = (t: FmTicket, status?: RecordCardProps["status"], actions?: ReactNode, framed = true, stated = true) => {
     const work = data.completions.find((c) => c.ticketId === t.id && c.costId);
     const cost = work ? data.costs.find((c) => c.id === work.costId) : undefined;
-    const latest = faultLatest(t, momentText);
+    const move = faultMove(t);
     const pill = recordDevicePill(t, { devices: { deviceOf }, entityMap: config.entityMap, entities, resolvedRooms });
+    const when = momentText(faultBegan(t));
+    // ⚠️ ITS STAGE IN ITS STRIP, WHO MOVED IT UNDER ITS WORDS (owner, 2026-11-05, the "Status on top" card): "Ticket in
+    // progress" on top, "Opened by Wayan" below, never the stage or the time twice (faultNotes.moveState, moveWho)
+    const state = stated ? moveState(move) ?? status : undefined;
+    const said = [state ?? []].flat().map((s) => s.text);
     return (
-      // its stage is said in the pill of who last moved it (owner, 2026-11-02), else its own pill
-      <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={latest ? undefined : status} actions={actions}
-        // among its tags, and on its buttons' line on a wide card (RecordCard tagState)
-        tagState={stated ? latest : null}
+      <RecordCard key={t.id} framed={framed} title={faultTitle(t)} status={state} actions={actions}
+        who={stated ? moveWho(move, said, when, momentText) : null}
         // where it comes from, the icon its Inbox card leads with (owner, 2026-11-01, the audit)
         lead={<SourceIcons sources={[faultSource(t)]} severities={["warn"]} />}
         // a ticket in progress is read again as its Inbox card is; a closed one is not
         check={stageOf(t) === "ticket" ? checkPill([{ source: faultSource(t), check: t.check }], cadence, new Date(now)) ?? undefined : undefined}
-        when={momentText(faultBegan(t))} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
-        pages={t.documentIds?.map((id, i, all) => ({ id, label: all.length > 1 ? `Investigation report ${i + 1}` : "Investigation report" }))}
+        when={when} notes={faultNoteLines(t, momentText)} photoIds={t.photoIds}
+        pages={t.documentIds?.map((id, i, all) => (all.length > 1 ? { id, label: `Investigation report ${i + 1}`, short: `Report ${i + 1}` }
+          : { id, label: "Investigation report", short: "Report" }))}
         amount={cost ? formatMoney(cost.amountIdr, terms.currency) : undefined}
         erase={{ title: "Erase this ticket", detail: t.title, run: (token) => removeTicket(t.id, token) }}
         onOpen={() => editor.edit(t.id)}
         // its device's room now, the stored one only with no device (owner, 2026-10-30: devicePlace.recordRoomNow)
         room={roomOf(t)}
-        pills={<>
-          {/* a guest reports a symptom from inside the villa, not a diagnosis */}
-          {t.reportedBy === "guest" && <span className="fm-clause guest">guest report</span>}
-          {/* its device's name and what a tap opens as its Inbox card has them (attention.recordDevicePill) */}
-          <DeviceChip entityId={pill.opens} onOpenEntity={onOpenEntity} label={pill.label} />
-        </>} />
+        // its device's name and what a tap opens as its Inbox card has them (attention.recordDevicePill), first on its line
+        device={<DeviceChip entityId={pill.opens} onOpenEntity={onOpenEntity} label={pill.label} />}
+        // a guest reports a symptom from inside the villa, not a diagnosis
+        pills={t.reportedBy === "guest" ? <span className="fm-clause guest">guest report</span> : undefined} />
     );
   };
 
   /** A record's status pill: its stage's one word and tone (fmEngine.STAGE_WORDS — the recap's word too). */
   const stagePill = (t: FmTicket) => {
     const s = STAGE_WORDS[stageOf(t)];
-    return { text: s.word, tone: stagePillClass(stageOf(t)) };
+    return { text: s.card, tone: stagePillClass(stageOf(t)) };
   };
 
   /** A ticket in progress: ONE card — every record taken on with it, its pill on the first, its buttons inside at the
@@ -143,13 +145,15 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
    *  tab's count, one per device, said 1): the first record says the card's state, the others do not repeat it. */
   const ticket = (g: DeviceWork) => {
     const records = g.records.map(workRecord);
+    const buttons = <WorkButtons actions={ticketActions(records)} cardKey={g.key} work={work} asked={helpAsked(records)} />;
+    if (g.records.length === 1) return <Fragment key={g.key}>{record(g.records[0], stagePill(g.records[0]), buttons)}</Fragment>;
+    // several records of one device: one frame, its buttons its last part, under every record (RecordCard rule 6)
     return (
       <div key={g.key} className="fm-record-card">
         <div className="fm-ticket-records">
-          {g.records.map((t, i) => record(t, i === 0 ? stagePill(t) : undefined,
-            i === 0 ? <WorkButtons actions={ticketActions(records)} cardKey={g.key} work={work}
-              asked={helpAsked(records)} /> : undefined, false, i === 0))}
+          {g.records.map((t, i) => record(t, i === 0 ? stagePill(t) : undefined, undefined, false, i === 0))}
         </div>
+        <ActionsRow>{buttons}</ActionsRow>
       </div>
     );
   };

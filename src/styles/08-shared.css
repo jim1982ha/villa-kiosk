@@ -212,7 +212,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 /* an open notification or report is the Cockpit's one card (RecordCard, owner 2026-10-29): its words as an issue's
    lines, its "To:" and Status as an issue's story; the full-screen ring keeps its large text (.announcement-full-text) */
 .messages-card-body { display: flex; flex-direction: column; gap: 6px; }
-.messages-card-body .announcement-full-text { font-size: var(--text-xs); color: var(--text-secondary); }
+.messages-card-body .announcement-full-text { font-size: var(--text-sm); color: var(--text-secondary); }
 .messages-card-body .announcement-full-to, .messages-card-body .announcement-full-status {
   font-size: var(--text-2xs); color: var(--text-dim); }
 .messages-card-body .announcement-full-photo { max-height: 320px; align-self: center; }
@@ -245,29 +245,16 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .fm-record-card.cockpit-focus { outline: 2px solid var(--status-warning); outline-offset: 2px; animation: cockpit-focus-flash 1.2s ease-out 2; }
 @keyframes cockpit-focus-flash { 0%, 100% { box-shadow: none; } 40% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--status-warning) 35%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .fm-record-card.cockpit-focus { animation: none; } }
-/* An issue's problems, one or several (config/attention.groupAttention): one line each, inside the card's text. */
-.cockpit-attention-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-/* ⚠️ EACH PROBLEM'S BUTTONS UNDER ITS WORDS, AS ON THE TICKETS TAB (owner, 2026-11-04: "it's nicely rendered for the
-   ticket menu: this should NEVER be the case"): a wide Inbox card put them on the right of its words (2026-11-01), a
-   placement of its own the Tickets tab's card never had, and only that one broke when the buttons changed. */
-.cockpit-attention-sub { display: flex; flex-direction: column; gap: 8px; }
-.cockpit-attention-sub + .cockpit-attention-sub { border-top: 1px solid var(--hairline); padding-top: 10px; margin-top: 10px; }
-/* no height of its own: 36 px, its text centred, was a blank line under the room on a card without buttons (owner,
-   2026-10-15) — the card's text starts level with the top of its buttons (RecordCard) */
-.cockpit-attention-sub-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
-/* ⚠️ A CARD'S WORDS ARE WHOLE; ONLY THE INBOX'S LIST ROW IS CUT (owner, 2026-10-31: an opened card cut "In progress:
-   … against a normal 0.07 kWh/da…" while VESTA's message under the next line showed in full). The cut ("use truncation
-   for the description text", 2026-10-18) belonged to the Overview's list of cards; since that list became one line
-   per device (RecordCard `folded`, .fm-card-folded, the one place a message is cut), an opened card's line wraps over as many lines as its words need, like every other text of the card. */
+/* An issue's problem's words (IssueCard LineWords): what is wrong, then VESTA's message of its alert or its short
+   story on Telegram, in one inset box (the "Status on top" card, owner 2026-11-05), then when it closes. */
+/* ⚠️ A CARD'S WORDS ARE WHOLE; ONLY A FOLDED CARD IS CUT (owner, 2026-10-31; RecordCard `folded`, .fm-card-folded, the
+   one place a message is cut): a line wraps over as many lines as its words need, like every other text of the card. */
+.cockpit-attention-sub-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: var(--text-sm);
+  color: var(--text-secondary); overflow-wrap: anywhere; }
 .cockpit-attention-sub-title { display: block; }
-.cockpit-attention-latest { display: block; margin-top: 2px; font-size: var(--text-2xs); color: var(--text-dim); }
-/* a problem's short story on Telegram, one line each under it (ticket 19 of "One inbox") */
-.cockpit-attention-story { list-style: none; margin: 0; padding: 0; }
-.cockpit-attention-sub-text {
-  /* basis 0: a long line wraps inside the card's text column rather than claiming its full length */
-  flex: 1 1 0; min-width: 0; font-size: var(--text-xs); color: var(--text-secondary);
-  overflow-wrap: anywhere;
-}
+.cockpit-attention-latest { display: block; font-size: var(--text-xs); color: var(--text-secondary); }
+.cockpit-attention-story { list-style: none; margin: 4px 0 0; padding: 10px 12px; border-radius: 12px; display: flex;
+  flex-direction: column; gap: 6px; background: var(--bg-input); }
 
 /* The Cockpit header's updates count: a header button's look, nothing to press. */
 .header-icon-badge { cursor: default; position: relative; }

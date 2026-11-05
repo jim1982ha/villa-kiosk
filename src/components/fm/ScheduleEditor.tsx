@@ -147,9 +147,10 @@ export default function ScheduleEditor() {
             <RecordCard key={s.id} title={s.title}
               // its state, the status pill every card has (owner, 2026-11-01), never a grey tag
               status={s.enabled ? undefined : { text: "Paused", tone: pillClass("warn") }}
-              when={`Every ${s.everyDays} days · due by ${due.dueAt ? shortDate(due.dueAt) : "—"}`}
+              when={due.dueAt ? `Due ${shortDate(due.dueAt)}` : undefined}
               room={roomOf(s)}
               pills={<>
+                <span>every {s.everyDays} days</span>
                 {s.clause && <span className="fm-clause">Cl. {s.clause}</span>}
                 <AgentMark record={s} />
               </>}

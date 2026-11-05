@@ -1,124 +1,166 @@
 // src/components/fm/RecordCard.tsx
-// THE card of every Cockpit list — an open issue in Messages, a ticket, a closed ticket, a scheduled task, a spend
-// line, a piece of work done (owner, 2026-10-14/15: "the same style as any other card, fully re-using the same code").
-// Its title with a status pill (and a line under it: the room), the line of pills and when, its notes, photos and
-// reports — or its own lines (`body`: an open issue's problems) — a cost on the right, and its buttons in a row under
-// its text, on the right, inside the card (owner, 2026-10-29). Tapping it opens it (`onOpen`); holding it erases it when it can be erased (`erase`:
-// ErasableRow, superadmin) — a scheduled task is removed with its own bin instead.
+// THE card of every Cockpit list — an open issue in the Inbox, a notification or a report, a ticket, a closed one, a
+// scheduled task, a spend line, a piece of work done, a readiness check, a saved document (owner, 2026-10-14/15: "the
+// same style as any other card, fully re-using the same code"). Tapping it opens it (`onOpen`); holding it erases it when
+// it can be erased (`erase`: ErasableRow, superadmin) — a scheduled task is removed with its own bin instead.
 //
 // ⚠️ ONE CARD, NOT FOUR (architecture review, 2026-10-15): the Overview, Schedule and Spend each drew their own, so a
 // layout request ("buttons inside, on the right", "a note never runs out of the card") was made up to four times.
 //
+// ⚠️ STATUS ON TOP (owner, 2026-11-05: the "Status on top" card, six rules, every kind of card alike):
+//   1. the strip, the card's top band in its status colour: its source icons (`lead`), its alert's name (`number`), where
+//      it stands (`status`, several joined " · "), its time at the right (`when`). It never wraps: the words give way, the
+//      name and the time never do. A card with nothing to say still has its strip and its time.
+//   2. the title names the thing (`title`, `titlePills` after it); the status is never said again under it;
+//   3. one quiet line: its device (`device`), its room, its next check (`check`), its tags (`pills`), " · " between them;
+//   4. its words (`body` or `notes`), photos and cost;
+//   5. who moved it, one quiet line (`who`): never its time or its stage again when the strip says them;
+//   6. the bar along its bottom edge (ActionsRow): every button a segment, the main action first and green.
+// A card of several problems (an Inbox device with two) draws each as a part (`parts`): its header line (its icons, its
+// state, its time), its words, who moved it, its own bar; its strip says how many. One part is the card itself.
+//
 // `framed`: a card of its own (the default) — or a record inside a card holding several (a ticket taken on for several
-// faults of one device: TicketsTab draws the frame). `lead`: what stands before the title (an open issue's source
-// icons); `titlePills`: pills right after the title, on its line (a spend's device); `room` and `status`: the line under
-// the title (CardPillLine); `check`: its next check, a refresh icon and when, right after the room; `tone`: the card's own
-// tint.
+// faults of one device: TicketsTab draws the frame). `tone`: the strip's colour when its status says none (fm/tone's
+// toneClass), with any other class of the frame (a fault being confirmed, the card a warning opened on).
 //
 // ⚠️ ONE FOLD (owner, 2026-11-01): `folded`, a notification's or a report's until tapped: its caller hands its card whole
 // and this one place swaps its text for that cut line, so no card can fold its own way.
-//
-// ⚠️ THE NAME AND ITS TIME, THEN ITS PILLS (owner, 2026-11-01: the next check "right after the room area pill"): folded or
-// opened, a card's second line is the same CardPillLine: the room and its next check on the left, its state on the right.
 
 import type { ReactNode } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, UserRound } from "lucide-react";
 import Tip from "@/components/common/Tip";
+import InfoTip from "@/components/common/InfoTip";
 import ErasableRow from "./ErasableRow";
 import EvidenceRow from "./EvidenceRow";
-import RecordMeta, { RecordNotes } from "./RecordMeta";
+import { RecordNotes } from "./RecordMeta";
 import { PageLink } from "@/components/messages/AnnouncementContent";
 
-/** A card's status pill: `tone` is the badge's colour class (fm/tone pillClass). */
+/** A card's state: its words and its tone's class (fm/tone pillClass, ACCENT_PILL, QUIET_PILL). */
 export interface RecordStatus { text: string; tone: string }
+
+/** One problem of a card holding several (an Inbox device's): its own header, words, who line and bar. */
+export interface CardPart {
+  key: string;
+  lead?: ReactNode;
+  status?: readonly RecordStatus[];
+  number?: string;
+  when?: string;
+  /** Its header's colour when its status says none (as the card's `tone`). */
+  tone?: string;
+  text?: ReactNode;
+  who?: string | null;
+  actions?: ReactNode;
+}
 
 export interface RecordCardProps {
   title: ReactNode;
-  /** Its status pill, or several (StatusPill). */
+  /** Where it stands, said in its strip (several joined " · "); the strip's colour is the worst of their tones. */
   status?: RecordStatus | RecordStatus[];
+  /** What its status means, in words: an (i) after it in the strip (a Watch card's "Closes 15:06"). */
+  statusTip?: string;
+  /** Its source icons, first in its strip. */
   lead?: ReactNode;
-  /** Pills right after the title, on its line (a spend's device). */
+  /** Its alert's name ("#91-P1"), a small chip in its strip before its status. */
+  number?: string;
+  /** Pills right after the title, on its line (a spend's device, a readiness check's way to its place). */
   titlePills?: ReactNode;
-  /** Its room, as THE room pill (Pill), on the title's line after its pills: every card that shows a room. */
+  /** The device a record names, first on its quiet line: a link that opens it (DeviceChip). */
+  device?: ReactNode;
+  /** Its room, quiet text on the line under the title: every card that shows a room. */
   room?: string;
-  /** Its next check, right after the room: `when` beside the refresh icon, `tip` on hover (CheckPill). */
+  /** Its next check, after the room: the refresh icon and when, `tip` on hover (CheckPill). */
   check?: { when: string; tip: string };
-  /** The line of tags above its text (the device, who last moved it, "by VESTA Agent" on a task or a spend line…). */
+  /** Its tags on that line ("guest report", "by VESTA Agent", a task's interval…). */
   pills?: ReactNode;
-  /** When, as a pill at the right of the title's line, on every card (owner, 2026-11-01). */
+  /** When, at the right of its strip, on every card (owner, 2026-11-01). */
   when?: string;
   notes?: (string | undefined | null)[];
-  /** Lines of its own, in place of the notes (an open issue's problems). */
+  /** Lines of its own, in place of the notes (an open issue's words, a notification's). */
   body?: ReactNode;
   /** Folded: this line, cut with "…", stands for its text; undefined: the card whole. */
   folded?: string;
   photoIds?: string[];
-  /** VESTA's pages kept with it (a report's, a ticket's investigation), opened on the iPad, offline: first in its
-   *  button row, folded or whole (architecture review 19 #3: a ticket's were drawn under its notes, only when whole,
-   *  while a report's sat in the button row). */
-  pages?: { id: string; label: string }[];
-  /** A cost, formatted, at the right of the text. */
+  /** VESTA's pages kept with it (a report's, a ticket's investigation), opened on the iPad, offline: in its bar after
+   *  its buttons, folded or whole (architecture review 19 #3); `short`, its word on a narrow card ("Report"). */
+  pages?: { id: string; label: string; short?: string }[];
+  /** A cost, formatted, at the right under its words. */
   amount?: string;
+  /** Who last moved it ("Opened by Wayan", "By VESTA Agent"): one quiet line under its words (faultNotes.moveWho). */
+  who?: string | null;
+  /** Its problems, when it holds several (an Inbox device's): one part each, under its title and quiet line. */
+  parts?: CardPart[];
   actions?: ReactNode;
   erase?: { title: string; detail: string; run: (token: string) => Promise<unknown> };
   onOpen?: () => void;
   framed?: boolean;
-  /** The frame's tint: fm/tone's toneClass ("tone-warn", "tone-danger"), none when all is well. */
   tone?: string;
-  /** Its state said among its tags (a ticket's pill of who last moved it): drawn there, after `pills`, and on its
-   *  buttons' row on a wide card (ActionsRow), by this card alone. */
-  tagState?: RecordStatus | null;
-  /** Its status is shown in a buttons' row of its `body` (an open issue's first problem) on a wide card. */
-  statusInBody?: boolean;
 }
 
-/** The class of a pill that its card's buttons' row shows on a wide card (ActionsRow): there, it is not drawn here.
- *  ⚠️ PLACED HERE ONLY (architecture review 23): each kind of card marked its own pills with it and passed its own hints
- *  (rowState, statusInBody), three things kept in step by hand; a card's state now goes in once (`status`, `tagState`)
- *  and an Inbox problem's pill through StateWhereItStands. */
-const STATE_INLINE = "fm-state-inline";
-
-/** A state pill where it stands in a card's text, hidden there on a wide card when its buttons' row says it
- *  (`atButtons`): an Inbox problem's pill of who last moved it (IssueCard). */
-export function StateWhereItStands({ atButtons, className, children }: { atButtons: boolean; className?: string; children: ReactNode }) {
-  const cls = [className, atButtons ? STATE_INLINE : ""].filter(Boolean).join(" ");
-  return <span className={cls || undefined}>{children}</span>;
+/** A strip's colour: the worst of its states' tones, else the card's tone, else grey. ⚠️ ONE RULE FOR EVERY STRIP
+ *  (owner, 2026-11-05): red act now, amber a fault, green handled (a ticket in progress, a watch, all well), grey
+ *  quiet (a device out of contact, anything closed). Pure: a check drives it. */
+export type StripTone = "danger" | "warn" | "ok" | "neutral";
+const TONE_OF_CLASS: Record<string, StripTone> = {
+  danger: "danger", warn: "warn", accent: "ok", ok: "ok", quiet: "neutral", lost: "neutral",
+};
+const STRIP_RANK: StripTone[] = ["danger", "warn", "ok", "neutral"];
+const toneOf = (cls: string | undefined): StripTone | undefined => {
+  const m = /(?:^|\s)tone-(\w+)/.exec(cls ?? "");
+  return m ? TONE_OF_CLASS[m[1]] : undefined;
+};
+export function stripTone(status: readonly RecordStatus[], tone?: string): StripTone {
+  const said = status.map((s) => toneOf(s.tone)).filter((t): t is StripTone => !!t);
+  if (said.length) return STRIP_RANK.find((t) => said.includes(t))!;
+  return toneOf(tone) ?? "neutral";
 }
 
-/** ⚠️ A CARD'S STATE ON ITS BUTTONS' LINE (owner, 2026-11-05: "the coloured pill … on the same line as the buttons on
- *  desktop, vertically centered", the "Unavailable" pill too, on every card of every tab): a card's buttons' row, its
- *  state pills at its left on a wide card; on a narrow one (a phone) they stay where they stand (STATE_INLINE), the
- *  row is the buttons alone (07-facility.css, the card's width). Every card's buttons' row is this one. */
-export function ActionsRow({ state, children }: { state?: ReactNode; children: ReactNode }) {
+/** ⚠️ A CARD'S BAR (owner, 2026-11-05, rule 6): its buttons joined along its bottom edge, equal segments split by
+ *  hairlines, at least a finger tall, each its icon and its label (its short word on a narrow card: 07-facility.css).
+ *  Every card's buttons go in this one bar, whatever they are: a problem's work buttons (WorkButtons, the main action
+ *  first and green), a page, a notification's buttons, a task's Pause and bin. */
+export function ActionsRow({ children }: { children: ReactNode }) {
   return (
     // a press on a button is the button's: never the card's hold-to-erase, never its tap-to-open
     <div className="fm-record-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-      {state && <span className="fm-work-state">{state}</span>}
       {children}
     </div>
   );
 }
 
-/** ⚠️ ONE PILL for when VESTA looks again (owner, 2026-10-23: an open issue's and a cleared fault's alike; 2026-11-01:
- *  the refresh icon on both, so a time on a card is plainly its next check): the icon and when, its words on hover. */
+/** ⚠️ A CARD'S QUESTION TAKES ITS BAR (owner, 2026-11-05): "Done? VESTA checks it again before it closes." on a line of
+ *  its own, then the bar [the main action][Cancel], the main action first as everywhere on the card. */
+export function CardAsk({ question, icon, confirmLabel, onConfirm, onCancel }: {
+  question: ReactNode; icon?: ReactNode; confirmLabel: ReactNode;
+  onConfirm: () => void | Promise<void>; onCancel: () => void;
+}) {
+  return (
+    <>
+      <div className="fm-record-ask">{icon}<span>{question}</span></div>
+      <button type="button" className="btn ghost fm-bar-main" onClick={() => { void onConfirm(); }}>{confirmLabel}</button>
+      <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
+    </>
+  );
+}
+
+/** ⚠️ ONE WAY TO SAY WHEN VESTA LOOKS AGAIN (owner, 2026-10-23: an open issue's and a cleared fault's alike; 2026-11-01:
+ *  the refresh icon, so a time on a card is plainly its next check): quiet text on the card's line, its words on hover. */
 export function CheckPill({ when, tip }: { when: string; tip: string }) {
   return (
     <Tip text={tip}>
-      <span className="fm-entity-chip fm-chip-static fm-record-check" aria-label={tip}>
-        <RefreshCw size={12} aria-hidden="true" />{when}
+      <span className="fm-record-check" aria-label={tip}>
+        <RefreshCw size={12} aria-hidden="true" />next check {when}
       </span>
     </Tip>
   );
 }
 
-/** ⚠️ ONE PILL FOR WHAT A CARD SAYS OF ITSELF (architecture review round 13, 2026-11-01: the Inbox drew the room as a
- *  framed pill, Tickets, Schedule and Today as plain grey text among the other tags; owner, 2026-11-01: the time and who
- *  last moved it too): the Spend tab's device pill's look (owner, 2026-11-01: "the area pill … reusing existing code"). */
+/** ⚠️ ONE PILL FOR WHAT A CARD SAYS OF ITSELF (architecture review round 13, 2026-11-01): the Spend tab's device pill's
+ *  look; on a card's quiet line it is quiet text (07-facility.css). */
 export function Pill({ text, className = "" }: { text: string; className?: string }) {
   return <span className={`fm-entity-chip fm-chip-static${className ? ` ${className}` : ""}`}>{text}</span>;
 }
 
-/** The device's pill on a ticket opens its window; a device no longer known, its name alone. */
+/** The device a ticket names: its name, a link that opens its window; a device no longer known, its name alone. */
 export function DeviceChip({ entityId, label, onOpenEntity }: {
   entityId?: string; label?: string; onOpenEntity: (id: string) => void;
 }) {
@@ -130,66 +172,82 @@ export function DeviceChip({ entityId, label, onOpenEntity }: {
   );
 }
 
-/** ⚠️ A STATE IS ONE PILL ON EVERY COCKPIT CARD (owner, 2026-11-01): a ticket's stage, a task's due state, an issue's
- *  device state ("Missing"): its card's `status`. */
-export function StatusPill({ text, tone }: RecordStatus) {
-  return <span className={`fm-badge ${tone}`}>{text}</span>;
+/** Who moved it, one quiet line with a person (rule 5). */
+export function WhoLine({ who }: { who?: string | null }) {
+  if (!who) return null;
+  return <div className="fm-record-who"><UserRound size={14} aria-hidden="true" /><span>{who}</span></div>;
 }
 
-/** A card's line of pills, folded or whole: its room and next check on the left, its state on the right (owner,
- *  2026-11-01); nothing with none. */
-function CardPillLine({ room, check, status, atButtons }: {
-  room?: string; check?: RecordCardProps["check"]; status: readonly RecordStatus[];
-  /** Its status is in a buttons' row too (ActionsRow): drawn here on a narrow card only. */
-  atButtons?: boolean;
+/** A card's strip, or a part's header line (`part`): icons, alert name, states, the (i), the time. */
+function CardStrip({ lead, number, status, tip, when, tone, part }: {
+  lead?: ReactNode; number?: string; status: readonly RecordStatus[]; tip?: string; when?: string; tone: StripTone; part?: boolean;
 }) {
-  if (!room && !check && status.length === 0) return null;
+  const words = status.map((s) => s.text).join(" · ");
   return (
-    <span className="card-pill-line">
-      {room && <Pill text={room} />}
-      {check && <CheckPill {...check} />}
-      {status.length > 0 && (
-        <span className={`card-pill-status${atButtons ? ` ${STATE_INLINE}` : ""}`}>{status.map((s) => <StatusPill key={s.text} {...s} />)}</span>
-      )}
-    </span>
+    <div className={`${part ? "fm-record-part-head" : "fm-record-strip"} strip-${tone}`}>
+      {lead && <span className="fm-record-lead">{lead}</span>}
+      {number && <span className="fm-record-number">{number}</span>}
+      {words && <span className="fm-record-status">{words}</span>}
+      {tip && <InfoTip label={tip}>{tip}</InfoTip>}
+      {when && <span className="fm-record-when">{when}</span>}
+    </div>
   );
 }
 
-export default function RecordCard({ title, status, lead, titlePills, room, when, check, pills, notes, body, folded, photoIds,
-  pages, amount, actions, erase, onOpen, framed = true, tone, tagState, statusInBody }: RecordCardProps) {
+export default function RecordCard({ title, status, statusTip, lead, number, titlePills, device, room, when, check, pills,
+  notes, body, folded, photoIds, pages, amount, who, parts, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const whole = folded === undefined;
   const statuses = [status ?? []].flat();
-  const row = !!actions || (pages?.length ?? 0) > 0;
-  const rowPills = row && (statuses.length > 0 || tagState)
-    ? <>{statuses.map((s) => <StatusPill key={s.text} {...s} />)}{tagState && <StatusPill {...tagState} />}</> : undefined;
-  const tags = (pills || tagState) && <>{pills}{tagState && <StateWhereItStands atButtons={row}><StatusPill {...tagState} /></StateWhereItStands>}</>;
+  // one problem is the card itself: its words, who line and buttons are the card's
+  const single = parts?.length === 1 ? parts[0] : undefined;
+  const several = parts && parts.length > 1 ? parts : [];
+  const text = single ? single.text : body;
+  const whoSaid = single ? single.who : who;
+  const bar = (pages?.length ?? 0) > 0 || actions || single?.actions;
+  const toneWords = (tone ?? "").split(" ").filter(Boolean);
+  const frame = toneWords.filter((w) => !w.startsWith("tone-")).join(" ");
   const inside = (
     <>
-      <div className="fm-record-head">
-        {lead && <span className="fm-record-lead">{lead}</span>}
-        <div className="fm-row-title">
-          <strong>{title}</strong>
-          {titlePills}
+      <CardStrip lead={lead} number={number} status={statuses} tip={statusTip} when={when}
+        tone={stripTone(statuses, toneWords.find((w) => w.startsWith("tone-")))} />
+      <div className="fm-record-main">
+        <div className="fm-record-head">
+          <div className="fm-row-title">
+            <strong>{title}</strong>
+            {titlePills}
+          </div>
         </div>
-        {when && <Pill text={when} className="fm-record-check" />}
-      </div>
-      <CardPillLine room={room} check={check} status={statuses} atButtons={(row && statuses.length > 0) || statusInBody} />
-      {/* its text the card's width (its cost beside it), its buttons under it on the right (owner, 2026-10-29) */}
-      <div className="fm-record-body">
-        <div className="fm-row-main">
-          {!whole && <span className="fm-card-folded">{folded}</span>}
-          {whole && tags && <RecordMeta>{tags}</RecordMeta>}
-          {whole && (body ?? <RecordNotes notes={notes ?? []} />)}
-          {whole && (photoIds?.length ?? 0) > 0 && <EvidenceRow photoIds={photoIds!} disabled />}
-        </div>
-        {amount && <span className="fm-amount">{amount}</span>}
-        {row && (
-          <ActionsRow state={rowPills}>
-            {pages?.map((p) => <PageLink key={p.id} page={p.id} label={p.label} />)}
-            {actions}
-          </ActionsRow>
+        {/* its quiet line: " · " between its pieces (07-facility.css), nothing drawn when it has none */}
+        {(device || room || check || pills) && (
+          <div className="fm-record-meta">
+            {device}
+            {room && <span>{room}</span>}
+            {check && <CheckPill {...check} />}
+            {pills}
+          </div>
         )}
+        {!whole && <span className="fm-card-folded">{folded}</span>}
+        {whole && (text ?? <RecordNotes notes={notes ?? []} />)}
+        {whole && (photoIds?.length ?? 0) > 0 && <EvidenceRow photoIds={photoIds!} disabled />}
+        {amount && <div className="fm-record-foot"><span className="fm-amount">{amount}</span></div>}
+        {whole && <WhoLine who={whoSaid} />}
       </div>
+      {whole && several.map((p) => (
+        <section key={p.key} className="fm-record-part">
+          <CardStrip part lead={p.lead} number={p.number} status={p.status ?? []} when={p.when} tone={stripTone(p.status ?? [], p.tone)} />
+          {(p.text || p.who) && <div className="fm-record-part-text">{p.text}<WhoLine who={p.who} /></div>}
+          {p.actions && <ActionsRow>{p.actions}</ActionsRow>}
+        </section>
+      ))}
+      {bar && (
+        <ActionsRow>
+          {/* the main action first (rule 6), the pages after the buttons */}
+          {single?.actions}
+          {actions}
+          {pages?.map((p) => <PageLink key={p.id} page={p.id}
+            label={p.short ? <><span className="work-long">{p.label}</span><span className="work-short">{p.short}</span></> : p.label} />)}
+        </ActionsRow>
+      )}
     </>
   );
   const record = erase ? (
@@ -206,5 +264,5 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
       {inside}
     </div>
   );
-  return framed ? <div className={`fm-record-card${tone ? ` ${tone}` : ""}`}>{record}</div> : record;
+  return framed ? <div className={`fm-record-card${frame ? ` ${frame}` : ""}`}>{record}</div> : record;
 }

@@ -331,9 +331,12 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
 {
   const JSX = await import("../consistency/jsx.mjs");
   const [open, shut] = JSX.elements(JSX.parseTsx("components/fm/TicketsTab.tsx"), "WorkButtons");
-  ck("a ticket is ONE card: the first record carries the pill and the ticket's buttons, the closed one its Reopen, no device name above",
+  // owner, 2026-11-05 ("Status on top"): its bar the card's last part, under every record of it
+  ck("a ticket is ONE card: its first record says its stage, its buttons the card's bar, under every record, the closed one its Reopen, no device name above",
      /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /const records = g\.records\.map\(workRecord\);/.test(ticketsTab)
-     && /record\(t, i === 0 \? stagePill\(t\) : undefined,\s*i === 0 \? <WorkButtons/.test(ticketsTab)
+     && /const buttons = <WorkButtons actions=\{ticketActions\(records\)\}/.test(ticketsTab)
+     && /if \(g\.records\.length === 1\) return <Fragment key=\{g\.key\}>\{record\(g\.records\[0\], stagePill\(g\.records\[0\]\), buttons\)\}<\/Fragment>;/.test(ticketsTab)
+     && /\{g\.records\.map\(\(t, i\) => record\(t, i === 0 \? stagePill\(t\) : undefined, undefined, false, i === 0\)\)\}\s*<\/div>\s*<ActionsRow>\{buttons\}<\/ActionsRow>\s*<\/div>/.test(ticketsTab)
      && JSX.propText(open, "actions") === "ticketActions(records)" && JSX.propText(shut, "actions") === "closedActions(workRecord(t), closedTold(t).reopen)"
      // its standing Need help said on it, from the same records as its buttons (checked by value below)
      && JSX.propText(open, "asked") === "helpAsked(records)"
@@ -450,10 +453,11 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
 // night check's finding beside VESTA's alert on the same device) do not repeat "Ticket opened by … In progress"
 {
   const tab = JSX.parseTsx("components/fm/TicketsTab.tsx");
-  const card = JSX.elements(tab, "RecordCard").find((c) => JSX.propText(c, "tagState") !== null);
-  ck("a ticket's card says its state once: the record's pill (RecordCard tagState) only where the record is `stated`, the first of its card",
-     !!card && JSX.propText(card, "tagState") === "stated ? latest : null" && JSX.elements(tab, "StatusPill").length === 0
-     && /, false, i === 0\)\)\}/.test(tt), card && JSX.propText(card, "tagState"));
+  const card = JSX.elements(tab, "RecordCard").find((c) => JSX.propText(c, "who") !== null);
+  ck("a ticket's card says its state once: its strip's stage and its who line only where the record is `stated`, the first of its card",
+     !!card && JSX.propText(card, "who") === "stated ? moveWho(move, said, when, momentText) : null" && JSX.propText(card, "status") === "state"
+     && /const state = stated \? moveState\(move\) \?\? status : undefined;/.test(tt) && JSX.elements(tab, "StatusPill").length === 0
+     && /, false, i === 0\)\)\}/.test(tt), card && JSX.propText(card, "who"));
 }
 // owner, 2026-11-02: "Move the Open Ticket button from the Inbox page to the Tickets page"
 {
@@ -570,8 +574,11 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   // shows one (07-facility.css .work-short)
   const seen = (html, narrow = false) => text(html.replace(narrow ? /<span class="work-long">[^<]*<\/span>/g
     : /<span class="work-short">[^<]*<\/span>/g, "")).replace(/\[icon\]\|?/g, "[icon] ");
-  ck("an issue card: Done, Need help, Not a problem, then Open Ticket, each with its icon, in their row, Done named for a screen reader",
-     /^<div class="fm-work-row">/.test(drawButtons(ovActs, null, { name: "Pump" }))
+  // owner, 2026-11-05 ("Status on top"): each a segment of the card's bar, the main action first, in green
+  ck("an issue card: Done, Need help, Not a problem, then Open Ticket, each with its icon, in the card's bar, Done first and green, named for a screen reader",
+     /^<button type="button" class="btn ghost fm-bar-main"[^>]*><svg[^>]*lucide-check/.test(drawButtons(ovActs, null, { name: "Pump" }))
+     && (drawButtons(ovActs).match(/fm-bar-main/g) ?? []).length === 1 && /^<button type="button" class="btn ghost fm-bar-main"/.test(drawButtons(tkActs))
+     && !/fm-bar-main/.test(drawButtons(W.closedActions({ id: "r", stage: "closed" }, true)))
      && seen(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] Open Ticket|"
      && /aria-label="Done “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })) && /aria-label="Open Ticket"/.test(drawButtons(ovActs)), seen(drawButtons(ovActs)));
   // owner, 2026-11-04 (iPhone screenshot): "use 1 word label and icon in the button … open/edit a ticket shall also
@@ -592,37 +599,39 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     const { readFileSync } = await import("node:fs");
     const css = (f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8");
     const fac = css("07-facility.css"), base = css("01-base.css");
+    // ⚠️ THE BAR'S SEGMENTS ARE EQUAL (owner, 2026-11-05): a label in full needs its segment, a card's width shared by
+    // its buttons, as wide as its widest label (Not a problem 98 px, a ticket's No action needed 121 px); the bar spans
+    // the card edge to edge (no card padding, no icon column any more)
     const num = (re, t) => Number((t.match(re) ?? [])[1]);
-    const pad = num(/\.fm-work-row > \.btn \{[^}]*padding: 0 (\d+)px/, fac);
-    const gap = num(/\.fm-work-row \{[^}]*gap: (\d+)px/, fac);
-    const lent = num(/\.fm-record-body \.fm-work-row \{ margin-left: -(\d+)px/, fac) || 0;
-    const gutter = num(/\.fm-record-head:has\(> \.fm-record-lead\), \.fm-record-head:has\(> \.fm-record-lead\) ~ :is\(\.fm-record-body, \.card-pill-line\) \{ padding-left: (\d+)px/, fac);
-    const cardPad = num(/--card-pad: \d+px (\d+)px/, base);
+    const seg = /\.fm-record-actions :is\(\.btn, \.icon-btn, \.fm-document-link\) \{([^}]*)\}/.exec(fac)?.[1] ?? "";
+    const pad = num(/padding: 0 (\d+)px/, seg), iconGap = num(/gap: (\d+)px/, seg);
+    const hair = num(/\.fm-record-actions \{[^}]*gap: (\d+)px/, fac);
     const narrowBelow = num(/@container work-row \(max-width: (\d+)px\)/, fac) + 1;
-    const tile = /@container work-row \(max-width: \d+px\) \{\s*\.fm-work-row > \.btn \{ flex: 1 1 0; min-width: 0; flex-direction: column; gap: \d+px; padding: \d+px (\d+)px; \}\s*\.work-long \{ display: none; \}\s*\.work-short \{ display: inline; \}/.exec(fac);
-    const tilePad = Number(tile?.[1]);
-    const ICON = 22;
-    const line = (labels) => labels.reduce((w, label) => w + label + ICON + 2 * pad + 2, 0) + (labels.length - 1) * gap;
-    const room = (screen) => screen - 36 - 2 * cardPad - gutter + lent;
-    const full = Math.max(line([34, 68, 98, 101 - ICON]), line([40, 68, 121]));
-    const tiles = 4 * (53 + 2 * tilePad + 2) + 3 * gap;
-    ck("  ...every label in full only on a row that holds the widest card's four; one words below, the four on one line on every phone, 360 to 430 px",
-       pad > 0 && gap > 0 && lent === gutter && !!tile && full <= narrowBelow
+    const ICON = 14 + iconGap;
+    const bar = (labels) => labels.length * (Math.max(...labels) + ICON + 2 * pad) + (labels.length - 1) * hair;
+    const room = (screen) => screen - 36;
+    const full = Math.max(bar([34, 68, 98, 79]), bar([40, 68, 121]));
+    // the one words: Done, Help, Ignore, Ticket on an issue (Ticket, the widest, 46 px); Close, Help, Dismiss (53 px) on a ticket
+    const tiles = Math.max(bar([34, 32, 44, 46]), bar([40, 32, 53]));
+    ck("  ...every label in full only on a card that holds the widest card's four; one words below, the four on one line on every phone, 360 to 430 px",
+       pad > 0 && iconGap > 0 && hair === 1 && /flex: 1 1 0; min-width: 0;/.test(seg) && full <= narrowBelow
        && [360, 375, 390, 412, 430].every((w) => room(w) < narrowBelow && tiles <= room(w))
        && /\.work-short \{ display: none; \}/.test(fac) && /^\.fm-record \{ container: work-row \/ inline-size; \}$/m.test(fac)
        // the CARD is measured: a row sized by its buttons (right of the words on a wide card) measured 0 px (owner, 2026-11-04)
        && (fac.match(/container(-type|-name)?:/g) ?? []).length === 1,
-       { pad, gap, lent, gutter, full, narrowBelow, tiles, room360: room(360) });
+       { pad, iconGap, hair, full, narrowBelow, tiles, room360: room(360) });
   }
   ck("  ...a ticket: Close, Need help and No action needed, each with its icon; a closed record: Reopen",
      seen(drawButtons(tkActs)) === "|[icon] Close|[icon] Need help|[icon] No action needed|" && seen(drawButtons(W.closedActions({ id: "r", stage: "closed" }, true))) === "|[icon] Reopen|", seen(drawButtons(tkActs)));
   // each close asks the question of the button pressed (owner, 2026-11-04: Not a problem a button of its own, no
   // longer a second yes under Done's question; tests/oracles/not_a_problem.mjs)
   const asked = (kind, key = "device:x") => ({ key, kind });
+  // owner, 2026-11-05: its question on a line of its own, then [the main action][Cancel], the main action first
   ck("  ...the button pressed asks ITS question in place of the buttons: Done's, the ticket's No action needed; Not a problem has none",
-     seen(drawButtons(ovActs, asked("done"))) === "|Done? VESTA checks it again before it closes.|Cancel|Done|"
+     seen(drawButtons(ovActs, asked("done"))) === "|[icon] Done? VESTA checks it again before it closes.|Done|Cancel|"
+     && /^<div class="fm-record-ask"><svg[\s\S]*?<\/svg><span>Done\?[^<]*<\/span><\/div><button type="button" class="btn ghost fm-bar-main">Done<\/button><button type="button" class="btn ghost">Cancel<\/button>$/.test(drawButtons(ovActs, asked("done")))
      && seen(drawButtons(ovActs, asked("notAProblem"))) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] Open Ticket|"
-     && seen(drawButtons(tkActs, asked("closeTicket"))) === "|Close this ticket? Nothing was done, no cost is recorded.|Cancel|No action needed|",
+     && seen(drawButtons(tkActs, asked("closeTicket"))) === "|[icon] Close this ticket? Nothing was done, no cost is recorded.|No action needed|Cancel|",
      [seen(drawButtons(ovActs, asked("done"))), seen(drawButtons(ovActs, asked("notAProblem"))), seen(drawButtons(tkActs, asked("closeTicket")))]);
   {
     // what a press does, on the drawn buttons themselves (WorkButtons draws with no hook: called, its tree is read)
@@ -663,7 +672,7 @@ console.log("\n  a Need help pressed is said on its card, and asked once (archit
   const ticket = (d) => d.tickets.filter((t) => t.id === "b").map(W.workRecord);
   // ⚠️ SAID ONCE (architecture review 23): the card's pill says it; the line above the buttons said it again
   const pillOf = (d) => cockpitCard(groupAttention(attentionOf({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {},
-    fmData: d }).attentionItems).find((g) => g.items.some((i) => i.ticketId === "a")), null).lines.map((l) => l.latest?.text ?? "");
+    fmData: d }).attentionItems).find((g) => g.items.some((i) => i.ticketId === "a")), null).lines.map((l) => (l.move ? N.moveText(l.move, momentText) : ""));
   ck("pressed on the Inbox: its card's pill says who asked and when, no line repeats it, and no second Need help",
      inbox(before).asked === null && inbox(after).asked === null
      && pillOf(after).includes(`Need help asked by Owner, on ${momentText(at)}`)
@@ -703,7 +712,7 @@ console.log("\n  a Need help pressed is said on its card, and asked once (archit
   ck("  ...and a closed record holds no Need help", closed.tickets.every((t) => E.standingHelp(t) === undefined));
 }
 ck("a ticket's notes wrap inside its card, never past its edge (owner, 2026-10-14: a long \"VESTA reads\" ran out)",
-   /\.fm-record-body > \.fm-row-main \{ flex: 1 1 260px; min-width: 0; \}/.test(src("styles/07-facility.css"))
+   /\.fm-record-main \{ display: flex; flex-direction: column; gap: 4px; min-width: 0;/.test(src("styles/07-facility.css"))
    && /\.fm-timeline-note \{[^}]*overflow-wrap: anywhere;/.test(src("styles/07-facility.css")));
 console.log("\n  one line per problem (owner, 2026-10-17: \"#49 · One mains phase lost\" six times):");
 {

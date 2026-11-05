@@ -14,7 +14,7 @@ import { confirmingFaults } from "@/fm/faultConfirm";
 import type { FmData } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { VillaAttention } from "./attention";
-import { closedCards, cockpitCard, confirmingCards, type CardView } from "./cockpitCard";
+import { CARD_TONE_RANK, closedCards, cockpitCard, confirmingCards, type CardView } from "./cockpitCard";
 import type { labelOf } from "./EntityMap";
 
 export interface CockpitIssues {
@@ -39,7 +39,10 @@ export function cockpitIssues(view: Pick<VillaAttention, "attentionGroups" | "de
   const { fmData, cadence, now, entities, entityMap, resolvedRooms } = opts;
   const cards = { devices: view.devices, entities, entityMap, resolvedRooms, may: view.shows };
   return {
-    open: view.attentionGroups.map((g) => cockpitCard(g, cadence, now)),
+    // ⚠️ IN THEIR COLOUR'S ORDER (owner, 2026-11-05): red, amber, grey, then what is being handled; within a colour the
+    // grouping's own order (attention.groupAttention), a stable sort
+    open: view.attentionGroups.map((g) => cockpitCard(g, cadence, now))
+      .sort((a, b) => CARD_TONE_RANK[a.tone ?? "warn"] - CARD_TONE_RANK[b.tone ?? "warn"]),
     watched: confirmingCards(confirmingFaults(fmData, cadence, now.getTime()), cards),
     closed: closedCards(fmData, cadence, now, cards),
   };

@@ -66,8 +66,11 @@ console.log("\n  the Overview's late-task line says the same word:");
 console.log("\n  the screens read the table (wiring a drawing cannot reach — the tab needs the Facility data):");
 const code = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
 const today = code("components/fm/TodayTab.tsx");
-ck("the Schedule tab's pill is the table's word in the table's tone; its line the engine's sentence",
-   /status=\{\{ text: DUE_WORDS\[s\.state\]\.word, tone: pillClass\(DUE_WORDS\[s\.state\]\.tone\) \}\}/.test(today) && /dueLine\(s\)/.test(today));
+// owner, 2026-11-05 ("Status on top"): the state in the card's strip, the day it is due as its time; the sentence
+// ("3 days overdue") is the recap's, never the card's, whose strip says it already
+ck("the Schedule tab's state is the table's word in the table's tone; its strip's time the day it is due",
+   /status=\{\{ text: DUE_WORDS\[s\.state\]\.word, tone: pillClass\(DUE_WORDS\[s\.state\]\.tone\) \}\}/.test(today)
+   && /when=\{s\.dueAt \? `Due \$\{shortDate\(s\.dueAt\)\}` : undefined\}/.test(today) && !/dueLine\(s\)/.test(today));
 const words = Object.values(E.DUE_WORDS).map((w) => w.word);
 const literal = new RegExp(`"(${words.join("|")}|Overdue by|No completion recorded yet)`);
 ck("  ...and no screen or document spells a due word itself",

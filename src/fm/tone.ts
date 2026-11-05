@@ -23,11 +23,14 @@ export const TONE_OF = {
 /** A tone's class on a card: none when all is well. */
 export const toneClass = (t: Tone): string => (t === "ok" ? "" : `tone-${t}`);
 
-/** A tone's class on a status pill (RecordCard `status.tone`, 07-facility.css .fm-badge): a pill is always filled, so
- *  its ok is drawn too (green, as a task's "ok" pill) — only a card's frame is left plain when all is well. */
+/** A tone's class on a card's state (RecordCard `status.tone`: its strip's colour, 07-facility.css .strip-*): its ok
+ *  is drawn too (green, as a task's "ok" state) — only a card's tone is left plain when all is well. */
 export const pillClass = (t: Tone): string => `tone-${t}`;
 
 /** A ticket IN PROGRESS's pill: the buttons' accent, as its Edit Ticket button (owner, 2026-11-04: "change the colour
  *  of the pill for OPENED ticket, for this green colour, and also colour the Edit Ticket button with this same green
  *  accent style"). */
 export const ACCENT_PILL = "tone-accent";
+
+/** A state that needs nothing (a closed record, a device out of contact): the card's grey (owner, 2026-11-05). */
+export const QUIET_PILL = "tone-quiet";

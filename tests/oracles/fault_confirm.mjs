@@ -122,23 +122,25 @@ ck("  ...only the faults whose device the profile may open (as the open issues)"
 const drawn = draw(h(AttentionCard, { card: cards[1], onOpenEntity: () => {} }));
 // ⚠️ THE SAME CARD AS AN OPEN ISSUE'S (owner, 2026-10-23: "the same piece of code … same style and same card layout"):
 // RecordCard's frame (marked), its title and room pill, the open issues' next-check pill, the check as its lead
-ck("  ...drawn by the open issues' own card: marked frame, a check, its device and room pill, its fault, who closed it",
+ck("  ...drawn by the open issues' own card: marked frame, a check, its device and room, its fault, who closed it its who line",
    /^<div class="fm-record-card fault-watched">/.test(drawn) && /class="[^"]*fault-watched-icon/.test(drawn)
-   && /<strong><button[^>]*>door<\/button><\/strong><\/div>/.test(drawn) && /card-pill-line"><span class="fm-entity-chip fm-chip-static">Hall<\/span>/.test(drawn)
-   && /#65 · Door unlocked/.test(drawn) && drawn.includes(`<span class="cockpit-attention-latest">Done${on(-2)} (JM)</span>`), drawn.slice(0, 900));
-const pillOf = (html) => /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="([^"]*)">(<svg[^>]*class="([^"]*)"[\s\S]*?<\/svg>)([^<]*)<\/span>/.exec(html);
+   && /<strong><button[^>]*>door<\/button><\/strong><\/div>/.test(drawn) && /<div class="fm-record-meta"><span>Hall<\/span><\/div>/.test(drawn)
+   && /#65 · Door unlocked/.test(drawn) && /class="fm-record-who"><svg[\s\S]*?<\/svg><span>Done[^<]* \(JM\)<\/span>/.test(drawn)
+   && drawn.includes(`<span>Done${on(-2)} (JM)</span>`), drawn.slice(0, 900));
+// owner, 2026-11-05 ("Status on top"): a Watch card's strip says when it closes, in green, with its (i)
+const stripOf = (html) => /class="fm-record-strip strip-(\w+)">[\s\S]*?<span class="fm-record-status">([^<]*)<\/span><span class="info-tip"><button type="button" class="info-btn" aria-label="([^"]*)"/.exec(html);
+const checkOf = (html) => /<span class="fm-record-check" aria-label="([^"]*)">/.exec(html);
 {
-  const pill = pillOf(drawn);
-  ck("  ...its pill is the open issues' pill (CheckPill): \"Closes\" and its time, what VESTA does then on touch",
-     !!pill && pill[4] === `Closes ${clockTime(NOW + 8 * 60_000)}` && pill[1] === closesAt(8), pill?.slice(1));
-  // owner, 2026-11-01: the refresh icon "to clearly indicate … the date when the next check will be done"
-  ck("  ...with the refresh icon of every next check",
-     !!pill && /\blucide-refresh-cw\b/.test(pill[3]) && !/circle-check|check-circle/.test(pill[3]), pill?.[3]);
+  const strip = stripOf(drawn);
+  ck("  ...its strip says \"Closes\" and its time, in green, what VESTA does then in its (i)",
+     !!strip && strip[2] === `Closes ${clockTime(NOW + 8 * 60_000)}` && strip[3] === closesAt(8) && strip[1] === "ok", strip?.slice(1));
+  ck("  ...said once: no next check on its quiet line", checkOf(drawn) === null, checkOf(drawn));
 }
 ck("  ...no Close and no Open Ticket: it is closed", !/fm-record-actions/.test(drawn));
 const activeCard = draw(h(AttentionCard, { card: cockpitCard(att.attentionGroups[0], CADENCE, new Date(NOW)), onOpenEntity: () => {} }));
 ck("an active fault keeps its look: no marker", /^<div class="fm-record-card">/.test(activeCard) && !/fault-watched/.test(activeCard));
-ck("  ...and a fault only a person closes has no next-check pill: nothing checks it", pillOf(activeCard) === null, pillOf(activeCard)?.slice(1));
+ck("  ...and a fault only a person closes has no next check: nothing checks it", checkOf(activeCard) === null && stripOf(activeCard) === null,
+   checkOf(activeCard)?.slice(1));
 {
   // Messages' own markup (the component needs the app's contexts to render): which cards are open issues and which
   // watched is the Messages model's, by value (messages_model.mjs); the tab draws them in that order
@@ -322,7 +324,7 @@ console.log("\n  a closed record told once, on both Closed sections (architectur
 {
   const { closedCards } = await import("@/config/cockpitCard");
   const { closedTold } = await import("@/fm/faultConfirm");
-  const { faultLatest } = await import("@/fm/faultNotes");
+  const { faultLatest, moveText } = await import("@/fm/faultNotes");
   const { closedActions, workRecord } = await import("@/fm/deviceWork");
   const T0 = NOW, iso = (ms) => new Date(ms).toISOString();
   const devs = devicesOf({ ids: ["switch.example_pump"] });
@@ -336,7 +338,7 @@ console.log("\n  a closed record told once, on both Closed sections (architectur
   const later = new Date(T0 + 3 * 86_400_000);
   const told = (t) => {
     const inbox = closedCards({ ...EMPTY_FM_DATA, tickets: [t] }, null, later, { devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, may: () => true })[0]?.lines[0];
-    return { inbox: inbox?.latest?.text ?? inbox?.closing, inboxReopen: (inbox?.actions ?? []).map((a) => a.label).join(),
+    return { inbox: (inbox?.move ? moveText(inbox.move, momentText) : null) ?? inbox?.closing, inboxReopen: (inbox?.actions ?? []).map((a) => a.label).join(),
       tickets: faultLatest(t, momentText)?.text, ticketsReopen: closedActions(workRecord(t), closedTold(t).reopen).map((a) => a.label).join() };
   };
   const [m, v, c] = [told(mine), told(vestas), told(cleared)];

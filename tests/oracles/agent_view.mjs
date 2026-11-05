@@ -106,19 +106,21 @@ const marks = ["RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "Save
   .filter((f) => !/<AgentMark record=\{/.test(src(`components/fm/${f}.tsx`)));
 ck("every Facility list shows the 'by VESTA Agent' mark", marks.length === 0, marks);
 // owner, 2026-11-01: on a ticket it was "confusing and redundant": the pill says who last moved it
-ck("  ...but a ticket: the pill of who last moved it, in its place",
-   !/AgentMark/.test(src("components/fm/TicketsTab.tsx")) && /tagState=\{stated \? latest : null\}/.test(src("components/fm/TicketsTab.tsx")));
+ck("  ...but a ticket: who last moved it, its who line (owner, 2026-11-05)",
+   !/AgentMark/.test(src("components/fm/TicketsTab.tsx")) && /who=\{stated \? moveWho\(move, said, when, momentText\) : null\}/.test(src("components/fm/TicketsTab.tsx")));
 // owner, 2026-10-11: the pills and when on ONE line right under the title, the same on every card — the mark, the
 // room, the device are inside RecordMeta, never in the title row; a fault's history shows its notes, not
 // "Open · date · VESTA Agent" lines that repeat that line
 // the shared card (RecordCard, 2026-10-14) puts the `pills` it is given in RecordMeta: a card handing it its pills is fine
-const cardPutsPillsInMeta = /<RecordMeta>\{tags\}<\/RecordMeta>/.test(src("components/fm/RecordCard.tsx"))
-  && /const tags = \(pills \|\| tagState\) && <>\{pills\}/.test(src("components/fm/RecordCard.tsx"));
+// 2026-11-05 ("Status on top"): the card's quiet line (`.fm-record-meta`) holds the `pills` it is given, drawn
+const { default: RecordCard } = await import("@/components/fm/RecordCard");
+const { h, draw, inside } = await import("../consistency/screen.mjs");
+const cardPutsPillsInMeta = inside(draw(h(RecordCard, { title: "T", pills: h("span", { className: "fm-clause agent" }, "by VESTA Agent") })),
+  "fm-record-meta").includes("by VESTA Agent");
 const loose = ["RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
   .filter((f) => { const s = src(`components/fm/${f}.tsx`), m = s.indexOf("<AgentMark");
-    if (cardPutsPillsInMeta && /pills=\{/.test(s) && s.lastIndexOf("pills={", m) > -1 && s.indexOf("<RecordCard") > -1) return false;
-    return !(s.indexOf("<RecordMeta") > -1 && s.indexOf("<RecordMeta") < m && m < s.indexOf("</RecordMeta>")); });
-ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0, loose);
+    return !(cardPutsPillsInMeta && s.lastIndexOf("pills={", m) > -1 && s.indexOf("<RecordCard") > -1); });
+ck("every Facility card: its tags on its one quiet line", cardPutsPillsInMeta && loose.length === 0, loose);
 {
   // review 26: a step says what it is (agent-contract.json ticketUpdate) — the card read the agent's title changes by
   // their first words and took them for status steps. Driven through the functions, with a fixed clock.
@@ -179,15 +181,16 @@ ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0,
      && faultLatest(ticketed, stamp)?.tone === ACCENT_PILL, [faultLatest(reopened, stamp), faultLatest(ticketed, stamp)]);
   // ONE place says a stage's colour (faultNotes.stagePillClass): the Tickets tab's stage pill wrote its own copy
   const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
-  ck("  ...the Tickets tab's card shows that same pill (faultLatest), and its stage pill asks the one colour rule",
-     /const latest = faultLatest\(t, momentText\);/.test(ticketsTab) && /tagState=\{stated \? latest : null\}/.test(ticketsTab)
+  ck("  ...the Tickets tab's card reads that same move (faultMove), and its stage asks the one colour rule",
+     /const move = faultMove\(t\);/.test(ticketsTab) && /const state = stated \? moveState\(move\) \?\? status : undefined;/.test(ticketsTab)
      && /tone: stagePillClass\(stageOf\(t\)\)/.test(ticketsTab) && !/pillClass\(\w+\.tone\)/.test(ticketsTab));
   const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
   const buttons = readFileSync(new URL("../../src/components/fm/WorkButtons.tsx", import.meta.url), "utf8");
-  ck("  ...the accent is the buttons' own colour, and Edit Ticket is drawn in it",
-     /\.fm-badge\.tone-accent \{ background: var\(--accent\); color: var\(--text-on-accent\); \}/.test(css)
-     && /const ACCENT: Partial<Record<WorkActionKind, true>> = \{ editTicket: true \};/.test(buttons)
-     && /className=\{ACCENT\[a\.kind\] \? "btn primary" : CARD_BUTTON\}/.test(buttons));
+  // owner, 2026-11-05: the strip says a ticket is in progress in the accent's green; the bar's main action, first, too
+  ck("  ...the accent is a handled card's strip and the main action's colour (Done, Close), Edit Ticket no longer",
+     /\.strip-ok \{ --strip: var\(--accent\); \}/.test(css) && /\.fm-record-actions \.fm-bar-main \{ color: var\(--accent\);/.test(css)
+     && /const MAIN: Partial<Record<WorkActionKind, true>> = \{ done: true, doneNew: true, ticketDone: true \};/.test(buttons)
+     && !/editTicket: true/.test(buttons));
   const contract = JSON.parse(readFileSync(new URL("../../rootfs/usr/share/vesta/agent-contract.json", import.meta.url), "utf8"));
   const kinds = /export type FmTicketUpdateKind = ([^;]+);/.exec(src("fm/fmTypes.ts"))?.[1].match(/"[^"]+"/g)?.map((k) => k.slice(1, -1));
   ck("the step kinds are the agreement's, the one list both sides read",
@@ -196,7 +199,7 @@ ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0,
 const faults = src("components/fm/TicketsTab.tsx");
 ck("a fault card no longer repeats its history's status lines, and reads its notes and when through faultNotes",
    !/fm-timeline-head|fm-timeline-dot/.test(faults) && /notes=\{faultNoteLines\(t, momentText\)\}/.test(faults)
-   && /when=\{momentText\(faultBegan\(t\)\)\}/.test(faults) && /faultLatest\(t, momentText\)/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
+   && /const when = momentText\(faultBegan\(t\)\);/.test(faults) && /faultMove\(t\)/.test(faults) && !/startsWith\("Now: "\)/.test(faults));
 {
   // what the button is: fm/deviceWork's, by value; that the Closed list draws it: the one wiring line
   const { closedActions, workRecord } = await import("@/fm/deviceWork");

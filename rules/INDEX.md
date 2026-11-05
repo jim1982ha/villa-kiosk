@@ -22,7 +22,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Ship, don't ask](owner-rules.md#ship-dont-ask) — cause found: implement and ship; ask only for a real decision
 - [Time matters](owner-rules.md#time-matters) — bundle a release; measure only what a decision needs; say what was skipped
 - [One mechanism per job](owner-rules.md#one-mechanism-per-job) — one store, channel or input per job; widen the existing one before adding; merging designs never keeps both
-- [One card, every case](owner-rules.md#one-card-every-case) — same fields at the same place on every card; a pill never repeats the words; audit every kind and screen before shipping
+- [One card, every case](owner-rules.md#one-card-every-case) — same fields at the same place on every card, state on top; a state never repeats the words; audit every kind and screen before shipping
 - [Defined once](owner-rules.md#defined-once) — every list, value or text in one place; YAML anchors, shared modules
 - [Telegram and the tablet alike](owner-rules.md#telegram-and-the-tablet-alike) — one card per alert, one name ("#91-P2") on Telegram, the tablet and every report; formats in the agreement
 - [Fix the shared piece](owner-rules.md#fix-the-shared-piece) — fix the shared component, never the misbehaving caller (DRY)
@@ -134,8 +134,8 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Animations own their clock](kiosk-code.md#animations-own-their-clock) — never `engine.getDeltaTime()`; per-second rates
 - [Node green, browser dead](kiosk-code.md#node-green-browser-dead) — never store `setTimeout`/`fetch` as a field or default
 - [Debug text can crash](kiosk-code.md#debug-text-can-crash) — no `!` on a value a debug line formats
-- [A card's state is one pill](kiosk-code.md#a-cards-state-is-one-pill) — StatusPill and RoomPill on every card and row; text says what is wrong; a condition in a shared format that makes a second format goes to the owner first
-- [A row's every field, on every kind of card](kiosk-code.md#a-rows-every-field-on-every-kind-of-card) — name, time, room left, pills right; proven on every kind, never only the kinds touched
+- [A card's state is one pill](kiosk-code.md#a-cards-state-is-one-pill) — a card's state only in its strip, in the strip's colour; text says what is wrong; who moved it its who line; a condition in a shared format that makes a second format goes to the owner first
+- [A row's every field, on every kind of card](kiosk-code.md#a-rows-every-field-on-every-kind-of-card) — strip (icons, alert name, state, time), title, quiet line (room, next check), words, who, bar; proven on every kind, never only the kinds touched
 - [One status vocabulary](kiosk-code.md#one-status-vocabulary) — status colours only from STATUS_COLOR; red means needs attention
 - [A badge on a chip is an unresolved room](kiosk-code.md#a-badge-on-a-chip-is-an-unresolved-room) — check the room resolver's id set before placement
 - [Rename a key when its default changes](kiosk-code.md#rename-a-key-when-its-default-changes) — saveConfig writes the whole config
