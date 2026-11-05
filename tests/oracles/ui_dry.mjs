@@ -110,9 +110,13 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
      /options\.length > 4 \? " segmented-grid"/.test(sg)
      && /\.settings-modal \.row > \.segmented\.segmented-grid:only-child \{\s*display: grid; grid-template-columns: repeat\(auto-fill, minmax\(\d+px, 1fr\)\)/.test(css));
   // owner, 2026-11-03: a chat's name stood one letter per line beside a language menu as wide as the line
-  // owner, 2026-11-06: each chat the Cockpit's card, its name the strip's; its menu its own short width in the card
-  ck("a chat's language menu keeps its own short width in its card",
-     /\.card-field > \.dropdown\.recipients-language \{ flex: 1 1 \d+px; max-width: \d+px; \}/.test(css));
+  // owner, 2026-11-06: each chat the Cockpit's card, its name the strip's; then "the content of these cards taking the
+  // whole width": a card's field (a chat's language, an announcement's seconds) fills the card beside its one-line name
+  ck("a card's field takes the rest of the card's width: its name on one line, no control capped or fixed",
+     /\.card-field-label \{ flex: 0 0 auto; white-space: nowrap;/.test(css)
+     && /\.card-field > :not\(\.card-field-label\) \{ flex: 1 1 \d+px; min-width: 0; \}/.test(css)
+     && /\.card-field > \.unit-field \{ flex: 1 1 \d+px; width: auto; \}/.test(css)
+     && !/\.card-field > [^{]*\{[^}]*(max-width|flex: 0 0 var)/.test(css));
   // owner, 2026-11-03: a device's id was cut every few letters beside "Confirm before toggling" on a phone. Owner,
   // 2026-11-05: the pencil and the chevron on the id's own line, at its right; the id never more than 2 lines (a long
   // id with its "· 3D object: …" pushed the toggle and the pencil down a line of their own)

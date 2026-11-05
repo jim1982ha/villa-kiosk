@@ -754,13 +754,13 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .on-off.config-confirm .on-off-switch { flex: 0 0 auto; width: auto; min-width: 110px; padding: 2px; }
 .on-off.config-confirm .on-off-switch button { min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--text-xs); }
 /* A field inside a settings card (RecordCard's words: a device's fields, an announcement's time, a chat's language):
-   its name at the left, its control at the right, on one line; too narrow, the control under its name. A picker takes
-   the card's width (owner, 2026-10-22). */
+   its name at the left on one line, its control taking the REST OF THE CARD'S WIDTH (owner, 2026-11-06: "the content of
+   these cards taking the whole width"); too narrow, the control under its name, as wide as the card. */
 .card-field { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; min-width: 0; padding: 5px 0; }
-.card-field-label { flex: 0 0 108px; color: var(--text-secondary); font-size: var(--text-2xs); text-transform: uppercase;
+.card-field-label { flex: 0 0 auto; white-space: nowrap; color: var(--text-secondary); font-size: var(--text-2xs); text-transform: uppercase;
   letter-spacing: 0.04em; }
 .card-field > :not(.card-field-label) { flex: 1 1 200px; min-width: 0; }
-.card-field > .unit-field { flex: 0 0 var(--unit-field); }
+.card-field > .unit-field { flex: 1 1 200px; width: auto; }
 /* a settings list of cards: room above it as above any list */
 .settings-cards { margin-top: 8px; }
 /* a bound 3D object's card says what it binds, one sentence above its search (BindingRow) */
@@ -830,8 +830,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .recipients-role { display: flex; flex-direction: column; gap: 8px; }
 .recipients-role-name { font-weight: 600; }
 .recipients-role + .recipients-role { margin-top: 12px; }
-/* a chat's language: a menu of its own short width, not the card's (the shared .dropdown is width: 100%) */
-.card-field > .dropdown.recipients-language { flex: 1 1 140px; max-width: 240px; }
 /* A choice among many standing on its own line (SegmentedGroup, more than four options: the tablet's languages): a
    grid of equal cells in a rounded box, never a pill stretched over several lines. A compact picker beside other
    controls (the charts' five ranges) keeps its pill. */

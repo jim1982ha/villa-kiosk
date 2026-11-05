@@ -1,3 +1,10 @@
+## 2.496.722
+
+What you will see:
+- Settings › Messages: in each announcement's card and each chat's card, the field ("On screen" 10s, "Language VESTA
+  writes in") now fills the card's width beside its name, and the name stays on one line. On a phone the field goes
+  under its name, as wide as the card. The same for every field inside a settings card (a device's fields too).
+
 ## 2.496.721
 
 What you will see:
