@@ -20,7 +20,7 @@
 
 import InfoTip from "@/components/common/InfoTip";
 import { memo, type RefObject } from "react";
-import { Pencil, Trash2, Check, X, ChevronDown, ChevronRight } from "lucide-react";
+import { Pencil, Trash2, Check, X } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import IdText from "@/components/common/IdText";
 import RecordCard from "@/components/fm/RecordCard";
@@ -45,7 +45,6 @@ interface Props {
   /** 3D objects linked to this device by name (by hand, or by "change entity") — said under its id,
    *  since this one list now holds hand-linked devices too (config/deviceRecord). */
   objects?: readonly string[];
-  expanded: boolean;
   editing: boolean;
   /** Only meaningful when `editing` — the parent always passes undefined for
    *  every non-editing row so their props stay stable while the one row being
@@ -54,9 +53,6 @@ interface Props {
   matchedRowRef?: RefObject<HTMLDivElement>;
   /** The device's name on every screen (useEntityLabel, read by the list: a row reads no live table of its own). */
   name: string;
-  /** Its room, every card's (useCardRoom). */
-  room: string;
-  onToggleExpanded: (key: string) => void;
   onStartRemap: (key: string) => void;
   onRemapChange: (id: string | undefined) => void;
   onRemapApply: (key: string, newId: string) => void;
@@ -66,8 +62,8 @@ interface Props {
 }
 
 function EntityMapRow({
-  entryKey, mapping, entity, stale, objects, expanded, editing, remapNewId, matchedRowRef, name, room,
-  onToggleExpanded, onStartRemap, onRemapChange, onRemapApply, onRemapCancel, onRemove,
+  entryKey, mapping, entity, stale, objects, editing, remapNewId, matchedRowRef, name,
+  onStartRemap, onRemapChange, onRemapApply, onRemapCancel, onRemove,
 }: Props) {
   // A change waits in the dialog's one pending store under this row's entity
   // id (MappingFields.useMappingDraft): only this row re-renders while it waits.
@@ -77,11 +73,13 @@ function EntityMapRow({
   const { draftField, m } = useMappingDraft(entryKey, mapping);
 
   // ⚠️ THE COCKPIT'S CARD (owner, 2026-11-06: "the same card in Settings and Advanced Settings"): the device's name in
-  // its strip, its room on its quiet line; its first line of words the decided one (owner, 2026-11-05: the shown box,
-  // the id at most 2 lines, the toggle, the pencil and the chevron at its right); its fields under it when opened; its
-  // Remove in the card's bar. A device the villa's system no longer has says so as the card's state.
+  // its strip; its first line of words the decided one (owner, 2026-11-05: the shown box, the id at most 2 lines, the
+  // toggle and the pencil at its right; on a phone the toggle on a line of its own under it: 04-modals.css); its fields
+  // always shown under it; its Remove in the card's bar. A device the villa's system no longer has says so as the
+  // card's state. ⚠️ NEVER FOLDED, NO ROOM LINE (owner, 2026-11-06: the chevron hid its fields; its room under its name
+  // said nothing the name did not, "no added value").
   return (
-    <RecordCard title={name} room={room} tone={m.disabled ? "device-card-off" : undefined}
+    <RecordCard title={name} tone={m.disabled ? "device-card-off" : undefined}
       status={stale ? { text: "No longer exists", tone: "tone-warn" } : undefined}
       body={
         <div className="device-card" ref={matchedRowRef} title={stale ? `${m.entityId} no longer exists` : undefined}>
@@ -126,19 +124,9 @@ function EntityMapRow({
                 </div>
               </div>
             ) : (
-              <div
-                className="entity-id-display entity-id-toggle"
-                role="button"
-                tabIndex={0}
-                aria-expanded={expanded}
-                title="Click to expand, use the pencil to redirect this mesh to a different entity ID"
-                onClick={() => onToggleExpanded(entryKey)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleExpanded(entryKey); }
-                }}
-              >
+              <div className="entity-id-display">
                 {/* ⚠️ ONE FIRST LINE (owner, 2026-11-05): the id, never more than 2 lines (its whole text on hover), the
-                    toggle, the pencil and the chevron at its right */}
+                    toggle and the pencil at its right */}
                 <span className="entity-id-text" title={[m.entityId, ...(objects ?? [])].join(" · ")}>
                   <IdText id={m.entityId} />
                   {!!objects?.length && (
@@ -156,15 +144,14 @@ function EntityMapRow({
                   >
                     <Pencil size={16} aria-hidden />
                   </button>
-                  {expanded ? <ChevronDown size={16} className="muted" /> : <ChevronRight size={16} className="muted" />}
                 </span>
-                <span className="entity-id-confirm" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                <span className="entity-id-confirm">
                   <ConfirmToggle m={m} draftField={draftField} />
                 </span>
               </div>
             )}
           </div>
-          {expanded && !editing && (
+          {!editing && (
             <MappingFields entryKey={entryKey} entityId={m.entityId} mapping={m} entity={entity}
               cell={(key, label, field) => (
                 <div key={key} className="card-field"><span className="card-field-label">{label}</span>{field}</div>

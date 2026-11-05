@@ -88,8 +88,8 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
       lead={card.look
         ? <IconTip k="watch" icon={<WatchedIcon size={18} />} />
         : icons.head ? <SourceIcons {...icons.head} /> : undefined}
-      // when its problems are read again: quiet text after its room; hovering it says it in words, with its date and
-      // time (owner, 2026-10-19). On the Watch list it is the strip's.
+      // when its problems are read again: a pill at the right of its first line (owner, 2026-11-06); hovering it says it
+      // in words, with its date and time (owner, 2026-10-19). On the Watch list the first line says when it closes.
       check={card.nextCheck && !watch ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
       parts={parts}
       // its strip's colour when nothing is said (cardStrip); a fault being confirmed: its frame marked (owner, 2026-10-23)

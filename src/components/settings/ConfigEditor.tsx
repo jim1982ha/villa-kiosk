@@ -9,7 +9,7 @@
 // one flat draft Record per field living HERE, which meant a keystroke in any
 // one row's Label field (or literally any HA state_changed event anywhere in
 // the house, since `entities` below is read at this level) re-rendered the
-// WHOLE table. Every callback passed down to rows (remove/toggleExpanded/
+// WHOLE table. Every callback passed down to rows (remove/
 // remap handlers) is given a STABLE identity — via useCallback reading the
 // latest config through a ref, never closing over `config` directly — because
 // React.memo's default shallow prop comparison only pays off if the props
@@ -47,20 +47,6 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   const [remapKey, setRemapKey] = useState<string | null>(null);
   const [remapNewId, setRemapNewId] = useState<string | undefined>(undefined);
 
-  // Cards are collapsed by default (there can be a LOT of auto-detected
-  // entities — no one wants to scroll past every field of every device just
-  // to reach the next one). A card opened via a device panel's edit shortcut
-  // starts expanded, since the whole point of that shortcut is to land right
-  // on its fields.
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
-    () => new Set(initialSearch ? [initialSearch] : []),
-  );
-  const toggleExpanded = useCallback((key: string) =>
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    }), []);
 
   // Opened via a device panel's edit shortcut: scroll the modal straight to
   // THIS entity's card instead of leaving it at the top (Villa location / 3D
@@ -218,13 +204,10 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
               objects={objects}
               entity={entities[key]}
               name={nameOf(key)}
-              room={roomOf({ entityId: key })}
               stale={staleSet.has(key)}
-              expanded={expandedKeys.has(key)}
               editing={remapKey === key}
               remapNewId={remapKey === key ? remapNewId : undefined}
               matchedRowRef={key === initialSearch ? matchedRowRef : undefined}
-              onToggleExpanded={toggleExpanded}
               onStartRemap={startRemap}
               onRemapChange={setRemapNewId}
               onRemapApply={remapEntity}

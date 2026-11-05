@@ -23,7 +23,7 @@ import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, docDate, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
 import { closedFaults, closedTold, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
-import { alertNumberOf, faultAlertLabel, faultBegan, faultName } from "@/fm/fmEngine";
+import { STAGE_WORDS, alertNumberOf, faultAlertLabel, faultBegan, faultName } from "@/fm/fmEngine";
 import { faultMove, moveState, type FaultMove } from "@/fm/faultNotes";
 import type { FmData, FmTicket } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
@@ -188,11 +188,25 @@ export function lineStrip(line: CardLine): { status: RecordStatus[]; number?: st
 }
 
 /** How a problem was last moved (a ticket's stage, "Reopened", a close's word: faultNotes.moveState), else where its
- *  alert stands as VESTA's message says it (toldState). */
+ *  alert stands as VESTA's message says it (toldState), else where its open fault stands (faultState). */
 const lineState = (l: CardLine, tone: string, look?: CardView["look"]): RecordStatus[] => {
   const m = moveState(l.move);
-  return m ? [m] : toldState(l, tone, look);
+  if (m) return [m];
+  const told = toldState(l, tone, look);
+  return told.length ? told : faultState(l, tone, look);
 };
+
+/** ⚠️ EVERY OPEN FAULT SAYS WHERE IT STANDS (owner, 2026-11-06: "House Pump Power", a maintenance check's fault nobody had
+ *  moved, had no first line, its card starting with its quiet line): a fault's state came only from how it was last
+ *  moved or from its alert's Status, and a fault nobody moved has neither. Nobody moved it: "New fault"; moved with no
+ *  state of its own (a Need help, said by its who line): its stage's word ("Open"); in its card's colour (amber for a
+ *  maintenance check's), from the one table of stage words (fmEngine.STAGE_WORDS). A live state with no record keeps
+ *  its device's word (itemState); the Watch list and Closed say their own. Pure. */
+function faultState(l: CardLine, tone: string, look?: CardView["look"]): RecordStatus[] {
+  if (look || !l.records?.some((r) => r.stage === "fault")) return [];
+  const words = STAGE_WORDS.fault;
+  return [{ text: l.move ? words.card : words.unmoved ?? words.card, tone }];
+}
 
 /** ⚠️ AN ALERT'S CARD SAYS WHERE IT STANDS FIRST (architecture review 29, 2026-11-06): with nothing moved on its record,
  *  its card's state line was empty and its stage ("⚠️ New alert", Telegram's Status) a small line under its words,

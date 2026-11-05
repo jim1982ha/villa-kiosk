@@ -232,7 +232,10 @@
      reads these; each card says only its own layout. Its colours are --bg-card and --hairline, per theme. */
   --card-radius: 12px;
   --card-pad: 12px 14px;
-  --card-border: 1px solid var(--hairline);
+  /* ⚠️ EACH CARD STANDS OUT (owner, 2026-11-06: "hard to distinguish each card individually"): the theme's stronger
+     hairline as its edge and a faint shadow under it, in every theme (--hairline-strong and --shadow are per theme) */
+  --card-border: 1px solid var(--hairline-strong);
+  --card-shadow: 0 1px 3px var(--shadow);
   /* Solid surface for every floating DIALOG (device panels, Settings, Config
      Editor, the badge legend…) — deliberately opaque, unlike the HUD's own
      "glass" chrome (.icon-btn/.hud-group/.hud-stack/.hud-menu etc., see

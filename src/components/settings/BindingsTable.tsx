@@ -147,7 +147,7 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
       {view === "bound" && (bound.length === 0 ? <p className="muted body-text mt">No objects bound yet.</p> : (
         <div className="fm-list settings-cards">
           {boundShown.visible.map((mesh) => (
-            <BoundObjectCard key={mesh} mesh={mesh} entityId={config.meshBindings[mesh]}
+            <BoundObjectCard key={mesh} mesh={mesh} entityId={config.meshBindings[mesh]} name={entityLabel(config.meshBindings[mesh])}
               room={roomOf({ entityId: config.meshBindings[mesh] })} onBind={bind} onUnbind={unbind} />
           ))}
         </div>

@@ -105,8 +105,10 @@ Two overlap fixes (2.496.552-553) were made without the phone's pose, the second
 ## A card's state is one pill
 
 Every Cockpit card says its state only on its first line (RecordCard's `status`), under the strip: its words joined
-" · ", bold, in the tone of the strip above it (red act now, amber a fault, green handled, grey quiet or closed); a card
-with no state has no such line. The strip names the thing (`title`) and says when. A line of text says what is wrong,
+" · ", bold, in the tone of the strip above it (red act now, amber a fault, green handled, grey quiet or closed); its
+next check is a pill at that line's right, under the strip's time (CheckPill, owner 2026-11-06). Every card that can
+have a state has one: an open fault nobody moved says "New fault", its stage words from `fmEngine.STAGE_WORDS`
+(owner, 2026-11-06: an unmoved maintenance-check fault's card began with its quiet line). The strip names the thing (`title`) and says when. A line of text says what is wrong,
 never the state; who moved it is the who line (`who`, faultNotes.moveWho), never its stage or its time again. Never add
 a case to a shared format that makes one kind of card read differently.
 
@@ -122,7 +124,7 @@ if so, ask the owner first. `tests/oracles/cockpit_cards.mjs` fails on a state s
 
 A card's anatomy is the same whatever kind of problem it is: the strip (its source icons, its alert's name, the thing's
 name, its time at the right; the name wraps to two lines at most, the icons, chip and time never shrink and stay on its
-first line), the state its first line, one quiet line (room, then next check, then its tags, " · " between them), its
+first line), the state its first line (its next check a pill at its right), one quiet line (room, then its tags, " · " between them), its
 words, who moved it, its bar (the main action first and green). A notification's or a report's name is its title's first
 sentence, the rest its first line (announcements.titleSentences). A new field, or a change to one, is proven on EVERY
 kind (offline, Missing, red device, late task, fault, ticket, Watch), not on the kinds the change touched; a time comes
@@ -145,4 +147,6 @@ Settings' and Advanced Settings' records are the same card (owner, 2026-11-06): 
 bound 3D object, an object bound to nothing, an entity no object shows, an asleep device, a device of Devices, a 3D
 object whose entity is gone, a full-screen announcement, a chat. Its remove or its main action is a segment of its bar,
 never a corner icon; a control (On | Off, a slider, a setting line) stays a setting line, a log (Device telemetry) a
-list. `tests/oracles/settings_cards.mjs` draws each kind through its real section.
+list. A device of Devices is never folded and has no room line (owner, 2026-11-06: redundant); on a phone its "Confirm
+before toggling" is a line of its own under its id. A bound 3D object's card is its entity's (name, room · id), saying
+"<object> is bound to <entity>". `tests/oracles/settings_cards.mjs` draws each kind through its real section.

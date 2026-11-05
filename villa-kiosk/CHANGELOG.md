@@ -1,3 +1,21 @@
+## 2.496.721
+
+What you will see:
+- Every card (Cockpit, Settings, Advanced Settings) has a clearer edge and a faint shadow under it, in light and dark,
+  so each card stands apart from the next.
+- "next check within 5min" is now a small pill with its refresh icon at the right of the card's first line (under the
+  time in the band), no longer on the line with the room. Hovering or tapping it still says when, as before.
+- Every open fault now says where it stands on its first line. A fault nobody has handled yet (a maintenance check's
+  finding, for example) says "New fault" in amber; before, its card started with its room. A card holding several
+  problems says it on each problem's line too.
+- Advanced Settings › Devices: each device card always shows its fields (no arrow to open it), and the room line under
+  its name is gone. On a phone, "Confirm before toggling" and its On | Off sit on their own line under the id; on a
+  computer they stay on the id's line.
+- Advanced Settings › Villa › Bound 3D objects: a bound object's card is named after the device it shows (its room and
+  id under the name, as on Asleep between reports), says "Lamp_Kitchen is bound to Terrace Lamp", then the search to
+  change it, and "Unbind" along the bottom. An object bound to nothing is named after the object, with the search and
+  "Bind".
+
 ## 2.496.720
 
 What you will see:

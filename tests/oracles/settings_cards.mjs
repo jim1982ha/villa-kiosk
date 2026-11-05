@@ -105,7 +105,7 @@ const bindings = (view) => { globalThis.__view = view; return drawIn(h(BindingsT
 const KINDS = [
   ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", "Remove group"],
   ["  ...a suggested group, its main action first", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Pool Pump Power + Pool Pump", "Create this group"],
-  ["a bound 3D object", bindings("bound"), "Lamp_Kitchen", "Unbind"],
+  ["a bound 3D object (named after its entity)", bindings("bound"), "Terrace Lamp", "Unbind"],
   ["an object bound to nothing", bindings("unbound"), "Mesh_Unnamed_042", "Bind"],
   ["an entity no object shows", bindings("unshown"), "Ceiling Fan", "Bind"],
   ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "Take off the list Remove"],
@@ -138,7 +138,7 @@ console.log("\n  Bound 3D objects: its title's counts open its lists:");
 {
   const head = (html) => inside(html, "cockpit-issues-head");
   // what each list holds: the object bound, the one bound to nothing, the entities no object shows
-  const LISTS = { bound: ["Lamp_Kitchen"], unbound: ["Mesh_Unnamed_042"], unshown: ["Back Door", "Ceiling Fan"] };
+  const LISTS = { bound: ["Terrace Lamp"], unbound: ["Mesh_Unnamed_042"], unshown: ["Back Door", "Ceiling Fan"] };
   const views = (html) => [...head(html).matchAll(/<button type="button" class="section-view( shown)?" aria-pressed="(true|false)">([^<]*)<\/button>/g)].map((m) => [m[3], m[2] === "true"]);
   ck("its three counts are buttons after its title, the list shown marked (bound first)",
      JSON.stringify(views(bindings("bound"))) === JSON.stringify([["1 bound", true], ["1 unbound", false], ["2 not shown", false]]), views(bindings("bound")));
@@ -149,6 +149,50 @@ console.log("\n  Bound 3D objects: its title's counts open its lists:");
   const body = inside(bindings("bound"), "fold-body");
   ck("  ...and the line of three toggles under the title is gone (no \"bound object\" fold, no summary line)",
      !/fold-toggle|bound object|section-summary">/.test(body.replace(/Show all[^<]*/g, "")) && !/class="section-summary">/.test(head(bindings("bound"))), body.slice(0, 400));
+}
+
+console.log("\n  every card stands out: one edge and shadow, the theme's:");
+{
+  const base = readFileSync(new URL("../../src/styles/01-base.css", import.meta.url), "utf8");
+  const facility = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
+  const frame = facility.match(/\n\.fm-record-card \{([^}]*)\}/)?.[1] ?? "";
+  // owner, 2026-11-06: "hard to distinguish each card individually"
+  ck("RecordCard's frame (every card: Cockpit, Settings, Advanced) reads the card's edge and shadow tokens",
+     /border: var\(--card-border\)/.test(frame) && /box-shadow: var\(--card-shadow\)/.test(frame), frame);
+  const hs = [...base.matchAll(/--hairline-strong: ([^;]+);/g)].length, hl = [...base.matchAll(/--hairline: ([^;]+);/g)].length;
+  ck("  ...the edge the theme's stronger hairline (defined in each theme), a faint shadow under it",
+     /--card-border: 1px solid var\(--hairline-strong\);/.test(base) && /--card-shadow: 0 1px 3px var\(--shadow\);/.test(base) && hs === hl && hs >= 3, [hs, hl]);
+  const drawn = cards(bindings("bound"))[0]?.card ?? "";
+  ck("  ...drawn: a Settings card is that frame", /^<div class="fm-record-card">/.test(drawn), drawn.slice(0, 80));
+}
+
+console.log("\n  a device of Devices: never folded, no room line, its toggle under its id on a phone:");
+{
+  const html = drawIn(h(ConfigEditor));
+  const card = cards(html).find((c) => c.name === "Pool Pump")?.card ?? "";
+  // owner, 2026-11-06: what the chevron opened is always shown; its room under its name said nothing more
+  ck("its fields always shown (Type, Category, Label…), no chevron, nothing to expand",
+     /card-field-label">Type</.test(card) && /card-field-label">Label</.test(card) && !/lucide-chevron|aria-expanded|role="button"/.test(inside(card, "device-first-line")), inside(card, "device-first-line"));
+  ck("  ...no quiet line (its room)", card !== "" && !/fm-record-meta/.test(card), card);
+  ck("  ...its id line: the box, the id, the pencil, its Confirm before toggling (a switch, which a tap turns)",
+     /type="checkbox"[\s\S]*entity-id-text[\s\S]*entity-id-tools[\s\S]*lucide-pencil[\s\S]*entity-id-confirm/.test(card)
+     && /Confirm before toggling/.test(inside(card, "entity-id-confirm")), card);
+}
+
+console.log("\n  Bound 3D objects: a bound object's card is its entity's:");
+{
+  const card = cards(bindings("bound"))[0]?.card ?? "";
+  ck("its strip its entity's name with the list's icon, its quiet line room · id, as an asleep device's",
+     /fm-record-lead"><svg[^>]*lucide-link2?/.test(inside(card, "fm-record-strip")) && text(inside(card, "fm-record-name")) === "|Terrace Lamp|"
+     && text(inside(card, "fm-record-meta")).replace(/\|/g, "") === "Otherlight.example_terrace_lamp", [text(inside(card, "fm-record-strip")), text(inside(card, "fm-record-meta"))]);
+  ck("  ...its words \"<object> is bound to <entity>\", then the search that changes it, Unbind in its bar",
+     /<p class="binding-said">/.test(card) && text(inside(card, "binding-said")).replace(/\|/g, "") === "Lamp_Kitchen is bound to Terrace Lamp"
+     && card.indexOf("binding-said") < card.indexOf('class="picker"') && cards(bindings("bound"))[0].bar === "Unbind", text(inside(card, "fm-record-main")));
+  const loose = cards(bindings("unbound"))[0]?.card ?? "";
+  ck("  ...an object bound to nothing: its name, the search, Bind; no quiet line",
+     text(inside(loose, "fm-record-name")).replace(/\|/g, "") === "Mesh_Unnamed_042" && !/fm-record-meta/.test(loose) && /class="picker"/.test(loose), loose);
+  const unshown = cards(bindings("unshown")).find((c) => c.name === "Ceiling Fan")?.card ?? "";
+  ck("  ...an entity no object shows: its name, room · id", /fan\.example_ceiling_fan/.test(text(inside(unshown, "fm-record-meta")).replace(/\|/g, "")), unshown);
 }
 
 console.log("\n  Device telemetry: a log list, its columns time, kind, device, words:");
