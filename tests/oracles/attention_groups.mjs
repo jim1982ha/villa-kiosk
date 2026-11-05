@@ -100,18 +100,26 @@ ck("  ...and a lone ticket is titled by its DEVICE, the fault its line, the devi
 // ⚠️ NO "Open fault:" (owner, 2026-10-14: "providing no value") — but a fault someone took still says so
 const taken = groupAttention(build([{ ...ticket("va-5", "Back door stiff", "lock.back"), status: "in_progress" }]))
   .find((g) => g.entityId === "lock.back");
-// owner, 2026-11-02: its stage said in the pill of who took it, "Ticket opened … · In progress", no pill of its own
-ck("  ...an open fault's line is its text alone; one taken in hand too, its \"In progress\" in its line's pill, in that colour",
-   taken && lineText(taken) === "Back door stiff" && !cockpitCard(taken, null).status?.length
-   && /^Ticket opened on .* · In progress$/.test(cockpitCard(taken, null).lines[0].latest?.text ?? "") && cockpitCard(taken, null).lines[0].latest?.tone === "tone-accent"
-   && !cockpitCard(loneFault, null).status?.length, taken?.items);
+// owner, 2026-11-02: its stage said with who took it, no state of the device; 2026-11-05: "Ticket in progress" in the
+// card's strip, in the accent's green, the card counted as handled
+{
+  const { cardStrip } = await import("@/config/cockpitCard");
+  const { moveText } = await import("@/fm/faultNotes");
+  const c = taken && cockpitCard(taken, null);
+  ck("  ...an open fault's line is its text alone; one taken in hand too, \"Ticket in progress\" in its strip, in that colour",
+     taken && lineText(taken) === "Back door stiff" && !c.status?.length
+     && /^Ticket opened on .* · In progress$/.test(moveText(c.lines[0].move, (x) => x)) && c.lines[0].move?.tone === "tone-accent"
+     && JSON.stringify(cardStrip(c).status) === JSON.stringify([{ text: "Ticket in progress", tone: "tone-accent" }]) && c.tone === "handled"
+     && !cockpitCard(loneFault, null).status?.length && cockpitCard(loneFault, null).tone === "warn", taken?.items);
+}
 // ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon
 ck("  ...and its line shows no icon of its own: the row's says it already",
    lineIcon(loneFault) === null && lineIcon(lone) === null);
 const mixed = battery.find((g) => g.key === "device:lock.door");
-ck("  ...while a row mixing sources marks each line with its own (a person's fault under a live lock), none before its name",
+// owner, 2026-11-05 ("Status on top"): the strip says every source, each problem's header its own
+ck("  ...while a row mixing sources marks each line with its own (a person's fault under a live lock), the strip all of them",
    mixed?.kind === "alarm" && mixed.items.map((_, n) => lineIcon(mixed, n)?.sources.join("+") ?? "").join(",") === "live,person"
-   && cardIcons(card(mixed)).head === null && cardIcons(card(mixed)).column,
+   && cardIcons(card(mixed)).head?.sources.join() === "live,person",
    mixed?.items.map((i, n) => [i.kind, lineIcon(mixed, n)]));
 ck("  ...and a row of one source draws its icons before its name only, none on its lines",
    cardIcons(card(loneFault)).head !== null && cardIcons(card(loneFault)).lines.every((x) => x === null));
@@ -308,8 +316,8 @@ console.log("\n  one way a problem's entity becomes its card's device, for the o
        c?.lead?.sources.join() === [...c.lines[0].own.sources, ...c.lines[1].own.sources].join()
        && c.lead.sources.includes("night"), [c?.lead, c?.lines.map((l) => l.own)]);
     const drawn = cardIcons(c);
-    ck("  ...the open card draws each icon once, beside its line, none before its name, its column kept",
-       drawn.head === null && drawn.column && drawn.lines[0]?.sources.join() === c.lines[0].own.sources.join()
+    ck("  ...the open card draws every source in its strip, each problem's own in its header",
+       drawn.head?.sources.join() === c.lead.sources.join() && drawn.lines[0]?.sources.join() === c.lines[0].own.sources.join()
        && drawn.lines[1]?.sources.join() === "night", drawn);
   }
 }

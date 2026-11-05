@@ -102,8 +102,11 @@ console.log("\n  one tinted card (fm/tone): each state says its tone, the styles
   const { CHECK_WORDS } = await import("@/fm/readiness");
   const drawnRow = (state) => draw(h(ReadinessChecks, { readiness: { ...r, checks: [{ ...r.checks[0], state }] }, label: (id) => id,
     onOpenEntity: () => {}, onOpenCheck: () => {}, startOpen: true }));
+  // owner, 2026-11-05 ("Status on top"): its tone is its strip's colour, the frame itself plain
   ck("a Recap check drawn amber or red by its tone, never by the Schedule's words",
-     /class="fm-record-card tone-warn"/.test(drawnRow("warn")) && /class="fm-record-card tone-danger"/.test(drawnRow("fail")) && !/state-/.test(drawnRow("fail")));
+     /class="fm-record-card"><div class="fm-row fm-record"><div class="fm-record-strip strip-warn">/.test(drawnRow("warn"))
+     && /class="fm-record-strip strip-danger"/.test(drawnRow("fail")) && /class="fm-record-strip strip-neutral"/.test(drawnRow("pass"))
+     && !/state-|fm-record-card tone-/.test(drawnRow("fail")));
   ck("  ...the same three tones for a task, a check and the spending cap",
      [DUE_WORDS["due-soon"].tone, CHECK_WORDS.warn.tone, TONE_OF.cap.approaching].every((t) => toneClass(t) === "tone-warn")
      && [CHECK_WORDS.fail.tone, TONE_OF.cap.exceeded].every((t) => toneClass(t) === "tone-danger") && toneClass(CHECK_WORDS.pass.tone) === "");

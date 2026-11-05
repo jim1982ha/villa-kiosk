@@ -50,8 +50,10 @@ const fac = readFileSync(SRC + "styles/07-facility.css", "utf8").replace(/\/\*[\
 const nudges = [...fac.matchAll(/([^{}]*\.fm-openable:active[^{]*)\{([^}]*)\}/g)].filter((m) => /transform/.test(m[2]));
 ck("the card nudges only on its own press", nudges.length === 1 && /:not\(:has\(button:active/.test(nudges[0][1]),
    nudges.map((m) => m[1].trim()));
-// asking, the card's row of buttons takes the whole width (it was as wide as its content, wider than a phone)
-const asking = fac.match(/\.fm-record-actions:has\(> \.modal-actions\)\s*\{([^}]*)\}/)?.[1] ?? "";
-ck("a card's question takes the whole row", /flex:\s*1 1 100%/.test(asking) && /min-width:\s*0/.test(asking), asking);
+// asking, the card's question takes the whole width of its bar (it was as wide as its content, wider than a phone), its
+// two buttons under it, sharing the bar (owner, 2026-11-05)
+const asking = fac.match(/\.fm-record-ask\s*\{([^}]*)\}/)?.[1] ?? "";
+const bar = fac.match(/\.fm-record-actions\s*\{([^}]*)\}/)?.[1] ?? "";
+ck("a card's question takes the whole row", /flex:\s*1 1 100%/.test(asking) && /min-width:\s*0/.test(asking) && /flex-wrap:\s*wrap/.test(bar), [asking, bar]);
 
 done("✅ every dialog at the top of the app; a card's question fits a phone");

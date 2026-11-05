@@ -116,8 +116,9 @@ const blind = lineCharts.filter((f) => {
   // lineRuns splits, outageBands bands — both against the requested window),
   // or chartGeometry, which owns both for every chart (2.496.90).
   const geometry = /\bchartGeometry\(/.test(src);
+  // its bands painted in the unavailable colour, or through outageLook (chartUtils), which paints them so (2.496.705)
   return (!geometry && (!/splitAtGaps|lineRuns/.test(src) || !/gapBand|outageBands/.test(src)))
-    || !/STATUS_COLOR\.unavailable/.test(src);
+    || !/STATUS_COLOR\.unavailable|fill=\{outageLook\(b\.gap\)\.background\}/.test(src);
 }).map((f) => f.slice(SRC.length + 1));
 console.log(`\n  scanned ${FILES.length} source files · ${lineCharts.length} draw a numeric line`);
 for (const f of lineCharts) console.log(`     ${f.slice(SRC.length + 1)}`);

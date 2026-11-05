@@ -2,7 +2,7 @@
 // scheduled task, a spend line, work done — is one card (RecordCard), and these checks render it and read what it
 // SHOWS. The checks they replace matched the code's text and were rewritten nine times in two days for moves that
 // changed nothing on screen; a check here fails only when what the owner sees changes.
-import { React, h, draw, inside, btn } from "../consistency/screen.mjs";
+import { React, h, draw, inside, btn, text } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
 import { elements, parseTsx, propText } from "../consistency/jsx.mjs";
@@ -21,17 +21,24 @@ const ticket = draw(h(RecordCard, { title: "#33 · Test lock unavailable",
   notes: ["What to do: power", "Reminder sent to Facility Manager (00:24)"], amount: "IDR 1,000",
   erase: { title: "Erase", detail: "x", run: async () => {} }, onOpen: () => {},
   actions: h(React.Fragment, null, btn("Mark resolved"), btn("Close")) }));
-const head = inside(ticket, "fm-record-head"), body = inside(ticket, "fm-record-body");
-const pillLine = (html) => inside(html, "card-pill-line");
-ck("its pill on the line under its title, in its tone's class (a filled pill: .fm-badge.tone-warn, 07-facility.css)",
-   head.includes("#33 · Test lock unavailable") && !head.includes("In progress") && /In progress/.test(pillLine(ticket))
-   && /fm-badge tone-warn/.test(pillLine(ticket)) && !/due-soon/.test(ticket), ticket);
-ck("  ...its buttons INSIDE the card, on the right of its text (owner, 2026-10-14)",
-   /fm-record-actions[\s\S]*Mark resolved[\s\S]*Close/.test(body) && /fm-row-main[\s\S]*fm-record-actions/.test(body)
-   && inside(ticket, "fm-record-card").includes("Mark resolved"), body);
-ck("  ...its time a pill on the first line, its tags, then its notes, its cost on the right",
-   /fm-record-check">Opened 2026-10-15 00:08/.test(head) && /fm-meta[\s\S]*Test lock/.test(body) && /What to do: power[\s\S]*Reminder sent/.test(body)
-   && /fm-amount">IDR 1,000/.test(body));
+const head = inside(ticket, "fm-record-head"), body = inside(ticket, "fm-record-main"), strip = (html) => inside(html, "fm-record-strip");
+// ⚠️ STATUS ON TOP (owner, 2026-11-05): the strip, the title, the quiet line, the words, who moved it, the bar
+ck("its state in its strip, in its tone's colour (.strip-warn, 07-facility.css), never under its title",
+   head.includes("#33 · Test lock unavailable") && !body.includes("In progress") && /fm-record-status">In progress</.test(strip(ticket))
+   && /class="fm-record-strip strip-warn"/.test(ticket) && !/due-soon/.test(ticket), ticket);
+ck("  ...its buttons INSIDE the card, its bar along its bottom edge: its last part (owner, 2026-11-05)",
+   /fm-record-main[\s\S]*<\/div><div class="fm-record-actions"><button[^>]*>Mark resolved<\/button><button[^>]*>Close<\/button><\/div><\/div><\/div>$/.test(ticket), ticket);
+ck("  ...its time in its strip, its tags on its quiet line, then its notes, its cost at the right under them",
+   /fm-record-when">Opened 2026-10-15 00:08/.test(strip(ticket)) && /fm-record-meta[\s\S]*Test lock/.test(body) && /What to do: power[\s\S]*Reminder sent[\s\S]*fm-record-foot"><span class="fm-amount">IDR 1,000/.test(body), body);
+{
+  const { stripTone } = await import("@/components/fm/RecordCard");
+  const { ACCENT_PILL, QUIET_PILL } = await import("@/fm/tone");
+  ck("  ...its strip's colour: the worst state's, then the card's tone, else grey (red, amber, green, grey)",
+     stripTone([{ text: "a", tone: pillClass("warn") }, { text: "b", tone: pillClass("danger") }]) === "danger"
+     && stripTone([{ text: "a", tone: QUIET_PILL }, { text: "b", tone: ACCENT_PILL }]) === "ok"
+     && stripTone([{ text: "a", tone: QUIET_PILL }]) === "neutral" && stripTone([], "fault-watched tone-warn") === "warn"
+     && stripTone([], "cockpit-focus") === "neutral" && stripTone([{ text: "a", tone: pillClass("ok") }], "tone-danger") === "ok");
+}
 ck("  ...it opens when tapped, as a button for the keyboard", /role="button"[^>]*tabindex="0"|tabindex="0"[^>]*role="button"/.test(ticket));
 
 console.log("\n  an open issue on the Overview — the same card:");
@@ -46,28 +53,27 @@ const issue = draw(h(AttentionCard, { card: cockpitCard(group, CADENCE), onOpenE
   buttons: () => h(React.Fragment, null, btn("Open Ticket"), btn("Close")) }));
 // owner, 2026-10-22: "show the area right after the device name, as the Spend tab's pills … to save one line"; "remove
 // the chevron, it's redundant"
-ck("it IS the Cockpit card: its source icons, then its name; its room as a pill on the line under — no chevron",
-   /class="fm-record-card"/.test(issue) && /fm-record-lead[\s\S]*<svg/.test(inside(issue, "fm-record-head"))
-   && /<strong><button[^>]*fm-title-link[^>]*>Test lock<\/button><\/strong><\/div>/.test(issue) && /fm-entity-chip fm-chip-static">Hall</.test(pillLine(issue))
+const meta = (html) => inside(html, "fm-record-meta");
+ck("it IS the Cockpit card: its source icons in its strip, then its name; its room quiet on the line under — no chevron",
+   /class="fm-record-card"/.test(issue) && /fm-record-lead[\s\S]*<svg/.test(strip(issue)) && !/<svg/.test(inside(issue, "fm-record-head"))
+   && /<strong><button[^>]*fm-title-link[^>]*>Test lock<\/button><\/strong><\/div>/.test(issue) && /^<div class="fm-record-meta"><span>Hall<\/span>/.test(meta(issue))
    && !/lucide-chevron-right/.test(issue) && !/fm-record-subtitle/.test(issue), issue.slice(0, 400));
-ck("  ...its problem, then that problem's own buttons, in the same section",
-   /cockpit-attention-sub"[\s\S]*#33 · Test lock unavailable[\s\S]*fm-record-actions[\s\S]*Open Ticket[\s\S]*Close/.test(inside(issue, "fm-record-body")));
+ck("  ...its problem, then that problem's own buttons, the card's bar, its last part",
+   /fm-record-main[\s\S]*#33 · Test lock unavailable[\s\S]*<\/div><div class="fm-record-actions"><button[^>]*>Open Ticket<\/button><button[^>]*>Close<\/button><\/div><\/div><\/div>$/.test(issue), issue);
 // owner, 2026-11-01: "the card themselves shall not be clickable". Its buttons under its words on every width, as the
-// Tickets tab's card (owner, 2026-11-04: a wide Inbox card put them beside its words, a placement of its own, and only
-// it broke when the buttons changed): no stylesheet places a problem's buttons anywhere else
+// Tickets tab's card (owner, 2026-11-04): the bar is the card's bottom edge, on every card, at every width
 {
   const sheets = ["07-facility.css", "08-shared.css"].map((f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8")).join("\n");
-  ck("  ...the card is not pressed; each problem's buttons stand under its words, as on the Tickets tab, at every width",
-     !/role="button"|fm-openable/.test(issue) && /\.cockpit-attention-sub \{ display: flex; flex-direction: column;/.test(sheets)
-     && (sheets.match(/^\s*\.cockpit-attention-sub \{/gm) ?? []).length === 1 && !/\.cockpit-attention-sub\s*>\s*\.fm-record-actions/.test(sheets),
-     sheets.match(/[^\n]*\.cockpit-attention-sub[^\n]*/g));
+  ck("  ...the card is not pressed; its bar one row of equal segments, a finger tall, at every width",
+     !/role="button"|fm-openable/.test(issue) && /\.fm-record-actions \{ display: flex; flex-wrap: wrap; gap: 1px;/.test(sheets)
+     && /\.fm-record-actions :is\(\.btn, \.icon-btn, \.fm-document-link\) \{\s*flex: 1 1 0; min-width: 0; min-height: var\(--touch-min\)/.test(sheets)
+     && (sheets.match(/^\s*\.fm-record-actions \{/gm) ?? []).length === 1, sheets.match(/[^\n]*\.fm-record-actions[^\n]*/g));
 }
-ck("  ...its name opens the device, no pill says it again", /fm-title-link/.test(issue) && !/fm-meta/.test(issue), issue);
-// owner, 2026-10-22: "instead of `Next check:` show a refresh icon, as a pill, on this same first line, on the right"
-// owner, 2026-11-01: "right after the room area pill"
-ck("  ...its next check a pill right after its room: a refresh icon, then when",
-   /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>within 5min<\/span>/.test(pillLine(issue)) && pillLine(issue).indexOf("Hall") < pillLine(issue).indexOf("fm-record-check"),
-   pillLine(issue));
+ck("  ...its name opens the device, no line says it again", /fm-title-link/.test(issue) && !text(meta(issue)).includes("Test lock"), issue);
+// owner, 2026-10-22: a refresh icon, not "Next check:"; 2026-11-01: "right after the room"; 2026-11-05: quiet text
+ck("  ...its next check quiet text right after its room: a refresh icon, then when",
+   /<span class="fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>next check within 5min<\/span>/.test(meta(issue)) && meta(issue).indexOf("Hall") < meta(issue).indexOf("fm-record-check"),
+   meta(issue));
 const { checkPill } = await import("@/fm/faultTiming");
 const nextCheck = (...a) => checkPill(...a)?.text ?? null;
 // at a fixed noon: the soonest of the 02:00 night and the 5-minute look is the night's from 01:55 to 02:00, and this
@@ -200,42 +206,42 @@ ck("  ...said whole, with its moment, by the pill's tooltip (the Kiosk's own: co
 // owner, 2026-10-15: "there should always be the room line, to respect a consistent layout"
 const [roomless] = groupAttention([{ id: "fault:f9", kind: "fault", title: "Relay dropped", detail: "Fault", entityId: "sensor.relay_t",
   ticketId: "f9", stage: "fault", source: "night", device: { key: "sensor.relay_t", label: "Relay" } }]);
-ck("  ...a device no room holds still has its room pill: Other, as By Room files it",
-   /<span class="fm-entity-chip fm-chip-static">Other</.test(draw(h(AttentionCard, { card: cockpitCard(roomless, CADENCE), onOpenEntity: () => {} }))));
+ck("  ...a device no room holds still has its room: Other, as By Room files it",
+   /<div class="fm-record-meta"><span>Other<\/span>/.test(draw(h(AttentionCard, { card: cockpitCard(roomless, CADENCE), onOpenEntity: () => {} }))));
 const lone = draw(h(AttentionCard, { card: cockpitCard({ ...group, entityId: undefined }, CADENCE), onOpenEntity: () => {} }));
 ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/chevron-right/.test(lone) && !/role="button"/.test(lone) && !/fm-record-actions/.test(lone));
 
-// owner, 2026-10-18: "#55" (its own siren before it) sat further right than "#41" above it (its icons are the card's):
-// a line's icon hangs in the card's icon column, so every line's text starts at the same place.
+// owner, 2026-10-18: "#55" sat further right than "#41" above it; 2026-11-05 ("Status on top"): a card of several
+// problems says how many in its strip, with every source, and each problem has its own header line: its icon, its state,
+// its time, then its words, all starting at the same place
 {
-  const { readFileSync } = await import("node:fs");
-  const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
   const dev = { key: "lock.door", label: "Door lock", room: "Hall" };
   const [two] = groupAttention([
     { id: "alarm:lock.door", kind: "alarm", title: "Door lock", detail: "Unlocked", entityId: "lock.door", source: "live", device: dev },
     { id: "fault:f1", kind: "fault", title: "#41 · Door unlocked", detail: "Fault", entityId: "lock.door", ticketId: "f1", stage: "fault", source: "alert", device: dev },
     { id: "fault:f2", kind: "fault", title: "#55 · Door unlocked", detail: "Fault", entityId: "lock.door", ticketId: "f2", stage: "fault", source: "alert", device: dev }]);
-  const lines = inside(draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {} })), "fm-record-body")
-    .split('<li class="cockpit-attention-sub">').slice(1);
-  const gutter = (css.match(/\.fm-record-head:has\(> \.fm-record-lead\), \.fm-record-head:has\(> \.fm-record-lead\) ~ :is\(\.fm-record-body, \.card-pill-line\) \{ padding-left: (\d+)px/) ?? [])[1];
-  const hung = (css.match(/\.fm-record-gutter > \.fm-record-gutter-icon \{[^}]*position: absolute; left: -(\d+)px/) ?? [])[1];
-  ck("  ...a line with its own icon starts its text where a line without one does: the icon hangs in the card's icon column",
-     // two sources on the card: each line draws its own (config/cockpitCard.cardIcons), both in the icon column
-     lines.length === 2 && /siren/.test(lines[1]) && /lucide-radio/.test(lines[0])
-     && lines.every((l) => !/cockpit-source-icons/.test(l.replace(/<span class="fm-record-gutter-icon">[\s\S]*?<\/svg><\/span><\/span>/g, "")))
-     && !!gutter && gutter === hung, { gutter, hung, lines });
+  const drawn = draw(h(AttentionCard, { card: cockpitCard(two, CADENCE), onOpenEntity: () => {} }));
+  const parts = drawn.split('<section class="fm-record-part">').slice(1);
+  const head = (p) => inside(p, "fm-record-part-head");
+  ck("  ...a card of several problems: \"2 problems\" in its strip, red as its worst; each problem its header: its icon, its state, its time",
+     /class="fm-record-strip strip-danger"[\s\S]*fm-record-status">2 problems</.test(drawn) && /siren/.test(strip(drawn)) && /lucide-radio/.test(strip(drawn))
+     // its "Unlocked" is no state of its header: the alert folded onto it says it (a state never repeats the words)
+     && parts.length === 2 && /lucide-radio/.test(head(parts[0])) && !/fm-record-status/.test(head(parts[0])) && /#41 · Door unlocked/.test(parts[0])
+     && /siren/.test(head(parts[1]))
+     && parts.every((p) => /fm-record-when">[^<]+</.test(head(p)) && /^<div class="fm-record-part-head strip-(danger|warn)">/.test(p))
+     && parts.every((p) => !/<svg/.test(inside(p, "fm-record-part-text"))), { parts });
 }
 
-// owner, 2026-10-15: "don't skip a line between the room and the next section" — a card without buttons kept a blank
-// line: its problem's line was 36 px high, its text centred, under the row's 12 px gap. What the stylesheet says:
+// owner, 2026-10-15: "don't skip a line between the room and the next section"; 2026-11-05: a card as tall as its
+// content, its bar its last part. What the stylesheet says:
 {
   const { readFileSync } = await import("node:fs");
   const css = (f) => readFileSync(new URL(`../../src/styles/${f}`, import.meta.url), "utf8");
-  const rule = (text, sel) => (text.match(new RegExp(`^${sel.replace(/[.]/g, "\\.")} \\{([^}]*)\\}`, "m")) ?? [])[1] ?? "";
-  ck("  ...its text right under the room: no height of its own on a problem's line, 4 px under the head",
-     !/min-height/.test(rule(css("08-shared.css"), ".cockpit-attention-sub-line"))
-     && /row-gap: 4px/.test(rule(css("07-facility.css"), ".fm-record-card .fm-record"))
-     && /align-items: flex-start/.test(rule(css("07-facility.css"), ".fm-record-body")));
+  const rule = (text, sel) => (text.match(new RegExp(`^${sel.replace(/[.]/g, "\\.").replace(/[()]/g, "\\$&")} \\{([^}]*)\\}`, "m")) ?? [])[1] ?? "";
+  ck("  ...its words right under the room: 4 px apart, no height of their own; the frame holds its parts edge to edge",
+     /gap: 4px/.test(rule(css("07-facility.css"), ".fm-record-main")) && !/min-height|height:/.test(rule(css("08-shared.css"), ".cockpit-attention-sub-text"))
+     && /padding: 0;/.test(rule(css("07-facility.css"), ".fm-record-card")) && /flex-direction: column/.test(rule(css("07-facility.css"), ".fm-record-card"))
+     && !/stretch|height:/.test(rule(css("07-facility.css"), ".fm-record-card")), [rule(css("07-facility.css"), ".fm-record-main"), rule(css("07-facility.css"), ".fm-record-card")]);
 }
 
 // architecture review, 2026-10-15: "offline for 129 h" was written at 02:00 and a day old by evening — a duration in a
@@ -255,8 +261,8 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
 console.log("\n  a scheduled task — the same card:");
 const task = draw(h(RecordCard, { title: "Pool filter clean", tone: "state-due-soon", status: { text: "Due soon", tone: "due-soon" },
   when: "due in 3 days · every 30 days", actions: h(React.Fragment, null, btn("Log"), h("button", { className: "icon-btn", "aria-label": "Remove" })) }));
-ck("its state pill on the line under its title, Log and the bin inside on the right, its tint on the card",
-   /Pool filter clean/.test(inside(task, "fm-record-head")) && /Due soon/.test(pillLine(task)) && /fm-record-actions[\s\S]*Log[\s\S]*aria-label="Remove"/.test(task)
+ck("its state in its strip, Log and the bin its bar, its tint on the card",
+   /Pool filter clean/.test(inside(task, "fm-record-head")) && /fm-record-status">Due soon</.test(strip(task)) && /fm-record-actions[\s\S]*Log[\s\S]*aria-label="Remove"/.test(task)
    && /class="fm-record-card state-due-soon"/.test(task), task.slice(0, 300));
 ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase on it", !/fm-erasable/.test(task));
 // owner, 2026-11-04: "what is the top right pill (light grey) for … it never disappears": the hold-to-erase hint dot,
@@ -294,9 +300,10 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
   const CARD = /fm-record|fm-row|cockpit-attention|messages-card|messages-detail|announcement/;
   // owner, 2026-11-01: the line under a title was cut at the time's column; it spans the row, on one line, cut with "…"
   ck("a folded card's first words are one line cut with \"…\", over the card's width", cuts.includes(".fm-card-folded"), cuts);
-  ck("  ...an opened card: no text of it is ever cut, whatever its line (no other rule cuts a card's text)",
-     cuts.filter((sel) => sel !== ".fm-card-folded").every((sel) => !CARD.test(sel)) && /\.cockpit-attention-sub-text \{[^}]*overflow-wrap: anywhere;/.test(shared),
-     cuts.filter((sel) => CARD.test(sel)));
+  // owner, 2026-11-05 ("Status on top"): the strip never wraps, its status words the one thing that gives way
+  ck("  ...an opened card: no text of it is ever cut but its strip's status words (no other rule cuts a card's text)",
+     cuts.filter((sel) => sel !== ".fm-card-folded" && sel !== ".fm-record-status").every((sel) => !CARD.test(sel))
+     && /\.cockpit-attention-sub-text \{[^}]*overflow-wrap: anywhere;/.test(shared), cuts.filter((sel) => CARD.test(sel)));
   // owner, 2026-11-01: one column, a tap opening a card in its place: no pane is left, and every section draws InboxCard
   const tab = parseTsx("components/cockpit/MessagesTab.tsx");
   const pane = /\.messages-(list|detail|scroll|back|row)\b|\.reading\b/;
@@ -304,8 +311,10 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
      !pane.test(shared.replace(/\/\*[\s\S]*?\*\//g, "")) && elements(tab, "InboxCard").length === 1
      && elements(tab, "CockpitAttentionRow").every((e) => { for (let n = e.parent; n; n = n.parent) if (n.name?.getText?.() === "InboxCard") return true; return false; }));
     // owner, 2026-11-01: two or three stacked icons made the name's line that tall, an empty line above the room
-  ck("a card's icons take no line of their own: out of the flow, in their column beside the head",
-     /\.fm-record-lead \{ position: absolute;/.test(fac) && /\.fm-record:has\(> \.fm-record-head > \.fm-record-lead\) \{ position: relative;/.test(fac));
+  // owner, 2026-11-01: stacked icons made the name's line that tall; 2026-11-05: they are the strip's, side by side
+  ck("a card's icons take no line of their own: in its strip, side by side, never stacked, no column of their own",
+     /\.fm-record-lead \{ flex: none; display: inline-flex;/.test(fac) && /\.cockpit-source-icons \{ flex-direction: row;/.test(fac)
+     && !/fm-record-gutter|padding-left: 30px/.test(fac));
   ck("every button lights under the mouse, and the card does not light while the mouse is on any of its buttons",
      /@media \(hover: hover\) \{\s*\.btn:hover:not\(:disabled\) \{/.test(base)
      && /\.fm-record-card:has\(> \.fm-openable\):hover:not\(:has\(\.fm-record-actions:hover\)\):not\(:has\(button:hover\)\)/.test(fac));
@@ -343,18 +352,18 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
      inlinePills.length === 0, inlinePills);
 }
 // architecture review round 13 (2026-11-01): the Inbox drew the room as a framed pill, Tickets, Schedule and Today as plain
-// grey text among the tags. ONE pill, the card's own `room` input (RecordCard Pill), on every list that shows a room.
+// grey text among the tags. ONE room, the card's own `room` input, on every list that shows a room; 2026-11-05: quiet
+// text, the first words of the card's quiet line.
 {
-  const { Pill } = await import("@/components/fm/RecordCard");
-  const pill = draw(h(Pill, { text: "Kitchen" }));
   const card = draw(h(RecordCard, { title: "Pump", room: "Kitchen", titlePills: h("span", { className: "fm-entity-chip" }, "DEVICE"),
     pills: h("span", { className: "fm-clause" }, "Cl. 3") }));
-  ck("a card's room is the room pill, on the line under its title; its other pills stay on the title's line; the tags keep the clause only",
-     pillLine(card).includes(pill) && inside(card, "fm-row-title").includes("DEVICE")
-     && !inside(card, "fm-record-body").includes("Kitchen") && pill.includes("fm-entity-chip"), card);
+  const room = '<div class="fm-record-meta"><span>Kitchen</span>';
+  ck("a card's room is its quiet line's first words, under its title; its other pills stay on the title's line; the tags follow the room",
+     card.includes(room) && inside(card, "fm-row-title").includes("DEVICE") && text(meta(card)) === "|Kitchen|Cl. 3|"
+     && (card.match(/Kitchen/g) ?? []).length === 1, card);
   const issue = draw(h(AttentionCard, { card: { key: "k", title: "Pump", room: "Kitchen", lead: null, nextCheck: null, actions: [],
     lines: [{ key: "l", text: "Stopped", story: [], closing: null, openedAt: null }] }, onOpenEntity() {} }));
-  ck("  ...the Inbox's opened card draws the same pill", pillLine(issue).includes(pill), issue);
+  ck("  ...the Inbox's opened card draws the same line", issue.includes(room), issue);
   const roomed = { "fm/TicketsTab.tsx": "roomOf(t)", "fm/ScheduleEditor.tsx": "roomOf(s)",
     "fm/TodayTab.tsx": "roomOf(s.schedule)", "fm/SpendTab.tsx": "roomOf(c)", "cockpit/IssueCard.tsx": "card.room" };
   const given = Object.fromEntries(Object.keys(roomed).map((f) => [f, elements(parseTsx(`components/${f}`), "RecordCard")
@@ -369,8 +378,8 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
   const { readdirSync, statSync } = await import("node:fs");
   const walk = (d) => readdirSync(d).flatMap((f) => { const p = `${d}/${f}`; return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(f) ? [p] : []; });
   const root = new URL("../../src", import.meta.url).pathname;
-  const badges = walk(root).filter((p) => /fm-badge/.test(readFileSync(p, "utf8")) && !p.endsWith("fm/tone.ts"));
-  ck("the status pill is drawn in one place (RecordCard StatusPill)", badges.length === 1 && badges[0].endsWith("components/fm/RecordCard.tsx"), badges);
+  const badges = walk(root).filter((p) => /fm-record-status|fm-badge/.test(readFileSync(p, "utf8")));
+  ck("a card's state is drawn in one place (RecordCard's strip)", badges.length === 1 && badges[0].endsWith("components/fm/RecordCard.tsx"), badges);
   const { cockpitCard } = await import("@/config/cockpitCard");
   const said = (item) => { const c = cockpitCard({ key: "device:d", title: "D", items: [item] }, null); return { text: c.lines.map((l) => l.text).join("|"), pills: c.status.map((s) => s.text) }; };
   const f = { id: "fault:x", kind: "fault", title: "Door stuck", detail: "", ticketId: "x" };
@@ -379,65 +388,53 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
     ["Overdue", { id: "s", kind: "schedule", title: "Filter", detail: "Overdue" }]];
   for (const [word, item] of cases) {
     const got = said(item);
-    ck(`  ..."${word}": in a pill, not in the line's words`, got.pills.includes(word) && !got.text.toLowerCase().includes(word.toLowerCase()), got);
+    ck(`  ..."${word}": in its state, not in the line's words`, got.pills.includes(word) && !got.text.toLowerCase().includes(word.toLowerCase()), got);
   }
-  ck("  ...but a ticket's stage is no pill of its own: its line's pill says it (owner, 2026-11-02)", said({ ...f, stage: "ticket" }).pills.length === 0);
+  ck("  ...but a ticket's stage is no state of the device: its line's move says it (owner, 2026-11-02/05)", said({ ...f, stage: "ticket" }).pills.length === 0);
   const sched = readFileSync(new URL("../../src/components/fm/ScheduleEditor.tsx", import.meta.url), "utf8");
   ck("  ...a paused task too: the status pill, no grey tag", /text: "Paused", tone: pillClass/.test(sched) && !/fm-clause">Paused/.test(sched));
   const row = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
-  ck("  ...and the Inbox draws no pill of its own: its cards are RecordCard's", !/CardPillLine|fm-badge/.test(row));
+  ck("  ...and the Inbox draws no state of its own: its cards are RecordCard's", !/CardPillLine|fm-badge|fm-record-status|StatusPill/.test(row));
 }
 
-// owner, 2026-11-05: "the coloured pill … on the same line as the buttons on desktop (vertically centered)", the
-// "Unavailable" pill too, on every card of every tab, the phone's look kept: a card's state pills are drawn in its
-// buttons' row (shown on a wide card) and, marked, where they stood (shown on a narrow one); a card with no buttons
-// keeps them where they stood, unmarked
+// owner, 2026-11-05 ("Status on top"): a card's state is said ONCE, in its strip, on every card of every tab, whatever
+// its width; its bar holds its buttons and nothing else; who moved it is its who line, never its stage or its time again
 {
-  const row = (html) => inside(html, "fm-record-actions");
-  const stood = (html) => /fm-state-inline/.test(html);
-  const unavailable = { key: "device:a", title: "Lock", room: "Hall", status: [{ text: "Unavailable", tone: "warn" }],
-    lines: [{ key: "a", text: "", actions: [], story: [],
-      latest: { text: "Reopened by VESTA Agent, on 31/10/2026 13:11", tone: "warn" } }] };
+  const bar = (html) => inside(html, "fm-record-actions");
+  const { moveWho, moveState } = await import("@/fm/faultNotes");
+  const { momentText } = await import("@/utils/dateText");
+  const reopened = { kind: "reopened", word: "Reopened", who: "VESTA Agent", at: "2026-10-31T05:11:00Z", tone: "tone-warn" };
+  const unavailable = { key: "device:a", title: "Lock", room: "Hall", status: [{ text: "Unavailable", tone: "tone-quiet" }],
+    lines: [{ key: "a", text: "", actions: [], story: [], openedAt: "2026-10-31T05:11:00Z", move: reopened }] };
   const withButtons = draw(h(AttentionCard, { card: unavailable, onOpenEntity: () => {}, buttons: () => btn("Done") }));
   const without = draw(h(AttentionCard, { card: unavailable, onOpenEntity: () => {} }));
-  ck("a card's state and its problem's pill stand on its buttons' line, at their left (an Inbox card)",
-     /fm-work-state[\s\S]*Unavailable[\s\S]*Reopened by VESTA Agent[\s\S]*Done/.test(row(withButtons))
-     && /card-pill-status fm-state-inline/.test(withButtons) && /fm-meta fm-state-inline/.test(withButtons), withButtons);
-  ck("  ...a card with no buttons keeps them where they stand", !/fm-work-state/.test(without) && !stood(without), without);
-  const task = draw(h(RecordCard, { title: "Pool filter clean", status: { text: "Due soon", tone: "due-soon" }, actions: btn("Done") }));
-  const tk = draw(h(RecordCard, { title: "Pump", tagState: { text: "Ticket opened by Owner", tone: "tone-accent" }, actions: btn("Close") }));
-  ck("  ...on every list's card: a task's due state, a ticket's pill of who last moved it",
-     /fm-work-state[\s\S]*Due soon[\s\S]*Done/.test(row(task)) && /card-pill-status fm-state-inline/.test(task)
-     && /fm-work-state[\s\S]*Ticket opened by Owner[\s\S]*Close/.test(row(tk)), [task, tk]);
-  // architecture review 23: a card's state goes in once and RecordCard places it; each kind of card says its state
-  // exactly once whatever its width (wide: the copy where it stands is hidden; narrow: the buttons' row's)
-  const hiding = (html, cls) => {
-    let out = html, i;
-    while ((i = out.search(new RegExp(`<(\\w+)[^>]*class="[^"]*\\b${cls}\\b[^"]*"`))) >= 0) {
-      const tag = /^<(\w+)/.exec(out.slice(i))[1];
-      let depth = 0, j = i;
-      const re = new RegExp(`<${tag}\\b|</${tag}>`, "g");
-      re.lastIndex = i;
-      for (let m; (m = re.exec(out));) { depth += m[0].startsWith("</") ? -1 : 1; if (depth === 0) { j = re.lastIndex; break; } }
-      out = out.slice(0, i) + out.slice(j);
-    }
-    return out;
-  };
+  ck("a card's states in its strip, joined: the device's and how it was last moved; its bar only its buttons",
+     /fm-record-status">Unavailable · Reopened</.test(strip(withButtons)) && /strip-warn/.test(strip(withButtons))
+     && text(bar(withButtons)) === "|Done|" && !/Unavailable|Reopened/.test(inside(withButtons, "fm-record-main")), withButtons);
+  ck("  ...who moved it its who line, its time and its word dropped when the strip says them",
+     /fm-record-who"><svg[\s\S]*?<\/svg><span>By VESTA Agent<\/span>/.test(withButtons)
+     && moveWho(reopened, ["Reopened"], momentText(reopened.at), momentText) === "By VESTA Agent"
+     && moveWho(reopened, [], undefined, momentText) === `Reopened by VESTA Agent, on ${momentText(reopened.at)}`
+     && moveWho({ ...reopened, kind: "opened", word: "Ticket opened", who: "Fab & Jm", stage: "ticket" }, ["Ticket in progress"], momentText(reopened.at), momentText) === "Opened by Fab & Jm"
+     && moveWho({ ...reopened, kind: "help", word: "Need help asked", who: "Owner" }, [], "x", momentText) === `Need help asked by Owner, on ${momentText(reopened.at)}`
+     && moveState({ ...reopened, kind: "help", word: "Need help asked" }) === null && moveWho(null, [], "x", momentText) === null);
+  ck("  ...a card with no buttons says them in the same place, no bar", strip(without) === strip(withButtons) && !/fm-record-actions/.test(without), without);
+  const task = draw(h(RecordCard, { title: "Pool filter clean", status: { text: "Due soon", tone: "tone-warn" }, actions: btn("Done") }));
+  const tk = draw(h(RecordCard, { title: "Pump", status: { text: "Ticket in progress", tone: "tone-accent" }, who: "Opened by Owner", actions: btn("Close") }));
+  const closed = draw(h(RecordCard, { title: "Pump", status: { text: "Resolved", tone: "tone-quiet" }, who: "Done by Wayan" }));
   const times = (html, words) => html.split(words).length - 1;
-  const once = (html, words) => [times(hiding(html, "fm-state-inline"), words), times(hiding(html, "fm-work-state"), words)];
-  const ticketFolded = draw(h(RecordCard, { title: "Pump", tagState: { text: "Ticket opened by Owner", tone: "tone-accent" } }));
-  const kinds = { "an Inbox card's state": once(withButtons, "Unavailable"), "an Inbox problem's pill": once(withButtons, "Reopened by VESTA Agent"),
-    "an Inbox card with no buttons": once(without, "Unavailable"), "a task's due state": once(task, "Due soon"),
-    "a ticket's pill": once(tk, "Ticket opened by Owner"), "a closed ticket's pill, no buttons": once(ticketFolded, "Ticket opened by Owner") };
-  ck("  ...every kind of card says its state exactly once, on a wide card and on a narrow one (review 23)",
-     Object.values(kinds).every(([wide, narrow]) => wide === 1 && narrow === 1), kinds);
+  const kinds = { "an Inbox card's state": times(withButtons, "Unavailable"), "an Inbox problem's move": times(withButtons, "Reopened"),
+    "an Inbox card with no buttons": times(without, "Unavailable"), "a task's due state": times(task, "Due soon"),
+    "a ticket's stage": times(tk, "Ticket in progress"), "a closed ticket's": times(closed, "Resolved") };
+  ck("  ...every kind of card says its state exactly once, in its strip, in its colour (green handled, grey closed)",
+     Object.values(kinds).every((n) => n === 1) && /strip-ok/.test(strip(tk)) && /strip-neutral/.test(strip(closed))
+     && /strip-warn/.test(strip(task)) && text(inside(tk, "fm-record-who")) === "|[icon]|Opened by Owner|", kinds);
   const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
-  ck("  ...shown in the row on a card as wide as the buttons' labels, where they stood on a narrower one",
-     /\.fm-work-state \{ display: none; \}\s*@container work-row \(min-width: 560px\) \{[\s\S]*?\.fm-work-state \{ display: flex;[\s\S]*?\.fm-state-inline \{ display: none; \}/.test(css)
-     && /@container work-row \(max-width: 559px\)/.test(css));
-  // owner, 2026-11-05, a phone: "the pill is overflowing outside the visible screen"
-  ck("  ...a pill too long for its line wraps inside its card, never past it",
-     /\.fm-record \.fm-badge \{ white-space: normal; max-width: 100%;/.test(css));
+  ck("  ...its strip never wraps: the words give way with \"…\", its alert's name and its time never shrink",
+     /\.fm-record-status \{ flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; \}/.test(css)
+     && /\.fm-record-when \{ flex: none;/.test(css) && /\.fm-record-number \{ flex: none; white-space: nowrap;/.test(css));
+  ck("  ...short words on a narrow card, the full ones on a wide one: the card is measured, never the bar",
+     /\.fm-record \{ container: work-row \/ inline-size; \}/.test(css) && /@container work-row \(max-width: 519px\) \{\s*\.work-long \{ display: none; \}\s*\.work-short \{ display: inline; \}/.test(css));
 }
 
 done("✅ every Cockpit list is one card, checked as it is drawn");

@@ -10,7 +10,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useStateSince } from "@/hooks/useStateSince";
 import { dayMonth, dayTime } from "@/utils/dateText";
-import { presenceOf, presenceSince, presenceWatched, presenceWhy, recapPresenceText, sinceText, type Presence, type PresenceWhy, type Since } from "./presence";
+import { presenceOf, presenceSince, presenceWatched, presenceWhy, sinceText, type Presence, type PresenceWhy, type Since } from "./presence";
 
 /** "since" in words, as every presence line says it ("19 Oct, 14:20", "before 10 Oct", "…" while read). */
 export const sinceWords = (s: Since): string => sinceText(s, dayTime, dayMonth);
@@ -21,8 +21,6 @@ interface VillaPresence {
   sensorId: string;
   /** When it became what it is, in words ("" when nothing can say). */
   since: string;
-  /** The Recap's line: "Villa occupied since 19 Oct, 09:12". */
-  recap: string;
 }
 
 /** The villa's presence now; null when no sensor is picked (nothing is shown). */
@@ -34,7 +32,7 @@ export function usePresence(): VillaPresence | null {
   const history = useStateSince(presence && presence.stated === null ? [config.presenceSensor] : []);
   if (!presence) return null;
   const since = sinceWords(presenceSince(presence, history(config.presenceSensor)));
-  return { presence, sensorId: config.presenceSensor, since, recap: recapPresenceText(presence, since) };
+  return { presence, sensorId: config.presenceSensor, since };
 }
 
 /** Why — the people and sensors the picked sensor watches, each with when its state really began (its window). */

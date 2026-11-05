@@ -12,7 +12,7 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import { isOffline, missingFromHa, NOT_IN_HA } from "@/utils/stateColors";
-import { stageOf } from "./fmEngine";
+import { isTicketOpen, stageOf } from "./fmEngine";
 import { openCounts } from "./deviceWork";
 import { faultSource, ISSUE_SOURCES, type IssueSource } from "./issueSource";
 import { lockFacts, lightFacts, climateFacts } from "@/config/villaSummary";
@@ -56,9 +56,15 @@ export interface ReadinessCheck {
    *  ("Check the ⏾ ⚑ faults in Messages…", ReadinessTab). Text stays plain for the saved snapshot. */
   sources?: IssueSource[];
   /** What tapping the check opens: its devices, as a list (SummaryGroupPanel), behind a button with these words.
-   *  Shown when the check names devices. Absent for a check about no device (the tickets). */
+   *  Absent for a check whose devices are a place's (the tickets: its words link there instead). */
   opens?: CheckTarget;
+  /** Words of `detail` that open the Cockpit's place they name (owner, 2026-11-05: "faults" opens Inbox › Open issues
+   *  on them, "tickets" the Tickets tab). The saved snapshot keeps the text plain. */
+  goes?: CheckLink[];
 }
+
+/** A word of a check's line, and the place it opens: Open issues on these faults' devices, or the Tickets tab. */
+export type CheckLink = { word: string; to: { place: "faults"; ids: string[] } | { place: "tickets" } };
 
 /**
  * A check's own devices, as the list its button opens.
@@ -290,6 +296,12 @@ export function buildReadiness(
   const open = openCounts(records, devices.deviceOfRecord);
   const faults = records.filter((t) => stageOf(t) === "fault");
   const where = [open.faults ? "the faults in Inbox › Open issues" : "", open.tickets ? "the tickets in Tickets" : ""].filter(Boolean);
+  // ⚠️ ITS DEVICES, EACH ONCE (owner, 2026-11-05: "show the device pills concerned by either the Ticket or Faults, the
+  // same way there is device pills for All devices reporting … never duplicate"): one per device, the device's own
+  // entity (deviceOfRecord: a record naming several sensors included), as Open issues and Tickets draw one card per
+  // device; a whole-villa fault names no device
+  const named = (rs: typeof records) => [...new Set(rs.filter((t) => isTicketOpen(t) && t.entityId)
+    .map((t) => devices.deviceOfRecord(t.entityId!)))];
   const found = new Set(faults.map(faultSource));
   checks.push({
     id: "tickets",
@@ -303,6 +315,11 @@ export function buildReadiness(
     state: open.total === 0 ? "pass" : "warn",   // a fault is a warning, however many (owner, 2026-10-18)
     detail: open.total === 0 ? "Nothing to deal with." : `Check ${where.join(", or ")}.`,
     sources: ISSUE_SOURCES.filter((s) => found.has(s)),
+    entityIds: named(records),
+    goes: [
+      ...(open.faults ? [{ word: "faults", to: { place: "faults" as const, ids: named(faults) } }] : []),
+      ...(open.tickets ? [{ word: "tickets", to: { place: "tickets" as const } }] : []),
+    ],
   });
 
   const passed = checks.filter((c) => c.state === "pass").length;

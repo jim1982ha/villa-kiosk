@@ -33,7 +33,7 @@ export function AnnouncementPhoto({ id, className }: { id: string; className: st
 export function PageLink({ page, label = "Open the page" }: {
   page: string;
   /** What it opens, when more than "the page" is known (a ticket's "Investigation report"). */
-  label?: string;
+  label?: ReactNode;
 }) {
   return (
     <div className="fm-documents">

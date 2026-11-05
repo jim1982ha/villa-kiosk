@@ -14,7 +14,7 @@ import { useFmData } from "@/fm/FmDataContext";
 import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
 import { openCounts } from "@/fm/deviceWork";
 import { pillClass, toneClass } from "@/fm/tone";
-import { budgetStatus, dueLine, DUE_WORDS, scheduleBoard, shortDate, type ScheduleStatus, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
+import { budgetStatus, DUE_WORDS, scheduleBoard, shortDate, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
@@ -31,13 +31,6 @@ import { useWorkFields } from "./useWorkFields";
 import Tip from "@/components/common/Tip";
 import FmForm from "./FmForm";
 import { useListEditor } from "./ListEditor";
-
-/** The engine's sentence (fmEngine.dueLine — the recap's too) with the date in the reader's locale. Same wording
- *  either side of "never": a target date is shown regardless — see fmEngine.scheduleStatus for why "never" now
- *  always carries a dueAt — so the operator sees WHEN a task is due even before it's ever been logged once. */
-function dueText(s: ScheduleStatus): string {
-  return `${dueLine(s)}${s.dueAt ? ` (by ${shortDate(s.dueAt)})` : ""}`;
-}
 
 export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) => void }) {
   const { data, logCompletion, removeSchedule, removeAllSchedules } = useFmData();
@@ -127,10 +120,13 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           its state's ONE word and tone (fmEngine.DUE_WORDS — the recap's and the Overview's too) */}
           <RecordCard tone={toneClass(DUE_WORDS[s.state].tone)} title={s.schedule.title}
             status={{ text: DUE_WORDS[s.state].word, tone: pillClass(DUE_WORDS[s.state].tone) }}
-            when={`${dueText(s)} · every ${s.schedule.everyDays} days`
-              + (s.last ? ` · last ${momentText(s.last.at)} by ${workedBy(s.last)}` : "")}
+            // the day it is due in its strip, its interval on its quiet line, the last time it was done its who line
+            // (the "Status on top" card, owner 2026-11-05)
+            when={s.dueAt ? `Due ${shortDate(s.dueAt)}` : undefined}
+            who={s.last ? `Last done by ${workedBy(s.last)}, on ${momentText(s.last.at)}` : null}
             room={roomOf(s.schedule)}
             pills={<>
+              <span>every {s.schedule.everyDays} days</span>
               {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
               <AgentMark record={s.schedule} />
             </>}

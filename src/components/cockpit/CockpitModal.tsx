@@ -53,6 +53,8 @@ interface CockpitModalProps {
   onReportProblem: () => void;
   /** The devices whose open issue Messages opens (a device window's warning). */
   focusFaults?: readonly string[];
+  /** Inbox › Open issues on these devices' faults (a readiness check's "faults", screen.openFaults). */
+  onOpenFaults: (ids: string[]) => void;
 }
 
 /** Messages, then the Facility tabs (2.496.273: the Facility window merged in — one top-bar button, one window, the
@@ -65,7 +67,7 @@ const MESSAGES_TAB: ModalTab<CockpitTab> = { id: "messages", label: "Inbox", ico
 
 export default function CockpitModal({
   onClose, onOpenEntity, doors, tab, onTab, reportFaultFor, onFaultFormOpened, onRaiseTicket,
-  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults,
+  editTicket, onEditTicket, onTicketEditOpened, onReportProblem, focusFaults, onOpenFaults,
 }: CockpitModalProps) {
   // A profile without the Facility door sees the Cockpit's view alone, no strip.
   const tabs: ModalTab<CockpitTab>[] = doors.facility ? [MESSAGES_TAB, ...FACILITY_TABS] : [MESSAGES_TAB];
@@ -127,7 +129,8 @@ export default function CockpitModal({
         {held && <p className="muted body-text">{held}</p>}
         {shownTab !== "messages" ? (
           <FacilitySections tab={shownTab} onOpenEntity={onOpenEntity} editTicket={editTicket}
-            onTicketEditOpened={onTicketEditOpened} reportFaultFor={reportFaultFor} onFaultFormOpened={onFaultFormOpened} />
+            onTicketEditOpened={onTicketEditOpened} reportFaultFor={reportFaultFor} onFaultFormOpened={onFaultFormOpened}
+            onTab={onTab} onOpenFaults={onOpenFaults} />
         ) : (
           <MessagesTab onOpenEntity={onOpenEntity} doors={doors} onRaiseTicket={onRaiseTicket}
             onEditTicket={onEditTicket} onReportProblem={onReportProblem} focusFaults={focusFaults} />

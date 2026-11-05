@@ -5,7 +5,7 @@
 //
 // ⚠️ FIVE CALLS, ONE CARD: the page asked attention for a line's words (twice: once for its hover text), its icons,
 // its buttons and the card's, and faultTiming for its next check, and worked out a line's latest Telegram note itself
-// (`item.latest ?? item.fault?.latest`) — each reading the shape the grouping leaves behind (`fault`, `twins`). The
+// (`item.move ?? item.fault?.move`) — each reading the shape the grouping leaves behind (`fault`, `twins`). The
 // "one line per problem" bugs of the week (10-13 a repeated icon, 10-17 "(6 times)", 10-18 "UNLOCKED — … UNLOCKED")
 // were each fixed in one of those calls; the page now knows none of them.
 //
@@ -13,7 +13,7 @@
 // checks read them one by one — a line's words could be right in a check and wrong on the card. attention groups the
 // problems; how a card SAYS them lives here only, and a check reads what cockpitCard returns.
 
-import { pillClass } from "@/fm/tone";
+import { ACCENT_PILL, QUIET_PILL, pillClass } from "@/fm/tone";
 import type { RecordStatus } from "@/components/fm/RecordCard";
 import type { AgentCadence } from "@/agent/agentApi";
 import { checkPill } from "@/fm/faultTiming";
@@ -23,8 +23,8 @@ import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, dayMonth, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
 import { closedFaults, closedTold, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
-import { alertNumberOf, faultBegan, faultTitle } from "@/fm/fmEngine";
-import { faultLatest } from "@/fm/faultNotes";
+import { alertLabel, alertNumberOf, faultBegan, faultTitle } from "@/fm/fmEngine";
+import { faultMove, moveState, type FaultMove } from "@/fm/faultNotes";
 import type { FmData, FmTicket } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { Announcement } from "@/messages/announcements";
@@ -91,12 +91,13 @@ function cardSources(items: readonly AttentionItem[]): LineSources | null {
  *  back to the alert drawn second, taken off the name, the emptied column padded). ⚠️ ONE ICON PER MEANING (owner,
  *  2026-10-13: "the icon is redundant"): a line never repeats an icon the name shows. Pure. */
 export function cardIcons(card: Pick<CardView, "lead" | "lines">): {
-  head: LineSources | null; lines: (LineSources | null)[]; column: boolean;
+  head: LineSources | null; lines: (LineSources | null)[];
 } {
+  // ⚠️ THE STRIP SAYS EVERY SOURCE, EACH PROBLEM ITS OWN (owner, 2026-11-05, the "Status on top" card): the card's strip
+  // carries every kind of problem it holds (cardSources); a card of several problems draws each one's own icons in that
+  // problem's header line, beside its state and its time. One problem: its icons are the strip's, none repeated.
   const owns = card.lines.map((l) => l.own ?? null);
-  const kinds = new Set(owns.filter((o): o is LineSources => o !== null).map((o) => o.sources.join("+")));
-  if (kinds.size <= 1) return { head: card.lead, lines: owns.map(() => null), column: card.lead !== null };
-  return { head: null, lines: owns, column: true };
+  return { head: card.lead, lines: card.lines.length > 1 ? owns : owns.map(() => null) };
 }
 
 /** A line's source icons and the status colour of each (owner, 2026-10-14: the source as an icon, in place of the
@@ -145,12 +146,52 @@ function attentionLine(item: AttentionItem): string {
  *  card and on its row. Pure. */
 function cardStatuses(items: readonly AttentionItem[]): RecordStatus[] {
   const out = new Map<string, RecordStatus>();
-  for (const i of items) {
-    const word = i.fault ? stateBesideFault(i) : i.kind === "fault" ? undefined : i.detail;
-    if (word) out.set(word, { text: word, tone: pillClass(attentionSeverity(i) === "danger" ? "danger" : "warn") });
-  }
+  for (const s of items.flatMap(itemState)) out.set(s.text, s);
   return [...out.values()];
 }
+
+/** One problem's own state word, in its severity's colour: a device out of contact grey (owner, 2026-11-05: red act
+ *  now, amber a fault, grey no contact, as the map's badges). [] for a fault, which names itself. */
+function itemState(i: AttentionItem): RecordStatus[] {
+  const word = i.fault ? stateBesideFault(i) : i.kind === "fault" ? undefined : i.detail;
+  return word ? [{ text: word, tone: SEVERITY_PILL[attentionSeverity(i)] }] : [];
+}
+
+const SEVERITY_PILL: Record<AttentionSeverity, string> = { danger: pillClass("danger"), warn: pillClass("warn"), lost: QUIET_PILL };
+
+/** How a card stands, for its colour and its place in Open issues: its worst problem's severity, or "handled" when
+ *  every problem of it is a ticket someone took on. */
+export type CardTone = AttentionSeverity | "handled";
+const CARD_TONE_PILL: Record<CardTone, string> = { ...SEVERITY_PILL, handled: ACCENT_PILL };
+/** ⚠️ OPEN ISSUES IN THEIR COLOUR'S ORDER (owner, 2026-11-05): red, then amber, then grey, then what is being handled. */
+export const CARD_TONE_RANK: Record<CardTone, number> = { danger: 0, warn: 1, lost: 2, handled: 3 };
+
+function cardTone(lead: LineSources | null, lines: readonly CardLine[]): CardTone {
+  if (lines.length > 0 && lines.every((l) => l.records?.some((r) => r.stage === "ticket"))) return "handled";
+  const sev = lead?.severities ?? [];
+  return (["danger", "warn", "lost"] as const).find((t) => sev.includes(t)) ?? "warn";
+}
+
+/** ⚠️ WHAT A CARD'S STRIP SAYS (owner, 2026-11-05, the "Status on top" card): its alert's name ("#91-P1"), then where it
+ *  stands: its states and, for one problem, how it was last moved (a ticket's stage, "Reopened", a close's word:
+ *  faultNotes.moveState); "2 problems" in its worst colour when it holds several, each problem's own in its header line
+ *  (lineStrip). `tone`: the colour when nothing is said. Pure. */
+export function cardStrip(card: Pick<CardView, "lines" | "status" | "tone">): { status: RecordStatus[]; number?: string; tone: string } {
+  const tone = CARD_TONE_PILL[card.tone ?? "warn"];
+  if (card.lines.length > 1) return { status: [{ text: `${card.lines.length} problems`, tone }], tone };
+  const lead = leadLine(card);
+  const status = dedupe([...(card.status ?? []), ...(lead ? lineMoveState(lead) : [])]);
+  return { status, tone, ...(lead?.alertLabel ? { number: lead.alertLabel } : {}) };
+}
+
+/** A problem's header line on a card of several: its own states and how it was last moved, its alert's name. Pure. */
+export function lineStrip(line: CardLine): { status: RecordStatus[]; number?: string; tone: string } {
+  return { status: dedupe([...(line.state ?? []), ...lineMoveState(line)]), tone: CARD_TONE_PILL[cardTone(line.own ?? null, [line])],
+    ...(line.alertLabel ? { number: line.alertLabel } : {}) };
+}
+
+const lineMoveState = (l: CardLine): RecordStatus[] => { const m = moveState(l.move); return m ? [m] : []; };
+const dedupe = (all: RecordStatus[]) => all.filter((s, i) => all.findIndex((x) => x.text === s.text) === i);
 
 /** ⚠️ A FAULT WAITING TO CLOSE SAYS SO (owner, 2026-10-21): a door locked at 14:38:50 was still a fault at 14:45 under
  *  "Next check: within 5 min" — the VESTA Agent closes it once it has stayed right for its clear wait, and nothing said
@@ -183,8 +224,13 @@ export interface CardLine {
   story: { note: string; at: string }[];
   /** When its fault began (fmEngine.faultBegan, ISO); null for a live state with no fault. */
   openedAt: string | null;
-  /** Who last moved its fault, when, and its stage (faultNotes.faultLatest): its pill; absent or null: nobody yet. */
-  latest?: { text: string; tone: string } | null;
+  /** Who last moved its fault, when, and its stage (faultNotes.faultMove): the strip's state and the who line; absent
+   *  or null: nobody yet. */
+  move?: FaultMove | null;
+  /** Its own state words (a device's "Unavailable", a task's "Overdue"): its header's on a card of several. */
+  state?: RecordStatus[];
+  /** Its alert's name ("#91-P1", fmEngine.alertLabel): the chip of the strip. */
+  alertLabel?: string;
   /** `openedAt` is only as far back as the villa keeps. */
   openedBefore?: true;
   /** The alert number of its fault ("#91"), whose VESTA card the open issue shows; absent without one. */
@@ -222,6 +268,8 @@ export interface CardView {
   lines: CardLine[];
   /** Its state, as pills (cardStatuses); absent on a card with none of its own (the Watch list's). */
   status?: RecordStatus[];
+  /** How it stands (cardTone): its strip's colour when nothing is said, its place in Open issues. */
+  tone?: CardTone;
 }
 
 /** ⚠️ EVERY CARD SAYS WHEN, AND A PROBLEM HAS ONE TIME (owner, 2026-11-01: an issue's row said 01:07, its escalation, its
@@ -291,17 +339,21 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     story: item.story ?? item.fault?.story ?? [],
     // the fault's moment first: what is told of a device's problem counts from it, not from its state
     openedAt: item.fault?.openedAt ?? item.openedAt ?? null,
-    latest: item.latest ?? item.fault?.latest,
+    move: item.move ?? item.fault?.move,
+    state: itemState(item),
+    ...((item.alertLabel ?? item.fault?.alertLabel) ? { alertLabel: item.alertLabel ?? item.fault?.alertLabel } : {}),
     ...(!item.fault && item.openedBefore ? { openedBefore: true as const } : {}),
     ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
     closing: closingText(item.closing ?? item.fault?.closing, now),
   });
+  const lead = cardSources(group.items), lines = group.items.map(line);
   return {
     key: group.key, title: group.title, room: group.room, entityId: group.entityId,
-    lead: cardSources(group.items),
+    lead,
     nextCheck: checkPill(group.items, cadence, now),
-    lines: group.items.map(line),
+    lines,
     status: cardStatuses(group.items),
+    tone: cardTone(lead, lines),
   };
 }
 
@@ -375,8 +427,11 @@ function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardVi
     entityId: device?.key,
     lead: null,
     lines: [{ key: `fault:${t.id}`, records: [], actions: own.look === "closed" ? closedActions(workRecord(t), closedTold(t).reopen) : [], asked: null, text: device && title !== device.label ? title : "", story: [], openedAt: faultBegan(t),
-      closing: own.look === "closed" ? null : did,
-      ...(own.look === "closed" ? { latest: faultLatest(t, momentText) } : {}),
-      ...alertNumberIn(alertNumberOf(t)) }],
+      closing: own.look === "closed" ? null : did, state: [],
+      ...(own.look === "closed" ? { move: faultMove(t) } : {}),
+      ...alertNumberIn(alertNumberOf(t)),
+      ...(alertNumberOf(t) !== undefined ? { alertLabel: alertLabel(alertNumberOf(t)!, t.alertPriority) } : {}) }],
+    // a watched one is being handled (VESTA closes it), a closed one is over: both quiet but the watch's green
+    tone: own.look === "watched" ? "handled" : "lost",
   }];
 }

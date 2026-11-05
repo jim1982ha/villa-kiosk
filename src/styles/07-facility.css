@@ -32,90 +32,134 @@
   .fm-tab:hover { background: var(--bg-input); }
 }
 .fm-tab.active { background: var(--accent); color: var(--text-on-accent); }
-/* Keeps the Recap tab's own height roughly stable across the empty-
-   placeholder <-> generated-recap swap — see RecapTab's docstring on the
-   button. */
-.fm-doc-preview-area { min-height: 260px; }
-
 .fm-stack { display: flex; flex-direction: column; gap: 16px; }
 
 /* Summary numbers — the glance layer above the detail. ⚠️ ONE LINE, HOWEVER
    MANY (owner, 2026-10-14): auto-fit wrapped the Faults tab's fourth box onto a
    row of its own on a phone. Each box takes an equal share; on a narrow screen
    the figure shrinks and the label wraps inside its box instead. */
-/* THE card of a Facility record (RecordCard): a ticket, a closed ticket, scheduled work done (owner, 2026-10-14: one
-   style everywhere). ONE frame; inside it the record flat — its head (title, status pill), then its text with its
-   cost and buttons on the right of it (a phone puts them under). A ticket taken on for several faults of a device
-   holds them all, divided by a hairline (.fm-ticket-records). */
+/* THE card of every Cockpit list (RecordCard): an issue, a notification, a ticket, a task, a spend line, work done
+   (owner, 2026-10-14: one style everywhere). ⚠️ STATUS ON TOP (owner, 2026-11-05, the "Status on top" card): top to
+   bottom its strip, its title, its quiet line, its words, who moved it, its bar. The frame holds them edge to edge;
+   it is as tall as what it holds, never stretched by a list (every list of cards aligns its cards to their top). A
+   ticket taken on for several faults of a device holds them all, divided by a hairline (.fm-ticket-records). */
 .fm-record-card {
-  display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px;
-  padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
+  display: flex; flex-direction: column; padding: 0; overflow: hidden;
+  border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
-/* its text right under the room (owner, 2026-10-15: "don't skip a line"): 4 px between head and text, not the row's 12 */
-.fm-record-card .fm-record { border: none; background: none; padding: 0; border-radius: 0; row-gap: 4px; }
-/* what stands before its title (an issue's source icons), the line under the title (its room); its text then starts
-   under the title, not under the icons */
-/* ⚠️ THE ICONS HANG IN THEIR COLUMN (owner, 2026-11-01: "a redundant line below the title"): stacked in the head, two or
-   three of them made the name's line as tall as they are, an empty line above the room. Out of the flow, they run down
-   beside the name, the room and the words, and no line is taller for them. */
-.fm-record:has(> .fm-record-head > .fm-record-lead) { position: relative; }
-.fm-record-lead { position: absolute; left: 0; top: 2px; width: 18px; display: inline-flex; justify-content: center; }
-.fm-record-head:has(> .fm-record-lead), .fm-record-head:has(> .fm-record-lead) ~ :is(.fm-record-body, .card-pill-line) { padding-left: 30px; }
-/* a line's own icon hangs in that column, under the card's, so every line's text starts at the same place, with or
-   without an icon (owner, 2026-10-18: "#55" sat further right than "#41" above it) */
-.fm-record-body .fm-record-gutter { position: relative; }
-.fm-record-body .fm-record-gutter > .fm-record-gutter-icon {
-  position: absolute; left: -30px; top: 1px; width: 18px; display: flex; justify-content: center;
-}
+.fm-record-card .fm-record { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 0;
+  border: none; background: none; padding: 0; border-radius: 0; }
 @media (hover: hover) {
   /* a card that opens lights up — never while the pointer is on its buttons, which light up themselves (owner,
-     2026-10-10: "I don't see the close button highlighted, rather the whole card") */
-  /* …nor on ANY button of it: a problem's own Close sits on its line, outside the card's row of buttons, and lit
-     the whole card (owner, 2026-10-18) */
+     2026-10-10: "I don't see the close button highlighted, rather the whole card"), nor on ANY button of it */
   .fm-record-card:has(> .fm-openable):hover:not(:has(.fm-record-actions:hover)):not(:has(button:hover)) {
     background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
   }
 }
-/* its name, then on the right its time pills; on a phone a long pill drops under the name, never squeezing it */
-.fm-record-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 12px; padding-right: 10px; flex: 1 1 100%; }
-.fm-record-head .fm-row-title { flex: 1 1 180px; min-width: 0; }
+/* 1. ITS STRIP: a band of its status colour, never a border (rule 1). ONE LINE, ALWAYS: the status words give way with
+   "…"; its alert's name and its time never shrink. Its words mixed with the text colour, so they read on the light
+   theme's pale tint and the dark one's alike (4.5:1). */
+.strip-danger { --strip: var(--status-danger); }
+.strip-warn { --strip: var(--status-warning); }
+.strip-ok { --strip: var(--accent); }
+.strip-neutral { --strip: var(--status-lost); }
+.fm-record-strip, .fm-record-part-head {
+  display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden;
+  font-size: var(--text-sm); font-weight: 600; color: color-mix(in srgb, var(--strip) 62%, var(--text-primary));
+}
+.fm-record-strip { min-height: 38px; padding: 0 14px; background: color-mix(in srgb, var(--strip) 13%, var(--bg-card)); }
+.fm-record-strip.strip-neutral { color: var(--text-secondary); }
+.fm-record-lead { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+/* a line's two source icons side by side in a strip (they stack beside a list's line: 08-shared.css) */
+:is(.fm-record-strip, .fm-record-part-head) .cockpit-source-icons { flex-direction: row; gap: 4px; }
+.fm-record-number { flex: none; white-space: nowrap; font-size: var(--text-xs); padding: 1px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--strip) 22%, transparent); }
+.fm-record-status { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fm-record-strip .info-tip, .fm-record-part-head .info-tip { flex: none; }
+.fm-record-when { flex: none; margin-left: auto; white-space: nowrap; font-size: var(--text-xs); font-weight: 500;
+  color: var(--text-secondary); }
+/* 2-5. its title, its quiet line, its words and who moved it, padded inside the frame */
+.fm-record-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 12px 16px 14px; }
+.fm-record-head { display: flex; align-items: flex-start; min-width: 0; }
+.fm-record-head .fm-row-title { flex: 1 1 auto; min-width: 0; }
 .fm-record-head .fm-row-title strong { font-weight: 600; font-size: var(--text-md); line-height: 1.35; overflow-wrap: anywhere; }
-/* a card's line of pills, in the Inbox's list and on the opened card alike (CardPillLine) */
-.card-pill-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 100%; min-width: 0; }
-.card-pill-status { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
-.fm-record > .card-pill-line { padding-right: 10px; }
-/* its text starts right under the room, level with the top of its buttons — centred on them, it left a blank line
-   (owner, 2026-10-15: "don't skip a line between the device name and the next section") */
-.fm-record-body { flex: 1 1 100%; min-width: 0; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; }
-/* the next check: a pill at the right of the title's line, its refresh icon before when (RecordCard `check`) */
-.fm-record-check { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.fm-ticket-records > .fm-record + .fm-record > .fm-record-head > .fm-record-lead { top: 10px; }
 /* an issue's name: the way to its device, not underlined (owner, 2026-11-02) */
 .fm-title-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
-.fm-record-head .fm-record-check { margin-top: 2px; margin-left: auto; }
+/* A word of a line that opens the place it names ("faults" Inbox › Open issues, "tickets" the Tickets tab: a readiness
+   check's line, owner 2026-11-05): the line's own text, in the accent, underlined */
+.fm-text-link { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline;
+  text-underline-offset: 2px; cursor: pointer; }
+/* 3. ITS QUIET LINE (rule 3): the device, the room, the next check, its tags, " · " between them, no chips */
+.fm-record-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0;
+  font-size: var(--text-xs); line-height: 1.5; color: var(--text-secondary); }
+.fm-record-meta > * + *::before { content: "·"; display: inline-block; margin-right: 6px; color: var(--text-dim); text-decoration: none; }
+.fm-record-meta :is(.fm-entity-chip, .fm-clause) { background: none; border: 0; padding: 0; border-radius: 0;
+  font-size: inherit; line-height: inherit; color: inherit; white-space: normal; }
+/* the device a ticket names: its name underlined, a finger's reach around it */
+.fm-record-meta button.fm-entity-chip { position: relative; color: var(--text-primary); text-decoration: underline;
+  text-decoration-color: var(--text-dim); text-underline-offset: 3px; cursor: pointer; }
+.fm-record-meta button.fm-entity-chip::after { content: ""; position: absolute; inset: -12px -4px; }
+.fm-record-check { display: inline-flex; align-items: center; gap: 4px; }
 /* a folded card's line, cut with "…" (RecordCard `folded`): the one place a card's words are cut */
 .fm-card-folded { display: block; font-size: var(--text-xs); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* ⚠️ THE CARD'S WIDTH, NEVER ITS LONGEST LINE (owner, 2026-10-14: a "VESTA reads: …" note ran past a Closed card's
-   right edge): a line of its own that may shrink wraps every note inside the card. */
-.fm-record-body > .fm-row-main { flex: 1 1 260px; min-width: 0; }
-/* ⚠️ THE BUTTONS UNDER THE TEXT, ON THE RIGHT (owner, 2026-10-29: "the description take all the width of the cards and
-   the buttons to appear below it, aligned on the right", every card alike): beside it, they squeezed an alert's story
-   into a narrow column, a date cut over two lines. A row of their own; a cost stays beside the text. */
+.fm-record-foot { display: flex; justify-content: flex-end; }
+/* 4. its words, one readable size on every card: a ticket's notes as an issue's lines (rule 4) */
+.fm-record-main .fm-timeline-note { font-size: var(--text-sm); }
+/* 5. WHO MOVED IT (rule 5): one quiet line, a person before it */
+.fm-record-who { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: var(--text-xs);
+  font-weight: 500; color: var(--text-secondary); overflow-wrap: anywhere; }
+.fm-record-who > svg { flex: none; }
+/* A CARD OF SEVERAL PROBLEMS: each a part, its own header line, words and bar, divided by a hairline */
+.fm-record-part { border-top: 1px solid var(--hairline); display: flex; flex-direction: column; }
+.fm-record-part-head { padding: 10px 16px 0; min-height: 28px; }
+.fm-record-part-head.strip-neutral { color: var(--text-secondary); }
+.fm-record-part-text { padding: 4px 16px 10px; display: flex; flex-direction: column; gap: 4px; }
+.fm-record-part-head:has(+ .fm-record-actions) { padding-bottom: 10px; }
+/* 6. ITS BAR (rule 6): its buttons joined along its bottom edge, equal segments split by hairlines (the bar's own
+   colour showing between them), at least a finger tall (48 px on a phone), each its icon and label side by side. The
+   main action first, in the accent. ⚠️ ONE BAR FOR EVERY BUTTON (owner, 2026-11-05): a problem's work buttons, a page,
+   a notification's buttons, a task's Pause and bin, an icon-only one (its name read aloud: aria-label). */
+.fm-record-actions { display: flex; flex-wrap: wrap; gap: 1px; padding-top: 1px; background: var(--hairline); min-width: 0; }
+.fm-record-actions :is(.fm-documents, .vesta-notice-actions) { display: contents; }
+.fm-record-actions :is(.btn, .icon-btn, .fm-document-link) {
+  flex: 1 1 0; min-width: 0; min-height: var(--touch-min); margin: 0; padding: 0 4px; border: 0; border-radius: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; overflow: hidden;
+  background: var(--bg-card); color: var(--text-secondary); font-size: var(--text-base); font-weight: 500; text-decoration: none;
+  box-shadow: none;
+}
+@media (max-width: 640px) { .fm-record-actions :is(.btn, .icon-btn, .fm-document-link) { min-height: 48px; } }
+@media (hover: hover) {
+  .fm-record-actions :is(.btn, .icon-btn, .fm-document-link):hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg-card)); color: var(--text-primary); }
+}
+.fm-record-actions .fm-bar-main { color: var(--accent); font-weight: 600; }
+/* what a button did or why it did not land, a standing Need help: a line of its own above the segments */
+.fm-record-actions :is(.fm-work-asked, .fm-inline-error, .vesta-notice-said) { flex: 1 1 100%; min-width: 0; margin: 0;
+  padding: 8px 16px; background: var(--bg-card); }
+.fm-record-actions .fm-work-asked { order: -1; }
+/* A CARD'S QUESTION TAKES ITS BAR: the question on a line of its own, then [the main action][Cancel] */
+.fm-record-ask { flex: 1 1 100%; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px;
+  background: color-mix(in srgb, var(--text-primary) 5%, var(--bg-card)); font-size: var(--text-base); font-weight: 500;
+  color: var(--text-primary); }
+.fm-record-ask > svg { flex: none; margin-top: 3px; }
+.fm-record-ask ~ :is(.btn, .icon-btn) { background: color-mix(in srgb, var(--text-primary) 5%, var(--bg-card)); }
+/* ⚠️ SHORT WORDS ON A NARROW CARD (owner, 2026-11-04: "use 1 word label and icon in the button"; 2026-11-05: Help,
+   Ignore, Ticket, Dismiss on a phone, the full words on a computer): THE CARD IS MEASURED, never the bar (owner,
+   2026-11-04: a row measuring itself measured nothing). A browser without container queries keeps the labels, cut
+   with the segment, never wrapped. */
+.fm-record { container: work-row / inline-size; }
+.work-short { display: none; }
+@container work-row (max-width: 519px) {
+  .work-long { display: none; }
+  .work-short { display: inline; }
+}
+/* A card's Need help that nothing has answered yet ("🆘 Need help asked …", WorkButtons) */
+.fm-work-asked { font-size: var(--text-xs); color: var(--text-secondary); }
 /* a form's title: an alert's number stays, fixed, before the words that can be changed */
 .fm-title-field { display: flex; align-items: center; gap: 8px; }
 .fm-title-field input { flex: 1 1 auto; min-width: 0; }
-.fm-record-actions { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.fm-record-actions .modal-actions { justify-content: flex-end; flex-wrap: wrap; }
-/* ⚠️ A CARD'S "Close this? No action needed." ON A PHONE (owner, 2026-10-21: "very buggy" on iPhone): the row of
-   buttons is sized to its content (flex: 0 0 auto), and the question with Cancel and Close is wider than a phone's
-   card — it ran out of the card, its Close cut off at the edge. Asking, the row takes the whole width; the question
-   takes what is left and wraps, the two buttons stay together at the end (as a problem's own line does below). */
-.fm-record-actions:has(> .modal-actions) { flex: 1 1 100%; min-width: 0; }
-.fm-record-actions > .modal-actions { flex: 1 1 100%; min-width: 0; align-items: center; gap: 8px 12px; }
-.fm-record-actions > .modal-actions .body-text { flex: 1 1 12em; min-width: 0; }
-.fm-record-actions > .modal-actions .btn { flex: 0 0 auto; }
 .fm-ticket-records { display: flex; flex-direction: column; }
-.fm-ticket-records > .fm-record + .fm-record { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 8px; }
+.fm-ticket-records > .fm-record + .fm-record { border-top: 1px solid var(--hairline); }
 /* The Spend tab's month totals on one line, each an equal share of the width with its word above its amount, Record
    spend at their right (owner, 2026-10-14); on a phone Record spend takes the line under them. */
 .fm-cap-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: center; gap: 6px 18px; }
@@ -170,7 +214,6 @@
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
-.fm-row-main { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .fm-row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 /* Pushed to the far right of the title line, same row as the label — see
    ReadinessTab's "All devices reporting" card, the one check with an inline
@@ -181,49 +224,6 @@
 .fm-row-confirm { flex: 1 1 100%; }
 .fm-row-confirm .modal-actions { flex-wrap: wrap; align-items: center; }
 .fm-row-sub { font-size: var(--text-xs); }
-/* The line of a card's tags (RecordMeta.tsx, owner 2026-10-11).
-   A device chip there is a pill like the others — the same height, still a button. */
-.fm-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-/* a card's pills, the same size on its title's line (its time, a spend's device), its room's line and the meta line */
-:is(.fm-meta, .fm-record-head, .card-pill-line) .fm-entity-chip { font-size: var(--text-2xs); padding: 1px 9px; line-height: 1.6; }
-/* ⚠️ A CARD'S BUTTONS ON ONE LINE, PHONE AND LAPTOP (owner, 2026-10-31, iPhone: Open Ticket wrapped under Done · Need
-   help; 2026-11-04, the fourth button, Not a problem: "use 1 word label and icon in the button … open/edit a ticket
-   shall also appear on the same line"): one row of their own (WorkButtons, Inbox and Tickets alike), 12 px each side
-   instead of the 18 of a .btn, and under a card with an icon column the row takes that column's width too (it is
-   empty under the buttons). Each button's icon, then its label; on a row narrower than every label in full needs, the
-   buttons share the row equally, each its one word under its icon (WorkLabel's .work-short). A browser without
-   container queries keeps the labels, wrapping whole, never cut.
-   ⚠️ THE CARD IS MEASURED, NEVER THE ROW (owner, 2026-11-04, the laptop's Open issues: each button alone on its line,
-   a word wide): on a wide card the buttons sit right of the words at their own width (08-shared.css, 640 px), and a
-   row measuring itself there measured nothing: 0 px, the narrow look. The card's width is the row's under its words
-   (the icon column lent back), and decides alike on every card. */
-.fm-record { container: work-row / inline-size; }
-.fm-work-row { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.fm-work-row > .btn { padding: 0 12px; white-space: nowrap; }
-.work-short { display: none; }
-@container work-row (max-width: 559px) {
-  .fm-work-row > .btn { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px; padding: 6px 4px; }
-  .work-long { display: none; }
-  .work-short { display: inline; }
-}
-.fm-record-head:has(> .fm-record-lead) ~ .fm-record-body .fm-work-row { margin-left: -30px; }
-/* ⚠️ A CARD'S STATE ON ITS BUTTONS' LINE (owner, 2026-11-05: "on the same line as the buttons on desktop (vertically
-   centered)", "maybe don't change the style" on a phone): its state pills (RecordCard ActionsRow) at the left of its
-   buttons on a card as wide as the buttons' labels need (the width at which they stop being tiles, above), where they
-   stood on a narrower one (STATE_INLINE). */
-.fm-work-state { display: none; }
-@container work-row (min-width: 560px) {
-  .fm-record-actions { align-items: center; }
-  .fm-work-state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-right: auto; min-width: 0; }
-  .fm-state-inline { display: none; }
-  /* the buttons beside it, at their own width; a standing Need help's line keeps its place above them */
-  .fm-work-state ~ .fm-work-row { flex: 0 1 auto; margin-left: 0; }
-  .fm-work-state ~ .fm-work-asked { order: -1; }
-}
-/* A card's Need help that nothing has answered yet ("🆘 Need help asked …", WorkButtons): a line of its own above the
-   buttons, on the Inbox and the Tickets tab alike (architecture review round 6). */
-.fm-work-asked { flex: 1 1 100%; min-width: 0; font-size: var(--text-xs); color: var(--text-dim); }
-
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status
    action already in these rows, and on a phone there is no width for both. */
@@ -406,22 +406,6 @@
   font-size: var(--text-2xs); padding: 1px 7px; border-radius: 999px;
   background: var(--bg-input); color: var(--text-dim); white-space: nowrap;
 }
-/* The actual status carrier: a filled pill, same family as a GitHub/Linear
-   status chip — reads as a deliberate label, not a colour-coded rule. */
-.fm-badge {
-  font-size: var(--text-2xs); font-weight: 600; padding: 3px 9px; border-radius: 999px;
-  white-space: nowrap; background: var(--bg-input); color: var(--text-secondary);
-}
-/* ⚠️ NEVER WIDER THAN ITS CARD (owner, 2026-11-05, a phone: "Ticket opened by Fab & Jm, on 31/10/2026 10:04 · In
-   progress" ran out of the card): on a card, a pill too long for its line wraps inside it */
-.fm-record .fm-badge { white-space: normal; max-width: 100%; overflow-wrap: anywhere; display: inline-block; }
-.fm-record :is(.fm-meta, .card-pill-status, .fm-work-state) > span { max-width: 100%; min-width: 0; }
-/* by its tone (fm/tone pillClass: a ticket's stage, a task's due state) — filled, its ok too */
-.fm-badge.tone-danger { background: var(--status-danger); color: #fff; }
-.fm-badge.tone-warn { background: var(--status-warning); color: #fff; }
-.fm-badge.tone-ok { background: var(--status-on); color: #fff; }
-/* who last moved a fault that is no ticket: the buttons' accent, no stage (fm/tone ACCENT_PILL) */
-.fm-badge.tone-accent { background: var(--accent); color: var(--text-on-accent); }
 
 .fm-check-icon { flex: 0 0 auto; display: flex; }
 .fm-check-icon.pass { color: var(--status-on); }
@@ -436,14 +420,8 @@
   padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
 .fm-headline-icon { flex: 0 0 auto; display: flex; color: var(--status-on); }
-/* The verdict is the checks' fold (owner, 2026-10-14): icon, words and chevron as one button, Save snapshot beside it. */
-.fm-headline-toggle {
-  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 14px;
-  background: none; border: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
-}
-/* the chevron right after the words, where the eye reads "this opens" (owner, 2026-10-14) — not at the far end */
-.fm-headline-toggle > svg { flex: 0 0 auto; color: var(--text-secondary); }
-.fm-headline-text { display: flex; flex-direction: column; gap: 2px; }
+/* The verdict, its checks always under it (owner, 2026-11-05), Save snapshot beside it. */
+.fm-headline-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .fm-headline strong { font-size: var(--text-lg); }
 /* its icon in its tone's colour (.tone-*, 08-shared.css) */
 :is(.tone-warn, .tone-danger) .fm-headline-icon { color: var(--tone); }

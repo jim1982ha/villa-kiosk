@@ -1,3 +1,57 @@
+## 2.496.708
+
+What you will see:
+- Every card in the Cockpit has a new look, the same on every tab (Inbox, Tickets, Schedule, Recap and Spend). On top, a coloured band says where it stands: red when you must act now, amber for a fault or
+  a late task, green when someone is handling it, grey when it is quiet or closed. The band holds the source icons, the
+  alert's number (for example "#91-P1"), the state ("Reopened", "Ticket in progress", "Unavailable") and, at its right,
+  the time. It always stays on one line.
+- Under it: the name of the device or the ticket, then one quiet line with the room and when VESTA checks again (for a
+  ticket, the device's name first, underlined: tap it to open the device), then the words, then who moved it last
+  ("Opened by Wayan", "By VESTA Agent", "Done by Wayan") without repeating the state or the time.
+- The buttons now form one bar along the bottom of the card, all the same width and easy to tap. The main action is
+  always first and in green: Done on an issue, Close on a ticket. On a phone the buttons show one word (Help, Ignore,
+  Ticket, Dismiss), on a computer the full words. A ticket's report is in the same bar.
+- Pressing Done (or No action needed on a ticket) shows the question on its own line, with Done first and Cancel second.
+- A device with several problems says "2 problems" on top; each problem then has its own small header (its icon, its
+  state, its time), its words and its own buttons.
+- A card on Watch says "Closes 15:06" on top, with its (i), and who closed it under its name.
+- Open issues are listed red first, then amber, then grey, then what is being handled.
+- The light theme uses the same look, in lighter colours.
+
+## 2.496.707
+
+What you will see:
+- Cockpit › Spend makes the monthly recap: one document with the month's spend, maintenance, faults, devices and
+  readiness. The spend statement was the recap's spend section on its own; it is gone, and "Generate recap" sits
+  beside the Month. Saved statements are listed with the saved recaps. The Month opens on the month running and
+  also offers the one just finished.
+- Cockpit › Recap: the readiness checks are always shown under the verdict (they no longer fold). "Villa occupied
+  since …" is no longer shown there. The faults and tickets check names its devices as pills, each device once, like
+  All devices reporting. In its line, "faults" opens Inbox › Open issues on those devices, and "tickets" opens the
+  Tickets tab.
+
+## 2.496.706
+
+What you will see:
+- A device's chart over 1h or 24h: an outage is striped like on 1w, 1m and 1y (it was a faint grey band, hard to
+  see), and its tooltip's key is that stripe, not the line's green dot. Its (i) says "Striped: unavailable at least
+  once in those 5min."
+- Advanced Settings › Devices: "Confirm before toggling" never drops to a second line. Every device keeps one line:
+  its name (2 lines at most), the toggle, the pencil and the chevron. On a narrow screen the toggle shows its shield
+  and On | Off without its words (the words still show on hover and are read aloud).
+
+## 2.496.705
+
+What you will see:
+- A chart's (i) is short: "Daily averages. Striped: unavailable at least once that day. Outages under 5min may not
+  show. Before 26 Oct: only whole-hour outages show." (the same on every chart, in its own steps).
+- A striped step's tooltip says "Unavailable at least once that day" (or hour, or week), with its day once, under
+  it. Its key is the striped swatch the chart draws, no longer the line's green dot; an outage's grey band is keyed
+  grey too.
+- Advanced Settings › Devices: the pencil and the fold chevron sit on the device's first line, at its right, and
+  "Confirm before toggling" on the line under it. A long id (with its "3D object: …") takes at most 2 lines; the
+  whole text shows on hover. On a wide screen the row keeps one line.
+
 ## 2.496.704
 
 What you will see:

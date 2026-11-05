@@ -47,27 +47,61 @@ const table = { offline: issue("unavailable:camera.offline"), missing: issue("un
 
 const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 console.log("\n  each field of the row, on each kind:");
+// ⚠️ STATUS ON TOP (owner, 2026-11-05): the strip says where it stands and when, the title names it, the quiet line
+// says where and when VESTA looks next, the words say what is wrong, never the state
 for (const [name, item] of Object.entries(table)) {
   const row = draw(h(InboxCard, { item, opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
-  ck(`${name}: its name on the first line, the time beside it, as a pill`, /<strong>.+<\/strong>/.test(inside(row, "fm-record-head"))
-     && text(inside(row, "fm-record-head")).includes(momentText(began)) && /fm-chip-static fm-record-check"/.test(row), row);
+  const strip = inside(row, "fm-record-strip");
+  ck(`${name}: its strip first, its time at its right end; its name on the line under`,
+     row.indexOf("fm-record-strip") < row.indexOf("fm-record-head") && /<strong>.+<\/strong>/.test(inside(row, "fm-record-head"))
+     && new RegExp(`fm-record-when">${momentText(began).replace(/\//g, "\\/")}</span></div>$`).test(strip)
+     && !text(inside(row, "fm-record-head") + inside(row, "fm-record-meta")).includes(momentText(began)), row);
   const opened = draw(h(AttentionCard, { card: item.card, onOpenEntity() {} }));
-  ck("  ...the opened card's second line is the row's own, the first keeps only its name and its next check",
-     (inside(row, "card-pill-line") ?? "") === (inside(opened, "card-pill-line") ?? "")
-     && !/fm-badge/.test(inside(opened, "fm-record-head")), opened);
-  ck("  ...the one card, in the Inbox as drawn alone", /fm-record-card/.test(row) && /fm-record-card/.test(opened)
-     && /fm-record-check[^>]*>[^<]*</.test(inside(opened, "fm-record-head")), row);
-  const pills = row.indexOf("card-pill-status"), room = row.indexOf("fm-entity-chip");
-  ck("  ...its room left, its state pills in the group pushed right, nothing of its state in the words",
-     (pills >= 0) === ((item.card.status ?? []).length > 0) && (pills < 0 || room < 0 || room < pills) && !row.slice(0, pills < 0 ? 0 : pills).includes("fm-badge")
-     && (pills < 0 || !/Missing|Unavailable|In progress/.test(text(inside(row, "cockpit-attention-sub-title") || ""))), row);
+  ck("  ...the one card, in the Inbox as drawn alone: the same strip and quiet line", /fm-record-card/.test(row) && /fm-record-card/.test(opened)
+     && inside(row, "fm-record-strip") === inside(opened, "fm-record-strip") && inside(row, "fm-record-meta") === inside(opened, "fm-record-meta"), opened);
+  const said = text(inside(strip, "fm-record-status")).replace(/\|/g, "");
+  const meta = inside(row, "fm-record-meta");
+  ck("  ...its state in its strip, its room the quiet line's first words, nothing of its state in the words or that line",
+     (said.length > 0) === ((item.card.status ?? []).length > 0 || name === "ticket" || name === "watched")
+     && (item.card.status ?? []).every((s) => said.includes(s.text)) && text(meta).startsWith(`|${item.card.room}|`)
+     && !/Missing|Unavailable|In progress|Never recorded/.test(text(meta) + text(inside(row, "cockpit-attention-sub-title") || "")), [said, meta, row]);
 }
-ck("each kind that has a state shows it as a pill; a ticket's, the pill of who took it (owner, 2026-11-02)", ["offline", "missing", "alarm", "task never done"]
-   .every((k) => (table[k].card.status ?? []).length > 0) && / · In progress$/.test(table.ticket.card.lines[0].latest?.text ?? "")
+ck("each kind that has a state says it; a ticket's, its stage, who took it its who line (owner, 2026-11-02/05)", ["offline", "missing", "alarm", "task never done"]
+   .every((k) => (table[k].card.status ?? []).length > 0) && table.ticket.card.lines[0].move?.stage === "ticket"
    && !(table.ticket.card.status ?? []).length, Object.entries(table).map(([k, v]) => [k, v.card.status]));
+{
+  const row = draw(h(InboxCard, { item: table.ticket, opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
+  ck("  ...a ticket's strip says \"Ticket in progress\" in green; its who line who opened it, not its stage again",
+     /strip-ok"[\s\S]*fm-record-status">Ticket in progress</.test(row) && /fm-record-who"[\s\S]*<span>Opened/.test(row)
+     && !/In progress/.test(text(inside(row, "fm-record-who"))), row);
+}
+{
+  // owner, 2026-11-05: "#91-P1" a small chip in the strip, before the state, from the record (fmEngine.alertLabel)
+  const alerted = attentionOf({ devices, entities, entityMap, resolvedRooms, sinceOf,
+    fmData: { ...EMPTY_FM_DATA, tickets: [ticket("f7", "lock.asked", { alertNumber: 91, alertPriority: "P1", status: "in_progress" })] } }).attentionItems;
+  const card = cockpitCard(groupAttention(alerted.filter((i) => i.id === "fault:f7"))[0], null, new Date(now));
+  const row = draw(h(InboxCard, { item: { kind: "issue", key: "f7", card }, opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
+  ck("  ...an alert's name a chip in its strip, before its state", /<span class="fm-record-number">#91-P1<\/span><span class="fm-record-status">Ticket in progress<\/span>/.test(inside(row, "fm-record-strip")), inside(row, "fm-record-strip"));
+}
+{
+  // owner, 2026-11-05: Open issues red, then amber, then grey, then what is being handled; within a colour, as grouped
+  const { cockpitIssues } = await import("@/config/cockpitIssues");
+  const groups = groupAttention(items);
+  const open = cockpitIssues({ attentionGroups: groups, devices, shows: () => true },
+    { fmData, cadence: null, now: new Date(now), entities, entityMap, resolvedRooms }).open;
+  const RANK = { danger: 0, warn: 1, lost: 2, handled: 3 };
+  const tones = open.map((c) => c.tone), kept = (t) => open.filter((c) => c.tone === t).map((c) => c.key).join()
+    === groups.map((g) => cockpitCard(g, null, new Date(now))).filter((c) => c.tone === t).map((c) => c.key).join();
+  const sorted = (ts) => ts.every((t, i) => i === 0 || RANK[ts[i - 1]] <= RANK[t]);
+  ck("Open issues in their colour's order: red, amber, grey, then handled; each colour in the grouping's order",
+     sorted(tones) && ["danger", "warn", "lost", "handled"].every((t) => tones.includes(t)) && ["danger", "warn", "lost", "handled"].every(kept)
+     // the grouping's own order is not that one: the order is the Inbox's
+     && !sorted(groups.map((g) => cockpitCard(g, null, new Date(now)).tone)), tones);
+}
 const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
-ck("the pills' group is pushed right; no rule frames a row", /\.card-pill-status \{[^}]*margin-left: auto/.test(css)
-   && !/\.fm-record-card\.ticket/.test(css));
+ck("the strip never wraps; no rule frames a row with a coloured edge", /\.fm-record-strip, \.fm-record-part-head \{[^}]*white-space: nowrap/.test(css)
+   && /\.fm-record-when \{[^}]*flex: none/.test(css) && /\.fm-record-number \{[^}]*flex: none/.test(css)
+   && !/\.fm-record-card\.ticket/.test(css) && !/border-left: [2-9]px/.test(css));
 
 console.log("\n  every card of the app, wherever it is drawn:");
 {
@@ -87,9 +121,12 @@ console.log("\n  every card of the app, wherever it is drawn:");
   const { default: RecordCard } = await import("@/components/fm/RecordCard");
   const drawn = draw(h(RecordCard, { title: "T", room: "Hall", when: "01/01/2026 10:00",
     pills: h("span", { className: "fm-clause" }, "tag") }));
-  ck("  ...its time a pill on the first line, its tags under it, its room on the second",
-     /fm-record-check">01\/01/.test(inside(drawn, "fm-record-head")) && !inside(drawn, "fm-record-body").includes("01/01/2026")
-     && inside(drawn, "fm-meta").includes("tag") && inside(drawn, "card-pill-line").includes("Hall"), drawn);
+  ck("  ...its time in its strip, its room then its tags on its quiet line",
+     /fm-record-when">01\/01/.test(inside(drawn, "fm-record-strip")) && !inside(drawn, "fm-record-main").includes("01/01/2026")
+     && text(inside(drawn, "fm-record-meta")) === "|Hall|tag|", drawn);
+  const bare = draw(h(RecordCard, { title: "T", when: "01/01/2026 10:00" }));
+  ck("  ...a card with no status and no icon still has its strip, its time in it (one card, every case)",
+     /^<div class="fm-record-card"><div class="fm-row fm-record"><div class="fm-record-strip strip-neutral"><span class="fm-record-when">01\/01\/2026 10:00<\/span><\/div>/.test(bare), bare);
 }
 
 console.log("\n  the same device, the same room, in the Inbox and on its ticket:");
@@ -138,7 +175,8 @@ ck("  ...a fault on that device: the fault's moment", rowWhen(cockpitCard(told, 
   ck("  ...a fault counting from when its device went offline: that moment, on its card and its ticket alike",
      rowWhen(cockpitCard(groupAttention([i])[0], null, new Date(now))) === momentText(since) && faultBegan(offline) === since
      && faultBegan({ openedAt }) === openedAt && faultBegan({ openedAt, since: "x" }) === openedAt);
-  ck("  ...the Tickets tab asks the same", /when=\{momentText\(faultBegan\(t\)\)\}/.test(readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8")));
+  const tab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
+  ck("  ...the Tickets tab asks the same", /const when = momentText\(faultBegan\(t\)\);/.test(tab) && /\bwhen=\{when\}/.test(tab));
 }
 
 console.log("\n  the wiring: every moment is actually read:");

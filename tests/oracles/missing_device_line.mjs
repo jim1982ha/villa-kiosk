@@ -61,7 +61,7 @@ console.log("  a device the villa's system no longer has:");
   // owner, 2026-11-01: never before the alert's name: one format for every card
   // owner, 2026-11-01: a state is every card's status pill, never the words of a line
   ck(`  ...and the Inbox's alert card says "${NOT_IN_HA}" in the status pill every card has, VESTA's title alone on its line, its message under it`,
-     /class="fm-badge tone-warn">Missing</.test(drawn) && drawn.includes(">#7-P1 (new)<") && !drawn.includes(`${NOT_IN_HA}, #7`)
+     /class="fm-record-status">Missing</.test(drawn) && drawn.includes(">#7-P1 (new)<") && !drawn.includes(`${NOT_IN_HA}, #7`)
      && drawn.includes("The door was unlocked while the villa was vacant."), drawn);
   const strip = cockpit(live, [{ ...alertTicket, id: "t-2", entityId: STRIP, alertNumber: 8, title: "Strip offline" }]).cards;
   const alert8 = { ...alert, key: "incident:8", title: "#8-P2 (new)" };

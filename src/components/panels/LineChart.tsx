@@ -18,12 +18,9 @@ import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
 import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
-import { NOT_KEPT_COLOR, STATUS_COLOR } from "@/utils/stateColors";
-import { cellBackground } from "@/utils/timelineCells";
 
 /** A step offline inside it: its stripes, the unavailable colour and nothing between. */
-const withinColor = (state: string) => (state ? STATUS_COLOR.unavailable : "transparent");
-import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage, keptWords } from "./chartUtils";
+import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage, keptWords, outageLook } from "./chartUtils";
 import { activeRange, valueExtent, type KeptChart, type ValueRange } from "@/utils/rangeFilter";
 import ChartRangeSlider, { RangeChip, rangeWords } from "./ChartRangeSlider";
 import { formatUnitValue } from "@/utils/entityValue";
@@ -101,6 +98,8 @@ export function TimeAxis({ g, right, slider }: { g: ChartGeometry | null; right?
 const keyOf = (l: LineSpec): ReactNode => (l.cls
   ? <i className={`key ${l.cls.split(" ")[0]}`} />
   : <span style={{ color: l.color }}>{l.dashed ? "┄" : "●"}</span>);
+/** An outage row's key: a swatch of the band it describes (outageLook), never its line's dot. */
+const outageKey = (gap: HistoryGap): ReactNode => <i className="key-outage" style={{ background: outageLook(gap).background }} aria-hidden />;
 
 export default function LineChart({ lines, window, height = 150, status, label, stepMs, filter, onExpand }: {
   lines: readonly LineSpec[];
@@ -176,9 +175,8 @@ export default function LineChart({ lines, window, height = 150, status, label, 
             <g className="chart-grid">{leftAxis.map((t) => <line key={t.v} x1="0" y1={t.y} x2={W} y2={t.y} />)}</g>
             {/* A band per line, in its own slice of the plot: which sensor was
                 out is part of the fact. Before the lines — SVG paints in order. */}
-            {g.series.flatMap((s, i) => s.bands.map((b, j) => (b.gap.within ? null :
-              <rect key={`gap${i}-${j}`} x={b.x} y={b.y} width={b.w} height={b.h} fill={b.gap.notKept ? NOT_KEPT_COLOR : STATUS_COLOR.unavailable} opacity={b.gap.notKept ? 0.5 : 0.18} />
-            )))}
+            {g.series.flatMap((s, i) => s.bands.map((b, j) => (b.gap.notKept ? <rect key={`gap${i}-${j}`} x={b.x} y={b.y}
+              width={b.w} height={b.h} fill={outageLook(b.gap).background} opacity={outageLook(b.gap).opacity} /> : null)))}
             {!nothing && g.series.map((sg, i) => {
               const l = lines[i];
               const cls = `${l.cls ?? ""}${l.dashed ? " dashed" : ""}`;
@@ -214,12 +212,12 @@ export default function LineChart({ lines, window, height = 150, status, label, 
             )}
             {hover && <line x1={hover.x} y1={TOP} x2={hover.x} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
           </svg>
-          {/* ⚠️ A STEP OFFLINE INSIDE IT (owner, 2026-11-05): its whole width, in the stripes of a state timeline's cell
-              that saw more than one state (timelineCells.cellBackground), unavailable and clear: the line runs through */}
-          {g.series.flatMap((s, i) => s.bands.filter((b) => b.gap.within).map((b, j) => (
+          {/* ⚠️ AN OUTAGE (owner, 2026-11-05): its whole step, in the stripes of a state timeline's cell that saw more than
+              one state (chartUtils.outageLook), at every step: a step offline inside it has the line running through */}
+          {g.series.flatMap((s, i) => s.bands.filter((b) => !b.gap.notKept).map((b, j) => (
             <i key={`within${i}-${j}`} className="chart-within" aria-hidden
               style={{ left: `${(b.x / W) * 100}%`, width: `${(b.w / W) * 100}%`, top: `${(b.y / H) * 100}%`, height: `${(b.h / H) * 100}%`,
-                background: cellBackground(["unavailable", ""], withinColor) }} />
+                background: outageLook(b.gap).background }} />
           )))}
           {hover && (
             <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtStepStamp(realAt(hover.t), stepMs, dated.spanHours)}
@@ -227,7 +225,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
                 const r = hover.readings[i], out = hover.outages[i];
                 const who = lines.length > 1 ? `${l.label} ` : "";
                 // An outage under the pointer says so — its span and length.
-                const said = out ? [{ key: `${i}-out`, marker: keyOf(l), text: `${who}${fmtOutage(out, g.window.to, g.spanHours)}` }] : [];
+                const said = out ? [{ key: `${i}-out`, marker: outageKey(out), text: `${who}${fmtOutage(out, g.window.to, g.spanHours)}` }] : [];
                 // A reading reads as the badge says it ("6.6 kW", not "6571W", 2.496.252):
                 // formatUnitValue is the one rule; a unitless line keeps the chart's number. A step offline inside
                 // it (HistoryGap.within) still has its mean: both are said.

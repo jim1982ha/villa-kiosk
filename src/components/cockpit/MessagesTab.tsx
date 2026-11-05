@@ -218,7 +218,7 @@ export function NoteDetail({ announcement: a, canOpenPage = false, folded, onTog
       when={a.at ? momentText(a.at) : undefined}
       erase={{ title: "Delete message", detail: a.title, run: (token) => eraseMessage(a, token, backendFetch) }}
       body={<div className="messages-card-body"><AnnouncementContent announcement={a} /></div>}
-      pages={a.page && canOpenPage ? [{ id: a.page, label: "Open the page" }] : undefined}
+      pages={a.page && canOpenPage ? [{ id: a.page, label: "Open the page", short: "Page" }] : undefined}
       actions={a.buttons.length > 0 ? <RecordButtons record={a} /> : undefined} />
   );
 }

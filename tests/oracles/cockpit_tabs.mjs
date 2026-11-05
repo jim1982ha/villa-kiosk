@@ -12,13 +12,15 @@ const ids = [...fm.matchAll(/\{ id: "(\w+)", label: "([^"]+)"/g)].map((m) => m[2
 // owner, 2026-10-14: Tickets right after the Overview; Today + Schedule one tab, Readiness + Recap one tab; the
 // Overview became Messages (ticket 17 of "One inbox", owner 2026-10-28)
 // ...named Inbox (owner, 2026-10-29: one word beside the others)
-ck("5 tabs: Inbox, then Tickets, Schedule (today's board + the schedule), Recap (readiness + the recap), Spend",
+ck("5 tabs: Inbox, then Tickets, Schedule (today's board + the schedule), Recap (readiness), Spend (spend + the recap)",
    /const MESSAGES_TAB: ModalTab<CockpitTab> = \{ id: "messages", label: "Inbox"/.test(cockpit) && !/"overview"/.test(cockpit)
    && ids.join() === "Tickets,Schedule,Recap,Spend", ids);
 ck("  ...the merged tabs show both their parts",
    /tab === "schedule" && \([\s\S]{0,40}<TodayTab[\s\S]{0,160}<ScheduleEditor \/>/.test(fm)
-   // the presence line ABOVE the readiness card since 2026-10-22 (owner)
-   && /tab === "recap" && \([\s\S]{0,200}recap-presence[\s\S]{0,80}<ReadinessTab[\s\S]{0,400}<RecapTab /.test(fm));
+   // owner, 2026-11-05: the Recap tab is the readiness alone, no "Villa occupied since …"; the monthly recap and the
+   // spend statement are one document, the Spend tab's
+   && /tab === "recap" && \(\s*<ReadinessTab [^\n]*\/>\s*\)\}/.test(fm) && !/recap-presence|usePresence|RecapTab/.test(fm)
+   && /useMonthlyDocument\("recap", inputs\)/.test(readFileSync(new URL("../../src/components/fm/SpendTab.tsx", import.meta.url), "utf8")));
 ck("  ...a profile without the Facility door (a guest) sees Messages alone, with no strip",
    /doors\.facility \? \[MESSAGES_TAB, \.\.\.FACILITY_TABS\] : \[MESSAGES_TAB\]/.test(cockpit)
    && /\{tabs\.length > 1 && <ModalTabs/.test(cockpit) && /const shownTab: CockpitTab = doors\.facility \? tab : "messages";/.test(cockpit));

@@ -9,7 +9,7 @@
 
 import { NEED_HELP } from "./deviceWork";
 import { closedTold } from "./faultConfirm";
-import { ACCENT_PILL, pillClass } from "./tone";
+import { ACCENT_PILL, QUIET_PILL, pillClass } from "./tone";
 import { STAGE_WORDS, type FmStage, isTicketResolved, helpIsLatest, recordLife, stageOf, standingHelp, statusChanges, stepsInTimeOrder } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
 import { authorWords } from "@/auth/roles";
@@ -56,28 +56,74 @@ export function notedStory(t: Pick<FmTicket, "updates">): { note: string; at: st
 /** A stage's pill colour: its tone (fmEngine.STAGE_WORDS), a ticket in progress the buttons' accent (tone.ACCENT_PILL),
  *  the colour of its Edit Ticket. The Tickets tab's stage pill and every card's who-moved-it pill alike. */
 export function stagePillClass(stage: FmStage): string {
-  return stage === "ticket" ? ACCENT_PILL : pillClass(STAGE_WORDS[stage].tone);
+  // a closed record is quiet: its card grey (owner, 2026-11-05, the "Status on top" card)
+  return stage === "ticket" ? ACCENT_PILL : stage === "closed" ? QUIET_PILL : pillClass(STAGE_WORDS[stage].tone);
 }
 
 export function faultLatest(t: FmTicket, stamp: (at: string) => string): { text: string; tone: string } | null {
-  const stage = STAGE_WORDS[stageOf(t)];
+  const m = faultMove(t);
+  return m ? { text: moveText(m, stamp), tone: m.tone } : null;
+}
+
+/** ⚠️ WHO LAST MOVED IT, IN PARTS (owner, 2026-11-05, the "Status on top" card): the card's strip says where it stands
+ *  and since when, its who line only who moved it. The pill above was one sentence; the card now draws its parts in two
+ *  places (moveState, moveWho), never by cutting that sentence. `word`: what the step did ("Ticket opened", "Reopened",
+ *  "Done", "Need help asked", a close's word); `stage`: a ticket's, said on a ticket only; `tone`: its stage's colour. */
+export interface FaultMove {
+  kind: "help" | "opened" | "reopened" | "closed";
+  word: string;
+  who?: string;
+  at: string;
+  stage?: FmStage;
+  tone: string;
+}
+
+/** The latest of its status steps, as its parts: null while it is only a fault nobody moved. Pure. */
+export function faultMove(t: FmTicket): FaultMove | null {
+  const stage = stageOf(t);
   const ticket = recordLife(t).ticket;
-  const said = (word: string, at: string, who?: string) =>
-    ({ text: `${word}${who ? ` by ${who},` : ""} on ${stamp(at)}${ticket ? ` · ${stage.word}` : ""}`,
-       tone: stagePillClass(stageOf(t)) });
+  const said = (kind: FaultMove["kind"], word: string, at: string, who?: string): FaultMove =>
+    ({ kind, word, at, ...(who ? { who } : {}), ...(ticket ? { stage } : {}), tone: stagePillClass(stage) });
   const steps = statusSteps(t);
   const last = steps[steps.length - 1];
   const help = standingHelp(t);
-  if (help && helpIsLatest(t)) return said(`${NEED_HELP} asked`, help.at, help.by);
+  if (help && helpIsLatest(t)) return said("help", `${NEED_HELP} asked`, help.at, help.by);
   if (!last) {
-    if (t.resolvedAt && isTicketResolved(t)) return said("Done", t.resolvedAt);
-    return stageOf(t) === "ticket" ? said("Ticket opened", t.openedAt) : null;
+    if (t.resolvedAt && isTicketResolved(t)) return said("closed", "Done", t.resolvedAt);
+    return stage === "ticket" ? said("opened", "Ticket opened", t.openedAt) : null;
   }
   // closed: told as every Closed section tells it (faultConfirm.closedTold), the action's word and who
-  if (isTicketResolved(last)) { const c = closedTold(t); return said(c.word, last.at, c.who); }
+  if (isTicketResolved(last)) { const c = closedTold(t); return said("closed", c.word, last.at, c.who); }
   const who = last.who || authorWords(last);
-  if (last.kind === "reopened") return said("Reopened", last.at, who);
-  return last.status === "in_progress" ? said("Ticket opened", last.at, who) : null;
+  if (last.kind === "reopened") return said("reopened", "Reopened", last.at, who);
+  return last.status === "in_progress" ? said("opened", "Ticket opened", last.at, who) : null;
+}
+
+/** The move in one sentence: "Ticket opened by Wayan, on 31/10/2026 09:55 · In progress" (the recap's, a check's). */
+export function moveText(m: FaultMove, stamp: (at: string) => string): string {
+  return `${m.word}${m.who ? ` by ${m.who},` : ""} on ${stamp(m.at)}${m.stage ? ` · ${STAGE_WORDS[m.stage].word}` : ""}`;
+}
+
+/** What the card's strip says of the move: a ticket its stage ("Ticket in progress", "Resolved"), a reopening or a
+ *  close its word; a Need help nothing (its who line says it, with when). Pure. */
+export function moveState(m: FaultMove | null | undefined): { text: string; tone: string } | null {
+  if (!m) return null;
+  if (m.stage) return { text: STAGE_WORDS[m.stage].card, tone: m.tone };
+  if (m.kind === "reopened" || m.kind === "closed") return { text: m.word, tone: m.tone };
+  return null;
+}
+
+/** ⚠️ WHO MOVED IT, SAID ONCE (owner, 2026-11-05: "Opened by Fab & Jm", "By VESTA Agent", "Done by Wayan"): the move's
+ *  word unless the strip says it (`strip`: the strip's words; a ticket's opening is "Opened" under its stage), who, and
+ *  its moment unless the strip's time is that moment (`when`). null when nothing is left to say. Pure. */
+export function moveWho(m: FaultMove | null | undefined, strip: readonly string[], when: string | undefined,
+  stamp: (at: string) => string): string | null {
+  if (!m) return null;
+  const word = strip.includes(m.word) ? "" : m.kind === "opened" && m.stage && strip.includes(STAGE_WORDS[m.stage].card) ? "Opened" : m.word;
+  const moment = stamp(m.at) === when ? "" : stamp(m.at);
+  const head = word && m.who ? `${word} by ${m.who}` : m.who ? `By ${m.who}` : word;
+  if (!head) return moment ? `On ${moment}` : null;
+  return moment ? `${head}${m.who ? "," : ""} on ${moment}` : head;
 }
 
 /** The card's notes, in order, each with its date: the fault's own note ("Check: …"), every step's note, and of its

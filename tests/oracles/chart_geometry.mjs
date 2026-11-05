@@ -167,8 +167,21 @@ console.log("\n  an outage you can SEE and POINT AT (2.496.149 — a pump's 3-mi
   ck("  ...and only there: each break in the line is a band's width",
      g.series[0].runs.slice(1).every((r, k) => b.some((x) => Math.abs(g.series[0].runs[k].at(-1).x - x.x) < 1e-6 && Math.abs(r[0].x - (x.x + x.w)) < 1e-6)));
   const lc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
-  ck("LineChart prints the outage row the geometry reports", /const said = out \? \[\{ key: `\$\{i\}-out`, marker: keyOf\(l\), text: `\$\{who\}\$\{fmtOutage\(out, g\.window\.to, g\.spanHours\)\}` \}\] : \[\];/.test(lc)
+  ck("LineChart prints the outage row the geometry reports", /const said = out \? \[\{ key: `\$\{i\}-out`, marker: outageKey\(out\), text: `\$\{who\}\$\{fmtOutage\(out, g\.window\.to, g\.spanHours\)\}` \}\] : \[\];/.test(lc)
      && /if \(!r\) return said;/.test(lc));
+  // owner, 2026-11-05: "make sure the legend is correct for this second line": an outage's row is keyed by the band it
+  // describes, never the line's green dot — the band and the key paint from the one outageLook
+  const { outageLook } = await import("@/components/panels/chartUtils");
+  const { STATUS_COLOR: SC, NOT_KEPT_COLOR: NK } = await import("@/utils/stateColors");
+  const striped = outageLook({ from: 0, to: 1, within: "day" }).background;
+  ck("  ...its key is the band's look: striped for every outage, at every step; its own colour for not kept",
+     /repeating-linear-gradient/.test(striped) && striped.includes(SC.unavailable)
+     // owner, 2026-11-05 ("is unavailable handled the same way here?"): a 24h chart's outage was a faint grey band,
+     // the week's striped: one look for an outage at every step
+     && outageLook({ from: 0, to: 1 }).background === striped && outageLook({ from: 0, to: 1, notKept: true }).background === NK
+     && /s\.bands\.filter\(\(b\) => !b\.gap\.notKept\)/.test(lc) && /b\.gap\.notKept \? <rect/.test(lc)
+     && /const outageKey = \(gap: HistoryGap\)[^\n]*outageLook\(gap\)/.test(lc)
+     && /background: outageLook\(b\.gap\)\.background/.test(lc), striped);
 }
 
 {
@@ -184,7 +197,8 @@ console.log("\n  an outage you can SEE and POINT AT (2.496.149 — a pump's 3-mi
      { bands: b.length, runs: g.series[0].runs.length, h });
   const lc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
   ck("  ...drawn in a state timeline's stripes for a cell of several states (timelineCells.cellBackground), never a pattern of its own",
-     /background: cellBackground\(\["unavailable", ""\], withinColor\)/.test(lc) && !/<pattern[^>]*within/.test(lc));
+     /background: outageLook\(b\.gap\)\.background/.test(lc) && !/<pattern[^>]*within/.test(lc)
+     && /cellBackground\(\["unavailable", ""\]/.test(readFileSync(new URL("../../src/components/panels/chartUtils.ts", import.meta.url), "utf8")));
 }
 
 done("✅ one chart geometry; an outage is never a reading");

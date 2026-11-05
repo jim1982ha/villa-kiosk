@@ -9,9 +9,11 @@ import { CheckCircle2 } from "lucide-react";
 import WorkButtons, { useCardWork, type RaisedFault } from "@/components/fm/WorkButtons";
 import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
-import { cardIcons, rowWhen, type CardLine, type CardView, type LineSources } from "@/config/cockpitCard";
+import { cardIcons, cardStrip, lineStrip, rowWhen, type CardLine, type CardView } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
-import RecordCard, { ActionsRow, StateWhereItStands, StatusPill } from "@/components/fm/RecordCard";
+import RecordCard, { type CardPart } from "@/components/fm/RecordCard";
+import { moveWho } from "@/fm/faultNotes";
+import { ACCENT_PILL } from "@/fm/tone";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
@@ -39,94 +41,83 @@ export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicke
 }
 
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
- *  source icons before the device's name, its time, the room under it, its problems' sections. Its name opens the
- *  device. Draws `card` (config/cockpitCard) and nothing else: what it says is decided there, by value. Pure: a check
- *  draws it. */
+ *  strip (its source icons, its alert's name, where it stands, its time), its name, its room and next check, its
+ *  problems. Its name opens the device. Draws `card` (config/cockpitCard) and nothing else: what it says is decided
+ *  there, by value (cardStrip, lineStrip, faultNotes.moveWho). Pure: a check draws it. */
 export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
   /** The issue as told (messagesModel issueAsTold): a line holding VESTA's message of its alert draws it. */
   card: CardView;
   onOpenEntity: (id: string) => void;
-  /** A problem's buttons, beside it. */
+  /** A problem's buttons: its own bar. */
   buttons?: (line: CardLine) => ReactNode;
   /** Marked, as the card a device window's warning asked for (owner, 2026-10-24). */
   focused?: boolean;
 }) {
   const icons = cardIcons(card);
-  const rows = card.lines.map((line) => buttons?.(line) ?? null);
-  const status = [card.status ?? []].flat();
-  // the card's state at its first problem's buttons, on a wide card (ActionsRow)
-  const atFirst = !!rows[0] && status.length > 0;
+  const strip = cardStrip(card);
+  // ⚠️ A WATCH CARD'S STRIP SAYS WHEN IT CLOSES (owner, 2026-11-05: "Closes 15:06" with its (i)); how it was cleared,
+  // when and by whom, is its who line
+  const watch = card.look === "watched" && card.nextCheck ? card.nextCheck : null;
+  const status = watch ? [{ text: watch.when, tone: ACCENT_PILL }] : strip.status;
+  const when = card.lines.length ? rowWhen(card) : undefined;
+  const parts: CardPart[] = card.lines.map((line, i) => {
+    const own = lineStrip(line);
+    const alone = card.lines.length === 1;
+    // its time and its words as its strip says them: the card's for one problem, its header's for one of several
+    const said = alone ? status : own.status, at = alone ? when : rowWhen({ lines: [line] });
+    return {
+      key: line.key, status: own.status, number: own.number, when: at, tone: own.tone,
+      lead: icons.lines[i] ? <SourceIcons {...icons.lines[i]!} size={14} /> : undefined,
+      text: <LineWords line={line} watched={card.look === "watched"} />,
+      who: card.look === "watched" ? line.closing : moveWho(line.move, said.map((s) => s.text), at, momentText),
+      actions: buttons?.(line) ?? undefined,
+    };
+  });
   return (
     <RecordCard
       // ⚠️ ITS NAME OPENS THE DEVICE (owner, 2026-11-01, the audit: a device pill said the name again under it)
       title={card.entityId
         ? <button type="button" className="fm-title-link" onClick={() => onOpenEntity(card.entityId!)}>{card.title}</button> : card.title}
       // the time of its problem, the same as its ticket's (rowWhen)
-      when={card.lines.length ? rowWhen(card) : undefined}
-      // the card's room pill, on the line under its name (CardPillLine)
+      when={when}
       room={card.room}
-      // its device's own state ("Missing"): the status pill every card has
-      status={card.status}
-      statusInBody={atFirst}
-      // where its (first) problem comes from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
+      status={status}
+      statusTip={watch?.tip}
+      number={strip.number}
+      // where its problems come from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look
         ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
-        : icons.head ? <SourceIcons {...icons.head} />
-        // the icon column kept when the lines draw the icons (config/cockpitCard.cardIcons): they stay inside the card
-        : icons.column ? <span className="fm-record-lead-empty" aria-hidden="true" /> : undefined}
-      // when its problems are read again or, on the Watch list, when VESTA closes it: a pill after its room (owner,
-      // 2026-11-01); hovering it says it in words, with its date and time (owner, 2026-10-19). No chevron: the card is
-      // the button.
-      check={card.nextCheck ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
-      body={(
-        <ul className="cockpit-attention-subs">
-          {card.lines.map((line, i) => <CockpitAttentionSub key={line.key} line={line} icons={icons.lines[i] ?? null}
-            buttons={rows[i]} state={i === 0 && atFirst ? status.map((s) => <StatusPill key={s.text} {...s} />) : null} />)}
-        </ul>
-      )}
-      // a fault being confirmed: its frame marked, the one place its look differs (owner, 2026-10-23)
-      tone={[card.look === "watched" ? "fault-watched" : "", focused ? "cockpit-focus" : ""].filter(Boolean).join(" ") || undefined}
+        : icons.head ? <SourceIcons {...icons.head} /> : undefined}
+      // when its problems are read again: quiet text after its room; hovering it says it in words, with its date and
+      // time (owner, 2026-10-19). On the Watch list it is the strip's.
+      check={card.nextCheck && !watch ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
+      parts={parts}
+      // its strip's colour when nothing is said (cardStrip); a fault being confirmed: its frame marked (owner, 2026-10-23)
+      tone={[strip.tone, card.look === "watched" ? "fault-watched" : "", focused ? "cockpit-focus" : ""].filter(Boolean).join(" ")}
     />
   );
 }
 
-function CockpitAttentionSub({ line, icons, buttons, state }: {
-  line: CardLine; icons: LineSources | null; buttons?: ReactNode;
-  /** The card's own state pills, at this problem's buttons on a wide card (its first). */
-  state?: ReactNode;
-}) {
+/** A problem's words: what is wrong, VESTA's message of its alert or its short story on Telegram, when it closes. */
+function LineWords({ line, watched }: { line: CardLine; watched: boolean }) {
   return (
-    <li className="cockpit-attention-sub">
-      <div className="cockpit-attention-sub-line fm-record-gutter">
-        {/* in the card's icon column (RecordCard's gutter), not before the text: every line's text lines up */}
-        {icons && <span className="fm-record-gutter-icon"><SourceIcons {...icons} size={14} /></span>}
-        <span className="cockpit-attention-sub-text">
-          {/* its words whole, over as many lines as they need: no hover repeats them (owner, 2026-10-31) */}
-          <span className="cockpit-attention-sub-title">{line.text}</span>
-          {/* who last moved this fault and its stage, in the stage's colour, beside its words (owner, 2026-11-01/02) */}
-          {line.latest && <StateWhereItStands atButtons={!!buttons} className="fm-meta"><StatusPill {...line.latest} /></StateWhereItStands>}
-          {/* what happened about it on Telegram — the short story its Status tells: the alert sent, a reminder, an
-              escalation, a button pressed (owner, 2026-10-14; every line since ticket 19 of "One inbox") */}
-          {/* ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components"):
-              VESTA's message of its alert, joined once (messagesModel issueAsTold), says it all here, as Telegram shows
-              it (its "To:", "What to do", its Status: the same story), and the card keeps every card's buttons */}
-          {line.told ? <div className="messages-card-body"><AnnouncementContent announcement={line.told} /></div> : (line.story.length > 0 && (
-            <ul className="cockpit-attention-story">
-              {line.story.map((s) => <li key={`${s.at} ${s.note}`} className="cockpit-attention-latest">{s.note} · {momentText(s.at)}</li>)}
-            </ul>
-          ))}
-          {/* when the VESTA Agent closes it if it stays right (owner, 2026-10-21) */}
-          {/* ...or, on a card on the Watch list, how it was cleared, when and by whom (owner, 2026-10-23) */}
-          {line.closing && <span className="cockpit-attention-latest">{line.closing}</span>}
-        </span>
-      </div>
-      {buttons && (
-        <ActionsRow state={state || line.latest ? <>{state}{line.latest && <StatusPill {...line.latest} />}</> : undefined}>
-          {buttons}
-        </ActionsRow>
-      )}
-    </li>
+    <div className="cockpit-attention-sub-text">
+      {/* its words whole, over as many lines as they need: no hover repeats them (owner, 2026-10-31) */}
+      {line.text && <span className="cockpit-attention-sub-title">{line.text}</span>}
+      {/* ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components"):
+          VESTA's message of its alert, joined once (messagesModel issueAsTold), says it all here, as Telegram shows
+          it (its "To:", "What to do", its Status: the same story); else what happened about it on Telegram — the
+          alert sent, a reminder, an escalation, a button pressed (owner, 2026-10-14; ticket 19 of "One inbox") */}
+      {line.told ? <div className="messages-card-body"><AnnouncementContent announcement={line.told} /></div> : (line.story.length > 0 && (
+        <ul className="cockpit-attention-story">
+          {line.story.map((s) => <li key={`${s.at} ${s.note}`} className="cockpit-attention-latest">{s.note} · {momentText(s.at)}</li>)}
+        </ul>
+      ))}
+      {/* when the VESTA Agent closes it if it stays right (owner, 2026-10-21); on the Watch list, how it was cleared is
+          its who line */}
+      {line.closing && !watched && <span className="cockpit-attention-latest">{line.closing}</span>}
+    </div>
   );
 }
 

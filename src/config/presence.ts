@@ -260,8 +260,3 @@ export function sinceText(s: Since, dayTime: (t: number) => string, day: (t: num
 /** What a "since" says while the history is read. */
 export const SINCE_LOADING = "…";
 
-/** The Recap's line: "Villa occupied since 19 Oct, 09:12", "Villa presence unknown". */
-export function recapPresenceText(p: Presence, when: string): string {
-  if (p.state === "unknown") return "Villa presence unknown";
-  return `Villa ${p.state}${when ? ` since ${when}` : ""}`;
-}

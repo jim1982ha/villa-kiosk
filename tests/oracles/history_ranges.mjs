@@ -172,8 +172,8 @@ console.log("\n  a step offline inside it (owner, 2026-11-05: a meter offline 22
      && week.length === 1 && week[0].within === "hour" && week[0].from <= day3 && week[0].to > day3, { year, week });
   ck("  ...a slot not compiled yet is no outage, and nothing is marked with every slot written",
      (await marks(() => false, 720, "day")).length === 0, await marks(() => false, 720, "day"));
-  ck("  ...its tooltip: \"Unavailable during this day · <day>\"",
-     fmtOutage(month[0], now, 720).startsWith("Unavailable during this day · ") && fmtOutage(week[0], now, 168).startsWith("Unavailable during this hour · "),
+  ck("  ...its tooltip: \"Unavailable at least once that day\" (owner, 2026-11-05), its day once, under it",
+     fmtOutage(month[0], now, 720) === "Unavailable at least once that day" && fmtOutage(week[0], now, 168) === "Unavailable at least once that hour",
      fmtOutage(month[0], now, 720));
 }
 // owner, 2026-11-05: "Unavailable · 13:40–13:40 (1s)" for a drop of 0.46s
@@ -228,8 +228,8 @@ console.log("\n  an outage inside a step looks the same whatever drew it, and a 
     stateRows: async (e, from, to) => changes.filter((r) => { const t = Date.parse(r.last_changed); return t >= from && t <= to; }) };
   const g = (await loadOne(plain, { kind: "trend", ids: ["sensor.x"], hours: 168, period: "hour" }, now))["sensor.x"].gaps;
   const inside = g.filter((x) => x.within), breaks = g.filter((x) => !x.within && !x.notKept);
-  ck("  ...a sensor with no figures: the hour offline 22min striped as the figures' (\"during this hour\"), the whole hour a break",
-     inside.some((x) => x.from <= off && x.to > off && x.within === "hour") && fmtOutage(inside[0], now, 168).startsWith("Unavailable during this hour")
+  ck("  ...a sensor with no figures: the hour offline 22min striped as the figures' (\"at least once that hour\"), the whole hour a break",
+     inside.some((x) => x.from <= off && x.to > off && x.within === "hour") && fmtOutage(inside[0], now, 168) === "Unavailable at least once that hour"
      && breaks.some((x) => x.from <= gone + 30 * MIN && x.to > gone + 30 * MIN && x.actual), { inside, breaks });
   // a 50 ms drop (the villa's system reloading its virtual devices): no figure would miss it, so no step is striped
   // (architecture review 25: a template sensor's whole day was striped on its month for each reload)
@@ -253,15 +253,15 @@ console.log("\n  every chart's (i): what it shows and what it may not (owner, 20
   const { barTipRows, barLayout } = await import("@/utils/barChart");
   const about = Object.fromEntries(RANGES.map((r) => [r.key, chartAbout("average", r.grainMs, now - r.hours * HOUR, kept)]));
   ck("1h and 24h: every reading in five-minute steps, a band over each five minutes an outage touched",
-     about["1h"] === about["24h"] && about["24h"] === "Every reading, in 5min steps. A grey band covers each 5min in which the device was unavailable, however briefly: its tooltip says when and for how long."
+     about["1h"] === about["24h"] && about["24h"] === "Every reading, in 5min steps. Striped: unavailable at least once in those 5min."
      // as wide as drawn: a 0.46s drop is a band of the five minutes it touched (widenGaps), its tooltip the real length
      && widenGaps([{ from: 1_000_056_000, to: 1_000_056_460 }], 0, 2e9)[0].to - widenGaps([{ from: 1_000_056_000, to: 1_000_056_460 }], 0, 2e9)[0].from === PERIOD_MS["5minute"], about["24h"]);
   ck("  ...1w: hourly averages, an hour striped when unavailable part of it, an outage under the finest figures' 5min may not show",
-     about["1w"] === "Hourly averages. An hour striped grey had the device unavailable for part of it. An outage shorter than 5min may not show: averages do not keep it.", about["1w"]);
+     about["1w"] === "Hourly averages. Striped: unavailable at least once that hour. Outages under 5min may not show.", about["1w"]);
   const keptDay = (await import("@/utils/dateText")).dayMonth(kept);
   ck("  ...1m and 1y: days and weeks, and before what the villa's system keeps, only an outage of a whole hour (day)",
-     about["1m"].startsWith("Daily averages. A day striped grey") && about["1m"].endsWith(`Before ${keptDay}, only an outage of a whole hour shows: the villa's system keeps finer figures since then.`)
-     && about["1y"].startsWith("Weekly averages. A week striped grey") && about["1y"].includes("only an outage of a whole day shows"), [about["1m"], about["1y"]]);
+     about["1m"] === `Daily averages. Striped: unavailable at least once that day. Outages under 5min may not show. Before ${keptDay}: only whole-hour outages show.`
+     && about["1y"].startsWith("Weekly averages. Striped: unavailable at least once that week.") && about["1y"].endsWith(": only whole-day outages show."), [about["1m"], about["1y"]]);
   {
     // a sensor with no figures: before what is kept its month is the "No longer kept" band, and its (i) says so, never
     // "only an outage of a whole hour shows" of figures it has none of (architecture review 25)
@@ -272,14 +272,14 @@ console.log("\n  every chart's (i): what it shows and what it may not (owner, 20
     const s = (await loadOne(bare, { kind: "trend", ids: ["sensor.t"], hours: 720, period: "day" }, now))["sensor.t"];
     const words = chartAbout("average", PERIOD_MS.day, now - 30 * DAY, kept, drawsUnkept([s]));
     ck("  ...a month with no figures, drawn \"No longer kept\" before what is kept, says so in its (i)",
-       s.gaps.some((g) => g.notKept) && words.endsWith(`Before ${keptDay}, the villa's system no longer keeps its readings.`)
+       s.gaps.some((g) => g.notKept) && words.endsWith(`Before ${keptDay}: no longer kept.`)
        && !drawsUnkept([{ gaps: [{ from: 0, to: 1 }] }, undefined]), words);
   }
   ck("  ...a window inside what is kept says nothing of before",
      !chartAbout("average", PERIOD_MS.day, kept + DAY, kept).includes("Before"));
   ck("  ...a state band: each step's states, unavailable at any length; a total: why it shows no outage",
-     chartAbout("states", PERIOD_MS.day, now - 30 * DAY, kept).startsWith("Each day shows the states it saw: striped when it saw several, grey among them when the device was unavailable, at any length. Before ")
-     && chartAbout("total", PERIOD_MS.hour) === `Hourly totals. An hour with no total written is a grey band, "${barTipRows({ t: 0, segs: null }, String)[0].text}". A meter counts on through a shorter outage, so a total written stays right: no outage is shown inside it.`
+     chartAbout("states", PERIOD_MS.day, now - 30 * DAY, kept) === `Each day shows its states: striped when several, grey when unavailable. Before ${keptDay}: no longer kept.`
+     && chartAbout("total", PERIOD_MS.hour) === `Hourly totals. Grey: no total, "${barTipRows({ t: 0, segs: null }, String)[0].text}". No outage shows: a meter keeps counting through it.`
      && barLayout([{ t: 0, segs: null }]).bars[0].missing,
      [chartAbout("states", PERIOD_MS.day, now - 30 * DAY, kept), chartAbout("total", PERIOD_MS.hour)]);
   ck("  ...words a person reads: no platform name, no long dash", Object.values(about).every((w) => !/Home Assistant|\bHA\b| — /.test(w)));

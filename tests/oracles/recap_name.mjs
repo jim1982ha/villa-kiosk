@@ -13,10 +13,11 @@ const code = (s) => s.split("\n").filter((l) => !/^\s*(\/\/|\/?\*)/.test(l)).joi
 const doc = { id: "1", month: "2026-09", markdown: "#", generatedAt: 0 };
 ck("a recap saved before the rename (kind \"report\") reads as a recap",
    recapKind({ ...doc, kind: "report" }).kind === "recap");
-ck("  ...and the other kinds pass untouched", recapKind({ ...doc, kind: "spend" }).kind === "spend"
-   && recapKind({ ...doc, kind: "recap" }).kind === "recap");
+// owner, 2026-11-05: the recap and the spend statement are one document; a statement saved before reads as a recap
+ck("  ...a statement saved before the merge (kind \"spend\") too; the others pass untouched", recapKind({ ...doc, kind: "spend" }).kind === "recap"
+   && recapKind({ ...doc, kind: "recap" }).kind === "recap" && recapKind({ ...doc, kind: "readiness" }).kind === "readiness");
 
-const screens = ["components/fm/RecapTab.tsx", "components/fm/FacilitySections.tsx", "components/fm/SavedDocumentsList.tsx"];
+const screens = ["components/fm/SpendTab.tsx", "components/fm/FacilitySections.tsx", "components/fm/SavedDocumentsList.tsx"];
 const said = screens.filter((p) => /\breport\b/i.test(code(rd(p))));
 ck("no Facility screen says 'report' for its own document", said.length === 0, said);
 const builder = code(rd("fm/fmDocuments.ts"));

@@ -15,11 +15,10 @@ import { alarmText, rowText } from "@/config/reading";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
-import { alertNumberOf, closedAsLasting, DUE_WORDS, faultBegan, faultTitle, fmAttention, helpIsLatest, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
+import { alertLabel, alertNumberOf, closedAsLasting, DUE_WORDS, faultBegan, faultTitle, fmAttention, helpIsLatest, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import type { AgentCadence } from "@/agent/agentApi";
 import { watchedRecords } from "@/fm/faultConfirm";
-import { faultLatest, notedStory } from "@/fm/faultNotes";
-import { momentText } from "@/utils/dateText";
+import { faultMove, notedStory, type FaultMove } from "@/fm/faultNotes";
 import { deviceWorkKey, groupByDevice } from "@/fm/deviceWork";
 import { faultSource, type IssueSource } from "@/fm/issueSource";
 import type { FmData, FmTicketCheck } from "@/fm/fmTypes";
@@ -78,8 +77,8 @@ export interface AttentionItem {
   openedBefore?: true;
   /** Set on a fault: its short story on Telegram, in time order (faultNotes.notedStory — "Escalation sent to Owner"). */
   story?: { note: string; at: string }[];
-  /** Set on a fault: who last moved it, when, and its stage (faultNotes.faultLatest), its pill. */
-  latest?: { text: string; tone: string } | null;
+  /** Set on a fault: who last moved it, when, and its stage (faultNotes.faultMove): the card's strip and who line. */
+  move?: FaultMove | null;
   /** Set on a fault: the Need help pressed on it that nothing has answered yet (fmEngine.standingHelp). */
   help?: HelpAsked;
   /** Its `latest` pill says that Need help (fmEngine.helpIsLatest): its buttons do not say it again. */
@@ -87,6 +86,8 @@ export interface AttentionItem {
   /** Set on a fault an alert raised: the number its Telegram messages carry ("#91"), which names VESTA's card of it
    *  (messagesModel.cardsOfIssue). */
   alertNumber?: number;
+  /** Its alert's name as Telegram writes it ("#91-P1", fmEngine.alertLabel): the chip of its card's strip. */
+  alertLabel?: string;
   /** Set on a fault: the other open records that say exactly the same thing on the same card (foldTwins) — one line,
    *  "(N times)", and the card's buttons act on every one of them. */
   twins?: string[];
@@ -473,11 +474,11 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       ticketId: t.id,
       stage: stageOf(t),
       story: notedStory(t),
-      latest: faultLatest(t, momentText),
+      move: faultMove(t),
       help: standingHelp(t),
       ...(helpIsLatest(t) ? { helpInPill: true as const } : {}),
       openedAt: faultBegan(t),
-      ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t) } : {}),
+      ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t), alertLabel: alertLabel(alertNumberOf(t)!, t.alertPriority) } : {}),
       source: faultSource(t),
       check: t.check,
       closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf, t.openedAt),

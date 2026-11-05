@@ -24,12 +24,11 @@ import {
   Wrench, Wallet, FileText, CalendarCog,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
-import { usePresence } from "@/config/usePresence";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import { useFmData } from "@/fm/FmDataContext";
-import { buildReadiness, type CheckTarget } from "@/fm/readiness";
+import { buildReadiness, type CheckLink, type CheckTarget } from "@/fm/readiness";
 import type { DocumentInputs } from "@/fm/monthlyDocument";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { resolveSiteTitle } from "@/config/AppConfig";
@@ -39,15 +38,15 @@ import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
 import TicketsTab from "./TicketsTab";
 import SpendTab from "./SpendTab";
-import RecapTab from "./RecapTab";
 import ScheduleEditor from "./ScheduleEditor";
 import { useDeviceIdentity, useVillaModel } from "@/config/VillaModel";
 
 export type FacilityTab = "tickets" | "schedule" | "recap" | "spend";
 
 /** The Facility tabs, shown in the Cockpit after its own view (2.496.273). Owner, 2026-10-14: Tickets right after
- *  the Overview; "Today" and "Schedule" are one tab (today's board, then the schedule it measures against); "Readiness"
- *  and "Recap" are one tab (the live check, then the month's recap built from it). */
+ *  the Overview; "Today" and "Schedule" are one tab (today's board, then the schedule it measures against). Recap is
+ *  the live readiness check; the month's recap is the Spend tab's (owner, 2026-11-05: the recap and the spend
+ *  statement, one document). */
 export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
   { id: "tickets", label: "Tickets", icon: Wrench },
   { id: "schedule", label: "Schedule", icon: CalendarCog },
@@ -63,9 +62,13 @@ export const FACILITY_TABS: ModalTab<FacilityTab>[] = [
  * Cockpit window itself, whichever tab shows (useFacilityLiveView, registered by the window).
  */
 export default function FacilitySections({
-  tab, onOpenEntity, editTicket, onTicketEditOpened, reportFaultFor, onFaultFormOpened,
+  tab, onOpenEntity, editTicket, onTicketEditOpened, reportFaultFor, onFaultFormOpened, onTab, onOpenFaults,
 }: {
   tab: FacilityTab;
+  /** Another Cockpit tab (a readiness check's "tickets"). */
+  onTab: (tab: "tickets" | "messages") => void;
+  /** Inbox › Open issues on these devices' faults (a readiness check's "faults"). */
+  onOpenFaults: (ids: string[]) => void;
   /** Jump to a device's panel — a failing check or a fault opens the actual
    *  device instead of leaving the operator to hunt for it. */
   onOpenEntity: (entityId: string) => void;
@@ -80,8 +83,6 @@ export default function FacilitySections({
 }) {
   const { entities, haConfig } = useHA();
   const { config, resolvedRooms } = useConfig();
-  // the villa's presence in the Recap, as the tile under the floors says it (owner, 2026-10-18)
-  const presenceLine = usePresence()?.recap ?? null;
   const { role } = useProfile();
   const { data, ready } = useFmData();
   // the villa's devices, role-blind — the pickers offer every device to the people who record work
@@ -105,6 +106,10 @@ export default function FacilitySections({
     [devices, config.entityMap, entities, resolvedRooms],
   );
   const canControl = roleCan(role, "controlEntities");
+  // a check's linked word: Open issues on its faults' devices (a whole-villa fault names none: Inbox as it opens), or
+  // the Tickets tab
+  const go = (to: CheckLink["to"]) => (to.place === "tickets" ? onTab("tickets")
+    : to.ids.length ? onOpenFaults(to.ids) : onTab("messages"));
 
   return (
     <>
@@ -116,14 +121,9 @@ export default function FacilitySections({
           <ScheduleEditor />
         </>
       )}
+      {/* ⚠️ NO "VILLA OCCUPIED SINCE …" HERE (owner, 2026-11-05: removed from this tab) */}
       {ready && tab === "recap" && (
-        <>
-          {/* "Villa occupied since …" above the readiness card it qualifies (owner, 2026-10-22) */}
-          {presenceLine && <p className="body-text recap-presence">{presenceLine}</p>}
-          <ReadinessTab inputs={inputs} onOpenEntity={onOpenEntity} onOpenCheck={setCheckList} />
-          <div className="settings-section-title">Monthly recap</div>
-          <RecapTab inputs={inputs} />
-        </>
+        <ReadinessTab inputs={inputs} onOpenEntity={onOpenEntity} onOpenCheck={setCheckList} onGo={go} />
       )}
       {ready && tab === "tickets" && (
         <TicketsTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions}
