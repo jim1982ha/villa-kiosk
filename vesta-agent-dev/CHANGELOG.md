@@ -1,3 +1,11 @@
+## 0.12.460
+
+What you will see:
+- Every date VESTA writes is in the app's one format, "04/11/2026 08:56" (a day alone "04/11/2026"), never "4 Nov,
+  08:56": in Telegram messages and their status lines, in the tablet's notifications and reports, and on the reports'
+  and investigations' pages (a report's dates, "Generated", a chart's points, an investigation's log). Messages already
+  sent keep their words.
+
 ## 0.12.459
 
 What you will see:
