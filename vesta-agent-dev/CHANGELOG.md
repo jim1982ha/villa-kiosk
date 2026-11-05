@@ -1,3 +1,24 @@
+## 0.12.455
+
+What you will see:
+- The tablet's alert card keeps every line when the villa's own automation reports a problem over after the watch
+  ended: the "- Not a problem on … (Jm). Watch 1h" line no longer disappears.
+- The night check's Telegram message says when a battery changes step during the day ("Status: Now: Gate lock battery
+  at 17%: replace within the week."), not only at the next night.
+- A fault that is not about a device being offline ends with the true reason: a device hidden since says it is hidden,
+  one added to "Asleep between reports" says it sleeps, and a quiet sensor that goes offline is followed by its offline
+  fault. None of them reads "Cleared: … no longer sees it" any more, and a battery of a hidden device no longer promises
+  "Next check: within 5min" all day.
+- The tablet's alert card is in English, whichever chat was drawn last: a French chat's "Rappel envoyé …" no longer
+  replaces the English lines; the French stays on the card as its French version.
+- Every fault's words follow what the 5-minute check finds (a reconnect count, the devices an integration takes down),
+  not only after the next night; a running time such as "for 1d 2h" alone never rewrites it.
+- An alert's Status keeps its close in its own words once something follows it: "- Not a problem in the Cockpit on …
+  (Luc)" or "- Cleared on … Watch 1h", in each chat's language, never "- Closing note sent …".
+- The Cockpit card of an automation watching a hidden device ends with its own words: "Closed: the automation '…' no
+  longer exists in the villa's system." when the automation is deleted, "Cleared: back online." when its devices answer
+  again.
+
 ## 0.12.454
 
 What you will see:
