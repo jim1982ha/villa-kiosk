@@ -202,10 +202,16 @@ export interface HistoryGap {
   /** Not an outage: the part of the window older than what the villa's system still keeps of every change (its
    *  recorder's days — historySource.keptFrom). Drawn grey, "No longer kept" (owner, 2026-10-20), never amber. */
   notKept?: boolean;
-  /** An outage INSIDE one step of the recorder's figures, which still has its mean (statisticsSeries.finerOutages):
-   *  the step's band is drawn, the line runs through it, and the tooltip says "Unavailable during this hour" (day,
-   *  week). */
-  within?: "hour" | "day" | "week";
+  /** An outage INSIDE one step, which still has its value (statisticsSeries.finerOutages, trendInterval
+   *  stepsOfflineInside): the step's band is drawn, the line runs through it, and its value is said with the outage —
+   *  at every range, five minutes to a week (owner, 2026-11-05: "the same way at every range"). The step's length: the
+   *  tooltip's "Unavailable at least once that hour" when only the averages tell it (no `drops`). */
+  within?: "5minute" | "hour" | "day" | "week";
+  /** ⚠️ WHEN AND HOW LONG, WHENEVER THE DETAIL IS KEPT (owner, 2026-11-05: the 24h chart said "Unavailable at 06:58, for
+   *  10s" and the 1w chart "at least once that hour" of the same drop): each real outage, as the villa's system's
+   *  detailed history has it, of this band (unclipped: a drop over two steps is said whole in each). Absent: only the
+   *  averages tell it (older than the detail kept, historySource.keptFrom). chartUtils.fmtOutage says them. */
+  drops?: readonly { from: number; to: number }[];
 }
 
 /** What a numeric history fetch returns: the readings, AND where there were

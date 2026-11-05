@@ -247,10 +247,10 @@ export function presenceWhy(sensorId: string, entities: Readonly<Record<string, 
   };
 }
 
-/** "since" in words, always with its day: "19 Oct, 18:40" (dateText.dayTime). ⚠️ THE TIME ALONE WAS NOT ENOUGH (owner,
+/** "since" in words, always with its day: "19/10/2026 18:40" (dateText.momentText). ⚠️ THE TIME ALONE WAS NOT ENOUGH (owner,
  *  2026-10-19, the presence window's People: "Home · since 18:40" — which day?): a time today was written without its
  *  date, so a reader could not tell today from yesterday. One form, every "since" of the window, the tile and the Recap.
- *  Older than the villa keeps: "before 10 Oct" (its day). While the history is read: "…", never a guess. */
+ *  Older than the villa keeps: "before 10/10/2026" (its day). While the history is read: "…", never a guess. */
 export function sinceText(s: Since, dayTime: (t: number) => string, day: (t: number) => string): string {
   if (s === "loading") return SINCE_LOADING;
   if (!s || !Number.isFinite(s.at)) return "";

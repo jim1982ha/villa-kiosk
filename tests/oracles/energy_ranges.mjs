@@ -24,7 +24,15 @@ ck("a bucket is an hour of a day, a day of a week or month, a month of a year",
    R.ENERGY_RANGES.map((r) => `${r.period}/${r.unit}`).join() === "hour/hour,day/day,day/day,month/month");
 ck("  ...and each shows the buckets its period is read in: 24 hours, 7 and 30 days, 12 months",
    R.ENERGY_RANGES.map((r) => E.periodStarts(r.kind, now).length).join() === "24,7,30,12");
-ck("a month's label is its short name; a day's names its weekday", /Sep|sept/i.test(R.energyRange("1y").bucketLabel(new Date(2026, 8, 1).getTime())) && /\d/.test(R.energyRange("1w").bucketLabel(now)));
+ck("a month's label is its short name", /Sep|sept/i.test(R.energyRange("1y").bucketLabel(new Date(2026, 8, 1).getTime())));
+// architecture review 28: "Wed 4" under a week's and a month's bars, where every other chart says "26/09"
+{
+  const { dayShort, docDate } = await import("@/utils/dateText");
+  ck("  ...a day's, the app's day: \"26/09\" on the axis, \"26/09/2026\" where it stands alone (Busiest day)",
+     ["1w", "1m"].every((k) => R.energyRange(k).bucketLabel(now) === dayShort(now) && R.energyRange(k).bucketName(now) === docDate(now))
+     && R.energyRange("1w").bucketLabel(now) === "26/09", R.ENERGY_RANGES.map((r) => [r.bucketLabel(now), r.bucketName(now)]));
+  ck("  ...and the window's figures name the bucket whole", /historyFigures\(p, unit, range\.bucketName, costUnit\)/.test(readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx", import.meta.url), "utf8")));
+}
 {
   const h = E.periodStarts("last24Hours", now);
   ck("24h is the last 24 hours, this one included — not today's", h.length === 24 && h[23] === Math.floor(now / 3_600_000) * 3_600_000

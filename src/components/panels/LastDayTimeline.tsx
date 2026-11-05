@@ -15,7 +15,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { stateWords } from "@/config/reading";
 import StateTimeline from "./StateTimeline";
 import { useStateHistory } from "@/hooks/useStateHistory";
-import { historyTitle } from "@/ha/historySource";
+import { lastReportNote } from "@/ha/historySource";
 import { useHistoryRange, useDeviceBand, HistoryHeader, useKeptFrom } from "./historyRange";
 import { aggregationWords, chartAbout } from "./chartUtils";
 import { HOUR_MS } from "@/utils/localDay";
@@ -53,7 +53,7 @@ export default function LastDayTimeline({
   const paint = colorFor ?? (palette ? paletteColorFor(held) : historyStateColor(entityId));
   return (
     <div className="field">
-      <HistoryHeader title={historyTitle(range.title, lastSeen)} picker={picker} step={aggregationWords(range.grainMs, null)}
+      <HistoryHeader title={range.title} note={lastReportNote(lastSeen)} picker={picker} step={aggregationWords(range.grainMs, null)}
         about={chartAbout("states", range.grainMs, Date.now() - range.hours * HOUR_MS, kept)} />
       <StateTimeline
         data={data}

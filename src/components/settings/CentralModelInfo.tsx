@@ -6,7 +6,7 @@
 
 import type { getLoadedModelInfo } from "@/utils/modelInfo";
 import type { AddonConfig } from "@/utils/centralModel";
-import { stampText } from "@/utils/dateText";
+import { momentText } from "@/utils/dateText";
 
 export default function CentralModelInfo({
   addonCfg, loadedModel,
@@ -28,7 +28,7 @@ export default function CentralModelInfo({
                 <>
                   <code>{cfg.rooms_upload.original_name}</code>
                   {cfg.rooms_upload.uploaded_at &&
-                    ` · ${stampText(cfg.rooms_upload.uploaded_at)}`}
+                    ` · ${momentText(cfg.rooms_upload.uploaded_at)}`}
                 </>
               ) : "—"}
             </span>
@@ -44,7 +44,7 @@ export default function CentralModelInfo({
             <span style={{ wordBreak: "break-word", textAlign: "right" }}>
               <code>{cfg.model_upload?.original_name || cfg.model_path}</code>
               {cfg.model_upload?.uploaded_at &&
-                ` · ${stampText(cfg.model_upload.uploaded_at)}`}
+                ` · ${momentText(cfg.model_upload.uploaded_at)}`}
             </span>
           </div>
           {loadedModel && (

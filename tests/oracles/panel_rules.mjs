@@ -104,7 +104,7 @@ ck("the light's sliders and the cover's follow the device (useLiveDraft, one set
 {
   const { missingAdvice } = await import("@/utils/stateColors");
   const { loadOne } = await import("@/ha/historySource");
-  const { dayTime } = await import("@/utils/dateText");
+  const { momentText } = await import("@/utils/dateText");
   const t0 = 1_700_000_000_000, M = 60_000, iso = (t) => new Date(t).toISOString();
   // worked for weeks, then removed: the removal is one last row with no state
   const dropped = [{ state: "locked", last_changed: iso(t0) }, { state: "unlocked", last_changed: iso(t0 + 5 * M) },
@@ -129,11 +129,11 @@ ck("the light's sliders and the cover's follow the device (useLiveDraft, one set
      !!quietSeen && quietSeen["lock.x"] === Date.parse(quiet.leftAt), quietSeen);
   const had = missingAdvice(true, seen);
   ck("  ...the window says when, to check the villa's system, and Edit if it comes back renamed; never the 3D model",
-     had.includes(`missing since ${dayTime(t0 + 10 * M)}`) && /check that it is still connected there/.test(had) && /another name.*Edit/.test(had)
+     had.includes(`missing since ${momentText(t0 + 10 * M)}`) && /check that it is still connected there/.test(had) && /another name.*Edit/.test(had)
      && !/3D model/.test(had), had);
   const hadGone = missingAdvice(false, seen);
   ck("  ...with no 3D object: when, and that it went in the villa's system; no Edit",
-     hadGone.includes(`missing since ${dayTime(t0 + 10 * M)}`) && /villa's system/.test(hadGone) && !/3D model|Edit/.test(hadGone), hadGone);
+     hadGone.includes(`missing since ${momentText(t0 + 10 * M)}`) && /villa's system/.test(hadGone) && !/3D model|Edit/.test(hadGone), hadGone);
   ck("Missing, no record: a 3D object is renamed, removed or re-pointed; anything else went away in the villa's system",
      /3D model/.test(missingAdvice(true, null)) && !/3D model|Edit/.test(missingAdvice(false, null))
      && /villa's system/.test(missingAdvice(false, null)), [missingAdvice(true, null), missingAdvice(false, null)]);

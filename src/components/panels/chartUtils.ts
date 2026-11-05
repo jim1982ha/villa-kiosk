@@ -4,7 +4,7 @@
 
 import { wallClock } from "@/utils/villaClock";
 import type { HistoryGap, HistorySeries, StateHistoryPoint } from "@/types/ha.types";
-import { clockTime, dayMonth, dayTime, monthShort } from "@/utils/dateText";
+import { clockTime, dayShort, docDate, momentText, monthShort } from "@/utils/dateText";
 import { NOT_KEPT_COLOR, NOT_KEPT_WORDS, STATUS_COLOR } from "@/utils/stateColors";
 import { cellBackground, nextEdge } from "@/utils/timelineCells";
 import { DAY_MS, HOUR_MS, MINUTE_MS } from "@/utils/localDay";
@@ -52,8 +52,8 @@ export function fmtCellSpan(from: number, to: number, stepMs: number, spanHours:
  *  a month's, the month. Never a clock time for a day or longer — every chart's tooltip says it this way. */
 export function fmtStepStamp(t: number, stepMs: number, spanHours: number): string {
   if (stepMs >= 28 * DAY_MS) return monthShort(t);
-  if (stepMs >= 7 * DAY_MS) return `${dayMonth(t)} – ${dayMonth(nextEdge(t, stepMs) - 1)}`;
-  if (stepMs >= DAY_MS) return dayMonth(t);
+  if (stepMs >= 7 * DAY_MS) return `${docDate(t)} – ${docDate(nextEdge(t, stepMs) - 1)}`;
+  if (stepMs >= DAY_MS) return docDate(t);
   return fmtChartStamp(t, spanHours);
 }
 
@@ -93,7 +93,7 @@ function stepNoun(stepMs: number): string {
  */
 export function chartAbout(shows: ChartShows, stepMs: number, from?: number, kept?: number, unkept = false): string {
   const step = stepNoun(stepMs), finest = PERIOD_MS["5minute"];
-  const before = kept !== undefined && from !== undefined && from < kept ? dayMonth(kept) : null;
+  const before = kept !== undefined && from !== undefined && from < kept ? docDate(kept) : null;
   if (shows === "total") {
     // ⚠️ SAID AS DRAWN (architecture review 24): it read "left empty" over the grey "No reading" bar (barChart)
     return `${cap(stepWords(stepMs))} totals. Grey: no total, "No reading". No outage shows: a meter keeps counting through it.`;
@@ -132,8 +132,8 @@ export function cellSummary(spent: Record<string, number>, entered: Record<strin
   }));
 }
 
-/** The words of a step of the figures offline inside it (HistoryGap.within). */
-const DURING: Record<NonNullable<HistoryGap["within"]>, string> = { hour: "that hour", day: "that day", week: "that week" };
+/** The words of a step of the figures offline inside it (HistoryGap.within), when only the averages tell it. */
+const DURING: Record<NonNullable<HistoryGap["within"]>, string> = { "5minute": `in those ${fmtDuration(PERIOD_MS["5minute"])}`, hour: "that hour", day: "that day", week: "that week" };
 
 /** How an outage is painted, on the chart and as its tooltip row's key (LineChart): a step of the figures offline
  *  inside it, and every outage, in the stripes of a state timeline's cell that saw more than one state, unavailable
@@ -147,20 +147,30 @@ export function outageLook(gap: Pick<HistoryGap, "within" | "notKept">): { backg
 }
 
 /** An outage in a chart's tooltip: "Unavailable · 05:21–05:24 (3min)", "Unavailable since 05:21" for one still
- *  running at `now` (the window's end), "Unavailable at least once that day" for a step of the figures
- *  offline inside it. ⚠️ ONE MINUTE, NOT A SPAN (owner, 2026-11-05: "Unavailable · 13:40–13:40 (1s)" for a 0.46s drop): within
- *  one minute it says when and how long, "Unavailable at 13:40, under 1s". `spanHours`: the chart's window, a time
- *  naming its day beyond one day (fmtChartStamp), as a "13:40" on a week's chart names none. */
-export function fmtOutage(gap: Pick<HistoryGap, "from" | "to" | "actual" | "notKept" | "within">,
+ *  running at `now` (the window's end), "Unavailable 3 times, 40s in all, the first at 06:58" for several in one band,
+ *  "Unavailable at least once that day" for a step of the figures offline inside it that only the averages tell (no
+ *  `drops`: older than the detail kept). ⚠️ ONE MINUTE, NOT A SPAN (owner, 2026-11-05: "Unavailable · 13:40–13:40 (1s)"
+ *  for a 0.46s drop): within one minute it says when and how long, "Unavailable at 13:40, under 1s". `spanHours`: the
+ *  chart's window, a time naming its day beyond one day (fmtChartStamp), as a "13:40" on a week's chart names none.
+ *  ⚠️ ONE WAY AT EVERY RANGE (owner, 2026-11-05): the week's hour said "at least once that hour" of a drop the 24h chart
+ *  said "at 06:58, for 10s"; both say the drops now (HistoryGap.drops), the same words of the same drop. */
+export function fmtOutage(gap: Pick<HistoryGap, "from" | "to" | "actual" | "notKept" | "within" | "drops">,
   now: number, spanHours = 24): string {
   // older than the villa's system keeps: not an outage (historySource.keptFrom, owner 2026-10-20)
-  if (gap.notKept) return `${NOT_KEPT_WORDS} · before ${dayTime(gap.to)}`;
+  if (gap.notKept) return `${NOT_KEPT_WORDS} · before ${momentText(gap.to)}`;
+  // a step with its value: the tooltip's own stamp names its day, its drops that day say only their time (its day once)
+  const at = (t: number) => (gap.within && sameVillaDay(t, gap.from) ? fmtChartTime(t) : fmtChartStamp(t, spanHours));
+  const drops = gap.drops?.length ? gap.drops : gap.within ? null : [gap.actual ?? gap];
   // ⚠️ AT LEAST ONCE, ITS DAY ONCE (owner, 2026-11-05): "Unavailable during this day · 3 Nov" over the tooltip's own
   // "3 Nov" said the day twice, and "during" read as the whole day
-  if (gap.within) return `Unavailable at least once ${DURING[gap.within]}`;
-  // The real times, when the band was widened to whole five-minute intervals.
-  const g = gap.actual ?? gap;
-  const at = (t: number) => fmtChartStamp(t, spanHours);
+  if (!drops) return `Unavailable at least once ${DURING[gap.within!]}`;
+  const end = (d: { to: number }) => (!Number.isFinite(d.to) || d.to >= now ? now : d.to);
+  if (drops.length > 1) {
+    const first = Math.min(...drops.map((d) => d.from));
+    const total = drops.reduce((sum, d) => sum + Math.max(0, end(d) - d.from), 0);
+    return `Unavailable ${drops.length} times, ${total < 1000 ? "under 1s" : fmtDuration(total)} in all, the first at ${at(first)}`;
+  }
+  const g = drops[0];
   if (!Number.isFinite(g.to) || g.to >= now) return `Unavailable since ${at(g.from)} (${fmtDuration(now - g.from)})`;
   const ms = g.to - g.from;
   if (at(g.from) === at(g.to)) return `Unavailable at ${at(g.from)}, ${ms < 1000 ? "under 1s" : `for ${fmtDuration(ms)}`}`;
@@ -173,7 +183,8 @@ export function fmtOutage(gap: Pick<HistoryGap, "from" | "to" | "actual" | "notK
  *  labeller for every chart; the Weather charts had a second. */
 export function fmtChartTick(t: number, spanHours: number): string {
   if (spanHours <= 48) return fmtChartTime(t);
-  return dayMonth(t);
+  // ⚠️ THE APP'S DAY (owner, 2026-11-05: "29 Oct" under a week's chart): its short form, the year in the tooltip
+  return dayShort(t);
 }
 
 /**
@@ -200,7 +211,7 @@ export function fmtChartStamp(t: number, spanHours: number): string {
   const d = wallClock(t), today = wallClock(Date.now());
   const sameDay = d.year === today.year && d.month === today.month && d.day === today.day;
   if (spanHours <= 24 && sameDay) return fmtChartTime(t);
-  return dayTime(t);
+  return momentText(t);
 }
 
 /**

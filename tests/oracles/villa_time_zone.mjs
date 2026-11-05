@@ -44,11 +44,9 @@ ck("  ...a document's date (docDate): the villa's day, day first as Telegram wri
 const fmt = (fn, opts) => new Date(at)[fn]([], { ...opts, timeZone: "Asia/Tokyo" });
 const device = (fn, opts) => new Date(at)[fn]([], opts);
 const forms = [
-  ["clockTime", T.clockTime(at), fmt("toLocaleTimeString", { hour: "2-digit", minute: "2-digit" }), device("toLocaleTimeString", { hour: "2-digit", minute: "2-digit" })],
-  ["dayMonth", T.dayMonth(at), fmt("toLocaleDateString", { day: "numeric", month: "short" }), device("toLocaleDateString", { day: "numeric", month: "short" })],
-  ["dayTime", T.dayTime(at), fmt("toLocaleString", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), device("toLocaleString", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })],
-  ["fullDate", T.fullDate(at), fmt("toLocaleDateString", { day: "2-digit", month: "short", year: "numeric" }), device("toLocaleDateString", { day: "2-digit", month: "short", year: "numeric" })],
-  ["stampText", T.stampText(at), fmt("toLocaleString", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }), device("toLocaleString", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })],
+  // owner, 2026-11-05: one day and time form wherever a person reads, the agreement's (no "28 Oct" locale form left)
+  ["clockTime", T.clockTime(at), "02:30", "10:30"],
+  ["dayShort (an axis tick)", T.dayShort(at), "28/10", "27/10"],
   ["weekday (Energy)", weekdayShort(at), fmt("toLocaleDateString", { weekday: "short" }), device("toLocaleDateString", { weekday: "short" })],
 ];
 for (const [name, got, villa, dev] of forms)

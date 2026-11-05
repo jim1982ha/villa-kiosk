@@ -9,11 +9,11 @@
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useStateSince } from "@/hooks/useStateSince";
-import { dayMonth, dayTime } from "@/utils/dateText";
+import { docDate, momentText } from "@/utils/dateText";
 import { presenceOf, presenceSince, presenceWatched, presenceWhy, sinceText, type Presence, type PresenceWhy, type Since } from "./presence";
 
 /** "since" in words, as every presence line says it ("19 Oct, 14:20", "before 10 Oct", "…" while read). */
-export const sinceWords = (s: Since): string => sinceText(s, dayTime, dayMonth);
+export const sinceWords = (s: Since): string => sinceText(s, momentText, docDate);
 
 interface VillaPresence {
   presence: Presence;

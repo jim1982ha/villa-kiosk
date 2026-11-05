@@ -5,7 +5,7 @@
 
 import type { HassEntity } from "@/types/ha.types";
 import { domainOf } from "./entityDomain";
-import { dayTime } from "./dateText";
+import { momentText } from "./dateText";
 
 /** HA reports "unavailable" when it has lost contact with the device
  *  (offline, integration reload, …) and "unknown" when it's never reported a
@@ -89,7 +89,7 @@ export function missingAdvice(inModel: boolean, seen: MissingSeen): string {
   if (typeof seen === "number") {
     // ⚠️ VESTA'S WORDS AND MOMENT (architecture review 2026-10-31 #1): "last seen" gave another time than Telegram's
     // "missing from the villa's system since"
-    return `The villa's system no longer has this device: it has been missing since ${dayTime(seen)}; `
+    return `The villa's system no longer has this device: it has been missing since ${momentText(seen)}; `
       + (inModel
         ? "its device may have been removed from the villa's system: check that it is still connected there. "
           + "If it comes back with another name, point this object at it with Edit."

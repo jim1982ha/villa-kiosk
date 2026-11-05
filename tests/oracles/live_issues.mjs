@@ -30,7 +30,8 @@ console.log("  a card's buttons are its faults' only (fm/deviceWork, architectur
 const item = (id, kind, entityId, extra = {}) => ({ id, kind, title: id, detail: "", entityId, device: { key: deviceOf(entityId), label: "dev" }, ...extra });
 // a card's buttons as the owner reads them: "label → the records it acts on [what it asks first]"
 const said = (acts) => acts.map((a) => `${a.label} → ${[...a.ids].sort().join(",")}${a.step.kind === "close" ? (a.step.ask ? ` [${a.step.ask.question} / ${a.step.ask.confirmLabel}]` : " [closes as pressed]") : ""}${a.step.kind === "stage" ? ` (${a.step.to})` : ""}`);
-// owner, 2026-10-30: Done · Need help · Open Ticket on every issue card, one Done closing everything on it
+// owner, 2026-10-30: Done · Need help · Open Ticket on every issue card, one Done closing everything on it; owner,
+// 2026-11-05: in the order Done · Not a problem · Open Ticket · Need help, on the tablet and on Telegram
 const OV_DONE = "[Done? VESTA checks it again before it closes. / Done]", TK_CLOSE = "[Close this ticket? Nothing was done, no cost is recorded. / No action needed]";
 // owner, 2026-11-04: Not a problem is a button of its own, after Need help, its label short, its meaning in its question
 // owner, 2026-11-04: "When I click 'ignore' I don't want to see the confirmation message since it's redundant"
@@ -44,17 +45,17 @@ const acts = cardActions(pump);
 ck("a device's live state and its faults are ONE card", pump.items.length >= 2 && cardRecords(pump).length === 2, pump.items.map((i) => i.id));
 // owner, 2026-11-01: "for each issue of a potential merged cards", Edit Ticket where a ticket is open
 ck("  ...each problem its own buttons: the ticket's Edit Ticket, the fault's Open Ticket, each Done and Need help on its record alone",
-   said(acts).join(" | ") === `Done → b ${OV_DONE} | Need help → b | Edit Ticket → b | Done → a ${OV_DONE} | Need help → a | Not a problem → a ${NAP} | Open Ticket → a (in_progress)`, said(acts));
+   said(acts).join(" | ") === `Done → b ${OV_DONE} | Edit Ticket → b | Need help → b | Done → a ${OV_DONE} | Not a problem → a ${NAP} | Open Ticket → a (in_progress) | Need help → a`, said(acts));
 const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" }),
   item("fault:c", "fault", "sensor.pump_energy", { ticketId: "c", stage: "ticket" })]);
 ck("  ...two tickets: Edit Ticket on each",
-   said(cardActions(taken)).join(" | ") === `Done → b ${OV_DONE} | Need help → b | Edit Ticket → b | Done → c ${OV_DONE} | Need help → c | Edit Ticket → c`, said(cardActions(taken)));
+   said(cardActions(taken)).join(" | ") === `Done → b ${OV_DONE} | Edit Ticket → b | Need help → b | Done → c ${OV_DONE} | Edit Ticket → c | Need help → c`, said(cardActions(taken)));
 const [lock] = groupAttention([item("alarm:lock.door", "alarm", "lock.door")]);
 // a card with no record: the same three for its device — Done and Need help raise its fault with the press, Open Ticket
 // opens the ticket form already pointed at it (owner, 2026-10-29; 2026-10-30)
-ck("a card that is only what Home Assistant reports: Done · Need help · Open Ticket, for its device",
-   said(cardActions(lock)).join(" | ") === "Done → lock.door | Need help → lock.door | Open Ticket → lock.door"
-   && cardActions(lock).map((a) => a.step.kind === "raiseThen" ? `raise+${a.step.then}` : a.step.kind).join() === "raise+done,raise+help,raise",
+ck("a card that is only what Home Assistant reports: Done · Open Ticket · Need help, for its device",
+   said(cardActions(lock)).join(" | ") === "Done → lock.door | Open Ticket → lock.door | Need help → lock.door"
+   && cardActions(lock).map((a) => a.step.kind === "raiseThen" ? `raise+${a.step.then}` : a.step.kind).join() === "raise+done,raise,raise+help",
    said(cardActions(lock)));
 const [lone] = groupAttention([{ id: "alarm:x", kind: "alarm", title: "Water leak", detail: "" }]);
 ck("  ...a problem on no device has nothing to open a ticket for: no button", cardActions(lone).length === 0, said(cardActions(lone)));
@@ -68,10 +69,10 @@ ck("  ...pressed, Open Ticket opens the Tickets tab's ticket form pointed at the
    && JSX.propText(icButtons, "raised") === "(entityId) => raisedFor({ title: card.title, lines: [line] }, place(entityId, card.title))"
    && /onRaiseTicket=\{onRaiseTicket\}/.test(MT) && !/<FaultForm /.test(MT));
 // owner, 2026-10-30: the Tickets tab's "Mark resolved" is the Inbox's Done (work done, its form kept), with Need help
-ck("a ticket in progress (Tickets): Close (its resolve form; owner, 2026-11-04), Need help, No action needed, never Not a problem (owner, 2026-11-04) — each on every record of it, its own Close question",
+ck("a ticket in progress (Tickets): Close (its resolve form; owner, 2026-11-04), No action needed, Need help, never Not a problem (owner, 2026-11-04) — each on every record of it, its own Close question",
    said(W.ticketActions([{ id: "a", stage: "ticket" }, { id: "b", stage: "ticket" }])).join(" | ")
-   === `Close → a,b (resolved) | Need help → a,b | No action needed → a,b ${TK_CLOSE}`
-   && W.WORK_ACTIONS.ticketDone.label === "Close" && W.ticketActions([{ id: "a", stage: "ticket" }])[1].step.kind === "help");
+   === `Close → a,b (resolved) | No action needed → a,b ${TK_CLOSE} | Need help → a,b`
+   && W.WORK_ACTIONS.ticketDone.label === "Close" && W.ticketActions([{ id: "a", stage: "ticket" }])[2].step.kind === "help");
 ck("  ...a closed record: Reopen, on it alone — and nothing else on a record that is not where the card expects it",
    said(W.closedActions({ id: "r", stage: "closed" }, true)).join() === "Reopen → r (open)"
    && W.closedActions({ id: "r", stage: "fault" }, true).length === 0 && W.ticketActions([{ id: "f", stage: "fault" }]).length === 0
@@ -135,9 +136,9 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
      tickets.map((t) => [t.key, t.records.map((r) => r.id)]));
   ck("  ...the Tickets card's buttons are its records', the Overview card's each its problem's",
      said(W.ticketActions(tickets.find((t) => t.key === "device:sensor.pump_power").records.map(W.workRecord))).join(" | ")
-       === `Close → p2 (resolved) | Need help → p2 | No action needed → p2 ${TK_CLOSE}`
+       === `Close → p2 (resolved) | No action needed → p2 ${TK_CLOSE} | Need help → p2`
      && said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))).join(" | ")
-       === `Done → p1 ${OV_DONE} | Need help → p1 | Not a problem → p1 ${NAP} | Open Ticket → p1 (in_progress) | Done → p2 ${OV_DONE} | Need help → p2 | Edit Ticket → p2`,
+       === `Done → p1 ${OV_DONE} | Not a problem → p1 ${NAP} | Open Ticket → p1 (in_progress) | Need help → p1 | Done → p2 ${OV_DONE} | Edit Ticket → p2 | Need help → p2`,
      said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))));
   ck("  ...Tickets lists the device whose ticket was opened last first, never an open fault or a closed record",
      tickets.map((t) => t.key).join() === "item:fault:n2,device:lock.back,device:sensor.pump_power", tickets.map((t) => t.key));
@@ -205,7 +206,7 @@ const [one] = offlineDevice("unavailable");
 ck("the fault on another entity of the device, itself unavailable, goes onto the device's Unavailable line",
    one.items.length === 1 && one.items[0].kind === "unavailable" && one.items[0].fault?.ticketId === "off"
    && lineText(one) === "Example has been offline for 9 h.", one.items.map((i) => i.id));
-ck("  ...its Done, Need help, Not a problem and Open Ticket still act on it", said(cardActions(one)).join(" | ") === `Done → off ${OV_DONE} | Need help → off | Not a problem → off ${NAP} | Open Ticket → off (in_progress)`, said(cardActions(one)));
+ck("  ...its Done, Not a problem, Open Ticket and Need help still act on it", said(cardActions(one)).join(" | ") === `Done → off ${OV_DONE} | Not a problem → off ${NAP} | Open Ticket → off (in_progress) | Need help → off`, said(cardActions(one)));
 // a live state and the fault about the same entity, on one device's card: its ONE line, as drawn
 const attentionLine = ({ fault, ...state }) => {
   const dev = { key: "x.d", label: "D" };
@@ -581,18 +582,18 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   const seen = (html, narrow = false) => text(html.replace(narrow ? /<span class="work-long">[^<]*<\/span>/g
     : /<span class="work-short">[^<]*<\/span>/g, "")).replace(/\[icon\]\|?/g, "[icon] ");
   // owner, 2026-11-05 ("Status on top"): each a segment of the card's bar, the main action first, in green
-  ck("an issue card: Done, Need help, Not a problem, then Open Ticket, each with its icon, in the card's bar, Done first and green, named for a screen reader",
+  ck("an issue card: Done, Not a problem, Open Ticket, then Need help (owner, 2026-11-05), each with its icon, in the card's bar, Done first and green, named for a screen reader",
      /^<button type="button" class="btn ghost fm-bar-main"[^>]*><svg[^>]*lucide-check/.test(drawButtons(ovActs, null, { name: "Pump" }))
      && (drawButtons(ovActs).match(/fm-bar-main/g) ?? []).length === 1 && /^<button type="button" class="btn ghost fm-bar-main"/.test(drawButtons(tkActs))
      && !/fm-bar-main/.test(drawButtons(W.closedActions({ id: "r", stage: "closed" }, true)))
-     && seen(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] Open Ticket|"
+     && seen(drawButtons(ovActs, null, { name: "Pump" })) === "|[icon] Done|[icon] Not a problem|[icon] Open Ticket|[icon] Need help|"
      && /aria-label="Done “Pump”"/.test(drawButtons(ovActs, null, { name: "Pump" })) && /aria-label="Open Ticket"/.test(drawButtons(ovActs)), seen(drawButtons(ovActs)));
   // owner, 2026-11-04 (iPhone screenshot): "use 1 word label and icon in the button … open/edit a ticket shall also
   // appear on the same line"
-  ck("  ...on a narrow row, one word each under its icon: Done · Help · Ignore · Ticket, and the Tickets tab's Close · Help · Dismiss",
-     seen(drawButtons(ovActs), true) === "|[icon] Done|[icon] Help|[icon] Ignore|[icon] Ticket|"
-     && seen(drawButtons(W.overviewActions([{ id: "a", stage: "ticket" }])), true) === "|[icon] Done|[icon] Help|[icon] Ticket|"
-     && seen(drawButtons(tkActs), true) === "|[icon] Close|[icon] Help|[icon] Dismiss|",
+  ck("  ...on a narrow row, one word each under its icon, in the same order: Done · Ignore · Ticket · Help, and the Tickets tab's Close · Dismiss · Help",
+     seen(drawButtons(ovActs), true) === "|[icon] Done|[icon] Ignore|[icon] Ticket|[icon] Help|"
+     && seen(drawButtons(W.overviewActions([{ id: "a", stage: "ticket" }])), true) === "|[icon] Done|[icon] Ticket|[icon] Help|"
+     && seen(drawButtons(tkActs), true) === "|[icon] Close|[icon] Dismiss|[icon] Help|",
      [seen(drawButtons(ovActs), true), seen(drawButtons(tkActs), true)]);
   // owner, 2026-10-31 (iPhone screenshot): Open Ticket wrapped under Done · Need help. Measured on that screenshot, a
   // 390 px wide iPhone: the card 354 px wide (the screen less 36 px); the labels' own widths at 15 px: Done 34, Need
@@ -627,8 +628,8 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
        && (fac.match(/container(-type|-name)?:/g) ?? []).length === 1,
        { pad, iconGap, hair, full, narrowBelow, tiles, room360: room(360) });
   }
-  ck("  ...a ticket: Close, Need help and No action needed, each with its icon; a closed record: Reopen",
-     seen(drawButtons(tkActs)) === "|[icon] Close|[icon] Need help|[icon] No action needed|" && seen(drawButtons(W.closedActions({ id: "r", stage: "closed" }, true))) === "|[icon] Reopen|", seen(drawButtons(tkActs)));
+  ck("  ...a ticket: Close, No action needed and Need help, each with its icon; a closed record: Reopen",
+     seen(drawButtons(tkActs)) === "|[icon] Close|[icon] No action needed|[icon] Need help|" && seen(drawButtons(W.closedActions({ id: "r", stage: "closed" }, true))) === "|[icon] Reopen|", seen(drawButtons(tkActs)));
   // each close asks the question of the button pressed (owner, 2026-11-04: Not a problem a button of its own, no
   // longer a second yes under Done's question; tests/oracles/not_a_problem.mjs)
   const asked = (kind, key = "device:x") => ({ key, kind });
@@ -636,7 +637,7 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   ck("  ...the button pressed asks ITS question in place of the buttons: Done's, the ticket's No action needed; Not a problem has none",
      seen(drawButtons(ovActs, asked("done"))) === "|[icon] Done? VESTA checks it again before it closes.|Done|Cancel|"
      && /^<div class="fm-record-ask"><svg[\s\S]*?<\/svg><span>Done\?[^<]*<\/span><\/div><button type="button" class="btn ghost fm-bar-main">Done<\/button><button type="button" class="btn ghost">Cancel<\/button>$/.test(drawButtons(ovActs, asked("done")))
-     && seen(drawButtons(ovActs, asked("notAProblem"))) === "|[icon] Done|[icon] Need help|[icon] Not a problem|[icon] Open Ticket|"
+     && seen(drawButtons(ovActs, asked("notAProblem"))) === "|[icon] Done|[icon] Not a problem|[icon] Open Ticket|[icon] Need help|"
      && seen(drawButtons(tkActs, asked("closeTicket"))) === "|[icon] Close this ticket? Nothing was done, no cost is recorded.|No action needed|Cancel|",
      [seen(drawButtons(ovActs, asked("done"))), seen(drawButtons(ovActs, asked("notAProblem"))), seen(drawButtons(tkActs, asked("closeTicket")))]);
   {
@@ -654,12 +655,12 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
        JSON.stringify(calls) === JSON.stringify([["close", "a", false, true], ["ask", "done"]]), calls);
   }
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
-     seen(drawButtons(tkActs, asked("closeTicket", "device:y"))) === "|[icon] Close|[icon] Need help|[icon] No action needed|" && drawButtons([]) === "");
+     seen(drawButtons(tkActs, asked("closeTicket", "device:y"))) === "|[icon] Close|[icon] No action needed|[icon] Need help|" && drawButtons([]) === "");
   const { momentText } = await import("@/utils/dateText");
   const at = "2026-10-30T09:20:00.000Z";
   ck("  ...a Need help that stands is said above the buttons, when and by whom; a step that did not land, under them",
-     seen(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })) === `|🆘 Need help asked ${momentText(at)} (Owner)|[icon] Close|[icon] Need help|[icon] No action needed|`
-     && seen(drawButtons(tkActs, null, { problem: "Not saved." })) === "|[icon] Close|[icon] Need help|[icon] No action needed|Not saved.|",
+     seen(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })) === `|🆘 Need help asked ${momentText(at)} (Owner)|[icon] Close|[icon] No action needed|[icon] Need help|`
+     && seen(drawButtons(tkActs, null, { problem: "Not saved." })) === "|[icon] Close|[icon] No action needed|[icon] Need help|Not saved.|",
      [seen(drawButtons(tkActs, null, { asked: { at, by: "Owner" } })), seen(drawButtons(tkActs, null, { problem: "Not saved." }))]);
 }
 
@@ -709,7 +710,7 @@ console.log("\n  a Need help pressed is said on its card, and asked once (archit
   const writers = { helpTickets: async (ids) => (calls.push(`help ${[...ids].join(",")}`), { done: true }),
     addTicket: async (t, o) => (calls.push(`raise ${t.entityId} then ${o.then}`), { done: true }) };
   const help = W.ticketActions(ticket(before)).find((a) => a.kind === "needHelp");
-  const [, helpNew] = W.overviewActions([], "light.example");
+  const helpNew = W.overviewActions([], "light.example").find((a) => a.kind === "helpNew");
   stepWrite(help, writers); stepWrite(helpNew, writers, (id) => ({ title: "x", entityId: id, photoIds: [] }));
   ck("  ...pressed, Need help writes its step on the card's records; on a card with no record, raises it asking for help",
      calls.join(" | ") === "help b | raise light.example then help"

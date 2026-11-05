@@ -9,7 +9,7 @@ import { ck, done } from "../consistency/check.mjs";
 const { cellEdges, timelineCells } = await import("@/utils/timelineCells");
 const { intervalSeries, widenGaps } = await import("@/utils/trendInterval");
 const { fmtStepStamp } = await import("@/components/panels/chartUtils");
-const { dayMonth } = await import("@/utils/dateText");
+const { docDate } = await import("@/utils/dateText");
 
 const DAY = 86_400_000, WEEK = 7 * DAY;
 const midnight = (t) => { const d = new Date(t); return d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0; };
@@ -35,7 +35,7 @@ const d = widenGaps([{ from: autumn + 3 * DAY, to: autumn + 3 * DAY + 60_000 }],
 ck("an outage in a daily chart widens to its midnight-to-midnight day, the change's day included", midnight(d.from) && midnight(d.to), [new Date(d.from).toString(), new Date(d.to).toString()]);
 const mon = cellEdges(spring, spring + 1, WEEK)[0];
 ck("a week's tooltip names its Monday and its Sunday, also in the week the clocks change",
-   fmtStepStamp(mon, WEEK, 8760) === `${dayMonth(mon)} – ${dayMonth(new Date(2026, 2, 29, 12).getTime())}`, fmtStepStamp(mon, WEEK, 8760));
+   fmtStepStamp(mon, WEEK, 8760) === `${docDate(mon)} – ${docDate(new Date(2026, 2, 29, 12).getTime())}`, fmtStepStamp(mon, WEEK, 8760));
 
 const { scheduleStatus } = await import("@/fm/fmEngine");
 const at9 = new Date(2026, 2, 25, 9).getTime();

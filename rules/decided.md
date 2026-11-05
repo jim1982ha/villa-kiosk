@@ -92,3 +92,9 @@ An automation's description says in one or two plain sentences what it does now;
 undo, traces) goes in the HISTORY file beside the blueprints, as a blueprint's does (owner, 2026-11-02: "there should
 never be visible here: isn't it why we explicitly created the HISTORY.md file?", replacing 2026-10-20's "no need to
 change them").
+
+## The night message's language stays as it is
+
+In a chat set to another language, the night check's message keeps its English words ("New:", "Back again:", its title)
+beside the translated "Status", and its first post is in English until an edit. The owner declined sending the first
+post in each chat's language (2026-11-05). Do not re-propose.

@@ -1,3 +1,33 @@
+## 2.496.715
+
+What you will see:
+- An alert's card in the Inbox says where the alert stands in its first line, like every other card: "New alert",
+  "Reminder sent", the same words as the Status on Telegram, in the card's colour (with the device's own state before
+  it when there is one: "Missing · New alert"). That line was empty, and the Status sat as a small line at the bottom
+  of the card; it is no longer repeated there. On the Watch list the first line still says when it closes.
+
+## 2.496.714
+
+What you will see:
+- The Energy window's week and month charts name their days as every other chart does: "04/11" under the bars and
+  "04/11/2026" for the busiest day (they said "Wed 4", which named no month).
+
+## 2.496.713
+
+What you will see:
+- Every card's buttons in one order, on the tablet as on Telegram: Done · Not a problem · Open Ticket · Need help (on a
+  phone: Done · Ignore · Ticket · Help). A ticket's card: Close · No action needed · Need help.
+- A device's chart says an outage the same way at every range (1h, 24h, 1w, 1m, 1y): the step's value first, then when
+  and how long ("Unavailable at 06:58, for 10s", or "Unavailable 3 times, 50s in all, the first at 06:58"), then its
+  time. "Unavailable at least once that hour" is said only where the villa's system no longer keeps the detail
+  (older than about 10 days). On the 24h chart, a five-minute step with a short drop keeps its line and its value.
+- A chart's heading is always on one line: the device window is a little wider, and on a phone the heading leaves out
+  "Last 24 hours" (the pressed "24h" says it; its (i) still says it). A silent device's "Last report …" is a line under
+  the heading.
+- One date format everywhere: "Due 31/01/2020" on a task, "04/11/2026 09:00" in a chart's tooltip, "29/10" under a
+  week's chart, times as "08:56".
+- A saved Recap snapshot says its moment once, in its band (no "Saved …" beside it).
+
 ## 2.496.712
 
 What you will see:

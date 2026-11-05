@@ -86,18 +86,23 @@ export function knownSpans(s: HistorySeries): { a: number; b: number; v: number 
  * outagesInside), while one drawn from its changes (no figures: intervalSeries) had the same hour a plain grey band,
  * its line broken, and its tooltip a span of times. Of `s` drawn in `period` steps, each widened outage's step that
  * still has its mean is marked offline inside it (`within`, the same as the figures'); a run of steps with no mean at
- * all stays a break with its real span (`actual`), as a missing figure is. "No longer kept" is left as it is. Pure.
+ * all stays a break. "No longer kept" is left as it is. Pure.
+ *
+ * ⚠️ AT EVERY RANGE, FIVE MINUTES INCLUDED (owner, 2026-11-05: "Unavailable at 06:58, for 10s" and no value on the 24h
+ * chart, "● 2.1 kW" and "at least once that hour" on the week's, of one drop): a five-minute step that has its mean is
+ * marked the same way, its value said with its outage, and every band says its real drops (`drops`, dropsOf).
  *
  * ⚠️ AN OUTAGE THE FIGURES WOULD SEE, NO SHORTER (architecture review 25): a 50 ms drop — the villa's system reloading
  * its virtual devices, several times a day — striped a template sensor's whole hour on its week and its whole day on
  * its month, while a sensor kept in figures showed nothing for the same drop (a five-minute figure is written unless
- * the device said nothing all of it: statisticsSeries.finerOutages). A step is marked only when the outage emptied a
- * whole five-minute slot of it (emptiesSlot), the one rule of both; the 1h and 24h charts still draw every outage.
+ * the device said nothing all of it: statisticsSeries.finerOutages). An hour, a day or a week is marked only when the
+ * outage emptied a whole five-minute slot of it (emptiesSlot), the one rule of both; the 1h and 24h charts still draw
+ * every outage.
  */
-export function stepsOfflineInside(s: HistorySeries, period: "hour" | "day" | "week", B: number,
+export function stepsOfflineInside(s: HistorySeries, period: "5minute" | "hour" | "day" | "week", B: number,
   /** The outages as they were (the changes' gaps, before widening): widened to whole steps, two outages in steps side
    *  by side merge into one gap whose `actual` spans both, and a 50 ms drop the day before a long one read as that
-   *  whole span. Absent: each gap's own `actual`. */
+   *  whole span. Absent: each gap's own drops. */
   outages?: readonly HistoryGap[]): HistorySeries {
   const { from, to } = s.window;
   if (!(to > from) || !s.gaps.some((g) => !g.notKept)) return s;
@@ -106,22 +111,35 @@ export function stepsOfflineInside(s: HistorySeries, period: "hour" | "day" | "w
   const gaps: HistoryGap[] = [];
   for (const g of s.gaps) {
     if (g.notKept) { gaps.push(g); continue; }
-    const real = g.actual ?? { from: g.from, to: g.to };
+    const real = outages?.filter((o) => !o.notKept) ?? g.drops ?? [g.actual ?? { from: g.from, to: g.to }];
     let run: HistoryGap | null = null;
     for (let k = Math.max(0, cellIndex(edges, g.from)); k + 1 < edges.length && edges[k] < g.to; k++) {
       const a = Math.max(edges[k], g.from), b = Math.min(edges[k + 1], g.to);
       if (hasMean.has(k)) {
         run = null;
-        const seen = (outages ?? [real as HistoryGap]).some((o) => !o.notKept && emptiesSlot(Math.max(o.from, edges[k]), Math.min(o.to, edges[k + 1])));
-        if (seen) gaps.push({ from: a, to: b, within: period });
+        const seen = period === "5minute" || real.some((o) => emptiesSlot(Math.max(o.from, edges[k]), Math.min(o.to, edges[k + 1])));
+        if (seen) gaps.push({ from: a, to: b, within: period, drops: dropsOf(real, a, b) });
         continue;
       }
-      if (run) { run.to = b; run.actual = { from: run.actual!.from, to: Math.min(real.to, b) }; continue; }
-      run = { from: a, to: b, actual: { from: Math.max(real.from, a), to: Math.min(real.to, b) } };
+      if (run) { run.to = b; run.drops = dropsOf(real, run.from, b); run.actual = spanOf(run.drops, run.from, b); continue; }
+      const drops = dropsOf(real, a, b);
+      run = { from: a, to: b, actual: spanOf(drops, a, b), drops };
       gaps.push(run);
     }
   }
   return { ...s, gaps };
+}
+
+/** The real outages of a band from `a` to `b`: those that touch it, whole (a drop over two steps is said whole in each,
+ *  the same words wherever it is pointed at). HistoryGap.drops. */
+export function dropsOf(outages: readonly { from: number; to: number }[], a: number, b: number): { from: number; to: number }[] {
+  return outages.filter((o) => o.from < b && o.to > a).map((o) => ({ from: o.from, to: o.to }));
+}
+
+/** The span the drops cover (the first's start, the last's end), clipped to the band; the band with none. */
+function spanOf(drops: readonly { from: number; to: number }[], a: number, b: number): { from: number; to: number } {
+  return drops.length ? { from: Math.max(a, Math.min(...drops.map((d) => d.from))), to: Math.min(b, Math.max(...drops.map((d) => d.to))) }
+    : { from: a, to: b };
 }
 
 /** Did an outage from `from` to `to` cover one whole five-minute slot of the clock — the slot a figure is written for
@@ -131,24 +149,27 @@ export function emptiesSlot(from: number, to: number): boolean {
 }
 
 /** Outages widened to whole five-minute intervals (merged where they then
- *  meet), each with its real span in `actual`. */
+ *  meet), each with its real span in `actual` and each real outage merged into it in `drops`. */
 export function widenGaps(gaps: readonly HistoryGap[], from: number, to: number, B = TREND_INTERVAL_MS): HistoryGap[] {
   const out: HistoryGap[] = [];
   // on the chart's own step edges (timelineCells.cellEdges): a week's outage was widened on the 1970 Thursday
   const edges = to > from ? cellEdges(from, to, B) : [from, to];
   for (const g of [...gaps].sort((a, b) => a.from - b.from)) {
     const k = cellIndex(edges, Math.max(from, g.from)), j = cellIndex(edges, Math.min(to, g.to) - 1);
-    const w = {
+    const actual = { from: g.actual?.from ?? g.from, to: g.actual?.to ?? g.to };
+    const w: HistoryGap = {
       from: Math.max(from, edges[Math.max(0, k)]),
       to: Math.min(to, edges[Math.min(edges.length - 1, j + 1)]),
-      actual: { from: g.actual?.from ?? g.from, to: g.actual?.to ?? g.to },
-      ...(g.notKept ? { notKept: true } : {}),
+      actual,
+      ...(g.notKept ? { notKept: true } : { drops: g.drops ? [...g.drops] : [actual] }),
     };
     const last = out[out.length - 1];
     // "no longer kept" and an outage stay two bands: different facts, different colours
     if (last && w.from <= last.to && !!last.notKept === !!w.notKept) {
       last.to = Math.max(last.to, w.to);
-      last.actual = { from: last.actual!.from, to: Math.max(last.actual!.to, w.actual.to) };
+      last.actual = { from: last.actual!.from, to: Math.max(last.actual!.to, actual.to) };
+      // each drop kept: "Unavailable 3 times, 10s in all" (chartUtils.fmtOutage)
+      if (w.drops) last.drops = [...(last.drops ?? []), ...w.drops];
     } else out.push(w);
   }
   return out;
