@@ -95,7 +95,22 @@ def runs_from_history(states: list[dict], on_threshold_w: float, zone: str, min_
 
 def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0,
                   min_drop_seconds: float = 0, end: datetime | None = None) -> dict[str, dict[date, int]]:
-    """Count drops to "unavailable" per entity per day from logbook rows, leaving out those within `settle_minutes` of
+    """The drops (drop_times) per entity per day.
+
+    ⚠️ `end`: THE DAYS ARE THE 24-HOUR PERIODS ENDING AT IT (architecture review, 2026-10-20). A drop is filed under the
+    day of `end` minus its whole days before `end` — at the night's end (midnight) the calendar days, as before; at the
+    5-minute recheck the last 72 hours, never two and a half days counted against a three-day threshold (a real loop
+    closed at noon and opened again at night). None: calendar days in `zone`."""
+    out: dict[str, dict[date, int]] = defaultdict(lambda: defaultdict(int))
+    for eid, times in drop_times(logbook, settle_minutes, min_drop_seconds, end).items():
+        for t in times:
+            out[eid][_day_of(t, end, zone)] += 1
+    return {k: dict(v) for k, v in out.items()}
+
+
+def drop_times(logbook: list[dict], settle_minutes: float = 0, min_drop_seconds: float = 0,
+               end: datetime | None = None) -> dict[str, list[datetime]]:
+    """When each entity dropped to "unavailable", from logbook rows, in order, leaving out those within `settle_minutes` of
     a Home Assistant restart (device_state.in_restart: its own "started" entry) — every restart takes every entity
     through "unavailable", and three restarts in three days read as "dropped and reconnected 10 times" for a relay that
     never moved (villa, 2026-10-04).
@@ -111,12 +126,9 @@ def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0,
     about 50 ms; nine such reloads in two days read as Wi-Fi trouble. A drop back within `min_drop_seconds` (the
     night's setting reconnect_min_drop_seconds) is not counted; one still offline at the end of the read is.
 
-    ⚠️ `end`: THE DAYS ARE THE 24-HOUR PERIODS ENDING AT IT (architecture review, 2026-10-20). A drop is filed under the
-    day of `end` minus its whole days before `end` — at the night's end (midnight) the calendar days, as before; at the
-    5-minute recheck the last 72 hours, never two and a half days counted against a three-day threshold (a real loop
-    closed at noon and opened again at night). None: calendar days in `zone`."""
+    `end`: the period read ends there; a drop at or after it is not counted (None: none is left out)."""
     drops = RestartDrops(logbook, settle_minutes)        # the one answer (vesta_shared.device_state)
-    out: dict[str, dict[date, int]] = defaultdict(lambda: defaultdict(int))
+    out: dict[str, list[datetime]] = defaultdict(list)
     timeline: dict[str, list[tuple[datetime, bool]]] = defaultdict(list)
     for r in logbook:
         if r.get("entity_id") and r.get("when"):
@@ -136,8 +148,8 @@ def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0,
             back = next((u for u, o in rows[i + 1:] if not o), None)
             if back is not None and (back - t).total_seconds() < min_drop_seconds:
                 continue                                  # back within the blink of a reload
-            out[eid][_day_of(t, end, zone)] += 1
-    return {k: dict(v) for k, v in out.items()}
+            out[eid].append(t)
+    return dict(out)
 
 
 def last_day(end: datetime, zone: str) -> date:

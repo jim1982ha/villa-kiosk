@@ -66,6 +66,12 @@ class Finding:
     detail: dict[str, Any] = field(default_factory=dict)
     check: str = ""      # what the FM should do
     day: str = ""
+    #: ISO: the latest moment this reading shows the problem itself — a drop's time; a finished day's verdict, the day's
+    #: start (its figure holds every hour of it) — "" for a state read now. ⚠️ A CLOSE IS ANSWERED ONLY BY WHAT CAME
+    #: AFTER IT (architecture review 25): recorded as seen at the read's own time, a fixed loop's drops of the last 3
+    #: days, or the day the pump was fixed on, read "Fault still there after the close" minutes after a person's Done
+    #: (Problems.wants_open), and again at every 5-minute check until the drops left the window.
+    seen_at: str = ""
 
     def as_dict(self):
         return asdict(self)

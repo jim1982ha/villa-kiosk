@@ -1256,3 +1256,31 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
   reach, keeps its own last line ("Done in the Cockpit …") under the incident's word "(existing)" with that word's icon;
   changing what a copy no step went to shows is the owner's call (each chat its own steps, 2026-10-18).
 
+
+## A close answered only by what came after it, one moment format (architecture review 25, 2026-11-05, 0.12.458)
+
+- **A finding is seen when its reading shows it** (`rules.Finding.seen_at`). `Problems.record` / `record_rechecked`
+  stamped every finding seen at the read's own time, and `wants_open` reopens a person's close once a finding is seen
+  `settle_minutes` after it. A reading that looks back did not fit: a reconnect loop counts the drops of 3 days, so a
+  loop fixed and closed was "Fault still there after the close" at the next 5-minute check and at every check for 3
+  days; a day rule judges a finished day, so a pump fixed at 15:00 was "still there" the next night by the very day it
+  was fixed on. Now the reader that knows its evidence stamps it: `nightly.reconnect_findings` the latest drop
+  (`features.drop_times`, from which `flips_per_day` counts), `nightly.day_seen` the judged day's start for every
+  `asset_findings` / `level_findings` rule (night and recheck alike). A state read now (offline, battery, silent,
+  missing, hidden) keeps "" (the read's time). The recheck's per-day cache keeps the moment (`at`); one kept without it
+  is read again.
+- **A day rule's watch ends with the first whole day after the close** (`problems.JUDGED_DAY`, set by `day_seen`):
+  `confirms_by` counts from the start of the villa's day after next (`_day_after_next`, the agent's TZ), so the
+  Cockpit's "VESTA confirms by" names the night whose verdict answers the close (a close between the villa's midnight
+  and the night run included: the day after next is still the first whole day after it).
+- **One moment format in the 5-minute check's titles** (`moment_label`): "devices offline / missing / batteries on
+  05/11/2026 09:13.", as every Status line and the agreement's `moment`, never "5 Nov, 09:13".
+- Time zones audited (every `.date()`, `date.today()`, naive `datetime.now()` / `fromtimestamp` in shipped code): all
+  convert to the villa's zone first, or are log lines in the container's TZ (the Supervisor sets it to the villa's).
+- Mutations red (tests/test_close_answered_after.py, test_back_online, test_missing_devices): `record` ignoring
+  `seen_at`, `record_rechecked` ignoring the moments, the recheck dropping `at`, the loop's stamp, `day_seen` left out
+  of `asset_findings`, the JUDGED_DAY flag and its watch, the two titles. Not pinned: the "batteries on" title (no
+  test sends it).
+- Dropped: the night message's words around its Status ("New", "Back again", its title) stay English in a French chat
+  while its Status is French; the first copy is all English. Making every copy follow its chat needs a skill message's
+  `text_in` on its first post and the tablet kept in English (the review-22 card-4 trap): the owner's call, not done.

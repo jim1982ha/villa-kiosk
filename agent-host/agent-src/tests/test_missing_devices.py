@@ -80,6 +80,7 @@ def test_a_critical_device_gone_from_the_villas_system_is_a_fault_within_the_fiv
                      "Still named in automation 'Critical watchdog': remove it there.")
     (msg,) = out["send"]
     assert msg["to"] == "fm" and "Example door is missing from the villa's system" in msg["text"]
+    assert msg["title"] == "Example Villa, devices missing on 31/10/2026 00:25.", msg["title"]   # the agreement's moment
     assert LOCK not in f["summary"] and "Home Assistant" not in msg["text"]
     # once: the next check sees it still missing and says nothing more
     assert _recheck(tmp_path, {TH: _st()}, T0 + timedelta(minutes=5), not_found=[LOCK, BATT])["send"] == []

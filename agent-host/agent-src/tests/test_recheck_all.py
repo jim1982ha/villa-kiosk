@@ -268,7 +268,9 @@ def test_a_reconnect_loop_is_read_again_in_the_day(tmp_path):
     _tick(tmp_path)
     st = Store(str(tmp_path / "s.sqlite"))
     assert st.finding(f_fan[0])["status"] == "closed" and st.task(f_fan[1])["status"] == "cleared"
-    assert st.finding(f_relay[0])["status"] == "open" and st.finding(f_relay[0])["seen_at"] == NOW.isoformat()
+    # seen at its latest drop, never at the read (architecture review 25: a close is answered by what came after it)
+    assert st.finding(f_relay[0])["status"] == "open" and \
+        st.finding(f_relay[0])["seen_at"] == (NOW - timedelta(hours=2, minutes=-1)).isoformat()
 
 
 def test_a_loop_spread_over_the_whole_three_days_stays_open_at_noon(tmp_path):
@@ -355,7 +357,8 @@ def test_a_day_total_fault_never_closes_mid_day_and_closes_on_the_first_tick_aft
     _pump_days(tmp_path, {date(2026, 10, 2): 0.1, date(2026, 10, 3): 0.1, date(2026, 10, 4): 0.5})
     noon = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
     assert _tick(tmp_path, noon)["actions"] == [] and _status(tmp_path, fid) == "open"
-    assert Store(str(tmp_path / "s.sqlite")).finding(fid)["seen_at"] == noon.isoformat()      # read, still there
+    # read, still there: seen from the start of the day judged (3 Oct), never at the read (architecture review 25)
+    assert Store(str(tmp_path / "s.sqlite")).finding(fid)["seen_at"] == "2026-10-03T00:00:00+00:00"
     # the same day's verdict is kept: worked out once, not again every 5 minutes (here even a changed 3 Oct is not read)
     _pump_days(tmp_path, {date(2026, 10, 2): 0.5, date(2026, 10, 3): 0.5, date(2026, 10, 4): 0.5})
     assert _tick(tmp_path, noon + timedelta(minutes=5))["actions"] == [] and _status(tmp_path, fid) == "open"

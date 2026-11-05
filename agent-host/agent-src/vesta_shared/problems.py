@@ -68,6 +68,9 @@ AGAIN_DAYS = again_days()
 #: What a task's fault says when it opens again because its problem was read still there after a person closed it —
 #: as the alert desk's reopening says it (its quiet_after_done), one sentence for both.
 STILL_THERE = "Still there after the close."
+#: A finding's detail key: its rule judges a finished day (the night check's day rules: nightly.day_seen). Only a day
+#: begun after a person's close answers it, so its watch runs to the night that judges that day (confirms_by).
+JUDGED_DAY = "judged_day"
 
 
 def occurrences(finding: dict | None) -> list[str]:
@@ -332,7 +335,8 @@ class Problems:
     def record_rechecked(self, rechecked, seen, day: str, at: str, *, note: str = "",
                          settle_minutes: float | None = None, handed: dict[int, str] | None = None,
                          ended=None) -> dict:
-        """Open findings `rechecked` (ids) read again at `at` by their own rule; `seen`: those of them still found. Each
+        """Open findings `rechecked` (ids) read again at `at` by their own rule; `seen`: those of them still found —
+        ids, or {id: when the reading shows it, "" for `at`} (rules.Finding.seen_at: a loop's latest drop). Each
         seen is recorded as seen (Problems.seen: a person's close `settle_minutes` or more before opens its task again,
         STILL_THERE); each not seen closes on `day`, its task closing saying `note` — as record_night closes what the
         night did not see, and only among the findings read: {seen, closed, handed (finding ids), notes ({finding id:
@@ -340,6 +344,7 @@ class Problems:
         task is settle()'s: a task a person reopened stays theirs, a person's close holds while it is not read again.
         `ended`: as record_night's — asked once with the findings no longer found, before `note`; `handed` is what a skill
         edited before 0.12.430 still passes."""
+        when = {int(k): v for k, v in seen.items()} if isinstance(seen, dict) else {}
         found, handed = {int(i) for i in seen}, {int(k): v for k, v in (handed or {}).items()}
         said: dict[int, str] = {}
         rows = [r for i in sorted({int(i) for i in rechecked} - found) if (r := self.store.finding(i)) and r["status"] == "open"]
@@ -355,7 +360,7 @@ class Problems:
             if not row or row["status"] != "open":
                 continue
             if fid in found:
-                moved += self.seen(fid, at, settle_minutes)
+                moved += self.seen(fid, when.get(fid) or at, settle_minutes)
                 out_seen.append(fid)
             else:
                 # `handed`: finding id → its note, one followed now by another fault (as record_night's handed_over):
@@ -394,7 +399,9 @@ class Problems:
                 fid, is_new = back, False
             else:
                 fid, is_new = self.store.raise_finding(f.rule_id, f.entity_id, f.family, day, f.severity, f.summary, f.detail)
-            self.store.finding_seen(fid, at or self.store.now(), settle_minutes)
+            # seen when the reading shows it (a loop's latest drop, a day's start), else now: a close is answered only by
+            # what came after it (rules.Finding.seen_at; architecture review 25)
+            self.store.finding_seen(fid, getattr(f, "seen_at", "") or at or self.store.now(), settle_minutes)
             d = f.as_dict()
             d["id"] = fid
             if back is not None:
@@ -787,6 +794,11 @@ class Problems:
             if task.get("status") == NOT_A_PROBLEM:
                 return None                      # known to last: nothing is watched, the card goes to Closed
             closed = _moment(task.get("done_at"))
+            row = self.store.finding(sid)
+            # ⚠️ A DAY RULE'S WATCH ENDS WITH THE FIRST WHOLE DAY AFTER THE CLOSE (architecture review 25): the next night
+            # judges the day the pump was fixed on, mostly from before the fix — it answers nothing (Finding.seen_at)
+            if closed and row and json.loads(row["detail"] or "{}").get(JUDGED_DAY):
+                closed = _day_after_next(closed)
             until = next_night(closed) if closed and next_night else None
             if until is None:
                 return None
@@ -915,6 +927,19 @@ def _check_word(kind, rule_id, rechecked) -> str:
     if kind == "incident" or rule_id in rechecked or "*" in rechecked:
         return "minutes"
     return "nightly"
+
+
+def _day_after_next(t: datetime) -> datetime:
+    """The start of the villa's day after the one after `t` (the zone the agent runs in: villa_day_of's): the night
+    check's first run from then judges the first whole day after `t`."""
+    import os
+    from datetime import time, timedelta
+    from zoneinfo import ZoneInfo
+    try:
+        z = ZoneInfo(os.environ.get("TZ") or "UTC")
+    except Exception:  # noqa: BLE001 — a zone this machine does not know: UTC
+        z = ZoneInfo("UTC")
+    return datetime.combine(t.astimezone(z).date() + timedelta(days=2), time(0, 0), tzinfo=z)
 
 
 def _moment(iso):

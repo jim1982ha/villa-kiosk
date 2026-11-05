@@ -29,6 +29,7 @@ import re
 import sys
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -45,7 +46,7 @@ from vesta_shared.offline import device_answers, devices_offline, reported_since
 from vesta_shared.store import alerted_states  # noqa: E402  (which states an alert is about: the desk's reading)
 from vesta_shared import automation_words as AW  # noqa: E402  (an automation in words: one writer)
 from vesta_shared.limits import limit  # noqa: E402  (every limit, set on the Limits tab)
-from vesta_shared.problems import Problems, alert_name, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
+from vesta_shared.problems import JUDGED_DAY, Problems, alert_name, problem_name  # noqa: E402  (a problem's lifecycle: one owner)
 from vesta_shared import result  # noqa: E402  (what the engine is asked to do: its shape; R is rules.py)
 from vesta_shared import daily  # noqa: E402  (a device's day: the one running threshold)
 from vesta_shared import run_hours  # noqa: E402  (a device's run-hours check on or off, and why: one verdict)
@@ -321,7 +322,16 @@ def asset_findings(cli, store, params, asset: dict, today: date, day_end: dateti
                                   prior, occupied)
     elif e_eid and expected:
         findings += R.power_rules(asset, e_eid, {}, today, params, expected, e_series, prior, occupied)
-    return findings, features_written
+    return day_seen(findings, day_end), features_written
+
+
+def day_seen(findings: list, day_end: datetime) -> list:
+    """`findings` judged on the day ending at `day_end`, each seen from that day's start (rules.Finding.seen_at): its
+    figure holds every hour of it, so only a day begun after a person's close says the close did not fix it."""
+    for f in findings:
+        f.seen_at = (day_end - timedelta(days=1)).isoformat()
+        f.detail[JUDGED_DAY] = True                        # its watch after a close: Problems.confirms_by
+    return findings
 
 
 def schedule_unused(cli, schedule_eid: str) -> list[str] | None:
@@ -365,7 +375,7 @@ def level_findings(pack, params, rows: list[dict], lvl_stats: dict, today: date,
         asset = pack.assets.get(row["asset"], {"slug": row["asset"], "name": row["name"]})
         series = F.level_daily_features(lvl_stats.get(row["entity_id"], []), zone)
         out += R.level_rules(asset, row["entity_id"], row.get("device_class"), series, today, params)
-    return out
+    return day_seen(out, datetime.combine(today + timedelta(days=1), time(0, 0), tzinfo=ZoneInfo(zone)))
 
 
 def hidden_in_rule_findings(cli, pack, states: dict, store) -> tuple[list, list[str]]:
@@ -606,6 +616,9 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, params, zone: str
         notes.append(unread("The logbook", day_time_label(book.reach.astimezone(Z))) + ", reconnect counts may be low.")
     flips = F.flips_per_day(lb, zone, params.behaviour("restart_settle_minutes"),
                             params.behaviour("reconnect_min_drop_seconds"), end=end)
+    # when each dropped last: a loop is seen at its latest drop (Finding.seen_at), never at the read
+    last_drop = {eid: max(ts) for eid, ts in F.drop_times(lb, params.behaviour("restart_settle_minutes"),
+                                                          params.behaviour("reconnect_min_drop_seconds"), end=end).items() if ts}
     # ONE finding per DEVICE, named as a person reads it (villa, 2026-10-04: a relay, its firmware
     # entity and its uptime sensor were three lines, two of them raw entity ids)
     rows_by_eid = {r["entity_id"]: r for fam in pack.families for r in pack.entities(fam)}
@@ -631,8 +644,12 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, params, zone: str
     for g in by_device.values():
         asset = dict(pack.assets.get(g["slug"], {"slug": g["slug"] or g["eid"]}))
         asset["name"] = asset.get("name") or g["name"] or _plain_name(g["eid"])
-        findings += R.flap_rules(_device_named(pack, asset, g["eid"]), g["eid"], g["per_day"], F.last_day(end, zone), params,
-                                 restarted=_restarted(pack, states, g["eid"], window_start))
+        found = R.flap_rules(_device_named(pack, asset, g["eid"]), g["eid"], g["per_day"], F.last_day(end, zone), params,
+                             restarted=_restarted(pack, states, g["eid"], window_start))
+        latest = max((last_drop[e] for e in g["members"] if e in last_drop), default=None)
+        for f in found:
+            f.seen_at = latest.isoformat() if latest else ""
+        findings += found
 
     return findings, notes
 

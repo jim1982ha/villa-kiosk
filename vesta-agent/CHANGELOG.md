@@ -1,3 +1,15 @@
+## 0.12.458
+
+What you will see:
+- A fault closed after it was fixed is no longer reopened by readings from before the fix. A device that kept dropping
+  and reconnecting, fixed and pressed Done, was "Fault still there after the close" at the next 5-minute check (the
+  3 days counted still held the old drops), and again at every check for 3 days; it now reopens only if it drops again
+  after the close. A pump fixed and pressed Done during the day is no longer "still there" because the night judged
+  that same day, most of it from before the fix: the next whole day answers it, and the Cockpit's "VESTA confirms by"
+  names the night that judges that day.
+- The 5-minute check's messages give their time as every Status line does: "Example Villa, devices offline on
+  05/11/2026 09:13." (also "devices missing on …" and "batteries on …"), no longer "on 5 Nov, 09:13".
+
 ## 0.12.457
 
 What you will see:

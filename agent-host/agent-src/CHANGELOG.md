@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.442 (5 November 2026)
+
+- Architecture review 25. A finding is seen when its reading shows it (`rules.Finding.seen_at`): a reconnect loop at
+  its latest drop (`features.drop_times`, the one reader `flips_per_day` counts from), a finished day's verdict at the
+  day's start (`nightly.day_seen`, for `asset_findings` and `level_findings`), "" (now) for a state read now.
+  `Problems.record` and `record_rechecked` (its `seen` may be {id: moment}) record that moment, so `wants_open` reopens
+  a person's close only for what came after it. A day rule's finding carries `problems.JUDGED_DAY`; `confirms_by` then
+  runs its watch to the night that judges the first whole day after the close. The recheck's day reads kept before
+  this carry no moment and are read again once. The 5-minute check's titles use `moment_label` (the agreement's moment).
+
 ## 0.6.441 (5 November 2026)
 
 - Architecture review 24. The reconnect window's last day comes from its end (`features.last_day`, the one answer

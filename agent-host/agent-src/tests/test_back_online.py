@@ -244,6 +244,8 @@ def test_a_critical_device_gone_offline_tells_the_facility_manager_at_once(tmp_p
     assert out["actions"] == MOVED and [t["entity_id"] for t in _open_tasks(tmp_path)] == ["lock.example_door"]
     (msg,) = out["send"]
     assert msg["to"] == "fm" and "Example door has been offline for 12min" in msg["text"], msg
+    # its title's moment as every Status line and the agreement write one, never "17 Oct, 21:58" (architecture review 25)
+    assert msg["title"] == "Example Villa, devices offline on 17/10/2026 21:58.", msg["title"]
 
 
 def test_maintenance_mode_holds_a_device_gone_offline_and_the_next_check_after_it_takes_it_up(tmp_path):

@@ -61,7 +61,7 @@ sys.path.insert(0, HERE)
 
 from vesta_shared import kiosk_words, result, script  # noqa: E402
 from vesta_shared.problems import Problems  # noqa: E402
-from vesta_shared.timeutil import day_time_label  # noqa: E402
+from vesta_shared.timeutil import moment_label  # noqa: E402  (a moment as every notice and the agreement write it)
 import nightly as N  # noqa: E402  (what is offline: the night's one reading of it)
 import endings as E  # noqa: E402  (how a fault ends: one table, the night's too)
 from vesta_shared.problems import STILL_THERE  # noqa: E402
@@ -145,7 +145,7 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_m
                                  settle_minutes=settle_minutes)
     actions = result.moved(moved + rec["task_ids"])
     send = N.told_now({"villa": pack.villa, "as_of": day, "new_findings": rec["new"], "again": rec["again"]},
-                      title=f"{pack.villa or 'The villa'}, devices offline on {day_time_label(at)}.", store=store, at=now)
+                      title=f"{pack.villa or 'The villa'}, devices offline on {moment_label(at, zone)}.", store=store, at=now)
     store.audit("preventive-maintenance", "gone_offline", {"findings": [d["id"] for d in rec["new"] + rec["again"]]})
     return {"actions": actions, "send": send, "found": [d["id"] for d in rec["new"] + rec["again"]]}
 
@@ -196,7 +196,7 @@ def gone_missing(store, pack, client, now: datetime, params, zone: str, settle_m
                                  settle_minutes=settle_minutes)
     send = N.told_now({"villa": getattr(pack, "villa", None), "as_of": day, "new_findings": rec["new"],
                        "again": rec["again"]},
-                      title=f"{getattr(pack, 'villa', None) or 'The villa'}, devices missing on {day_time_label(at)}.",
+                      title=f"{getattr(pack, 'villa', None) or 'The villa'}, devices missing on {moment_label(at, zone)}.",
                       store=store, at=now)
     ids = [d["id"] for d in rec["new"] + rec["again"]]
     if ids:
@@ -424,14 +424,14 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
     # a device asleep between its reports reads its last real state (vesta_shared.asleep): its battery fault is judged
     # on its charge, never left open on "unavailable"
     t.states = read_states(client(), pack, now, ids) if ids else {}
-    read, seen, steps, moved_step, restated = [], [], [], {}, []
+    read, seen, steps, moved_step, restated = [], {}, [], {}, []
     for f, rule, rows, es in plan:
         st = t.states.get(f["entity_id"]) or {}
         if es and not rule.readable(st):
             continue
         key = f"pm-dayread:{int(f['id'])}:{t.day.isoformat()}"
         was = store.cache_get(key) if rule.per_day else None
-        if was is None:
+        if was is None or "at" not in was:                  # kept before 0.12.458 had no `at`: read again, once
             try:
                 found = rule.found(t, rows)
             except Exception as e:  # noqa: BLE001 — a read that failed closes nothing; the next tick reads it again
@@ -440,7 +440,9 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
                 continue
             # the rule's own verdict (a battery's: battery.judge — handed to its other step, or raised again)
             v = rule.judge(f, found)
-            was = {"seen": v.seen}
+            # when the reading shows it (rules.Finding.seen_at: a loop's latest drop, a day's start), "" for now
+            was = {"seen": v.seen, "at": next((x.seen_at for x in found if x.rule_id == f["rule_id"]
+                                               and x.entity_id == f["entity_id"] and getattr(x, "seen_at", "")), "")}
             if v.handed:
                 steps += list(v.opens)
                 moved_step[(f["rule_id"], f["entity_id"])] = v.handed
@@ -450,7 +452,7 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
                 store.cache_put(key, was)
         read.append(f["id"])
         if was["seen"]:
-            seen.append(f["id"])
+            seen[int(f["id"])] = was.get("at") or ""
     if not read:
         return none
     day = t.at.date().isoformat()
@@ -473,7 +475,7 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
                                      settle_minutes=settle_minutes)
         task_ids += new["task_ids"]
         send = N.told_now({"villa": pack.villa, "as_of": day, "new_findings": new["new"], "again": new["again"]},
-                          title=f"{pack.villa or 'The villa'}, batteries on {day_time_label(t.at)}.", store=store, at=now)
+                          title=f"{pack.villa or 'The villa'}, batteries on {moment_label(t.at, t.Z)}.", store=store, at=now)
     return {"actions": result.moved(task_ids), "closed": rec["closed"], "seen": rec["seen"], "send": send,
             "handed": {fid: rec["notes"][fid] for fid in rec["handed"]}}
 
