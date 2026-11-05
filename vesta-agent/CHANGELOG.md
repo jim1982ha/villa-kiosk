@@ -1,3 +1,10 @@
+## 0.12.459
+
+What you will see:
+- An alert reopened in the Cockpit is told in every chat that read its close. The owner's group kept "Done on …
+  Watch 4h." under "(existing)", reading as ended an alert that was open again, while only the facility manager's
+  chat said "Reopen request sent …"; that line is now under the Done in the owner's group too.
+
 ## 0.12.458
 
 What you will see:

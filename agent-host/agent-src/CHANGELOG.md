@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.443 (5 November 2026)
+
+- A step that undoes an ending reaches every copy of its alert (`message_format.Step.every_copy`, the reopening's;
+  `outcome.py` leaves no copy quiet for it), as every copy took the close: the owner's group kept "Done … Watch 4h"
+  under "(existing)" after a Cockpit reopening the facility manager alone was told of (owner, 2026-11-05).
+
 ## 0.6.442 (5 November 2026)
 
 - Architecture review 25. A finding is seen when its reading shows it (`rules.Finding.seen_at`): a reconnect loop at

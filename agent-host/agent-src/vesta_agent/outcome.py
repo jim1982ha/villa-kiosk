@@ -42,6 +42,7 @@ import os
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
+from vesta_shared.message_format import STEPS
 from vesta_shared.result import FAULTS_CHANGED
 from vesta_shared.ha_client import error_short_chars
 
@@ -280,8 +281,10 @@ class Outcome:
             # and takes only the heading: the title word and "To:" are the incident's, the same in every copy
             # (architecture review, 2026-10-19)
             stepped = set().union(*[r for (i, _st), r in told.items() if i == iid] or [set()])
-            elsewhere = {c for c, _rec in self.thread.state.incident_chats(iid)
-                         if self.notices and not self.notices.concerns(c, stepped)}
+            # a step that undoes an ending (a reopening) reaches every copy, as its close did (Step.every_copy)
+            every = any(s.every_copy for (i, st) in told if i == iid and (s := STEPS.get(st or "")))
+            elsewhere = set() if every else {c for c, _rec in self.thread.state.incident_chats(iid)
+                                             if self.notices and not self.notices.concerns(c, stepped)}
             # this result's own steps of the incident: its bottom line says them, the history above them never.
             # ⚠️ COUNTED AS RECORDED (architecture review 22, card 1): counted here by its own rule, the villa's late
             # all-clear of an alert closed and watched out was 1 step that Notices.record never added, and every other

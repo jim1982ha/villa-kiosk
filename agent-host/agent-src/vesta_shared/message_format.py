@@ -194,6 +194,10 @@ class Step(NamedTuple):
     #: and {who} (the roles, short). ⚠️ EVERY LINE ENDS "(to: …)" (owner, 2026-10-18, #41: "Alert sent … to Owner &
     #: FM" beside "Back at …, 2nd time in 7 days (to: Owner & FM)" — two shapes for whom in one Status).
     line: str = "{sent} {at} (to: {who})"
+    #: it undoes an ending: every copy takes it, as every copy took the close (vesta_agent/outcome.py). ⚠️ A REOPENING
+    #: UNDOES AN ENDING (owner, 2026-11-05): each chat keeps its own steps, yet the owner's group, which read "Done …
+    #: Watch 4h", kept it under "(existing)" while the facility manager alone read the reopening
+    every_copy: bool = False
 
 
 #: EVERY STEP OF AN ALERT, ONE LINE EACH (architecture review, 2026-10-17: a step was named in five tables — the
@@ -218,7 +222,7 @@ STEPS: dict[str, Step] = {
     "back": Step("Back: alert sent", "existing", timed=True, starts_run=True,
                  line="Back at {at}{times} (to: {who})"),
     "still": Step("Still-there alert sent", "existing", timed=True),
-    "reopened": Step("Reopen request sent", "existing", timed=True),
+    "reopened": Step("Reopen request sent", "existing", timed=True, every_copy=True),
     "closed": Step("Closing note sent", "closed", timed=False),
 }
 #: A button pressed on an alert: the answer in its own chat is no step of its own — the press is the story's line
