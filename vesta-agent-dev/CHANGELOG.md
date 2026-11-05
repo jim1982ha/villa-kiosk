@@ -1,3 +1,15 @@
+## 0.12.461
+
+What you will see:
+- An alert's buttons on Telegram are in the tablet's order: Done · Not a problem · Open Ticket · Need help. Open Ticket
+  is new on Telegram, its label in each chat's language ("Ouvrir un ticket", "Buka tiket" …).
+- Open Ticket pressed on Telegram does what the tablet's Open Ticket does: the alert's fault becomes a ticket in
+  progress in the Cockpit ("Opened by" the person who pressed), its reminders stop, and every chat's Status says
+  "Ticket opened in the Cockpit on … (name)". The message keeps Done and Need help; Not a problem and Open Ticket go.
+  An alert taken on in the Cockpit now keeps Done and Need help on Telegram too.
+- If the VESTA Kiosk cannot be reached, the message says "The VESTA Kiosk cannot be reached: open the ticket on the
+  tablet." and keeps its buttons; nothing else changes.
+
 ## 0.12.460
 
 What you will see:
