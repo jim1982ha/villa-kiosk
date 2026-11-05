@@ -1,3 +1,28 @@
+## 2.496.723
+
+What you will see:
+- Advanced Settings › Devices › Grouped devices: one search field instead of two ("Search groups, or a device to
+  group…"). Typing narrows the groups below and lists the matching devices: one already grouped says "In group …"
+  (tap it to see that group, marked), another says "Create a group" (tap it to make the group with it as the main
+  device). Typing a device's exact id offers "Create a group with …" first, Enter picks it. When no group matches,
+  the list says "No group has '…'" with a button to create one. Clearing the field shows every group again.
+- Asleep between reports works the same way ("Search, or a device to add…"): "On the list" or "Add to the list".
+  Auto-detected entity settings has the same field, which only narrows the list ("Search by id, label or room…").
+  Villa › Bound 3D objects too ("Search objects, or a device to prepare…"): it narrows the list shown, and offers
+  "Prepare it" or "Already in Devices"; the separate Add button is gone.
+- The list under a search field is now solid, so the cards behind it no longer show through.
+- On a phone, a device card's tick box now sits on the same line as its id and pencil, with "Confirm before toggling"
+  on the line under them.
+- In every settings card (a device's, an announcement's, a chat's) the fields now all start at the same place, the
+  names in one column on the left. On a phone each name sits above its field. A chat's field is now called
+  "Language".
+- Inbox: a card whose problem is only seen live (a device "Unavailable" with no VESTA fault) now has a pill at the
+  right of its first line, "checked live"; hovering it says the tablet watches it all the time and the card goes as
+  soon as the device is back to normal. On a card that also has a VESTA fault, the card keeps the fault's next check,
+  and the live problem's own line shows "checked live".
+- Inbox on a phone: the Issues · Notifications · Reports bar now has a solid background across the whole width, so
+  the cards no longer show above or beside it while you scroll.
+
 ## 2.496.722
 
 What you will see:
