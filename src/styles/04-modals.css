@@ -425,6 +425,24 @@
 @media (hover: hover) {
   .info-tip > .info-btn:hover { color: var(--accent); }
 }
+/* ⚠️ A CARD'S SOURCE ICON AS ITS TIP'S BUTTON (sourceIcons IconTip, owner 2026-11-06): the icon's own size and place,
+   so the strip looks as before; its finger's area 44 px around it, drawn by nothing (::before). */
+.info-tip > .info-btn.info-btn-icon {
+  position: relative; width: auto; height: auto; padding: 0; border-radius: 4px; color: inherit; cursor: help;
+}
+.info-tip > .info-btn.info-btn-icon::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%);
+}
+@media (hover: hover) {
+  .info-tip > .info-btn.info-btn-icon:hover { color: inherit; filter: brightness(1.15); }
+}
+/* One icon's tip: its icon and name, then What it is, Appears, Goes, each a short labelled line. */
+.source-tip { display: flex; flex-direction: column; gap: 6px; }
+.source-tip-lines { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.source-tip-lines dt { display: inline; font-weight: 600; color: var(--text-dim); }
+.source-tip-lines dt::after { content: ": "; }
+.source-tip-lines dd { display: inline; margin: 0; color: var(--text-primary); }
+
 /* A title or a label with its (i) beside it — the ONE place an option's explanation lives in Settings, Advanced
    Settings and the Cockpit (owner, 2026-10-22: no visible description text). The (i) sits inline after the words, a
    size that suits a title rather than the 30 px stand-alone button. */

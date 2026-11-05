@@ -119,6 +119,22 @@ export function confirmingRow(c: AgentCadence | null): ConfirmingRow {
   };
 }
 
+/** The table's three columns after the source, in their one wording: its head (FaultTiming) and each line of an icon's
+ *  own tip (sourceIcons IconTip) — owner, 2026-11-06: "each card shows the specific icon's tooltip". */
+export const TIMING_HEADS = { what: "What it is", opens: "Appears", goes: "Goes" } as const;
+
+/** What a tip can explain: a problem's source, or the check of a cleared problem on the Watch list. */
+export type TimingKey = IssueSource | "watch";
+
+/** ONE icon's row of the table, the very row the (i) shows for it (owner, 2026-11-06): a source's from faultTiming —
+ *  its Agent rows are always there, as an Agent's icon on a card is always explained — the Watch check's from
+ *  confirmingRow; `cadence` the Agent's own timing, as the table reads it. */
+export function timingRow(key: TimingKey, cadence: AgentCadence | null): { what: string; opens: string; goes: string } {
+  const t = faultTiming(true, cadence);
+  const row = key === "watch" ? t.confirming! : t.rows.find((r) => r.source === key)!;
+  return { what: row.what, opens: row.opens, goes: row.goes };
+}
+
 /** Every source's row — the VESTA Agent's only with an Agent — in its group, and the note under them; `cadence`: the
  *  Agent's own timing (null: it did not say). */
 export function faultTiming(agent: boolean, cadence: AgentCadence | null = null):

@@ -5,12 +5,11 @@
 
 import { momentText } from "@/utils/dateText";
 import type { ReactNode } from "react";
-import { CheckCircle2 } from "lucide-react";
 import WorkButtons, { useCardWork, type RaisedFault } from "@/components/fm/WorkButtons";
 import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
 import { cardIcons, cardStrip, lineStrip, rowWhen, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
-import { SourceIcons } from "@/components/fm/sourceIcons";
+import { IconTip, SourceIcons, WatchedIcon } from "@/components/fm/sourceIcons";
 import RecordCard, { type CardPart } from "@/components/fm/RecordCard";
 import { moveWho } from "@/fm/faultNotes";
 import { ACCENT_PILL } from "@/fm/tone";
@@ -87,7 +86,7 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
       // where its problems come from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
       lead={card.look
-        ? <CheckCircle2 className="fault-watched-icon" size={18} aria-hidden="true" />
+        ? <IconTip k="watch" icon={<WatchedIcon size={18} />} />
         : icons.head ? <SourceIcons {...icons.head} /> : undefined}
       // when its problems are read again: quiet text after its room; hovering it says it in words, with its date and
       // time (owner, 2026-10-19). On the Watch list it is the strip's.

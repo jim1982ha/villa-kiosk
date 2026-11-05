@@ -11,7 +11,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useProfile } from "@/auth/ProfileContext";
 import { roleCan } from "@/auth/permissions";
 import { useStoreRefresh } from "@/hooks/useStoreRefresh";
-import { fetchAgentStatus, type AgentStatus } from "./agentApi";
+import { fetchAgentStatus, type AgentCadence, type AgentStatus } from "./agentApi";
 import { agentVisible } from "./agentView";
 import RoomShare from "./RoomShare";
 
@@ -62,4 +62,11 @@ export function useAgent(): AgentContextValue {
   const ctx = useContext(AgentContext);
   if (!ctx) throw new Error("useAgent must be used within an AgentProvider");
   return ctx;
+}
+
+/** The Agent's own timing (its heartbeat's cadence), the one the (i)'s table words its rows with — for an icon's tip on a
+ *  card (sourceIcons SourceTip), which also draws where no Agent is mounted (a check's drawing): null there, the
+ *  table's words without numbers. */
+export function useAgentCadence(): AgentCadence | null {
+  return useContext(AgentContext)?.status?.cadence ?? null;
 }

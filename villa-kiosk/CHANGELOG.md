@@ -1,3 +1,16 @@
+## 2.496.719
+
+What you will see:
+- Every source icon on a card now explains itself. Hover it with a mouse, or tap it on a phone or the iPad, and a
+  small card opens with that icon's own line of the table in the (i) beside OPEN ISSUES: its icon and name ("Live",
+  "Alert", "Maintenance check", "Owner"…), then "What it is", "Appears" and "Goes", word for word as the table says
+  them, with VESTA's own times.
+- This works on every icon: the ones at the top of an Inbox card, the one beside each problem of a card holding
+  several, a ticket's icon in Tickets, the icons in the Recap's "Check the faults" line, and the green check of a
+  card on the Watch list ("On watch"). A card with two icons has two cards, one for each.
+- Tapping an icon only opens its explanation: it never opens or erases the card under it. A tap anywhere else, or
+  Escape, closes it.
+
 ## 2.496.718
 
 What you will see:

@@ -27,11 +27,13 @@ export function useOutsideClose(
       onClose();
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
+    // ⚠️ BEFORE ANYTHING (capture), so a press that something stops on its way up still closes it (2.496.719): a
+    // card's bar, or a card's source icon opening its own tip, stop the press from reaching the card under them
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("keydown", onKey, true);
     return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("keydown", onKey, true);
     };
     // `inside` is a fresh array literal at every call site; its refs are stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
