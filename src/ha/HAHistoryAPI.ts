@@ -29,6 +29,7 @@ export function haHistoryPort(ws: StatisticsPort, asleep: ReadonlySet<string> = 
     },
     getStatisticsDuringPeriod: (...args) => ws.getStatisticsDuringPeriod(...args),
     keptFrom: villaKeptFrom,
+    asleep: (entityId) => asleep.has(entityId),
   };
 }
 

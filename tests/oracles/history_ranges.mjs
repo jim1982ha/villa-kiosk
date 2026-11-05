@@ -184,10 +184,61 @@ ck("an outage within one minute says when and how long, under 1s or for its seco
 ck("  ...on a chart of several days, with its day", /\d/.test(fmtOutage({ from: now - 2 * DAY, to: now - 2 * DAY + 460 }, now, 168).replace(/\d\d:\d\d/, "")),
    fmtOutage({ from: now - 2 * DAY, to: now - 2 * DAY + 460 }, now, 168));
 
+// architecture review 24: "Unavailable · 3 Nov, 06:13–3 Nov, 06:40" said the day twice
+{
+  const day2 = now - 2 * DAY, tip = fmtOutage({ from: day2, to: day2 + 27 * MIN }, now, 168);
+  const across = fmtOutage({ from: day2 - 20 * MIN, to: day2 + 4 * HOUR }, now, 168);
+  ck("an outage on a chart of several days says its day once when it ends the same day, twice when it does not",
+     (tip.match(/\d{1,2} [A-Z][a-z]{2}|[A-Z][a-z]{2} \d{1,2}/g) ?? []).length === 1
+     && (new Date(day2 - 20 * MIN).getUTCDate() === new Date(day2 + 4 * HOUR).getUTCDate()
+       || (across.match(/\d{1,2} [A-Z][a-z]{2}|[A-Z][a-z]{2} \d{1,2}/g) ?? []).length === 2), [tip, across]);
+}
+
+console.log("\n  an outage inside a step looks the same whatever drew it, and a sleep is none (architecture review 24):");
+{
+  const slot = 5 * MIN, id = "sensor.terrace_temp";
+  const rowsOf = (step, from, to, keep) => { const o = []; for (let t = Math.ceil(from / step) * step; t + step <= to; t += step) if (keep(t)) o.push({ start: t, end: t + step, mean: 21 }); return o; };
+  // a battery sensor that sleeps between its half-hourly reports: no five-minute figure for the slots it slept through
+  const sleeper = (asleep) => ({ stateRows: async () => [], keptFrom: async () => kept, ...(asleep ? { asleep: (e) => e === id } : {}),
+    getStatisticsDuringPeriod: async (ids, start, period) => {
+      const from = Date.parse(start), step = { "5minute": slot, hour: HOUR, day: DAY, week: 7 * DAY }[period];
+      const lo = period === "5minute" ? Math.max(from, kept) : from;
+      // an hour a day it slept through whole: no hourly figure either
+      return { [id]: rowsOf(step, lo, now - slot, (t) => (period !== "5minute" || t % (30 * MIN) === 0) && (period !== "hour" || new Date(t).getUTCHours() !== 3)) };
+    } });
+  const weekOf = async (port) => (await loadOne(port, { kind: "trend", ids: [id], hours: 168, period: "hour" }, now))[id];
+  const awake = await weekOf(sleeper(false)), asleep = await weekOf(sleeper(true));
+  ck("a device asleep by design: no step of its week striped, its line held across the hours it slept through",
+     awake.gaps.filter((g) => g.within).length > 100 && asleep.gaps.length === 0, { awake: awake.gaps.length, asleep: asleep.gaps });
+  // the caller: the tablet's port says which devices sleep, from the entity store's list (useHistorySource)
+  const { haHistoryPort } = await import("@/ha/HAHistoryAPI");
+  const real = haHistoryPort({ getStatisticsDuringPeriod: async () => ({}) }, new Set([id]));
+  ck("  ...the tablet's history port knows them, from the list it is given", real.asleep?.(id) === true && real.asleep?.("sensor.other") === false);
+  // a sensor with no figures, drawn from its changes: offline 22min inside an hour, and a whole hour
+  const iso = (t) => new Date(t).toISOString(), off = now - 3 * DAY + 10 * HOUR + 13 * MIN, gone = now - 2 * DAY + 5 * HOUR;
+  const changes = [];
+  for (let t = now - 8 * DAY; t < now; t += 10 * MIN) {
+    if (t >= off && t < off + 22 * MIN) continue;
+    if (t >= gone && t < gone + HOUR + 10 * MIN) continue;
+    changes.push({ state: "20", last_changed: iso(t) });
+  }
+  changes.push({ state: "unavailable", last_changed: iso(off) }, { state: "unavailable", last_changed: iso(gone) });
+  changes.sort((a, b) => Date.parse(a.last_changed) - Date.parse(b.last_changed));
+  const plain = { keptFrom: async () => kept, getStatisticsDuringPeriod: async () => ({}),
+    stateRows: async (e, from, to) => changes.filter((r) => { const t = Date.parse(r.last_changed); return t >= from && t <= to; }) };
+  const g = (await loadOne(plain, { kind: "trend", ids: ["sensor.x"], hours: 168, period: "hour" }, now))["sensor.x"].gaps;
+  const inside = g.filter((x) => x.within), breaks = g.filter((x) => !x.within && !x.notKept);
+  ck("  ...a sensor with no figures: the hour offline 22min striped as the figures' (\"during this hour\"), the whole hour a break",
+     inside.some((x) => x.from <= off && x.to > off && x.within === "hour") && fmtOutage(inside[0], now, 168).startsWith("Unavailable during this hour")
+     && breaks.some((x) => x.from <= gone + 30 * MIN && x.to > gone + 30 * MIN && x.actual), { inside, breaks });
+}
+
 console.log("\n  every chart's (i): what it shows and what it may not (owner, 2026-11-05):");
 {
   const { chartAbout } = await import("@/components/panels/chartUtils");
   const { PERIOD_MS } = await import("@/utils/statisticsSeries");
+  // architecture review 24: a total's (i) says what its chart draws for a step with no total, the grey "No reading"
+  const { barTipRows, barLayout } = await import("@/utils/barChart");
   const about = Object.fromEntries(RANGES.map((r) => [r.key, chartAbout("average", r.grainMs, now - r.hours * HOUR, kept)]));
   ck("1h and 24h: every reading, each outage at its real length",
      about["1h"] === about["24h"] && about["24h"] === "Every reading. A grey band is each time the device was unavailable, at its real length.", about["24h"]);
@@ -201,7 +252,8 @@ console.log("\n  every chart's (i): what it shows and what it may not (owner, 20
      !chartAbout("average", PERIOD_MS.day, kept + DAY, kept).includes("Before"));
   ck("  ...a state band: each step's states, unavailable at any length; a total: why it shows no outage",
      chartAbout("states", PERIOD_MS.day, now - 30 * DAY, kept).startsWith("Each day shows the states it saw: striped when it saw several, grey among them when the device was unavailable, at any length. Before ")
-     && chartAbout("total", PERIOD_MS.hour) === "Hourly totals. An hour with no total written is left empty. A meter counts on through an outage, so its total stays right and no outage is shown.",
+     && chartAbout("total", PERIOD_MS.hour) === `Hourly totals. An hour with no total written is a grey band, "${barTipRows({ t: 0, segs: null }, String)[0].text}". A meter counts on through a shorter outage, so a total written stays right: no outage is shown inside it.`
+     && barLayout([{ t: 0, segs: null }]).bars[0].missing,
      [chartAbout("states", PERIOD_MS.day, now - 30 * DAY, kept), chartAbout("total", PERIOD_MS.hour)]);
   ck("  ...words a person reads: no platform name, no long dash", Object.values(about).every((w) => !/Home Assistant|\bHA\b| — /.test(w)));
   // the set, derived from the tree: every chart with a title says its (i) through ChartStep's `about`, from chartAbout
