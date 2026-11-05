@@ -1,3 +1,10 @@
+## 0.12.462
+
+What you will see:
+- Open Ticket pressed on Telegram is said as such in every chat: "Ticket opened on Telegram on 05/11/2026 16:28
+  (Wayan)." in each chat's language. It said "Ticket opened in the Cockpit". Open Ticket on the tablet still says "in
+  the Cockpit".
+
 ## 0.12.461
 
 What you will see:

@@ -82,7 +82,9 @@ def test_open_ticket_takes_the_alert_on_as_the_kiosks_own_does(agent):
     # every chat says the take-on (the Kiosk's own step words), its buttons those that still apply
     for chat in (FM_CHAT, GROUP):
         texts = [t for c, _m, t in agent.tg.edits if c == chat]
-        assert texts and "Ticket opened" in status(texts[-1]) and "(Wayan)" in status(texts[-1]), texts[-1:]
+        # where it was pressed (architecture review 28: it was told "Ticket opened in the Cockpit")
+        assert texts and "Ticket opened on Telegram" in status(texts[-1]) and "(Wayan)" in status(texts[-1]), texts[-1:]
+        assert "Cockpit" not in status(texts[-1]), texts[-1]
         # said once, by the take-on: no line of the press beside it, now or under a later step
         assert "Open Ticket" not in texts[-1].split("Status:")[1], texts[-1]
     assert not [h for h in agent.state.incident_history(1) if h.get("label") == "Open Ticket"]
@@ -133,3 +135,16 @@ def test_need_help_after_the_take_on_brings_back_no_button_that_no_longer_applie
     # the owner is asked to act, with the buttons that still apply (the press's own chat settled by its answer)
     asked = [k for c, _t, k in agent.tg.sent if c in (OWNER, GROUP) and k][-1]
     assert [b["text"] for b in asked["inline_keyboard"][0]] == ["Done", "Need help"]
+
+
+def test_a_take_on_says_where_in_every_language():
+    """Telegram's Open Ticket in each chat's own words (status_words "places" "taken"), the Cockpit's as before."""
+    from vesta_shared import kiosk_words, status_words as SW
+    from vesta_shared.message_format import IN_COCKPIT, ON_TELEGRAM
+    on_tg = kiosk_words.taken("Wayan", "2026-11-05T08:00:00+00:00", "UTC", ON_TELEGRAM)
+    in_ck = kiosk_words.taken("Wayan", "2026-11-05T08:00:00+00:00", "UTC", IN_COCKPIT)
+    assert str(on_tg) == "Ticket opened on Telegram on 05/11/2026 08:00 (Wayan)."
+    assert str(in_ck) == "Ticket opened in the Cockpit on 05/11/2026 08:00 (Wayan)."
+    assert set(on_tg.langs) == set(SW.LANGS) - {"en"}
+    for lang, said in on_tg.langs.items():
+        assert "Telegram" in said and "Cockpit" not in said and "(Wayan)" in said and "opened" not in said, (lang, said)

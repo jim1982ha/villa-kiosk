@@ -149,6 +149,9 @@ LASTING_IN = {ON_TELEGRAM: f"Not a problem {ON_PLACE[ON_TELEGRAM]}", ON_TABLET: 
 #: Cockpit has the button. ⚠️ NOT A DONE (architecture review 24): the Kiosk's card said "No action needed on … (Owner)"
 #: and every chat "Done in the Cockpit on … (Owner)" for the same press.
 NOTHING_IN = {IN_COCKPIT: COCKPIT["nothing"]}
+#: …and a take-on ("Open Ticket"), on the Cockpit's card or Telegram's button. ⚠️ WHERE IT WAS PRESSED (architecture
+#: review 28): Telegram's Open Ticket (owner, 2026-11-05) was told "Ticket opened in the Cockpit" in every chat.
+TAKEN_IN = {ON_TELEGRAM: f"Ticket opened {ON_PLACE[ON_TELEGRAM]}", IN_COCKPIT: COCKPIT["taken"]}
 
 
 def done_in(place: str, who: str | None = None, lasting: bool = False) -> str:

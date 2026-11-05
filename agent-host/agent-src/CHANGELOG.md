@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.446 (6 November 2026)
+
+- Architecture review 28: a take-on said where it was pressed (`message_format.TAKEN_IN`, `places.taken` in each
+  language, read by `status_words.closed_where`; `kiosk_words.taken(where=)`): `Tickets.take_on` marks the fault it
+  takes on from Telegram before writing the step and `_press` says "Ticket opened on Telegram on … (name)"; it said "in
+  the Cockpit". ARCHITECTURE.md maps the Open Ticket path. tests/test_open_ticket_telegram.py, 4 mutations red.
+
 ## 0.6.445 (5 November 2026)
 
 - One button order, and Open Ticket on Telegram (owner, 2026-11-05): the alert desk's `buttons` are done,

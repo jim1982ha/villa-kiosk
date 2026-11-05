@@ -21,7 +21,7 @@ from vesta_shared.when import Spec
 from .kiosk import ASK_HELP, CLOSE, MINE, REOPEN, TAKE, KioskError, closing, confirming, noted, retitled, tagged, todo
 from .kiosk import fault_title_chars
 from vesta_shared.messaging import headline, incident_tag
-from vesta_shared.message_format import IN_COCKPIT, STEPS
+from vesta_shared.message_format import IN_COCKPIT, ON_TELEGRAM, STEPS
 
 log = logging.getLogger("vesta.outcome")
 
@@ -43,6 +43,8 @@ class Tickets:
         # fault runs a repair, and seven alerts in one second ran seven at once — each saw the same open tasks with no
         # fault yet, and each made one. Taken in turn, the second finds the first one's fault on its task.
         self._repairing = asyncio.Lock()
+        # the faults taken on by Telegram's Open Ticket whose step the next repair reads (take_on): told as Telegram's
+        self._taken_on_telegram: set[str] = set()
 
     def _store(self):
         from vesta_shared.store import Store
@@ -136,13 +138,19 @@ class Tickets:
         uid = task.get("todo_uid") if task and task.get("status") == "open" else None
         if not uid:
             return False
+        # ⚠️ TOLD WHERE IT WAS PRESSED (architecture review 28): read back as the Kiosk's own take-on, it was told "Ticket
+        # opened in the Cockpit". Marked before the step is written: a repair already running may read it first
+        self._taken_on_telegram.add(uid)
         try:
-            if not await self.kiosk.take_ticket(uid, by):
+            try:
+                if not await self.kiosk.take_ticket(uid, by):
+                    return False
+            except Exception as e:  # noqa: BLE001 — answered plainly, nothing half done
+                log.warning("Incident #%s could not be taken on in the Kiosk (%s)", iid, type(e).__name__)
                 return False
-        except Exception as e:  # noqa: BLE001 — answered plainly, nothing half done
-            log.warning("Incident #%s could not be taken on in the Kiosk (%s)", iid, type(e).__name__)
-            return False
-        await self.repair()
+            await self.repair()
+        finally:
+            self._taken_on_telegram.discard(uid)
         return True
 
     async def repair(self) -> dict[str, int]:
@@ -321,7 +329,8 @@ class Tickets:
         elif kind == TAKE:
             # ⚠️ AN ALERT TAKEN ON IN THE KIOSK IS NO LONGER CHASED (owner, 2026-10-15): "Open Ticket" on its card
             if task and task["status"] == "open":
-                said = kiosk_words.taken(by, at, self.timezone)
+                said = kiosk_words.taken(by, at, self.timezone,
+                                         ON_TELEGRAM if uid in self._taken_on_telegram else IN_COCKPIT)
                 iid = problems.taken_in_kiosk(task["id"], str(said))
                 if iid and self.restate_alert:
                     await self.restate_alert(iid, said)

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from . import message_format as mf
 from . import status_words as SW
 from .timeutil import moment_label
 
@@ -69,11 +70,12 @@ def helped(by: str, iso: str | None, zone: str) -> Words:
     return _every(lambda lang: SW.cockpit("help", at, by, lang))
 
 
-def taken(by: str, iso: str | None, zone: str) -> Words:
+def taken(by: str, iso: str | None, zone: str, where: str = mf.IN_COCKPIT) -> Words:
     """"Ticket opened in the Cockpit on 15/10/2026 00:40 (Facility Manager)." in every language — someone took an
-    alert's fault on in the VESTA Kiosk ("Open Ticket"): its Telegram chase stops (owner, 2026-10-15)."""
+    alert's fault on ("Open Ticket"): its Telegram chase stops (owner, 2026-10-15). `where`: the place it was pressed
+    (message_format.TAKEN_IN), "Ticket opened on Telegram on …" for Telegram's button (architecture review 28)."""
     at = when(iso, zone)
-    return _every(lambda lang: SW.cockpit("taken", at, by, lang) + SW.stop(lang))
+    return _every(lambda lang: SW.closed_where(mf.TAKEN_IN[where], at, by, lang) + SW.stop(lang))
 
 
 def reopened(by: str, iso: str | None, zone: str, what: str | None = None) -> Words:

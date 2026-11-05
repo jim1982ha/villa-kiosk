@@ -1283,4 +1283,26 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
   test sends it).
 - Dropped: the night message's words around its Status ("New", "Back again", its title) stay English in a French chat
   while its Status is French; the first copy is all English. Making every copy follow its chat needs a skill message's
-  `text_in` on its first post and the tablet kept in English (the review-22 card-4 trap): the owner's call, not done.
+  `text_in` on its first post and the tablet kept in English (the review-22 card-4 trap): the owner's call, not done. The owner
+  declined it (2026-11-05): rules/decided.md "The night message's language stays as it is".
+
+
+## Open Ticket on Telegram, said where it was pressed (architecture review 28, 2026-11-06, 0.12.462)
+
+- **The path** (0.12.461, owner 2026-11-05): the alert desk's skill.yaml `buttons` are done, not_a_problem,
+  open_ticket, need_help, the tablet's order. open_ticket is `takes: true` (desk.py reply hands `result.take_on` to the
+  engine and says nothing itself) and `until: taken` (`AlertButtons.offered` leaves it, and not_a_problem, off a copy
+  once the alert is taken on). `Tickets.take_on` writes the agreement's `ticket.takenStep` on the alert's open fault
+  by the person who pressed (`Kiosk.take_ticket`: their name as the step's `by` and `who`, which the proxy keeps), then
+  runs the repair, which reads it back as any take-on (`kiosk.gestures` TAKE → `Tickets._press` →
+  `Problems.taken_in_kiosk`): the chase stops and every copy is restated. One mechanism: the Telegram press only writes
+  what the Kiosk's button writes. A Kiosk that cannot be reached, or an alert with no open fault yet, is answered
+  plainly with the buttons back.
+- **Said where it was pressed** (`message_format.TAKEN_IN`, each language's `places.taken`, `status_words.closed_where`
+  as for a close; `kiosk_words.taken(where=)`): read back as the Kiosk's own take-on, a Telegram press was told "Ticket
+  opened in the Cockpit on … (Wayan)" in every chat. `Tickets.take_on` marks its fault (`_taken_on_telegram`) before
+  writing the step, since a repair already running may read it first, and `_press` says "Ticket opened on Telegram".
+  The Kiosk's record keeps no place: the mark lives for the repair that reads the step.
+- Mutations red (tests/test_open_ticket_telegram.py): the place ignored, the mark left out, TAKEN_IN not among
+  closed_where's tables, one language's words removed.
+

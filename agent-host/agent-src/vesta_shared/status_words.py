@@ -52,7 +52,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nouvelle alerte", "still_open": "Toujours en cours",
         "earlier": ("… {n} notification précédente", "… {n} notifications précédentes"),
         "units": ("s", "min", "h", "j"),
-        "places": {"done": {"telegram": "Terminé sur Telegram", "tablet": "Terminé sur la tablette"}, "lasting": {"telegram": "Pas un problème sur Telegram", "tablet": "Pas un problème sur la tablette"}},
+        "places": {"done": {"telegram": "Terminé sur Telegram", "tablet": "Terminé sur la tablette"}, "lasting": {"telegram": "Pas un problème sur Telegram", "tablet": "Pas un problème sur la tablette"}, "taken": {"telegram": "Ticket ouvert sur Telegram"}},
         "cockpit": {"closed": "Terminé dans le Cockpit", "nothing": "Aucune action nécessaire dans le Cockpit", "lasting": "Pas un problème dans le Cockpit", "help": "Aide demandée dans le Cockpit", "taken": "Ticket ouvert dans le Cockpit", "reopened": "Rouvert dans le Cockpit",
                     "look_again": "Merci de vérifier à nouveau."},
     },
@@ -69,7 +69,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Peringatan baru", "still_open": "Masih terbuka",
         "earlier": ("… {n} pemberitahuan sebelumnya", "… {n} pemberitahuan sebelumnya"),
         "units": ("dtk", "mnt", "jam", "hr"),
-        "places": {"done": {"telegram": "Selesai di Telegram", "tablet": "Selesai di tablet"}, "lasting": {"telegram": "Bukan masalah di Telegram", "tablet": "Bukan masalah di tablet"}},
+        "places": {"done": {"telegram": "Selesai di Telegram", "tablet": "Selesai di tablet"}, "lasting": {"telegram": "Bukan masalah di Telegram", "tablet": "Bukan masalah di tablet"}, "taken": {"telegram": "Tiket dibuka di Telegram"}},
         "cockpit": {"closed": "Selesai di Cockpit", "nothing": "Tidak perlu tindakan di Cockpit", "lasting": "Bukan masalah di Cockpit", "help": "Bantuan diminta di Cockpit", "taken": "Tiket dibuka di Cockpit", "reopened": "Dibuka kembali di Cockpit",
                     "look_again": "Mohon periksa lagi."},
     },
@@ -86,7 +86,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Neuer Alarm", "still_open": "Weiterhin offen",
         "earlier": ("… {n} frühere Meldung", "… {n} frühere Meldungen"),
         "units": ("s", "Min.", "Std.", "Tg."),
-        "places": {"done": {"telegram": "Auf Telegram erledigt", "tablet": "Auf dem Tablet erledigt"}, "lasting": {"telegram": "Auf Telegram kein Problem", "tablet": "Auf dem Tablet kein Problem"}},
+        "places": {"done": {"telegram": "Auf Telegram erledigt", "tablet": "Auf dem Tablet erledigt"}, "lasting": {"telegram": "Auf Telegram kein Problem", "tablet": "Auf dem Tablet kein Problem"}, "taken": {"telegram": "Ticket auf Telegram eröffnet"}},
         "cockpit": {"closed": "Im Cockpit erledigt", "nothing": "Im Cockpit keine Maßnahme nötig", "lasting": "Im Cockpit kein Problem", "help": "Hilfe im Cockpit angefordert", "taken": "Ticket im Cockpit eröffnet", "reopened": "Im Cockpit wieder geöffnet",
                     "look_again": "Bitte noch einmal prüfen."},
     },
@@ -103,7 +103,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nueva alerta", "still_open": "Sigue abierta",
         "earlier": ("… {n} aviso anterior", "… {n} avisos anteriores"),
         "units": ("s", "min", "h", "d"),
-        "places": {"done": {"telegram": "Hecho en Telegram", "tablet": "Hecho en la tableta"}, "lasting": {"telegram": "No es un problema en Telegram", "tablet": "No es un problema en la tableta"}},
+        "places": {"done": {"telegram": "Hecho en Telegram", "tablet": "Hecho en la tableta"}, "lasting": {"telegram": "No es un problema en Telegram", "tablet": "No es un problema en la tableta"}, "taken": {"telegram": "Ticket abierto en Telegram"}},
         "cockpit": {"closed": "Hecho en el Cockpit", "nothing": "No se necesita acción en el Cockpit", "lasting": "No es un problema en el Cockpit", "help": "Ayuda pedida en el Cockpit", "taken": "Ticket abierto en el Cockpit", "reopened": "Reabierto en el Cockpit",
                     "look_again": "Por favor, revíselo de nuevo."},
     },
@@ -120,7 +120,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nuovo avviso", "still_open": "Ancora aperto",
         "earlier": ("… {n} notifica precedente", "… {n} notifiche precedenti"),
         "units": ("s", "min", "h", "g"),
-        "places": {"done": {"telegram": "Fatto su Telegram", "tablet": "Fatto sul tablet"}, "lasting": {"telegram": "Non è un problema su Telegram", "tablet": "Non è un problema sul tablet"}},
+        "places": {"done": {"telegram": "Fatto su Telegram", "tablet": "Fatto sul tablet"}, "lasting": {"telegram": "Non è un problema su Telegram", "tablet": "Non è un problema sul tablet"}, "taken": {"telegram": "Ticket aperto su Telegram"}},
         "cockpit": {"closed": "Fatto nel Cockpit", "nothing": "Nessuna azione necessaria nel Cockpit", "lasting": "Non è un problema nel Cockpit", "help": "Aiuto chiesto nel Cockpit", "taken": "Ticket aperto nel Cockpit", "reopened": "Riaperto nel Cockpit",
                     "look_again": "Si prega di ricontrollare."},
     },
@@ -137,7 +137,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "Nieuwe melding", "still_open": "Nog open",
         "earlier": ("… {n} eerdere melding", "… {n} eerdere meldingen"),
         "units": ("s", "min", "u", "d"),
-        "places": {"done": {"telegram": "Gedaan via Telegram", "tablet": "Gedaan op de tablet"}, "lasting": {"telegram": "Geen probleem via Telegram", "tablet": "Geen probleem op de tablet"}},
+        "places": {"done": {"telegram": "Gedaan via Telegram", "tablet": "Gedaan op de tablet"}, "lasting": {"telegram": "Geen probleem via Telegram", "tablet": "Geen probleem op de tablet"}, "taken": {"telegram": "Ticket geopend via Telegram"}},
         "cockpit": {"closed": "Gedaan in de Cockpit", "nothing": "Geen actie nodig in de Cockpit", "lasting": "Geen probleem in de Cockpit", "help": "Hulp gevraagd in de Cockpit", "taken": "Ticket geopend in de Cockpit", "reopened": "Heropend in de Cockpit",
                     "look_again": "Kijk er alstublieft opnieuw naar."},
     },
@@ -153,7 +153,7 @@ WORDS: dict[str, dict] = {
         "colon": "：", "stop": "。", "sep": "，", "new_alert": "新警报", "still_open": "仍未解决",
         "earlier": ("… 之前 {n} 条通知", "… 之前 {n} 条通知"),
         "units": ("秒", "分钟", "小时", "天"), "tight": True,
-        "places": {"done": {"telegram": "已在 Telegram 中完成", "tablet": "已在平板上完成"}, "lasting": {"telegram": "已在 Telegram 中标记为不是问题", "tablet": "已在平板上标记为不是问题"}},
+        "places": {"done": {"telegram": "已在 Telegram 中完成", "tablet": "已在平板上完成"}, "lasting": {"telegram": "已在 Telegram 中标记为不是问题", "tablet": "已在平板上标记为不是问题"}, "taken": {"telegram": "已在 Telegram 中开单"}},
         "cockpit": {"closed": "已在 Cockpit 中完成", "nothing": "已在 Cockpit 中标记为无需处理", "lasting": "已在 Cockpit 中标记为不是问题", "help": "已在 Cockpit 中请求协助", "taken": "已在 Cockpit 中开单", "reopened": "已在 Cockpit 中重新打开",
                     "look_again": "请再次检查。"},
     },
@@ -169,7 +169,7 @@ WORDS: dict[str, dict] = {
         "colon": "：", "stop": "。", "sep": "、", "new_alert": "新しいアラート", "still_open": "未解決",
         "earlier": ("… 以前の通知 {n} 件", "… 以前の通知 {n} 件"),
         "units": ("秒", "分", "時間", "日"), "tight": True,
-        "places": {"done": {"telegram": "Telegramで完了", "tablet": "タブレットで完了"}, "lasting": {"telegram": "Telegramで問題なしに設定", "tablet": "タブレットで問題なしに設定"}},
+        "places": {"done": {"telegram": "Telegramで完了", "tablet": "タブレットで完了"}, "lasting": {"telegram": "Telegramで問題なしに設定", "tablet": "タブレットで問題なしに設定"}, "taken": {"telegram": "Telegramでチケット作成"}},
         "cockpit": {"closed": "Cockpitで完了", "nothing": "Cockpitで対応不要に設定", "lasting": "Cockpitで問題なしに設定", "help": "Cockpitで支援を依頼", "taken": "Cockpitでチケット作成", "reopened": "Cockpitで再オープン",
                     "look_again": "もう一度確認してください。"},
     },
@@ -185,7 +185,7 @@ WORDS: dict[str, dict] = {
         "colon": ": ", "stop": ".", "sep": ", ", "new_alert": "새 알림", "still_open": "아직 열림",
         "earlier": ("… 이전 알림 {n}건", "… 이전 알림 {n}건"),
         "units": ("초", "분", "시간", "일"), "tight": True,
-        "places": {"done": {"telegram": "Telegram에서 완료됨", "tablet": "태블릿에서 완료됨"}, "lasting": {"telegram": "Telegram에서 문제 아님으로 표시됨", "tablet": "태블릿에서 문제 아님으로 표시됨"}},
+        "places": {"done": {"telegram": "Telegram에서 완료됨", "tablet": "태블릿에서 완료됨"}, "lasting": {"telegram": "Telegram에서 문제 아님으로 표시됨", "tablet": "태블릿에서 문제 아님으로 표시됨"}, "taken": {"telegram": "Telegram에서 티켓 생성됨"}},
         "cockpit": {"closed": "Cockpit에서 완료됨", "nothing": "Cockpit에서 조치 불필요로 표시됨", "lasting": "Cockpit에서 문제 아님으로 표시됨", "help": "Cockpit에서 도움 요청됨", "taken": "Cockpit에서 티켓 생성됨", "reopened": "Cockpit에서 다시 열림",
                     "look_again": "다시 확인해 주세요."},
     },
@@ -286,13 +286,13 @@ def cockpit(act: str, when: str, whom: str = "", lang: str = "en") -> str:
 
 
 def closed_where(where: str, when: str, whom: str = "", lang: str = "en") -> str:
-    """A person's close as a line says it in `lang`, `where` its English words (message_format.DONE_IN, LASTING_IN: "Done
-    on Telegram", "Not a problem in the Cockpit"): "Terminé sur Telegram le 05/11/2026 04:16 (JM)". Words not among
+    """A person's close (or take-on) as a line says it in `lang`, `where` its English words (message_format.DONE_IN,
+    LASTING_IN, NOTHING_IN, TAKEN_IN: "Done on Telegram", "Not a problem in the Cockpit"): "Terminé sur Telegram le 05/11/2026 04:16 (JM)". Words not among
     them stay as they are, in English.
 
     ⚠️ EVERY PLACE, NOT ONLY THE COCKPIT (architecture review 24): the night check's French message said "Done on
     Telegram on … (JM)." in English: only the Cockpit's close had its words in each language."""
-    for kind, table in (("done", mf.DONE_IN), ("lasting", mf.LASTING_IN), ("nothing", mf.NOTHING_IN)):
+    for kind, table in (("done", mf.DONE_IN), ("lasting", mf.LASTING_IN), ("nothing", mf.NOTHING_IN), ("taken", mf.TAKEN_IN)):
         place = next((p for p, w in table.items() if w == where), None)
         if place == mf.IN_COCKPIT:
             return cockpit({"done": "closed"}.get(kind, kind), when, whom, lang)
