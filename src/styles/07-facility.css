@@ -215,10 +215,6 @@
   padding: var(--card-pad); border-radius: var(--card-radius); background: var(--bg-card); border: var(--card-border);
 }
 .fm-row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-/* Pushed to the far right of the title line, same row as the label — see
-   ReadinessTab's "All devices reporting" card, the one check with an inline
-   action. */
-.fm-row-title-action { margin-left: auto; }
 /* A row's own "sure?" (the fault's one-step close): a line of its own under
    the record, its question and buttons wrapping on a phone. */
 .fm-row-confirm { flex: 1 1 100%; }

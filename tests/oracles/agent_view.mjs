@@ -102,7 +102,7 @@ ck("  ...and never an empty list", roomsToShare({ "sensor.x": null }, null) === 
 const share = src("agent/RoomShare.tsx");
 ck("RoomShare remembers what it sent in the device's storage, and asks roomsToShare",
    share.includes("roomsToShare(resolvedRooms, readString(LAST_SENT_KEY) ?? sentThisLoad, views)") && share.includes("writeString(LAST_SENT_KEY, share.key)"));
-const marks = ["RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
+const marks = ["RecentWorkList", "SpendTab", "TaskCard", "SavedDocumentsList"]
   .filter((f) => !/<AgentMark record=\{/.test(src(`components/fm/${f}.tsx`)));
 ck("every Facility list shows the 'by VESTA Agent' mark", marks.length === 0, marks);
 // owner, 2026-11-01: on a ticket it was "confusing and redundant": the pill says who last moved it
@@ -117,7 +117,7 @@ const { default: RecordCard } = await import("@/components/fm/RecordCard");
 const { h, draw, inside } = await import("../consistency/screen.mjs");
 const cardPutsPillsInMeta = inside(draw(h(RecordCard, { title: "T", pills: h("span", { className: "fm-clause agent" }, "by VESTA Agent") })),
   "fm-record-meta").includes("by VESTA Agent");
-const loose = ["RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
+const loose = ["RecentWorkList", "SpendTab", "TaskCard", "SavedDocumentsList"]
   .filter((f) => { const s = src(`components/fm/${f}.tsx`), m = s.indexOf("<AgentMark");
     return !(cardPutsPillsInMeta && s.lastIndexOf("pills={", m) > -1 && s.indexOf("<RecordCard") > -1); });
 ck("every Facility card: its tags on its one quiet line", cardPutsPillsInMeta && loose.length === 0, loose);

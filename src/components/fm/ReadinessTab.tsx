@@ -15,7 +15,7 @@ import SavedDocumentsList from "./SavedDocumentsList";
 import MarkdownPreview from "./MarkdownPreview";
 import { SourceIconRow } from "./sourceIcons";
 import { CHECK_WORDS, VERDICT_WORDS, type CheckLink, type CheckState, type CheckTarget, type ReadinessCheck, type ReadinessResult } from "@/fm/readiness";
-import { toneClass } from "@/fm/tone";
+import { pillClass, toneClass } from "@/fm/tone";
 import RecordCard from "./RecordCard";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 
@@ -110,12 +110,14 @@ export function ReadinessChecks({ readiness, label, onOpenEntity, onOpenCheck, o
           const chips = !!c.entityIds?.length;
           return (
             // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22: "wherever there is a card, the same style")
+            // its word in its strip, as every card's state ("Pass", "Warning", "Fail"), and what it opens a segment of its
+            // bar: every button of a card is in its bar (the "Status on top" card; it sat beside the title)
             <RecordCard key={c.id} tone={toneClass(CHECK_WORDS[c.state].tone)}
+              status={{ text: CHECK_WORDS[c.state].word, tone: pillClass(CHECK_WORDS[c.state].tone) }}
               lead={<span className={`fm-check-icon ${c.state}`}><Icon size={16} /></span>}
               title={c.label}
-              // on the title's line, not stacked below the detail: one card taller than its neighbours reads as a bug
-              titlePills={opens ? (
-                <button className="btn ghost fm-row-title-action" onClick={() => onOpenCheck(opens)}>
+              actions={opens ? (
+                <button className="btn ghost" onClick={() => onOpenCheck(opens)}>
                   {opens.label} <ChevronRight size={16} />
                 </button>
               ) : undefined}

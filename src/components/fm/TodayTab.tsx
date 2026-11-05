@@ -6,23 +6,21 @@
 // 3D map. Overdue work is exactly the kind of gap a management contract's
 // maintenance-standard clause exists to prevent, whatever that clause is.
 
-import { momentText } from "@/utils/dateText";
 import InfoTip from "@/components/common/InfoTip";
 import { Fragment, useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
 import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
 import { openCounts } from "@/fm/deviceWork";
-import { pillClass, toneClass } from "@/fm/tone";
-import { budgetStatus, DUE_WORDS, scheduleBoard, shortDate, parseAmount, fmAttention, workedBy } from "@/fm/fmEngine";
+import { budgetStatus, scheduleBoard, parseAmount, fmAttention } from "@/fm/fmEngine";
 import { COST_CATEGORY_NAMES } from "@/fm/fmTypes";
 import { useFmTerms } from "@/fm/useFmTerms";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
 import InlineConfirm from "@/components/common/InlineConfirm";
-import AgentMark from "./AgentMark";
 import RecordCard from "./RecordCard";
+import TaskCard from "./TaskCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import FormActions from "./FormActions";
@@ -115,21 +113,8 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
       <div className="fm-list">
         {board.map((s) => (
           <Fragment key={s.schedule.id}>
-          {/* THE Cockpit card (RecordCard): its state pill on the title line, Log and the bin inside, on the right of
-          // its text (architecture review, 2026-10-15 — the layout the owner set for tickets); its tint says how late
-          its state's ONE word and tone (fmEngine.DUE_WORDS — the recap's and the Overview's too) */}
-          <RecordCard tone={toneClass(DUE_WORDS[s.state].tone)} title={s.schedule.title}
-            status={{ text: DUE_WORDS[s.state].word, tone: pillClass(DUE_WORDS[s.state].tone) }}
-            // the day it is due in its strip, its interval on its quiet line, the last time it was done its who line
-            // (the "Status on top" card, owner 2026-11-05)
-            when={s.dueAt ? `Due ${shortDate(s.dueAt)}` : undefined}
-            who={s.last ? `Last done by ${workedBy(s.last)}, on ${momentText(s.last.at)}` : null}
-            room={roomOf(s.schedule)}
-            pills={<>
-              <span>every {s.schedule.everyDays} days</span>
-              {s.schedule.clause && <span className="fm-clause">Cl. {s.schedule.clause}</span>}
-              <AgentMark record={s.schedule} />
-            </>}
+          {/* THE task's card, the Schedule tab's too (TaskCard): Log and the bin in its bar */}
+          <TaskCard status={s} room={roomOf(s.schedule)}
             actions={<>
               <button className="btn ghost" onClick={() => (log.editing === s.schedule.id ? log.close() : log.edit(s.schedule.id))}>
                 <Check size={16} /> Log

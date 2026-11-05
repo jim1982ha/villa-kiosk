@@ -4,7 +4,7 @@
 // conditioning and Cameras had no button, and "View unavailable devices" left Recap for the Overview (architecture
 // review round two, 2026-10-17). By value, then drawn.
 import { readFileSync } from "node:fs";
-import { h, draw, text } from "../consistency/screen.mjs";
+import { h, draw, text, inside } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 const { buildReadiness } = await import("@/fm/readiness");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
@@ -40,6 +40,13 @@ ck("every failing check about devices has its button, with its own words",
    rowOf("All devices reporting").includes("|View unavailable devices [icon]|") && rowOf("Doors locked").includes("|View doors [icon]|")
    && rowOf("Lights off before arrival").includes("|View lights [icon]|") && rowOf("Air conditioning reachable").includes("|View air conditioning [icon]|")
    && rowOf("Cameras online").includes("|View cameras [icon]|"), rows);
+// architecture review, 2026-11-05: its button a segment of its bar, as every card's; its state its strip's word
+{
+  const card = html.split('<div class="fm-row ').find((x) => x.includes("All devices reporting")) ?? "";
+  ck("  ...its button in its bar, never beside its title; its state the first words of its strip",
+     inside(card, "fm-record-actions").includes("View unavailable devices") && !inside(card, "fm-row-title").includes("<button")
+     && /fm-record-status">(Pass|Warning|Fail)</.test(card), card);
+}
 // (owner, 2026-10-18: the devices not reporting as pills, "the same way the unlocked device or on lights are shown")
 ck("  ...every check names its devices as chips — the devices not reporting too",
    /fm-entity-chip/.test(html.split('<div class="fm-row ').find((x) => x.includes("All devices reporting")) ?? "") && rowOf("Doors locked").includes("|back|") && rowOf("Cameras online").includes("|pool|"), rows);
@@ -105,7 +112,7 @@ console.log("\n  one tinted card (fm/tone): each state says its tone, the styles
   // owner, 2026-11-05 ("Status on top"): its tone is its strip's colour, the frame itself plain
   ck("a Recap check drawn amber or red by its tone, never by the Schedule's words",
      /class="fm-record-card"><div class="fm-row fm-record"><div class="fm-record-strip strip-warn">/.test(drawnRow("warn"))
-     && /class="fm-record-strip strip-danger"/.test(drawnRow("fail")) && /class="fm-record-strip strip-neutral"/.test(drawnRow("pass"))
+     && /class="fm-record-strip strip-danger"/.test(drawnRow("fail")) && /class="fm-record-strip strip-ok"/.test(drawnRow("pass")) /* "Pass" green, as a task's "On schedule" */
      && !/state-|fm-record-card tone-/.test(drawnRow("fail")));
   ck("  ...the same three tones for a task, a check and the spending cap",
      [DUE_WORDS["due-soon"].tone, CHECK_WORDS.warn.tone, TONE_OF.cap.approaching].every((t) => toneClass(t) === "tone-warn")

@@ -1,3 +1,15 @@
+## 2.496.710
+
+What you will see:
+- A maintenance task looks the same on the Schedule tab as on Today: a late task is red with "Overdue" in its band on
+  both (the Schedule tab showed it grey, with no state), a paused one says "Paused", and both say who did it last
+  ("Last done by Wayan, on …").
+- A spend entry names its device the way a ticket does: underlined, first on the quiet line under its title (it was a
+  chip beside the title). Tap it to open the device.
+- In Recap, each check says "Pass", "Warning" or "Fail" in its coloured band, and its button ("View unavailable
+  devices", "View doors" …) sits in the bar at the bottom, like every other card's buttons, instead of beside its title.
+  A passing check is green, like a task on schedule.
+
 ## 2.496.709
 
 What you will see:

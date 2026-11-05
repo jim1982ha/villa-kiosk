@@ -355,18 +355,20 @@ ck("  ...nothing to erase by holding it (its bin removes it): no hold-to-erase o
 // grey text among the tags. ONE room, the card's own `room` input, on every list that shows a room; 2026-11-05: quiet
 // text, the first words of the card's quiet line.
 {
-  const card = draw(h(RecordCard, { title: "Pump", room: "Kitchen", titlePills: h("span", { className: "fm-entity-chip" }, "DEVICE"),
+  const card = draw(h(RecordCard, { title: "Pump", room: "Kitchen", device: h("span", { className: "fm-entity-chip" }, "DEVICE"),
     pills: h("span", { className: "fm-clause" }, "Cl. 3") }));
   const room = '<div class="fm-record-meta"><span>Kitchen</span>';
-  ck("a card's room is its quiet line's first words, under its title; its other pills stay on the title's line; the tags follow the room",
-     card.includes(room) && inside(card, "fm-row-title").includes("DEVICE") && text(meta(card)) === "|Kitchen|Cl. 3|"
+  ck("a card's title alone on its line; its quiet line: its device, its room, then its tags (architecture review, 2026-11-05)",
+     text(inside(card, "fm-row-title")) === "|Pump|" && text(meta(card)) === "|DEVICE|Kitchen|Cl. 3|"
      && (card.match(/Kitchen/g) ?? []).length === 1, card);
   const issue = draw(h(AttentionCard, { card: { key: "k", title: "Pump", room: "Kitchen", lead: null, nextCheck: null, actions: [],
     lines: [{ key: "l", text: "Stopped", story: [], closing: null, openedAt: null }] }, onOpenEntity() {} }));
   ck("  ...the Inbox's opened card draws the same line", issue.includes(room), issue);
-  const roomed = { "fm/TicketsTab.tsx": "roomOf(t)", "fm/ScheduleEditor.tsx": "roomOf(s)",
+  // a task's card is TaskCard, the Schedule and Today tabs' alike (architecture review, 2026-11-05): they give it its room
+  const roomed = { "fm/TicketsTab.tsx": "roomOf(t)", "fm/ScheduleEditor.tsx": "roomOf(s)", "fm/TaskCard.tsx": "room",
     "fm/TodayTab.tsx": "roomOf(s.schedule)", "fm/SpendTab.tsx": "roomOf(c)", "cockpit/IssueCard.tsx": "card.room" };
-  const given = Object.fromEntries(Object.keys(roomed).map((f) => [f, elements(parseTsx(`components/${f}`), "RecordCard")
+  const cardOf = { "fm/ScheduleEditor.tsx": "TaskCard", "fm/TodayTab.tsx": "TaskCard" };
+  const given = Object.fromEntries(Object.keys(roomed).map((f) => [f, elements(parseTsx(`components/${f}`), cardOf[f] ?? "RecordCard")
     .map((e) => propText(e, "room")).filter((x) => x !== undefined && x !== null)]));
   ck("  ...Tickets, Schedule, Today, Spend and the Inbox's card each give their card its room, none as a tag of its own",
      Object.entries(roomed).every(([f, r]) => JSON.stringify(given[f]) === JSON.stringify([r]))
@@ -391,8 +393,10 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
     ck(`  ..."${word}": in its state, not in the line's words`, got.pills.includes(word) && !got.text.toLowerCase().includes(word.toLowerCase()), got);
   }
   ck("  ...but a ticket's stage is no state of the device: its line's move says it (owner, 2026-11-02/05)", said({ ...f, stage: "ticket" }).pills.length === 0);
-  const sched = readFileSync(new URL("../../src/components/fm/ScheduleEditor.tsx", import.meta.url), "utf8");
-  ck("  ...a paused task too: the status pill, no grey tag", /text: "Paused", tone: pillClass/.test(sched) && !/fm-clause">Paused/.test(sched));
+  const { taskState } = await import("@/components/fm/TaskCard");
+  const late = { schedule: { enabled: true }, state: "overdue" };
+  ck("  ...a paused task too: its state says it, overdue or not", taskState({ ...late, schedule: { enabled: false } }).word === "Paused"
+     && taskState(late).word === "Overdue");
   const row = readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8");
   ck("  ...and the Inbox draws no state of its own: its cards are RecordCard's", !/CardPillLine|fm-badge|fm-record-status|StatusPill/.test(row));
 }

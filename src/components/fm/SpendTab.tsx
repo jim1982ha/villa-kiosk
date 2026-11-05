@@ -28,8 +28,7 @@ import NotesField from "./NotesField";
 import MarkdownPreview from "./MarkdownPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 import AgentMark from "./AgentMark";
-import RecordCard from "./RecordCard";
-import Tip from "@/components/common/Tip";
+import RecordCard, { DeviceChip } from "./RecordCard";
 import { formatMoney } from "@/utils/money";
 import CostFields from "./CostFields";
 import { useDeviceChoice } from "./useDeviceChoice";
@@ -222,17 +221,10 @@ export default function SpendTab(
             amount={money(c.amountIdr)} onOpen={() => openEditor(c)}
             erase={{ title: "Erase this spend entry", detail: `${c.label}, ${money(c.amountIdr)}`,
               run: (token) => removeCost(c.id, token) }}
-            // its device right after its name, as an Overview card's room (owner, 2026-10-22: "align the Spend cards
-            // with the Overview's")
-            titlePills={c.entityId ? (
-              <Tip text={c.entityId}>
-                <button className="fm-entity-chip" onClick={(e) => { e.stopPropagation(); onOpenEntity?.(c.entityId!); }}>
-                  {c.deviceLabel ?? c.entityId}
-                </button>
-              </Tip>
-            ) : c.deviceLabel ? (
-              <span className="fm-entity-chip fm-chip-static">{c.deviceLabel}</span>
-            ) : undefined}
+            // its device first on its quiet line, a link, as a ticket's (DeviceChip; the "Status on top" card): it was a
+            // chip beside its title, the one card left that way
+            device={c.entityId || c.deviceLabel ? <DeviceChip entityId={c.entityId} label={c.deviceLabel ?? c.entityId}
+              onOpenEntity={(id) => onOpenEntity?.(id)} /> : undefined}
             // its room, the pill of every Cockpit card (Pill): its device's room now, else the one it was saved with
             room={roomOf(c)}
             pills={<>
