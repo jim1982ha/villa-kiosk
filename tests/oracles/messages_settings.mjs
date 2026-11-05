@@ -98,7 +98,7 @@ console.log("\n  the rows, drawn:");
     .map((m) => [m[1], /value="(\d+)"/.exec(m[0])?.[1]]);
   ck("one seconds field per picked announcement, named for it, holding its own time",
      J(fields) === J([["🔔 Visitor", "15"], ["🔥 Overload", "300"]]), fields);
-  ck("  ...each with its ✕ to take it off", (html.match(/aria-label="Take [^"]+ off full screen"/g) ?? []).length === 2);
+  ck("  ...each with its bin to delete it", (html.match(/class="icon-btn-sm fm-record-remove danger" aria-label="Delete the announcement [^"]+" data-icon="bin"/g) ?? []).length === 2);
   // owner, 2026-11-04: the search box under the list became an add on the list's title line (common/AddOnLine);
   // owner, 2026-11-06: that line sits ABOVE the card, its add a "+ Add" button as Schedule's "Add a task", and the card's
   // heading holds its columns' words only: "Time" over the time, nothing over the ✕; the time and its unit joined, "15s"
@@ -107,12 +107,13 @@ console.log("\n  the rows, drawn:");
      /<div class="add-line"><span class="add-line-title"><span class="settings-list-title">On every tablet<\/span><\/span>[\s\S]*<button[^>]*class="btn ghost add-line-button"[^>]*aria-label="Add an announcement"[^>]*><svg[\s\S]*?<\/svg> Add<\/button>/.test(before)
      && !/placeholder="Add an announcement…"/.test(html), before.slice(-600));
   // owner, 2026-11-06: each announcement the Cockpit's card (RecordCard): its title in the strip, its time on screen its
-  // one field, Remove its bar; no table heading any more
+  // one field, its bin at its strip's right (no bar left); no table heading any more
   const firstCard = inside(html, "fm-record-card");
-  ck("  ...each announcement a card: its title in its strip, its time its one field, Remove in its bar",
+  ck("  ...each announcement a card: its title in its strip, its bin at the strip's right, its time its one field, no bar",
      inside(firstCard, "fm-record-name").includes("🔔 Visitor") && !/settings-list"|settings-list-(head|row)|fs-row/.test(html)
      && /<span class="card-field-label">On screen<\/span><span class="unit-field"><input[^>]*value="15"[^>]*\/><span class="unit-field-unit" aria-hidden="true">s<\/span><\/span>/.test(firstCard)
-     && /<div class="fm-record-actions"[^>]*><button type="button" class="btn ghost" aria-label="Take 🔔 Visitor off full screen"><svg[\s\S]*?<\/svg>Remove<\/button><\/div>/.test(firstCard), firstCard);
+     && /aria-label="Delete the announcement [^"]+" data-icon="bin"><svg[^>]*lucide-trash-2[\s\S]*?<\/svg><\/button><\/div>/.test(inside(firstCard, "fm-record-strip"))
+     && !/fm-record-actions/.test(firstCard), firstCard);
   ck("  ...no \"Ring shown for\" anywhere", !/Ring shown for/i.test(html));
 }
 

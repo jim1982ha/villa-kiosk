@@ -12,7 +12,7 @@ import SearchPicker from "@/components/common/SearchPicker";
 import AddOnLine from "@/components/common/AddOnLine";
 import UnitField from "@/components/common/UnitField";
 import RecordCard from "@/components/fm/RecordCard";
-import { Maximize, X } from "lucide-react";
+import { Maximize } from "lucide-react";
 
 interface Props {
   /** The picked announcements as the dialog shows them (its draft's view). */
@@ -21,7 +21,7 @@ interface Props {
   onChange: (next: FullScreenAnnouncement[]) => void;
 }
 
-/** The picked announcements, one card each (its title; its seconds; Remove), and a picker of the titles the add-on keeps
+/** The picked announcements, one card each (its title; its seconds; its bin), and a picker of the titles the add-on keeps
  *  (the page's one list). A title no longer kept stays picked until its ✕: the villa may announce it again. A newly
  *  picked one starts at FULL_SCREEN_S_DEFAULT. */
 export function FullScreenAnnouncements({ value, onChange }: Props) {
@@ -43,7 +43,7 @@ export function FullScreenAnnouncements({ value, onChange }: Props) {
             : "Nothing else announced yet: each announcement the villa makes is listed here."} />}
       </AddOnLine>
       {/* ⚠️ EACH ANNOUNCEMENT THE COCKPIT'S CARD (owner, 2026-11-06): its title in the strip, its time on screen its
-          one field, Remove its bar; it was a row of a table under "Announcement · Time" */}
+          one field, its bin at its strip's right; it was a row of a table under "Announcement · Time" */}
       {value.length === 0 ? <p className="muted body-text">None yet: add one above.</p> : (
         <div className="fm-list settings-cards">
           {value.map((f) => (
@@ -64,7 +64,7 @@ export function secondsWrite(title: string, text: string): ((c: AppConfig) => Pa
   return (c) => ({ fullScreen: c.fullScreen.map((f) => (f.title === title ? { ...f, seconds: n } : f)) });
 }
 
-/** One picked announcement: its title, how many seconds it fills the screen, Remove. The seconds commit on blur, Enter
+/** One picked announcement: its title, how many seconds it fills the screen, its bin. The seconds commit on blur, Enter
  *  or a pause, in the dialog's one pending store (usePendingField). */
 function FullScreenCard({ item, onRemove }: { item: FullScreenAnnouncement; onRemove: () => void }) {
   const field = usePendingField<string>(`fullScreen:${item.title}`, FIELD_COMMIT_MS);
@@ -86,10 +86,6 @@ function FullScreenCard({ item, onRemove }: { item: FullScreenAnnouncement; onRe
           </UnitField>
         </div>
       }
-      actions={
-        <button type="button" className="btn ghost" aria-label={`Take ${item.title} off full screen`} onClick={onRemove}>
-          <X size={16} aria-hidden />Remove
-        </button>
-      } />
+      remove={{ icon: "bin", label: `Delete the announcement ${item.title}`, run: onRemove }} />
   );
 }

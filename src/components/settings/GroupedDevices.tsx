@@ -7,7 +7,7 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import AskDialog from "@/components/common/AskDialog";
-import { Layers, Plus, Trash2, Sparkles } from "lucide-react";
+import { Layers, Plus, Sparkles } from "lucide-react";
 import { FoldToggle } from "@/components/common/FoldedList";
 import IdText from "@/components/common/IdText";
 import RecordCard from "@/components/fm/RecordCard";
@@ -115,7 +115,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
 
       {/* ⚠️ EACH GROUP THE COCKPIT'S CARD (owner, 2026-11-06): its name (its primary's) in the strip, the group's icon
           before it; its room, its primary's id and what the primary does on its quiet line; its members and "Add another
-          entity…" its words; Remove group its bar */}
+          entity…" its words; its bin at its strip's right (owner, 2026-11-06), so it has no bar */}
       {shown.visible.length > 0 && (
         <div className="fm-list settings-cards" ref={listRef}>
           {shown.visible.map((group) => (
@@ -140,12 +140,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
                   </div>
                 </div>
               }
-              actions={
-                <button type="button" className="btn ghost" aria-label={`Remove the group ${entityLabel(group.primaryEntityId)}`}
-                  onClick={() => deleteGroup(group.id)}>
-                  <Trash2 size={16} aria-hidden />Remove group
-                </button>
-              } />
+              remove={{ icon: "bin", label: `Delete the group ${entityLabel(group.primaryEntityId)}`, run: () => deleteGroup(group.id) }} />
           ))}
         </div>
       )}

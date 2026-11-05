@@ -1,3 +1,25 @@
+## 2.496.725
+
+What you will see:
+- The remove icons' tooltips each name what they remove, in the screen's own words: "Delete the announcement
+  <announcement>" (it said "Delete this announcement"), "Take <device> off Asleep between reports" (it said "off the
+  Asleep list", a name the screen does not show).
+
+## 2.496.724
+
+What you will see:
+- Settings and Advanced Settings: a card's remove is no longer a word in the bar at its bottom. It is now a small icon at
+  the right of the card's top band: a bin when it deletes the thing, an ✕ when it takes it off a list or undoes a link.
+  Hovering it says what it does:
+  - a device group: bin, "Delete the group <its main device>";
+  - a device's card in Devices: bin, "Remove <device>'s settings" (a device the 3D model names still has none);
+  - a full-screen announcement: bin, "Delete this announcement";
+  - a chat in Who gets the messages: ✕, "Take <chat> off the Owner's list" (or the Facility Manager's);
+  - a device in Asleep between reports: ✕, "Take <device> off the Asleep list";
+  - a bound 3D object: ✕, "Unbind <object> from <device>".
+- These cards have no bottom bar any more, as nothing is left in it. Bind, Create this group and Point it there stay in
+  their bar. Each remove acts at once, as before.
+
 ## 2.496.723
 
 What you will see:

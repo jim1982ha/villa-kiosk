@@ -20,7 +20,7 @@
 
 import InfoTip from "@/components/common/InfoTip";
 import { memo, type RefObject } from "react";
-import { Pencil, Trash2, Check, X } from "lucide-react";
+import { Pencil, Check, X } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import IdText from "@/components/common/IdText";
 import RecordCard from "@/components/fm/RecordCard";
@@ -75,7 +75,7 @@ function EntityMapRow({
   // ⚠️ THE COCKPIT'S CARD (owner, 2026-11-06: "the same card in Settings and Advanced Settings"): the device's name in
   // its strip; its first line of words the decided one (owner, 2026-11-05: the shown box, the id at most 2 lines, the
   // toggle and the pencil at its right; on a phone the toggle on a line of its own under it: 04-modals.css); its fields
-  // always shown under it; its Remove in the card's bar. A device the villa's system no longer has says so as the
+  // always shown under it; its bin at its strip's right (owner, 2026-11-06), so it has no bar. A device the villa's system no longer has says so as the
   // card's state. ⚠️ NEVER FOLDED, NO ROOM LINE (owner, 2026-11-06: the chevron hid its fields; its room under its name
   // said nothing the name did not, "no added value").
   return (
@@ -159,12 +159,8 @@ function EntityMapRow({
           )}
         </div>
       }
-      // its bin in the card's bar, with its word (owner, 2026-11-06); an object the 3D model names is never removed here
-      actions={onRemove && (
-        <button type="button" className="btn ghost" aria-label={`Remove ${m.entityId}`} onClick={() => onRemove(entryKey)}>
-          <Trash2 size={16} aria-hidden />Remove
-        </button>
-      )} />
+      // an object the 3D model names is never removed here
+      remove={onRemove && { icon: "bin", label: `Remove ${name}'s settings`, run: () => onRemove(entryKey) }} />
   );
 }
 

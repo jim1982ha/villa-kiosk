@@ -12,7 +12,8 @@
 //   1. the strip, the card's top band in its status colour: its source icons (`lead`), its alert's name (`number`), the
 //      thing's name (`title`: a device, a ticket, a task, a check, a notification's first sentence), its time at the
 //      right (`when`). The name wraps to two lines at most, then "…"; the icons, the chip and the time never shrink and
-//      stay on its first line. A card with nothing to say still has its strip and its time.
+//      stay on its first line. A card with nothing to say still has its strip and its time. A Settings card's remove is
+//      a small icon at the strip's right end (`remove`: a bin or an ✕, owner 2026-11-06), never a word in its bar.
 //   2. the card's first line says where it stands (`status`, several joined " · "), bold, in its tone's colour, its
 //      (i) after it (`statusTip`: a Watch card's "Closes 15:06"), and at its right, under the strip's time, when VESTA
 //      looks again (`check`: the next-check pill, owner 2026-11-06); a card with neither has no such line;
@@ -31,13 +32,19 @@
 // and this one place swaps its text for that cut line, so no card can fold its own way.
 
 import type { ReactNode } from "react";
-import { RefreshCw, UserRound } from "lucide-react";
+import { RefreshCw, Trash2, UserRound, X } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import InfoTip from "@/components/common/InfoTip";
 import ErasableRow from "./ErasableRow";
 import EvidenceRow from "./EvidenceRow";
 import { RecordNotes } from "./RecordMeta";
 import { PageLink } from "@/components/messages/AnnouncementContent";
+
+/** A Settings card's remove, a small round icon at the right of its strip (owner, 2026-11-06): a bin when it deletes
+ *  the thing (a group, a device's settings, an announcement), an ✕ when it takes it off a list or undoes a link (a chat
+ *  off a role's list, a device off Asleep between reports, an unbind). `label` is its tooltip and its accessible name, saying
+ *  what goes ("Delete the group Kitchen Temperature", "Take Back Door off Asleep between reports"). */
+export interface CardRemove { icon: "bin" | "x"; label: string; run: () => void }
 
 /** A card's state: its words and its tone's class (fm/tone pillClass, ACCENT_PILL, QUIET_PILL). */
 export interface RecordStatus { text: string; tone: string }
@@ -96,6 +103,9 @@ export interface RecordCardProps {
   /** Its problems, when it holds several (an Inbox device's): one part each, under its state and quiet line. */
   parts?: CardPart[];
   actions?: ReactNode;
+  /** Settings and Advanced Settings only: what takes the record away, an icon at its strip's right (never a word in
+   *  its bar). The Cockpit's cards never pass it (tests/oracles/settings_cards.mjs). */
+  remove?: CardRemove;
   erase?: { title: string; detail: string; run: (token: string) => Promise<unknown> };
   onOpen?: () => void;
   framed?: boolean;
@@ -208,9 +218,24 @@ function StateWords({ status, tip }: { status: readonly RecordStatus[]; tip?: st
   );
 }
 
-/** A card's strip: its icons, its alert's name, the thing's name, its time. */
-function CardStrip({ lead, number, name, when, tone }: {
-  lead?: ReactNode; number?: string; name: ReactNode; when?: string; tone: StripTone;
+/** ⚠️ A SETTINGS CARD'S REMOVE (owner, 2026-11-06: "a small icon button at the top right of the card's band", where a
+ *  Cockpit card shows its time): the app's small round icon button, its 44px touch target outside its glyph so the strip
+ *  keeps its height (07-facility.css); a press is the button's, never the card's tap or hold. */
+function RemoveButton({ icon, label, run }: CardRemove) {
+  const Icon = icon === "bin" ? Trash2 : X;
+  return (
+    <Tip text={label}>
+      <button type="button" className={`icon-btn-sm fm-record-remove${icon === "bin" ? " danger" : ""}`} aria-label={label}
+        data-icon={icon} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); run(); }}>
+        <Icon size={16} aria-hidden="true" />
+      </button>
+    </Tip>
+  );
+}
+
+/** A card's strip: its icons, its alert's name, the thing's name, its time, a Settings card's remove. */
+function CardStrip({ lead, number, name, when, tone, remove }: {
+  lead?: ReactNode; number?: string; name: ReactNode; when?: string; tone: StripTone; remove?: CardRemove;
 }) {
   return (
     <div className={`fm-record-strip strip-${tone}`}>
@@ -218,6 +243,7 @@ function CardStrip({ lead, number, name, when, tone }: {
       {number && <span className="fm-record-number">{number}</span>}
       {name !== undefined && name !== null && name !== "" && <span className="fm-record-name">{name}</span>}
       {when && <span className="fm-record-when">{when}</span>}
+      {remove && <RemoveButton {...remove} />}
     </div>
   );
 }
@@ -238,7 +264,7 @@ function PartHead({ lead, number, status, check, when, tone }: {
 }
 
 export default function RecordCard({ title, status, statusTip, lead, number, device, room, when, check, pills,
-  notes, body, folded, photoIds, pages, amount, who, parts, actions, erase, onOpen, framed = true, tone }: RecordCardProps) {
+  notes, body, folded, photoIds, pages, amount, who, parts, actions, remove, erase, onOpen, framed = true, tone }: RecordCardProps) {
   const whole = folded === undefined;
   const statuses = [status ?? []].flat();
   // one problem is the card itself: its words, who line and buttons are the card's
@@ -252,7 +278,7 @@ export default function RecordCard({ title, status, statusTip, lead, number, dev
   const strip = stripTone(statuses, toneWords.find((w) => w.startsWith("tone-")));
   const inside = (
     <>
-      <CardStrip lead={lead} number={number} name={title} when={when} tone={strip} />
+      <CardStrip lead={lead} number={number} name={title} when={when} tone={strip} remove={remove} />
       <div className="fm-record-main">
         {/* its first line: where it stands, in its tone's colour (rule 2), its next check a pill at its right; none
             when it says nothing */}

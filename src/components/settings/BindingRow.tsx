@@ -4,20 +4,20 @@
 // edited in ONE place, its card in Devices (config/deviceRecord; architecture review 2026-10-12) — the bound row used to
 // carry the same fields (MappingFields), a second editor for the same record. React.memo'd, as EntityMapRow.
 //
-// ⚠️ THE COCKPIT'S CARD (owner, 2026-11-06: "the same card in Settings and Advanced Settings"): its one action in its bar
-// (Unbind, Bind). They were rows of fixed columns with a small icon at the end. A bound object's card is named after
+// ⚠️ THE COCKPIT'S CARD (owner, 2026-11-06: "the same card in Settings and Advanced Settings"): Bind in its bar, Unbind
+// an ✕ at its strip's right (owner, 2026-11-06: a remove is an icon in the band, never a word in the bar). They were rows of fixed columns with a small icon at the end. A bound object's card is named after
 // its ENTITY as an asleep device's is (its name in the strip, room · id on the quiet line), its words "<object> is bound
 // to <entity>", then the search that changes it (owner, 2026-11-06); an object bound to nothing is named after the
 // object, the search its words; an entity no object shows, after the entity, room · id on its quiet line.
 
-import { Link2, Unlink, Box, EyeOff } from "lucide-react";
+import { Link2, Box, EyeOff } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { memo, useState } from "react";
 import IdText from "@/components/common/IdText";
 import SearchPicker from "@/components/common/SearchPicker";
 import RecordCard from "@/components/fm/RecordCard";
 
-/** A bound 3D object: its entity's card, "<object> is bound to <entity>", the picker changing it at once; Unbind in its bar. */
+/** A bound 3D object: its entity's card, "<object> is bound to <entity>", the picker changing it at once; its ✕ unbinds it. */
 function BoundObjectCardInner({ mesh, entityId, name, room, onBind, onUnbind }: {
   mesh: string;
   entityId: string;
@@ -35,11 +35,7 @@ function BoundObjectCardInner({ mesh, entityId, name, room, onBind, onUnbind }: 
         <p className="binding-said"><IdText id={mesh} /> is bound to {name}</p>
         <EntityPicker value={entityId} onChange={(id) => onBind(mesh, id)} allowCustom hideCurrentLabel />
       </>}
-      actions={
-        <button type="button" className="btn ghost" aria-label={`Unbind ${mesh}`} onClick={() => onUnbind(mesh)}>
-          <Unlink size={16} aria-hidden />Unbind
-        </button>
-      } />
+      remove={{ icon: "x", label: `Unbind ${mesh} from ${name}`, run: () => onUnbind(mesh) }} />
   );
 }
 export const BoundObjectCard = memo(BoundObjectCardInner);
