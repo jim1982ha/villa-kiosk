@@ -118,14 +118,17 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
   // id with its "· 3D object: …" pushed the toggle and the pencil down a line of their own)
   const row = srcOf("components/settings/EntityMapRow.tsx");
   const tools = row.match(/<span className="entity-id-tools">([\s\S]*?)\n\s*<\/span>/)?.[1] ?? "";
-  ck("a device's id: toggle, pencil and chevron on its one line at the right at every width, the id at most 2 lines",
-     /<Pencil /.test(tools) && /<ChevronDown /.test(tools) && /<ChevronRight /.test(tools) && !/ConfirmToggle/.test(tools)
-     && /<span className="entity-id-confirm" onClick=\{[^}]*\} onKeyDown=\{[^}]*\}>\s*<ConfirmToggle /.test(row)
-     // owner, 2026-11-05: "the toggle … on a second line: it shall never be possible": one row at every width, the
-     // toggle's words kept for screen readers and hidden on a narrow row (its shield and On | Off stay)
+  // owner, 2026-11-06: never folded (no chevron); on a phone "Confirm before toggling" a line of its own under the id,
+  // its words shown; on a laptop it stays on the id's line
+  const phone = css.match(/@container work-row \(max-width: 519px\) \{([^@]*?)\n\}/g)?.find((b) => /entity-id-display/.test(b)) ?? "";
+  ck("a device's id: the toggle and the pencil on its line at the right on a laptop, no chevron; on a phone the toggle on its own line under it, its words shown",
+     /<Pencil /.test(tools) && !/Chevron/.test(row) && !/ConfirmToggle/.test(tools)
+     && /<span className="entity-id-confirm">\s*<ConfirmToggle /.test(row)
      && /\.entity-id-display \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto auto;\s*grid-template-areas: "name confirm tools";[^}]*container-type: inline-size;/.test(css)
-     && !/grid-template-areas: "name tools"/.test(css)
+     && /\.entity-id-display \{ grid-template-columns: minmax\(0, 1fr\) auto; grid-template-areas: "name tools" "confirm confirm"; \}/.test(phone)
+     && /\.entity-id-display \.entity-id-confirm \.setting-row-label \{ position: static; width: auto; height: auto; overflow: visible; clip-path: none; \}/.test(phone)
      && /@container \(max-width: \d+px\) \{\s*\.entity-id-confirm \.setting-row-label \{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\);/.test(css)
+     && css.indexOf(phone) > css.search(/@container \(max-width: \d+px\) \{\s*\.entity-id-confirm/)
      // owner, 2026-11-06: "fan.example_house_guest_roo / m": the id breaks after its dots and underscores only
      // (common/IdText), a part longer than the line alone breaking within it
      && /\.entity-id-text \{[^}]*-webkit-line-clamp: 2;[^}]*overflow: hidden;[^}]*overflow-wrap: break-word;/.test(css)

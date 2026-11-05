@@ -623,9 +623,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* ⚠️ THE ID KEEPS A READABLE WIDTH (owner, 2026-11-03: on a phone "fan.cei / ling_fa / n_mas…" was cut every few
    letters beside "Confirm before toggling"): the id takes at least 180px, and the actions wrap onto their own line,
    on the right, when the two no longer fit; a long id breaks at its dots and underscores first. */
-/* ⚠️ ONE LINE, AT EVERY WIDTH (owner, 2026-11-05: the pencil and the chevron on the id's line; "the toggle … on a second
-   line: it shall never be possible"): the id at most 2 lines, then the toggle, the pencil and the chevron at its
-   right. On a narrow row the toggle's words go (its shield and On | Off stay, the words still read aloud). */
+/* ⚠️ THE ID'S LINE (owner, 2026-11-05: the pencil on the id's line): the id at most 2 lines, then the toggle and the
+   pencil at its right; on a narrow row the toggle's words go (its shield and On | Off stay, the words still read
+   aloud). ⚠️ ON A PHONE, THE TOGGLE ON A LINE OF ITS OWN (owner, 2026-11-06: "Confirm before toggling" with its On | Off
+   under the id's line, never on it; on a laptop it stays on the id's line): the card is measured (its work-row
+   container, RecordCard), the words back, On | Off at the line's right. The card is never folded (no chevron). */
 .entity-id-display { display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
   grid-template-areas: "name confirm tools"; align-items: center; gap: 6px 8px; width: 100%; color: var(--text-secondary);
   container-type: inline-size; }
@@ -638,15 +640,16 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .entity-id-confirm .on-off.config-confirm .on-off-switch { min-width: 84px; }
   .entity-id-confirm .on-off.config-confirm .on-off-switch button { padding: 0 8px; }
 }
-
-/* Collapsed-by-default device card's first line: Shown checkbox + entity id/remap
-   row + expand chevron, all on one line. */
-.device-first-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.entity-id-toggle { cursor: pointer; border-radius: 8px; }
-@media (hover: hover) {
-  .entity-id-toggle:hover { color: var(--text-primary); }
+@container work-row (max-width: 519px) {
+  .entity-id-display { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name tools" "confirm confirm"; }
+  .entity-id-display .entity-id-confirm { display: flex; }
+  .entity-id-display .entity-id-confirm:empty { display: none; }
+  .entity-id-display .entity-id-confirm .on-off.config-confirm { flex: 1 1 auto; }
+  .entity-id-display .entity-id-confirm .setting-row-label { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
 }
-.entity-id-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* A device card's first line: its shown box, then its id's line (or the remap row). */
+.device-first-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
 
 /* Redirect-entity picker: one line (field + Apply + Cancel) on desktop,
    wraps to its own line as a pair on narrow screens. */
@@ -760,6 +763,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .card-field > .unit-field { flex: 0 0 var(--unit-field); }
 /* a settings list of cards: room above it as above any list */
 .settings-cards { margin-top: 8px; }
+/* a bound 3D object's card says what it binds, one sentence above its search (BindingRow) */
+.binding-said { margin: 0 0 4px; font-size: var(--text-sm); color: var(--text-primary); overflow-wrap: anywhere; }
 /* a device group's members and its "Add another entity…", on one line, wrapping */
 .group-members { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .group-members-add { flex: 1 1 180px; min-width: 140px; }

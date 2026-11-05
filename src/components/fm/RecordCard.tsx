@@ -14,8 +14,9 @@
 //      right (`when`). The name wraps to two lines at most, then "…"; the icons, the chip and the time never shrink and
 //      stay on its first line. A card with nothing to say still has its strip and its time.
 //   2. the card's first line says where it stands (`status`, several joined " · "), bold, in its tone's colour, its
-//      (i) after it (`statusTip`: a Watch card's "Closes 15:06"); a card with no status has no such line;
-//   3. one quiet line: its device (`device`), its room, its next check (`check`), its tags (`pills`), " · " between them;
+//      (i) after it (`statusTip`: a Watch card's "Closes 15:06"), and at its right, under the strip's time, when VESTA
+//      looks again (`check`: the next-check pill, owner 2026-11-06); a card with neither has no such line;
+//   3. one quiet line: its device (`device`), its room, its tags (`pills`), " · " between them;
 //   4. its words (`body` or `notes`), photos and cost;
 //   5. who moved it, one quiet line (`who`): never its time or its stage again when the card says them;
 //   6. the bar along its bottom edge (ActionsRow): every button a segment, the main action first and green.
@@ -70,7 +71,7 @@ export interface RecordCardProps {
   device?: ReactNode;
   /** Its room, quiet text on its quiet line: every card that shows a room. */
   room?: string;
-  /** Its next check, after the room: the refresh icon and when, `tip` on hover (CheckPill). */
+  /** Its next check: a pill at the right of its first line, under the strip's time, `tip` on hover (CheckPill). */
   check?: { when: string; tip: string };
   /** Its tags on that line ("guest report", "by VESTA Agent", a task's interval…). */
   pills?: ReactNode;
@@ -157,11 +158,12 @@ export function CardAsk({ question, icon, confirmLabel, onConfirm, onCancel }: {
 }
 
 /** ⚠️ ONE WAY TO SAY WHEN VESTA LOOKS AGAIN (owner, 2026-10-23: an open issue's and a cleared fault's alike; 2026-11-01:
- *  the refresh icon, so a time on a card is plainly its next check): quiet text on the card's line, its words on hover. */
+ *  the refresh icon, so a time on a card is plainly its next check; 2026-11-06: a pill, the app's own (Pill's look), at
+ *  the right of the card's first line, under the strip's time; it was quiet text on the quiet line): its words on hover. */
 export function CheckPill({ when, tip }: { when: string; tip: string }) {
   return (
     <Tip text={tip}>
-      <span className="fm-record-check" aria-label={tip}>
+      <span className="fm-entity-chip fm-chip-static fm-record-check" aria-label={tip}>
         <RefreshCw size={12} aria-hidden="true" />next check {when}
       </span>
     </Tip>
@@ -248,16 +250,19 @@ export default function RecordCard({ title, status, statusTip, lead, number, dev
     <>
       <CardStrip lead={lead} number={number} name={title} when={when} tone={strip} />
       <div className="fm-record-main">
-        {/* its first line: where it stands, in its tone's colour (rule 2); none when it says nothing */}
-        {statuses.some((s) => s.text) && (
-          <div className={`fm-record-state strip-${strip}`}><StateWords status={statuses} tip={statusTip} /></div>
+        {/* its first line: where it stands, in its tone's colour (rule 2), its next check a pill at its right; none
+            when it says nothing */}
+        {(statuses.some((s) => s.text) || check) && (
+          <div className={`fm-record-state strip-${strip}`}>
+            <StateWords status={statuses} tip={statusTip} />
+            {check && <CheckPill {...check} />}
+          </div>
         )}
         {/* its quiet line: " · " between its pieces (07-facility.css), nothing drawn when it has none */}
-        {(device || room || check || pills) && (
+        {(device || room || pills) && (
           <div className="fm-record-meta">
             {device}
             {room && <span>{room}</span>}
-            {check && <CheckPill {...check} />}
             {pills}
           </div>
         )}

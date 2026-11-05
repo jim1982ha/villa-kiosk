@@ -73,10 +73,29 @@ ck("  ...its problem, then that problem's own buttons, the card's bar, its last 
      && (sheets.match(/^\s*\.fm-record-actions \{/gm) ?? []).length === 1, sheets.match(/[^\n]*\.fm-record-actions[^\n]*/g));
 }
 ck("  ...its name opens the device, no line says it again", /fm-title-link/.test(issue) && !text(meta(issue)).includes("Test lock"), issue);
-// owner, 2026-10-22: a refresh icon, not "Next check:"; 2026-11-01: "right after the room"; 2026-11-05: quiet text
-ck("  ...its next check quiet text right after its room: a refresh icon, then when",
-   /<span class="fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>next check within 5min<\/span>/.test(meta(issue)) && meta(issue).indexOf("Hall") < meta(issue).indexOf("fm-record-check"),
-   meta(issue));
+// owner, 2026-10-22: a refresh icon, not "Next check:"; 2026-11-06: a pill (the app's), on the card's first line, at its
+// right under the strip's time, never on the quiet line
+const stateLine = (html) => inside(html, "fm-record-state");
+const PILL = /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="Next check: within 5min \([^"]+\)"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>next check within 5min<\/span><\/div>$/;
+ck("  ...its next check a pill, the last thing of its first line (after its state), never on its quiet line",
+   PILL.test(stateLine(issue)) && stateLine(issue).indexOf("fm-record-status") < stateLine(issue).indexOf("fm-record-check")
+   && !/fm-record-check|next check/.test(meta(issue)), [stateLine(issue), meta(issue)]);
+{
+  const facility = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
+  const rule = facility.match(/\n\.fm-record-state \.fm-record-check \{([^}]*)\}/)?.[1] ?? "";
+  ck("  ...at that line's right (pushed by its margin), whole, the line wrapping it under its state when both do not fit",
+     /margin-left: auto/.test(rule) && /flex: none/.test(rule) && /white-space: nowrap/.test(rule)
+     && /\n\.fm-record-state \{ display: flex; flex-wrap: wrap;/.test(facility) && !/\.fm-record-meta[^{]*fm-record-check/.test(facility), rule);
+  // every caller: the pill is RecordCard's alone (its `check`), drawn on its first line even on a card with no state
+  const { readdirSync } = await import("node:fs");
+  const root = new URL("../../src/", import.meta.url);
+  const using = readdirSync(root, { recursive: true }).filter((f) => /\.tsx?$/.test(f) && f !== "components/fm/RecordCard.tsx")
+    .filter((f) => /<CheckPill\b|fm-record-check/.test(readFileSync(new URL(f, root), "utf8")));
+  const bare = draw(h(RecordCard, { title: "T", room: "Hall", check: { when: "02:00", tip: "Next check: 02:00" } }));
+  ck("  ...every next check drawn by the card itself (no other file draws the pill); a card with no state still has its first line for it",
+     using.length === 0 && /^<div class="fm-record-state strip-neutral"><span class="fm-entity-chip fm-chip-static fm-record-check"/.test(stateLine(bare))
+     && !/fm-record-check/.test(meta(bare)), [using, bare]);
+}
 const { checkPill } = await import("@/fm/faultTiming");
 const nextCheck = (...a) => checkPill(...a)?.text ?? null;
 // at a fixed noon: the soonest of the 02:00 night and the 5-minute look is the night's from 01:55 to 02:00, and this
@@ -228,9 +247,10 @@ ck("  ...a problem with no device: no chevron, nothing to tap, no buttons", !/ch
   const head = (p) => inside(p, "fm-record-part-head");
   ck("  ...a card of several problems: \"2 problems\" in its strip, red as its worst; each problem its header: its icon, its state, its time",
      /class="fm-record-strip strip-danger"[\s\S]*fm-record-status">2 problems</.test(drawn) && /siren/.test(strip(drawn)) && /lucide-radio/.test(strip(drawn))
-     // its "Unlocked" is no state of its header: the alert folded onto it says it (a state never repeats the words)
-     && parts.length === 2 && /lucide-radio/.test(head(parts[0])) && !/fm-record-status/.test(head(parts[0])) && /#41 · Door unlocked/.test(parts[0])
-     && /siren/.test(head(parts[1]))
+     // its "Unlocked" is no state of its header: the alert folded onto it says it (a state never repeats the words);
+     // each fault nobody moved says so (owner, 2026-11-06: every card that can have a state has one)
+     && parts.length === 2 && /lucide-radio/.test(head(parts[0])) && !/Unlocked/.test(head(parts[0])) && /#41 · Door unlocked/.test(parts[0])
+     && /siren/.test(head(parts[1])) && parts.every((p) => /<span class="fm-record-status">New fault<\/span>/.test(head(p)))
      && parts.every((p) => /fm-record-when">[^<]+</.test(head(p)) && /^<div class="fm-record-part-head strip-(danger|warn)">/.test(p))
      && parts.every((p) => !/<svg/.test(inside(p, "fm-record-part-text"))), { parts });
 }

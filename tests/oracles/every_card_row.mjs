@@ -65,7 +65,7 @@ for (const [name, item] of Object.entries(table)) {
   const state = inside(main, "fm-record-state"), said = text(state).replace(/\|/g, "");
   const meta = inside(row, "fm-record-meta");
   ck("  ...its state the card's first line (none in its strip), its room the quiet line's first words, nothing of its state in the words or that line",
-     (said.length > 0) === ((item.card.status ?? []).length > 0 || name === "ticket" || name === "watched")
+     (said.length > 0) === ((item.card.status ?? []).length > 0 || name === "ticket" || name === "watched" || name === "fault")
      && (!said || main.startsWith(`<div class="fm-record-main"><div class="fm-record-state`)) && !strip.includes("fm-record-status")
      && (item.card.status ?? []).every((s) => said.includes(s.text)) && text(meta).startsWith(`|${item.card.room}|`)
      && !/Missing|Unavailable|In progress|Never recorded/.test(text(meta) + text(inside(row, "cockpit-attention-sub-title") || "")), [said, meta, row]);
@@ -78,6 +78,16 @@ ck("each kind that has a state says it; a ticket's, its stage, who took it its w
   ck("  ...a ticket's strip green, its first line \"Ticket in progress\" in green; its who line who opened it, not its stage again",
      /fm-record-strip strip-ok"/.test(row) && /fm-record-state strip-ok"><span class="fm-record-status">Ticket in progress</.test(row) && /fm-record-who"[\s\S]*<span>Opened/.test(row)
      && !/In progress/.test(text(inside(row, "fm-record-who"))), row);
+}
+{
+  // owner, 2026-11-06: "House Pump Power", a maintenance check's fault nobody had moved, began with its quiet line
+  const row = (k) => draw(h(InboxCard, { item: table[k], opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
+  const first = (k) => inside(row(k), "fm-record-state");
+  ck("every kind of card has its first line; a fault nobody moved says \"New fault\", amber as its strip",
+     Object.keys(table).every((k) => first(k) !== "") && /^<div class="fm-record-state strip-warn"><span class="fm-record-status">New fault<\/span>/.test(first("fault"))
+     && /fm-record-strip strip-warn"/.test(row("fault")), Object.keys(table).map((k) => [k, text(first(k))]));
+  // the same fault, moved: its move says where it stands, never "New fault" (a ticket's stage, a reopening)
+  ck("  ...only while nobody moved it: a ticket says its stage, not \"New fault\"", !/New fault/.test(row("ticket")) && !/New fault/.test(row("watched")));
 }
 {
   // owner, 2026-11-05: "#91-P1" a small chip in the strip, before the name, from the record (fmEngine.alertLabel)
@@ -123,7 +133,9 @@ console.log("\n  every card of the app, wherever it is drawn:");
     "fm/SavedDocumentsList.tsx": 1 /* a saved document */, "fm/TicketsTab.tsx": 1 /* "No ticket in progress" */, "fm/TodayTab.tsx": 1 /* "Nothing due" */,
     // Settings' records (owner, 2026-11-06): a 3D object bound to nothing (no device, so no room), a full-screen
     // announcement (every tablet's), a chat that gets the messages (a person's phone or group)
-    "settings/BindingRow.tsx": 1, "settings/MessagesSettings.tsx": 1, "settings/WhoGetsMessages.tsx": 1 };
+    "settings/BindingRow.tsx": 1, "settings/MessagesSettings.tsx": 1, "settings/WhoGetsMessages.tsx": 1,
+    // a device of Devices: its room under its name was redundant (owner, 2026-11-06: "no added value")
+    "settings/EntityMapRow.tsx": 1 };
   const cards = files.map((f) => { const all = elements(parseTsx(`components/${f}`), "RecordCard");
     return { f, all, roomless: all.filter((e) => propText(e, "room") === undefined || propText(e, "room") === null).length,
       perCaller: all.filter((e) => /\|\| undefined/.test(propText(e, "room") ?? "")).length }; });

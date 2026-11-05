@@ -131,12 +131,12 @@ ck("  ...drawn by the open issues' own card: marked frame, a check, its device i
 // owner, 2026-11-05 ("Status on top", then "state first"): a Watch card's first line says when it closes, in green, with
 // its (i), under a green strip
 const stripOf = (html) => /class="fm-record-strip strip-ok">[\s\S]*?<div class="fm-record-main"><div class="fm-record-state strip-(\w+)"><span class="fm-record-status">([^<]*)<\/span><span class="info-tip"><button type="button" class="info-btn" aria-label="([^"]*)"/.exec(html);
-const checkOf = (html) => /<span class="fm-record-check" aria-label="([^"]*)">/.exec(html);
+const checkOf = (html) => /<span class="[^"]*\bfm-record-check" aria-label="([^"]*)">/.exec(html);
 {
   const strip = stripOf(drawn);
   ck("  ...its first line says \"Closes\" and its time, in green, what VESTA does then in its (i)",
      !!strip && strip[2] === `Closes ${clockTime(NOW + 8 * 60_000)}` && strip[3] === closesAt(8) && strip[1] === "ok", strip?.slice(1));
-  ck("  ...said once: no next check on its quiet line", checkOf(drawn) === null, checkOf(drawn));
+  ck("  ...said once: no next check pill (its first line says when it closes)", checkOf(drawn) === null, checkOf(drawn));
 }
 ck("  ...no Close and no Open Ticket: it is closed", !/fm-record-actions/.test(drawn));
 const activeCard = draw(h(AttentionCard, { card: cockpitCard(att.attentionGroups[0], CADENCE, new Date(NOW)), onOpenEntity: () => {} }));

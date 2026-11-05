@@ -312,9 +312,11 @@ export function recordsByStage(records: readonly { status?: FmTicket["status"] }
  *  open fault, owner 2026-10-14: "OPEN FAULT:" before every fault said nothing; the open word is for a table).
  *  ⚠️ THREE SPELLINGS (architecture review, 2026-10-19): the pill said "In progress" in the Schedule's due-soon colour,
  *  the recap printed the stored status ("in progress"), and the Overview's item carried a "Fault" nothing read. */
-export const STAGE_WORDS: Record<FmStage, { word: string; tone: Tone; card: string }> = {
-  // `card`: the stage as a card's state line says it, among the Inbox's other states (owner, 2026-11-05)
-  fault: { word: "Open", tone: "warn", card: "Open" },
+export const STAGE_WORDS: Record<FmStage, { word: string; tone: Tone; card: string; unmoved?: string }> = {
+  // `card`: the stage as a card's state line says it, among the Inbox's other states (owner, 2026-11-05); `unmoved`: a
+  // fault nobody has moved yet (no ticket, no reopening, no Need help, no alert's Status), which said nothing, so its
+  // card began with its quiet line (owner, 2026-11-06: "every card that can have a state has one")
+  fault: { word: "Open", tone: "warn", card: "Open", unmoved: "New fault" },
   ticket: { word: "In progress", tone: "warn", card: "Ticket in progress" },
   closed: { word: "Resolved", tone: "ok", card: "Resolved" },
 };
