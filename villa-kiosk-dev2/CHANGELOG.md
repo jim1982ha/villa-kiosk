@@ -1,3 +1,15 @@
+## 2.496.705
+
+What you will see:
+- A chart's (i) is short: "Daily averages. Striped: unavailable at least once that day. Outages under 5min may not
+  show. Before 26 Oct: only whole-hour outages show." (the same on every chart, in its own steps).
+- A striped step's tooltip says "Unavailable at least once that day" (or hour, or week), with its day once, under
+  it. Its key is the striped swatch the chart draws, no longer the line's green dot; an outage's grey band is keyed
+  grey too.
+- Advanced Settings › Devices: the pencil and the fold chevron sit on the device's first line, at its right, and
+  "Confirm before toggling" on the line under it. A long id (with its "3D object: …") takes at most 2 lines; the
+  whole text shows on hover. On a wide screen the row keeps one line.
+
 ## 2.496.704
 
 What you will see:
