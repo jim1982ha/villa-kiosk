@@ -92,12 +92,10 @@ export function knownSpans(s: HistorySeries): { a: number; b: number; v: number 
  * chart, "● 2.1 kW" and "at least once that hour" on the week's, of one drop): a five-minute step that has its mean is
  * marked the same way, its value said with its outage, and every band says its real drops (`drops`, dropsOf).
  *
- * ⚠️ AN OUTAGE THE FIGURES WOULD SEE, NO SHORTER (architecture review 25): a 50 ms drop — the villa's system reloading
- * its virtual devices, several times a day — striped a template sensor's whole hour on its week and its whole day on
- * its month, while a sensor kept in figures showed nothing for the same drop (a five-minute figure is written unless
- * the device said nothing all of it: statisticsSeries.finerOutages). An hour, a day or a week is marked only when the
- * outage emptied a whole five-minute slot of it (emptiesSlot), the one rule of both; the 1h and 24h charts still draw
- * every outage.
+ * ⚠️ EVERY OUTAGE THE 24H CHART SHOWS (owner, 2026-11-06: "It shall be visible by design"): architecture review 25
+ * marked an hour, a day or a week only when the outage emptied a whole five-minute slot (as the figures then saw it),
+ * so a drop of seconds striped the 24h chart and nothing on the week's. Every outage marks its step, as the figures'
+ * steps now are from the same detail (historySource.outagesInside): one rule, at every range.
  */
 export function stepsOfflineInside(s: HistorySeries, period: "5minute" | "hour" | "day" | "week", B: number,
   /** The outages as they were (the changes' gaps, before widening): widened to whole steps, two outages in steps side
@@ -117,8 +115,7 @@ export function stepsOfflineInside(s: HistorySeries, period: "5minute" | "hour" 
       const a = Math.max(edges[k], g.from), b = Math.min(edges[k + 1], g.to);
       if (hasMean.has(k)) {
         run = null;
-        const seen = period === "5minute" || real.some((o) => emptiesSlot(Math.max(o.from, edges[k]), Math.min(o.to, edges[k + 1])));
-        if (seen) gaps.push({ from: a, to: b, within: period, drops: dropsOf(real, a, b) });
+        gaps.push({ from: a, to: b, within: period, drops: dropsOf(real, a, b) });
         continue;
       }
       if (run) { run.to = b; run.drops = dropsOf(real, run.from, b); run.actual = spanOf(run.drops, run.from, b); continue; }
@@ -140,12 +137,6 @@ export function dropsOf(outages: readonly { from: number; to: number }[], a: num
 function spanOf(drops: readonly { from: number; to: number }[], a: number, b: number): { from: number; to: number } {
   return drops.length ? { from: Math.max(a, Math.min(...drops.map((d) => d.from))), to: Math.min(b, Math.max(...drops.map((d) => d.to))) }
     : { from: a, to: b };
-}
-
-/** Did an outage from `from` to `to` cover one whole five-minute slot of the clock — the slot a figure is written for
- *  (statisticsSeries PERIOD_MS["5minute"], the same five minutes as TREND_INTERVAL_MS)? */
-export function emptiesSlot(from: number, to: number): boolean {
-  return Math.ceil(from / TREND_INTERVAL_MS) * TREND_INTERVAL_MS + TREND_INTERVAL_MS <= to;
 }
 
 /** Outages widened to whole five-minute intervals (merged where they then

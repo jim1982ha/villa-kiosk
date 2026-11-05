@@ -25,5 +25,5 @@ export function useHistorySource<Q extends HistoryRequests>(
   const port = useMemo(() => haHistoryPort(ws, unavailableByDesign), [ws, unavailableByDesign]);
   const key = requests ? `${historyKey(requests)}#${refresh ?? ""}` : null;
   return useHistory<HistoryAnswers<Q> | null>(
-    key, () => loadHistory(port, requests!, Date.now()), null);
+    key, (early) => loadHistory(port, requests!, Date.now(), early), null);
 }

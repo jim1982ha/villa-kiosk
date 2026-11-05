@@ -30,7 +30,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [The owner verifies by screenshots](owner-rules.md#the-owner-verifies-by-screenshots) — no browser testing; say what to check on which device
 - [iPhone and Android alike](owner-rules.md#iphone-and-android-alike) — every change works on iPhone too; fallbacks for late Safari APIs; group controls that wrap
 - [One line per problem](owner-rules.md#one-line-per-problem) — a repeated problem is one line with a count, on every surface
-- [Forms, charts and lists](owner-rules.md#forms-charts-and-lists) — Y axis with grid, pickers not free text (who does the work: typed), 10-row pages, Light/Auto/Dark
+- [Forms, charts and lists](owner-rules.md#forms-charts-and-lists) — Y axis with grid, pickers not free text (who does the work: typed), 10-row pages, Light/Auto/Dark; an outage seen at 24h shows at 1w/1m/1y, however short
 - [Fill, don't paint](owner-rules.md#fill-dont-paint) — use the empty band; never recolour it
 - [Private stays private](owner-rules.md#private-stays-private) — docs/, villa data and the security suite never reach the repository
 

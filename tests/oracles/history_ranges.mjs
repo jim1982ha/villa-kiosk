@@ -194,7 +194,9 @@ console.log("\n  one drop, the same words at every range (owner, 2026-11-05):");
   // the recorder's days begin at the villa's midnight (this machine's, as cellEdges reads it)
   const tz = -new Date(now).getTimezoneOffset() * MIN;
   const rowsOf = (step, from, to, skip) => { const o = []; for (let t = Math.ceil((from + tz) / step) * step - tz; t + step <= to; t += step) if (!skip(t)) o.push({ start: t, end: t + step, mean: 2050 }); return o; };
-  const villa = (figures = true) => ({ keptFrom: async () => kept,
+  // `slotLost`: the recorder wrote no five-minute figure for the drop's slot (a drop of minutes); a drop of seconds
+  // leaves every figure written (the device reported in that slot). `days`: the tablet's cache of finished days.
+  const villa = (figures = true, slotLost = true, days) => ({ keptFrom: async () => kept, ...(days ? { outageDays: days } : {}),
     // as the villa's system answers: the state in force at `from`, then every change kept
     stateRows: async (e, from, to) => { reads.push(to - from);
       const inside = changes.filter((r) => { const t = Date.parse(r.last_changed); return t >= Math.max(from, kept) && t <= to; });
@@ -204,7 +206,7 @@ console.log("\n  one drop, the same words at every range (owner, 2026-11-05):");
       if (!figures) return {};
       const from = Date.parse(start), step = { "5minute": slot, hour: HOUR, day: DAY, week: 7 * DAY }[period];
       const lo = period === "5minute" ? Math.max(from, kept) : from;
-      return { [id]: rowsOf(step, lo, now - slot, (t) => period === "5minute" && t <= drop && drop < t + slot) };
+      return { [id]: rowsOf(step, lo, now - slot, (t) => slotLost && period === "5minute" && t <= drop && drop < t + slot) };
     } });
   const said = async (port, hours, period) => {
     const s = (await loadOne(port, { kind: "trend", ids: [id], hours, period }, now))[id];
@@ -222,8 +224,69 @@ console.log("\n  one drop, the same words at every range (owner, 2026-11-05):");
      { d24: d24.words, d1w: d1w.words, m1: m1.words });
   ck("  ...at every range the step's value is said above it (the line runs through), its band striped",
      [d24, d1w, m1].every((x) => x.value && x.outage && x.band.within), { d24, d1w, m1 });
-  ck("  ...the detail is read only around the slot the figures miss, never the month (a few slots wide)",
-     monthRead > 0 && monthRead <= 4 * slot, monthRead / MIN);
+  // ⚠️ A DROP OF SECONDS EMPTIES NO FIVE-MINUTE FIGURE (owner, 2026-11-06: a pool pump's 24h chart striped two drops
+  // its week's chart did not show): the recorder writes a slot's mean whenever the device reported in it, so the
+  // figures alone never see it; every drop the detail kept shows is marked, with its real time and length
+  const days = new Map();
+  const s24 = await said(villa(true, false, days), 24, "5minute");
+  reads.length = 0;
+  const s1w = await said(villa(true, false, days), 168, "hour");
+  const weekReads = reads.length, weekSpan = reads.reduce((a, b) => a + b, 0);
+  reads.length = 0;
+  const s1m = await said(villa(true, false, days), 720, "day");
+  const afterWeek = [...reads];
+  reads.length = 0;
+  const again = await said(villa(true, false, days), 168, "hour");
+  ck("a 10s drop that empties no five-minute figure: the same outage line on the 24h, 1w and 1m charts",
+     /^Unavailable at [^,]+, for 10s$/.test(s24.words) && s1w.words === s24.words && s1m.words === s24.words
+     && [s1w, s1m].every((x) => x.value && x.outage && x.band.within), { s24: s24.words, s1w: s1w.words, s1m: s1m.words });
+  ck("  ...the week's detail in one read of whole villa days, at most 8 of them",
+     weekReads === 1 && weekSpan <= 8 * DAY + HOUR && weekSpan > 7 * DAY, { weekReads, days: weekSpan / DAY });
+  ck("  ...then the month reads only the days the week had not (finished days are kept), and the week again only today",
+     afterWeek.length >= 1 && afterWeek.every((r) => r <= 4 * DAY) && reads.length === 1 && reads[0] <= DAY && again.words === s24.words,
+     { month: afterWeek.map((r) => r / HOUR), again: reads.map((r) => r / HOUR) });
+  // the Weather window's figures (a "statistics" request of means) through the same path: the same drop, the same words
+  {
+    const w = (await loadOne(villa(true, false), { kind: "statistics", ids: [id], period: "hour", fields: ["mean", "min", "max"], hours: 168 }, now))[id];
+    const band = w.mean.gaps.find((g) => g.within && g.from <= drop && g.to > drop);
+    ck("  ...the Weather window's hourly figures mark it the same, its words the 24h chart's",
+       !!band && fmtOutage(band, now, 168) === s24.words, band && fmtOutage(band, now, 168));
+  }
+  // ⚠️ ONE PATH (owner, 2026-11-06: "make sure … this fix [is applied] everywhere it shall be"): every chart that draws
+  // an outage over time gets it from the history source, so nothing outside it reads the villa's history or turns rows
+  // or figures into outages. Derived from the tree: a new chart reading its own would fail here
+  {
+    const { readdirSync, readFileSync, statSync } = await import("node:fs");
+    const root = new URL("../../src/", import.meta.url);
+    const walk = (u) => readdirSync(u).flatMap((f) => { const c = new URL(f, u);
+      return statSync(c).isDirectory() ? walk(new URL(f + "/", u)) : /\.tsx?$/.test(f) ? [c] : []; });
+    // the code, not its comments (one names the read it explains)
+    const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+    const files = walk(root).map((u) => [u.pathname.slice(root.pathname.length), code(readFileSync(u, "utf8"))]);
+    const builders = /\b(gapsFrom|finerOutages|missingSlots|stepsOfflineInside|statisticsSeries|intervalSeries|fiveMinuteSeries|dropsOf)\b/;
+    const imports = (src) => [...src.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s+from/g)].map((m) => m[1]).join(",");
+    const own = new Set(["ha/historySource.ts", "utils/historyGaps.ts", "utils/statisticsSeries.ts", "utils/trendInterval.ts"]);
+    const builds = files.filter(([f, src]) => !own.has(f) && builders.test(imports(src))).map(([f]) => f);
+    const reads = files.filter(([f, src]) => !["ha/historySource.ts", "ha/HAHistoryAPI.ts", "ha/HAWebSocket.ts", "types/ha.types.ts", "ha/entityStore.ts"].includes(f)
+      && /\b(getStatisticsDuringPeriod|recordedStates|stateRows|history\/period)\b/.test(src)).map(([f]) => f);
+    ck("  ...every chart's outages from the history source alone: nothing else turns history into outages or reads it",
+       files.length > 100 && builds.length === 0 && reads.length === 0, { builds, reads });
+  }
+  // the line first: the figures' answer is given before the detail arrives (historySource.loadHistory `early`)
+  {
+    const { loadHistory } = await import("@/ha/historySource");
+    let release, first;
+    const gate = new Promise((r) => { release = r; });
+    const slow = { ...villa(true, false), stateRows: async (...a) => { await gate; return villa(true, false).stateRows(...a); } };
+    const done_ = loadHistory(slow, { w: { kind: "trend", ids: [id], hours: 168, period: "hour" } }, now, (a) => { first = a; });
+    for (let i = 0; i < 20 && !first; i++) await new Promise((r) => setTimeout(r, 0));
+    const early = first, firstBand = first?.w[id].gaps.some((g) => g.within && g.from <= drop && g.to > drop);
+    release();
+    const last = await done_;
+    ck("  ...the week's line is drawn from the figures before the detail arrives, its band added when it does",
+       !!early && early.w[id].points.length > 100 && !firstBand && last.w[id].gaps.some((g) => g.within && g.from <= drop && g.to > drop),
+       { early: !!early, firstBand });
+  }
   // older than the detail kept: only the averages tell it
   const old = { from: kept - DAY, to: kept - DAY + HOUR, within: "hour" };
   ck("  ...\"at least once that hour\" only where the detail is no longer kept",
@@ -294,17 +357,18 @@ console.log("\n  an outage inside a step looks the same whatever drew it, and a 
   ck("  ...a sensor with no figures: the hour offline 22min striped as the figures', its tooltip when and how long, the whole hour a break",
      inside.some((x) => x.from <= off && x.to > off && x.within === "hour") && /^Unavailable · [^–]+–[^–]+ \(27min\)$/.test(fmtOutage(inside[0], now, 168))
      && breaks.some((x) => x.from <= gone + 30 * MIN && x.to > gone + 30 * MIN && x.actual), { inside, breaks, said: fmtOutage(inside[0], now, 168) });
-  // a 50 ms drop (the villa's system reloading its virtual devices): no figure would miss it, so no step is striped
-  // (architecture review 25: a template sensor's whole day was striped on its month for each reload)
+  // a 50 ms drop (the villa's system reloading its virtual devices): the 24h chart shows it, so its hour and its day do
+  // (owner, 2026-11-06: every outage seen at 24h is visible at 1w and 1m; architecture review 25 had hidden it)
   const blink = now - 5 * DAY + 14 * HOUR + 3 * MIN;   // a day with no other outage
   const reloaded = [...changes, { state: "unavailable", last_changed: iso(blink) }, { state: "20", last_changed: iso(blink + 50) }]
     .sort((a, b) => Date.parse(a.last_changed) - Date.parse(b.last_changed));
   const port2 = { ...plain, stateRows: async (e, from, to) => reloaded.filter((r) => { const t = Date.parse(r.last_changed); return t >= from && t <= to; }) };
   for (const [hours, period, B] of [[168, "hour", HOUR], [720, "day", DAY]]) {
     const gg = (await loadOne(port2, { kind: "trend", ids: ["sensor.x"], hours, period }, now))["sensor.x"].gaps;
-    ck(`  ...a reload's 50 ms drop marks no ${period} (only an outage emptying a whole five-minute slot, as a figure's)`,
-       !gg.some((x) => x.within && x.from <= blink && x.to > blink) && gg.some((x) => x.within && x.from <= off && x.to > off),
-       gg.filter((x) => x.within));
+    const mark = gg.find((x) => x.within && x.from <= blink && x.to > blink);
+    ck(`  ...a reload's 50 ms drop marks its ${period}, said "under 1s" as on the 24h chart`,
+       !!mark && /^Unavailable at [^,]+, under 1s$/.test(fmtOutage(mark, now, hours)) && gg.some((x) => x.within && x.from <= off && x.to > off),
+       mark && fmtOutage(mark, now, hours));
   }
 }
 
@@ -319,11 +383,11 @@ console.log("\n  every chart's (i): what it shows and what it may not (owner, 20
      about["1h"] === about["24h"] && about["24h"] === "Every reading, in 5min steps. Striped: unavailable at least once in those 5min."
      // as wide as drawn: a 0.46s drop is a band of the five minutes it touched (widenGaps), its tooltip the real length
      && widenGaps([{ from: 1_000_056_000, to: 1_000_056_460 }], 0, 2e9)[0].to - widenGaps([{ from: 1_000_056_000, to: 1_000_056_460 }], 0, 2e9)[0].from === PERIOD_MS["5minute"], about["24h"]);
-  ck("  ...1w: hourly averages, an hour striped when unavailable part of it, an outage under the finest figures' 5min may not show",
-     about["1w"] === "Hourly averages. Striped: unavailable at least once that hour. Outages under 5min may not show.", about["1w"]);
+  ck("  ...1w: hourly averages, an hour striped when unavailable part of it, every outage (the detail is kept)",
+     about["1w"] === "Hourly averages. Striped: unavailable at least once that hour.", about["1w"]);
   const keptDay = (await import("@/utils/dateText")).docDate(kept);
   ck("  ...1m and 1y: days and weeks, and before what the villa's system keeps, only an outage of a whole hour (day)",
-     about["1m"] === `Daily averages. Striped: unavailable at least once that day. Outages under 5min may not show. Before ${keptDay}: only whole-hour outages show.`
+     about["1m"] === `Daily averages. Striped: unavailable at least once that day. Before ${keptDay}: only whole-hour outages show.`
      && about["1y"].startsWith("Weekly averages. Striped: unavailable at least once that week.") && about["1y"].endsWith(": only whole-day outages show."), [about["1m"], about["1y"]]);
   {
     // a sensor with no figures: before what is kept its month is the "No longer kept" band, and its (i) says so, never

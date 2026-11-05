@@ -1,3 +1,24 @@
+## 2.496.718
+
+What you will see:
+- Nothing new on screen. The rule behind 2.496.717 is now written in the project's shared rules: a drop seen on a
+  finer chart always shows on the coarser ones, however short, so a later change cannot hide it again.
+
+## 2.496.717
+
+What you will see:
+- A short drop that shows on a device's 24h chart now also marks its hour on the week chart and its day on the month
+  chart, with the same words: "Unavailable at 06:58, for 10s", or "Unavailable 3 times, 50s in all, the first at …"
+  when there were several. Until now a drop of a few seconds or a minute or two showed on the 24h chart only. This is
+  the same on the Weather window's charts, and on a device's charts of values drawn from its changes.
+- A drop of under a second (the villa's system reloading a virtual device) marks its hour and its day too, said
+  "under 1s", as on the 24h chart.
+- The week and month charts show their line at once, as before; the striped hours or days appear a moment later. A
+  second opening of the same chart, or the month after the week, is quicker: only today is read again.
+- Drops older than the villa's system keeps every change (Settings › System, "Days records are kept") still show only
+  when they lasted long enough to leave a gap in the averages, said "Unavailable at least once that day": nothing else
+  is kept for them. The chart's (i) no longer says "Outages under 5min may not show".
+
 ## 2.496.716
 
 What you will see:
