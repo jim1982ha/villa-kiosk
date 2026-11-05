@@ -21,6 +21,10 @@ ck("its card is out of every window's box (portalled to <body>), fixed and opaqu
    && /\.info-pop \{\s*position: fixed; z-index: 400;/.test(css) && /\.info-pop \{[^}]*background: var\(--bg-modal\);/.test(css)
    && !/\.info-tip \.info-pop/.test(css));
 
+// the (i)'s table as it is drawn, with an Agent (FaultTiming's pure part)
+const { h, draw } = await import("../consistency/screen.mjs");
+const timingTable = draw(h((await import("@/components/fm/FaultTiming")).FaultTimingTable, { timing: faultTiming(true) }));
+
 console.log("\n  where the card goes (infoTipPlacement), by value:");
 const { infoTipPlacement } = await import("@/components/common/infoTipPlacement");
 const ipad = { width: 1120, height: 1600 }, phone = { width: 390, height: 844 };
@@ -40,7 +44,7 @@ ck("an (i) may ask for a wider card (the Overview's table: 847 px) — kept insi
 const roomy = infoTipPlacement({ left: 1340, right: 1378, top: 236, bottom: 274 }, { width: 1920, height: 1000 }, 560, 847);
 ck("  ...with room, its right edge on the (i)'s", roomy.width === 847 && roomy.left + roomy.width === 1378, roomy);
 ck("  ...the Overview's (i) asks for twice the default: four columns (owner, 2026-10-19: \"too big as tooltip\")", /width=\{INFO_TIP_WIDTH \* 2\}/.test(src("components/fm/FaultTiming.tsx"))
-   && /<th>Source<\/th><th>What it is<\/th><th>Appears<\/th><th>Goes<\/th>/.test(src("components/fm/FaultTiming.tsx")));
+   && /<th>Source<\/th><th>What it is<\/th><th>Appears<\/th><th>Goes<\/th>/.test(timingTable));
 const tall = infoTipPlacement({ left: 300, right: 330, top: 100, bottom: 130 }, phone, 2000);
 ck("a card taller than the screen stops at its edge (and scrolls inside only then)", !tall.above && tall.top + tall.maxHeight <= 844 - 12, tall);
 
@@ -65,14 +69,14 @@ ck("  ...the Kiosk's sources first, then the Agent's, each group under its headi
 // owner, 2026-10-23: "include the new icon (validated ones)" — the check of a fault being confirmed, last of the Agent's
 {
   const told15 = faultTiming(true, { checkMinutes: 15, nightlyAt: "04:30" }).confirming;
-  const src = readFileSync(new URL("../../src/components/fm/FaultTiming.tsx", import.meta.url), "utf8");
   // its words the owner's life of a problem, Open › Cleared (on the Watch list) › Closed (owner, 2026-10-31)
   ck("  ...the Agent's group ends with \"On watch\", its check icon explained, closed at its refresh pill's time; none without an Agent",
      withAgent.confirming?.words === "On watch" && withAgent.confirming.what && withAgent.confirming.opens
      && /^VESTA closes it at the time on its refresh pill \("Closes"\), at its next look once that time is past, if all is still well\. Back before then: open again, as the same problem$/.test(withAgent.confirming.goes)
      && /, within 15min once/.test(told15.goes)
      && alone.confirming === null
-     && /confirming && g === groups\[groups\.length - 1\]/.test(src) && /<CheckCircle2 size=\{15\} className="fault-watched-icon"/.test(src),
+     && /<tr data-source="watch"><td><span class="info-pop-source"><svg[^>]*class="lucide lucide-circle-check fault-watched-icon"[\s\S]*?<b>On watch<\/b>/.test(timingTable)
+     && timingTable.lastIndexOf('<tr data-source="watch">') > timingTable.lastIndexOf('<tr data-source="chat">'),
      withAgent.confirming);
 }
 ck("  ...Live is what the Kiosk's map shows, and nobody is told",
@@ -133,7 +137,9 @@ ck("the card shows the Agent's rows when an Agent is connected OR one of its fau
   const inHead = head ? head.children.filter((c) => c.getText().trim()).map((c) => c.getText().replace(/\s+/g, " ")) : [];
   ck("it is Open issues' own (i), drawn right after the section's title, in the same group (Messages)",
      propText(issues, "tip") === "canManage ? <FaultTiming /> : undefined"
-     && inHead.length === 2 && inHead[0].startsWith('<FoldToggle className="messages-section-toggle') && inHead[1] === "{tip}",
+     // between them only a section's counts that open its lists (Bound 3D objects' `views`, owner 2026-11-06)
+     && inHead.length === 3 && inHead[0].startsWith('<FoldToggle className="messages-section-toggle') && inHead[1].startsWith("{views && (")
+     && inHead[2] === "{tip}",
      inHead);
 }
 

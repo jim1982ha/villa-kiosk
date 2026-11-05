@@ -7,10 +7,11 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import AskDialog from "@/components/common/AskDialog";
-import { Plus, Search, Trash2, Sparkles } from "lucide-react";
+import { Layers, Plus, Search, Trash2, Sparkles } from "lucide-react";
 import { FoldToggle } from "@/components/common/FoldedList";
 import IdText from "@/components/common/IdText";
-import Tip from "@/components/common/Tip";
+import RecordCard from "@/components/fm/RecordCard";
+import { useCardRoom } from "@/config/VillaModel";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import EntityPicker from "./EntityPicker";
 import Fold from "./Fold";
@@ -30,6 +31,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
   const { config, update } = useConfig();
   const { entityDeviceIds } = useHA();
   const entityLabel = useEntityLabel();
+  const roomOf = useCardRoom();
   const [newPrimary, setNewPrimary] = useState<string | undefined>(undefined);
   /** A refusal to show in the app's own dialog — see AskDialog for why this is
    *  not `alert()`. */
@@ -134,44 +136,41 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
         <p className="muted body-text mt">No groups match “{search}”.</p>
       )}
 
-      {shown.visible.map((group) => (
-        <div key={group.id} style={{ padding: "14px 0", borderTop: "1px solid var(--hairline)" }}>
-          <div className="row spread" style={{ gap: 12 }}>
-            {/* flex:1 + minWidth:0 so a long entity_id wraps inside the row instead of pushing the delete button
-                off-screen, at its dots and underscores (common/IdText), never mid-word */}
-            <div style={{ fontSize: "var(--text-sm)", fontWeight: 500, flex: 1, minWidth: 0 }}>
-              {entityLabel(group.primaryEntityId)}
-              <div className="muted body-text" style={{ fontSize: "var(--text-2xs)", marginTop: 2 }}>
-                <IdText id={group.primaryEntityId} />, primary (keeps the map badge)
-              </div>
-            </div>
-            <Tip text="Delete group">
-              <button type="button" className="icon-btn-sm danger" aria-label="Delete group" onClick={() => deleteGroup(group.id)}>
-                <Trash2 size={16} aria-hidden />
-              </button>
-            </Tip>
-          </div>
-
-          {/* Member pills + the "add another" picker share one row — the
-              picker is a `compact` EntityPicker so its own height matches
-              the pills instead of towering over them as a full-size field
-              on its own line below. */}
-          <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 10, alignItems: "center" }}>
-            {group.memberEntityIds.map((id) => (
-              <RemovablePill key={id} label={entityLabel(id)} tip={id} removeLabel="Remove from group"
-                onRemove={() => removeMember(group, id)} />
-            ))}
-            <div style={{ flex: "1 1 180px", minWidth: 140 }}>
-              <EntityPicker
-                onChange={(id) => addMember(group, id)}
-                placeholder="Add another entity…"
-                hideCurrentLabel
-                compact
-              />
-            </div>
-          </div>
+      {/* ⚠️ EACH GROUP THE COCKPIT'S CARD (owner, 2026-11-06): its name (its primary's) in the strip, the group's icon
+          before it; its room, its primary's id and what the primary does on its quiet line; its members and "Add another
+          entity…" its words; Remove group its bar */}
+      {shown.visible.length > 0 && (
+        <div className="fm-list settings-cards">
+          {shown.visible.map((group) => (
+            <RecordCard key={group.id} title={entityLabel(group.primaryEntityId)} lead={<Layers size={16} aria-hidden />}
+              room={roomOf({ entityId: group.primaryEntityId })}
+              pills={<><span><IdText id={group.primaryEntityId} /></span><span>primary (keeps the map badge)</span></>}
+              body={
+                // the member pills and the "add another" picker share one line, the picker compact at the pills' height
+                <div className="group-members">
+                  {group.memberEntityIds.map((id) => (
+                    <RemovablePill key={id} label={entityLabel(id)} tip={id} removeLabel="Remove from group"
+                      onRemove={() => removeMember(group, id)} />
+                  ))}
+                  <div className="group-members-add">
+                    <EntityPicker
+                      onChange={(id) => addMember(group, id)}
+                      placeholder="Add another entity…"
+                      hideCurrentLabel
+                      compact
+                    />
+                  </div>
+                </div>
+              }
+              actions={
+                <button type="button" className="btn ghost" aria-label={`Remove the group ${entityLabel(group.primaryEntityId)}`}
+                  onClick={() => deleteGroup(group.id)}>
+                  <Trash2 size={16} aria-hidden />Remove group
+                </button>
+              } />
+          ))}
         </div>
-      ))}
+      )}
       <ShowAll list={shown} noun="group" />
 
       {/* Suggestions — collapsed by default: this section only shows what's
@@ -182,25 +181,22 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
         </FoldToggle>
       )}
 
-      {showSuggestions && suggestions.map((s) => (
-        <div
-          key={`${s.primaryEntityId}|${s.memberEntityId}`}
-          className="row spread"
-          style={{ padding: "8px 0", borderTop: "1px solid var(--hairline)" }}
-        >
-          <span className="body-text" style={{ fontSize: "var(--text-xs)", flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
-            {entityLabel(s.primaryEntityId)} <span className="muted">+</span>{" "}
-            {entityLabel(s.memberEntityId)}
-          </span>
-          <button
-            className="btn ghost"
-            style={{ padding: "5px 10px", fontSize: "var(--text-xs)", flexShrink: 0 }}
-            onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}
-          >
-            Group these
-          </button>
+      {/* a suggested group: the same card, its main action first in its bar */}
+      {showSuggestions && (
+        <div className="fm-list settings-cards">
+          {suggestions.map((s) => (
+            <RecordCard key={`${s.primaryEntityId}|${s.memberEntityId}`}
+              title={`${entityLabel(s.primaryEntityId)} + ${entityLabel(s.memberEntityId)}`} lead={<Sparkles size={16} aria-hidden />}
+              room={roomOf({ entityId: s.primaryEntityId })}
+              pills={<><span><IdText id={s.primaryEntityId} /></span><span><IdText id={s.memberEntityId} /></span></>}
+              actions={
+                <button type="button" className="btn ghost fm-bar-main" onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}>
+                  <Plus size={16} aria-hidden />Create this group
+                </button>
+              } />
+          ))}
         </div>
-      ))}
+      )}
       </Fold>
     </div>
   );

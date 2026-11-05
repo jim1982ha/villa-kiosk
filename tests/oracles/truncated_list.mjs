@@ -48,7 +48,9 @@ ck("Readiness' devices: the one list, every device reachable (no \"+N more\" tha
    && !/\.slice\(0, 8\)|more\s*<\/span>/.test(ready.getText()) && elements(ready, "CheckDevices").length === 1);
 for (const f of ["settings/BindingsTable.tsx", "settings/ConfigEditor.tsx", "settings/GroupedDevices.tsx"]) {
   const t = parseTsx(`components/${f}`);
-  ck(`  ...${f.split("/")[1]}: the same`, calls(t, "useTruncated").length === 1 && elements(t, "ShowAll").length === 1
+  // Bound 3D objects pages each of its three lists (owner, 2026-11-06: an object bound to nothing listed all 829)
+  const lists = f === "settings/BindingsTable.tsx" ? 3 : 1;
+  ck(`  ...${f.split("/")[1]}: the same`, calls(t, "useTruncated").length === lists && elements(t, "ShowAll").length === lists
      && elements(t, "ShowAll").every((s) => propText(s, "noun")));
 }
 

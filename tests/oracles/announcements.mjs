@@ -443,8 +443,9 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
     .filter((e) => propText(e, "label") === '"Language on this tablet"');
   ck("  ...drawn only while there is a language to choose besides English, title and all",
      pick.length === 1 && guardsOf(pick[0]).includes("languages.length > 1") && !/so far|Only English/.test(settings), pick.map(guardsOf));
-  ck("  ...the chats' menus under a column named \"Language VESTA writes in\"",
-     /<div className="settings-list-head">\s*<span>Chat<\/span>\s*<span>Language VESTA writes in<\/span>/.test(
+  // owner, 2026-11-06: each chat the Cockpit's card, its menu its one field, named as the column was
+  ck("  ...each chat's menu named \"Language VESTA writes in\"",
+     /<span className="card-field-label">Language VESTA writes in<\/span>\s*<Dropdown className="recipients-language"/.test(
        readFileSync(new URL("../../src/components/settings/WhoGetsMessages.tsx", import.meta.url), "utf8")));
 }
 

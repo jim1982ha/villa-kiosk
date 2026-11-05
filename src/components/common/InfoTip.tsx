@@ -10,6 +10,12 @@
 // last line). It lived inside the (i), absolute, capped at 420 px and scrolling inside itself: the Overview's table
 // did not fit, its note stopped mid-sentence, and a window's scrolling body could clip it. Now it is measured and
 // placed on the screen (infoTipPlacement), as tall as it needs, the Dropdown's way.
+//
+// ⚠️ AN ICON CAN BE ITS BUTTON (owner, 2026-11-06: "each card shows the specific icon's tooltip"): `trigger` draws a
+// card's source icon in place of the (i) (sourceIcons IconTip), the same card, placement, closing and hover grace.
+// ⚠️ A PRESS ON IT IS ITS OWN: its button and its card (a portal is inside it in React's tree) stop the press, the
+// tap and the hold's keys from reaching what holds them — a card's tap opens it, its hold erases it (RecordCard,
+// ErasableRow) — as a card's bar does (ActionsRow). Outside-close and Escape listen before anything (useOutsideClose).
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -20,9 +26,18 @@ import { infoTipPlacement, INFO_TIP_WIDTH } from "./infoTipPlacement";
 /** How long the pointer may be between the (i) and its card before a hover-opened card closes. */
 const HOVER_GRACE_MS = 150;
 
-export default function InfoTip({ label, children, className, width = INFO_TIP_WIDTH }: {
+/** A press inside the (i) or its card stays there (see above); Enter and Space are a hold's keys (useLongPress). */
+export const KEEP_PRESS = {
+  onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+  onClick: (e: React.MouseEvent) => e.stopPropagation(),
+  onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); },
+};
+
+export default function InfoTip({ label, children, className, width = INFO_TIP_WIDTH, trigger }: {
   /** What the button is for, read by a screen reader ("How this list is kept up to date"). */
   label: string;
+  /** What the button shows in place of the (i): a card's source icon (sourceIcons IconTip). */
+  trigger?: ReactNode;
   children: ReactNode;
   /** Extra class on the wrapper. */
   className?: string;
@@ -68,10 +83,10 @@ export default function InfoTip({ label, children, className, width = INFO_TIP_W
 
   return (
     <span ref={ref} className={`info-tip${open ? " open" : ""}${className ? ` ${className}` : ""}`}
-      onPointerEnter={hoverIn} onPointerLeave={hoverOut}>
-      <button type="button" className="info-btn" aria-label={label} aria-expanded={open}
+      onPointerEnter={hoverIn} onPointerLeave={hoverOut} {...KEEP_PRESS}>
+      <button type="button" className={trigger ? "info-btn info-btn-icon" : "info-btn"} aria-label={label} aria-expanded={open}
         onClick={() => setOpen((v) => hovering.current || !v)}>
-        <Info size={16} />
+        {trigger ?? <Info size={16} />}
       </button>
       {open && createPortal(
         <div ref={pop} className="info-pop" role="tooltip" style={pos ?? { visibility: "hidden", width: `min(${width}px, calc(100vw - 24px))` }}

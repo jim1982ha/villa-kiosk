@@ -1,7 +1,6 @@
 // src/components/settings/BindingsTable.tsx
-// Unified editor for all 3D-object → entity bindings. Each row lets you
-// change which entity the object controls AND edit its display metadata
-// (type, label, requires-confirmation) — all in one place. Room is NOT
+// Unified editor for all 3D-object → entity bindings: each card (BindingRow) changes which entity the object controls;
+// its display metadata is the device's, in Devices. Room is NOT
 // editable here (or anywhere in the kiosk) any more — see config/devicePlace.ts's
 // resolveEntityRoom docstring for why.
 //
@@ -18,30 +17,31 @@
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
-import { FoldToggle } from "@/components/common/FoldedList";
-import IdText from "@/components/common/IdText";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import EntityPicker from "./EntityPicker";
 import Fold from "./Fold";
-import BindingRow from "./BindingRow";
+import { BoundObjectCard, UnboundObjectCard, UnshownEntityCard } from "./BindingRow";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 import { addMapping, bindMesh, unbindMesh } from "@/config/mappingEdits";
 import { loadMeshCatalog } from "@/utils/meshCatalog";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { unshownEntities } from "@/config/deviceGroups";
-import { useDeviceIdentity } from "@/config/VillaModel";
+import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
-import { countOf } from "@/utils/countOf";
+
+/** The list the section shows: its bound objects, its objects bound to nothing, the entities no object shows. */
+type ListView = "bound" | "unbound" | "unshown";
 
 export default function BindingsTable({ title, tip }: { title: string; tip?: ReactNode }) {
   // THE name a device is shown by (useEntityLabel) — this list printed HA's raw friendly_name.
   const entityLabel = useEntityLabel();
   const { config, update } = useConfig();
-  const { entities, suppressedEntityIds, entityAreaNames } = useHA();
-  const [showBound, setShowBound] = useState(false);
-  const [showUnbound, setShowUnbound] = useState(false);
-  const [showUnmappedHa, setShowUnmappedHa] = useState(false);
+  const { entities, suppressedEntityIds } = useHA();
+  const roomOf = useCardRoom();
+  // ⚠️ THE TITLE'S COUNTS OPEN THE LISTS, ONE AT A TIME (owner, 2026-11-06: "4 bound · 829 unbound · 88 not shown" in the
+  // title, then again as a line of three toggles under it): bound first
+  const [view, setView] = useState<ListView>("bound");
   // "Pre-configure a new entity" — moved here from ConfigEditor.tsx (Auto-
   // detected entity settings): sets label/room/panel type for an entity_id
   // whose 3D object doesn't exist YET, so it's ready the moment a matching
@@ -81,6 +81,8 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
     }),
     [entities, config.entityMap, folding, suppressedEntityIds],
   );
+  const boundShown = useTruncated(bound);
+  const unboundShown = useTruncated(unbound);
   const unmappedShown = useTruncated(unmappedHaEntities);
 
   // Latest entities via a ref, read inside the stable callbacks below (the
@@ -100,7 +102,14 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
           were another section — it is this section's way to add an entity. */}
       {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
 
-      <Fold title={title} tip={tip} summary={`${bound.length} bound · ${unbound.length} unbound · ${unmappedHaEntities.length} not shown`}>
+      <Fold title={title} tip={tip} views={{
+        items: [
+          { key: "bound", words: `${bound.length} bound` },
+          { key: "unbound", words: `${unbound.length} unbound` },
+          { key: "unshown", words: `${unmappedHaEntities.length} not shown` },
+        ],
+        shown: view, onShow: (k) => setView(k as ListView),
+      }}>
 
       <div style={{ marginBottom: 20 }}>
         <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
@@ -134,84 +143,35 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
         </div>
       </div>
 
-      {bound.length === 0 && (
-        <p className="muted body-text mt">No objects bound yet.</p>
-      )}
-
-      {/* ⚠️ THE THREE LISTS' BUTTONS ON ONE LINE (owner, 2026-10-14), each list opening under them; the unmapped
-          list is the inverse audit — informational only, there is no mesh here to bind those TO. */}
-      <div className="row mt" style={{ gap: 4, flexWrap: "wrap" }}>
-        {bound.length > 0 && (
-          <FoldToggle open={showBound} onToggle={() => setShowBound((s) => !s)}>
-            {countOf(bound.length, "bound object")}
-          </FoldToggle>
-        )}
-        {catalog.length > 0 && (
-          <FoldToggle open={showUnbound} onToggle={() => setShowUnbound((s) => !s)}>
-            {countOf(unbound.length, "unbound object")}
-          </FoldToggle>
-        )}
-        {unmappedHaEntities.length > 0 && (
-          <FoldToggle open={showUnmappedHa} onToggle={() => setShowUnmappedHa((s) => !s)}>
-            {countOf(unmappedHaEntities.length, "entity", "entities")} not shown
-          </FoldToggle>
-        )}
-      </div>
-
-      {showBound && bound.map((mesh) => (
-        <BindingRow
-          key={mesh}
-          mesh={mesh}
-          entityId={config.meshBindings[mesh]}
-          onBind={bind}
-          onUnbind={unbind}
-        />
-      ))}
-
-      {showUnbound &&
-        unbound.map((mesh) => (
-          <div key={mesh} className="binding-row">
-            <div className="binding-row-object"><IdText id={mesh} /></div>
-            <div className="binding-row-entity">
-              <EntityPicker
-                onChange={(id) => bind(mesh, id)}
-                placeholder="Bind to entity…"
-                allowCustom
-              />
-            </div>
-            <span aria-hidden />
-          </div>
-        ))}
-
-      {catalog.length === 0 && (
-        <p className="muted body-text mt">No 3D model loaded yet.</p>
-      )}
-
-      {showUnmappedHa && (
-        <>
-          <p className="muted body-text mt">Not on the map:</p>
-          {unmappedShown.visible.map((id) => (
-            <div
-              key={id}
-              className="row spread"
-              style={{ gap: 12, padding: "8px 0", borderTop: "1px solid var(--hairline)" }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "var(--text-sm)" }}>{entityLabel(id)}</div>
-                <div style={{ fontSize: "var(--text-2xs)", color: "var(--text-secondary)" }}>
-                  <IdText id={id} />
-                </div>
-              </div>
-              {entityAreaNames[id] && (
-                <div style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", flex: "0 0 auto" }}>
-                  {entityAreaNames[id]}
-                </div>
-              )}
-            </div>
+      {/* each record the Cockpit's card (BindingRow), the list the title's count opened */}
+      {view === "bound" && (bound.length === 0 ? <p className="muted body-text mt">No objects bound yet.</p> : (
+        <div className="fm-list settings-cards">
+          {boundShown.visible.map((mesh) => (
+            <BoundObjectCard key={mesh} mesh={mesh} entityId={config.meshBindings[mesh]}
+              room={roomOf({ entityId: config.meshBindings[mesh] })} onBind={bind} onUnbind={unbind} />
           ))}
-          <ShowAll list={unmappedShown} noun="entity" plural="entities" />
-        </>
-      )}
+        </div>
+      ))}
+      {view === "bound" && <ShowAll list={boundShown} noun="bound object" />}
+
+      {view === "unbound" && (catalog.length === 0 ? <p className="muted body-text mt">No 3D model loaded yet.</p>
+        : unbound.length === 0 ? <p className="muted body-text mt">Every 3D object is bound.</p> : (
+        <div className="fm-list settings-cards">
+          {unboundShown.visible.map((mesh) => <UnboundObjectCard key={mesh} mesh={mesh} onBind={bind} />)}
+        </div>
+      ))}
+      {view === "unbound" && <ShowAll list={unboundShown} noun="unbound object" />}
+
+      {/* the inverse audit: entities no 3D object shows */}
+      {view === "unshown" && (unmappedHaEntities.length === 0 ? <p className="muted body-text mt">Every entity is on the map.</p> : (
+        <div className="fm-list settings-cards">
+          {unmappedShown.visible.map((id) => (
+            <UnshownEntityCard key={id} entityId={id} name={entityLabel(id)} room={roomOf({ entityId: id })}
+              objects={unbound} onBind={bind} />
+          ))}
+        </div>
+      ))}
+      {view === "unshown" && <ShowAll list={unmappedShown} noun="entity" plural="entities" />}
       </Fold>
     </div>
   );

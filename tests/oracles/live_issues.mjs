@@ -261,7 +261,8 @@ ck("  ...a profile is the top bar's badge: its letters in a circle (O, FM, G), i
    && /source-role-badge two[^"]*"[^>]*>FM</.test(people) && /class="source-role-badge[^"]*"[^>]*>G</.test(people), people);
 ck("  ...every source has its icon and its words in the (i)'s legend",
    S.ISSUE_SOURCES.every((x) => I.SOURCE_ICON[x] && I.SOURCE_WORDS[x])
-   && /SOURCE_ICON\[r\.source\]/.test(readFileSync(new URL("../../src/components/fm/FaultTiming.tsx", import.meta.url), "utf8")));
+   && S.ISSUE_SOURCES.every((x) => draw(h(I.TimingName, { k: x })).includes(draw(h(I.SOURCE_ICON[x], { size: 15, "aria-hidden": true })))
+     && draw(h(I.TimingName, { k: x })).includes(`<b>${I.SOURCE_WORDS[x]}</b>`)));
 
 console.log("\n  the Recap's readiness says what is found, never the goal over a contradiction (owner, 2026-10-14):");
 const { buildReadiness } = await import("@/fm/readiness");
@@ -309,14 +310,14 @@ ck("  ...nothing open: the goal is met, and said once", allClear.state === "pass
   const drawn = draw(h(ReadinessChecks, { readiness: result, label: (id) => id, onOpenEntity: () => {}, onOpenCheck: () => {}, onGo: () => {} }));
   // owner, 2026-11-05: "faults" opens Inbox › Open issues on them, "tickets" the Tickets tab; the icons before "faults"
   ck("  ...the Recap draws those icons in the line, before \"faults\", and its two words open their place",
-     text(drawn).includes('|Check the |G|[icon][icon]| |faults| in Inbox › Open issues, or the |tickets| in Tickets.|')
+     text(drawn).includes('|Check the |G|[icon]|[icon]| |faults| in Inbox › Open issues, or the |tickets| in Tickets.|')
      && (drawn.match(/<button type="button" class="fm-text-link">(faults|tickets)<\/button>/g) ?? []).length === 2
      && JSON.stringify(mixedOpen.goes) === JSON.stringify([{ word: "faults", to: { place: "faults", ids: ["x.n1", "x.n2", "x.a1", "x.g"] } },
        { word: "tickets", to: { place: "tickets" } }]), text(drawn));
   // owner, 2026-11-05: "always expanded (remove the capability to collapse the card)"
   ck("  ...the checks are always shown under their verdict: nothing folds",
      text(drawn).includes("|Ready, with things worth fixing|0 of 1 checks passing|") && drawn.includes("4 open faults")
-     && !/aria-expanded|fm-headline-toggle/.test(drawn), text(drawn));
+     && !/aria-expanded|fm-headline-toggle/.test(drawn.replace(/<button type="button" class="info-btn info-btn-icon"[^>]*>/g, "")), text(drawn));
   // owner, 2026-11-05: "show the device pills concerned by either the Ticket or Faults … never duplicate device"
   const pump = pumpBy((id) => (id.includes("pump") ? "switch.pump" : id));
   ck("  ...its devices as chips, as All devices reporting's: each device once (a pump's ticket and fault are one chip)",

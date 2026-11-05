@@ -9,20 +9,24 @@
 // line with a chevron after the title.
 import { useState, type ReactNode } from "react";
 import InfoTip from "@/components/common/InfoTip";
-import { ListSection } from "@/components/common/FoldedList";
+import { ListSection, type SectionViews } from "@/components/common/FoldedList";
 
-export default function Fold({ title, tip, summary, children }: {
+export default function Fold({ title, tip, summary, views, children }: {
   /** The section's title. */
   title: string;
   /** Its (i): what the section is for (owner, 2026-10-22: no visible description). */
   tip?: ReactNode;
   /** What is inside, after the title ("9 groups · 15 suggested"). */
-  summary: string;
+  summary?: string;
+  /** In place of the summary: its counts, each opening its own list (Bound 3D objects); a count tapped opens the
+   *  section on its list. */
+  views?: SectionViews;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <ListSection title={title} summary={summary} open={open} onToggle={() => setOpen((v) => !v)} bare
+      views={views && { ...views, onShow: (key) => { setOpen(true); views.onShow(key); } }}
       tip={tip ? <InfoTip label={`About ${title}`}>{tip}</InfoTip> : undefined}>
       {children}
     </ListSection>

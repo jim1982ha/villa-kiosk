@@ -19,12 +19,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
-import { Search } from "lucide-react";
+import { Link2, Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { forgetMappings, repointDevice } from "@/config/mappingEdits";
 import { matchesQuery, rowMatches } from "@/config/deviceRecord";
 import { useHA } from "@/ha/HAStateStore";
-import { useVillaModel } from "@/config/VillaModel";
+import { useCardRoom, useVillaModel } from "@/config/VillaModel";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
+import RecordCard from "@/components/fm/RecordCard";
+import IdText from "@/components/common/IdText";
 import EntityMapRow from "./EntityMapRow";
 import EntityPicker from "./EntityPicker";
 import { countOf } from "@/utils/countOf";
@@ -34,6 +37,9 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   const { entities } = useHA();
   const villa = useVillaModel();
   const { sceneEntityIds } = villa;
+  // each card's name and room, as every screen says them (a row reads no live table of its own: EntityMapRow)
+  const nameOf = useEntityLabel();
+  const roomOf = useCardRoom();
   // Seed the filter when opened from a device panel's edit shortcut, so that
   // entity's row is shown immediately.
   const [search, setSearch] = useState(initialSearch ?? "");
@@ -61,7 +67,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   // model source), which is what the surrounding modal scrolls to by default.
   // Ref'd on the matched row below; only fires once, and only for that entry
   // point — a manual search shouldn't yank the scroll position around.
-  const matchedRowRef = useRef<HTMLTableRowElement>(null);
+  const matchedRowRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (initialSearch) matchedRowRef.current?.scrollIntoView({ block: "start" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -178,67 +184,55 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
         <p className="muted body-text mt">No auto-detected entities yet.</p>
       )}
 
-      {orphans.map((id) => (
-        <div key={id} className="config-stale-notice config-repoint">
-          <div>
-            <strong>No entity {id} exists.</strong>
-            <div className="muted body-text" style={{ marginTop: 2 }}>
-              A 3D object in the model is named after it, so it shows as missing everywhere. If the
-              entity was renamed, point the object at its new name; otherwise rename or remove the object in the model.
-            </div>
-            <div className="remap-row" style={{ marginTop: 8 }}>
-              <div className="remap-picker">
-                <EntityPicker value={repointTo[id]} onChange={(v) => setRepointTo((m) => ({ ...m, [id]: v }))}
-                  hideCurrentLabel placeholder="The entity this 3D object is now…" />
-              </div>
-              <div className="remap-actions">
-                <button className="btn primary" disabled={!repointTo[id] || repointTo[id] === id} onClick={() => repoint(id)}>
-                  Point it there
+      {/* a 3D object whose entity is gone: a card like every device's, its state "No such entity", its one action in
+          its bar (owner, 2026-11-06: every record of Settings is the Cockpit's card) */}
+      {orphans.length > 0 && (
+        <div className="fm-list settings-cards">
+          {orphans.map((id) => (
+            <RecordCard key={id} title={<IdText id={id} />} room={roomOf({ entityId: id })}
+              status={{ text: "No such entity", tone: "tone-warn" }}
+              // what it means is its state's (i), never a visible paragraph (owner, 2026-10-22)
+              statusTip="A 3D object in the model is named after it, so it shows as missing everywhere. If the entity was renamed, point the object at its new name; otherwise rename or remove the object in the model."
+              body={<EntityPicker value={repointTo[id]} onChange={(v) => setRepointTo((m) => ({ ...m, [id]: v }))}
+                hideCurrentLabel placeholder="The entity this 3D object is now…" />}
+              actions={
+                <button type="button" className="btn ghost fm-bar-main" disabled={!repointTo[id] || repointTo[id] === id} onClick={() => repoint(id)}>
+                  <Link2 size={16} aria-hidden />Point it there
                 </button>
-              </div>
-            </div>
-          </div>
+              } />
+          ))}
         </div>
-      ))}
+      )}
       {allRows.length > 0 && entries.length === 0 && orphans.length === 0 && (
         <p className="muted body-text mt">No entities match “{search}”.</p>
       )}
 
+      {/* ⚠️ ONE CARD PER DEVICE, THE COCKPIT'S (RecordCard, owner 2026-11-06): it was a table drawn as cards */}
       {entries.length > 0 && (
-        <table className="config-table">
-          <thead>
-            <tr>
-              <th>Shown</th>
-              <th>Entity ID</th>
-              <th>Type</th>
-              <th>Category</th>
-              <th>Label</th>
-              <th>Linked entity</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.visible.map(({ id: key, mapping: m0, objects }) => (
-              <EntityMapRow
-                key={key}
-                entryKey={key}
-                mapping={m0}
-                objects={objects}
-                entity={entities[key]}
-                stale={staleSet.has(key)}
-                expanded={expandedKeys.has(key)}
-                editing={remapKey === key}
-                remapNewId={remapKey === key ? remapNewId : undefined}
-                matchedRowRef={key === initialSearch ? matchedRowRef : undefined}
-                onToggleExpanded={toggleExpanded}
-                onStartRemap={startRemap}
-                onRemapChange={setRemapNewId}
-                onRemapApply={remapEntity}
-                onRemapCancel={cancelRemap}
-                onRemove={sceneEntityIds.has(key) ? undefined : remove}
-              />
-            ))}
-          </tbody>
-        </table>
+        <div className="fm-list settings-cards">
+          {shown.visible.map(({ id: key, mapping: m0, objects }) => (
+            <EntityMapRow
+              key={key}
+              entryKey={key}
+              mapping={m0}
+              objects={objects}
+              entity={entities[key]}
+              name={nameOf(key)}
+              room={roomOf({ entityId: key })}
+              stale={staleSet.has(key)}
+              expanded={expandedKeys.has(key)}
+              editing={remapKey === key}
+              remapNewId={remapKey === key ? remapNewId : undefined}
+              matchedRowRef={key === initialSearch ? matchedRowRef : undefined}
+              onToggleExpanded={toggleExpanded}
+              onStartRemap={startRemap}
+              onRemapChange={setRemapNewId}
+              onRemapApply={remapEntity}
+              onRemapCancel={cancelRemap}
+              onRemove={sceneEntityIds.has(key) ? undefined : remove}
+            />
+          ))}
+        </div>
       )}
       <ShowAll list={shown} noun="entity" plural="entities" />
 

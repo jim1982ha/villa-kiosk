@@ -28,13 +28,23 @@ export function FoldToggle({ open, onToggle, children, className = "" }: {
   );
 }
 
+/** ⚠️ A SECTION'S COUNTS OPEN ITS LISTS (owner, 2026-11-06: Bound 3D objects said "4 bound · 829 unbound · 88 not
+ *  shown" in its title and again as a line of three toggles under it): each count after the title is the way to its
+ *  own list, one shown at a time, the one shown marked. */
+export interface SectionViews {
+  items: readonly { key: string; words: string }[];
+  /** The list shown while the section is open. */
+  shown: string;
+  onShow: (key: string) => void;
+}
+
 /** One section of a list — Open issues, Notifications, Closed, Recent work — its name and count, its (i) right after
  *  them (`tip`, owner 2026-10-31: next to the words, not at the far end), folded or open by its chevron (owner,
  *  2026-10-28: each collapsible). Advanced Settings' folded sections are this too (settings/Fold): `summary` says what
  *  is inside where a count alone would not ("1 group · 2 suggested"), `bare` leaves its content as it is drawn (a
  *  section's working part, not a list of cards). */
-export function ListSection({ title, count, summary, open, onToggle, tip, bare = false, children }: {
-  title: string; count?: number; summary?: string; open: boolean; onToggle: () => void; tip?: ReactNode;
+export function ListSection({ title, count, summary, views, open, onToggle, tip, bare = false, children }: {
+  title: string; count?: number; summary?: string; views?: SectionViews; open: boolean; onToggle: () => void; tip?: ReactNode;
   bare?: boolean; children: ReactNode;
 }) {
   return (
@@ -43,8 +53,19 @@ export function ListSection({ title, count, summary, open, onToggle, tip, bare =
         <div className="with-tip">
           <FoldToggle className="messages-section-toggle settings-section-title" open={open} onToggle={onToggle}>
             <span className="fold-toggle-words">{title}{count ? ` (${count})` : ""}</span>
-            {summary && <span className="section-summary">{summary}</span>}
+            {summary && !views && <span className="section-summary">{summary}</span>}
           </FoldToggle>
+          {views && (
+            <span className="section-summary section-views" role="group" aria-label={`${title}: which list`}>
+              {views.items.map((v) => {
+                const shown = open && v.key === views.shown;
+                return (
+                  <button key={v.key} type="button" className={`section-view${shown ? " shown" : ""}`} aria-pressed={shown}
+                    onClick={() => views.onShow(v.key)}>{v.words}</button>
+                );
+              })}
+            </span>
+          )}
           {tip}
         </div>
       </div>

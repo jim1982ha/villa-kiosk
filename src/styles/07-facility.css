@@ -562,11 +562,9 @@
 .fm-doc-table th { color: var(--text-secondary); font-weight: 600; }
 .fm-doc-table td:first-child, .fm-doc-table th:first-child { padding-left: 0; }
 
-/* Config Editor: a row whose entity Home Assistant no longer knows about, and
-   the banner offering to clear them out in one go. Flagged rather than
-   auto-removed — the row may still hold a label/room worth re-pointing at the
-   renamed entity via "Change entity ID". */
-.config-row-stale > td { background: color-mix(in srgb, var(--status-danger) 8%, transparent); }
+/* Config Editor: the banner offering to clear out, in one go, the devices Home Assistant no longer knows about (each
+   says so as its card's state). Flagged rather than auto-removed — a card may still hold a label/room worth
+   re-pointing at the renamed entity via "Change entity ID". */
 .config-stale-notice {
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
   margin-bottom: 12px; padding: 12px 14px; border-radius: 12px;

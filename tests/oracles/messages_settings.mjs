@@ -86,7 +86,7 @@ console.log("\n  each announcement's own seconds:");
 
 console.log("\n  the rows, drawn:");
 {
-  const { h, draw } = await import("../consistency/screen.mjs");
+  const { h, draw, inside } = await import("../consistency/screen.mjs");
   const { PendingFields } = await import("@/hooks/usePendingField");
   const { PendingEdits } = await import("@/config/pendingEdits");
   const { FullScreenAnnouncements } = await import("@/components/settings/MessagesSettings");
@@ -102,17 +102,17 @@ console.log("\n  the rows, drawn:");
   // owner, 2026-11-04: the search box under the list became an add on the list's title line (common/AddOnLine);
   // owner, 2026-11-06: that line sits ABOVE the card, its add a "+ Add" button as Schedule's "Add a task", and the card's
   // heading holds its columns' words only: "Time" over the time, nothing over the ✕; the time and its unit joined, "15s"
-  const before = html.slice(0, html.indexOf('<div class="settings-list">'));
-  const head = /<div class="settings-list-head fs-row">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
+  const before = html.slice(0, html.indexOf('<div class="fm-list'));
   ck("  ...the add on the list's title line above the card, a worded \"+ Add\" (no search box until it is pressed)",
      /<div class="add-line"><span class="add-line-title"><span class="settings-list-title">On every tablet<\/span><\/span>[\s\S]*<button[^>]*class="btn ghost add-line-button"[^>]*aria-label="Add an announcement"[^>]*><svg[\s\S]*?<\/svg> Add<\/button>/.test(before)
      && !/placeholder="Add an announcement…"/.test(html), before.slice(-600));
-  const firstRow = /<div class="settings-list-row fs-row">([\s\S]*?)<\/div>\s*(?:<div class="settings-list-row|$)/.exec(html)?.[1] ?? "";
-  ck("  ...the card's heading: its columns' words only, \"Time\" over the time, nothing over the ✕",
-     head.trim() === '<span>Announcement</span><span class="fs-head-time">Time</span><span class="fs-head-remove" aria-hidden="true"></span>', head);
-  ck("  ...a row's time: its number and its \"s\" joined in one field (\"15s\"), its ✕ the small icon button",
-     /<span class="unit-field"><input[^>]*value="15"[^>]*\/><span class="unit-field-unit" aria-hidden="true">s<\/span><\/span>/.test(firstRow)
-     && /<button type="button" class="icon-btn-sm" aria-label="Take 🔔 Visitor off full screen"/.test(firstRow), firstRow);
+  // owner, 2026-11-06: each announcement the Cockpit's card (RecordCard): its title in the strip, its time on screen its
+  // one field, Remove its bar; no table heading any more
+  const firstCard = inside(html, "fm-record-card");
+  ck("  ...each announcement a card: its title in its strip, its time its one field, Remove in its bar",
+     inside(firstCard, "fm-record-name").includes("🔔 Visitor") && !/settings-list"|settings-list-(head|row)|fs-row/.test(html)
+     && /<span class="card-field-label">On screen<\/span><span class="unit-field"><input[^>]*value="15"[^>]*\/><span class="unit-field-unit" aria-hidden="true">s<\/span><\/span>/.test(firstCard)
+     && /<div class="fm-record-actions"[^>]*><button type="button" class="btn ghost" aria-label="Take 🔔 Visitor off full screen"><svg[\s\S]*?<\/svg>Remove<\/button><\/div>/.test(firstCard), firstCard);
   ck("  ...no \"Ring shown for\" anywhere", !/Ring shown for/i.test(html));
 }
 

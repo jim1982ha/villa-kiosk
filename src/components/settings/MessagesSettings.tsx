@@ -9,10 +9,10 @@ import { FULL_SCREEN_S_DEFAULT, fullScreenSecondsOk, type AppConfig, type FullSc
 import { announcedTitles } from "@/messages/announcements";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import SearchPicker from "@/components/common/SearchPicker";
-import Tip from "@/components/common/Tip";
 import AddOnLine from "@/components/common/AddOnLine";
 import UnitField from "@/components/common/UnitField";
-import { X } from "lucide-react";
+import RecordCard from "@/components/fm/RecordCard";
+import { Maximize, X } from "lucide-react";
 
 interface Props {
   /** The picked announcements as the dialog shows them (its draft's view). */
@@ -21,7 +21,7 @@ interface Props {
   onChange: (next: FullScreenAnnouncement[]) => void;
 }
 
-/** The picked announcements, one row each (its title; its seconds; its ✕), and a picker of the titles the add-on keeps
+/** The picked announcements, one card each (its title; its seconds; Remove), and a picker of the titles the add-on keeps
  *  (the page's one list). A title no longer kept stays picked until its ✕: the villa may announce it again. A newly
  *  picked one starts at FULL_SCREEN_S_DEFAULT. */
 export function FullScreenAnnouncements({ value, onChange }: Props) {
@@ -42,17 +42,15 @@ export function FullScreenAnnouncements({ value, onChange }: Props) {
           empty={offered.length > 0 ? undefined : !loaded ? "Reading what the villa has announced…"
             : "Nothing else announced yet: each announcement the villa makes is listed here."} />}
       </AddOnLine>
-      <div className="settings-list">
-        <div className="settings-list-head fs-row">
-          <span>Announcement</span>
-          {value.length > 0 && <span className="fs-head-time">Time</span>}
-          {value.length > 0 && <span className="fs-head-remove" aria-hidden />}
+      {/* ⚠️ EACH ANNOUNCEMENT THE COCKPIT'S CARD (owner, 2026-11-06): its title in the strip, its time on screen its
+          one field, Remove its bar; it was a row of a table under "Announcement · Time" */}
+      {value.length === 0 ? <p className="muted body-text">None yet: add one above.</p> : (
+        <div className="fm-list settings-cards">
+          {value.map((f) => (
+            <FullScreenCard key={f.title} item={f} onRemove={() => onChange(value.filter((x) => x.title !== f.title))} />
+          ))}
         </div>
-        {value.length === 0 && <div className="settings-list-row muted body-text">None yet: add one above.</div>}
-        {value.map((f) => (
-          <FullScreenRow key={f.title} item={f} onRemove={() => onChange(value.filter((x) => x.title !== f.title))} />
-        ))}
-      </div>
+      )}
     </>
   );
 }
@@ -66,30 +64,32 @@ export function secondsWrite(title: string, text: string): ((c: AppConfig) => Pa
   return (c) => ({ fullScreen: c.fullScreen.map((f) => (f.title === title ? { ...f, seconds: n } : f)) });
 }
 
-/** One picked announcement: its title, how many seconds it fills the screen, its ✕. The seconds commit on blur, Enter or
- *  a pause, in the dialog's one pending store (usePendingField). */
-function FullScreenRow({ item, onRemove }: { item: FullScreenAnnouncement; onRemove: () => void }) {
+/** One picked announcement: its title, how many seconds it fills the screen, Remove. The seconds commit on blur, Enter
+ *  or a pause, in the dialog's one pending store (usePendingField). */
+function FullScreenCard({ item, onRemove }: { item: FullScreenAnnouncement; onRemove: () => void }) {
   const field = usePendingField<string>(`fullScreen:${item.title}`, FIELD_COMMIT_MS);
-  const removeLabel = `Take ${item.title} off full screen`;
   return (
-    <div className="settings-list-row fs-row">
-      <span className="body-text fs-row-title">{item.title}</span>
-      {/* the seconds and their unit joined, "10s" (owner, 2026-11-06: a box and a separate "s"; rules: durations are
-          joined), in one field (common/UnitField) */}
-      <UnitField unit="s">
-        <input
-          inputMode="numeric" aria-label={`Seconds ${item.title} fills the screen`}
-          value={field.shown ?? String(item.seconds)}
-          onChange={(e) => field.draft(e.target.value, secondsWrite(item.title, e.target.value))}
-          onBlur={field.flush}
-          onKeyDown={(e) => e.key === "Enter" && field.flush()}
-        />
-      </UnitField>
-      <Tip text={removeLabel}>
-        <button type="button" className="icon-btn-sm" aria-label={removeLabel} onClick={onRemove}>
-          <X size={16} aria-hidden />
+    <RecordCard title={item.title} lead={<Maximize size={16} aria-hidden />}
+      body={
+        <div className="card-field">
+          <span className="card-field-label">On screen</span>
+          {/* the seconds and their unit joined, "10s" (owner, 2026-11-06: a box and a separate "s"; rules: durations
+              are joined), in one field (common/UnitField) */}
+          <UnitField unit="s">
+            <input
+              inputMode="numeric" aria-label={`Seconds ${item.title} fills the screen`}
+              value={field.shown ?? String(item.seconds)}
+              onChange={(e) => field.draft(e.target.value, secondsWrite(item.title, e.target.value))}
+              onBlur={field.flush}
+              onKeyDown={(e) => e.key === "Enter" && field.flush()}
+            />
+          </UnitField>
+        </div>
+      }
+      actions={
+        <button type="button" className="btn ghost" aria-label={`Take ${item.title} off full screen`} onClick={onRemove}>
+          <X size={16} aria-hidden />Remove
         </button>
-      </Tip>
-    </div>
+      } />
   );
 }

@@ -315,6 +315,34 @@ const TONE: Record<string, string> = {
   csp: "var(--status-warning)",
 };
 
+/** One event, one line: ⚠️ ITS TIME FIRST, THEN ITS KIND, ITS DEVICE, ITS WORDS (owner, 2026-11-06: the kind led and
+ *  the time sat at the far right); on a phone its words take the line under the other three (08-shared.css). */
+export function TelemetryRow({ e }: { e: TelemetryEvent }) {
+  return (
+    /* Layout lives in styles.css (.telemetry-row), NOT inline: the
+       phone tier has to re-flow this row onto two lines, and a media
+       query cannot override an inline style prop. */
+    <div className="telemetry-row" title={e.ua}>
+      {/* the app's one moment, on the villa's clock, with its seconds (owner, 2026-11-06: it was the store's
+          "2026-11-05 17:55:13Z") */}
+      <span className="muted telemetry-time">{telemetryTime(e.at)}</span>
+      <span className="telemetry-kind" style={{ color: TONE[e.kind] ?? "var(--text-primary)" }}>
+        {e.kind}
+      </span>
+      <span className="muted telemetry-meta">
+        {/* The build that produced the event. Without it, an event
+            logged minutes after a release is indistinguishable from
+            one produced BY that release — the add-on's frontend ships
+            inside the GHCR image, so a device can lag a push by a long
+            way. Older events predate the field and just show nothing. */}
+        {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}{e.v ? ` · v${e.v}` : ""}
+      </span>
+      <span className="telemetry-summary" title={summarise(e)}>{summarise(e)}</span>
+    </div>
+  );
+}
+
+
 /** The table only ever RENDERS this many rows (newest first) — the add-on
  *  already caps the underlying log server-side (the telemetry_max_events
  *  option, 500 by default — supervisor-proxy.py's ring), but 500 rows of
@@ -519,29 +547,10 @@ export default function TelemetryPanel() {
       )}
 
       {!!events?.length && (
-        <div className="config-table">
-          {paged.page.map((e, i) => (
-            /* Layout lives in styles.css (.telemetry-row), NOT inline: the
-               phone tier has to re-flow this row onto two lines, and a media
-               query cannot override an inline style prop. */
-            <div key={i} className="telemetry-row" title={e.ua}>
-              <span className="telemetry-kind" style={{ color: TONE[e.kind] ?? "var(--text-primary)" }}>
-                {e.kind}
-              </span>
-              <span className="muted telemetry-meta">
-                {/* The build that produced the event. Without it, an event
-                    logged minutes after a release is indistinguishable from
-                    one produced BY that release — the add-on's frontend ships
-                    inside the GHCR image, so a device can lag a push by a long
-                    way. Older events predate the field and just show nothing. */}
-                {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}{e.v ? ` · v${e.v}` : ""}
-              </span>
-              <span className="telemetry-summary" title={summarise(e)}>{summarise(e)}</span>
-              {/* the app's one moment, on the villa's clock, with its seconds (owner, 2026-11-06: it was the store's
-                  "2026-11-05 17:55:13Z") */}
-              <span className="muted telemetry-time">{telemetryTime(e.at)}</span>
-            </div>
-          ))}
+        // ⚠️ TIME FIRST, THEN THE KIND, THE DEVICE, THE WORDS (owner, 2026-11-06): a log read down its times; the time and
+        // the kind in columns of one width (the page's longest kind), so the rows align; on a phone the words under them
+        <div className="telemetry-list" style={{ ["--telemetry-kind" as string]: `${Math.max(...paged.page.map((e) => e.kind.length))}ch` }}>
+          {paged.page.map((e, i) => <TelemetryRow key={i} e={e} />)}
         </div>
       )}
       {!!events?.length && <Pager paged={paged} unit="event" />}
