@@ -202,7 +202,10 @@ class Vesta:
                                     thread=self.thread, run_job=self.run_code_job, facts=self.chat_facts)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
                                timezone=settings.timezone,
-                               story=lambda iid: self.notices.story(iid), restate_alert=self.thread.restate,
+                               story=lambda iid: self.notices.story(iid),
+                               # every copy says the take-on, keeping the buttons that still apply (owner, 2026-11-05)
+                               restate_alert=lambda iid, said: self.thread.restate(
+                                   iid, said, keyboard=lambda chat: self.buttons.still(iid, chat)),
                                rechecked=lambda: {r for sk in self.skills.all().values() for r in sk.rechecks},
                                nightly_at=self.nightly_at)
         # a fault offered in a chat, start to end (fault_offers.py, review 32)

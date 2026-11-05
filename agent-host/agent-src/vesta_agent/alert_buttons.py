@@ -49,11 +49,26 @@ class AlertButtons:
         """The buttons `skill` puts under an alert: its own, or those of a skill.yaml from before they were declared."""
         return getattr(skill, "buttons", None) or BEFORE_BUTTONS
 
+    def offered(self, skill, iid: int | str) -> list[dict]:
+        """The buttons `skill` offers under incident `iid` now: its own, less those offered only until it is taken on
+        (skill.yaml `until: taken`) once someone took it on (Incidents.taken). ⚠️ AS ON THE TABLET (owner, 2026-11-05):
+        a ticket in progress keeps Done and Need help; Not a problem and Open Ticket no longer apply."""
+        taken = self.incidents.taken(iid)
+        return [b for b in self.of(skill) if not (taken and b.get("until") == "taken")]
+
     def keyboard(self, iid: int, chat: int, skill_name: str) -> dict:
         """The buttons of incident `iid`, for a message to `chat` from `skill_name` (whose on_reply answers them)."""
         self.state.set_alert_skill(iid, chat, skill_name)
         return {"inline_keyboard": [[{"text": b["label"], "callback_data": button_data.make(button_data.ALERT, iid, b["option"])}
-                                     for b in self.of(self.skills.get(skill_name))]]}
+                                     for b in self.offered(self.skills.get(skill_name), iid)]]}
+
+    def still(self, iid: int | str, chat: int) -> dict | None:
+        """The buttons incident `iid`'s copy in `chat` keeps now (its skill's, as offered), None when it is closed or no
+        skill sent it there: a copy redrawn after a take-on (incident_thread.IncidentThread.restate)."""
+        skill_name = self.state.alert_skill(iid, chat)
+        if not skill_name or not self.open(iid) or not self.offered(self.skills.get(skill_name), iid):
+            return None
+        return self.keyboard(int(iid), chat, skill_name)
 
     async def press(self, chat: int, parts: list[str], person, toast: Callable[[str], Awaitable],
                     name: str | None = None, pressed: int | None = None, anywhere: bool = False) -> None:
@@ -67,7 +82,7 @@ class AlertButtons:
         skill_name = self.state.alert_skill(iid, chat) or (next(
             (k for c in self.thread.shown(int(iid)) if (k := self.state.alert_skill(iid, c))), None) if anywhere else None)
         skill = self.skills.get(skill_name) if skill_name else None
-        buttons = {b["option"]: b for b in self.of(skill)}
+        buttons = {b["option"]: b for b in self.offered(skill, iid)}
         if opt not in buttons:
             labels = [b["label"] for b in buttons.values()]
             offered = ", ".join(labels[:-1]) + " or " + labels[-1] if len(labels) > 1 else "".join(labels)
@@ -119,8 +134,9 @@ class AlertButtons:
                                 note_in={lang: pressed(word, name, "{time}", lang) for lang, word in labels.items()},
                                 interim=True)
         # the press, for the fault's card in the Kiosk (notice.Notices.story; owner, 2026-10-14)
-        note_press(self.state, int(iid), label, name, button["mark"], bool(button.get("closes")), labels,
-                   place=place or ON_TELEGRAM, told=bool(button.get("tells")))
+        # a take-on is said by its own step (restate's "Ticket opened by …"): no line of its own, as a close
+        note_press(self.state, int(iid), label, name, button["mark"], bool(button.get("closes") or button.get("takes")),
+                   labels, place=place or ON_TELEGRAM, told=bool(button.get("tells")))
         # ⚠️ TOLD TO THE AI (owner, 2026-10-23): a press goes to the agent, never into the conversation — the AI could
         # say an alert waits for an answer that was given here a minute before
         if self.facts is not None:

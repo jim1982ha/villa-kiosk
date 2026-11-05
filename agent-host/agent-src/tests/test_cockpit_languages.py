@@ -160,7 +160,7 @@ def test_not_a_problem_pressed_on_telegram_closes_it_as_the_cockpit_does(tmp_pat
     # owner, 2026-11-04: "Not a problem" beside Done and Need help, on Telegram as on the Cockpit's card
     v, k, uid = villa(tmp_path)
     labels = [b["label"] for b in next(m for m in k.messages.values() if m.get("buttons"))["buttons"]]
-    assert labels == ["Done", "Need help", "Not a problem"], labels          # the tablet's notice, as Telegram's
+    assert labels == ["Done", "Not a problem", "Open Ticket", "Need help"], labels          # the tablet's notice, as Telegram's
     run(v.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": FM_FR, "user_id": FM_FR,
                                             "message": {"message_id": v.thread.shown(1)[FM_FR]["mid"], "chat": {"id": FM_FR}},
                                             "bot": BOT}))

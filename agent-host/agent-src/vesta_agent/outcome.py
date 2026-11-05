@@ -42,8 +42,8 @@ import os
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from vesta_shared.message_format import STEPS
-from vesta_shared.result import FAULTS_CHANGED
+from vesta_shared.message_format import KIOSK_UNREACHED, STEPS
+from vesta_shared.result import FAULTS_CHANGED, TAKE_ON
 from vesta_shared.ha_client import error_short_chars
 
 from . import layout
@@ -331,6 +331,14 @@ class Outcome:
                 elif kind == "ticket":
                     if await self.tickets.create(a.get("summary", ""), a.get("entity_id") or None, a.get("note") or None):
                         done["tickets"] += 1
+                elif kind == TAKE_ON and str(a.get("incident_id") or "").isdigit():
+                    # Open Ticket on Telegram (owner, 2026-11-05): the Kiosk's own take-on, or a plain answer and the
+                    # buttons back — never a press that looks taken and is not
+                    iid = int(a["incident_id"])
+                    if await self.tickets.take_on(iid, str(a.get("by") or "")):
+                        done["tickets"] += 1
+                    elif self.thread is not None:
+                        await self.thread.unsettle(iid, KIOSK_UNREACHED, lambda c, i=iid: self.buttons.still(i, c))
                 elif kind == "snapshot.get":
                     photo = await camera_photo(self.reader, a.get("entity_id"))
                     if photo:

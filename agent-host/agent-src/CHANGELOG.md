@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.445 (5 November 2026)
+
+- One button order, and Open Ticket on Telegram (owner, 2026-11-05): the alert desk's `buttons` are done,
+  not_a_problem, open_ticket, need_help; open_ticket (labels in nine languages) `takes: true, until: taken`. skill.yaml
+  `takes` (on_reply takes the alert on as a ticket: its take-on says the press, `note_press` keeps none) and `until:
+  taken` (offered only until the alert is taken on) are read by `skills._buttons`; `AlertButtons.offered` leaves the
+  `until: taken` buttons out once `Incidents.taken` (the new `Notes.TAKEN_ON`, written by `Problems.taken_in_kiosk`,
+  or the TAKEN state); `Incidents.awaiting_answer` is "not closed". `desk.py reply --option open_ticket` returns
+  `result.take_on`; the engine writes the agreement's take-on step (`Kiosk.take_ticket`: status in_progress, `by` and
+  `who` the person) and runs the repair, whose `_take_in` reads it as the Kiosk's own (chase stopped, every copy
+  restated with `AlertButtons.still`); a Kiosk it cannot reach: `IncidentThread.unsettle` puts the buttons back under
+  `message_format.KIOSK_UNREACHED`. `taken_in_kiosk` answers while the alert is open (escalated too).
+  tests/test_open_ticket_telegram.py drives the callback through the reply hook (8 mutations, all red).
+
 ## 0.6.444 (5 November 2026)
 
 - One date format in every text a person reads (owner, 2026-11-05): `timeutil.day_label` writes the agreement's date

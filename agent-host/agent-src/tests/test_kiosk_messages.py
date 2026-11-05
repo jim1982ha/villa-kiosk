@@ -78,8 +78,8 @@ def test_an_alert_it_took_over_is_kept_and_a_reminder_replaces_it(agent, kiosk):
     assert rec["key"] == form.replace("{number}", "1"), "the key in the agreement's form, the one the tablet reads"
     assert {b["kind"] for b in rec["buttons"]} == {"i"} and all(b["label"] and b["id"].startswith("1:") for b in rec["buttons"])
     # its Done · Need help as Telegram shows them, none flagged (owner, 2026-10-29: the same wherever the alert shows)
-    assert [sorted(b) for b in rec["buttons"]] == [["id", "kind", "label"]] * 3 and \
-        [b["label"] for b in rec["buttons"]] == ["Done", "Need help", "Not a problem"], rec["buttons"]
+    assert [sorted(b) for b in rec["buttons"]] == [["id", "kind", "label"]] * 4 and \
+        [b["label"] for b in rec["buttons"]] == ["Done", "Not a problem", "Open Ticket", "Need help"], rec["buttons"]
     assert "callback_data" not in str(rec) and "inline_keyboard" not in str(rec), "VESTA's button kind and id, nothing else"
     scenario(agent, tick_20 := (lambda v: tick(v, 20)))
     assert list(kiosk.messages) == ["incident:1"], "the reminder REPLACES the alert's record: one record per thread"
@@ -593,7 +593,7 @@ def test_an_open_alert_with_no_step_since_the_tablet_kept_cards_gets_its_card_at
     assert any("Escalation sent" in line for line in rec["status"]), rec["status"]
     assert any("Alert sent" in line for line in rec["status"]) and any("Reminder sent" in line for line in rec["status"])
     assert sum("Escalation sent" in line for line in rec["status"]) == 1, rec["status"]
-    assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Need help", "Not a problem"], rec
+    assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Not a problem", "Open Ticket", "Need help"], rec
 
 
 def test_at_start_an_open_alerts_card_is_told_again_as_it_was_kept_never_guessed_from_the_chats(agent, kiosk):
@@ -672,7 +672,7 @@ def test_a_copy_the_kiosk_could_not_keep_is_sent_again_without_a_new_step(agent,
     kiosk.unreachable = False
     scenario(agent, _owed_now(agent))
     rec = kiosk.messages.get("incident:1")
-    assert rec and [b["label"] for b in rec.get("buttons", [])] == ["Done", "Need help", "Not a problem"], rec
+    assert rec and [b["label"] for b in rec.get("buttons", [])] == ["Done", "Not a problem", "Open Ticket", "Need help"], rec
     pushed = len(kiosk.pushed)
     scenario(agent, _owed_now(agent))
     assert len(kiosk.pushed) == pushed, "nothing owed once kept: never pushed again"
@@ -722,7 +722,7 @@ def test_open_alerts_reach_a_kiosk_that_was_down_when_the_agent_started(agent, k
     scenario(again, _owed_now(again))
     rec = kiosk.messages.get("incident:1")
     assert rec and any("Reminder sent" in line for line in rec["status"]), rec
-    assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Need help", "Not a problem"], rec
+    assert [b["label"] for b in rec.get("buttons", [])] == ["Done", "Not a problem", "Open Ticket", "Need help"], rec
 
 
 def test_an_owed_alert_card_survives_a_restart(agent, kiosk):

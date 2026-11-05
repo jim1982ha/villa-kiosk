@@ -124,6 +124,27 @@ class Tickets:
         return bool(await self.create(a.get("title") or task.get("summary") or "", task.get("entity_id") or None,
                                       result.fault_note(Problems(self._store()).check_of(task)), task["id"]))
 
+    async def take_on(self, iid: int, by: str) -> bool:
+        """Alert `iid` taken on as ONE ticket by the person `by` (result.take_on: Open Ticket on Telegram), as the Kiosk's
+        own Open Ticket on its card: the take-on step on the fault of its open task (Kiosk.take_ticket), then read back as
+        the Kiosk's (repair: _take_in, its press TAKE) — its chase stops, every chat says "Ticket opened by …", the
+        buttons that still apply kept. ⚠️ ONE MECHANISM: the press only writes what the Kiosk's button writes. False:
+        the Kiosk is not configured or cannot be reached, or the alert has no open fault there yet."""
+        if not self.kiosk.enabled:
+            return False
+        task = self._store().last_task(f"incident:{int(iid)}")
+        uid = task.get("todo_uid") if task and task.get("status") == "open" else None
+        if not uid:
+            return False
+        try:
+            if not await self.kiosk.take_ticket(uid, by):
+                return False
+        except Exception as e:  # noqa: BLE001 — answered plainly, nothing half done
+            log.warning("Incident #%s could not be taken on in the Kiosk (%s)", iid, type(e).__name__)
+            return False
+        await self.repair()
+        return True
+
     async def repair(self) -> dict[str, int]:
         """The open tasks and the Kiosk's faults agree (at each start and each night, owner, 2026-10-01), in three steps:
           1. what people did in the Kiosk comes in: a fault a person closed closes its task (and the incident it came

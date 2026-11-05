@@ -44,6 +44,15 @@ def _strings(node):
             yield from _strings(v)
 
 
+def _kiosks_button(doc):
+    """`doc` less the other languages of the Kiosk's own button (owner, 2026-11-05: Open Ticket on Telegram too, its
+    label in every language a chat reads — "Ouvrir un ticket" is that button's word, as "Open Ticket" is)."""
+    if isinstance(doc, dict) and isinstance(doc.get("buttons"), list):
+        doc = {**doc, "buttons": [{k: v for k, v in b.items() if not (k == "labels" and ALLOWED.fullmatch(str(b.get("label"))))}
+                                  if isinstance(b, dict) else b for b in doc["buttons"]]}
+    return doc
+
+
 def _starter_texts() -> dict[str, str]:
     out = {"config/instructions.md": open(os.path.join(STARTER_DIR, "config", "instructions.md"), encoding="utf-8").read()}
     skills = os.path.join(STARTER_DIR, "skills")
@@ -51,7 +60,7 @@ def _starter_texts() -> dict[str, str]:
         out[os.path.relpath(path, STARTER_DIR)] = open(path, encoding="utf-8").read()
     for path in sorted(glob.glob(os.path.join(skills, "*", "*.yaml"))):
         # the values only: a comment is the developer's, never read by the model
-        out[os.path.relpath(path, STARTER_DIR)] = "\n".join(_strings(yaml.safe_load(open(path, encoding="utf-8"))))
+        out[os.path.relpath(path, STARTER_DIR)] = "\n".join(_strings(_kiosks_button(yaml.safe_load(open(path, encoding="utf-8")))))
     return out
 
 

@@ -759,6 +759,30 @@ class Kiosk:
             return False
         return await self._edit(change)
 
+    async def take_ticket(self, tid: str, by: str) -> bool:
+        """One of the agent's open faults taken on by the person `by` — the agreement's `ticket.takenStep` (status, kind),
+        their name as the step's `by` and `who`, never the agent's stamp (the proxy keeps a step's own `by`): the Kiosk
+        shows "Ticket in progress", "Opened by <name>", and reads it as its own "Open Ticket" did (owner, 2026-11-05:
+        Open Ticket on Telegram). False when it is gone or no longer open."""
+        rule = agreement.section("ticket").get("takenStep") or {}
+        if not rule.get("status"):
+            return False
+
+        def change(data: dict) -> bool:
+            tickets = list(data.get("tickets") or [])
+            for i, t in enumerate(tickets):
+                if isinstance(t, dict) and t.get("id") == tid:
+                    if t.get("status") != "open":
+                        return False
+                    name = by[:who_chars()]
+                    upd = {"at": _now(), "status": rule["status"], "photoIds": [], "by": name, "who": name,
+                           **({"kind": rule["kind"]} if rule.get("kind") else {})}
+                    tickets[i] = self._gated(t, dict(t, status=rule["status"], updates=list(t.get("updates") or []) + [upd]))
+                    data["tickets"] = tickets
+                    return True
+            return False
+        return await self._edit(change)
+
     async def resolve_ticket(self, tid: str, note: str | None = None, who: str | None = None,
                              confirms_by: str | None = None, lasting: bool = False) -> bool:
         """Mark one of the agent's tickets resolved. By `who` — a person's Done: their name on the card, and the work

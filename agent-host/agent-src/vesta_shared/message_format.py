@@ -254,6 +254,9 @@ def status_superseded(lines: list[str]) -> list[int]:
 
 
 PRESSED = acted("{label}", "{time}", "{name}") + "."
+#: A take-on the VESTA Kiosk could not record (result.take_on: Open Ticket on Telegram, the Kiosk unreachable or the
+#: alert's fault not there yet): the copies say it, their buttons back (owner, 2026-11-05: nothing half done)
+KIOSK_UNREACHED = "The VESTA Kiosk cannot be reached: open the ticket on the tablet."
 #: Sections whose items are notes — what happened, said by the agent — rather than the things reported.
 NOTE_SECTIONS = frozenset({STATUS})
 

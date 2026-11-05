@@ -1,7 +1,8 @@
 """An alert someone took on in the VESTA Kiosk is no longer chased (owner, 2026-10-15: "should Telegram stop chasing the
 facility manager? yes"). "Open Ticket" on its card and Telegram still reminded the facility manager, then escalated to
 the owner — of a job someone had taken. Now: no reminder, no escalation, every copy says "Ticket opened in the Cockpit
-by …" without its buttons; the alert stays open and ends as before. Synthetic villa; ids invented."""
+by …", keeping only Done and Need help (owner, 2026-11-05); the alert stays open and ends as before. Synthetic villa;
+ids invented."""
 from __future__ import annotations
 
 import asyncio
@@ -134,18 +135,23 @@ def test_the_closed_message_tells_every_step_the_villa_saw_on_15_october(tmp_pat
         assert text.split("\n")[0].endswith("(closed)")
 
 
-def test_an_alert_taken_on_in_the_kiosk_waits_for_no_answer(tmp_path):
-    # owner, 2026-10-15: someone has it — its messages carry no Done / Need help (incidents.Incidents, the one reader
-    # since architecture review scan 1, 2026-10-19)
+def test_an_alert_taken_on_in_the_kiosk_keeps_done_and_need_help(tmp_path):
+    # owner, 2026-10-15: someone has it — no longer chased; owner, 2026-11-05: as on the tablet, its messages keep Done
+    # and Need help, Not a problem and Open Ticket go (incidents.Incidents, the one reader since architecture review
+    # scan 1, 2026-10-19; alert_buttons.AlertButtons.offered)
     from vesta_agent.incidents import Incidents
-    from vesta_shared.store import Incident, Store
+    from vesta_shared.store import Incident, Notes, Store
     path = str(tmp_path / "s.sqlite")
     st = Store(path)
     iid = st.new_incident("k", "automation.x", "lock.front_door", "P2", {"message": "m"})
     inc = Incidents(path)
-    assert inc.awaiting_answer(iid) and not inc.closed(iid) and inc.severity(iid) == "P2"
+    assert inc.awaiting_answer(iid) and not inc.closed(iid) and inc.severity(iid) == "P2" and not inc.taken(iid)
     st.update_incident(iid, state=Incident.TAKEN)
-    assert not inc.awaiting_answer(iid)
+    assert inc.awaiting_answer(iid) and inc.taken(iid)
+    # taken on, then escalated by a Need help: still taken on (its note)
+    st.note(iid, {Notes.TAKEN_ON: "Ticket opened."})
+    st.update_incident(iid, state=Incident.ESCALATED)
+    assert inc.taken(iid)
     assert not inc.awaiting_answer("x") and inc.runs(999) is None
 
 

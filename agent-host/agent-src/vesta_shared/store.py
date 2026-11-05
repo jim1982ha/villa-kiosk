@@ -122,6 +122,10 @@ class Notes:
     # 2026-10-25); written by the desk's watch_over, read by Incidents.watching — a later close is watched again
     WATCH_OVER = "watch_over"
     KIOSK_REOPENED = "kiosk_reopened"                            # mail: who reopened its fault in the Kiosk, and when
+    # who took it on as a ticket and when ("Ticket opened by JM on …", kiosk_words.taken), in the Kiosk or from Telegram:
+    # written by Problems.taken_in_kiosk, read by Incidents.taken — its buttons offered `until: taken` go (owner,
+    # 2026-11-05). Kept whatever its state becomes after (a Need help escalates it: still taken on)
+    TAKEN_ON = "taken_on"
     UNREACHED = "unreached"                                      # mail: Telegram refused every chat of the FM's
     # ⚠️ NEED HELP ON EVERY CARD (owner, 2026-10-30: every Cockpit card offers Done · Need help · Open Ticket): mail, who
     # pressed Need help on this alert's card in the Kiosk, and when (kiosk_words.helped) — the desk escalates it as a

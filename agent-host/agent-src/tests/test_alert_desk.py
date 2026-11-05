@@ -199,8 +199,8 @@ def test_only_done_and_need_help_and_an_old_not_found_is_chased_again(tmp_path):
     # owner, 2026-10-10: "remove all the Mute and Not Found … too complex for now"
     import sqlite3
     from vesta_shared.store import Store
-    # the skill's own (skill.yaml); "Not a problem" beside them since the owner's 2026-11-04 request
-    assert [b["label"] for b in desk.BUTTONS.values()] == ["Done", "Need help", "Not a problem"]
+    # the skill's own (skill.yaml), in the one order of the tablet and Telegram (owner, 2026-11-05)
+    assert [b["label"] for b in desk.BUTTONS.values()] == ["Done", "Not a problem", "Open Ticket", "Need help"]
     path = str(tmp_path / "old.sqlite")
     st = Store(path)
     iid = st.new_incident("k", "automation.x", "lock.x", "P2", {"message": "m"})

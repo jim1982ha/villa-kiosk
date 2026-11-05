@@ -15,16 +15,25 @@ buttons:                      # under every message about an open alert; a press
   # labels: the label in other languages — how each chat's Status names the press ("Terminé le … (JM)")
   # closes: on_reply closes the alert, and its close says the press ("✅ Done on … (JM)."): not also a line of its Status
   # tells: on_reply's answer says the press ("🆘 Need help on … (JM): Owner is asked to act."): not a line of its own
+  # takes: on_reply takes the alert on as one ticket in the VESTA Kiosk (its fault "Ticket in progress", by the person
+  #   who pressed): the take-on says the press in every chat ("Ticket opened by JM"), never a line of its own
+  # until: taken — offered only until someone takes the alert on (here or in the Kiosk); after, Done and Need help stay
+  # ⚠️ ONE ORDER, ON TELEGRAM AND THE TABLET (owner, 2026-11-05): Done · Not a problem · Open Ticket · Need help
   - {option: done, label: Done, closes: true,
      labels: {fr: Terminé, id: Selesai, de: Erledigt, es: Hecho, it: Fatto, nl: Klaar, zh: 已完成, ja: 完了, ko: 완료}}
+  # closed with nothing done, never read again while the problem lasts; back after it ended, it is a new alert (owner,
+  # 2026-11-04: beside Done and Need help, as on the Cockpit's card, never only after a Done); never once a ticket is
+  # taken on (owner, 2026-11-04: on a ticket "it's irrelevant")
+  - {option: not_a_problem, label: Not a problem, closes: true, until: taken,
+     labels: {fr: Pas un problème, id: Bukan masalah, de: Kein Problem, es: No es un problema, it: Non è un problema,
+              nl: Geen probleem, zh: 不是问题, ja: 問題なし, ko: 문제 아님}}
+  # the Kiosk's Open Ticket on the alert's card, from Telegram (owner, 2026-11-05)
+  - {option: open_ticket, label: Open Ticket, takes: true, until: taken,
+     labels: {fr: Ouvrir un ticket, id: Buka tiket, de: Ticket öffnen, es: Abrir ticket, it: Apri ticket,
+              nl: Ticket openen, zh: 创建工单, ja: チケットを開く, ko: 티켓 열기}}
   - {option: need_help, label: Need help, mark: help, tells: true,     # mark: its footer's icon (🆘)
      labels: {fr: Besoin d'aide, id: Butuh bantuan, de: Brauche Hilfe, es: Necesito ayuda, it: Serve aiuto,
               nl: Hulp nodig, zh: 需要帮助, ja: 助けが必要, ko: 도움 필요}}
-  # closed with nothing done, never read again while the problem lasts; back after it ended, it is a new alert (owner,
-  # 2026-11-04: beside Done and Need help, as on the Cockpit's card, never only after a Done)
-  - {option: not_a_problem, label: Not a problem, closes: true,
-     labels: {fr: Pas un problème, id: Bukan masalah, de: Kein Problem, es: No es un problema, it: Non è un problema,
-              nl: Geen probleem, zh: 不是问题, ja: 問題なし, ko: 문제 아님}}
 # The alert's own words in each chat's language (owner, 2026-10-23): the villa's automations write them in English;
 # a chat whose language (set in the VESTA Kiosk beside the chat) is another gets them translated by the AI, once per sentence pattern
 # (names, numbers, times and codes stay as written and are not sent as words), then from memory with no AI. The card always

@@ -1249,6 +1249,14 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
     elif option == "need_help":
         helped = need_help(store, inc, act, now, out, mark=button.get("mark"), reply=label)
         out["send"].append(here(helped, "pressed", mark=button.get("mark")))
+    elif button.get("takes"):
+        # Open Ticket (owner, 2026-11-05): what the Kiosk's Open Ticket on the alert's card does — the engine writes the
+        # take-on on its fault, by the person who pressed, and reads it back as the Kiosk's: the chase stops and every
+        # chat says "Ticket opened by …" (its own step). Nothing said here: a Kiosk it cannot reach is answered by the
+        # engine, the buttons back
+        out["actions"].append(R.take_on(iid, who))
+        store.audit("alert-desk", "reply", {"incident": iid, "by": sender_role, "option": option})
+        return out
     else:
         store.update_incident(iid, reply=label)
         noted = lambda lang: SW.acted(_in(say("noted_word"), lang), "{time}", _in(who_in, lang), lang)

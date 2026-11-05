@@ -533,13 +533,20 @@ class Problems:
     def taken_in_kiosk(self, task_id: int, said: str) -> int | None:
         """A person took the task's fault on in the VESTA Kiosk ("Open Ticket"): the alert it came from is no longer
         chased — no reminder, no escalation (owner, 2026-10-15: "should Telegram stop chasing the facility manager?
-        yes"). It stays open and ends as before. Returns the incident's id when it was still being chased, else None.
+        yes"). It stays open and ends as before. Returns the incident's id while it is open (every copy then says the take-on,
+        owner 2026-11-05: an alert escalated by a Need help, then taken on, said nothing), else None.
         `said`: who and when, as kiosk_words.taken writes it."""
         kind, sid = self._source(self.store.task(task_id))
         if kind != "incident" or not sid:
             return None
-        # still being chased, read and written under one lock (store.move): the desk's tick may be moving it too
-        return sid if self.store.move(sid, Incident.CHASED, Incident.TAKEN, reply=said) else None
+        inc = self.store.incident(sid)
+        if not inc or inc.get("closed_at"):
+            return None
+        # taken on, whatever it was doing: the buttons that no longer apply go (Notes.TAKEN_ON; owner, 2026-11-05)
+        self.store.note(sid, {Notes.TAKEN_ON: str(said)})
+        # no longer chased, read and written under one lock (store.move): the desk's tick may be moving it too
+        self.store.move(sid, Incident.CHASED, Incident.TAKEN, reply=said)
+        return sid
 
     def unreached(self, iid: int) -> None:
         """No chat of the facility manager's received incident `iid` (Telegram refused them all): the alert desk hands

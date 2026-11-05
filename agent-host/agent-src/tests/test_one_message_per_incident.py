@@ -309,7 +309,7 @@ def test_a_button_the_skill_renames_still_answers_the_alert(agent):
     ha_alert(agent)
     tick(agent, 20)
     kb = agent.tg.sent[-1][2]["inline_keyboard"][0]
-    assert [b["text"] for b in kb] == ["Fait", "Need help", "Not a problem"]
+    assert [b["text"] for b in kb] == ["Fait", "Not a problem", "Open Ticket", "Need help"]
     iid = kb[0]["callback_data"].split(":")[1]
     run(agent.on_ha_event("telegram_callback", {"id": "cb", "data": kb[0]["callback_data"], "chat_id": FM_CHAT,
                                                 "user_id": FM, "bot": BOT,

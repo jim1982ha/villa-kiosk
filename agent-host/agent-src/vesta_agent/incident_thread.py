@@ -356,12 +356,15 @@ class IncidentThread:
                 n += await self._show(iid, chat, {**rec, "settled": True, "finished": True}, p)
             return n
 
-    async def restate(self, iid: int | str, note: str, note_in: dict | None = None) -> int:
-        """Every copy of incident `iid` shows `note` as where it stands and loses its buttons, WITHOUT settling: the
-        incident is open and ends as any does (its close still says how). For an alert someone took on in the VESTA
-        Kiosk (owner, 2026-10-15). `note_in`: the same in other languages ({code: text}), each chat showing the one it
-        reads, kept as `close` keeps it so a copy another chat gets later says its own (architecture review O); a
-        kiosk_words.Words `note` brings its own (`langs`). Returns how many chats show it now.
+    async def restate(self, iid: int | str, note: str, note_in: dict | None = None,
+                      keyboard: Callable[[int], dict | None] | None = None) -> int:
+        """Every copy of incident `iid` shows `note` as where it stands, WITHOUT settling: the incident is open and ends
+        as any does (its close still says how). For an alert someone took on as a ticket, in the VESTA Kiosk or on
+        Telegram (owner, 2026-10-15). `keyboard(chat)`: the buttons each copy keeps now (alert_buttons.AlertButtons.still:
+        owner, 2026-11-05, Done and Need help stay once taken on), none: its buttons go. `note_in`: the same in other
+        languages ({code: text}), each chat showing the one it reads, kept as `close` keeps it so a copy another chat
+        gets later says its own (architecture review O); a kiosk_words.Words `note` brings its own (`langs`). Returns how
+        many chats show it now.
 
         ⚠️ THE THREAD RECORDS ITS OWN "TAKEN" STEP (architecture review round 16): app glued it on after the call
         (thread.restate, then note_step) while `_finish` records its CLEARED itself — two ways to put a step in the
@@ -374,15 +377,33 @@ class IncidentThread:
             now = datetime.now(timezone.utc)
             n = 0
             for chat, rec in self.state.incident_chats(iid):
-                if rec.get("settled") or not rec.get("mid"):
+                # a press's receipt (`interim`: its buttons gone at once) is replaced by what the press did
+                if (rec.get("settled") and not rec.get("interim")) or not rec.get("mid"):
                     continue
                 p = layout.changed(layout.of(rec), status=layout.fill_time(pick(note, note_in, self._lang(chat)), now, self.tz))
                 if note_in:
                     p["said"] = layout.note_said(note, note_in, now, self.tz)
                 p = self._own_words(iid, chat, {**p, "head": self._head_now(iid, chat, p.get("head") or "")})
-                n += await self._show(iid, chat, {**rec, "buttons": False}, p)
+                kb = keyboard(chat) if keyboard else None
+                kept = {k: v for k, v in rec.items() if k not in ("interim", "kb")}
+                n += await self._show(iid, chat, {**kept, "settled": False, "buttons": bool(kb)}, p, keyboard=kb)
             if str(iid).isdigit():
                 note_step(self.state, int(iid), TAKEN_STAGE, str(note), note_in)
+            return n
+
+    async def unsettle(self, iid: int | str, note: str, keyboard: Callable[[int], dict | None]) -> int:
+        """A press that could not be carried out: every copy its receipt settled (`interim`) shows `note` (why, and what
+        to do instead) with its buttons back (`keyboard(chat)`), as before the press — nothing half done (owner,
+        2026-11-05: Open Ticket on Telegram with the VESTA Kiosk unreachable). Returns how many chats show it now."""
+        async with self._lock(iid):
+            n = 0
+            for chat, rec in self.state.incident_chats(iid):
+                if not (rec.get("settled") and rec.get("interim")) or not rec.get("mid"):
+                    continue
+                p = self._own_words(iid, chat, layout.changed(layout.of(rec), status=note))
+                kb = keyboard(chat)
+                kept = {k: v for k, v in rec.items() if k not in ("interim", "kb")}
+                n += await self._show(iid, chat, {**kept, "settled": False, "buttons": bool(kb)}, p, keyboard=kb)
             return n
 
     def _own_words(self, iid: int | str, chat: int, p: dict) -> dict:

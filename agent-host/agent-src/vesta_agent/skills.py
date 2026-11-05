@@ -652,13 +652,20 @@ def _without_ai(path: str, steps, where: str) -> list[dict]:
     return out
 
 
+#: What a button's `until` may name: offered until the alert is taken on as a ticket (here or in the Kiosk).
+BUTTON_UNTIL = frozenset({"taken"})
+
+
 def _buttons(raw) -> list[dict]:
-    """skill.yaml `buttons`: [{option, label, mark, labels, closes, tells}] — an option is a short word (it travels in
+    """skill.yaml `buttons`: [{option, label, mark, labels, closes, tells, takes, until}] — an option is a short word (it travels in
     Telegram's 64 bytes of button data, button_data.ALERT), a label what the button says, a mark one of
     message_format.MARK_ICONS, `labels` the label in other languages ({code: label}: how each chat's Status names a
     press, owner 2026-10-23), `closes` true when on_reply closes the alert, `tells` true when on_reply's answer says the
     press itself — a close always does ("✅ Done on … (JM).") — so its line is left to that answer while it is a copy's
-    last word (notice.Notices.history_lines; a close's: note_press keeps none).
+    last word (notice.Notices.history_lines; a close's: note_press keeps none). `takes` true when on_reply takes the
+    alert on as a ticket in the Kiosk (result.take_on: its take-on step says the press, note_press keeps none); `until`
+    "taken": the button is offered only until the alert is taken on (alert_buttons.AlertButtons.offered; owner,
+    2026-11-05: after Open Ticket, Done and Need help stay, Not a problem and Open Ticket go, as on the tablet).
     ⚠️ ONE LINE PER PRESS (architecture review 23, card 4): Need help's answer, "🆘 Need help on … (Luc): Owner is asked
     to act.", stood under a "- 🆘 Need help on … (Luc)" line of its own; only the closing buttons were left out."""
     if raw is None:
@@ -682,10 +689,15 @@ def _buttons(raw) -> list[dict]:
         if labels is not None and not (isinstance(labels, dict) and all(
                 isinstance(k, str) and isinstance(v, str) and 0 < len(v.strip()) <= 30 for k, v in labels.items())):
             raise SkillError(f"buttons[{i}]: labels must be {{language code: label}}, each label 30 characters at most")
-        closes, tells = b.get("closes", False), b.get("tells", False)
-        if not isinstance(closes, bool) or not isinstance(tells, bool):
-            raise SkillError(f"buttons[{i}]: closes and tells must be true or false")
-        out.append({"option": option, "label": label, "mark": mark, "closes": closes, "tells": closes or tells,
+        closes, tells, takes = b.get("closes", False), b.get("tells", False), b.get("takes", False)
+        if not isinstance(closes, bool) or not isinstance(tells, bool) or not isinstance(takes, bool):
+            raise SkillError(f"buttons[{i}]: closes, tells and takes must be true or false")
+        until = b.get("until")
+        if until is not None and until not in BUTTON_UNTIL:
+            raise SkillError(f"buttons[{i}]: until {until!r} is not one of {', '.join(sorted(BUTTON_UNTIL))}")
+        out.append({"option": option, "label": label, "mark": mark, "closes": closes,
+                    # a take-on says the press in every chat ("Ticket opened by JM"): its line is that step's
+                    "tells": closes or tells or takes, "takes": takes, **({"until": until} if until else {}),
                     **({"labels": {k: v.strip() for k, v in labels.items()}} if labels else {})})
     return out
 

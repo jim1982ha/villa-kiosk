@@ -26,10 +26,17 @@ class Incidents:
         return self._store().incident(int(iid)) if str(iid).isdigit() else None
 
     def awaiting_answer(self, iid: int | str) -> bool:
-        """Is incident `iid` still waiting for an answer — not closed, and not taken on in the VESTA Kiosk (someone has
-        it: owner, 2026-10-15)? Its messages then carry the buttons."""
+        """Is incident `iid` still waiting for an answer — not closed? Its messages then carry the buttons that still
+        apply (alert_buttons.AlertButtons.offered). ⚠️ TAKEN ON, DONE AND NEED HELP STAY (owner, 2026-11-05, as on the
+        tablet's card): an alert taken on as a ticket (owner, 2026-10-15) carried no button at all."""
         inc = self._get(iid)
-        return bool(inc) and not inc.get("closed_at") and inc.get("state") != Incident.TAKEN
+        return bool(inc) and not inc.get("closed_at")
+
+    def taken(self, iid: int | str) -> bool:
+        """Has someone taken incident `iid` on as a ticket — "Open Ticket" in the Kiosk or on Telegram (Notes.TAKEN_ON;
+        an older one: its TAKEN state)? Its buttons offered `until: taken` then go."""
+        inc = self._get(iid)
+        return bool(inc) and (inc.get("state") == Incident.TAKEN or bool(notes_of(inc).get(Notes.TAKEN_ON)))
 
     def closed(self, iid: int) -> bool:
         """Is the incident closed (the notices' heading: "Closed")?"""

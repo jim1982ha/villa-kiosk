@@ -195,6 +195,18 @@ def moved(task_ids) -> list[dict]:
     return [faults_changed()] if list(task_ids) else []
 
 
+#: The action of a take-on (take_on), as the engine reads it.
+TAKE_ON = "ticket.take"
+
+
+def take_on(incident: int, by: str) -> dict:
+    """Alert `incident` taken on as ONE ticket in the VESTA Kiosk by the person `by` (their name): what the Kiosk's own
+    "Open Ticket" on the alert's card does (owner, 2026-11-05: Open Ticket on Telegram). The engine writes the agreement's
+    take-on step on its fault and reads it back as the Kiosk's (tickets.Tickets.take_on); a Kiosk it cannot reach, or an
+    alert with no fault there yet, is answered plainly and nothing changes."""
+    return {"action": TAKE_ON, "incident_id": int(incident), "by": str(by)}
+
+
 def snapshot(entity_id: str, incident: int) -> dict:
     """A camera's picture, sent with an alert."""
     return {"action": "snapshot.get", "entity_id": entity_id, "incident_id": int(incident)}
