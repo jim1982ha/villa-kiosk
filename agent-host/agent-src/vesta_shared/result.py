@@ -206,13 +206,16 @@ def _in(key: str, texts: dict | None) -> dict:
     return {key: got} if got else {}
 
 
-def settle(incident: int, note: str, mark: str | None = None, note_in: dict | None = None, final: bool = False) -> dict:
+def settle(incident: int, note: str, mark: str | None = None, note_in: dict | None = None, final: bool = False,
+           closed: bool = False) -> dict:
     """Every message carrying the incident's buttons loses them and shows `note` ("{time}": the villa's time); `mark`:
     MARKS; `note_in`: the note in other languages ({code: text}), each chat showing the one it reads. `final`: the
     incident's last word, its watch over — every copy, settled or not, keeps where it stood as a line of its Status and
-    shows `note` under it (IncidentThread.close)."""
+    shows `note` under it (IncidentThread.close). `closed`: `note` tells a close that happened, whatever the incident is
+    now — its line is kept in the story even when it was reopened before this was told (a close and a reopening in the
+    Cockpit read together)."""
     return _mark({"incident_id": int(incident), "note": note, **_in("note_in", note_in),
-                  **({"final": True} if final else {})}, mark)
+                  **({"final": True} if final else {}), **({"closed": True} if closed else {})}, mark)
 
 
 def ha_message(incident: int, text: str, context: str | None, stage: str | None = None, status: str | None = None,

@@ -140,13 +140,20 @@ def flips_per_day(logbook: list[dict], zone: str, settle_minutes: float = 0,
     return {k: dict(v) for k, v in out.items()}
 
 
+def last_day(end: datetime, zone: str) -> date:
+    """The day the period ending at `end` is counted as, in `zone`: the day of the moment just before it — the last key
+    flips_per_day files a drop under. ⚠️ THE ONE ANSWER (architecture review 24): the 5-minute recheck judged its drops
+    against the UTC date of now while they were filed under the villa's day; past the villa's midnight, before UTC's,
+    the newest day fell outside the window and a real loop "cleared" minutes after the night check opened it."""
+    return (end - timedelta(microseconds=1)).astimezone(ZoneInfo(zone)).date()
+
+
 def _day_of(t: datetime, end: datetime | None, zone: str) -> date:
-    """The day a moment is counted under: its calendar day in `zone`, or — with `end` — the day of `end` (the moment
-    just before it) less the whole days `t` lies before `end` (flips_per_day)."""
+    """The day a moment is counted under: its calendar day in `zone`, or — with `end` — the day of `end` (last_day)
+    less the whole days `t` lies before `end` (flips_per_day)."""
     if end is None:
         return t.astimezone(ZoneInfo(zone)).date()
-    last = (end - timedelta(microseconds=1)).astimezone(ZoneInfo(zone)).date()
-    return last - timedelta(days=int((end - t).total_seconds() // 86400))
+    return last_day(end, zone) - timedelta(days=int((end - t).total_seconds() // 86400))
 
 
 def reporting_share(hour_rows: list[dict], until_ms: int | None = None, hours: int | None = None) -> tuple[float | None, int]:

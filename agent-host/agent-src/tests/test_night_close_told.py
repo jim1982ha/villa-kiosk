@@ -92,3 +92,30 @@ def test_the_five_minute_recheck_says_it(tmp_path):
     Problems(st).closed_in_kiosk(tid, kiosk_words.closed("JM", at, "UTC"), at=at, who="JM")
     (edit,) = _run(tmp_path, {}, now)["edits"]
     assert edit["text"].endswith(f"Done in the Cockpit on {moment_label(close_at, 'UTC')} (JM)."), edit["text"]
+
+
+def test_a_close_on_telegram_is_told_in_the_chats_language_too(tmp_path):
+    # architecture review 24: a night fault closed by the Done of its Need help alert on Telegram (help_link.closed)
+    # read "Done on Telegram on … (JM)." in English in the French chat: only the Cockpit's close had its words
+    from vesta_shared.problems import DONE
+    st = Store(str(tmp_path / "s.sqlite"))
+    pb = Problems(st)
+    now = datetime.now(timezone.utc)
+    fid, _ = st.raise_finding("PM-X", "sensor.example_pump", "power", now.date().isoformat(), "P2", "Pump weak", {})
+    tid, _ = pb.open_task("finding", fid, "PM-X", "sensor.example_pump", "Pump weak")
+    nightly.told_now({"villa": "Example", "as_of": now.date().isoformat(), "again": [],
+                      "new_findings": [{"id": fid, "severity": "P2", "summary": "Pump weak"}]},
+                     store=st, at=now - timedelta(hours=1))
+    pb.close(tid, DONE, "Done on Telegram (JM).", "JM")
+    (edit,) = nightly.told_closes(st, "UTC", skill_settings.load(PM, "settings.yaml"))
+    at = moment_label(datetime.fromisoformat(st.task(tid)["last_closed_at"]), "UTC")
+    assert edit["text"].endswith(f"Done on Telegram on {at} (JM)."), edit["text"]
+    assert edit["text_in"]["fr"].endswith(f"Terminé sur Telegram le {at} (JM)."), edit["text_in"]["fr"]
+    assert edit["text_in"]["de"].endswith(f"Auf Telegram erledigt am {at} (JM)."), edit["text_in"]["de"]
+
+
+def test_no_action_needed_keeps_its_words_on_a_night_fault():
+    # architecture review 24: a night fault closed with "No action needed" read "Done in the Cockpit …, but still there"
+    task = {"close_note": "No action needed in the Cockpit on 04/11/2026 23:45 (JM)", "closed_who": "JM",
+            "last_closed_at": "2026-11-04T23:45:00+00:00"}
+    assert Problems.close_said(task, "UTC") == "No action needed in the Cockpit on 04/11/2026 23:45 (JM)"

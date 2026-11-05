@@ -283,7 +283,7 @@ class Tick:
     def loops(self) -> list:
         if self._loops is None:
             book = loopbook(self.store, self.client(), self.now, int(self.params.behaviour("reconnect_days")))
-            self._loops = N.reconnect_findings(self.client(), self.pack, self.states, self.now, self.now.date(),
+            self._loops = N.reconnect_findings(self.client(), self.pack, self.states, self.now,
                                                self.params, self.zone, self.Z, self.now, book=book)[0]
         return self._loops
 

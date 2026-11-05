@@ -279,7 +279,7 @@ class Tickets:
             # who and when, as a button's footer says it (owner, 2026-10-10): the Kiosk's own record of the close, told
             # by the alert desk in each chat's language with the watch it wrote (Notes.KIOSK_CLOSED; architecture review
             # 23, card 1: told here, it said no watch and read "(closed)")
-            said = kiosk_words.closed(by, at, self.timezone, lasting=g["lasting"])
+            said = kiosk_words.closed(by, at, self.timezone, lasting=g["lasting"], nothing=bool(g.get("nothing")))
             if task and task["status"] == "open" and not _before(at, task.get("reopened_at")):
                 iid = problems.closed_in_kiosk(task["id"], said, at=at, who=by or None, lasting=g["lasting"])
                 log.info("Kiosk fault %s closed by a person: its task closed with it", uid)

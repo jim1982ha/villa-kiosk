@@ -123,6 +123,7 @@ def acted(what: str, when: str, who: str = "") -> str:
 # ⚠️ "NOT A PROBLEM" IS NOT A DONE (owner, 2026-11-04: "Not a problem while it lasts" pressed, and Telegram, the tablet's
 # card and its notice all said "Done in the Cockpit"): its close says what was pressed ("lasting")
 COCKPIT = {"closed": "Done in the Cockpit", "lasting": "Not a problem in the Cockpit",
+           "nothing": "No action needed in the Cockpit",
            "help": "Need help in the Cockpit", "taken": "Ticket opened in the Cockpit",
            "reopened": "Reopened in the Cockpit", "look_again": "Please look again."}
 
@@ -144,6 +145,10 @@ DONE_IN = {ON_TELEGRAM: f"Done {ON_PLACE[ON_TELEGRAM]}", ON_TABLET: f"Done {ON_P
 #: …and its "Not a problem while it lasts", by the same places: a close never read again while the problem lasts.
 LASTING_IN = {ON_TELEGRAM: f"Not a problem {ON_PLACE[ON_TELEGRAM]}", ON_TABLET: f"Not a problem {ON_PLACE[ON_TABLET]}",
               IN_COCKPIT: COCKPIT["lasting"]}
+#: A close with nothing done ("No action needed", the Kiosk's own words for it, faultConfirm.closedTold): only the
+#: Cockpit has the button. ⚠️ NOT A DONE (architecture review 24): the Kiosk's card said "No action needed on … (Owner)"
+#: and every chat "Done in the Cockpit on … (Owner)" for the same press.
+NOTHING_IN = {IN_COCKPIT: COCKPIT["nothing"]}
 
 
 def done_in(place: str, who: str | None = None, lasting: bool = False) -> str:

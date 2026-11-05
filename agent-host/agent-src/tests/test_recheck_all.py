@@ -530,3 +530,37 @@ def test_a_restart_does_not_close_an_open_silent_fault(tmp_path):
     st = Store(str(tmp_path / "s.sqlite"))
     assert st.finding(f["temp"][0])["status"] == "open"
     assert st.finding(f["temp"][0])["seen_at"] == NOW.isoformat()                 # read again, and still there
+
+
+def test_a_loop_stays_open_past_the_villas_midnight_before_utcs(tmp_path):
+    # architecture review 24: the recheck judged the drops, filed under the villa's day, against the UTC date of now.
+    # Between the villa's midnight and UTC's (02:05 in a villa at UTC+9, just after the night check), the newest day
+    # fell outside the window: a real loop "cleared" minutes after the night check opened it, to open again the next
+    # night "(2nd time in 7 days)"
+    zone, relay = "Asia/Tokyo", "switch.example_relay"
+    now = datetime(2026, 10, 19, 17, 5, tzinfo=timezone.utc)
+    (tmp_path / "pack.json").write_text(json.dumps({
+        "villa": "Example Villa", "time_zone": zone, "generated_at": "x", "ha_version": None, "areas": [], "people": [],
+        "channels": {}, "unknown_area": [], "unclassified": [], "retention": {"raw_history_days": 10},
+        "families": {"network": [_row(relay, "Pool relay", "network", "relay", "dev_r")]}, "assets": {}}))
+    store = Store(str(tmp_path / "s.sqlite"))
+    f_relay = _found(store, "PM-RECONNECT-LOOP", relay, "Pool relay dropped and reconnected 12 times in 3 days.",
+                     day="2026-10-19")
+    fx = tmp_path / "fx"
+    fx.mkdir()
+    t0 = (now - timedelta(minutes=60)).isoformat()
+    (fx / "states.json").write_text(json.dumps({"states": {relay: {"state": "on", "attributes": {}, "last_changed": t0,
+                                                                   "last_reported": t0}}}))
+    entries = []
+    for k in range(12):                                   # twelve one-minute drops in the 20 hours before now
+        t = now - timedelta(hours=4 + k * 1.5)
+        entries += [{"entity_id": relay, "state": "unavailable", "when": t.isoformat()},
+                    {"entity_id": relay, "state": "on", "when": (t + timedelta(minutes=1)).isoformat()}]
+    (fx / "logbook.json").write_text(json.dumps({"entries": entries}))
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "recheck.py"), "--pack", str(tmp_path / "pack.json"),
+                        "--store", str(tmp_path / "s.sqlite"), "--fixture-dir", str(fx), "--now", now.isoformat(),
+                        "--zone", zone], capture_output=True, text=True, env={**os.environ, "PYTHONPATH": PYTHONPATH},
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    row = Store(str(tmp_path / "s.sqlite")).finding(f_relay[0])
+    assert row["status"] == "open" and row["summary"].startswith("Pool relay dropped and reconnected 12 times"), row

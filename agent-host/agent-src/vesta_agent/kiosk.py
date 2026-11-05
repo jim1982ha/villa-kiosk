@@ -276,8 +276,11 @@ def gestures(ups: list[dict]) -> list[dict]:
             continue
         # who: the name typed on the step, else its profile in today's words (profiles.step_by); a help names the profile
         by = str((profiles.step_by(u) or u.get("who")) if kind == ASK_HELP else (u.get("who") or profiles.step_by(u)) or "")
+        lasting = bool(u.get("lasting")) and kind == CLOSE
+        # `nothing`: "No action needed", a person's close with no work done (the agreement's cleared step)
         out.append((_epoch(u.get("at")) or 0.0, i, {"kind": kind, "at": str(u.get("at") or ""), "by": by,
-                                                    "lasting": bool(u.get("lasting")) and kind == CLOSE}))
+                                                    "lasting": lasting,
+                                                    "nothing": kind == CLOSE and not lasting and cleared_step(u)}))
     return [g for *_, g in sorted(out, key=lambda x: (x[0], x[1]))]
 
 

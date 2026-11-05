@@ -266,12 +266,19 @@ class FakeKiosk(Kiosk):
                                 "photoIds": [], "updates": []})
 
     def person_closes(self, tid: str, by: str = "Facility manager", at: str = PERSON_AT, cockpit: bool = False,
-                      lasting: bool = False) -> None:
-        """A person's close. `cockpit`: as the Cockpit's Close writes it (fmEngine.withTicketClosed: kind "cleared",
-        "Closed without action", by the profile) — else a close with no kind (a ticket's "Mark resolved"). `lasting`:
-        its "Not a problem" (while it lasts: the step's `lasting`)."""
+                      lasting: bool = False, nothing: bool = False) -> None:
+        """A person's close. `cockpit`: the Cockpit card's Done (fmEngine.withTicketAdvanced: work done, a note, no kind)
+        — else a close with no kind (a ticket's "Mark resolved"). `nothing`: its "No action needed"
+        (fmEngine.withTicketClosed: kind "cleared", "Closed without action", by the profile). `lasting`: its "Not a
+        problem" (withTicketClosed too, while it lasts: the step's `lasting`).
+
+        ⚠️ `cockpit` WROTE "No action needed" (architecture review 24): the Kiosk's Done became work done (owner,
+        2026-10-30, its review round 4); this fake kept the cleared close, so the tests read "No action needed" as "Done
+        in the Cockpit", as the engine did."""
         step = {"at": at, "status": "resolved", "by": by}
-        if cockpit or lasting:
+        if cockpit:
+            step.update(note="Done", photoIds=[])
+        if nothing or lasting:
             step.update(kind=CLEARED, note="Closed without action", photoIds=[])
         if lasting:
             step["lasting"] = True

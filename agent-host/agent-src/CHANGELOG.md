@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.441 (5 November 2026)
+
+- Architecture review 24. The reconnect window's last day comes from its end (`features.last_day`, the one answer
+  `_day_of` and `flap_rules` share): `reconnect_findings` takes no `today`; the recheck passed the UTC date of now
+  while the drops were filed under the villa's day. `status_words.closed_where`: a person's close in every language for
+  every place (`places` in each language's words), the night message's "done" step through it. `result.settle(closed=)`
+  → `IncidentThread.close(closed=)`: the desk's told Cockpit close keeps its story line (`close_step`) even when the
+  alert was reopened in the same read. A person's cleared close ("No action needed", the agreement's cleared step) is
+  `kiosk.gestures`' `nothing`, said "No action needed in the Cockpit" (message_format.COCKPIT / NOTHING_IN, each
+  language's `cockpit.nothing`; `Problems.done_where` knows it); the test Kiosk's Cockpit Done is a work close now.
+
 ## 0.6.440 (5 November 2026)
 
 - Architecture review 23. A close in the Cockpit is told by the alert desk: `Problems.person_done` (IN_COCKPIT) leaves

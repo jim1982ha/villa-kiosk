@@ -38,7 +38,6 @@ from vesta_shared import occupancy  # noqa: E402  (the villa's state per day: li
 from vesta_shared.timeutil import day_label, day_time_label, moment_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title, status_line  # noqa: E402  (the one shape of a message)
-from vesta_shared import message_format as mf  # noqa: E402  (where a person's close was given: DONE_IN, LASTING_IN)
 from vesta_shared import status_words as SW  # noqa: E402  (each step as the alert card says it, in each chat's language)
 from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart  # noqa: E402
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
@@ -151,7 +150,7 @@ def run(args) -> dict:
     findings += level_findings(pack, params, level_rows, lvl_stats, today, zone)
 
     # ---- forensics: reconnect loops from the logbook -------------------------
-    found, said = reconnect_findings(cli, pack, states, day_end, today, params, zone, Z, now_ref, book=book)
+    found, said = reconnect_findings(cli, pack, states, day_end, params, zone, Z, now_ref, book=book)
     findings += found
     notes += said
 
@@ -589,7 +588,7 @@ CLEARED, cleared_note = E.CLEARED, E.cleared_note
 # ⚠️ ONE RULE, READ AT NIGHT OR FOR ONE FINDING EVERY 5 MINUTES (owner, 2026-10-19: "just re-check the identified ones
 # to update their status"; 2026-10-20: every fault every 5 minutes): recheck.py runs the very same functions over the
 # rows of the findings still open (`rows`, `book`, asset_findings, level_findings), never a second copy of a rule.
-def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, params, zone: str, Z, now_ref: datetime,
+def reconnect_findings(cli, pack, states: dict, end: datetime, params, zone: str, Z, now_ref: datetime,
                        book=None) -> tuple[list, list[str]]:
     """The reconnect loops over the `reconnect_days` ending at `end` (one finding per device), and the notes a read cut
     short adds — the night's (end: the day judged's end) and the 5-minute recheck's (end: now; `book`: the logbook it
@@ -632,7 +631,7 @@ def reconnect_findings(cli, pack, states: dict, end: datetime, today: date, para
     for g in by_device.values():
         asset = dict(pack.assets.get(g["slug"], {"slug": g["slug"] or g["eid"]}))
         asset["name"] = asset.get("name") or g["name"] or _plain_name(g["eid"])
-        findings += R.flap_rules(_device_named(pack, asset, g["eid"]), g["eid"], g["per_day"], today, params,
+        findings += R.flap_rules(_device_named(pack, asset, g["eid"]), g["eid"], g["per_day"], F.last_day(end, zone), params,
                                  restarted=_restarted(pack, states, g["eid"], window_start))
 
     return findings, notes
@@ -908,10 +907,8 @@ def _told_line(st: dict, lang: str, to: str = "fm") -> str:
     if kind == "reopened":
         return SW.cockpit("reopened", at, st.get("who") or "", lang)
     if kind == "done":
-        # in the Cockpit: its words in every language (status_words); elsewhere as the close was named (done_where)
-        where, who = st.get("where") or "", st.get("who") or ""
-        act = {mf.DONE_IN[mf.IN_COCKPIT]: "closed", mf.LASTING_IN[mf.IN_COCKPIT]: "lasting"}.get(where)
-        return (SW.cockpit(act, at, who, lang) if act else mf.acted(where, at, who)) + SW.stop(lang if act else "en")
+        # where it was made (done_where), in every language (status_words.closed_where)
+        return SW.closed_where(st.get("where") or "", at, st.get("who") or "", lang) + SW.stop(lang)
     return st.get("note") or ""
 
 

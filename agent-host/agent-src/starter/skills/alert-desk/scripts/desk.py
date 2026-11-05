@@ -191,7 +191,7 @@ def cockpit_closes(store: Store, out: dict, t: dict | None = None) -> list[int]:
         said = kiosk_words.read(said)
         stop = Said(f"{said}{SW.stop('en')}", {lang: f"{text}{SW.stop(lang)}" for lang, text in said.langs.items()})
         line = closed_said(store.incident(inc["id"]), stop)
-        out.setdefault("settle", []).append(R.settle(inc["id"], line, note_in=line.langs or None))
+        out.setdefault("settle", []).append(R.settle(inc["id"], line, note_in=line.langs or None, closed=True))
         _faults_follow(out)                                                 # its fault says when VESTA confirms it
         told.append(inc["id"])
     return told

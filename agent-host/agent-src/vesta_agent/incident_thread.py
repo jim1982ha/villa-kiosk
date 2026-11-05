@@ -263,7 +263,8 @@ class IncidentThread:
             return True
 
     async def close(self, iid: int | str, note: str, body: str | None = None, mark: str | None = None,
-                    note_in: dict | None = None, final: bool = False, interim: bool = False) -> int:
+                    note_in: dict | None = None, final: bool = False, interim: bool = False,
+                    closed: bool = False) -> int:
         """Every message of incident `iid`, in every chat, loses its buttons and shows `note` (who did what, when;
         "{time}": the villa's time now) — a copy without buttons too (owner, 2026-10-11: one incident, one picture);
         `note_in`: the same in other languages ({code: text}), each chat showing the one it reads (owner, 2026-10-23).
@@ -279,7 +280,12 @@ class IncidentThread:
         `interim`: the engine's receipt of a press, its buttons gone at once — the skill's answer that follows (its
         settle) replaces it in every copy. ⚠️ ONE LAST LINE IN EVERY CHAT (architecture review 21 card 1): "Not a problem"
         pressed in the FM's chat ended "… (Luc). Watch 1h." there and "… (Luc)." in the owner's group — the receipt
-        settled the group's copy first, and the desk's own words, its watch, were then dropped as "settled already"."""
+        settled the group's copy first, and the desk's own words, its watch, were then dropped as "settled already".
+
+        `closed`: `note` tells a close that happened, even if the incident is open again by now (its line kept in the
+        story, notice.close_step). ⚠️ A CLOSE AND A REOPENING READ TOGETHER (architecture review 24): Done then Reopen in
+        the Cockpit, read in one go (presses made while VESTA restarted), left the facility manager's chat and the
+        tablet's card with "Reopened in the Cockpit" under an alert they were never told was closed."""
         if final:
             return await self._finish(iid, note, note_in)
         async with self._lock(iid):
@@ -309,7 +315,7 @@ class IncidentThread:
                 p = self._own_words(iid, chat, p)
                 kept = {k: v for k, v in rec.items() if k != "interim"}
                 n += await self._show(iid, chat, {**kept, "settled": True, **({"interim": True} if interim else {})}, p)
-            if note and not interim and str(iid).isdigit() and self.words.closed_now(int(iid)):
+            if note and not interim and str(iid).isdigit() and (closed or self.words.closed_now(int(iid))):
                 # the close's own line in its story (notice.close_step), whoever settled it: the desk, the Cockpit
                 from .notice import close_step
                 close_step(self.state, int(iid), layout.fill_time(note, now, self.tz),

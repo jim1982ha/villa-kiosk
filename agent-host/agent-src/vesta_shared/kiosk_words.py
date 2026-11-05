@@ -53,12 +53,13 @@ def read(value) -> Words:
     return value if isinstance(value, Words) else Words(str(value or ""))
 
 
-def closed(by: str, iso: str | None, zone: str, end: bool = False, lasting: bool = False) -> Words:
+def closed(by: str, iso: str | None, zone: str, end: bool = False, lasting: bool = False, nothing: bool = False) -> Words:
     """"Done in the Cockpit on 11/10/2026 07:05 (Fabien)" in every language — no full stop unless `end` (a sentence
     may go on after it). `lasting`: closed as "Not a problem" (while it lasts: "Not a problem in the Cockpit on …
-    (Fabien)")."""
+    (Fabien)"); `nothing`: closed with nothing done ("No action needed in the Cockpit on … (Fabien)")."""
     at = when(iso, zone)
-    return _every(lambda lang: SW.cockpit("lasting" if lasting else "closed", at, by, lang) + (SW.stop(lang) if end else ""))
+    act = "lasting" if lasting else "nothing" if nothing else "closed"
+    return _every(lambda lang: SW.cockpit(act, at, by, lang) + (SW.stop(lang) if end else ""))
 
 
 def helped(by: str, iso: str | None, zone: str) -> Words:

@@ -1238,3 +1238,21 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
   (`nightly.told_closes`: the message's story is the record, a close before the message or after a settled step is
   not news). The night fault's "VESTA confirms by" now counts from the person's close too (done_at).
 
+## The villa's day for every count, a close in every language, a close told late (architecture review 24, 2026-11-05, 0.12.457)
+
+- **The reconnect window ends on the villa's day** (`features.last_day`): `flips_per_day` files each drop under a day
+  counted back from the window's end in the villa's zone, and `flap_rules` now sums up to that same day. The 5-minute
+  recheck passed `now.date()` (UTC): past the villa's midnight and before UTC's, the newest day fell outside the window
+  and a real loop closed minutes after the night check opened it. `reconnect_findings` takes no `today` any more.
+- **A person's close in every language, wherever it was made** (`status_words.closed_where`, each language's
+  `places`): the night message's "done" step said a Telegram or tablet close in English in every chat.
+- **"No action needed" is not a Done** (`kiosk.gestures` `nothing`: a person's cleared step, the agreement's
+  `cleared_step`): `kiosk_words.closed(nothing=)` says "No action needed in the Cockpit" in every language, as the
+  Kiosk's card does (faultConfirm.closedTold); its watch and read-again stay a Done's. The test Kiosk's `cockpit=True`
+  close had kept the cleared step after the Kiosk's Done became work done, so the tests agreed with the engine.
+- **A close told after its reopening keeps its line** (`result.settle(closed=True)`, the desk's `cockpit_closes`):
+  `IncidentThread.close` records `close_step` for a close that happened even when the incident is open again by the
+  time it is told (Done and Reopen read together). Not done: the owner's group, which a Cockpit reopening does not
+  reach, keeps its own last line ("Done in the Cockpit …") under the incident's word "(existing)" with that word's icon;
+  changing what a copy no step went to shows is the owner's call (each chat its own steps, 2026-10-18).
+
