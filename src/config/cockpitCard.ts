@@ -16,7 +16,7 @@
 import { ACCENT_PILL, QUIET_PILL, pillClass } from "@/fm/tone";
 import type { RecordStatus } from "@/components/fm/RecordCard";
 import type { AgentCadence } from "@/agent/agentApi";
-import { checkPill } from "@/fm/faultTiming";
+import { cardCheck, LIVE_CHECK, watchedLive, type CheckSaid } from "@/fm/faultTiming";
 import { closedActions, helpAsked, overviewActions, workRecord, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import type { HelpAsked } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
@@ -276,6 +276,9 @@ export interface CardLine {
   /** VESTA's message of its alert, joined to it once (messagesModel issueAsTold): its words drawn in the line, the
    *  line named by the message's title. Absent on a line VESTA holds no message for, and before the join. */
   told?: Announcement;
+  /** Its own pill on its header, on a card of several whose pill says another check: "checked live" for a problem
+   *  watched live (faultTiming.LIVE_CHECK). */
+  check?: CheckSaid;
 }
 
 /** `{ alertNumber }` when there is one, else nothing (an optional field stays absent). */
@@ -297,9 +300,10 @@ export interface CardView {
   entityId?: string;
   /** The icons before its name: where each of its problems comes from (cardSources). */
   lead: LineSources | null;
-  /** "Next check: 02:00", and its moment ("20/10/2026 02:00") (faultTiming.checkPill); `when`: the pill's words beside
-   *  its refresh icon ("02:00", "Closes 02:00"); `tip`: what hovering the pill says. null: nothing checks it again at a time. */
-  nextCheck: { text: string; at: string | null; when: string; tip: string } | null;
+  /** "Next check: 02:00", and its moment ("20/10/2026 02:00") (faultTiming.cardCheck); `pill`: the pill's words beside
+   *  its refresh icon ("next check 02:00", "checked live"); `when`: a watched card's first line ("Closes 02:00"); `tip`:
+   *  what hovering the pill says. null: nothing checks it again. */
+  nextCheck: CheckSaid | null;
   lines: CardLine[];
   /** Its state, as pills (cardStatuses); absent on a card with none of its own (the Watch list's). */
   status?: RecordStatus[];
@@ -381,11 +385,15 @@ export function cockpitCard(group: AttentionGroup, cadence: AgentCadence | null,
     ...alertNumberIn(item.alertNumber ?? item.fault?.alertNumber),
     closing: closingText(item.closing ?? item.fault?.closing, now),
   });
-  const lead = cardSources(group.items), lines = group.items.map(line);
+  const lead = cardSources(group.items), nextCheck = cardCheck(group.items, cadence, now);
+  // ⚠️ A PROBLEM WATCHED LIVE ON A CARD OF SEVERAL (owner, 2026-11-06): its own "checked live" pill on its header when
+  // the card's pill says another check (a fault's); never when the card's says it already
+  const lines = group.items.map((item) => ({ ...line(item),
+    ...(watchedLive(item) && nextCheck !== LIVE_CHECK ? { check: LIVE_CHECK } : {}) }));
   return {
     key: group.key, title: group.title, room: group.room, entityId: group.entityId,
     lead,
-    nextCheck: checkPill(group.items, cadence, now),
+    nextCheck,
     lines,
     status: cardStatuses(group.items),
     tone: cardTone(lead, lines),
@@ -407,7 +415,7 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: Ca
     // cleared it the line under its fault
     // ...one about to be watched has no pill until VESTA says when (faultConfirm.afterClose, architecture review round 16)
     return clearedCard(c.ticket, said.did, opts, { key: `watched:${c.ticket.id}`, look: "watched", watched: said,
-      nextCheck: c.awaiting ? null : { text: said.tip, at: null, when: said.when, tip: said.tip } });
+      nextCheck: c.awaiting ? null : { text: said.tip, at: null, when: said.when, pill: said.when, tip: said.tip } });
   }));
 }
 

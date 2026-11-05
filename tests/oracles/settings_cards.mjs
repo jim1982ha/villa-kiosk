@@ -19,8 +19,12 @@ const PATCH = {
   "/src/config/ConfigContext.tsx": [["", "export { ConfigContext as __Ctx };"]],
   "/src/ha/HAStateStore.tsx": [["", "export { HAStateContext as __Ctx };"]],
   "/src/components/settings/Fold.tsx": [["useState(false)", "useState(true)"]],
-  "/src/components/settings/GroupedDevices.tsx": [["useState(false)", "useState(true)"]],
-  "/src/components/settings/BindingsTable.tsx": [['useState("bound")', 'useState(globalThis.__view ?? "bound")']],
+  "/src/components/settings/GroupedDevices.tsx": [["useState(false)", "useState(true)"],
+    ['const [search, setSearch] = useState("")', 'const [search, setSearch] = useState(globalThis.__q ?? "")']],
+  "/src/components/settings/BindingsTable.tsx": [['useState("bound")', 'useState(globalThis.__view ?? "bound")'],
+    ['const [search, setSearch] = useState("")', 'const [search, setSearch] = useState(globalThis.__q ?? "")']],
+  "/src/components/settings/UnavailableByDesign.tsx": [['const [search, setSearch] = useState("")', 'const [search, setSearch] = useState(globalThis.__q ?? "")']],
+  "/src/components/common/SearchPicker.tsx": [["useState(!!startOpen)", "useState(!!startOpen || !!globalThis.__open)"]],
 };
 export async function load(url, context, next) {
   const r = await next(url, context);
@@ -132,6 +136,70 @@ ck("  ...none of the rows and tables they were (a table, .binding-row, .settings
   ck("  ...the files drawing them, each through RecordCard",
      JSON.stringify(drawing) === JSON.stringify(["BindingRow.tsx", "ConfigEditor.tsx", "EntityMapRow.tsx", "GroupedDevices.tsx", "MessagesSettings.tsx", "UnavailableByDesign.tsx", "WhoGetsMessages.tsx"]), drawing);
   ck("  ...and none frames a card of its own", files.every(([, t]) => !/className="fm-record-(card|strip|actions)/.test(t)), files.filter(([, t]) => /className="fm-record-(card|strip|actions)/.test(t)).map(([f]) => f));
+}
+
+console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and offers its devices:");
+{
+  // typed `q`, the field's list open (as a tap opens it): what the section draws
+  const typed = (q, el) => { globalThis.__q = q; globalThis.__open = true; try { return drawIn(el); } finally { globalThis.__q = undefined; globalThis.__open = false; } };
+  const field = (html) => inside(html, "search-or-add");
+  const offers = (html) => [...field(html).matchAll(/<button class="row picker-option( strong)?">([\s\S]*?)<\/button>/g)]
+    .map((m) => (m[1] ? "! " : "") + text(m[2]).replace(/^\||\|$/g, "").replace(/\|/g, " / "));
+  const groups = (q) => typed(q, h(GroupedDevices, { title: "Grouped devices" }));
+  const asleep = (q) => typed(q, h(UnavailableByDesign, { title: "Asleep between reports" }));
+  const names = (html) => cards(html).map((c) => c.name);
+  const SECTIONS = [
+    ["Grouped devices", groups(""), "Search groups, or a device to group…"],
+    ["Asleep between reports", asleep(""), "Search, or a device to add…"],
+    ["Auto-detected entity settings", drawIn(h(ConfigEditor)), "Search by id, label or room…"],
+    ["Bound 3D objects", bindings("bound"), "Search objects, or a device to prepare…"],
+  ];
+  for (const [name, html, words] of SECTIONS) {
+    // the list's fields: the one shared field, plus the pickers INSIDE its cards (a group's "Add another entity…", a
+    // bound object's entity) which are the cards' own
+    const outside = cards(html).reduce((rest, c) => rest.replace(c.card, ""), html);
+    ck(`${name}: one field, the shared one ("${words}"), no second field, no Create or Add button beside it`,
+       (outside.match(/class="config-search/g) ?? []).length === 1 && (outside.match(/class="search-or-add"/g) ?? []).length === 1
+       && new RegExp(`placeholder="${words}"`).test(field(html))
+       && !/New group|Filter by|Add a device…|Search or type entity_id|>Create<|> ?Add<\/button>/.test(text(outside)), text(outside).slice(0, 300));
+  }
+  const kitchen = groups("kitchen");
+  ck("Grouped devices: typing narrows the groups, and offers the devices; one in a group says \"In group <its name>\"",
+     JSON.stringify(names(kitchen).filter((n) => !n.includes("+"))) === JSON.stringify(["Kitchen Temperature"])
+     && JSON.stringify(offers(kitchen)) === JSON.stringify(["Kitchen Humidity / sensor.example_kitchen_humidity / In group Kitchen Temperature",
+       "Kitchen Temperature / sensor.example_kitchen_temperature / In group Kitchen Temperature"]), [names(kitchen), offers(kitchen)]);
+  const pool = groups("pool");
+  ck("  ...one in no group \"Create a group\"; no group left: \"No group has '…'\" with the create offer",
+     offers(pool).every((o) => o.endsWith(" / Create a group")) && offers(pool).length === 2
+     && !names(pool).includes("Kitchen Temperature") && /No group has “pool”\./.test(text(pool))
+     && /<button type="button" class="btn ghost">Create a group with Pool Pump Power<\/button>/.test(inside(pool, "search-empty")), [offers(pool), text(inside(pool, "search-empty"))]);
+  const exact = groups("switch.example_pool_pump");
+  ck("  ...the exact id of a real device in no group: its own row first, \"Create a group with <id>\" (Enter picks it), not repeated",
+     offers(exact)[0] === "! Create a group with switch.example_pool_pump / Pool Pump" && offers(exact).filter((o) => o.includes("switch.example_pool_pump")).length === 1
+     && offers(groups("switch.example_no_such_thing")).length === 0, offers(exact));
+  ck("  ...cleared: every group again, no suggestion", names(groups("")).includes("Kitchen Temperature") && offers(groups("")).length === 0);
+  const door = asleep("door"), lamp = asleep("lamp");
+  ck("Asleep between reports: the same — a device on the list \"On the list\", another \"Add to the list\"; the cards narrowed",
+     JSON.stringify(offers(door)) === JSON.stringify(["Back Door / binary_sensor.example_back_door / On the list"]) && JSON.stringify(names(door)) === JSON.stringify(["Back Door"])
+     && JSON.stringify(offers(lamp)) === JSON.stringify(["Terrace Lamp / light.example_terrace_lamp / Add to the list"]) && names(lamp).length === 0
+     && /No device on the list has “lamp”\./.test(text(lamp)) && />Add Terrace Lamp to the list</.test(lamp), [offers(door), offers(lamp), names(lamp)]);
+  const auto = typed("", h(ConfigEditor, { initialSearch: "pool" }));
+  ck("Auto-detected entity settings: the same field, narrowing only (no suggestions)",
+     JSON.stringify(names(auto)) === JSON.stringify(["Pool Pump", "Pool Pump Power"]) && !/picker-dropdown/.test(field(auto)), [names(auto), field(auto).slice(0, 200)]);
+  globalThis.__view = "bound";
+  const bound = typed("terrace", h(BindingsTable, { title: "Bound 3D objects" }));
+  const ahead = typed("light.example_new_lamp", h(BindingsTable, { title: "Bound 3D objects" }));
+  ck("Bound 3D objects: the same — a device \"Already in Devices\" or \"Prepare it\", an id not there yet prepared ahead; the list narrowed",
+     JSON.stringify(offers(bound)) === JSON.stringify(["Terrace Lamp / light.example_terrace_lamp / Already in Devices"]) && JSON.stringify(names(bound)) === JSON.stringify(["Terrace Lamp"])
+     && offers(ahead)[0] === "! Prepare “light.example_new_lamp” / not there yet, will activate when it appears"
+     && offers(typed("fan", h(BindingsTable, { title: "Bound 3D objects" }))).includes("Ceiling Fan / fan.example_ceiling_fan / Prepare it"),
+     [offers(bound), names(bound), offers(ahead)]);
+  const { readdirSync } = await import("node:fs");
+  const dir = new URL("../../src/components/settings/", import.meta.url);
+  const using = readdirSync(dir).filter((f) => /<SearchOrAdd\b/.test(readFileSync(new URL(f, dir), "utf8"))).sort();
+  ck("  ...the four lists draw the one SearchOrAdd, none its own search box",
+     JSON.stringify(using) === JSON.stringify(["BindingsTable.tsx", "ConfigEditor.tsx", "GroupedDevices.tsx", "UnavailableByDesign.tsx"])
+     && readdirSync(dir).every((f) => !/<input\s+type="search"/.test(readFileSync(new URL(f, dir), "utf8"))), using);
 }
 
 console.log("\n  Bound 3D objects: its title's counts open its lists:");

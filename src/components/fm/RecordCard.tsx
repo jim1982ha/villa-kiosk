@@ -51,6 +51,8 @@ export interface CardPart {
   when?: string;
   /** Its header's colour when its status says none (as the card's `tone`). */
   tone?: string;
+  /** Its own check, a pill on its header before its time (a problem watched live on a card whose pill says a fault's). */
+  check?: { pill: string; tip: string };
   text?: ReactNode;
   who?: string | null;
   actions?: ReactNode;
@@ -71,8 +73,9 @@ export interface RecordCardProps {
   device?: ReactNode;
   /** Its room, quiet text on its quiet line: every card that shows a room. */
   room?: string;
-  /** Its next check: a pill at the right of its first line, under the strip's time, `tip` on hover (CheckPill). */
-  check?: { when: string; tip: string };
+  /** Its next check: a pill at the right of its first line, under the strip's time, its words `pill` ("next check
+   *  within 5min", "checked live"), `tip` on hover (CheckPill). */
+  check?: { pill: string; tip: string };
   /** Its tags on that line ("guest report", "by VESTA Agent", a task's interval…). */
   pills?: ReactNode;
   /** When, at the right of its strip, on every card (owner, 2026-11-01). */
@@ -160,11 +163,11 @@ export function CardAsk({ question, icon, confirmLabel, onConfirm, onCancel }: {
 /** ⚠️ ONE WAY TO SAY WHEN VESTA LOOKS AGAIN (owner, 2026-10-23: an open issue's and a cleared fault's alike; 2026-11-01:
  *  the refresh icon, so a time on a card is plainly its next check; 2026-11-06: a pill, the app's own (Pill's look), at
  *  the right of the card's first line, under the strip's time; it was quiet text on the quiet line): its words on hover. */
-export function CheckPill({ when, tip }: { when: string; tip: string }) {
+export function CheckPill({ pill, tip }: { pill: string; tip: string }) {
   return (
     <Tip text={tip}>
       <span className="fm-entity-chip fm-chip-static fm-record-check" aria-label={tip}>
-        <RefreshCw size={12} aria-hidden="true" />next check {when}
+        <RefreshCw size={12} aria-hidden="true" />{pill}
       </span>
     </Tip>
   );
@@ -219,15 +222,16 @@ function CardStrip({ lead, number, name, when, tone }: {
   );
 }
 
-/** A part's header line, in a card of several problems: its icons, its alert's name, its state, its time. */
-function PartHead({ lead, number, status, when, tone }: {
-  lead?: ReactNode; number?: string; status: readonly RecordStatus[]; when?: string; tone: StripTone;
+/** A part's header line, in a card of several problems: its icons, its alert's name, its state, its check, its time. */
+function PartHead({ lead, number, status, check, when, tone }: {
+  lead?: ReactNode; number?: string; status: readonly RecordStatus[]; check?: { pill: string; tip: string }; when?: string; tone: StripTone;
 }) {
   return (
     <div className={`fm-record-part-head strip-${tone}`}>
       {lead && <span className="fm-record-lead">{lead}</span>}
       {number && <span className="fm-record-number">{number}</span>}
       <StateWords status={status} />
+      {check && <CheckPill {...check} />}
       {when && <span className="fm-record-when">{when}</span>}
     </div>
   );
@@ -274,7 +278,7 @@ export default function RecordCard({ title, status, statusTip, lead, number, dev
       </div>
       {whole && several.map((p) => (
         <section key={p.key} className="fm-record-part">
-          <PartHead lead={p.lead} number={p.number} status={p.status ?? []} when={p.when} tone={stripTone(p.status ?? [], p.tone)} />
+          <PartHead lead={p.lead} number={p.number} status={p.status ?? []} check={p.check} when={p.when} tone={stripTone(p.status ?? [], p.tone)} />
           {(p.text || p.who) && <div className="fm-record-part-text">{p.text}<WhoLine who={p.who} /></div>}
           {p.actions && <ActionsRow>{p.actions}</ActionsRow>}
         </section>

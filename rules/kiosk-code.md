@@ -106,7 +106,8 @@ Two overlap fixes (2.496.552-553) were made without the phone's pose, the second
 
 Every Cockpit card says its state only on its first line (RecordCard's `status`), under the strip: its words joined
 " · ", bold, in the tone of the strip above it (red act now, amber a fault, green handled, grey quiet or closed); its
-next check is a pill at that line's right, under the strip's time (CheckPill, owner 2026-11-06). Every card that can
+next check is a pill at that line's right, under the strip's time (CheckPill, owner 2026-11-06); a problem only watched
+live says "checked live" (faultTiming.cardCheck: a card with a VESTA fault says the fault's, a live part of it its own). Every card that can
 have a state has one: an open fault nobody moved says "New fault", its stage words from `fmEngine.STAGE_WORDS`
 (owner, 2026-11-06: an unmoved maintenance-check fault's card began with its quiet line). The strip names the thing (`title`) and says when. A line of text says what is wrong,
 never the state; who moved it is the who line (`who`, faultNotes.moveWho), never its stage or its time again. Never add
@@ -148,5 +149,7 @@ bound 3D object, an object bound to nothing, an entity no object shows, an aslee
 object whose entity is gone, a full-screen announcement, a chat. Its remove or its main action is a segment of its bar,
 never a corner icon; a control (On | Off, a slider, a setting line) stays a setting line, a log (Device telemetry) a
 list. A device of Devices is never folded and has no room line (owner, 2026-11-06: redundant); on a phone its "Confirm
-before toggling" is a line of its own under its id. A bound 3D object's card is its entity's (name, room · id), saying
+before toggling" is a line of its own under its id, the box and the id always on one line. A card's fields start at
+one x (one name column, `--card-field-label`; on a phone the name above its control). Each list has ONE field
+(`SearchOrAdd`): it narrows the list and, where the list takes devices, offers them saying where each already is. A bound 3D object's card is its entity's (name, room · id), saying
 "<object> is bound to <entity>". `tests/oracles/settings_cards.mjs` draws each kind through its real section.

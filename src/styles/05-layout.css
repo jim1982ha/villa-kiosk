@@ -406,7 +406,7 @@
     padding: 16px calc(18px + env(safe-area-inset-right, 0px)) 12px calc(18px + env(safe-area-inset-left, 0px));
   }
   .modal-body {
-    padding: 8px calc(18px + env(safe-area-inset-right, 0px)) 12px calc(18px + env(safe-area-inset-left, 0px));
+    --body-left: calc(18px + env(safe-area-inset-left, 0px)); --body-right: calc(18px + env(safe-area-inset-right, 0px));
   }
   /* Keep the footer on one line — Config Editor left, Cancel/Save right — like
      desktop, instead of wrapping. */

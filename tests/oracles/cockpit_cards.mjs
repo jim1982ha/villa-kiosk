@@ -82,7 +82,7 @@ ck("  ...its next check a pill, the last thing of its first line (after its stat
    && !/fm-record-check|next check/.test(meta(issue)), [stateLine(issue), meta(issue)]);
 {
   const facility = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
-  const rule = facility.match(/\n\.fm-record-state \.fm-record-check \{([^}]*)\}/)?.[1] ?? "";
+  const rule = facility.match(/\n:is\(\.fm-record-state, \.fm-record-part-head\) \.fm-record-check \{([^}]*)\}/)?.[1] ?? "";
   ck("  ...at that line's right (pushed by its margin), whole, the line wrapping it under its state when both do not fit",
      /margin-left: auto/.test(rule) && /flex: none/.test(rule) && /white-space: nowrap/.test(rule)
      && /\n\.fm-record-state \{ display: flex; flex-wrap: wrap;/.test(facility) && !/\.fm-record-meta[^{]*fm-record-check/.test(facility), rule);
@@ -91,26 +91,28 @@ ck("  ...its next check a pill, the last thing of its first line (after its stat
   const root = new URL("../../src/", import.meta.url);
   const using = readdirSync(root, { recursive: true }).filter((f) => /\.tsx?$/.test(f) && f !== "components/fm/RecordCard.tsx")
     .filter((f) => /<CheckPill\b|fm-record-check/.test(readFileSync(new URL(f, root), "utf8")));
-  const bare = draw(h(RecordCard, { title: "T", room: "Hall", check: { when: "02:00", tip: "Next check: 02:00" } }));
+  const bare = draw(h(RecordCard, { title: "T", room: "Hall", check: { pill: "next check 02:00", tip: "Next check: 02:00" } }));
   ck("  ...every next check drawn by the card itself (no other file draws the pill); a card with no state still has its first line for it",
      using.length === 0 && /^<div class="fm-record-state strip-neutral"><span class="fm-entity-chip fm-chip-static fm-record-check"/.test(stateLine(bare))
      && !/fm-record-check/.test(meta(bare)), [using, bare]);
 }
-const { checkPill } = await import("@/fm/faultTiming");
-const nextCheck = (...a) => checkPill(...a)?.text ?? null;
+// the card's pill (cardCheck): its faults' timed check, else "checked live" for a card all live
+const { cardCheck } = await import("@/fm/faultTiming");
+const nextCheck = (...a) => cardCheck(...a)?.text ?? null;
 // at a fixed noon: the soonest of the 02:00 night and the 5-minute look is the night's from 01:55 to 02:00, and this
 // check failed those five minutes every night (2026-10-22, 01:58)
 const NOON = new Date(2026, 9, 21, 12, 0, 0);
 const said = (problems, cadence = CADENCE) => nextCheck(problems, cadence, NOON);
 ck("  ...each card says when its problems are read again, the Agent's numbers its own",
-   said([{ source: "live" }]) === null
+   said([{ source: "live" }])?.startsWith("Checked live")
    && said([{ source: "night", check: "nightly" }]) === "Next check: 02:00"
    && said([{ source: "night", check: "nightly" }], { checkMinutes: 15, nightlyAt: "04:30" }) === "Next check: 04:30"
    && said([{ source: "live", fault: { source: "night", check: "minutes" } }]) === "Next check: within 5min"   // offline: rechecked
    && said([{ source: "night", check: "nightly" }, { source: "alert", check: "minutes" }]) === "Next check: within 5min"
    && said([{ source: "alert" }]) === "Next check: within 5min" && said([{ source: "night" }]) === "Next check: within 5min" // older: read at every look now
    && said([{ source: "owner" }]) === null && said([{ source: "chat" }]) === null
-   && said([{ source: "live" }, { source: "guest" }]) === null
+   && said([{ source: "live" }, { source: "guest" }]) === null   // a person's fault beside it: its part says live
+
    && said([{ source: "schedule" }]) === null
    && said([{ source: "night", check: "nightly" }], null) === null);
 // owner, 2026-10-19: hovering "Next check" says when, as a date and time — the nightly check's next run, or the
@@ -140,8 +142,38 @@ ck("  ...and hovering it says when: the nightly check's next run, the Agent's ne
      && nextCheck([{ source: "live", fault: { source: "night", check: "day" } }], CADENCE, new Date(2026, 9, 19, 1, 58)) === "Next check: within 5min");
   ck("  ...a live item beside them keeps its rule: the faults decide; live alone stays live; a person's alone: by hand",
      nextCheck([{ source: "live" }, { source: "night", check: "minutes" }], CADENCE, t1310) === "Next check: within 5min"
-     && nextCheck([{ source: "live" }], CADENCE, t1310) === null
+     && nextCheck([{ source: "live" }], CADENCE, t1310) === "Checked live"
      && nextCheck([{ source: "night", check: "day" }], null, t1310) === null);
+}
+// owner, 2026-11-06: an Inbox card whose problem is only live ("Unavailable", no VESTA fault) had no pill: the tablet
+// re-reads live states all the time, so it says "checked live", its tip the Live row's own words (faultTiming's table)
+{
+  const { timingRow, LIVE_CHECK } = await import("@/fm/faultTiming");
+  const goes = timingRow("live", null).goes;
+  ck("  ...a problem watched live: \"checked live\", its tip when the card goes in the table's Live row's words",
+     LIVE_CHECK.pill === "checked live" && LIVE_CHECK.tip === `This tablet watches it all the time: the card goes ${goes[0].toLowerCase()}${goes.slice(1)}`
+     && goes === "As soon as the device is back to normal", LIVE_CHECK);
+  const dev = { key: "camera.example_storage", label: "Storage Room Person Detection", room: "Storage" };
+  const liveItem = { id: "unavailable:camera.example_storage", kind: "unavailable", title: dev.label, detail: "Unavailable",
+    entityId: dev.key, source: "live", device: dev };
+  const drawn = (items) => draw(h(AttentionCard, { card: cockpitCard(groupAttention(items)[0], CADENCE), onOpenEntity: () => {} }));
+  const alone = drawn([liveItem]);
+  ck("  ...drawn: a live-only card has the pill at the right of its first line, saying \"checked live\"",
+     /<span class="fm-entity-chip fm-chip-static fm-record-check" aria-label="This tablet watches it all the time[^"]*"><svg[^>]*lucide-refresh-cw[\s\S]*?<\/svg>checked live<\/span><\/div>$/.test(stateLine(alone)), stateLine(alone));
+  // a live state and a fault of another problem on one card: the card's pill is the fault's (the later check, the one
+  // to wait for); the live part its own "checked live" on its header, before its time
+  const fault = { id: "fault:f9", kind: "fault", title: "Storage camera storage full", detail: "Fault", entityId: "sensor.example_storage_card", ticketId: "f9",
+    stage: "fault", source: "night", check: "nightly", device: dev };
+  const both = cockpitCard(groupAttention([liveItem, fault])[0], CADENCE, NOON);
+  const mixed = draw(h(AttentionCard, { card: both, onOpenEntity: () => {} }));
+  const heads = [...mixed.matchAll(/<div class="fm-record-part-head[\s\S]*?<\/div>/g)].map((m) => m[0]);
+  ck("  ...a card of several: the card's pill its fault's next check, the live part's header its own \"checked live\" before its time",
+     both.lines.length === 2 && /next check 02:00<\/span><\/div>$/.test(stateLine(mixed))
+     && heads.filter((x) => /checked live<\/span><span class="fm-record-when">/.test(x)).length === 1
+     && heads.filter((x) => /fm-record-check/.test(x)).length === 1, [stateLine(mixed), heads]);
+  const twoLive = cockpitCard(groupAttention([liveItem, { ...liveItem, id: "alarm:camera.example_storage", kind: "alarm", detail: "Unlocked" }])[0], CADENCE);
+  ck("  ...a card all live: one pill, the card's, none repeated on its parts",
+     twoLive.nextCheck === LIVE_CHECK && twoLive.lines.every((l) => !l.check), twoLive);
 }
 // owner, 2026-10-21: "the tooltip is updating every minute, whereas I expect it to reflect the 5 min check period" —
 // it said now + 5 min. The Agent says when its look last started (cadence lastLookAt): the next one is a fixed moment.

@@ -61,7 +61,7 @@ const NAME = {
 };
 const VALUE = { times: 48, metres: 57, degrees: 42 };
 const ICON = 16;
-const phoneSide = px(/\.modal-body \{\s*padding: \d+px calc\((\d+)px/, layout);
+const phoneSide = px(/\.modal-body \{\s*--body-left: calc\((\d+)px/, layout);
 const nameGap = px(/\.setting-row-name \{[^}]*gap: (\d+)px;/);
 const icon = px(/\.setting-row-name > svg \{ flex: 0 0 auto; width: (\d+)px; height: \d+px; \}/);
 const info = px(/\.setting-row-name > \.info-tip > \.info-btn \{ width: (\d+)px;/);
@@ -92,7 +92,7 @@ for (const r of rows) {
 // the laptop (the family's width): several settings to a line, each its name alone on its line, in equal shares
 {
   const family = px(/--settings-width: (\d+)px;/, css("01-base.css"));
-  const bodySide = px(/^\.modal-body \{[^}]*padding: \d+px (\d+)px/m);
+  const bodySide = px(/^\.modal-body \{[^}]*--body-left: (\d+)px/m);
   const lineGap = px(/\.setting-line \{ display: flex; gap: (\d+)px;/);
   const tree = parseTsx("components/settings/SettingsModal.tsx");
   const lines = elements(tree, "div").filter((d) => propText(d, "className") === '"setting-line"')

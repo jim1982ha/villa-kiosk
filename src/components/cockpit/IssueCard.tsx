@@ -66,6 +66,7 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
     const said = alone ? status : own.status, at = alone ? when : rowWhen({ lines: [line] });
     return {
       key: line.key, status: own.status, number: own.number, when: at, tone: own.tone,
+      ...(line.check ? { check: { pill: line.check.pill, tip: line.check.tip } } : {}),
       lead: icons.lines[i] ? <SourceIcons {...icons.lines[i]!} size={14} /> : undefined,
       text: <LineWords line={line} look={card.look} />,
       who: card.look === "watched" ? line.closing : moveWho(line.move, said.map((s) => s.text), at, momentText),
@@ -90,7 +91,7 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
         : icons.head ? <SourceIcons {...icons.head} /> : undefined}
       // when its problems are read again: a pill at the right of its first line (owner, 2026-11-06); hovering it says it
       // in words, with its date and time (owner, 2026-10-19). On the Watch list the first line says when it closes.
-      check={card.nextCheck && !watch ? { when: card.nextCheck.when, tip: card.nextCheck.tip } : undefined}
+      check={card.nextCheck && !watch ? { pill: card.nextCheck.pill, tip: card.nextCheck.tip } : undefined}
       parts={parts}
       // its strip's colour when nothing is said (cardStrip); a fault being confirmed: its frame marked (owner, 2026-10-23)
       tone={[strip.tone, card.look === "watched" ? "fault-watched" : "", focused ? "cockpit-focus" : ""].filter(Boolean).join(" ")}

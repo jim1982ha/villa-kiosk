@@ -404,8 +404,8 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
               Fold several entities that are really one physical device (e.g. a combo sensor with separate
               temperature and humidity entities) into a single map badge. Only the primary entity keeps a badge on the
               map; every other member's value and 24-hour history appear in that badge's detail view instead. To make
-              one, pick the entity that should keep the map badge (e.g. temperature) under New group, then add the rest
-              as members.
+              one, search for the entity that should keep the map badge (e.g. temperature) and pick it (Create a group),
+              then add the rest as members.
             </>} />
 
             <UnavailableByDesign title="Asleep between reports" tip={<>

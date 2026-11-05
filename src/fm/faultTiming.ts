@@ -225,14 +225,36 @@ export function nextCheckAt(problems: readonly CheckedProblem[], cadence: AgentC
   return soonest(problems, cadence, now)?.at ?? null;
 }
 
+/** A card's check, as its pill says it: `pill` its words beside the refresh icon ("next check within 5min", "checked
+ *  live"), `tip` what hovering it says, `text`/`at`/`when` the timed check's sentence, moment and words. */
+export interface CheckSaid { text: string; at: string | null; when: string; pill: string; tip: string }
+
 /** ⚠️ ONE ANSWER FOR THE NEXT-CHECK PILL (owner, 2026-11-01: "the time each fault ticket will be rechecked", on every
  *  fault card): an Inbox card's and a ticket's, from their problems: its words ("within 5min", "02:00", the Agent's own
- *  numbers, never a copy), what hovering it says. ⚠️ A PILL ONLY WITH A TIME (owner, 2026-11-01, the audit: "simple,
- *  comprehensible, logical"): a refresh icon beside "live" or "by hand" announced a check no one will make. */
-export function checkPill(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()):
-  { text: string; at: string; when: string; tip: string } | null {
+ *  numbers, never a copy), what hovering it says. A pill with a time; a problem watched live says so (livePill, by
+ *  cardCheck); one only a person closes has none (owner, 2026-11-01: a refresh icon beside "by hand" announced a check
+ *  no one will make). */
+export function checkPill(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): CheckSaid | null {
   const next = soonest(problems, cadence, now);
   if (!next) return null;
   const text = `Next check: ${next.words}`, at = momentText(next.at);
-  return { text, at, when: next.words, tip: `${text} (${at})` };
+  return { text, at, when: next.words, pill: `next check ${next.words}`, tip: `${text} (${at})` };
+}
+
+/** A problem that is only what the map shows now (no fault on it): this tablet reads it again all the time. */
+export const watchedLive = (p: CheckedProblem): boolean => p.source === "live" && !p.fault;
+
+/** ⚠️ A PROBLEM WATCHED LIVE SAYS SO TOO (owner, 2026-11-06: an Inbox card for a device "Unavailable" with no VESTA
+ *  fault had no pill): the tablet re-reads live states continuously, so its pill says "checked live", its tip when the
+ *  card goes in the Live row's own words (ROWS.live.goes, the table's). */
+export const LIVE_CHECK: CheckSaid = {
+  text: "Checked live", at: null, when: "checked live", pill: "checked live",
+  tip: `This tablet watches it all the time: the card goes ${ROWS.live.goes.charAt(0).toLowerCase()}${ROWS.live.goes.slice(1)}`,
+};
+
+/** A card's pill: its faults' next check when one has a time (a card with a live state AND a VESTA fault says the
+ *  fault's: the live state is read continuously, so the later check, the fault's, is the one to wait for); else
+ *  "checked live" when every problem is watched live; else none. */
+export function cardCheck(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): CheckSaid | null {
+  return checkPill(problems, cadence, now) ?? (problems.length > 0 && problems.every(watchedLive) ? LIVE_CHECK : null);
 }
