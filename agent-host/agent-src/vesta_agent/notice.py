@@ -84,6 +84,25 @@ def note_press(state, incident: int, label: str, name: str, mark: str | None = N
     state.set_incident_history(incident, _kept(history))
 
 
+def close_step(state, incident: int, note: str, note_in: dict | None = None) -> None:
+    """Incident `incident` closed with `note` (who closed it, where, when; `note_in`: its other languages): its closing
+    step in its history, in the close's own words — every close, however it was made.
+
+    ⚠️ A CLOSE KEEPS ITS OWN LINE (architecture review 22, card 6): it had one only when a closing message happened to be
+    sent ("- Closing note sent 00:29 (to: FM)", the confirmation's time, not the close's), none at all for "Not a
+    problem" in the Cockpit, and never who closed it; an alert back within its watch then told its close three ways.
+    A closing step standing already is its close: a closing message's ("Closing note sent", no words) takes these words;
+    one with words, or the close's end (CLEARED), stays."""
+    history = state.incident_history(incident)
+    if history and (history[-1].get("stage") == CLEARED_STAGE
+                    or (history[-1].get("stage") == CLOSED_STEP and history[-1].get("note"))):
+        return
+    if history and history[-1].get("stage") == CLOSED_STEP:
+        history.pop()
+        state.set_incident_history(incident, history)
+    note_step(state, incident, CLOSED_STEP, note, note_in)
+
+
 def note_step(state, incident: int, stage: str, note: str, note_in: dict | None = None) -> None:
     """A step of incident `incident` that is not a notice sent — someone took it on in the Kiosk ("taken"), its close
     once its watch is over ("cleared") — kept in its history in its own words, so a later "Status:" still lists it
@@ -295,7 +314,7 @@ class Notices:
         # ⚠️ A CLOSE STANDING IS ITS BOTTOM LINE (owner, 2026-11-05, #118): redrawn while closed, the card listed
         # "- Closing note sent 00:19" above "✅ Not a problem on 00:19 (Jm). Watch 1h." — the same close. Its step shows
         # once something came after it (it came back), or as the close's own words once its watch is over (note_step)
-        if shown and shown[-1].get("stage") == CLOSED_STEP and self._closed_now(incident):
+        if shown and shown[-1].get("stage") == CLOSED_STEP and self.closed_now(incident):
             shown = shown[:-1]
         for h in shown:
             roles = self._roles(h) if h.get("chats") or h.get("to") else set()
@@ -307,7 +326,8 @@ class Notices:
             lines.append(f"- {self._line(h, lang)}")
         return lines
 
-    def _closed_now(self, incident: int) -> bool:
+    def closed_now(self, incident: int) -> bool:
+        """Is incident `incident` closed now (False when that cannot be read)?"""
         try:
             return bool(self.closed(int(incident)))
         except Exception:  # noqa: BLE001 — not knowable: every step listed, as before
@@ -459,18 +479,19 @@ class Notices:
         return {**h, "word": self.word(int(incident), None, bool(history)),
                 "to": self.to_line(int(incident), history=history) or h["to"]}
 
-    def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> None:
+    def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> int:
         """A notice about `incident` went to `sent` — (chat, the role or roles it was for) — one result's messages being one
-        notice: its history line, each chat with the roles it was for. `stage` unset: "new" for the first, "update" after."""
+        notice: its history line, each chat with the roles it was for. `stage` unset: "new" for the first, "update" after.
+        Returns how many steps it recorded (0 or 1): the ONE answer to "what did this result add" (Outcome's `before`)."""
         if stage == PRESSED_STAGE:
             # the answer to a press in its own chat: the press itself is the story's line (note_press) — recorded as
             # "Update sent", it told the same press as two events (architecture review, 2026-10-15)
-            return
+            return 0
         history = self.state.incident_history(incident)
         if stage == CLOSED_STEP and self._closed_again(history):
             # ⚠️ ONE CLOSE, ONE STEP (owner, 2026-11-05, #118): the villa's own all-clear at 00:27 of an alert closed with
             # "Not a problem" at 00:19 was a second "Closing note sent" — the same close, its message taken over
-            return
+            return 0
         reach = self._reach(int(incident))
         # the roles it was for — the chat's own only when the desk did not say whom the priority reaches: a step to
         # no role (a P3's own message, taken over) records what the priority does instead ("digest"), so no later
@@ -490,6 +511,7 @@ class Notices:
                 line["run"] = run
         history.append(line)
         self.state.set_incident_history(incident, _kept(history))
+        return 1
 
     @staticmethod
     def _closed_again(history: list[dict]) -> bool:

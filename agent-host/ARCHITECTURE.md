@@ -1197,3 +1197,24 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
   tablet" (message_format.ON_PLACE, the one place word).
 - Not done: the Cockpit's close still says no watch (its watch words are the desk's, words.yaml; the Cockpit close is
   the engine's), and card 4, one "kind of close" owning Done / Not a problem, waits for a third kind.
+
+## What a result recorded, every hand-over, endings by standing, the tablet's language, a close's own line (architecture review 22, 2026-11-05, 0.12.455)
+
+- **What a result recorded: `Notices.record`'s return** (card 1). Outcome counted a result's steps by its own rule
+  (every notice but a press) while `record` skipped a second close; the villa's late all-clear after a watch counted 1,
+  recorded 0, and `before=1` cut the press line from the tablet's story. `carry_out` sums what `record` returns.
+- **Every hand-over of a tick reaches the night's message** (card 2): `recheck_open` returns `handed` {id: note}
+  (`Problems.record_rechecked` returns `notes`, as `record_night`), and `main` merges it with back_online's.
+- **Endings by how the device stands, not by rule** (cards 3, 7): `_device` (every rule but missing and hidden-in-rule)
+  for missing, gone and hidden; ASLEEP_SKIPPED for asleep; NEEDS_ANSWER (PM-SILENT) for `offline`, a hand-over to the
+  device's open offline fault (`offline_hands`), and PM-SILENT is not judged while offline (`readable`). A hidden-device
+  fault's subject is its hidden devices (`entities_of`, the one copy), its automation is read too (`_read_ids`):
+  `rule_gone`, `answers_again`. `recheck_open` reads what it no longer finds with the client and the pack, as the night.
+- **A fault's words between two nights: `battery.reworded` for every READS rule** (card 5), its `since_words` masked;
+  `recheck._restate` is the one writer (recheck_open's restated, gone_offline's offline faults); gone_missing's own
+  rewrite names its task moved.
+- **The tablet's card in English: `IncidentThread._for_everyone`** (card 4), applied in `tell`: the Status redrawn for no
+  chat (`Notices.restatus(0, …)`), the heading's `lang` dropped (the body as written, its translation in `languages`).
+- **A close keeps its own step: `notice.close_step`** (card 6), from `IncidentThread.close` when the incident is closed
+  (`Notices.closed_now`; PlainWords never): the close's words and languages; a "Closing note sent" step standing takes
+  them, a worded one or the watch's end stays. The Cockpit's close still has no watch (round 21's Not done).

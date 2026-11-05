@@ -57,19 +57,30 @@ class Verdict(NamedTuple):
 
 
 def seen(row: dict, found) -> Verdict:
-    """Every rule's verdict but the battery's: still found, or not."""
+    """Still found, or not (reworded's, when its words have not changed)."""
     return Verdict(any(x.rule_id == row["rule_id"] and x.entity_id == row["entity_id"] for x in found))
 
 
-def reworded(row: dict, found) -> Verdict:
-    """`seen`, raised again when its words now differ (`restate`): a rule whose words change only when what it finds
-    does, so its fault says it within the next tick, never only after the next night.
+def _plain(summary, detail) -> str:
+    """A finding's words with its running time taken out (rules.since_of `since_words`: "offline for 4d 9h"), which
+    every reading words anew: what is left changes only when what was found does."""
+    words, d = str(summary or ""), detail if isinstance(detail, dict) else json.loads(detail or "{}")
+    since = d.get("since_words")
+    return words.replace(str(since), "{since}", 1) if since else words
 
-    ⚠️ NOT EVERY RULE (owner, 2026-11-05: "after updating, i still see this card"): the hidden-device fault kept its
-    words of 02:01 under a release that words it otherwise. A rule whose words count time ("offline for 4d 9h") would
-    be raised again at every tick, so it stays `seen`."""
+
+def reworded(row: dict, found) -> Verdict:
+    """`seen`, raised again when its words now differ (`restate`), its running time apart: its fault says what the
+    reading finds within the next tick, never only after the next night. Every rule's verdict but the battery's.
+
+    ⚠️ EVERY RULE, ONE TEST (architecture review 22, card 5): a fault asked for its new words by name (the hidden-device
+    fault, 2026-11-05: "after updating, i still see this card"), so a reconnect loop counted 11 at 15:40 still read
+    "6 times" until 02:00. A rule whose words count time ("offline for 4d 9h") is compared without that time, so it is
+    not raised again at every tick."""
     same = next((x for x in found if x.rule_id == row["rule_id"] and x.entity_id == row["entity_id"]), None)
-    return Verdict(True, restate=same) if same is not None and same.summary != row.get("summary") else seen(row, found)
+    if same is not None and _plain(same.summary, same.detail) != _plain(row.get("summary"), row.get("detail")):
+        return Verdict(True, restate=same)
+    return seen(row, found)
 
 
 def judge(row: dict, found) -> Verdict:

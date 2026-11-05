@@ -129,7 +129,8 @@ def test_the_night_and_the_5_minute_recheck_carry_the_rewrites():
     assert "told_watch_over(store, now_ref, zone, ctx.settings)" in src           # the night ends the watches it owes
     assert 'out["edits"] = res.get("edits") or []' in src
     assert src.count("N.told_cleared(ctx.store,") == 1                 # one tick: every close of the 5 minutes
-    assert 'handed=res["handed"]' in src and src.count("one_edit_per_message(") == 2
+    # every hand-over of the tick is said (test_recheck_all: a battery's step, run through recheck.py)
+    assert src.count("one_edit_per_message(") == 2
     # a reopening (a person's, or still there after a close) is marked on the message that told it, in the same tick
     assert "reopened_untold(ctx.store, ctx.zone, ctx.settings, edits)" in src and "ctx.store, ctx.zone, ctx.settings, edits)" in src.split("still_there_untold(")[-1]
     assert "store=store, at=now)" in inspect.getsource(recheck.gone_offline)

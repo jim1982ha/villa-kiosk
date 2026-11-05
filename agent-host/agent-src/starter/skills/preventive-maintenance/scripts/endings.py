@@ -23,12 +23,20 @@ import sys
 from datetime import datetime
 from typing import Callable, NamedTuple
 
-from vesta_shared.device_state import OFFLINE, out_for  # "is it back": one answer
+from vesta_shared import automation_words as AW  # an automation named by its own name
+from vesta_shared.device_state import OFFLINE, is_offline, out_for  # "is it back": one answer
 from vesta_shared.offline import device_answers  # a device that answers is not offline
 from vesta_shared.timeutil import clock
 import rules as R  # the missing rule's id
 
 OFFLINE_RULE = "PM-UNAVAILABLE"
+#: The rules whose reading leaves out a device asleep between its reports (nightly.silent_findings,
+#: reconnect_findings): a fault of theirs about a device listed asleep since ends saying so. A battery is read on its
+#: last real charge (vesta_shared.asleep), so its fault is not one of them.
+ASLEEP_SKIPPED = frozenset({OFFLINE_RULE, "PM-SILENT", "PM-RECONNECT-LOOP"})
+#: The rules whose reading needs the device answering (silent: "although it is online"): a fault of theirs whose device
+#: went offline since is followed by its offline fault, never cleared.
+NEEDS_ANSWER = frozenset({"PM-SILENT"})
 
 # the sentences, each written once (the Cockpit's fault and the Telegram message read them as they are)
 GONE_NOTE = "Closed: this device no longer exists in the villa's system."
@@ -52,8 +60,31 @@ def cleared_note(at: datetime | None = None, zone: str | None = None) -> str:
 
 
 def entities_of(f: dict) -> list[str]:
-    """The entities a fault is about: its detail's `entities`, else its own."""
-    return json.loads(f.get("detail") or "{}").get("entities") or [f["entity_id"]]
+    """The devices a fault is about: its detail's `entities`, else its own — for a hidden-device fault, the hidden
+    devices its automation names (its own entity is the automation: rules.hidden_in_rule_rules). The ONE answer, the
+    night's and the recheck's (architecture review 22, card 7: three copies, and the automation's fault ended "this
+    device no longer exists" when the automation was deleted)."""
+    d = json.loads(f.get("detail") or "{}")
+    if f.get("rule_id") == R.HIDDEN_IN_RULE:
+        return list(d.get("hidden") or [])
+    return d.get("entities") or [f["entity_id"]]
+
+
+def offline_hands(open_rows) -> dict[tuple[str, str], str]:
+    """The open faults of a rule that needs its device answering (NEEDS_ANSWER) whose device has an open offline fault
+    now, each (rule, entity) → "Followed by: <the offline fault's words>". ⚠️ OFF IS NOT FIXED (architecture review 22,
+    card 3): a sensor silent for 2 days that went offline closed "Cleared: the check at 11:05 no longer sees it", and
+    came back 10 minutes later as a new offline fault."""
+    rows = [dict(o) for o in open_rows or ()]
+    off = [(set(entities_of(o)), o.get("summary") or "") for o in rows if o["rule_id"] == OFFLINE_RULE]
+    out = {}
+    for o in rows:
+        if o["rule_id"] not in NEEDS_ANSWER:
+            continue
+        said = next((summary for es, summary in off if es & set(entities_of(o))), None)
+        if said:
+            out[(o["rule_id"], o["entity_id"])] = f"Followed by: {said}"
+    return out
 
 
 class Reading(NamedTuple):
@@ -61,7 +92,8 @@ class Reading(NamedTuple):
     recheck's reading of a rule other than the offline one — its devices were read by back_online the same tick);
     `states` of their entities and those the villa's system answers "not found" for (`gone`); `pack`; `now`; `minutes`
     (back_online_minutes: how long a device must be back). What follows a fault now, each (rule, entity) → its note:
-    `missing` (nightly.missing_hands), `alerts` (nightly.handed_to_alerts), `battery` (vesta_shared.battery.judge)."""
+    `missing` (nightly.missing_hands), `alerts` (nightly.handed_to_alerts), `battery` (vesta_shared.battery.judge),
+    `offline` (offline_hands)."""
     client: object | None
     states: dict
     gone: set
@@ -71,14 +103,21 @@ class Reading(NamedTuple):
     missing: dict
     alerts: dict
     battery: dict
+    offline: dict
+
+
+def _read_ids(f: dict) -> list[str]:
+    """What is read for fault `f`: its devices, and the automation a hidden-device fault is about (it may be gone)."""
+    return entities_of(f) + ([f["entity_id"]] if f.get("rule_id") == R.HIDDEN_IN_RULE else [])
 
 
 def read(client, faults, *, pack=None, now: datetime | None = None, minutes: float | None = None,
-         missing: dict | None = None, alerts: dict | None = None, battery: dict | None = None) -> Reading:
+         missing: dict | None = None, alerts: dict | None = None, battery: dict | None = None,
+         offline: dict | None = None) -> Reading:
     """The reading for `faults`: their entities' states and which of them the villa's system no longer has, read once.
     ⚠️ NOT READ IS NOT GONE: only Home Assistant's own "not found" makes a device gone; a read that fails reads nothing
     (named on stderr), and no ending that needs it holds."""
-    ids = sorted({e for f in faults for e in entities_of(f) if ENTITY_ID.match(str(e))})
+    ids = sorted({e for f in faults for e in _read_ids(f) if ENTITY_ID.match(str(e))})
     states, gone = {}, set()
     if client is not None and ids:
         try:
@@ -89,7 +128,8 @@ def read(client, faults, *, pack=None, now: datetime | None = None, minutes: flo
             print(f"preventive-maintenance: the devices of {len(faults)} fault(s) could not be read "
                   f"({type(e).__name__})", file=sys.stderr)
             states, gone = {}, set()
-    return Reading(client, states, gone, pack, now, minutes, dict(missing or {}), dict(alerts or {}), dict(battery or {}))
+    return Reading(client, states, gone, pack, now, minutes, dict(missing or {}), dict(alerts or {}), dict(battery or {}),
+                   dict(offline or {}))
 
 
 class Ending(NamedTuple):
@@ -116,8 +156,34 @@ def _offline(rule: str) -> bool:
     return rule == OFFLINE_RULE
 
 
-def _not_missing(rule: str) -> bool:
-    return rule != R.MISSING                  # a missing fault ends by its own reading: back (BACK_NOTE), or a Done
+def _device(rule: str) -> bool:
+    """A fault about a device VESTA watches: every rule's but the missing one's (it ends by its own reading: back,
+    BACK_NOTE, or a Done) and the hidden-device one's (about an automation naming devices no check watches)."""
+    return rule not in (R.MISSING, R.HIDDEN_IN_RULE)
+
+
+def _asleep_skipped(rule: str) -> bool:
+    return rule in ASLEEP_SKIPPED
+
+
+def _needs_answer(rule: str) -> bool:
+    return rule in NEEDS_ANSWER
+
+
+def _in_rule(rule: str) -> bool:
+    return rule == R.HIDDEN_IN_RULE
+
+
+def _rule_gone(f: dict) -> str:
+    """A hidden-device fault's automation (or script) deleted: its sentence, the automation named by its own name."""
+    d = json.loads(f.get("detail") or "{}")
+    return f"Closed: the {AW.words(d.get('name'), f['entity_id'], d.get('kind'))} no longer exists in the villa's system."
+
+
+def _all_answer(es, r) -> bool:
+    """Every one of `es` read now, and none offline: a hidden device that answers is no fault (rules.hidden_in_rule_rules)."""
+    return r.client is not None and bool(es) and all(e in r.states and not is_offline((r.states[e] or {}).get("state"))
+                                                     for e in es)
 
 
 def _any(rule: str) -> bool:
@@ -125,23 +191,28 @@ def _any(rule: str) -> bool:
 
 
 #: EVERY WAY A FAULT ENDS, in the order it is asked (architecture review N card 2, 2026-10-27, for the offline fault;
-#: round 13 card 2, 2026-11-01, for both checks).
+#: round 13 card 2, 2026-11-01, for both checks). ⚠️ BY HOW THE DEVICE STANDS, NOT BY RULE (architecture review 22,
+#: card 3): hidden, asleep and gone were asked for the offline fault alone, so a battery of a device hidden since read
+#: "Next check: within 5min" all day and closed "Cleared: the nightly check no longer sees it" at 02:00.
 ENDS = (
+    # a hidden-device fault (its devices: entities_of): its automation deleted, or every device it names answers again
+    Ending("rule_gone", _in_rule, lambda f, es, r: f["entity_id"] in r.gone, lambda f, es, r: _rule_gone(f)),
+    Ending("answers_again", _in_rule, lambda f, es, r: _all_answer(es, r), lambda f, es, r: BACK_ONLINE_NOTE),
     # ⚠️ A DEVICE GONE IS MISSING, NOT OVER (owner, 2026-10-31): an entrance lock its hub stopped sharing closed its
     # faults "this device no longer exists" and nothing more was said. A fault about a device VESTA watched follows its
     # missing fault; only one about something no longer watched (an automation deleted, a device a person said was
     # removed on purpose) closes as gone.
-    Ending("missing", _not_missing, lambda f, es, r: _key(f) in r.missing, lambda f, es, r: r.missing[_key(f)],
+    Ending("missing", _device, lambda f, es, r: _key(f) in r.missing, lambda f, es, r: r.missing[_key(f)],
            handed=True),
     # ⚠️ A DEVICE DELETED FROM THE VILLA'S SYSTEM (owner, 2026-10-14): its fault closed "Cleared: the nightly check no
     # longer sees it", as if it had come back — every entity answered "not found" (its own 404, never a failed read)
-    Ending("gone", _not_missing, lambda f, es, r: bool(es) and all(e in r.gone for e in es), lambda f, es, r: GONE_NOTE),
+    Ending("gone", _device, lambda f, es, r: bool(es) and all(e in r.gone for e in es), lambda f, es, r: GONE_NOTE),
     # ⚠️ HIDDEN SINCE IT WAS FOUND (architecture review, 2026-10-21): the night check no longer saw it and closed it as
     # "Cleared" — said of a device still off
-    Ending("hidden", _offline, lambda f, es, r: r.pack is not None and bool(es)
+    Ending("hidden", _device, lambda f, es, r: r.pack is not None and bool(es)
            and not any(r.pack.is_watched(e) for e in es), lambda f, es, r: HIDDEN_NOTE),
     # listed as unavailable by design since it was found (vesta_shared.asleep): never a fault
-    Ending("asleep", _offline, lambda f, es, r: r.pack is not None and bool(es) and all(r.pack.is_asleep(e) for e in es),
+    Ending("asleep", _asleep_skipped, lambda f, es, r: r.pack is not None and bool(es) and all(r.pack.is_asleep(e) for e in es),
            lambda f, es, r: ASLEEP_NOTE),
     Ending("back", _offline, lambda f, es, r: r.client is not None and r.minutes is not None and bool(r.states)
            and out_for(r.client, [e for e in es if e not in r.gone], r.states, OFFLINE, r.now, r.minutes,
@@ -153,6 +224,9 @@ ENDS = (
            and device_answers(r.pack, es, r.client.states), lambda f, es, r: ANSWERS_NOTE),
     # still off, and the villa's own alert follows it now: one problem, the alert's (nightly.handed_to_alerts)
     Ending("alert", _offline, lambda f, es, r: _key(f) in r.alerts, lambda f, es, r: r.alerts[_key(f)], handed=True),
+    # its device went offline since, and its offline fault follows it now (offline_hands)
+    Ending("offline", _needs_answer, lambda f, es, r: _key(f) in r.offline, lambda f, es, r: r.offline[_key(f)],
+           handed=True),
     # ⚠️ A BATTERY THAT MOVED A STEP (architecture review, 2026-10-22): "within the week" → "replace now", or back, is
     # handed to its new fault, never cleared (vesta_shared.battery.judge)
     Ending("battery", _any, lambda f, es, r: _key(f) in r.battery, lambda f, es, r: r.battery[_key(f)], handed=True),

@@ -92,7 +92,8 @@ def back_online(store, client, now: datetime, minutes: float, zone: str, pack=No
         return {"closed": [], "gone": [], "handed": {}, "actions": []}
     asked = [f for f in rows if f["rule_id"] != MISSING_RULE]
     r = E.read(client(), asked, pack=pack, now=now, minutes=minutes, missing=N.missing_hands(rows, rows),
-               alerts=N.handed_to_alerts(store, pack, N.alerted_offline(store, pack)) if pack is not None else {})
+               alerts=N.handed_to_alerts(store, pack, N.alerted_offline(store, pack)) if pack is not None else {},
+               offline=E.offline_hands(rows))
     day = now.astimezone(ZoneInfo(zone)).date().isoformat()
     closed, deleted, moved, handed = [], [], [], {}
     for f in asked:
@@ -114,14 +115,15 @@ def back_online(store, client, now: datetime, minutes: float, zone: str, pack=No
 def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_minutes: float | None = None) -> dict:
     """{actions: [faults_changed when a task moved], send: [the facility manager's message for a critical device],
     found: [finding ids]}. A device with no open finding gets one; one whose finding is open is recorded as seen still
-    offline at `now` (Problems.seen, with the skill's `settle_minutes`): its words stay the night check's to restate,
-    but a person's close of its fault that long ago or more no longer holds."""
+    offline at `now` (Problems.seen, with the skill's `settle_minutes`) — a person's close of its fault that long ago or
+    more no longer holds — and raised again when its words changed but for its running time (battery.reworded: an
+    integration's "(3 devices)" now 5; architecture review 22, card 5)."""
     none = {"actions": [], "send": [], "found": []}
     if pack is None or client() is None:
         return none
     ids = sorted({r["entity_id"] for fam in watched_kinds() for r in pack.entities(fam)})
     at = now.astimezone(ZoneInfo(zone))
-    found, moved = [], []
+    found, moved, restated = [], [], []
     # since when each device is offline, from the past kept between ticks (HISTORY_KEPT): read again whole on every
     # tick, that was the recheck's 41.9 s, then 89.6 s (owner, 2026-10-30)
     for f in N.offline_findings(pack, client().states(ids), at, params, set(N.alerted_offline(store, pack)),
@@ -129,11 +131,15 @@ def gone_offline(store, pack, client, now: datetime, params, zone: str, settle_m
         row = store.open_finding(f.rule_id, f.entity_id)
         if row:
             moved += Problems(store).seen(row["id"], now.isoformat(), settle_minutes)
+            if battery.reworded(dict(row), [f]).restate is not None:
+                restated.append(f)
         else:
             found.append(f)
+    day = at.date().isoformat()
+    if restated:
+        moved += _restate(store, restated, day, now, params, settle_minutes)
     if not found:
         return {**none, "actions": result.moved(moved)}
-    day = at.date().isoformat()
     rec = Problems(store).record(found, day, state_rules=N.STATE_RULES, event_rules=N.EVENT_RULES,
                                  worsened_step=params.behaviour("worsened_step_pct"), at=now.isoformat(),
                                  settle_minutes=settle_minutes)
@@ -154,8 +160,9 @@ def gone_missing(store, pack, client, now: datetime, params, zone: str, settle_m
     at = now.astimezone(ZoneInfo(zone))
     day = at.date().isoformat()
     N.forget_dismissed(store, day)
-    near = {e for f in store.findings(status="open")
-            for e in json.loads(f.get("detail") or "{}").get("entities") or [f["entity_id"]] if ENTITY_ID.match(str(e))}
+    # a hidden-device fault's devices are hidden: no check watches them, none is "near"
+    near = {e for f in store.findings(status="open") if f["rule_id"] != R.HIDDEN_IN_RULE
+            for e in E.entities_of(f) if ENTITY_ID.match(str(e))}
     if not (near or (pack is not None and pack.critical) or store.cache_get(N.FORGOTTEN)) or client() is None:
         return none
     try:
@@ -175,6 +182,8 @@ def gone_missing(store, pack, client, now: datetime, params, zone: str, settle_m
             if row["summary"] != f.summary or json.loads(row["detail"] or "{}").get("since") != f.detail.get("since"):
                 store.raise_finding(f.rule_id, f.entity_id, f.family, row["opened_day"], f.severity, f.summary,
                                     {**json.loads(row["detail"] or "{}"), **f.detail, "check": f.check})
+                # its open task named moved, so the Kiosk's fault is retitled now (tickets.repair), as _restate's
+                moved += _open_task(store, row["id"])
             moved += Problems(store).seen(row["id"], now.isoformat(), settle_minutes)
         else:
             new.append(f)
@@ -193,6 +202,22 @@ def gone_missing(store, pack, client, now: datetime, params, zone: str, settle_m
     if ids:
         store.audit("preventive-maintenance", "gone_missing", {"findings": ids})
     return {"actions": result.moved(moved + rec["task_ids"]), "send": send, "found": ids, "closed": closed}
+
+
+def _open_task(store, finding_id) -> list[int]:
+    """The id of finding `finding_id`'s open task, as a list ([] when it has none open)."""
+    t = store.last_task(f"finding:{int(finding_id)}")
+    return [t["id"]] if t and t["status"] == "open" else []
+
+
+def _restate(store, findings, day: str, now: datetime, params, settle_minutes: float | None) -> list[int]:
+    """Open faults raised again with their words now, as the night raises them (Problems.record → store.raise_finding):
+    its summary is the one title every reader shows; the ids of their open tasks, named moved so the Kiosk's fault is
+    retitled now (tickets.repair). The ONE writer of a fault's new words between two nights."""
+    Problems(store).record(list(findings), day, state_rules=N.STATE_RULES, event_rules=N.EVENT_RULES,
+                           worsened_step=params.behaviour("worsened_step_pct"), at=now.isoformat(),
+                           settle_minutes=settle_minutes)
+    return [t for f in findings if (row := store.open_finding(f.rule_id, f.entity_id)) for t in _open_task(store, row["id"])]
 
 
 OFFLINE_RULE = E.OFFLINE_RULE      # read by back_online (a device back for `back_online_minutes`), not in READS
@@ -304,7 +329,7 @@ class Reading(NamedTuple):
     entities: Callable
     found: Callable
     per_day: bool = False
-    judge: Callable = battery.seen
+    judge: Callable = battery.reworded
     readable: Callable = bool
 
 
@@ -319,13 +344,16 @@ _asset = Reading(_asset_of, _none, lambda t, rows: t.asset_day(rows), per_day=Tr
 #: Overview says which (Unreadable) — a fault never promises a check that does not run.
 READS: dict[str, Reading] = {
     battery.CRIT: _battery_replace, battery.LOW: _battery_replace, battery.TREND: _battery, result.PARAM_MISSING: _battery,
+    # ⚠️ OFFLINE IS NOT FIXED (architecture review 22, card 3): silent means online and quiet, so a sensor gone offline
+    # is not judged here — kept open until its offline fault follows it (endings.offline_hands), never "Cleared"
     "PM-SILENT": Reading(_silence_rows, lambda pack, f, rows: [r["entity_id"] for r in rows]
                          + sorted(pack.entities_of_device(pack.device_id_of(f["entity_id"]))),
-                         lambda t, rows: N.silent_findings(t.client(), t.pack, t.states, t.at, t.params, t.Z, rows=rows)),
+                         lambda t, rows: N.silent_findings(t.client(), t.pack, t.states, t.at, t.params, t.Z, rows=rows),
+                         readable=lambda st: bool(st) and not is_offline(st.get("state"))),
     "PM-RECONNECT-LOOP": Reading(lambda pack, f: [{"entity_id": f["entity_id"]}], lambda pack, f, rows: [f["entity_id"]],
                                  lambda t, rows: t.loops()),
     R.HIDDEN_IN_RULE: Reading(lambda pack, f: [{"entity_id": f["entity_id"]}], _none,
-                              lambda t, rows: t.hidden(), judge=battery.reworded),
+                              lambda t, rows: t.hidden()),
     "PM-POWER-CHANGE": _asset, "PM-ENERGY-CHANGE": _asset, "PM-RUNHOURS": _asset, "PM-RUN-SAG": _asset,
     "PM-EXPECTED-SILENT": _asset, result.COUNTER_RESET: _asset,
     "PM-LEVEL-HIGH": Reading(_level_rows, _none, lambda t, rows: t.level_day(rows), per_day=True),
@@ -374,11 +402,12 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
     """Every open finding (the offline ones are back_online's) read again now, each by its rule's reading (READS): one
     still found is recorded as seen — a person's close that long ago or more no longer holds (Problems.wants_open) —,
     one no longer found closes, saying so with the time (nightly.cleared_note). Nothing else is touched: no new finding
-    (the night opens those). Returns {actions, closed, seen}; Home Assistant is asked for nothing when nothing is open.
+    (the night opens those). Returns {actions, closed, handed: {finding id: its note, one another fault follows now (a
+    battery's other step)}, seen, send}, as back_online's; Home Assistant is asked for nothing when nothing is open.
 
     ⚠️ NOT READ IS NOT GONE: a state the read did not bring back, a battery with no value now, or a reading that failed
     closes nothing — its close would say the problem is over when nothing was seen."""
-    none = {"actions": [], "closed": [], "seen": [], "send": []}
+    none = {"actions": [], "closed": [], "handed": {}, "seen": [], "send": []}
     if unreadable():
         raise Unreadable(", ".join(unreadable()))
     open_ = [f for f in store.findings(status="open") if f["rule_id"] not in (OFFLINE_RULE, MISSING_RULE)]
@@ -425,22 +454,19 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
     if not read:
         return none
     day = t.at.date().isoformat()
-    # what is no longer found asks how it ended (endings.py, the night's table too) before "no longer sees it": its
-    # devices were read by back_online this tick, so here only what its own reading said follows it (a battery's step)
-    rec = Problems(store).record_rechecked(read, seen, day, now.isoformat(), note=E.cleared_note(now, zone),
-                                           settle_minutes=settle_minutes,
-                                           ended=lambda rows: E.endings(rows, E.read(None, rows, battery=moved_step)))
+    # what is no longer found asks how it ended (endings.py, the night's table too) before "no longer sees it", read as
+    # the night reads it (its devices, the pack: architecture review 22, cards 3 and 7 — it was read with nothing, so a
+    # device hidden or asleep since, an automation deleted, a hidden device back, each read "no longer sees it")
+    rec = Problems(store).record_rechecked(
+        read, seen, day, now.isoformat(), note=E.cleared_note(now, zone), settle_minutes=settle_minutes,
+        ended=lambda rows: E.endings(rows, E.read(client(), rows, pack=pack, now=now,
+                                                  minutes=params.behaviour("back_online_minutes"), battery=moved_step,
+                                                  offline=E.offline_hands(store.findings(status="open")))))
     if rec["closed"] or rec["handed"]:
         store.audit("preventive-maintenance", "recheck", {"read": read, "closed": rec["closed"], "handed": rec["handed"]})
     send, task_ids = [], rec["task_ids"]
     if restated:
-        # raised again as the night raises it (Problems.record → store.raise_finding): its summary is the one title
-        # every reader shows; its open task is named moved so the Kiosk's fault is retitled now (tickets.repair)
-        Problems(store).record([x for _, x in restated], day, state_rules=N.STATE_RULES, event_rules=N.EVENT_RULES,
-                               worsened_step=params.behaviour("worsened_step_pct"), at=now.isoformat(),
-                               settle_minutes=settle_minutes)
-        task_ids += [t["id"] for fid, _ in restated
-                     if (t := store.last_task(f"finding:{fid}")) and t["status"] == "open"]
+        task_ids += _restate(store, [x for _, x in restated], day, now, params, settle_minutes)
     if steps:
         new = Problems(store).record(steps, day, state_rules=N.STATE_RULES, event_rules=N.EVENT_RULES,
                                      worsened_step=params.behaviour("worsened_step_pct"), at=now.isoformat(),
@@ -448,7 +474,8 @@ def recheck_open(store, pack, client, now: datetime, params, zone: str, settle_m
         task_ids += new["task_ids"]
         send = N.told_now({"villa": pack.villa, "as_of": day, "new_findings": new["new"], "again": new["again"]},
                           title=f"{pack.villa or 'The villa'}, batteries on {day_time_label(t.at)}.", store=store, at=now)
-    return {"actions": result.moved(task_ids), "closed": rec["closed"], "seen": rec["seen"], "send": send}
+    return {"actions": result.moved(task_ids), "closed": rec["closed"], "seen": rec["seen"], "send": send,
+            "handed": {fid: rec["notes"][fid] for fid in rec["handed"]}}
 
 
 def reopened_untold(store, zone: str, settings: dict, edits: list | None = None) -> list[dict]:
@@ -528,14 +555,17 @@ def main(argv=None):
         return 1
     found = gone_offline(ctx.store, ctx.pack, lambda: ctx.live_client, now, ctx.params, ctx.zone, settle)
     closed = res["closed"] + again["closed"] + miss["closed"]
+    # ⚠️ EVERY HAND-OVER OF THE TICK (architecture review 22, card 2): a battery's "replace now" handed to "replace within
+    # the week" at 10:05 was recorded and never said on the night's message, which kept "8%: replace now" all day
+    handed = {**res["handed"], **again["handed"]}
     # a close sends nothing new: a P2 told earlier says it on its own message (told_cleared, owner 2026-10-20) — and an
     # offline fault an alert took over says so there; a reopening is told anew AND marked on that message
-    edits = N.told_cleared(ctx.store, closed, now, ctx.zone, ctx.settings, handed=res["handed"])
+    edits = N.told_cleared(ctx.store, closed, now, ctx.zone, ctx.settings, handed=handed)
     told = again["send"] + reopened_untold(ctx.store, ctx.zone, ctx.settings, edits) + still_there_untold(
         ctx.store, ctx.zone, ctx.settings, edits)
     print(json.dumps({"actions": result.moved(res["actions"] + again["actions"] + found["actions"] + miss["actions"]),
                       "send": miss["send"] + found["send"] + told, "edits": N.one_edit_per_message(edits),
-                      result.FAULTS_CHANGED: bool(closed or res["handed"] or again["actions"] or found["actions"]
+                      result.FAULTS_CHANGED: bool(closed or handed or again["actions"] or found["actions"]
                                                   or miss["actions"])},
                      default=str))
     return 0

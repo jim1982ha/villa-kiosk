@@ -155,7 +155,9 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     # #51: "— Came back … —" then "- Came-back alert sent …" were two shapes for one moment; reworded 2026-10-18, #52:
     # the count after a comma, whom in brackets); A: "FM", never "Facility Manager"
     assert re.fullmatch(rf"- Back at {T}, 2nd time in 7 days \(to: FM\)", lines[2]), lines
-    assert lines[1].startswith("- Closing note sent") and lines[3].startswith("⚠️ ⚙️ Reminder sent"), lines
+    # the close in its own words, its moment and its watch (architecture review 22, card 6: "- Closing note sent …"
+    # said a message went, never what closed it)
+    assert re.fullmatch(rf"- Cleared on {T}\. Watch .+", lines[1]) and lines[3].startswith("⚠️ ⚙️ Reminder sent"), lines
     assert not any("ame back" in ln or "ame-back" in ln or ln.startswith("—") for ln in lines), lines
     assert "Facility Manager" not in group and "facility manager" not in group
     fm_before = card(agent, FM_CHAT)

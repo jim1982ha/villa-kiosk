@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import re
+
+import pytest
 from datetime import datetime, timedelta, timezone
 
 from helpers import make_agent
@@ -134,7 +136,10 @@ def test_not_a_problem_in_the_cockpit_is_said_as_such_never_as_a_done(tmp_path):
     assert status(v, GROUP)[-1] == "✅ Not a problem in the Cockpit on 15/10/2026 00:40 (Luc).", status(v, GROUP)
     assert status(v, FM_FR)[-1] == "✅ Pas un problème dans le Cockpit le 15/10/2026 00:40 (Luc).", status(v, FM_FR)
     lines = [ln for m in k.messages.values() for ln in m.get("status") or []]        # the tablet's cards of the alert
-    assert lines[-1] == "✅ Pas un problème dans le Cockpit le 15/10/2026 00:40 (Luc).", lines   # in the FM's language
+    # the tablet's card in English, the French beside it (architecture review 22, card 4: it was the FM chat's, drawn last)
+    assert lines[-1] == "✅ Not a problem in the Cockpit on 15/10/2026 00:40 (Luc).", lines
+    (card,) = [m for m in k.messages.values() if m.get("languages")]
+    assert card["languages"]["fr"]["status"] == ["Pas un problème dans le Cockpit le 15/10/2026 00:40 (Luc)."], card
     assert not any("Done" in ln or "Terminé" in ln for ln in lines), lines
 
 
@@ -160,3 +165,26 @@ def test_not_a_problem_pressed_on_telegram_closes_it_as_the_cockpit_does(tmp_pat
     assert (last["status"], last.get("kind"), last.get("lasting"), last.get("who")) == \
         ("resolved", "cleared", True, "Luc"), last
     assert not any(c.get("ticketId") == uid for c in k.doc["data"].get("completions") or [])   # never a repair
+
+
+@pytest.mark.parametrize("lasting,said,said_fr", [
+    (True, "Not a problem in the Cockpit on", "Pas un problème dans le Cockpit le"),
+    (False, "Done in the Cockpit on", "Terminé dans le Cockpit le")])
+def test_a_close_in_the_cockpit_keeps_its_own_line_once_something_follows_it(tmp_path, lasting, said, said_fr):
+    """Architecture review 22, card 6: a close kept a line only when a closing message happened to be sent — "Not a
+    problem" in the Cockpit had none, and no close line ever said who closed it. Reopened after it, the card tells the
+    close in its own words, in each chat's language, above the reopening."""
+    v, k, uid = villa(tmp_path)
+    now = datetime.now(timezone.utc)
+    stamp = lambda m: (now + timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:00.000Z")
+    k.person_closes(uid, by="Luc", at=stamp(1), lasting=lasting, cockpit=True)
+    run(v.tickets.repair())
+    k.person_reopens(uid, by="Anna", at=stamp(3))
+    run(v.tickets.repair())
+    run(v.run_code_job(v.skills.get("alert-desk"), f"desk.py tick --now {(now + timedelta(minutes=4)).isoformat()}", 60))
+    fr = status(v, FM_FR)                         # the reopening went to the facility managers' chats
+    assert any(re.fullmatch(rf"- {said_fr} {T} \(Luc\)", ln) for ln in fr), fr
+    assert "Rouvert dans le Cockpit" in fr[-1] and not any("Clôture" in ln for ln in fr), fr
+    card = k.messages["incident:1"]["status"]     # the tablet's card, in English (its story: every step)
+    assert any(re.fullmatch(rf"- {said} {T} \(Luc\)", ln) for ln in card), card
+    assert not any("Closing note sent" in ln for ln in card), card

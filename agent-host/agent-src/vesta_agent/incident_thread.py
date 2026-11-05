@@ -52,7 +52,7 @@ def owed_for() -> timedelta:
 
 class PlainWords:
     """A thread's words as given: its copies' headings, Status and language with no notices to draw them (a test, or a
-    thread built before them). notice.Notices is the one the engine uses: the same five methods."""
+    thread built before them). notice.Notices is the one the engine uses: the same six methods."""
 
     def retitle(self, iid, head: str, chat: int = 0) -> str:
         return head
@@ -68,6 +68,9 @@ class PlainWords:
 
     def restatus(self, chat: int, p: dict) -> dict:
         return p
+
+    def closed_now(self, incident: int) -> bool:
+        return False
 
 
 class IncidentThread:
@@ -128,6 +131,7 @@ class IncidentThread:
         one a later copy does not carry (agent-contract.json vestaMessage.keptOnRewrite)."""
         if self.mirror is None:
             return
+        parts = self._for_everyone(parts)
         self.state.set_incident_card(iid, {"parts": parts, "keyboard": keyboard})
         # ⚠️ WHO IT WENT TO IS EVERY CHAT'S, NOT THE LAST DRAWN'S: each chat's copy says its own "To:" (owner and FM, one
         # group each); the tablet's one record names them all, in the words a "To:" line uses (message_format.audience)
@@ -141,6 +145,19 @@ class IncidentThread:
         self.mirror(kiosk_messages.of_parts(kiosk_messages.thread_key(iid), parts, keyboard=keyboard,
                                             photo=kiosk_messages.photo_b64(photo), to=AND.join(roles) if roles else None,
                                             takes=self.state.incident_runs(iid)))
+
+    def _for_everyone(self, parts: dict) -> dict:
+        """A chat's copy as the tablet's card: in English, the languages it was said in carried beside it
+        (kiosk_messages.of_parts reads its step's `status_in` and the alert's translation `tr`).
+
+        ⚠️ THE TABLET'S OWN LANGUAGE, NOT THE LAST CHAT'S (architecture review 22, card 4): every chat's copy is told
+        here in turn and the last drawn was kept — the facility manager's chat reads French, so the tablet read "Rappel
+        envoyé …" under an English title. Its Status is drawn again from the step (`said`) for no chat (English), its
+        heading drawn in no chat's language, so its alert words are the ones written."""
+        h = layout.head_of(parts.get("head"))
+        if h and h.get("lang"):
+            parts = {**parts, "head": {k: v for k, v in h.items() if k != "lang"}}
+        return self.words.restatus(0, parts)
 
     def tell_open(self, open_incidents) -> int:
         """At start: each open incident's card told to the tablet again, as it was kept (`tell`) — a copy the Kiosk had not
@@ -292,6 +309,11 @@ class IncidentThread:
                 p = self._own_words(iid, chat, p)
                 kept = {k: v for k, v in rec.items() if k != "interim"}
                 n += await self._show(iid, chat, {**kept, "settled": True, **({"interim": True} if interim else {})}, p)
+            if note and not interim and str(iid).isdigit() and self.words.closed_now(int(iid)):
+                # the close's own line in its story (notice.close_step), whoever settled it: the desk, the Cockpit
+                from .notice import close_step
+                close_step(self.state, int(iid), layout.fill_time(note, now, self.tz),
+                           {k: layout.fill_time(v, now, self.tz) for k, v in (note_in or {}).items() if isinstance(v, str)})
             self._tell_alone(iid, status=layout.fill_time(note, now, self.tz) if note else None, body=body, mark=mark)
             return n
 

@@ -46,7 +46,6 @@ from vesta_shared.result import FAULTS_CHANGED
 from vesta_shared.ha_client import error_short_chars
 
 from . import layout
-from vesta_shared.message_format import PRESSED_STAGE
 from vesta_shared.status_words import pick
 from . import siren
 from .incidents import Incidents
@@ -267,9 +266,10 @@ class Outcome:
                                                             "to": self.poster.to_line(chat, roles, sent_to.get(id(item)))})
         for e in res.get("edits") or []:
             done["edited"] += await self.rewrite(e, skill_name)
+        recorded: dict[int, int] = {}                        # incident → the steps this result added to its history
         if self.notices:
             for (iid, stage), chs in noticed.items():
-                self.notices.record(iid, stage, chs)
+                recorded[iid] = recorded.get(iid, 0) + self.notices.record(iid, stage, chs)
         # ⚠️ ONE INCIDENT, ONE PICTURE (owner, 2026-10-11): a reminder went to the facility manager only, and the group's
         # copy kept "(new)" and the first alert — every other copy now shows what was just sent, quietly
         for iid, shown_in in posted.items():
@@ -282,8 +282,11 @@ class Outcome:
             stepped = set().union(*[r for (i, _st), r in told.items() if i == iid] or [set()])
             elsewhere = {c for c, _rec in self.thread.state.incident_chats(iid)
                          if self.notices and not self.notices.concerns(c, stepped)}
-            # this result's own steps of the incident: its bottom line says them, the history above them never
-            steps_now = sum(1 for (i, st) in noticed if i == iid and st != PRESSED_STAGE)   # a press records none
+            # this result's own steps of the incident: its bottom line says them, the history above them never.
+            # ⚠️ COUNTED AS RECORDED (architecture review 22, card 1): counted here by its own rule, the villa's late
+            # all-clear of an alert closed and watched out was 1 step that Notices.record never added, and every other
+            # chat and the tablet lost the close's line ("✅ Closed on …: it did not come back within 1h")
+            steps_now = recorded.get(iid, 0)
             # each chat's heading as the copy just sent was headed, the chat's own steps listed (notice.heading: one)
             head_for = (lambda c, i=iid, st=last_stage, al=last_also, n=steps_now:
                         self.notices.heading(c, i, stage=st, also=al, before=n)) if self.notices else None

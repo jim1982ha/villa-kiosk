@@ -446,3 +446,20 @@ def test_an_offline_fault_an_alert_now_follows_is_handed_over_within_one_recheck
 
 
 # Every way a fault ends, through this recheck AND the night check: test_fault_endings.py (one table).
+
+
+def test_an_offline_faults_new_words_are_said_at_the_next_check_its_running_time_apart(tmp_path):
+    """Architecture review 22, card 5: an open offline fault was only recorded as seen, its words the night's to restate
+    ("x integration (3 devices)" while 5 were down, until 02:00). It is raised again when what it says changed — never
+    for its running time alone (above: "offline for 11min" stays while open)."""
+    states = _off_since(NIGHT)
+    _run_engine(tmp_path, states, NIGHT + timedelta(minutes=11))
+    st = Store(str(tmp_path / "s.sqlite"))
+    (f,) = st.findings("open")
+    worded = f["summary"].replace("TH", "Older name", 1)
+    st.db.execute("UPDATE findings SET summary=? WHERE id=?", (worded, f["id"]))
+    st.db.commit()
+    out = _run_engine(tmp_path, states, NIGHT + timedelta(minutes=16))
+    now = Store(str(tmp_path / "s.sqlite")).finding(f["id"])
+    assert now["summary"] != worded and "TH has been offline for 16min" in now["summary"], now["summary"]
+    assert out["actions"] == MOVED and out["faults_changed"] is True

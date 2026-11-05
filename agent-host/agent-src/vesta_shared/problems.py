@@ -330,8 +330,8 @@ class Problems:
         """Open findings `rechecked` (ids) read again at `at` by their own rule; `seen`: those of them still found. Each
         seen is recorded as seen (Problems.seen: a person's close `settle_minutes` or more before opens its task again,
         STILL_THERE); each not seen closes on `day`, its task closing saying `note` — as record_night closes what the
-        night did not see, and only among the findings read: {seen, closed (finding ids), task_ids (the tasks that
-        moved)}. A finding no longer open is left as it is; an id in `seen` not read is ignored. What decides each
+        night did not see, and only among the findings read: {seen, closed, handed (finding ids), notes ({finding id:
+        the note it closed with}, as record_night's), task_ids (the tasks that moved)}. A finding no longer open is left as it is; an id in `seen` not read is ignored. What decides each
         task is settle()'s: a task a person reopened stays theirs, a person's close holds while it is not read again.
         `ended`: as record_night's — asked once with the findings no longer found, before `note`; `handed` is what a skill
         edited before 0.12.430 still passes."""
@@ -344,7 +344,7 @@ class Problems:
                 handed[int(i)] = end.note
             else:
                 said[int(i)] = end.note
-        out_seen, closed, gone, moved = [], [], [], []
+        out_seen, closed, gone, moved, notes = [], [], [], [], {}
         for fid in sorted({int(i) for i in rechecked}):
             row = self.store.finding(fid)
             if not row or row["status"] != "open":
@@ -356,9 +356,10 @@ class Problems:
                 # `handed`: finding id → its note, one followed now by another fault (as record_night's handed_over):
                 # closed with that note, never counted cleared
                 self.store.close_finding(row["rule_id"], row["entity_id"], day)
-                moved += self.settle(f"finding:{fid}", note=handed.get(fid) or said.get(fid) or note)
+                notes[fid] = handed.get(fid) or said.get(fid) or note
+                moved += self.settle(f"finding:{fid}", note=notes[fid])
                 (gone if fid in handed else closed).append(fid)
-        return {"seen": out_seen, "closed": closed, "handed": gone, "task_ids": moved}
+        return {"seen": out_seen, "closed": closed, "handed": gone, "notes": notes, "task_ids": moved}
 
     def record(self, findings, day: str, *, state_rules, event_rules, worsened_step: float, at: str | None = None,
                settle_minutes: float | None = None) -> dict:

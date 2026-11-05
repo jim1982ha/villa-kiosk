@@ -184,7 +184,8 @@ def run(args) -> dict:
         resolved_note=cleared_note(),
         ended=lambda rows: E.endings(rows, E.read(cli, rows, pack=pack, now=now_ref,
                                                   minutes=params.behaviour("back_online_minutes"),
-                                                  missing=missing, alerts=alerts, battery=moved)),
+                                                  missing=missing, alerts=alerts, battery=moved,
+                                                  offline=E.offline_hands(store.findings(status="open")))),
         settle_minutes=still_there_minutes(ctx.settings))
     new, still_open, closed, tasks = night["new"], night["still_open"], night["closed"], night["task_ids"]
     again = night["again"]
@@ -404,10 +405,6 @@ FORGOTTEN_NOTE = "Closed: removed on purpose, no longer watched."
 BACK_NOTE = E.BACK_NOTE
 
 
-def _entities_of(f: dict) -> list[str]:
-    return json.loads(f.get("detail") or "{}").get("entities") or [f["entity_id"]]
-
-
 def forget_dismissed(store, day: str) -> list[int]:
     """The open PM-MISSING faults a person closed (Done on Telegram, or in the Cockpit): the device was removed on
     purpose. Forgotten — out of the devices seen (store.forget_seen) and kept in FORGOTTEN — and its finding closed, so
@@ -417,7 +414,7 @@ def forget_dismissed(store, day: str) -> list[int]:
     for f in store.findings(status="open"):
         if f["rule_id"] != R.MISSING or not p.closed_by_person(f"finding:{int(f['id'])}", f.get("reopened_at") or ""):
             continue
-        es = _entities_of(f)
+        es = E.entities_of(f)
         store.forget_seen(es)
         forgotten.update({e: store.now() for e in es})
         p.close_finding(f, day, FORGOTTEN_NOTE)
@@ -448,14 +445,14 @@ def missing_findings(store, pack, cli, now: datetime, zone: str, near=None, name
         devs = {seen[e]["device"] for e in ids if e in seen and seen[e].get("device")}
         ids |= {e for e, r in seen.items() if r.get("device") in devs}       # the whole device: one fault, as at night
     open_ = [f for f in store.findings(status="open") if f["rule_id"] == R.MISSING]
-    ids |= {e for f in open_ for e in _entities_of(f)} | set(forgotten)
+    ids |= {e for f in open_ for e in E.entities_of(f)} | set(forgotten)
     if not ids:
         return [], []
     states = cli.states(sorted(ids))
     if any(e in states for e in forgotten):          # answers again: watched again
         forgotten = {e: t for e, t in forgotten.items() if e not in states}
         store.cache_put(FORGOTTEN, forgotten)
-    back = [f for f in open_ if any(e in states for e in _entities_of(f))]
+    back = [f for f in open_ if any(e in states for e in E.entities_of(f))]
     nostate = sorted(e for e in ids if e not in states and e not in forgotten and e in base)
     gone = cli.not_found(nostate) if nostate else set()
     groups: dict[str, list[str]] = {}
@@ -463,7 +460,7 @@ def missing_findings(store, pack, cli, now: datetime, zone: str, near=None, name
         groups.setdefault((seen.get(e) or {}).get("device") or e, []).append(e)
     plan = []
     for es in groups.values():
-        mine = next((f for f in open_ if f not in back and set(_entities_of(f)) & set(es)), None)
+        mine = next((f for f in open_ if f not in back and set(E.entities_of(f)) & set(es)), None)
         crit = [e for e in es if e in critical or (pack is not None and pack.is_critical(e))]
         eid = mine["entity_id"] if mine else (crit or es)[0]
         plan.append((eid, es, bool(crit), mine))
@@ -552,14 +549,14 @@ def missing_hands(open_rows, missing) -> dict[tuple[str, str], str]:
     the villa's system closed its offline fault "this device no longer exists", and nothing else was said."""
     def parts(m):
         if isinstance(m, dict):
-            return m["rule_id"], set(_entities_of(m)), m.get("summary") or ""
+            return m["rule_id"], set(E.entities_of(m)), m.get("summary") or ""
         return m.rule_id, set(m.detail.get("entities") or [m.entity_id]), m.summary
     gone = [(es, summary) for rule, es, summary in map(parts, missing) if rule == R.MISSING]
     out = {}
     for o in open_rows:
         if o["rule_id"] == R.MISSING:
             continue
-        es = set(_entities_of(o))
+        es = set(E.entities_of(o))
         said = next((summary for ges, summary in gone if es and es <= ges), None)
         if said:
             out[(o["rule_id"], o["entity_id"])] = f"Followed by: {said}"

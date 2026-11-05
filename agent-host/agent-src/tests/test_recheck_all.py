@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -123,6 +124,29 @@ def test_the_recheck_closes_what_is_gone_keeps_what_is_still_there_and_touches_n
     assert _tick(tmp_path)["actions"] == []                                                  # closed once
 
 
+@pytest.mark.parametrize("stored,restated", [("Room D humidity has not reported for 1d 2h although it is online.", False),
+                                              ("Old sensor has not reported for 1d 2h although it is online.", True)])
+def test_a_faults_words_follow_what_the_recheck_finds_but_its_running_time(tmp_path, stored, restated):
+    """Architecture review 22, card 5: only the faults asked for by name (the hidden-device one) took their new words
+    within 5 minutes; a reconnect loop counted 11 still read "6 times" until 02:00. Every rule's fault is raised again
+    in the words its reading finds now — but for its running time ("for 1d 2h", which the Kiosk words anew), never
+    raised again at every tick for that."""
+    _pack(tmp_path)
+    store = Store(str(tmp_path / "s.sqlite"))
+    fid, tid = store.raise_finding("PM-SILENT", HUMID, "room_d", "2026-10-18", "P3", stored,
+                                   {"since": (NOW - timedelta(hours=26)).isoformat(), "since_words": "1d 2h"})
+    tid = Problems(store).settle(f"finding:{fid}")[0]
+    _villa(tmp_path, {HUMID: _st("60", 30 * 60)})
+    out = _tick(tmp_path)
+    now = Store(str(tmp_path / "s.sqlite")).finding(fid)
+    assert now["status"] == "open"
+    if restated:
+        assert now["summary"].startswith("Room D humidity has not reported for "), now["summary"]
+        assert out["faults_changed"] is True                       # the Kiosk's fault retitled now
+    else:
+        assert now["summary"] == stored, now["summary"]           # its running time alone: left as it was
+
+
 def test_a_reading_that_did_not_come_back_closes_nothing(tmp_path):
     _pack(tmp_path)
     store, f = _night_findings(tmp_path)
@@ -161,14 +185,14 @@ def test_record_rechecked_closes_only_among_what_it_read(tmp_path):
     c, tc = _found(store, "PM-X", "sensor.c", "C")
     out = Problems(store).record_rechecked([a, b], [b, c], "2026-10-19", NOW.isoformat(), note="Cleared: gone.",
                                            settle_minutes=10)
-    assert out == {"seen": [b], "closed": [a], "handed": [], "task_ids": [ta]}
+    assert out == {"seen": [b], "closed": [a], "handed": [], "notes": {a: "Cleared: gone."}, "task_ids": [ta]}
     assert [store.finding(x)["status"] for x in (a, b, c)] == ["closed", "open", "open"]
     assert store.finding(a)["closed_day"] == "2026-10-19" and store.task(ta)["close_note"] == "Cleared: gone."
     assert store.finding(b)["seen_at"] == NOW.isoformat() and store.finding(c)["seen_at"] != NOW.isoformat()
     assert store.task(tb)["status"] == store.task(tc)["status"] == "open"
     # a finding no longer open is left as it is
     assert Problems(store).record_rechecked([a], [], "2026-10-19", NOW.isoformat()) == {"seen": [], "closed": [], "handed": [],
-                                                                                         "task_ids": []}
+                                                                                         "notes": {}, "task_ids": []}
 
 
 def test_a_finding_closed_in_the_day_and_seen_again_at_night_is_the_same_problem_back(tmp_path):
@@ -456,6 +480,25 @@ def test_a_battery_that_moves_a_step_is_handed_over_never_cleared(tmp_path, was,
     (now,) = [f for f in st.findings(status="open") if f["entity_id"] == BAT_LOW]
     assert now["rule_id"] == now_rule
     assert out["edits"] == []                                     # no P2 message rewritten as cleared
+
+
+def test_a_told_p2_handed_to_its_other_step_is_said_on_the_nights_message(tmp_path):
+    """Architecture review 22, card 2: the night's message told "Lock B battery at 5%: replace now"; at 10:05 it read
+    17% and was handed to "replace within the week" — recorded, and the message kept "replace now" all day (the tick
+    passed on back_online's hand-overs only)."""
+    sys.path.insert(0, os.path.join(SKILL, "scripts"))
+    import nightly as N
+    _pack(tmp_path)
+    store = Store(str(tmp_path / "s.sqlite"))
+    fid, _ = _found(store, "PM-BATTERY-CRIT", BAT_CRIT, "Lock B battery at 5%: replace now.", "P2")
+    (told,) = N.told_now({"villa": "Example Villa", "as_of": "2026-10-18", "again": [],
+                          "new_findings": [{"id": fid, "severity": "P2", "summary": "Lock B battery at 5%: replace now."}]},
+                         store=store, at=NOW - timedelta(hours=10))
+    _villa(tmp_path, {BAT_CRIT: _st("17", 5)})
+    out = _tick(tmp_path)
+    (e,) = out["edits"]
+    assert e["key"] == told["key"], out["edits"]
+    assert "Status:" in e["text"] and re.search(r"Now: Lock B battery.* 17%: replace within the week", e["text"].split("Status:", 1)[1]), e["text"]
 
 
 def test_a_battery_that_moves_a_step_at_night_is_handed_over(tmp_path):

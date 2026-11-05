@@ -515,6 +515,58 @@ def test_the_tablets_card_tells_every_step_whoever_the_last_copy_was_drawn_for(a
     assert sum("Escalation sent" in line for line in status) == 1, status
 
 
+def test_the_rules_late_all_clear_keeps_every_line_of_the_tablets_card(agent, kiosk):
+    """Architecture review 22, card 1: "Not a problem", its watch over, then the rule's own all-clear in the group. That
+    result was counted one step that was never recorded (the close stood already), and the tablet's card lost its
+    press line ("- Not a problem on … (Owner). Watch …") while Telegram's copies, settled, kept theirs."""
+    async def run_of(v, phase, mid, priority=None):
+        context = f"RUN-1-{phase}"
+        await v.on_ha_event("telegram_sent", {"chat_id": GROUP, "message_id": mid, "bot": BOT, CONTEXT_KEY: context})
+        await v.on_ha_event("vesta_critical_event", {
+            "blueprint": "critical_condition", "rule_id": "automation.critical_condition_laundry",
+            "incident_id": "automation.critical_condition_laundry-1", "phase": phase, "severity": "critical",
+            "label": "Laundry door unlocked", "entities": ["lock.laundry"], "summary": SUMMARY,
+            "timestamp": datetime.now(timezone.utc).isoformat(), CONTEXT_KEY: context,
+            **({"priority": priority} if priority else {})})
+
+    async def not_a_problem(v):
+        await v.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": GROUP,
+                                                  "user_id": OWNER, "message": {"message_id": 500, "chat": {"id": GROUP}},
+                                                  "bot": BOT})
+    scenario(agent, lambda v: run_of(v, "opened", 500, "P1"), not_a_problem, lambda v: tick(v, 24 * 60))
+    watched_out = list(kiosk.messages["incident:1"]["status"])
+    assert watched_out[-1].startswith("✅ Closed on ") and any("Not a problem" in ln for ln in watched_out), watched_out
+    scenario(agent, lambda v: run_of(v, "resolved", 501))
+    assert kiosk.messages["incident:1"]["status"] == watched_out
+
+
+def test_the_tablets_card_is_in_english_whichever_chats_copy_was_drawn_last(tmp_path, kiosk):
+    """Architecture review 22, card 4: every chat's copy was told to the tablet in turn, the last drawn kept — the
+    facility manager's chat reads French, so the tablet's card read "Rappel envoyé …" and "Terminé le …" under an English
+    title. The tablet's card is drawn in English, every language the step was said in carried beside it."""
+    roster = Roster.of(owner=[(OWNER, "Owner"), (GROUP, "Owner chat")], fm=[(FM_CHAT, "Wayan")],
+                       languages={FM_CHAT: "fr"})
+    v = make_agent(tmp_path, policy(), roster=roster, skills=["alert-desk"], reader=FakeHA(tools=[tool("ha_get_state")]),
+                   kiosk=kiosk)
+    v.bot_username = BOT["username"]
+    scenario(v, alert, lambda a: tick(a, 20))                     # a reminder: to the facility manager's French chat
+    fm_copy = v.thread.shown(1)[FM_CHAT]["text"]
+    assert "Rappel" in fm_copy, fm_copy                          # the chat reads French
+    rec = kiosk.messages["incident:1"]
+    assert rec["status"][-1].startswith("⚠️ ⚙️ Reminder sent"), rec["status"]
+
+    async def done(a):
+        data = next(b for b in kiosk.messages["incident:1"]["buttons"] if b["id"].endswith(":done"))
+        mid = a.thread.shown(1)[FM_CHAT]["mid"]
+        await a.on_ha_event("telegram_callback", {"id": "cb", "data": f"i:{data['id'].split(':')[0]}:done",
+                                                  "chat_id": FM_CHAT, "user_id": FM,
+                                                  "message": {"message_id": mid, "chat": {"id": FM_CHAT}}, "bot": BOT})
+    scenario(v, done)
+    rec = kiosk.messages["incident:1"]
+    assert rec["status"][-1].startswith("✅ Done on "), rec["status"]
+    assert rec["languages"]["fr"]["status"][0].startswith("Terminé le "), rec        # the French, beside it
+
+
 def test_an_open_alert_with_no_step_since_the_tablet_kept_cards_gets_its_card_at_start(agent, kiosk):
     """Alert #83 (owner, 2026-10-29): no step since before the tablet kept alert cards, so the tablet showed the short
     list while Telegram showed the card. At start, every open alert's card is kept as its newest copy stands, its

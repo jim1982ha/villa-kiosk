@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.439 (5 November 2026)
+
+- Architecture review 22. Notices.record returns the steps it recorded; Outcome sums them for `before` (a late
+  all-clear after the watch cut the tablet story's last line). recheck_open returns `handed` with notes
+  (record_rechecked `notes`), and recheck.main passes every hand-over of the tick to told_cleared.
+- endings.py: hidden, gone and missing end any fault about a watched device (`_device`), asleep ends the rules that skip
+  asleep devices (ASLEEP_SKIPPED), `offline` hands a PM-SILENT fault to its device's open offline fault (offline_hands,
+  NEEDS_ANSWER); PM-SILENT is not judged while its sensor is offline. One entities_of (a hidden-device fault's devices
+  are detail.hidden; nightly._entities_of and recheck's copy gone), and `rule_gone` / `answers_again` end it. The
+  recheck reads what it no longer finds as the night does (client and pack).
+- battery.reworded is every recheck rule's judge, its running time (since_words) taken out; gone_offline restates an
+  open offline fault through recheck._restate, the one writer between two nights; gone_missing names its task moved.
+- IncidentThread.tell keeps the tablet's card in English (`_for_everyone`: Status redrawn for no chat, heading without
+  a chat language). IncidentThread.close records a closing step in the close's words (notice.close_step) when the
+  incident is closed; a closing message's "Closing note sent" takes those words.
+
 ## 0.6.438 (5 November 2026)
 
 - PM-HIDDEN-IN-RULE's recheck judges with battery.reworded: an open finding whose words now differ is raised again
