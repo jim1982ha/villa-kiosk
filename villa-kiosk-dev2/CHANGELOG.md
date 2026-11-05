@@ -1,3 +1,15 @@
+## 2.496.707
+
+What you will see:
+- Cockpit › Spend makes the monthly recap: one document with the month's spend, maintenance, faults, devices and
+  readiness. The spend statement was the recap's spend section on its own; it is gone, and "Generate recap" sits
+  beside the Month. Saved statements are listed with the saved recaps. The Month opens on the month running and
+  also offers the one just finished.
+- Cockpit › Recap: the readiness checks are always shown under the verdict (they no longer fold). "Villa occupied
+  since …" is no longer shown there. The faults and tickets check names its devices as pills, each device once, like
+  All devices reporting. In its line, "faults" opens Inbox › Open issues on those devices, and "tickets" opens the
+  Tickets tab.
+
 ## 2.496.706
 
 What you will see:
