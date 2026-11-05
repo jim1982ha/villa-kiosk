@@ -24,12 +24,12 @@
 // Pure apart from the port: tests/oracles/history_source.mjs.
 
 import { gapsFrom } from "@/utils/historyGaps";
-import { finerOutages, PERIOD_MS, statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
-import { fiveMinuteSeries, intervalSeries, stepsOfflineInside } from "@/utils/trendInterval";
+import { COMPILE_GRACE_MS, finerOutages, missingSlots, PERIOD_MS, statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
+import { dropsOf, fiveMinuteSeries, intervalSeries, stepsOfflineInside } from "@/utils/trendInterval";
 import { windowEndingAt } from "@/utils/lineChart";
 import { isNoHistory, NO_RECORD, NOT_KEPT, UNKNOWN_STATES } from "@/utils/stateColors";
 import type { HistoryGap, HistorySeries, StateHistoryPoint, StatisticPeriod } from "@/types/ha.types";
-import { dayTime } from "@/utils/dateText";
+import { momentText } from "@/utils/dateText";
 import { HOUR_MS } from "@/utils/localDay";
 import { bandEnd } from "@/utils/timelineCells";
 import { TREND_INTERVAL_MS } from "@/utils/trendInterval";
@@ -264,14 +264,12 @@ async function stateWindow(port: HistoryPort, id: string, hours: number, now: nu
     ...(follow.length ? { followers: await followers(end) } : {}) };
 }
 
-/** The section header's title: the range, and — when the window had to be
- *  moved to find data — the device's last report, which it ends just after,
- *  because an unlabelled chart of a different period is worse than no chart. */
-export function historyTitle(rangeTitle: string, lastSeen: number | undefined): string {
+/** The line under a section's heading when its window had to be moved to find data: the device's last report, which it
+ *  ends just after, because an unlabelled chart of a different period is worse than no chart. Under the heading, never
+ *  in it (owner, 2026-11-05: the heading never on two lines; HistoryHeader `note`); undefined when not moved. */
+export function lastReportNote(lastSeen: number | undefined): string | undefined {
   // ⚠️ "LAST REPORT", NOT "BEFORE": the band ends on the step after it, with its state drawn (StateWindow.end)
-  return lastSeen
-    ? `${rangeTitle}, last report ${dayTime(lastSeen)}`
-    : rangeTitle;
+  return lastSeen ? `Last report ${momentText(lastSeen)}` : undefined;
 }
 
 /**
@@ -478,13 +476,56 @@ async function outagesInside(port: HistoryPort, ids: readonly string[], period: 
   if (!marked || ids.length === 0) return {};
   const steps = [...new Set<StatisticsPeriod>(["5minute", FINER[marked] as StatisticsPeriod])];
   const fine = await Promise.all(steps.map(async (step) => ({ step, figures: await statistics(port, ids, step, ["mean"], window) })));
-  return Object.fromEntries(ids.map((id) => {
+  return Object.fromEntries(await Promise.all(ids.map(async (id) => {
     const coarse = Object.values(figures[id] ?? {}).find((s) => s && s.points.length);
     const all = coarse ? fine.flatMap(({ step, figures: f }) => { const s = f[id]?.mean;
       return s ? finerOutages(coarse, s, marked, PERIOD_MS[step], now, step === "5minute" ? kept : undefined) : []; }) : [];
     // a step marked by both readings is one band
-    return [id, all.filter((g, i) => all.findIndex((x) => x.from === g.from) === i)];
-  }));
+    const marks = all.filter((g, i) => all.findIndex((x) => x.from === g.from) === i);
+    const slots = fine.flatMap(({ step, figures: f }) => { const s = f[id]?.mean;
+      return s ? missingSlots(s, PERIOD_MS[step], now, step === "5minute" ? kept : undefined) : []; });
+    return [id, await withDrops(port, id, marks, slots, kept, now)] as const;
+  })));
+}
+
+/** How much of the detail is read on each side of a missing slot: one slot, where the drop that emptied it began. */
+const DETAIL_PAD_MS = TREND_INTERVAL_MS;
+
+/**
+ * ⚠️ WHEN AND HOW LONG, WHENEVER THE DETAIL IS KEPT (owner, 2026-11-05: the 24h chart said "Unavailable at 06:58, for
+ * 10s", the week's chart "Unavailable at least once that hour" of the same drop): each marked step younger than the
+ * detail kept (`kept`) gets its real drops (HistoryGap.drops), read from the villa's system's every change — ONLY
+ * around the finer slots the figures miss inside it (`slots`, a slot on each side), never the step's whole week.
+ * ⚠️ MEASURED (2026-11-05, a pump's power sensor on the owner's villa): 35,078 changes in a week, about 2MB of
+ * history; a missing slot's read is a few dozen. Any read failing: the steps keep "at least once" (only the averages
+ * tell it), never a half answer.
+ */
+async function withDrops(port: HistoryPort, id: string, marks: readonly HistoryGap[], slots: readonly { from: number; to: number }[],
+  kept: number | undefined, now: number): Promise<HistoryGap[]> {
+  const detailed = marks.filter((g) => g.within && (kept === undefined || g.from >= kept));
+  if (detailed.length === 0) return [...marks];
+  const spans = slots.filter((m) => detailed.some((g) => m.from < g.to && m.to > g.from))
+    // a slot still missing near the end may be a drop still running: read it to now, where it is said "since"
+    .map((m) => ({ from: m.from - DETAIL_PAD_MS, to: m.to + DETAIL_PAD_MS + COMPILE_GRACE_MS >= now ? now : m.to + DETAIL_PAD_MS }))
+    .sort((a, b) => a.from - b.from);
+  const reads: { from: number; to: number }[] = [];
+  for (const sp of spans) {
+    const last = reads[reads.length - 1];
+    // slots near each other: one read (a flapping device is one read an hour at most)
+    if (last && sp.from <= last.to + HOUR_MS) last.to = Math.max(last.to, sp.to); else reads.push({ ...sp });
+  }
+  let drops: HistoryGap[];
+  try {
+    drops = (await Promise.all(reads.map((w) => readings(port, id, w)))).flatMap((r) => r.gaps)
+      .map((g) => (g.to >= now ? { from: g.from, to: Infinity } : g));
+  } catch {
+    return [...marks];
+  }
+  return marks.map((g) => {
+    if (!detailed.includes(g)) return g;
+    const d = dropsOf(drops, g.from, g.to);
+    return d.length ? { ...g, drops: d } : g;
+  });
 }
 
 /** `s` with the steps it was offline inside added to its gaps. */
@@ -506,7 +547,9 @@ async function trend(port: HistoryPort, ids: readonly string[], period: Statisti
     const raw = await readings(port, id, window);
     const drawn = period === "5minute" ? fiveMinuteSeries(raw) : intervalSeries(raw, PERIOD_MS[period]);
     // an outage inside a step looks as the figures' does (stepsOfflineInside)
-    const marked = period === "hour" || period === "day" || period === "week" ? stepsOfflineInside(drawn, period, PERIOD_MS[period], raw.gaps) : drawn;
+    // ...at every range, five minutes included (owner, 2026-11-05: one way to say it at 1h, 24h, 1w, 1m, 1y)
+    const marked = period === "5minute" || period === "hour" || period === "day" || period === "week"
+      ? stepsOfflineInside(drawn, period, PERIOD_MS[period], raw.gaps) : drawn;
     out[id] = withNotKept(marked, kept);
   }
   return out;

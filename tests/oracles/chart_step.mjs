@@ -38,7 +38,9 @@ ck("every device line chart gives the range's step, its header 'avg'",
    // one header for every layout, the larger chart's too (owner, 2026-10-29: its window has the same `Last …` line)
    && /const header = \(title: string\) => <HistoryHeader title=\{title\} picker=\{picker\} step=\{step\} about=\{about\} \/>/.test(num));
 ck("the on/off band's header: its step alone", /step=\{aggregationWords\(range\.grainMs, null\)\}/.test(band));
-ck("a history header shows the step beside its title, and its (i)", /\{title\}<ChartStep words=\{step\} about=\{about\} \/>/.test(head));
+// owner, 2026-11-05: the title's words in their own span (left out on a narrow heading), its (i) saying them in full
+ck("a history header shows the step beside its title, and its (i)",
+   /<span className="chart-range-words">\{title\}<\/span>\s*<ChartStep words=\{step\} about=\{`\$\{title\}, \$\{step\}\. \$\{about\}`\} \/>/.test(head));
 ck("the Weather charts: their period's step, 'avg', the rain 'sum' at its own bucket",
    (weather.match(/<ChartTile picker=\{picker\} stepMs=\{PERIOD_MS\[range\.period\]\}/g) || []).length === 5
    && /aggregationWords\(stepMs, "avg"\)/.test(weather) && /aggregationWords\(stepMs, "sum"\)/.test(weather)

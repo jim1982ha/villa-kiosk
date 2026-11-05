@@ -4,8 +4,11 @@
    same visual language. .panel-modal only adds what's specific to it: a
    readable width and its own internal scroll (content can be taller than a
    preset/high climate or camera-motion panel comfortably fits). */
+/* ⚠️ 490px (owner, 2026-11-05: a chart's heading "LAST 24 HOURS · 5-min avg (i)" wrapped its range pills at 460px):
+   the inner width (less the body's 28px sides and the border) holds the longest range's words beside the pills, 414px
+   measured (04-modals.css .timeline-head), with a margin for a browser's rounding. One width for the family. */
 .modal.panel-modal {
-  max-width: 460px; overflow: hidden; overscroll-behavior: contain;
+  max-width: 490px; overflow: hidden; overscroll-behavior: contain;
 }
 /* The header, body and footer are THE modal sections (04-modals.css) — the
    device panel, Energy and Weather use them exactly as Settings does. Only the

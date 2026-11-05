@@ -19,7 +19,7 @@ import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
  *  appears in a consistent way"): titled by the device (or by the problem, when no device stands behind it) with its
  *  room, every problem a section INSIDE the card, always whole (owner, 2026-11-01: never folded, the card itself not
- *  pressed), each with its own buttons beside it where the width allows: Done · Need help · Open Ticket
+ *  pressed), each with its own buttons beside it where the width allows: Done · Not a problem · Open Ticket · Need help
  *  (fm/deviceWork.overviewActions). Done resolves that problem's records as work done, each read again by the VESTA
  *  Agent; Need help asks the owner to act; "Open Ticket" makes them a ticket, then "Edit Ticket" opens it in the Tickets
  *  tab. A problem that is only what the villa's system reports raises its fault with a Done or a Need help, and Open

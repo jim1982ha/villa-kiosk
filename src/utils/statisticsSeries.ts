@@ -71,8 +71,18 @@ export type MarkedPeriod = "hour" | "day" | "week";
  */
 export function finerOutages(coarse: HistorySeries, finer: HistorySeries, period: MarkedPeriod, finerMs: number,
   now: number, kept?: number): HistoryGap[] {
+  if (coarse.points.length === 0) return [];
+  const real = missingSlots(finer, finerMs, now, kept);
+  const P = PERIOD_MS[period];
+  return coarse.points.filter((p) => real.some((m) => m.from < p.t + P && m.to > p.t))
+    .map((p) => ({ from: p.t, to: Math.min(p.t + P, coarse.window.to), within: period }));
+}
+
+/** The slots of `finer` (one figure per `finerMs`) the recorder wrote no figure for, BETWEEN its figures and after the
+ *  last once compiled (finerOutages), from `kept` on: where a step's outage is (historySource reads the detail there). */
+export function missingSlots(finer: HistorySeries, finerMs: number, now: number, kept?: number): { from: number; to: number }[] {
   const pts = finer.points;
-  if (pts.length === 0 || coarse.points.length === 0) return [];
+  if (pts.length === 0) return [];
   const missing: { from: number; to: number }[] = [];
   for (let i = 1; i < pts.length; i++) {
     if (pts[i].t - pts[i - 1].t > finerMs * 1.5) missing.push({ from: pts[i - 1].t + finerMs, to: pts[i].t });
@@ -80,10 +90,7 @@ export function finerOutages(coarse: HistorySeries, finer: HistorySeries, period
   const lastEnd = pts[pts.length - 1].t + finerMs;
   const compiled = Math.floor((Math.min(now, finer.window.to) - COMPILE_GRACE_MS - lastEnd) / finerMs);
   if (compiled >= 1) missing.push({ from: lastEnd, to: lastEnd + compiled * finerMs });
-  const real = missing.filter((m) => kept === undefined || m.from >= kept);
-  const P = PERIOD_MS[period];
-  return coarse.points.filter((p) => real.some((m) => m.from < p.t + P && m.to > p.t))
-    .map((p) => ({ from: p.t, to: Math.min(p.t + P, coarse.window.to), within: period }));
+  return missing.filter((m) => kept === undefined || m.from >= kept);
 }
 
 /** Where a history request stands. `failed` and an empty `ready` are

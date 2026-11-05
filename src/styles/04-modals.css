@@ -295,12 +295,27 @@
      header owns it now. */
   margin-bottom: var(--field-label-gap);
 }
-.timeline-head .entity-label { margin: 0; }
+.timeline-head .entity-label { margin: 0; white-space: nowrap; }
 .timeline-ranges { flex: 0 0 auto; gap: 2px; padding: 2px; }
 .timeline-ranges button {
   flex: 0 0 auto; min-height: 26px; padding: 0 10px;
   font-size: var(--text-xs); font-weight: 600;
 }
+/* ⚠️ THE HEADING ALWAYS ON ONE LINE (owner, 2026-11-05: "LAST 24 HOURS · 5-min avg (i)" wrapped the pills onto a second
+   line, "it should never happen"): never wrapped. The device panel's family is wide enough for the longest words beside
+   the pills (03-panels.css .panel-modal); a narrower heading (a phone, 288 to 394px) leaves out the words the pill
+   pressed already says ("Last 24 hours": the "24h" pill), kept for a screen reader and said in full in its (i), and
+   its pills are compact. Measured in headless Chromium with the app's fonts: "LAST 24 HOURS · 5-min avg (i)" 216px,
+   the pills 188px (compact 148px), "5-min avg (i)" 106px. tests/oracles/history_heading.mjs. */
+.timeline-head { flex-wrap: nowrap; container-type: inline-size; }
+@container (max-width: 425px) {
+  .timeline-head .chart-range-words, .timeline-head .chart-step-sep {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .timeline-head .timeline-ranges button { padding: 0 6px; }
+}
+/* the moved window's last report: under the heading, never in it (HistoryHeader `note`) */
+.chart-note { font-size: var(--text-xs); color: var(--text-secondary); margin: calc(-1 * var(--field-label-gap) + 2px) 0 var(--field-label-gap); }
 
 /* Day/Auto/Night control (SettingsModal, beside Brightness/Night dimming): shorter than the ordinary .segmented-icons
    sizing above so it matches the sliders' TRACK/THUMB (the thumb is 28px: 2px padding + a 24px button lands on it). */

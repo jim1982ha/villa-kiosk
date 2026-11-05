@@ -13,7 +13,7 @@ import { register } from "node:module";
 import { readFileSync } from "node:fs";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
-const { loadOne, historyTitle } = await import("@/ha/historySource");
+const { loadOne, lastReportNote } = await import("@/ha/historySource");
 const { timelineCells } = await import("@/utils/timelineCells");
 const { NOT_KEPT } = await import("@/utils/stateColors");
 
@@ -79,7 +79,7 @@ console.log("\n  a moved window shows the state its last report set:");
   ck("the band's last cell carries the reported state (it ended on the one before)",
      lastCell(w.data, w.end, 1).states.includes("on"), lastCell(w.data, w.end, 1));
   ck("the door's band ends at the same edge", lastCell(w.followers[DOOR], w.end, 1).to === lastCell(w.data, w.end, 1).to);
-  ck("the title says the last report, not \"before\" it", historyTitle("Last hour", w.lastSeen).startsWith("Last hour, last report "));
+  ck("the line under the heading says the last report, not \"before\" it", lastReportNote(w.lastSeen).startsWith("Last report "));
 }
 
 console.log("\n  a device dead for days, on a week's chart, where the villa keeps less than its moved window:");

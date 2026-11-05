@@ -12,7 +12,7 @@ import {
   type FmTerms,
   type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket, type FmTicketUpdate,
 } from "./fmTypes";
-import { fullDate, monthYear } from "@/utils/dateText";
+import { docDate, monthYear } from "@/utils/dateText";
 import { addLocalDays, DAY_MS, HOUR_MS, localMonthStart } from "@/utils/localDay";
 import { villaTime, wallClock } from "@/utils/villaClock";
 import { fmtDuration } from "@/components/panels/chartUtils";
@@ -609,7 +609,7 @@ export function shortDate(at: string | number | Date): string {
   // the app already asks the platform. The FIELDS stay fixed — day, short
   // month, year — so the shape is stable and unambiguous wherever it renders;
   // only the ordering and spelling follow the reader.
-  return fullDate(at);
+  return docDate(at);
 }
 
 /** The month a report covers, spelled for a heading (e.g. "July 2026").

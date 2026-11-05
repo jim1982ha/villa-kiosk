@@ -61,9 +61,9 @@ export function ticketCards(records: readonly FmTicket[], deviceOfRecord: (field
 
 // ── What a card's buttons do ─────────────────────────────────────────────────
 
-/** Every button a card of open work can carry. An issue card's (the Inbox's): Done · Need help · Open Ticket (or Edit
- *  Ticket), `doneNew` / `helpNew` on a card with no record yet (only what the villa's system reports: a fault for its
- *  device is raised with the press). A Tickets card's: Close · Need help · No action needed (`ticketDone`: the resolve form, work
+/** Every button a card of open work can carry. An issue card's (the Inbox's): Done · Not a problem · Open Ticket (or Edit
+ *  Ticket) · Need help, `doneNew` / `helpNew` on a card with no record yet (only what the villa's system reports: a fault for its
+ *  device is raised with the press). A Tickets card's: Close · No action needed · Need help (`ticketDone`: the resolve form, work
  *  done; `closeTicket`: that ticket's records closed with nothing done and no cost, fmCommands' closeTickets). */
 export type WorkActionKind = "done" | "needHelp" | "notAProblem" | "doneNew" | "helpNew" | "openTicket" | "raiseTicket"
   | "editTicket" | "ticketDone" | "closeTicket" | "reopen";
@@ -95,7 +95,7 @@ export const NEED_HELP = "Need help";
  *  closed with nothing done, and never raised again while the problem lasts (FmTicketUpdate.lasting); back after it
  *  ended, it is new. ⚠️ A BUTTON OF ITS OWN (owner, 2026-11-04: "instead of showing the button `Not a problem while it
  *  lasts` only after clicking on the `Done` Button, show it directly next to `Done`, `Need Help`"): it was the second
- *  answer to a Done's or a No action needed's question; now it follows Need help on every card that offers Done on a
+ *  answer to a Done's or a No action needed's question; now it follows Done on every card that offers Done on a
  *  record on the Inbox while none is a ticket (never a ticket's: owner, 2026-11-04; notAProblem), in the order VESTA's own alert offers it on Telegram, its label short ("the button label must be short":
  *  owner, 2026-11-04); pressed, it closes, no question asked (owner, 2026-11-04). */
 export const NOT_A_PROBLEM = "Not a problem";
@@ -166,7 +166,8 @@ export function helpLine(h: HelpAsked, stamp: (at: string) => string): string {
 
 /**
  * The buttons of an issue card (the Inbox's), from the device's open records (its own fault lines and those folded onto
- * a live state's line): Done · Need help · Not a problem · Open Ticket, the same on every card. Done closes them ALL, faults and
+ * a live state's line): Done · Not a problem · Open Ticket · Need help, the same on every card and on VESTA's alert on
+ * Telegram (⚠️ ONE ORDER, owner 2026-11-05: "Done · Not a problem · Open Ticket · Need help"). Done closes them ALL, faults and
  * tickets, each read again by the VESTA Agent ("one Done closes everything on the card", owner 2026-10-30, in place of
  * each line's own Close of 2026-10-18); Need help writes a "help" step on each not asked about yet (none left: no
  * Need help); Open Ticket takes on its faults (one ticket for the device), "Edit Ticket" as soon as one is a ticket:
@@ -177,13 +178,14 @@ export function helpLine(h: HelpAsked, stamp: (at: string) => string): string {
  */
 export function overviewActions(records: readonly WorkRecord[], device?: string): WorkAction[] {
   const open = records.filter((r) => r.stage !== "closed");
-  if (open.length === 0) return device ? [action("doneNew", [device]), action("helpNew", [device]), action("raiseTicket", [device])] : [];
+  if (open.length === 0) return device ? [action("doneNew", [device]), action("raiseTicket", [device]), action("helpNew", [device])] : [];
   const faults = open.filter((r) => r.stage === "fault").map((r) => r.id);
   const tickets = open.filter((r) => r.stage === "ticket").map((r) => r.id);
   const ids = open.map((r) => r.id);
   return [
-    action("done", ids), ...needHelp(open), ...notAProblem(open),
+    action("done", ids), ...notAProblem(open),
     tickets.length ? action("editTicket", [tickets[0]]) : action("openTicket", faults),
+    ...needHelp(open),
   ];
 }
 
@@ -195,14 +197,15 @@ function notAProblem(records: readonly WorkRecord[]): WorkAction[] {
   return records.length && records.every((r) => r.stage === "fault") ? [action("notAProblem", records.map((r) => r.id))] : [];
 }
 
-/** The buttons of a ticket in progress (a Tickets card): Close (its resolve form: work done), Need help (the same "help"
- *  step as an issue card's: the VESTA Agent asks the owner to act) and No action needed (nothing done) — each on every
+/** The buttons of a ticket in progress (a Tickets card), in the issue card's order by meaning: Close (its resolve form:
+ *  work done), No action needed (nothing done) and Need help (the same "help" step as an issue card's: the VESTA Agent
+ *  asks the owner to act) — each on every
  *  record of it. ⚠️ NO NOT A PROBLEM (owner, 2026-11-04: "it's irrelevant here"): a ticket is work someone took on;
  *  "not a problem" is said of an alert, on the Inbox's card, before anyone takes it on. */
 export function ticketActions(records: readonly WorkRecord[]): WorkAction[] {
   const tickets = records.filter((r) => r.stage === "ticket");
   const ids = tickets.map((r) => r.id);
-  return ids.length ? [action("ticketDone", ids), ...needHelp(tickets), ...notAProblem(tickets), action("closeTicket", ids)] : [];
+  return ids.length ? [action("ticketDone", ids), ...notAProblem(tickets), action("closeTicket", ids), ...needHelp(tickets)] : [];
 }
 
 /** A closed record's one button: "Reopen" — it is a fault again, back on the Inbox — when it may be taken back

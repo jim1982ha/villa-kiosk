@@ -20,7 +20,7 @@ import { checkPill } from "@/fm/faultTiming";
 import { closedActions, helpAsked, overviewActions, workRecord, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import type { HelpAsked } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
-import { clockTime, dayMonth, momentText } from "@/utils/dateText";
+import { clockTime, docDate, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
 import { closedFaults, closedTold, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
 import { alertNumberOf, faultAlertLabel, faultBegan, faultName } from "@/fm/fmEngine";
@@ -198,7 +198,7 @@ function closingText(c: AttentionItem["closing"], now: Date): string | null {
   const at = Date.parse(c.at);
   const when = at > now.getTime() ? `closes at about ${clockTime(at)}` : "closes at the next check";
   if (!c.word) return `Back to normal · ${when} if it stays so`;
-  const said = sinceText(c.since ?? null, clockTime, dayMonth);
+  const said = sinceText(c.since ?? null, clockTime, docDate);
   const since = said ? ` since ${said}` : "";
   return `${c.word}${since} · ${when} if it stays ${c.word.toLowerCase()}`;
 }
@@ -210,7 +210,7 @@ export interface CardLine {
   text: string;
   /** The records it stands for, each with its stage; what its buttons act on. */
   records: WorkRecord[];
-  /** Done · Need help · Open Ticket (or Edit Ticket) on them, or the device when it holds none (lineWork). */
+  /** Done · Not a problem · Open Ticket (or Edit Ticket) · Need help on them, or the device when it holds none (lineWork). */
   actions: WorkAction[];
   /** The Need help pressed on it that nothing has answered yet (deviceWork.helpAsked): its buttons say so. */
   asked: HelpAsked | null;

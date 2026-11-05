@@ -104,16 +104,17 @@ ck("one button closes as lasting: Not a problem, short, with no question (it clo
 const W = await import("@/fm/deviceWork");
 const order = (acts) => acts.map((a) => a.kind).join(" · ");
 // owner, 2026-11-04: "don't show the `Not a problem` button in the Ticket cards, because it's irrelevant here"
-ck("  ...after Need help on an Inbox card that offers Done on a record; never on a card with no record, nor a Tickets card",
-   order(W.overviewActions([{ id: "a", stage: "fault" }])) === "done · needHelp · notAProblem · openTicket"
-   && order(W.ticketActions([{ id: "a", stage: "ticket" }])) === "ticketDone · needHelp · closeTicket"
+// owner, 2026-11-05: "Done · Not a problem · Open Ticket · Need help", on the tablet and on Telegram alike
+ck("  ...after Done on an Inbox card that offers Done on a record; never on a card with no record, nor a Tickets card",
+   order(W.overviewActions([{ id: "a", stage: "fault" }])) === "done · notAProblem · openTicket · needHelp"
+   && order(W.ticketActions([{ id: "a", stage: "ticket" }])) === "ticketDone · closeTicket · needHelp"
    && !W.overviewActions([], "switch.pump").some((a) => a.kind === "notAProblem"),
    [order(W.overviewActions([{ id: "a", stage: "fault" }])), order(W.ticketActions([{ id: "a", stage: "ticket" }]))]);
 // architecture review 23: the Inbox card of a device whose ticket is in progress offered it, and closed that ticket
 // as "Not a problem while it lasts"; one rule now, the same on both tabs
 ck("  ...never while the device has a ticket in progress, on its Inbox card as on its Tickets card",
-   order(W.overviewActions([{ id: "a", stage: "fault" }, { id: "b", stage: "ticket" }])) === "done · needHelp · editTicket"
-   && order(W.overviewActions([{ id: "b", stage: "ticket" }])) === "done · needHelp · editTicket"
+   order(W.overviewActions([{ id: "a", stage: "fault" }, { id: "b", stage: "ticket" }])) === "done · editTicket · needHelp"
+   && order(W.overviewActions([{ id: "b", stage: "ticket" }])) === "done · editTicket · needHelp"
    && !W.ticketActions([{ id: "b", stage: "ticket" }]).some((a) => a.kind === "notAProblem"),
    order(W.overviewActions([{ id: "a", stage: "fault" }, { id: "b", stage: "ticket" }])));
 const wb = parseTsx("components/fm/WorkButtons.tsx");

@@ -38,8 +38,9 @@ const list = (kind) => draw(h(SavedDocumentRows, { kind, docs: docs.map(recapKin
 // "October 2026". Titled by the moment it was taken, in the documents' fixed form (momentText, the "Generated:" stamp).
 const at16 = momentText("2026-10-16T09:00:00Z"), at17 = momentText("2026-10-17T09:00:00Z");
 ck("the readiness list reads \"Saved snapshots\", newest first, each titled by its moment, to Reopen or delete",
-   // its strip: its title, then when it was saved (owner, 2026-11-05: the strip names the thing)
-   text(list("readiness")).startsWith(`|Saved snapshots (2)|${at17}|Saved ${at17}|`) && text(list("readiness")).includes(`|${at16}|`)
+   // its strip: its title, the moment it was taken, said once (owner, 2026-11-05: "Saved <the same moment>" beside it)
+   text(list("readiness")).startsWith(`|Saved snapshots (2)|${at17}|[icon] Reopen|`) && text(list("readiness")).includes(`|${at16}|`)
+   && !text(list("readiness")).includes(`Saved ${at17}`)
    && !text(list("readiness")).includes("October 2026") && (text(list("readiness")).match(/Reopen/g) ?? []).length === 2,
    text(list("readiness")));
 ck("  ...the moment in the agreement's fixed form (day first, as Telegram), never a locale's",

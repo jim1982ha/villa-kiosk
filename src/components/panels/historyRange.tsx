@@ -100,13 +100,22 @@ export function useSharedRange(): HistoryRange {
 }
 
 /** The heading row every history section uses: its title on the left, the
- *  range picker on the right. Keeps the three views visually identical. */
-export function HistoryHeader({ title, picker, step, about }: { title: string; picker: ReactNode; step: string; about: string }) {
+ *  range picker on the right. Keeps the three views visually identical.
+ *  ⚠️ ALWAYS ONE LINE (owner, 2026-11-05: "it should never happen"): "LAST 24 HOURS · 5-min avg (i)" pushed the pills
+ *  onto a second line. The device panel's family is wide enough for the longest range's words beside the pills
+ *  (03-panels.css .panel-modal), and a narrower heading (a phone) leaves out the words the pill pressed already says
+ *  ("24h"), kept for a screen reader and in its (i) (04-modals.css `.timeline-head` container). `note`: a fact under the
+ *  row, never in it (the last report a moved window ends just after: historySource.lastReportNote). */
+export function HistoryHeader({ title, picker, step, about, note }: { title: string; picker: ReactNode; step: string; about: string; note?: string }) {
   return (
-    <div className="timeline-head">
-      <label className="entity-label">{title}<ChartStep words={step} about={about} /></label>
-      {picker}
-    </div>
+    <>
+      <div className="timeline-head">
+        <label className="entity-label"><span className="chart-range-words">{title}</span>
+          <ChartStep words={step} about={`${title}, ${step}. ${about}`} /></label>
+        {picker}
+      </div>
+      {note && <div className="chart-note">{note}</div>}
+    </>
   );
 }
 
@@ -114,7 +123,7 @@ export function HistoryHeader({ title, picker, step, about }: { title: string; p
  *  device panel's header and the Weather and Energy windows' chart heads (owner, 2026-10-20). ⚠️ AND ITS (i) (owner,
  *  2026-11-05): what the chart shows and what it may not (chartUtils.chartAbout), on every chart, the app's one (i). */
 export function ChartStep({ words, about }: { words: string; about: string }) {
-  return <span className="chart-step"> · {words}<InfoTip label="What this chart shows" className="chart-about">{about}</InfoTip></span>;
+  return <span className="chart-step"><span className="chart-step-sep"> · </span>{words}<InfoTip label="What this chart shows" className="chart-about">{about}</InfoTip></span>;
 }
 
 /** Where the villa's system's finer record begins (historySource.keptFrom, read once an hour), for a chart's (i);

@@ -15,7 +15,7 @@ import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 import { ck, done } from "../consistency/check.mjs";
 import { readFileSync, readdirSync } from "node:fs";
-const { loadOne, historyTitle } = await import("@/ha/historySource");
+const { loadOne, lastReportNote } = await import("@/ha/historySource");
 const { emptyHistoryText } = await import("@/utils/statisticsSeries");
 
 
@@ -49,8 +49,9 @@ console.log("\n  the look-back:");
   const c = await loadStateWindow("x.y", 24, port(never));
   ck("a device never seen in the look-back: the asked-for window, no 'before'", c.lastSeen === undefined
      && c.data.map((p) => p.state).join() === "\u0000no_record,unavailable", c);
-  ck("the header says the last report a moved window ends just after", historyTitle("Last 24 hours", b.lastSeen).startsWith("Last 24 hours, last report ")
-     && historyTitle("Last 24 hours", undefined) === "Last 24 hours");
+  // owner, 2026-11-05: the heading never on two lines: the last report is a line under it (HistoryHeader `note`)
+  ck("the line under the heading says the last report a moved window ends just after", lastReportNote(b.lastSeen)?.startsWith("Last report ")
+     && lastReportNote(undefined) === undefined, lastReportNote(b.lastSeen));
 }
 
 console.log("\n  who charts states, and how:");
@@ -62,7 +63,7 @@ console.log("\n  who charts states, and how:");
   ck("only the history section, the camera's two-series rail and a linked sensor's band draw a StateTimeline themselves",
      importers.sort().join() === "CameraPanel.tsx,LastDayTimeline.tsx,LinkedSensorRow.tsx", importers);
   const day = src("LastDayTimeline.tsx");
-  ck("the section charts the moved window where it ENDS and titles it", /end=\{end\}/.test(day) && /title=\{historyTitle\(range\.title, lastSeen\)\}/.test(day));
+  ck("the section charts the moved window where it ENDS and says its last report under the heading", /end=\{end\}/.test(day) && /title=\{range\.title\} note=\{lastReportNote\(lastSeen\)\}/.test(day));
   ck("  ...and hands the chart the fetch's status whole", /status=\{status\}/.test(day));
   ck("Generic and Sensor (binary and text) use the section", /<LastDayTimeline entityId=\{mapping\.entityId\} palette \/>/.test(src("GenericPanel.tsx"))
      && /<ReadingHistory entityId=\{mapping\.entityId\}/.test(src("SensorPanel.tsx"))

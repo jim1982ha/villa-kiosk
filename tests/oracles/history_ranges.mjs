@@ -176,6 +176,68 @@ console.log("\n  a step offline inside it (owner, 2026-11-05: a meter offline 22
      fmtOutage(month[0], now, 720) === "Unavailable at least once that day" && fmtOutage(week[0], now, 168) === "Unavailable at least once that hour",
      fmtOutage(month[0], now, 720));
 }
+// ⚠️ ONE WAY TO SAY IT AT EVERY RANGE (owner, 2026-11-05): a power sensor's 10s drop said "Unavailable at 06:58, for 10s"
+// with no value on its 24h chart, "● 2.1 kW" and "Unavailable at least once that hour" on its week's. Through the real
+// path: the history source over a port with the villa's changes AND its figures (the slot of the drop missing, as the
+// recorder writes it), the chart's geometry, the tooltip's words
+console.log("\n  one drop, the same words at every range (owner, 2026-11-05):");
+{
+  const { chartGeometry } = await import("@/utils/chartGeometry");
+  const slot = 5 * MIN, id = "sensor.pump_power";
+  const drop = now - 21 * HOUR + 3 * MIN + 20_000, back = drop + 10_000;    // 10s, inside the last 24 hours, its day compiled
+  const iso = (t) => new Date(t).toISOString();
+  const changes = [];
+  for (let t = now - 12 * DAY; t < now; t += MIN) changes.push({ state: String(2000 + (t / MIN) % 7), last_changed: iso(t) });
+  changes.push({ state: "unavailable", last_changed: iso(drop) }, { state: "2100", last_changed: iso(back) });
+  changes.sort((a, b) => Date.parse(a.last_changed) - Date.parse(b.last_changed));
+  const reads = [];
+  // the recorder's days begin at the villa's midnight (this machine's, as cellEdges reads it)
+  const tz = -new Date(now).getTimezoneOffset() * MIN;
+  const rowsOf = (step, from, to, skip) => { const o = []; for (let t = Math.ceil((from + tz) / step) * step - tz; t + step <= to; t += step) if (!skip(t)) o.push({ start: t, end: t + step, mean: 2050 }); return o; };
+  const villa = (figures = true) => ({ keptFrom: async () => kept,
+    // as the villa's system answers: the state in force at `from`, then every change kept
+    stateRows: async (e, from, to) => { reads.push(to - from);
+      const inside = changes.filter((r) => { const t = Date.parse(r.last_changed); return t >= Math.max(from, kept) && t <= to; });
+      const before = changes.filter((r) => Date.parse(r.last_changed) < from).pop();
+      return before ? [{ ...before, last_changed: iso(from) }, ...inside] : inside; },
+    getStatisticsDuringPeriod: async (ids, start, period) => {
+      if (!figures) return {};
+      const from = Date.parse(start), step = { "5minute": slot, hour: HOUR, day: DAY, week: 7 * DAY }[period];
+      const lo = period === "5minute" ? Math.max(from, kept) : from;
+      return { [id]: rowsOf(step, lo, now - slot, (t) => period === "5minute" && t <= drop && drop < t + slot) };
+    } });
+  const said = async (port, hours, period) => {
+    const s = (await loadOne(port, { kind: "trend", ids: [id], hours, period }, now))[id];
+    const band = s.gaps.find((g) => !g.notKept && g.from <= drop && g.to > drop);
+    const g = chartGeometry(s.window, [{ pts: s.points, gaps: s.gaps }], { left: 0, right: 320, top: 12, bottom: 138 });
+    const hover = g.hover(drop);
+    return { band, words: band && fmtOutage(band, now, hours), value: !!hover?.readings[0], outage: !!hover?.outages[0] };
+  };
+  const d24 = await said(villa(true), 24, "5minute"), d1w = await said(villa(true), 168, "hour");
+  reads.length = 0;
+  const m1 = await said(villa(true), 720, "day");
+  const monthRead = Math.max(0, ...reads);
+  ck("the same drop, the same outage line on the 24h and the 1w chart: when and how long",
+     /^Unavailable at [^,]+, for 10s$/.test(d24.words) && d1w.words === d24.words && m1.words === d24.words,
+     { d24: d24.words, d1w: d1w.words, m1: m1.words });
+  ck("  ...at every range the step's value is said above it (the line runs through), its band striped",
+     [d24, d1w, m1].every((x) => x.value && x.outage && x.band.within), { d24, d1w, m1 });
+  ck("  ...the detail is read only around the slot the figures miss, never the month (a few slots wide)",
+     monthRead > 0 && monthRead <= 4 * slot, monthRead / MIN);
+  // older than the detail kept: only the averages tell it
+  const old = { from: kept - DAY, to: kept - DAY + HOUR, within: "hour" };
+  ck("  ...\"at least once that hour\" only where the detail is no longer kept",
+     fmtOutage(old, now, 168) === "Unavailable at least once that hour", fmtOutage(old, now, 168));
+  // several drops in one band
+  const { stepsOfflineInside, fiveMinuteSeries: five } = await import("@/utils/trendInterval");
+  const t0 = now - 2 * HOUR, w = { from: now - 3 * HOUR, to: now };
+  const raw = { points: [{ t: w.from, v: 1 }, { t: t0 + 30_000, v: 1 }, { t: t0 + 70_000, v: 1 }, { t: t0 + 110_000, v: 1 }],
+    gaps: [{ from: t0, to: t0 + 30_000 }, { from: t0 + 60_000, to: t0 + 70_000 }, { from: t0 + 100_000, to: t0 + 110_000 }], window: w };
+  const three = stepsOfflineInside(five(raw), "5minute", slot, raw.gaps).gaps.find((g) => g.from <= t0 && g.to > t0);
+  ck("  ...several drops in one step: \"Unavailable 3 times, 50s in all, the first at …\"",
+     /^Unavailable 3 times, 50s in all, the first at [^,]+$/.test(fmtOutage(three, now, 24)), fmtOutage(three, now, 24));
+}
+
 // owner, 2026-11-05: "Unavailable · 13:40–13:40 (1s)" for a drop of 0.46s
 ck("an outage within one minute says when and how long, under 1s or for its seconds",
    /^Unavailable at .+, under 1s$/.test(fmtOutage({ from: now - 2 * HOUR, to: now - 2 * HOUR + 460 }, now))
@@ -189,9 +251,9 @@ ck("  ...on a chart of several days, with its day", /\d/.test(fmtOutage({ from: 
   const day2 = now - 2 * DAY, tip = fmtOutage({ from: day2, to: day2 + 27 * MIN }, now, 168);
   const across = fmtOutage({ from: day2 - 20 * MIN, to: day2 + 4 * HOUR }, now, 168);
   ck("an outage on a chart of several days says its day once when it ends the same day, twice when it does not",
-     (tip.match(/\d{1,2} [A-Z][a-z]{2}|[A-Z][a-z]{2} \d{1,2}/g) ?? []).length === 1
+     (tip.match(/\d\d\/\d\d\/\d{4}/g) ?? []).length === 1
      && (new Date(day2 - 20 * MIN).getUTCDate() === new Date(day2 + 4 * HOUR).getUTCDate()
-       || (across.match(/\d{1,2} [A-Z][a-z]{2}|[A-Z][a-z]{2} \d{1,2}/g) ?? []).length === 2), [tip, across]);
+       || (across.match(/\d\d\/\d\d\/\d{4}/g) ?? []).length === 2), [tip, across]);
 }
 
 console.log("\n  an outage inside a step looks the same whatever drew it, and a sleep is none (architecture review 24):");
@@ -228,9 +290,10 @@ console.log("\n  an outage inside a step looks the same whatever drew it, and a 
     stateRows: async (e, from, to) => changes.filter((r) => { const t = Date.parse(r.last_changed); return t >= from && t <= to; }) };
   const g = (await loadOne(plain, { kind: "trend", ids: ["sensor.x"], hours: 168, period: "hour" }, now))["sensor.x"].gaps;
   const inside = g.filter((x) => x.within), breaks = g.filter((x) => !x.within && !x.notKept);
-  ck("  ...a sensor with no figures: the hour offline 22min striped as the figures' (\"at least once that hour\"), the whole hour a break",
-     inside.some((x) => x.from <= off && x.to > off && x.within === "hour") && fmtOutage(inside[0], now, 168) === "Unavailable at least once that hour"
-     && breaks.some((x) => x.from <= gone + 30 * MIN && x.to > gone + 30 * MIN && x.actual), { inside, breaks });
+  // owner, 2026-11-05: when and how long whenever the detail is kept, never "at least once" then
+  ck("  ...a sensor with no figures: the hour offline 22min striped as the figures', its tooltip when and how long, the whole hour a break",
+     inside.some((x) => x.from <= off && x.to > off && x.within === "hour") && /^Unavailable · [^–]+–[^–]+ \(27min\)$/.test(fmtOutage(inside[0], now, 168))
+     && breaks.some((x) => x.from <= gone + 30 * MIN && x.to > gone + 30 * MIN && x.actual), { inside, breaks, said: fmtOutage(inside[0], now, 168) });
   // a 50 ms drop (the villa's system reloading its virtual devices): no figure would miss it, so no step is striped
   // (architecture review 25: a template sensor's whole day was striped on its month for each reload)
   const blink = now - 5 * DAY + 14 * HOUR + 3 * MIN;   // a day with no other outage
@@ -258,7 +321,7 @@ console.log("\n  every chart's (i): what it shows and what it may not (owner, 20
      && widenGaps([{ from: 1_000_056_000, to: 1_000_056_460 }], 0, 2e9)[0].to - widenGaps([{ from: 1_000_056_000, to: 1_000_056_460 }], 0, 2e9)[0].from === PERIOD_MS["5minute"], about["24h"]);
   ck("  ...1w: hourly averages, an hour striped when unavailable part of it, an outage under the finest figures' 5min may not show",
      about["1w"] === "Hourly averages. Striped: unavailable at least once that hour. Outages under 5min may not show.", about["1w"]);
-  const keptDay = (await import("@/utils/dateText")).dayMonth(kept);
+  const keptDay = (await import("@/utils/dateText")).docDate(kept);
   ck("  ...1m and 1y: days and weeks, and before what the villa's system keeps, only an outage of a whole hour (day)",
      about["1m"] === `Daily averages. Striped: unavailable at least once that day. Outages under 5min may not show. Before ${keptDay}: only whole-hour outages show.`
      && about["1y"].startsWith("Weekly averages. Striped: unavailable at least once that week.") && about["1y"].endsWith(": only whole-day outages show."), [about["1m"], about["1y"]]);
@@ -295,7 +358,7 @@ console.log("\n  every chart's (i): what it shows and what it may not (owner, 20
   const untitled = charts.filter((f) => !nested.has(f) && !/<(ChartStep|HistoryHeader)\b/.test(src(f)));
   const steps = files.flatMap((f) => [...src(f).matchAll(/<(ChartStep|HistoryHeader)\b[\s\S]*?\/>/g)].map((m) => [f, m[0]]));
   const noAbout = steps.filter(([f, el]) => !(/about=\{chartAbout\(/.test(el) || /about=\{about\}/.test(el)
-    || (f === "historyRange.tsx" && /about=\{about\}/.test(el))));
+    || (f === "historyRange.tsx" && /about=\{(about|`\$\{title\}, \$\{step\}\. \$\{about\}`)\}/.test(el))));
   ck("every chart with a title (derived from the tree) carries its (i), from the one text builder",
      charts.length >= 5 && untitled.length === 0 && noAbout.length === 0 && /about: string/.test(src("historyRange.tsx")), { charts, untitled, noAbout });
   // every chart of averages says what it draws before what is kept (drawsUnkept): its call, wherever it is

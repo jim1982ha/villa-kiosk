@@ -41,7 +41,10 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
   if (docs.length === 0) return null;
 
   // each titled by what it is about: its month, or the moment it was taken (DOCUMENT_KINDS[kind].title)
-  const { noun, plural, title } = DOCUMENT_KINDS[kind];
+  const { noun, plural, title, about } = DOCUMENT_KINDS[kind];
+  // ⚠️ ITS MOMENT ONCE (owner, 2026-11-05: a snapshot's card said "05/11/2026 14:02" in its band and "Saved 05/11/2026
+  // 14:02" beside it): a document titled by the moment it was taken says no "Saved"; one about a month says when saved
+  const saved = (doc: FmSavedDocument) => (about === "moment" ? undefined : `Saved ${momentText(doc.generatedAt)}`);
 
   return (
     <div className="fm-stack">
@@ -51,7 +54,7 @@ export function SavedDocumentRows({ kind, docs: all, onOpen, onRemove }: {
       <div className="fm-list">
         {docs.map((doc) => (
           // THE Cockpit card (RecordCard), as every list (owner, 2026-10-22)
-          <RecordCard key={doc.id} title={title(doc)} when={`Saved ${momentText(doc.generatedAt)}`}
+          <RecordCard key={doc.id} title={title(doc)} when={saved(doc)}
             pills={<AgentMark record={doc} />}
             actions={<>
               <button className="btn ghost" onClick={() => onOpen(doc)}>

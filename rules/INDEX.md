@@ -62,6 +62,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Asleep devices: one list, the Kiosk's](decided.md#asleep-devices-one-list-the-kiosks) — the Kiosk owns the unavailable-by-design list; the Agent reads it
 - [The bake's job table is the owner's](decided.md#the-bakes-job-table-is-the-owners) — never reset or move the bake pipeline's job table
 - [Automation descriptions are short too](decided.md#automation-descriptions-are-short-too) — one or two plain sentences; history in the HISTORY file
+- [The night message's language stays as it is](decided.md#the-night-messages-language-stays-as-it-is) — English words beside a translated Status, its first post English; declined 2026-11-05
 
 ## Verifying a claim
 
