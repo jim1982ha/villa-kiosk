@@ -1,3 +1,9 @@
+## 2.496.714
+
+What you will see:
+- The Energy window's week and month charts name their days as every other chart does: "04/11" under the bars and
+  "04/11/2026" for the busiest day (they said "Wed 4", which named no month).
+
 ## 2.496.713
 
 What you will see:
