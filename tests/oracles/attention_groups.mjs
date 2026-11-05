@@ -103,7 +103,7 @@ const taken = groupAttention(build([{ ...ticket("va-5", "Back door stiff", "lock
 // owner, 2026-11-02: its stage said in the pill of who took it, "Ticket opened … · In progress", no pill of its own
 ck("  ...an open fault's line is its text alone; one taken in hand too, its \"In progress\" in its line's pill, in that colour",
    taken && lineText(taken) === "Back door stiff" && !cockpitCard(taken, null).status?.length
-   && /^Ticket opened, on .* · In progress$/.test(cockpitCard(taken, null).lines[0].latest?.text ?? "") && cockpitCard(taken, null).lines[0].latest?.tone === "tone-accent"
+   && /^Ticket opened on .* · In progress$/.test(cockpitCard(taken, null).lines[0].latest?.text ?? "") && cockpitCard(taken, null).lines[0].latest?.tone === "tone-accent"
    && !cockpitCard(loneFault, null).status?.length, taken?.items);
 // ⚠️ ONE ICON PER MEANING (owner, 2026-10-13: "the icon is redundant"): every line repeated its row's icon
 ck("  ...and its line shows no icon of its own: the row's says it already",

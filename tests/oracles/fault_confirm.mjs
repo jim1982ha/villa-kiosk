@@ -62,8 +62,8 @@ const closesAt = (min) => `VESTA closes this at ${clockTime(NOW + min * 60_000)}
 ck("  ...its line: \"Done on 23/10/2026 14:56 (JM) · VESTA closes this at 15:06 if all is still well; …\" (the villa's clock)",
    line("w1") === `Done${on(-2)} (JM) · ${closesAt(8)}` && clockTime(NOW + 8 * 60_000).includes("06"),
    line("w1"));
-ck("  ...a Close in the Cockpit says Cleared (never Closed: it is not closed yet) and the profile",
-   line("w2") === `Cleared${on(-1)} (Owner) · ${closesAt(9)}`,
+ck("  ...a Close in the Cockpit says what was pressed, No action needed (never Closed: it is not closed yet), and the profile",
+   line("w2") === `No action needed${on(-1)} (Owner) · ${closesAt(9)}`,
    line("w2"));
 {
   // ⚠️ EVERY CLOSE ALIKE (owner, 2026-10-25): an alert the VESTA Agent cleared itself is watched too, said "Cleared"
@@ -316,6 +316,37 @@ console.log("\n  one place at every moment (architecture review round 16: faultC
   // manage Facility work (IssueCard: canManage && line.actions)
   ck("  ...none for a profile that does not manage Facility work",
      !/fm-record-actions/.test(row(false)) && /\(canManage && line\.actions\.length > 0/.test(readFileSync(new URL("../../src/components/cockpit/IssueCard.tsx", import.meta.url), "utf8")));
+}
+
+console.log("\n  a closed record told once, on both Closed sections (architecture review 23):");
+{
+  const { closedCards } = await import("@/config/cockpitCard");
+  const { closedTold } = await import("@/fm/faultConfirm");
+  const { faultLatest } = await import("@/fm/faultNotes");
+  const { closedActions, workRecord } = await import("@/fm/deviceWork");
+  const T0 = NOW, iso = (ms) => new Date(ms).toISOString();
+  const devs = devicesOf({ ids: ["switch.example_pump"] });
+  const ents = { "switch.example_pump": { entity_id: "switch.example_pump", state: "on", attributes: {} } };
+  const taken = { at: iso(T0 - 1_800_000), status: "in_progress", photoIds: [], by: "Owner" };
+  // a ticket a person opened, closed in Tickets with No action needed; one of VESTA's, done; one VESTA cleared itself
+  const mine = { ...doneOn("p1", "switch.example_pump", undefined), source: "owner", status: "resolved", resolvedAt: iso(T0),
+    openedAt: iso(T0 - 3_600_000), updates: [opened, taken, { at: iso(T0), status: "resolved", kind: "cleared", photoIds: [], by: "Owner" }] };
+  const vestas = { ...mine, id: "v1", source: "vesta_agent", updates: [opened, taken, { at: iso(T0), status: "resolved", who: "JM", photoIds: [], by: "Owner" }] };
+  const cleared = { ...mine, id: "c1", source: "vesta_agent", updates: [opened, { at: iso(T0), status: "resolved", kind: "cleared", note: "Cleared by VESTA", photoIds: [], by: "VESTA Agent" }] };
+  const later = new Date(T0 + 3 * 86_400_000);
+  const told = (t) => {
+    const inbox = closedCards({ ...EMPTY_FM_DATA, tickets: [t] }, null, later, { devices: devs, entities: ents, entityMap: {}, resolvedRooms: {}, may: () => true })[0]?.lines[0];
+    return { inbox: inbox?.latest?.text ?? inbox?.closing, inboxReopen: (inbox?.actions ?? []).map((a) => a.label).join(),
+      tickets: faultLatest(t, momentText)?.text, ticketsReopen: closedActions(workRecord(t), closedTold(t).reopen).map((a) => a.label).join() };
+  };
+  const [m, v, c] = [told(mine), told(vestas), told(cleared)];
+  ck("the same words on Inbox › Closed and Tickets › Closed, by the action pressed and who",
+     m.inbox === m.tickets && m.inbox === `No action needed by Owner, on ${momentText(T0)} · Resolved`
+     && v.inbox === v.tickets && v.inbox === `Done by JM, on ${momentText(T0)} · Resolved`
+     && c.inbox === c.tickets && c.inbox === `Cleared on ${momentText(T0)}`, [m, v, c]);
+  ck("  ...and the same Reopen on both: a person's own ticket (nothing checks it again), never one VESTA checks",
+     m.inboxReopen === "Reopen" && m.ticketsReopen === "Reopen" && v.inboxReopen === "" && v.ticketsReopen === ""
+     && c.inboxReopen === "" && c.ticketsReopen === "", [m, v, c]);
 }
 
 console.log("\n  gone or back as the Agent says:");

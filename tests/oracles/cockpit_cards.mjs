@@ -405,11 +405,32 @@ console.log("\n  a card's state is one pill, everywhere (owner, 2026-11-01, opti
      && /card-pill-status fm-state-inline/.test(withButtons) && /fm-meta fm-state-inline/.test(withButtons), withButtons);
   ck("  ...a card with no buttons keeps them where they stand", !/fm-work-state/.test(without) && !stood(without), without);
   const task = draw(h(RecordCard, { title: "Pool filter clean", status: { text: "Due soon", tone: "due-soon" }, actions: btn("Done") }));
-  const ticketPill = h("span", { className: "fm-badge" }, "Ticket opened by Owner");
-  const tk = draw(h(RecordCard, { title: "Pump", rowState: ticketPill, actions: btn("Close") }));
+  const tk = draw(h(RecordCard, { title: "Pump", tagState: { text: "Ticket opened by Owner", tone: "tone-accent" }, actions: btn("Close") }));
   ck("  ...on every list's card: a task's due state, a ticket's pill of who last moved it",
      /fm-work-state[\s\S]*Due soon[\s\S]*Done/.test(row(task)) && /card-pill-status fm-state-inline/.test(task)
      && /fm-work-state[\s\S]*Ticket opened by Owner[\s\S]*Close/.test(row(tk)), [task, tk]);
+  // architecture review 23: a card's state goes in once and RecordCard places it; each kind of card says its state
+  // exactly once whatever its width (wide: the copy where it stands is hidden; narrow: the buttons' row's)
+  const hiding = (html, cls) => {
+    let out = html, i;
+    while ((i = out.search(new RegExp(`<(\\w+)[^>]*class="[^"]*\\b${cls}\\b[^"]*"`))) >= 0) {
+      const tag = /^<(\w+)/.exec(out.slice(i))[1];
+      let depth = 0, j = i;
+      const re = new RegExp(`<${tag}\\b|</${tag}>`, "g");
+      re.lastIndex = i;
+      for (let m; (m = re.exec(out));) { depth += m[0].startsWith("</") ? -1 : 1; if (depth === 0) { j = re.lastIndex; break; } }
+      out = out.slice(0, i) + out.slice(j);
+    }
+    return out;
+  };
+  const times = (html, words) => html.split(words).length - 1;
+  const once = (html, words) => [times(hiding(html, "fm-state-inline"), words), times(hiding(html, "fm-work-state"), words)];
+  const ticketFolded = draw(h(RecordCard, { title: "Pump", tagState: { text: "Ticket opened by Owner", tone: "tone-accent" } }));
+  const kinds = { "an Inbox card's state": once(withButtons, "Unavailable"), "an Inbox problem's pill": once(withButtons, "Reopened by VESTA Agent"),
+    "an Inbox card with no buttons": once(without, "Unavailable"), "a task's due state": once(task, "Due soon"),
+    "a ticket's pill": once(tk, "Ticket opened by Owner"), "a closed ticket's pill, no buttons": once(ticketFolded, "Ticket opened by Owner") };
+  ck("  ...every kind of card says its state exactly once, on a wide card and on a narrow one (review 23)",
+     Object.values(kinds).every(([wide, narrow]) => wide === 1 && narrow === 1), kinds);
   const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
   ck("  ...shown in the row on a card as wide as the buttons' labels, where they stood on a narrower one",
      /\.fm-work-state \{ display: none; \}\s*@container work-row \(min-width: 560px\) \{[\s\S]*?\.fm-work-state \{ display: flex;[\s\S]*?\.fm-state-inline \{ display: none; \}/.test(css)

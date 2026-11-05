@@ -18,7 +18,7 @@
 // PURE — imports nothing that touches a browser, so tests/oracles runs it.
 
 import { bucketGaps, type TimeWindow } from "./lineChart";
-import type { HistorySeries, StatisticPeriod } from "@/types/ha.types";
+import type { HistoryGap, HistorySeries, StatisticPeriod } from "@/types/ha.types";
 import { DAY_MS, HOUR_MS } from "./localDay";
 
 /** A measurement's bucket (mean/min/max) or a total's (change). */
@@ -54,6 +54,36 @@ export function statisticsSeries(
     ? bucketGaps(points, PERIOD_MS[period], window)
     : [{ from: window.from, to: window.to }];
   return { points, gaps, window };
+}
+
+/** A coarse figure's step whose finer figures say when it was offline (rangeFilter FINER: an hour's five-minute ones, a
+ *  day's hourly ones, a week's daily ones). */
+export type MarkedPeriod = "hour" | "day" | "week";
+
+/**
+ * ⚠️ AN OUTAGE INSIDE ONE STEP OF THE FIGURES (owner, 2026-11-05: a power meter offline 22 minutes showed nothing on its
+ * 1w chart, and an hourly mean hides it): each step of `coarse` that HAS its mean, inside which the recorder wrote no
+ * finer figure for a slot (`finer`, one figure per `finerMs`: the device said nothing all that slot), marked the
+ * step's whole width with `within`: drawn as a band, the line still drawn through it, its tooltip "Unavailable during
+ * this hour". Only BETWEEN the finer figures (none before the first: older than the recorder keeps them, `keptFrom`
+ * for the five-minute ones, or before the device existed) and after the last only once its slot is compiled
+ * (COMPILE_GRACE_MS: a slot not written yet is no outage). Pure.
+ */
+export function finerOutages(coarse: HistorySeries, finer: HistorySeries, period: MarkedPeriod, finerMs: number,
+  now: number, kept?: number): HistoryGap[] {
+  const pts = finer.points;
+  if (pts.length === 0 || coarse.points.length === 0) return [];
+  const missing: { from: number; to: number }[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    if (pts[i].t - pts[i - 1].t > finerMs * 1.5) missing.push({ from: pts[i - 1].t + finerMs, to: pts[i].t });
+  }
+  const lastEnd = pts[pts.length - 1].t + finerMs;
+  const compiled = Math.floor((Math.min(now, finer.window.to) - COMPILE_GRACE_MS - lastEnd) / finerMs);
+  if (compiled >= 1) missing.push({ from: lastEnd, to: lastEnd + compiled * finerMs });
+  const real = missing.filter((m) => kept === undefined || m.from >= kept);
+  const P = PERIOD_MS[period];
+  return coarse.points.filter((p) => real.some((m) => m.from < p.t + P && m.to > p.t))
+    .map((p) => ({ from: p.t, to: Math.min(p.t + P, coarse.window.to), within: period }));
 }
 
 /** Where a history request stands. `failed` and an empty `ready` are

@@ -106,6 +106,13 @@ ck("  ...after Need help on an Inbox card that offers Done on a record; never on
    && order(W.ticketActions([{ id: "a", stage: "ticket" }])) === "ticketDone · needHelp · closeTicket"
    && !W.overviewActions([], "switch.pump").some((a) => a.kind === "notAProblem"),
    [order(W.overviewActions([{ id: "a", stage: "fault" }])), order(W.ticketActions([{ id: "a", stage: "ticket" }]))]);
+// architecture review 23: the Inbox card of a device whose ticket is in progress offered it, and closed that ticket
+// as "Not a problem while it lasts"; one rule now, the same on both tabs
+ck("  ...never while the device has a ticket in progress, on its Inbox card as on its Tickets card",
+   order(W.overviewActions([{ id: "a", stage: "fault" }, { id: "b", stage: "ticket" }])) === "done · needHelp · editTicket"
+   && order(W.overviewActions([{ id: "b", stage: "ticket" }])) === "done · needHelp · editTicket"
+   && !W.ticketActions([{ id: "b", stage: "ticket" }]).some((a) => a.kind === "notAProblem"),
+   order(W.overviewActions([{ id: "a", stage: "fault" }, { id: "b", stage: "ticket" }])));
 const wb = parseTsx("components/fm/WorkButtons.tsx");
 const confirm = elements(wb, "InlineConfirm")[0];
 ck("  ...a question (Done's, No action needed's) closes as its button says; no question offers a second yes any more", !!confirm

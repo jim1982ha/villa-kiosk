@@ -83,7 +83,7 @@ console.log("\n  the shared reader picks the source by the step:");
   });
   const month = await loadOne(port(true), { kind: "trend", ids: ["sensor.pump_power"], hours: 720, period: "day" }, now);
   const m = month["sensor.pump_power"];
-  ck("a month of a device with long-term figures: its daily figures, the whole month", asked.at(-1) === "day" && m.points.length === 30
+  ck("a month of a device with long-term figures: its daily figures, the whole month", asked.includes("day") && m.points.length === 30
      && m.points.every((p) => p.v === 42) && !m.gaps.some((g) => g.notKept), [asked, m.points.length]);
   const none = (await loadOne(port(false), { kind: "trend", ids: ["sensor.pump_power"], hours: 720, period: "day" }, now))["sensor.pump_power"];
   ck("  ...one it keeps no figures of: what is kept, a value a day, and the rest 'no longer kept'",
@@ -132,6 +132,93 @@ console.log("\n  a greyed choice:");
        line.length > 3 && JSON.stringify(line.slice(0, band.length)) === JSON.stringify(band.slice(0, line.length))
        && line.every((t) => new Date(t).getHours() === 0 && (key !== "1y" || new Date(t).getDay() === 1)), [line.slice(0, 3), band.slice(0, 3)]);
   }
+}
+
+console.log("\n  a step offline inside it (owner, 2026-11-05: a meter offline 22min showed nothing on its 1w chart):");
+{
+  // complete figures at every step, but for the five-minute ones: one slot missing on day 3 (the device said nothing
+  // those five minutes), and the newest slots not compiled yet
+  const slot = 5 * MIN, day3 = now - 3 * DAY + 10 * HOUR;
+  const rowsOf = (step, from, to, skip = () => false) => {
+    const out = [];
+    for (let t = Math.ceil(from / step) * step; t + step <= to; t += step) if (!skip(t)) out.push({ start: t, end: t + step, mean: 5 });
+    return out;
+  };
+  const W = { day: 7 * DAY };
+  const port = (missing) => ({
+    stateRows: async () => [],
+    keptFrom: async () => kept,
+    getStatisticsDuringPeriod: async (ids, start, period) => {
+      const from = Date.parse(start);
+      const step = { "5minute": slot, hour: HOUR, day: DAY, week: W.day }[period];
+      // the recorder keeps five-minute figures ~10 days; the newest five-minute slot is not compiled yet
+      const lo = period === "5minute" ? Math.max(from, kept) : from;
+      const hi = period === "5minute" ? now - slot : now;
+      return { "sensor.meter_power": rowsOf(step, lo, hi, (t) => period === "5minute" && missing(t)) };
+    },
+  });
+  const marks = async (missing, hours, period) =>
+    (await loadOne(port(missing), { kind: "trend", ids: ["sensor.meter_power"], hours, period }, now))["sensor.meter_power"].gaps
+      .filter((g) => g.within);
+  const lost = (t) => t === day3;
+  // a year's week only once compiled: the slot lost nine days ago, inside the last whole week
+  const day9 = now - 9 * DAY + 10 * HOUR;
+  const month = await marks(lost, 720, "day"), year = await marks((t) => t === day9, 8760, "week"), week = await marks(lost, 168, "hour");
+  const dayStart = Math.floor(day3 / DAY) * DAY;
+  ck("a month: the day the five-minute figures miss a slot is marked, its whole width, its line kept (one mark, nothing else)",
+     month.length === 1 && month[0].from === dayStart && month[0].to === dayStart + DAY && month[0].within === "day", month);
+  ck("  ...a year: that day's week; a week: that hour",
+     year.length === 1 && year[0].within === "week" && year[0].from <= day9 && year[0].to > day9
+     && week.length === 1 && week[0].within === "hour" && week[0].from <= day3 && week[0].to > day3, { year, week });
+  ck("  ...a slot not compiled yet is no outage, and nothing is marked with every slot written",
+     (await marks(() => false, 720, "day")).length === 0, await marks(() => false, 720, "day"));
+  ck("  ...its tooltip: \"Unavailable during this day · <day>\"",
+     fmtOutage(month[0], now, 720).startsWith("Unavailable during this day · ") && fmtOutage(week[0], now, 168).startsWith("Unavailable during this hour · "),
+     fmtOutage(month[0], now, 720));
+}
+// owner, 2026-11-05: "Unavailable · 13:40–13:40 (1s)" for a drop of 0.46s
+ck("an outage within one minute says when and how long, under 1s or for its seconds",
+   /^Unavailable at .+, under 1s$/.test(fmtOutage({ from: now - 2 * HOUR, to: now - 2 * HOUR + 460 }, now))
+   && /^Unavailable at .+, for 4s$/.test(fmtOutage({ from: now - 2 * HOUR, to: now - 2 * HOUR + 4_000 }, now)),
+   fmtOutage({ from: now - 2 * HOUR, to: now - 2 * HOUR + 460 }, now));
+ck("  ...on a chart of several days, with its day", /\d/.test(fmtOutage({ from: now - 2 * DAY, to: now - 2 * DAY + 460 }, now, 168).replace(/\d\d:\d\d/, "")),
+   fmtOutage({ from: now - 2 * DAY, to: now - 2 * DAY + 460 }, now, 168));
+
+console.log("\n  every chart's (i): what it shows and what it may not (owner, 2026-11-05):");
+{
+  const { chartAbout } = await import("@/components/panels/chartUtils");
+  const { PERIOD_MS } = await import("@/utils/statisticsSeries");
+  const about = Object.fromEntries(RANGES.map((r) => [r.key, chartAbout("average", r.grainMs, now - r.hours * HOUR, kept)]));
+  ck("1h and 24h: every reading, each outage at its real length",
+     about["1h"] === about["24h"] && about["24h"] === "Every reading. A grey band is each time the device was unavailable, at its real length.", about["24h"]);
+  ck("  ...1w: hourly averages, an hour striped when unavailable part of it, an outage under the finest figures' 5min may not show",
+     about["1w"] === "Hourly averages. An hour striped grey had the device unavailable for part of it. An outage shorter than 5min may not show: averages do not keep it.", about["1w"]);
+  const keptDay = (await import("@/utils/dateText")).dayMonth(kept);
+  ck("  ...1m and 1y: days and weeks, and before what the villa's system keeps, only an outage of a whole hour (day)",
+     about["1m"].startsWith("Daily averages. A day striped grey") && about["1m"].endsWith(`Before ${keptDay}, only an outage of a whole hour shows: the villa's system keeps finer figures since then.`)
+     && about["1y"].startsWith("Weekly averages. A week striped grey") && about["1y"].includes("only an outage of a whole day shows"), [about["1m"], about["1y"]]);
+  ck("  ...a window inside what is kept says nothing of before",
+     !chartAbout("average", PERIOD_MS.day, kept + DAY, kept).includes("Before"));
+  ck("  ...a state band: each step's states, unavailable at any length; a total: why it shows no outage",
+     chartAbout("states", PERIOD_MS.day, now - 30 * DAY, kept).startsWith("Each day shows the states it saw: striped when it saw several, grey among them when the device was unavailable, at any length. Before ")
+     && chartAbout("total", PERIOD_MS.hour) === "Hourly totals. An hour with no total written is left empty. A meter counts on through an outage, so its total stays right and no outage is shown.",
+     [chartAbout("states", PERIOD_MS.day, now - 30 * DAY, kept), chartAbout("total", PERIOD_MS.hour)]);
+  ck("  ...words a person reads: no platform name, no long dash", Object.values(about).every((w) => !/Home Assistant|\bHA\b| — /.test(w)));
+  // the set, derived from the tree: every chart with a title says its (i) through ChartStep's `about`, from chartAbout
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const dir = new URL("../../src/components/panels/", import.meta.url);
+  const files = readdirSync(dir).filter((f) => f.endsWith(".tsx"));
+  const src = (f) => readFileSync(new URL(f, dir), "utf8");
+  const charts = files.filter((f) => /<(LineChart|BarChart|StateTimeline)\b/.test(src(f)));
+  // drawn under another chart's title, in its window and its range: the camera's status bar (its band of the camera
+  // and its motion sensor, no range of its own) and a device's linked sensor row (under the device's band)
+  const nested = new Set(["CameraPanel.tsx", "LinkedSensorRow.tsx"]);
+  const untitled = charts.filter((f) => !nested.has(f) && !/<(ChartStep|HistoryHeader)\b/.test(src(f)));
+  const steps = files.flatMap((f) => [...src(f).matchAll(/<(ChartStep|HistoryHeader)\b[\s\S]*?\/>/g)].map((m) => [f, m[0]]));
+  const noAbout = steps.filter(([f, el]) => !(/about=\{chartAbout\(/.test(el) || /about=\{about\}/.test(el)
+    || (f === "historyRange.tsx" && /about=\{about\}/.test(el))));
+  ck("every chart with a title (derived from the tree) carries its (i), from the one text builder",
+     charts.length >= 5 && untitled.length === 0 && noAbout.length === 0 && /about: string/.test(src("historyRange.tsx")), { charts, untitled, noAbout });
 }
 
 done("✅ five periods, each in its step; older than kept is said");

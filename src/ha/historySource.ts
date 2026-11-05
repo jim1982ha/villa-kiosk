@@ -24,11 +24,11 @@
 // Pure apart from the port: tests/oracles/history_source.mjs.
 
 import { gapsFrom } from "@/utils/historyGaps";
-import { PERIOD_MS, statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
+import { finerOutages, PERIOD_MS, statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
 import { fiveMinuteSeries, intervalSeries } from "@/utils/trendInterval";
 import { windowEndingAt } from "@/utils/lineChart";
 import { isNoHistory, NO_RECORD, NOT_KEPT, UNKNOWN_STATES } from "@/utils/stateColors";
-import type { HistorySeries, StateHistoryPoint, StatisticPeriod } from "@/types/ha.types";
+import type { HistoryGap, HistorySeries, StateHistoryPoint, StatisticPeriod } from "@/types/ha.types";
 import { dayTime } from "@/utils/dateText";
 import { HOUR_MS } from "@/utils/localDay";
 import { bandEnd } from "@/utils/timelineCells";
@@ -445,6 +445,34 @@ export function withNotKept(s: HistorySeries, kept: number | undefined): History
   return { ...s, gaps: [{ from: s.window.from, to, notKept: true }, ...s.gaps.filter((g) => g.to > to)] };
 }
 
+/**
+ * ⚠️ A STEP OFFLINE INSIDE IT (owner, 2026-11-05: a meter offline 22min showed nothing on its 1w chart): per id, the
+ * steps of its `figures` (an hour, a day, a week) the device was offline inside, where the finest figures still kept
+ * miss a slot (statisticsSeries.finerOutages): the five-minute ones for the recent days (kept ~10 days: any outage that
+ * empties a slot), the next finer step (rangeFilter FINER) beyond. One read per step for every id; none for a finer
+ * step (5minute: its trend reads every change). Every chart of measured figures asks it: a device's trend and the
+ * Weather window's figures alike.
+ */
+async function outagesInside(port: HistoryPort, ids: readonly string[], period: StatisticsPeriod,
+  figures: Record<string, Partial<Record<StatisticField, HistorySeries>>>, window: { from: number; to: number }, now: number,
+  kept: number | undefined): Promise<Record<string, HistoryGap[]>> {
+  const marked = period === "hour" || period === "day" || period === "week" ? period : null;
+  if (!marked || ids.length === 0) return {};
+  const steps = [...new Set<StatisticsPeriod>(["5minute", FINER[marked] as StatisticsPeriod])];
+  const fine = await Promise.all(steps.map(async (step) => ({ step, figures: await statistics(port, ids, step, ["mean"], window) })));
+  return Object.fromEntries(ids.map((id) => {
+    const coarse = Object.values(figures[id] ?? {}).find((s) => s && s.points.length);
+    const all = coarse ? fine.flatMap(({ step, figures: f }) => { const s = f[id]?.mean;
+      return s ? finerOutages(coarse, s, marked, PERIOD_MS[step], now, step === "5minute" ? kept : undefined) : []; }) : [];
+    // a step marked by both readings is one band
+    return [id, all.filter((g, i) => all.findIndex((x) => x.from === g.from) === i)];
+  }));
+}
+
+/** `s` with the steps it was offline inside added to its gaps. */
+const withInside = (s: HistorySeries, inside: readonly HistoryGap[] | undefined): HistorySeries =>
+  inside?.length ? { ...s, gaps: [...s.gaps, ...inside].sort((a, b) => a.from - b.from) } : s;
+
 /** A numeric trend in the range's step: five minutes from every change kept; a day or a week from the recorder's
  *  long-term figures (they are kept for good) — or, for a device it keeps none of, from every change kept, in that
  *  step. Whatever is older than the detail kept and not in the figures is marked "no longer kept". */
@@ -452,10 +480,11 @@ async function trend(port: HistoryPort, ids: readonly string[], period: Statisti
   window: { from: number; to: number }, now: number): Promise<Record<string, HistorySeries>> {
   const kept = await keptFrom(port, now);
   const figures = period === "5minute" ? {} : await statistics(port, ids, period, ["mean"], window);
+  const inside = await outagesInside(port, ids.filter((id) => figures[id]?.mean?.points.length), period, figures, window, now, kept);
   const out: Record<string, HistorySeries> = {};
   for (const id of ids) {
     const fig = figures[id]?.mean;
-    if (fig && fig.points.length) { out[id] = fig; continue; }
+    if (fig && fig.points.length) { out[id] = withInside(fig, inside[id]); continue; }
     const raw = await readings(port, id, window);
     out[id] = withNotKept(period === "5minute" ? fiveMinuteSeries(raw) : intervalSeries(raw, PERIOD_MS[period]), kept);
   }
@@ -500,8 +529,16 @@ export async function loadOne<R extends HistoryRequest>(port: HistoryPort, r: R,
     }
     case "stateWindow":
       return await stateWindow(port, r.id, r.hours, now, r.follow) as HistoryAnswer<R>;
-    case "statistics":
-      return await statistics(port, r.ids, r.period, r.fields, window) as HistoryAnswer<R>;
+    case "statistics": {
+      const figures = await statistics(port, r.ids, r.period, r.fields, window);
+      // measured figures (a mean) say the steps the device was offline inside; a total keeps counting through an
+      // outage, its next reading carrying what was used, so its step stays right
+      if (!r.fields.includes("mean")) return figures as HistoryAnswer<R>;
+      const measured = r.ids.filter((id) => Object.values(figures[id] ?? {}).some((x) => x?.points.length));
+      const inside = await outagesInside(port, measured, r.period, figures, window, now, await keptFrom(port, now));
+      return Object.fromEntries(r.ids.map((id) => [id, Object.fromEntries(Object.entries(figures[id] ?? {})
+        .map(([f, s]) => [f, s && withInside(s, inside[id])]))])) as HistoryAnswer<R>;
+    }
     case "since":
       return await each(r.ids, (id) => since(port, id, now)) as HistoryAnswer<R>;
     case "lastSeen":

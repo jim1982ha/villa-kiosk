@@ -22,8 +22,9 @@ import type { HelpAsked } from "@/fm/fmEngine";
 import type { IssueSource } from "@/fm/issueSource";
 import { clockTime, dayMonth, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
-import { closedFaults, closedWords, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
-import { alertNumberOf, closedAsLasting, faultBegan, faultTitle } from "@/fm/fmEngine";
+import { closedFaults, closedTold, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
+import { alertNumberOf, faultBegan, faultTitle } from "@/fm/fmEngine";
+import { faultLatest } from "@/fm/faultNotes";
 import type { FmData, FmTicket } from "@/fm/fmTypes";
 import type { HassEntity } from "@/types/ha.types";
 import type { Announcement } from "@/messages/announcements";
@@ -36,7 +37,7 @@ import { attentionSeverity, cardDevice, cardHead, type AttentionGroup, type Atte
 function itemRecords(i: AttentionItem): WorkRecord[] {
   const f = i.kind === "fault" ? i : i.fault;
   return f ? [f.ticketId, ...(f.twins ?? [])].flatMap((id) => (id
-    ? [{ id, stage: f.stage ?? "fault", ...(f.help ? { help: f.help } : {}) }] : [])) : [];
+    ? [{ id, stage: f.stage ?? "fault", ...(f.help ? { help: f.help } : {}), ...(f.helpInPill ? { helpInPill: f.helpInPill } : {}) }] : [])) : [];
 }
 
 /** ⚠️ EACH PROBLEM HAS ITS OWN BUTTONS (owner, 2026-11-01: "for each issue of a potential merged cards", Edit Ticket on
@@ -340,12 +341,12 @@ function oneCardPerDevice(cards: readonly CardView[]): CardView[] {
 
 /** Every closed fault as its card, for the Closed section (owner, 2026-11-01): a watched card's, with nothing left to
  *  check, the last closed first (faultConfirm.closedFaults).
- *  ⚠️ "NOT A PROBLEM WHILE IT LASTS" CAN BE TAKEN BACK, AND ONLY IT (owner, 2026-11-04: "just add this button for the
- *  faults that have been closed with the Not a problem while it lasts status"): nothing follows such a close, so it had
- *  no way back; every other close is checked or over. The Tickets tab's Reopen (deviceWork.closedActions): an open
- *  fault again, the VESTA Agent told. */
+ *  ⚠️ TAKEN BACK WHEN NOTHING CHECKS IT AGAIN (owner, 2026-11-04: "just add this button for the faults that have been
+ *  closed with the Not a problem while it lasts status"; architecture review 23: one rule with Tickets › Closed,
+ *  faultConfirm.closedTold): such a close had no way back. ⚠️ TOLD AS TICKETS › CLOSED TELLS IT (review 23): its pill,
+ *  who closed it, how and when (faultNotes.faultLatest), never words of its own. */
 export function closedCards(fmData: FmData, cadence: AgentCadence | null, now: Date, opts: CardsOpts): CardView[] {
-  return closedFaults(fmData, cadence, now.getTime()).flatMap((c) => clearedCard(c.ticket, closedWords(c), opts,
+  return closedFaults(fmData, cadence, now.getTime()).flatMap((c) => clearedCard(c.ticket, "", opts,
     { key: `closed:${c.ticket.id}`, look: "closed", nextCheck: null,
       ...(Number.isNaN(c.closedAt) ? {} : { closedAt: new Date(c.closedAt).toISOString() }) }));
 }
@@ -373,8 +374,9 @@ function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardVi
     ...cardHead(device, title, t.room),
     entityId: device?.key,
     lead: null,
-    lines: [{ key: `fault:${t.id}`, records: [], actions: own.look === "closed" && closedAsLasting(t) ? closedActions(workRecord(t)) : [], asked: null, text: device && title !== device.label ? title : "", story: [], openedAt: faultBegan(t),
-      closing: did,
+    lines: [{ key: `fault:${t.id}`, records: [], actions: own.look === "closed" ? closedActions(workRecord(t), closedTold(t).reopen) : [], asked: null, text: device && title !== device.label ? title : "", story: [], openedAt: faultBegan(t),
+      closing: own.look === "closed" ? null : did,
+      ...(own.look === "closed" ? { latest: faultLatest(t, momentText) } : {}),
       ...alertNumberIn(alertNumberOf(t)) }],
   }];
 }

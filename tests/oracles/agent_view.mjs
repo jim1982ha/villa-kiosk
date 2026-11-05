@@ -107,12 +107,13 @@ const marks = ["RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "Save
 ck("every Facility list shows the 'by VESTA Agent' mark", marks.length === 0, marks);
 // owner, 2026-11-01: on a ticket it was "confusing and redundant": the pill says who last moved it
 ck("  ...but a ticket: the pill of who last moved it, in its place",
-   !/AgentMark/.test(src("components/fm/TicketsTab.tsx")) && /<StatusPill \{\.\.\.latest\} \/>/.test(src("components/fm/TicketsTab.tsx")));
+   !/AgentMark/.test(src("components/fm/TicketsTab.tsx")) && /tagState=\{stated \? latest : null\}/.test(src("components/fm/TicketsTab.tsx")));
 // owner, 2026-10-11: the pills and when on ONE line right under the title, the same on every card — the mark, the
 // room, the device are inside RecordMeta, never in the title row; a fault's history shows its notes, not
 // "Open · date · VESTA Agent" lines that repeat that line
 // the shared card (RecordCard, 2026-10-14) puts the `pills` it is given in RecordMeta: a card handing it its pills is fine
-const cardPutsPillsInMeta = /<RecordMeta>\{pills\}<\/RecordMeta>/.test(src("components/fm/RecordCard.tsx"));
+const cardPutsPillsInMeta = /<RecordMeta>\{tags\}<\/RecordMeta>/.test(src("components/fm/RecordCard.tsx"))
+  && /const tags = \(pills \|\| tagState\) && <>\{pills\}/.test(src("components/fm/RecordCard.tsx"));
 const loose = ["RecentWorkList", "SpendTab", "TodayTab", "ScheduleEditor", "SavedDocumentsList"]
   .filter((f) => { const s = src(`components/fm/${f}.tsx`), m = s.indexOf("<AgentMark");
     if (cardPutsPillsInMeta && /pills=\{/.test(s) && s.lastIndexOf("pills={", m) > -1 && s.indexOf("<RecordCard") > -1) return false;
@@ -179,7 +180,7 @@ ck("every Facility card: its tags on one line (RecordMeta)", loose.length === 0,
   // ONE place says a stage's colour (faultNotes.stagePillClass): the Tickets tab's stage pill wrote its own copy
   const ticketsTab = readFileSync(new URL("../../src/components/fm/TicketsTab.tsx", import.meta.url), "utf8");
   ck("  ...the Tickets tab's card shows that same pill (faultLatest), and its stage pill asks the one colour rule",
-     /const latest = faultLatest\(t, momentText\);/.test(ticketsTab) && /const latestPill = stated && latest && <StatusPill \{\.\.\.latest\} \/>;/.test(ticketsTab)
+     /const latest = faultLatest\(t, momentText\);/.test(ticketsTab) && /tagState=\{stated \? latest : null\}/.test(ticketsTab)
      && /tone: stagePillClass\(stageOf\(t\)\)/.test(ticketsTab) && !/pillClass\(\w+\.tone\)/.test(ticketsTab));
   const css = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
   const buttons = readFileSync(new URL("../../src/components/fm/WorkButtons.tsx", import.meta.url), "utf8");
@@ -199,10 +200,11 @@ ck("a fault card no longer repeats its history's status lines, and reads its not
 {
   // what the button is: fm/deviceWork's, by value; that the Closed list draws it: the one wiring line
   const { closedActions, workRecord } = await import("@/fm/deviceWork");
-  const [reopen, ...more] = closedActions(workRecord({ id: "r", status: "resolved" }));
-  ck("a closed record offers \"Reopen\" (it is a fault again, on the Overview)",
+  const [reopen, ...more] = closedActions(workRecord({ id: "r", status: "resolved" }), true);
+  ck("a closed record that may be taken back offers \"Reopen\" (it is a fault again, on the Inbox), by the one rule (faultConfirm.closedTold)",
      more.length === 0 && reopen?.label === "Reopen" && reopen.step.kind === "stage" && reopen.step.to === "open" && reopen.ids.join() === "r"
-     && /<WorkButtons actions=\{closedActions\(workRecord\(t\)\)\}/.test(faults), reopen);
+     && closedActions(workRecord({ id: "r", status: "resolved" }), false).length === 0
+     && /<WorkButtons actions=\{closedActions\(workRecord\(t\), closedTold\(t\)\.reopen\)\}/.test(faults), reopen);
 }
 
 // a card's "Next check" with the Agent gone quiet: the proxy answers no cadence while it is offline (tests/agent-interface.py,

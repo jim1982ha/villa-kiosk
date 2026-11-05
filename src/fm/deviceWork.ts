@@ -12,7 +12,7 @@
 // Pure — tests/oracles/live_issues.mjs drives it by value.
 
 import type { FmTicket, FmTicketStatus } from "./fmTypes";
-import { isTicketOpen, stageOf, standingHelp, type FmStage, type HelpAsked } from "./fmEngine";
+import { helpIsLatest, isTicketOpen, stageOf, standingHelp, type FmStage, type HelpAsked } from "./fmEngine";
 
 // ── One card per device ──────────────────────────────────────────────────────
 
@@ -96,9 +96,11 @@ export const NEED_HELP = "Need help";
  *  ended, it is new. ⚠️ A BUTTON OF ITS OWN (owner, 2026-11-04: "instead of showing the button `Not a problem while it
  *  lasts` only after clicking on the `Done` Button, show it directly next to `Done`, `Need Help`"): it was the second
  *  answer to a Done's or a No action needed's question; now it follows Need help on every card that offers Done on a
- *  record on the Inbox (never a Tickets card's: owner, 2026-11-04), in the order VESTA's own alert offers it on Telegram, its label short ("the button label must be short":
+ *  record on the Inbox while none is a ticket (never a ticket's: owner, 2026-11-04; notAProblem), in the order VESTA's own alert offers it on Telegram, its label short ("the button label must be short":
  *  owner, 2026-11-04); pressed, it closes, no question asked (owner, 2026-11-04). */
 export const NOT_A_PROBLEM = "Not a problem";
+/** A close with nothing done: its button, and how its close is told (faultConfirm.closedTold). */
+export const NO_ACTION_NEEDED = "No action needed";
 /** The one words of Need help, Not a problem and a ticket's button on a narrow row (WorkActionSpec.short). */
 const HELP = "Help", IGNORE = "Ignore", TICKET = "Ticket";
 
@@ -123,7 +125,7 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // Ticket card, the `Done` shall be renamed to `Close`"): it said Done, as the Inbox's (2026-10-30), until then
   ticketDone: { label: "Close", step: { kind: "stage", to: "resolved" } },
   // what it records in its words (owner, 2026-11-01): "Close" read as the normal end of a ticket, beside Done
-  closeTicket: { label: "No action needed", short: "Dismiss", step: { kind: "close", ask: { question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: "No action needed" } } },
+  closeTicket: { label: NO_ACTION_NEEDED, short: "Dismiss", step: { kind: "close", ask: { question: "Close this ticket? Nothing was done, no cost is recorded.", confirmLabel: NO_ACTION_NEEDED } } },
   reopen: { label: "Reopen", step: { kind: "stage", to: "open" } },
 };
 
@@ -134,7 +136,11 @@ const action = (kind: WorkActionKind, ids: string[]): WorkAction => ({ kind, ids
 
 /** A record as a card's buttons see it: which one, where it stands, and the Need help on it nothing has answered yet
  *  (fmEngine.standingHelp). */
-export interface WorkRecord { id: string; stage: FmStage; help?: HelpAsked }
+export interface WorkRecord {
+  id: string; stage: FmStage; help?: HelpAsked;
+  /** Its card's pill already says that Need help (fmEngine.helpIsLatest): no line above the buttons repeats it. */
+  helpInPill?: true;
+}
 
 /** ⚠️ NEED HELP IS ASKED ONCE (architecture review round 6, 2026-10-30: the card looked the same after the press, so it
  *  was pressed again and the owner asked twice): a card's Need help acts on the records nobody has asked about yet, and
@@ -144,9 +150,10 @@ function needHelp(records: readonly WorkRecord[]): WorkAction[] {
   return ids.length ? [action("needHelp", ids)] : [];
 }
 
-/** The Need help a card shows as asked: the latest standing one among its records, null with none. */
+/** The Need help a card says above its buttons: the latest standing one among its records whose pill does not already
+ *  say it (helpInPill: a fact said once), null with none. */
 export function helpAsked(records: readonly WorkRecord[]): HelpAsked | null {
-  return records.reduce<HelpAsked | null>((last, r) => (r.help && (!last || Date.parse(r.help.at) >= Date.parse(last.at))
+  return records.reduce<HelpAsked | null>((last, r) => (r.help && !r.helpInPill && (!last || Date.parse(r.help.at) >= Date.parse(last.at))
     ? r.help : last), null);
 }
 
@@ -175,9 +182,17 @@ export function overviewActions(records: readonly WorkRecord[], device?: string)
   const tickets = open.filter((r) => r.stage === "ticket").map((r) => r.id);
   const ids = open.map((r) => r.id);
   return [
-    action("done", ids), ...needHelp(open), action("notAProblem", ids),
+    action("done", ids), ...needHelp(open), ...notAProblem(open),
     tickets.length ? action("editTicket", [tickets[0]]) : action("openTicket", faults),
   ];
+}
+
+/** ⚠️ NOT A PROBLEM ONLY BEFORE ANYONE TAKES IT ON (owner, 2026-11-04: on a ticket "it's irrelevant"; architecture
+ *  review 23): the Tickets card left it out, but the same device's Inbox card offered it while its ticket was in
+ *  progress, and pressing it closed that ticket as "Not a problem while it lasts". Offered on records none of which is a
+ *  ticket; asked by every card's buttons (overviewActions, ticketActions). */
+function notAProblem(records: readonly WorkRecord[]): WorkAction[] {
+  return records.length && records.every((r) => r.stage === "fault") ? [action("notAProblem", records.map((r) => r.id))] : [];
 }
 
 /** The buttons of a ticket in progress (a Tickets card): Close (its resolve form: work done), Need help (the same "help"
@@ -187,18 +202,19 @@ export function overviewActions(records: readonly WorkRecord[], device?: string)
 export function ticketActions(records: readonly WorkRecord[]): WorkAction[] {
   const tickets = records.filter((r) => r.stage === "ticket");
   const ids = tickets.map((r) => r.id);
-  return ids.length ? [action("ticketDone", ids), ...needHelp(tickets), action("closeTicket", ids)] : [];
+  return ids.length ? [action("ticketDone", ids), ...needHelp(tickets), ...notAProblem(tickets), action("closeTicket", ids)] : [];
 }
 
-/** A closed record's one button: "Reopen" — it is a fault again, back on the Overview. */
-export function closedActions(record: WorkRecord): WorkAction[] {
-  return record.stage === "closed" ? [action("reopen", [record.id])] : [];
+/** A closed record's one button: "Reopen" — it is a fault again, back on the Inbox — when it may be taken back
+ *  (`reopen`: faultConfirm.closedTold, the one rule of both Closed sections). */
+export function closedActions(record: WorkRecord, reopen: boolean): WorkAction[] {
+  return record.stage === "closed" && reopen ? [action("reopen", [record.id])] : [];
 }
 
 /** A stored record as a card's buttons see it. */
 export const workRecord = (t: Pick<FmTicket, "id" | "status" | "updates">): WorkRecord => {
   const help = standingHelp(t);
-  return { id: t.id, stage: stageOf(t), ...(help ? { help } : {}) };
+  return { id: t.id, stage: stageOf(t), ...(help ? { help } : {}), ...(help && helpIsLatest(t) ? { helpInPill: true as const } : {}) };
 };
 
 // ── The counts ───────────────────────────────────────────────────────────────

@@ -18,7 +18,7 @@
 import type { ReactNode } from "react";
 import { useNow } from "@/hooks/useInterval";
 import { CloudSun } from "lucide-react";
-import { aggregationWords, fmtChartValue, fmtChartTick, fmtChartTime, fmtDuration, fmtStepStamp } from "./chartUtils";
+import { aggregationWords, chartAbout, fmtChartValue, fmtChartTick, fmtChartTime, fmtDuration, fmtStepStamp } from "./chartUtils";
 import { formatUnitValue } from "@/utils/entityValue";
 import BarChart from "./BarChart";
 import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
@@ -27,7 +27,7 @@ import { barNote, seriesBuckets } from "@/utils/barChart";
 import LineChart, { ChartEmpty } from "./LineChart";
 import { useHA } from "@/ha/HAStateStore";
 import { useHistorySource } from "@/hooks/useHistorySource";
-import { ChartStep, useHistoryRange, type HistoryRange } from "./historyRange";
+import { ChartStep, useHistoryRange, useKeptFrom, type HistoryRange } from "./historyRange";
 import { ExpandableChart } from "./ChartWindow";
 import { PERIOD_MS, peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
 import { isUnavailable } from "@/utils/stateColors";
@@ -428,9 +428,10 @@ function ChartTile({ title, legend, note, lines, win, status, stepMs, picker }: 
   // Every line the station has a sensor for — one with no readings still has
   // its outage, and its band says so.
   const present = lines.filter((l): l is Line & { s: HistorySeries } => !!l.s);
+  const kept = useKeptFrom();
   const head = (
     <div className="weather-chart-head">
-      <div className="weather-eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} /></div>
+      <div className="weather-eyebrow">{title}<ChartStep words={aggregationWords(stepMs, "avg")} about={chartAbout("average", stepMs, win.from, kept)} /></div>
       {legend && <div className="weather-legend">{legend.map(([n, c]) => <span key={n}><i className={`key ${c}`} />{n}</span>)}</div>}
       {note && <div className="weather-legend">{note}</div>}
     </div>
@@ -471,7 +472,7 @@ function RainTile({ s, win, status, stepMs, unit }: {
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
-        <div className="weather-eyebrow">Rain<ChartStep words={aggregationWords(stepMs, "sum")} /></div>
+        <div className="weather-eyebrow">Rain<ChartStep words={aggregationWords(stepMs, "sum")} about={chartAbout("total", stepMs)} /></div>
         <div className="weather-legend">{unit}</div>
       </div>
       {n === 0

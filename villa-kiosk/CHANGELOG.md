@@ -1,3 +1,27 @@
+## 2.496.701
+
+What you will see:
+- Cockpit › Inbox: a device whose ticket is in progress no longer offers "Not a problem" (it closed the ticket as
+  "Not a problem while it lasts"). Its card offers Done, Need help and Edit Ticket, as the Tickets tab does.
+- Cockpit cards: a Need help pressed is said once, in the card's pill ("Need help asked by Owner, on …"). The line
+  "🆘 Need help asked … (Owner)" above the buttons shows only when something moved the card after the Need help.
+- Inbox › Closed and Tickets › Closed tell a closed record the same way, in the same pill: "Done by JM, on …",
+  "No action needed by Owner, on …", "Not a problem by Owner, on …", or "Cleared on …" when VESTA cleared it itself.
+  A ticket still adds its stage ("· Resolved"). On the Watch list, a Close in the Cockpit now says "No action needed on …
+  (Owner)" instead of "Cleared on … (Owner)".
+- Reopen follows one rule on both Closed sections: it is offered when nothing will check the record again (closed
+  as "Not a problem while it lasts", or a ticket a person opened), and never on a fault VESTA checks.
+- Ask VESTA: after "New conversation", an answer from before no longer comes back when VESTA tidies it (removes its
+  Continue button after a press, or at its start).
+- A device's chart over a week, a month or a year: an hour, a day or a week in which the device was unavailable
+  for part of the time is striped grey, the same stripes as a state band's, its line drawn through. Its tooltip says
+  "Unavailable during this hour" (day, week). The same on the Weather window's charts.
+- Every chart's title has an (i) saying what the chart shows and what it may not: every reading on 1h and 24h, and on
+  longer ranges that an outage shorter than 5min may not show, with the date before which only longer outages show.
+- A chart's tooltip for a short drop says "Unavailable at 13:40, under 1s" (or "for 4s") instead of
+  "Unavailable · 13:40–13:40 (1s)"; on a chart of several days, it names the day.
+- Nothing else changes on the cards: each card's state pills stand where they stood, on a laptop and on a phone.
+
 ## 2.496.700
 
 What you will see:

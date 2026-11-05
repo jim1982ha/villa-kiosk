@@ -202,6 +202,10 @@ export interface HistoryGap {
   /** Not an outage: the part of the window older than what the villa's system still keeps of every change (its
    *  recorder's days — historySource.keptFrom). Drawn grey, "No longer kept" (owner, 2026-10-20), never amber. */
   notKept?: boolean;
+  /** An outage INSIDE one step of the recorder's figures, which still has its mean (statisticsSeries.finerOutages):
+   *  the step's band is drawn, the line runs through it, and the tooltip says "Unavailable during this hour" (day,
+   *  week). */
+  within?: "hour" | "day" | "week";
 }
 
 /** What a numeric history fetch returns: the readings, AND where there were

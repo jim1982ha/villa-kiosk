@@ -11,7 +11,7 @@ import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
 import { cardIcons, rowWhen, type CardLine, type CardView, type LineSources } from "@/config/cockpitCard";
 import { SourceIcons } from "@/components/fm/sourceIcons";
-import RecordCard, { ActionsRow, STATE_INLINE, StatusPill } from "@/components/fm/RecordCard";
+import RecordCard, { ActionsRow, StateWhereItStands, StatusPill } from "@/components/fm/RecordCard";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
 
 /** One card of the Live issues, ONE SHAPE whatever it holds (owner, 2026-10-10: "make sure each reported issue
@@ -105,7 +105,7 @@ function CockpitAttentionSub({ line, icons, buttons, state }: {
           {/* its words whole, over as many lines as they need: no hover repeats them (owner, 2026-10-31) */}
           <span className="cockpit-attention-sub-title">{line.text}</span>
           {/* who last moved this fault and its stage, in the stage's colour, beside its words (owner, 2026-11-01/02) */}
-          {line.latest && <span className={`fm-meta${buttons ? ` ${STATE_INLINE}` : ""}`}><StatusPill {...line.latest} /></span>}
+          {line.latest && <StateWhereItStands atButtons={!!buttons} className="fm-meta"><StatusPill {...line.latest} /></StateWhereItStands>}
           {/* what happened about it on Telegram — the short story its Status tells: the alert sent, a reminder, an
               escalation, a button pressed (owner, 2026-10-14; every line since ticket 19 of "One inbox") */}
           {/* ⚠️ AN ALERT'S ISSUE IS ONE CARD (owner, 2026-10-29: "no need to split the card into 2 distinct components"):
