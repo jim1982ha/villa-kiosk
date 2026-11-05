@@ -278,6 +278,15 @@ Dark look. Long names never overflow their field.
 **Not a known set:** who does the work ("Done by", "Who's handling it") is typed every time, never offered from earlier
 records nor from the browser's memory (owner, 2026-11-02: "it shall be a value the user has to manually enter").
 
+**An outage seen finer shows coarser:** as soon as a device was unavailable at all in a step of a finer chart (1h,
+24h), the step of every coarser chart that holds it (the hour at 1w, the day at 1m, the week at 1y) is striped
+"Unavailable", with the same words in its tooltip ("Unavailable at 06:58, for 10s"), however short the drop, a
+fraction of a second included (owner, 2026-11-05 "At least one … during that period"; 2026-11-06: "as soon as an
+occurrence is seen in the lower granularity, it shall appear in the higher granularity"). Never a floor (a whole five
+minutes, a second) that hides at 1w what 24h shows. The only limit is what the villa's system still keeps in detail
+(about 10 days): before it, the chart's (i) says which outages can still show. All outages come from the one history
+reader (src/ha/historySource.ts), never a second route.
+
 ## Fill, don't paint
 
 When the owner shows an empty band, make the app use that space; never recolour the band.

@@ -1,3 +1,9 @@
+## 2.496.718
+
+What you will see:
+- Nothing new on screen. The rule behind 2.496.717 is now written in the project's shared rules: a drop seen on a
+  finer chart always shows on the coarser ones, however short, so a later change cannot hide it again.
+
 ## 2.496.717
 
 What you will see:
