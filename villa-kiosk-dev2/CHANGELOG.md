@@ -1,3 +1,11 @@
+## 2.496.715
+
+What you will see:
+- An alert's card in the Inbox says where the alert stands in its first line, like every other card: "New alert",
+  "Reminder sent", the same words as the Status on Telegram, in the card's colour (with the device's own state before
+  it when there is one: "Missing · New alert"). That line was empty, and the Status sat as a small line at the bottom
+  of the card; it is no longer repeated there. On the Watch list the first line still says when it closes.
+
 ## 2.496.714
 
 What you will see:
