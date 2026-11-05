@@ -1,3 +1,14 @@
+## 2.496.711
+
+What you will see:
+- A ticket's card no longer says "next check within …": someone is on it. The fault's own card in the Inbox still says
+  when VESTA looks again.
+- On the Schedule tab, "Maintenance schedule" is folded at first, like "Recent work": tap its name to see the tasks and
+  "Add a task".
+- In Recap, "All devices reporting" has no "View unavailable devices" button any more: the word "devices" in its line
+  ("3 devices offline or not reporting") is a link that opens the same list, like "faults" and "tickets" on the faults
+  and tickets check.
+
 ## 2.496.710
 
 What you will see:
