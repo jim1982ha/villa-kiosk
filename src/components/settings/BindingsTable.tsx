@@ -16,9 +16,11 @@
 
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Plus } from "lucide-react";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import EntityPicker from "./EntityPicker";
+import SearchOrAdd, { SearchEmpty } from "@/components/common/SearchOrAdd";
+import type { AddOffer } from "@/config/searchOrAdd";
+import { deviceMatches, matchesQuery } from "@/config/deviceRecord";
+import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 import Fold from "./Fold";
 import { BoundObjectCard, UnboundObjectCard, UnshownEntityCard } from "./BindingRow";
 import { useConfig } from "@/config/ConfigContext";
@@ -47,12 +49,16 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
   // whose 3D object doesn't exist YET, so it's ready the moment a matching
   // model is uploaded. Lives here now since it's the same "add something new
   // to the entity↔object map" action this whole section is about.
-  const [newId, setNewId] = useState<string | undefined>(undefined);
-  const addEntity = (id: string) => {
-    if (!id) return;
-    update(addMapping(id, entities[id]));
-    setNewId(undefined);
+  // ⚠️ ONE FIELD (owner, 2026-11-06: as every list of Devices): it narrows the list shown, and its suggestions are the
+  // devices to prepare, one already a device saying so ("Already in Devices": picking it narrows the list to it); an id
+  // the villa's system does not have yet is prepared too. It was a picker and an Add button, with no filter.
+  const [search, setSearch] = useState("");
+  const src = useDeviceSearch();
+  const offer: AddOffer = {
+    placeOf: (id) => (config.entityMap[id] ? "Already in Devices" : null),
+    addWords: "Prepare it", exactWords: (d) => `Prepare ${d}`, ahead: (id) => `Prepare “${id}”`,
   };
+  const addEntity = (id: string) => { update(addMapping(id, entities[id])); setSearch(""); };
 
   const catalog = useMemo(() => loadMeshCatalog(), []);
   const bound = Object.keys(config.meshBindings);
@@ -81,9 +87,15 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
     }),
     [entities, config.entityMap, folding, suppressedEntityIds],
   );
-  const boundShown = useTruncated(bound);
-  const unboundShown = useTruncated(unbound);
-  const unmappedShown = useTruncated(unmappedHaEntities);
+  // each list narrowed by the field: an object by its name or its entity's, an entity as any device is found
+  const boundFound = useMemo(() => bound.filter((m) => matchesQuery(search, m) || deviceMatches(config.meshBindings[m], search, src)),
+    [bound, search, src, config.meshBindings]);
+  const unboundFound = useMemo(() => unbound.filter((m) => matchesQuery(search, m)), [unbound, search]);
+  const unmappedFound = useMemo(() => unmappedHaEntities.filter((id) => deviceMatches(id, search, src)), [unmappedHaEntities, search, src]);
+  const boundShown = useTruncated(boundFound);
+  const unboundShown = useTruncated(unboundFound);
+  const unmappedShown = useTruncated(unmappedFound);
+  const narrowed = search.trim() !== "";
 
   // Latest entities via a ref, read inside the stable callbacks below (the
   // config edits read the latest config themselves, inside update()) — see
@@ -111,40 +123,12 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
         shown: view, onShow: (k) => setView(k as ListView),
       }}>
 
-      <div style={{ marginBottom: 20 }}>
-        <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
-          <div style={{ flex: 1 }}>
-            <EntityPicker
-              value={newId}
-              onChange={(id) => setNewId(id)}
-              allowCustom
-              hideCurrentLabel
-              placeholder="Search or type entity_id…"
-            />
-            {newId && (
-              <div className="muted body-text field-hint">
-                Selected: <strong style={{ color: "var(--accent)" }}>{newId}</strong>
-                {config.entityMap[newId] && (
-                  <span style={{ marginLeft: 8, color: "var(--status-danger)" }}>
-                    already configured
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          <button
-            className="btn ghost"
-            onClick={() => newId && addEntity(newId)}
-            disabled={!newId || !!config.entityMap[newId]}
-            style={{ flexShrink: 0 }}
-          >
-            <Plus size={18} /> Add
-          </button>
-        </div>
-      </div>
+      <SearchOrAdd query={search} onQuery={setSearch} placeholder="Search objects, or a device to prepare…"
+        offer={offer} onAdd={addEntity} onFound={setSearch} />
 
       {/* each record the Cockpit's card (BindingRow), the list the title's count opened */}
-      {view === "bound" && (bound.length === 0 ? <p className="muted body-text mt">No objects bound yet.</p> : (
+      {view === "bound" && (bound.length === 0 ? <p className="muted body-text mt">No objects bound yet.</p>
+        : narrowed && boundFound.length === 0 ? <SearchEmpty query={search} noun="bound object" offer={offer} onAdd={addEntity} /> : (
         <div className="fm-list settings-cards">
           {boundShown.visible.map((mesh) => (
             <BoundObjectCard key={mesh} mesh={mesh} entityId={config.meshBindings[mesh]} name={entityLabel(config.meshBindings[mesh])}
@@ -155,7 +139,8 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
       {view === "bound" && <ShowAll list={boundShown} noun="bound object" />}
 
       {view === "unbound" && (catalog.length === 0 ? <p className="muted body-text mt">No 3D model loaded yet.</p>
-        : unbound.length === 0 ? <p className="muted body-text mt">Every 3D object is bound.</p> : (
+        : unbound.length === 0 ? <p className="muted body-text mt">Every 3D object is bound.</p>
+        : narrowed && unboundFound.length === 0 ? <SearchEmpty query={search} noun="unbound object" offer={offer} onAdd={addEntity} /> : (
         <div className="fm-list settings-cards">
           {unboundShown.visible.map((mesh) => <UnboundObjectCard key={mesh} mesh={mesh} onBind={bind} />)}
         </div>
@@ -163,7 +148,8 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
       {view === "unbound" && <ShowAll list={unboundShown} noun="unbound object" />}
 
       {/* the inverse audit: entities no 3D object shows */}
-      {view === "unshown" && (unmappedHaEntities.length === 0 ? <p className="muted body-text mt">Every entity is on the map.</p> : (
+      {view === "unshown" && (unmappedHaEntities.length === 0 ? <p className="muted body-text mt">Every entity is on the map.</p>
+        : narrowed && unmappedFound.length === 0 ? <SearchEmpty query={search} noun="entity" offer={offer} onAdd={addEntity} /> : (
         <div className="fm-list settings-cards">
           {unmappedShown.visible.map((id) => (
             <UnshownEntityCard key={id} entityId={id} name={entityLabel(id)} room={roomOf({ entityId: id })}

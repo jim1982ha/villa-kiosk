@@ -83,13 +83,15 @@ export default function WhoGetsMessages({ onSaved }: {
               <span className="muted body-text">This list is not on the villa yet.</span>
             ) : ids.length > 0 && (
               // ⚠️ EACH CHAT THE COCKPIT'S CARD (owner, 2026-11-06): its name in the strip (its list is the line above
-              // it), the language VESTA writes to it its one field (owner, 2026-11-03: named once, short), Remove its bar
+              // it), the language VESTA writes to it its one field (owner, 2026-11-03: named once, short; 2026-11-06 "Language":
+              // the card names the chat and the section says VESTA writes to it, so the name fits the cards' one name
+              // column), Remove its bar
               <div className="fm-list">
                 {ids.map((id) => (
                   <RecordCard key={id} title={name(id)} lead={<MessageCircle size={16} aria-hidden />}
                     body={
                       <div className="card-field">
-                        <span className="card-field-label">Language VESTA writes in</span>
+                        <span className="card-field-label">Language</span>
                         <Dropdown className="recipients-language" ariaLabel={`The language ${name(id)} reads VESTA's messages in`}
                           value={languages[id] ?? "en"} onChange={(code) => setLanguage(id, code)}
                           options={Object.entries(CHAT_LANGUAGES).map(([code, words]) => ({ value: code, label: words }))} />

@@ -19,7 +19,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
-import { Link2, Search } from "lucide-react";
+import { Link2 } from "lucide-react";
+import SearchOrAdd, { SearchEmpty } from "@/components/common/SearchOrAdd";
 import { useConfig } from "@/config/ConfigContext";
 import { forgetMappings, repointDevice } from "@/config/mappingEdits";
 import { matchesQuery, rowMatches } from "@/config/deviceRecord";
@@ -154,16 +155,8 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       )}
 
       {allRows.length > 0 && (
-        <div className="config-search">
-          <Search size={16} />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter by entity ID, label or room…"
-            aria-label="Filter entities"
-          />
-        </div>
+        // the list's one field (SearchOrAdd), as every list of Devices and Villa: here it narrows only
+        <SearchOrAdd query={search} onQuery={setSearch} placeholder="Search by id, label or room…" />
       )}
 
       {allRows.length === 0 && (
@@ -190,7 +183,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
         </div>
       )}
       {allRows.length > 0 && entries.length === 0 && orphans.length === 0 && (
-        <p className="muted body-text mt">No entities match “{search}”.</p>
+        <SearchEmpty query={search} noun="device" />
       )}
 
       {/* ⚠️ ONE CARD PER DEVICE, THE COCKPIT'S (RecordCard, owner 2026-11-06): it was a table drawn as cards */}

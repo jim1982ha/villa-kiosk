@@ -63,13 +63,19 @@ export function deviceSearchTexts(id: string, src: SearchSource): string[] {
   return [shown, platform, room, id, `${shown} ${room} ${id}`].filter(Boolean);
 }
 
-/** The entities "Add a device…" (EntityPicker) lists for a search: of `domains` when given, found by what any device
+/** The entities a device picker (EntityPicker, a list's field: SearchOrAdd) lists for a search: of `domains` when given, found by what any device
  *  is found by, in id order. Pure. */
 export function entitySearch(query: string, src: SearchSource, domains?: readonly string[]): string[] {
   return Object.keys(src.entities)
     .filter((id) => !domains || domains.includes(domainOf(id)))
     .filter((id) => matchesQuery(query, ...deviceSearchTexts(id, src)))
     .sort((a, b) => a.localeCompare(b));
+}
+
+/** Does a search find this device, by what any device is found by (a list of devices: Asleep between reports, the
+ *  entities no 3D object shows). Pure. */
+export function deviceMatches(id: string, query: string, src: SearchSource): boolean {
+  return matchesQuery(query, ...deviceSearchTexts(id, src));
 }
 
 /** Does a search find this device group: any of its devices, its lead and its members alike, by what any device is

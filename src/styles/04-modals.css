@@ -150,7 +150,10 @@
    .info-pop tooltip on a narrow phone) put a horizontal scrollbar on the
    whole Advanced Settings body. Nothing in the body legitimately needs
    horizontal scroll (wide tables card-stack on mobile already). */
-.modal-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 8px 28px 12px; }
+/* Its padding in named parts, so a bar that stays in view while it scrolls (the Inbox's filters) can cover the edges
+   the cards scroll through (08-shared.css .messages-toolbar). */
+.modal-body { --body-top: 8px; --body-left: 28px; --body-right: 28px;
+  flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: var(--body-top) var(--body-right) 12px var(--body-left); }
 .modal-body label {
   display: block; color: var(--text-secondary);
   font-size: var(--field-label-size); margin: 14px 0 var(--field-label-gap);
@@ -577,6 +580,10 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* a device not shown in the 3D view: its card faded (its box unticked says why) */
 .fm-record-card.device-card-off { opacity: 0.5; }
 
+/* A list's one field (common/SearchOrAdd): above its cards; what it says when it narrows them to nothing, with its offer */
+.search-or-add { margin-bottom: 14px; }
+.search-empty { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.search-empty > p { margin: 0; }
 /* Config Editor entity filter box. */
 .config-search {
   display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
@@ -640,16 +647,24 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .entity-id-confirm .on-off.config-confirm .on-off-switch { min-width: 84px; }
   .entity-id-confirm .on-off.config-confirm .on-off-switch button { padding: 0 8px; }
 }
+/* A device card's first line: its shown box, then its id's line (or the remap row). Before the phone's rule below, which
+   it would otherwise outrank by coming later. */
+.device-first-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* ⚠️ THE BOX AND THE ID ON ONE LINE (owner, 2026-11-06: on a phone the box sat alone at the left, centred between the
+   id's line and the toggle's): the card's first line is one grid there, its id's line laid into it (display: contents),
+   line 1 the box, the id and the pencil, line 2 "Confirm before toggling" under them; on a laptop it stays one row. */
 @container work-row (max-width: 519px) {
-  .entity-id-display { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name tools" "confirm confirm"; }
+  .device-first-line { display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "box name tools" "confirm confirm confirm"; align-items: center; gap: 6px 10px; }
+  .device-first-line > input[type="checkbox"] { grid-area: box; }
+  .device-first-line > .entity-id-display { display: contents; }
+  .device-first-line > .remap-row { grid-column: 2 / -1; }
   .entity-id-display .entity-id-confirm { display: flex; }
   .entity-id-display .entity-id-confirm:empty { display: none; }
   .entity-id-display .entity-id-confirm .on-off.config-confirm { flex: 1 1 auto; }
   .entity-id-display .entity-id-confirm .setting-row-label { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
 }
 
-/* A device card's first line: its shown box, then its id's line (or the remap row). */
-.device-first-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
 
 /* Redirect-entity picker: one line (field + Apply + Cancel) on desktop,
    wraps to its own line as a pair on narrow screens. */
@@ -755,12 +770,20 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .on-off.config-confirm .on-off-switch button { min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--text-xs); }
 /* A field inside a settings card (RecordCard's words: a device's fields, an announcement's time, a chat's language):
    its name at the left on one line, its control taking the REST OF THE CARD'S WIDTH (owner, 2026-11-06: "the content of
-   these cards taking the whole width"); too narrow, the control under its name, as wide as the card. */
-.card-field { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; min-width: 0; padding: 5px 0; }
-.card-field-label { flex: 0 0 auto; white-space: nowrap; color: var(--text-secondary); font-size: var(--text-2xs); text-transform: uppercase;
-  letter-spacing: 0.04em; }
-.card-field > :not(.card-field-label) { flex: 1 1 200px; min-width: 0; }
-.card-field > .unit-field { flex: 1 1 200px; width: auto; }
+   these cards taking the whole width"). ⚠️ EVERY CONTROL STARTS AT ONE X (owner, 2026-11-06: "the text fields all start
+   at the same level, rather than inline with the description text"): the names are one column (--card-field-label, the
+   longest name's width), the controls the rest. On a narrow card (a phone) the name above its control, both the card's
+   width, every control at the card's left. */
+.card-field { display: grid; grid-template-columns: var(--card-field-label) minmax(0, 1fr); align-items: center; gap: 6px 12px;
+  min-width: 0; padding: 5px 0; }
+.card-field-label { grid-column: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text-secondary); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em; }
+.card-field > :not(.card-field-label) { grid-column: 2; min-width: 0; }
+.card-field > .unit-field { width: auto; }
+@container work-row (max-width: 519px) {
+  .card-field { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .card-field > :not(.card-field-label) { grid-column: 1; }
+}
 /* a settings list of cards: room above it as above any list */
 .settings-cards { margin-top: 8px; }
 /* a bound 3D object's card says what it binds, one sentence above its search (BindingRow) */

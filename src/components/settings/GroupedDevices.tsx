@@ -7,13 +7,15 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import AskDialog from "@/components/common/AskDialog";
-import { Layers, Plus, Search, Trash2, Sparkles } from "lucide-react";
+import { Layers, Plus, Trash2, Sparkles } from "lucide-react";
 import { FoldToggle } from "@/components/common/FoldedList";
 import IdText from "@/components/common/IdText";
 import RecordCard from "@/components/fm/RecordCard";
 import { useCardRoom } from "@/config/VillaModel";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import EntityPicker from "./EntityPicker";
+import SearchOrAdd, { SearchEmpty, useSearchHit } from "@/components/common/SearchOrAdd";
+import type { AddOffer } from "@/config/searchOrAdd";
 import Fold from "./Fold";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -32,7 +34,6 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
   const { entityDeviceIds } = useHA();
   const entityLabel = useEntityLabel();
   const roomOf = useCardRoom();
-  const [newPrimary, setNewPrimary] = useState<string | undefined>(undefined);
   /** A refusal to show in the app's own dialog — see AskDialog for why this is
    *  not `alert()`. */
   const [notice, setNotice] = useState<string | null>(null);
@@ -63,9 +64,20 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
   };
   const acceptSuggestion = (primaryEntityId: string, memberEntityId: string) =>
     edit({ kind: "accept", primaryEntityId, memberEntityId, id: newGroupId() });
-  const createGroup = (primaryEntityId: string) => {
-    if (edit({ kind: "create", primaryEntityId, id: newGroupId() })) setNewPrimary(undefined);
+  // ⚠️ ONE FIELD (owner, 2026-11-06): it narrows the groups, and its suggestions are the devices — one in a group shows
+  // that group, one in none creates a group with it as the primary (the old "New group" picker and its Create button)
+  const { hit, marked, listRef } = useSearchHit();
+  const groupOf = (id: string) => config.deviceGroups.find((g) => g.primaryEntityId === id || g.memberEntityIds.includes(id));
+  const offer: AddOffer = {
+    placeOf: (id) => { const g = groupOf(id); return g ? `In group ${entityLabel(g.primaryEntityId)}` : null; },
+    addWords: "Create a group", exactWords: (d) => `Create a group with ${d}`,
   };
+  const createGroup = (primaryEntityId: string) => {
+    const id = newGroupId();
+    if (edit({ kind: "create", primaryEntityId, id })) { setSearch(""); hit(id); }
+  };
+  const showGroup = (entityId: string) => { setSearch(entityId); hit(groupOf(entityId)?.id ?? null); };
+  const typed = (q: string) => { setSearch(q); hit(null); };
   const addMember = (group: DeviceGroup, memberEntityId: string) =>
     edit({ kind: "add", groupId: group.id, memberEntityId });
   const removeMember = (group: DeviceGroup, memberEntityId: string) =>
@@ -90,59 +102,25 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
       <Fold title={title} tip={tip} summary={countOf(config.deviceGroups.length, "group")
         + (suggestions.length ? ` · ${suggestions.length} suggested` : "")}>
 
-      {/* New group — first, since creating one is the primary action here;
-          the existing-groups list below is what you get once you've made
-          some. No border under this any more: it used to sit LAST, below
-          the groups list, separated from it by a rule that made sense in
-          that order but not in this one. */}
-      <div style={{ marginBottom: 20 }}>
-        <label style={{ display: "block", marginBottom: 6, fontSize: "var(--text-sm)", fontWeight: 500 }}>
-          New group
-        </label>
-        <div className="row" style={{ gap: 8, alignItems: "flex-start" }}>
-          <div style={{ flex: 1 }}>
-            <EntityPicker
-              value={newPrimary} onChange={setNewPrimary}
-              placeholder="Search or type entity_id…" hideCurrentLabel
-            />
-          </div>
-          <button
-            className="btn ghost" onClick={() => newPrimary && createGroup(newPrimary)}
-            disabled={!newPrimary} style={{ flexShrink: 0 }}
-          >
-            <Plus size={18} /> Create
-          </button>
-        </div>
-      </div>
+      <SearchOrAdd query={search} onQuery={typed} placeholder="Search groups, or a device to group…"
+        offer={offer} onAdd={createGroup} onFound={showGroup} />
 
-      {config.deviceGroups.length === 0 && (
+      {config.deviceGroups.length === 0 && !search.trim() && (
         <p className="muted body-text mt">No grouped devices yet.</p>
       )}
 
-      {config.deviceGroups.length > 0 && (
-        <div className="config-search">
-          <Search size={16} />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter by entity ID or label…"
-            aria-label="Filter grouped devices"
-          />
-        </div>
-      )}
-
-      {config.deviceGroups.length > 0 && matches.length === 0 && (
-        <p className="muted body-text mt">No groups match “{search}”.</p>
+      {matches.length === 0 && search.trim() !== "" && (
+        <SearchEmpty query={search} noun="group" offer={offer} onAdd={createGroup} />
       )}
 
       {/* ⚠️ EACH GROUP THE COCKPIT'S CARD (owner, 2026-11-06): its name (its primary's) in the strip, the group's icon
           before it; its room, its primary's id and what the primary does on its quiet line; its members and "Add another
           entity…" its words; Remove group its bar */}
       {shown.visible.length > 0 && (
-        <div className="fm-list settings-cards">
+        <div className="fm-list settings-cards" ref={listRef}>
           {shown.visible.map((group) => (
             <RecordCard key={group.id} title={entityLabel(group.primaryEntityId)} lead={<Layers size={16} aria-hidden />}
+              tone={marked(group.id)}
               room={roomOf({ entityId: group.primaryEntityId })}
               pills={<><span><IdText id={group.primaryEntityId} /></span><span>primary (keeps the map badge)</span></>}
               body={

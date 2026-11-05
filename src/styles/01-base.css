@@ -141,6 +141,7 @@
   --text-sm: 13px;    /* form labels, table cells, muted body */
   --text-base: 14px;  /* default UI text */
   --settings-width: 780px; /* Settings, Advanced Settings and their family on a laptop: one width */
+  --card-field-label: 116px; /* a settings card's field names, one column: its longest, "LINKED ENTITY", with room */
   /* The text typed in EVERY field — a search, a picker, a name, a number (owner, 2026-10-22: the coordinates and the
      records-kept days looked bigger than the pickers beside them). One size, read by every field rule. */
   --field-text: var(--text-base);

@@ -31,8 +31,8 @@ const SHORT = { "5-min avg": 90, "5-min": 67, "hourly avg": 92, "hourly": 70, "d
 const PILLS_BARE = 88;
 
 const panelMax = px(/\.modal\.panel-modal \{[^}]*max-width: (\d+)px/, panels);
-const bodySide = px(/^\.modal-body \{[^}]*padding: \d+px (\d+)px/m, modals);
-const phoneSide = px(/\.modal-body \{\s*padding: \d+px calc\((\d+)px/, layout);
+const bodySide = px(/^\.modal-body \{[^}]*--body-left: (\d+)px/m, modals);
+const phoneSide = px(/\.modal-body \{\s*--body-left: calc\((\d+)px/, layout);
 const narrow = px(/@container \(max-width: (\d+)px\) \{\s*\.timeline-head \.chart-range-words/, modals);
 const pad = px(/\.timeline-ranges button \{[^}]*padding: 0 (\d+)px/, modals);
 const compact = px(/\.timeline-head \.timeline-ranges button \{ padding: 0 (\d+)px; \}/, modals);

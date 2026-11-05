@@ -30,7 +30,7 @@ export interface SearchRow {
 export const SEARCH_ROWS = 60;
 
 export default function SearchPicker({
-  rows, onPick, placeholder, compact, before, empty, none, trailing, onOpenChange, text, startOpen,
+  rows, onPick, placeholder, compact, before, empty, none, trailing, onOpenChange, text, startOpen, enterPicks,
 }: {
   /** The rows matching what is typed ("" when nothing is). */
   rows: (query: string) => readonly SearchRow[];
@@ -53,6 +53,8 @@ export default function SearchPicker({
   text?: { value: string; onChange: (text: string) => void };
   /** Drawn open, the focus in its box: a box shown because a person asked for it (AddOnLine's icon pressed). */
   startOpen?: boolean;
+  /** Enter picks the `before` row, or the one row listed (a list's search-or-add field, components/common/SearchOrAdd). */
+  enterPicks?: boolean;
 }) {
   const [own, setOwn] = useState("");
   const query = text ? text.value : own;
@@ -64,6 +66,8 @@ export default function SearchPicker({
 
   // Outside tap or Escape closes the list and clears the query.
   useOutsideClose([containerRef], open, close);
+  const listed = (q: string) => [before?.(q), ...rows(q).slice(0, SEARCH_ROWS)].filter((r): r is SearchRow => !!r);
+  const pick = (key: string) => { onPick(key); close(); };
 
   return (
     <div ref={containerRef} className="picker">
@@ -78,21 +82,28 @@ export default function SearchPicker({
           // open, never tapped): a window puts the focus in its first field (useModalA11y), and the list opened on it.
           // A tap, typing, or the down arrow opens it
           onClick={() => setOpen(true)}
-          onKeyDown={(e) => { if (e.key === "ArrowDown") setOpen(true); }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") setOpen(true);
+            if (e.key === "Enter" && enterPicks) {
+              const all = listed(query), only = all[0]?.strong || all.length === 1 ? all[0] : undefined;
+              if (only) { e.preventDefault(); pick(only.key); }
+            }
+          }}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
         />
         {!open && trailing}
       </div>
 
       {open && (() => {
-        const found = rows(query).slice(0, SEARCH_ROWS);
+        const all = listed(query);
+        const said = empty ?? (all.length === 0 && query.trim() && none ? none(query.trim()) : null);
+        // nothing to pick and nothing to say: no empty box under the field (a list's filter-only field)
+        if (!said && all.length === 0) return null;
         return (
         <div className="picker-dropdown">
-          {empty && <div className="muted body-text" style={{ padding: 12 }}>{empty}</div>}
-          {!empty && found.length === 0 && query.trim() && none
-            && <div className="muted body-text" style={{ padding: 12 }}>{none(query.trim())}</div>}
-          {[before?.(query), ...found].filter((r): r is SearchRow => !!r).map((r) => (
-            <button key={r.key} className={`row picker-option${r.strong ? " strong" : ""}`} onClick={() => { onPick(r.key); close(); }}>
+          {said && <div className="muted body-text" style={{ padding: 12 }}>{said}</div>}
+          {all.map((r) => (
+            <button key={r.key} className={`row picker-option${r.strong ? " strong" : ""}`} onClick={() => pick(r.key)}>
               <span style={{ flex: 1, textAlign: "left" }}>
                 {r.label}
                 {r.sub !== undefined && <div className="muted" style={{ fontSize: "var(--text-2xs)" }}>{r.sub}</div>}

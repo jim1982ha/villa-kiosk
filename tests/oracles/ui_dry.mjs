@@ -112,11 +112,25 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
   // owner, 2026-11-03: a chat's name stood one letter per line beside a language menu as wide as the line
   // owner, 2026-11-06: each chat the Cockpit's card, its name the strip's; then "the content of these cards taking the
   // whole width": a card's field (a chat's language, an announcement's seconds) fills the card beside its one-line name
-  ck("a card's field takes the rest of the card's width: its name on one line, no control capped or fixed",
-     /\.card-field-label \{ flex: 0 0 auto; white-space: nowrap;/.test(css)
-     && /\.card-field > :not\(\.card-field-label\) \{ flex: 1 1 \d+px; min-width: 0; \}/.test(css)
-     && /\.card-field > \.unit-field \{ flex: 1 1 \d+px; width: auto; \}/.test(css)
-     && !/\.card-field > [^{]*\{[^}]*(max-width|flex: 0 0 var)/.test(css));
+  // owner, 2026-11-06 (later): "the text fields all start at the same level, rather than inline with the description
+  // text": the names one column, one token, every control at one x; on a phone the name above its control
+  const base = readFileSync(join(SRC, "styles/01-base.css"), "utf8");
+  const token = [...base.matchAll(/--card-field-label: (\d+)px;/g)];
+  const narrow = css.match(/@container work-row \(max-width: 519px\) \{\s*\.card-field \{([^}]*)\}\s*\.card-field > :not\(\.card-field-label\) \{([^}]*)\}/);
+  ck("a card's field takes the rest of the card's width: its name on one line, every control starting at one x (one name column)",
+     token.length === 1 && +token[0][1] >= 100
+     && /\n\.card-field \{ display: grid; grid-template-columns: var\(--card-field-label\) minmax\(0, 1fr\);/.test(css)
+     && /\.card-field-label \{ grid-column: 1;[^}]*white-space: nowrap;/.test(css)
+     && /\.card-field > :not\(\.card-field-label\) \{ grid-column: 2; min-width: 0; \}/.test(css)
+     && !/\.card-field-label \{[^}]*flex: 0 0 auto/.test(css)
+     && !/\.card-field > [^{]*\{[^}]*(max-width|flex: 0 0 var)/.test(css)
+     && !!narrow && /grid-template-columns: minmax\(0, 1fr\);/.test(narrow[1]) && /grid-column: 1;/.test(narrow[2]), [token.map((m) => m[0]), narrow?.[0]]);
+  // ...and every name fits the column: the device card's, an announcement's, a chat's (the longest, "Linked entity")
+  const names = ["Type", "Category", "Label", "Intensity", "Linked entity", "On screen", "Language"];
+  const drawnNames = ["components/settings/MappingFields.tsx", "components/settings/MessagesSettings.tsx", "components/settings/WhoGetsMessages.tsx"]
+    .flatMap((f) => [...srcOf(f).matchAll(/cell\("\w+", "([^"]+)"|<span className="card-field-label">([^<]+)<\/span>/g)].map((m) => m[1] ?? m[2]));
+  ck("  ...every field's name one of the column's, the longest \"Linked entity\"", drawnNames.length > 0 && drawnNames.every((n) => names.includes(n))
+     && Math.max(...drawnNames.map((n) => n.length)) === "Linked entity".length, drawnNames);
   // owner, 2026-11-03: a device's id was cut every few letters beside "Confirm before toggling" on a phone. Owner,
   // 2026-11-05: the pencil and the chevron on the id's own line, at its right; the id never more than 2 lines (a long
   // id with its "· 3D object: …" pushed the toggle and the pencil down a line of their own)
@@ -129,7 +143,13 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
      /<Pencil /.test(tools) && !/Chevron/.test(row) && !/ConfirmToggle/.test(tools)
      && /<span className="entity-id-confirm">\s*<ConfirmToggle /.test(row)
      && /\.entity-id-display \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto auto;\s*grid-template-areas: "name confirm tools";[^}]*container-type: inline-size;/.test(css)
-     && /\.entity-id-display \{ grid-template-columns: minmax\(0, 1fr\) auto; grid-template-areas: "name tools" "confirm confirm"; \}/.test(phone)
+     // owner, 2026-11-06: on a phone the box sat alone at the left, centred between the id's line and the toggle's: the
+     // first line one grid there, line 1 the box, the id and the pencil, line 2 the toggle under them
+     && /\.device-first-line \{ display: grid; grid-template-columns: auto minmax\(0, 1fr\) auto;\s*grid-template-areas: "box name tools" "confirm confirm confirm"; align-items: center;/.test(phone)
+     && /\.device-first-line > input\[type="checkbox"\] \{ grid-area: box; \}/.test(phone)
+     && /\.device-first-line > \.entity-id-display \{ display: contents; \}/.test(phone)
+     && /<div className="device-first-line">\s*<input\s+type="checkbox"/.test(row)
+     && css.search(/\n\.device-first-line \{ display: flex;/) < css.indexOf(phone)
      && /\.entity-id-display \.entity-id-confirm \.setting-row-label \{ position: static; width: auto; height: auto; overflow: visible; clip-path: none; \}/.test(phone)
      && /@container \(max-width: \d+px\) \{\s*\.entity-id-confirm \.setting-row-label \{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\);/.test(css)
      && css.indexOf(phone) > css.search(/@container \(max-width: \d+px\) \{\s*\.entity-id-confirm/)

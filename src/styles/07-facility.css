@@ -92,7 +92,8 @@
 .fm-record-state .info-tip { flex: none; margin-block: -6px; }
 /* its next check (CheckPill): the app's pill (.fm-entity-chip), at the right of the first line, under the strip's time;
    on a line too narrow for both it takes the next line, still at the right (owner, 2026-11-06) */
-.fm-record-state .fm-record-check { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+/* ...and a part's (a problem watched live on a card of several), at the right of its header line, before its time */
+:is(.fm-record-state, .fm-record-part-head) .fm-record-check { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 9px; font-weight: 500; line-height: 1.4; color: var(--text-secondary); white-space: nowrap; }
 /* 3-5. its quiet line, its words and who moved it, padded inside the frame; nothing to say, no padding */
 .fm-record-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 12px 16px 14px; }
@@ -122,6 +123,8 @@
 .fm-record-who { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: var(--text-xs);
   font-weight: 500; color: var(--text-secondary); overflow-wrap: anywhere; }
 .fm-record-who > svg { flex: none; }
+.fm-record-part-head .fm-record-check { font-size: var(--text-xs); }
+.fm-record-part-head .fm-record-check + .fm-record-when { margin-left: 0; }
 /* A CARD OF SEVERAL PROBLEMS: each a part, its own header line, words and bar, divided by a hairline */
 .fm-record-part { border-top: 1px solid var(--hairline); display: flex; flex-direction: column; }
 .fm-record-part-head { padding: 10px 16px 0; min-height: 28px; }
