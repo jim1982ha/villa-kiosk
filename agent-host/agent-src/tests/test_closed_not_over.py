@@ -14,7 +14,7 @@ from villa_timeline import TimelineVilla
 from helpers import STARTER_SKILLS, make_agent
 from kiosk_fake import FakeKiosk
 from vesta_shared.problems import Problems
-from vesta_shared.store import Store
+from vesta_shared.store import Notes, Store, notes_of
 from vesta_agent.roster import Roster
 
 spec = importlib.util.spec_from_file_location("desk25", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
@@ -188,12 +188,6 @@ def test_a_fault_the_agent_cleared_and_a_person_renamed_is_never_a_persons_close
     # and the LAST step's kind was read: "Closed in the Cockpit on … (Facility manager)" went into the alert's history
     k = FakeKiosk()
     v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "JM")]), kiosk=k)
-    settled = []
-
-    async def settle(iid, note, **_kw):
-        settled.append(note)
-        return 0
-    v.tickets.settle_alert = settle
     st, pb = Store(v.s.store_path), Problems(Store(v.s.store_path))
     iid = st.new_incident("automation.door|lock.door", "automation.door", "lock.door", "P2", {"message": "Door unlocked"})
     tid, _ = pb.open_task("incident", iid, "automation.door", "lock.door", "Door unlocked")
@@ -205,7 +199,7 @@ def test_a_fault_the_agent_cleared_and_a_person_renamed_is_never_a_persons_close
                      at="2099-01-01T00:00:00.000Z")                        # after it (the rename step says "resolved")
     run(v.tickets.repair())
     assert st.task(tid)["status"] == "open" and st.incident(iid)["closed_at"] is None
-    assert not [n for n in settled if n.startswith(("Closed in the Cockpit", "Done in the Cockpit"))], settled
+    assert Notes.KIOSK_CLOSED not in notes_of(st.incident(iid))           # no close of a person's to tell
 
 
 def test_a_reopening_told_before_the_mark_existed_is_never_told_again(tmp_path):

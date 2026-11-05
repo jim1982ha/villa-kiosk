@@ -24,9 +24,7 @@ class _State:
 
 def desk(tmp_path, kiosk):
     path = str(tmp_path / "agent.db")
-    async def settle(_iid, _note, **_kw):
-        return 0
-    return Tickets(kiosk=kiosk, state=_State(), store_path=path, settle_alert=settle), Store(path)
+    return Tickets(kiosk=kiosk, state=_State(), store_path=path), Store(path)
 
 
 def test_the_real_kiosk_writes_the_number_and_gives_it_once_to_a_fault_made_without():

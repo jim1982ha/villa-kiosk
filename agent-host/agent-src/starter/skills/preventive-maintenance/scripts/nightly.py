@@ -38,6 +38,7 @@ from vesta_shared import occupancy  # noqa: E402  (the villa's state per day: li
 from vesta_shared.timeutil import day_label, day_time_label, moment_label, villa_day  # noqa: E402
 from vesta_shared.past import unread  # noqa: E402  (the one "could not be read whole: nothing is known after")
 from vesta_shared.message_format import document, split_title, status_line  # noqa: E402  (the one shape of a message)
+from vesta_shared import message_format as mf  # noqa: E402  (where a person's close was given: DONE_IN, LASTING_IN)
 from vesta_shared import status_words as SW  # noqa: E402  (each step as the alert card says it, in each chat's language)
 from vesta_shared.device_state import ABSENT, ANSWERS, OFFLINE_NOW, ha_restarts, in_restart  # noqa: E402
 from vesta_shared.asleep import last_value, read_states, unheard  # noqa: E402  (a sleeping device reads its last real state)
@@ -884,12 +885,13 @@ def told_now(res: dict, title: str | None = None, store=None, at: datetime | Non
 #: be updated consistently (completed in status section, and the previous line to be struck)"). "watch": cleared, watched
 #: until the next night check ({time} {until}); "closed": that night passed without it; "back": that night found it
 #: again; "handed": an alert follows its device now (the close note itself); "still": read still there after a person's
-#: close; "reopened": a person reopened it in the Cockpit ({who}).
+#: close; "reopened": a person reopened it in the Cockpit ({who}); "done": a person closed it ({who}, {where} it was
+#: given — told_closes).
 #: ⚠️ THE ALERT CARD'S WORDS, IN THE CHAT'S LANGUAGE (architecture review round 11, card 1): settings.yaml held this
 #: skill's own sentences ("⚠️ Reopened in the Cockpit at 07:05 by Owner"), English in a French chat, beside the alert
 #: card's "Reopened in the Cockpit on 11/10/2026 07:05 (Owner)". Every step is written by the shared writers now
 #: (vesta_shared.status_words), with its date, in each language; the message's rewrite carries them all (`text_in`).
-TOLD_STATES = ("watch", "closed", "back", "handed", "still", "reopened")
+TOLD_STATES = ("watch", "closed", "back", "handed", "still", "reopened", "done")
 #: Where nothing more is to come for the item: the message's title says all back to normal once every item is there.
 TOLD_SETTLED = ("watch", "closed", "handed")
 
@@ -905,6 +907,11 @@ def _told_line(st: dict, lang: str, to: str = "fm") -> str:
         return SW.step(kind, at, "", SW.who([to], lang), lang)
     if kind == "reopened":
         return SW.cockpit("reopened", at, st.get("who") or "", lang)
+    if kind == "done":
+        # in the Cockpit: its words in every language (status_words); elsewhere as the close was named (done_where)
+        where, who = st.get("where") or "", st.get("who") or ""
+        act = {mf.DONE_IN[mf.IN_COCKPIT]: "closed", mf.LASTING_IN[mf.IN_COCKPIT]: "lasting"}.get(where)
+        return (SW.cockpit(act, at, who, lang) if act else mf.acted(where, at, who)) + SW.stop(lang if act else "en")
     return st.get("note") or ""
 
 
@@ -1042,6 +1049,35 @@ def told_cleared(store, closed_ids, at: datetime, zone: str, settings: dict,
     return _told_edits(store, _told_mark(store, changes), settings,
                        (lambda what, i: backup.format(time=when, what=what) if i in cleared
                         else f"{what}: {changes[int(i)]['note']}") if backup else None)
+
+
+def told_closes(store, zone: str, settings: dict) -> list[dict]:
+    """The P2 messages to rewrite because a person closed one of their faults since — Done or "Not a problem" in the
+    Cockpit, Done on the alert standing for it — each a line of its Status as the alert card says it ("Done in the
+    Cockpit on 04/11/2026 23:45 (JM)."). Told once: the message's story is the record (a "done" step of that close's
+    moment). A close from before the message was sent, or of an item settled since, is not news.
+
+    ⚠️ A CLOSE THE MESSAGE NEVER SAID (architecture review 23, card 7): the message kept "New: - Pump weak" after JM's
+    Done, then said "Still-there alert sent …" — the follow-up of a close it had not told."""
+    from vesta_shared.problems import CLOSED_IN_KIOSK, DONE, NOT_A_PROBLEM
+    changes = {}
+    for t in store.tasks(None):
+        src = str(t.get("source") or "")
+        if t.get("status") not in (DONE, CLOSED_IN_KIOSK, NOT_A_PROBLEM) or not src.startswith("finding:"):
+            continue
+        fid, at = int(src.split(":", 1)[1]), t.get("last_closed_at") or t.get("done_at")
+        key = store.cache_get(f"{TOLD}of:{fid}")
+        rec = _told_rec(store, key) if key and at else None
+        last = (store.last_task(src) or {}).get("id")
+        if not rec or last != t["id"] or str(at) < key.removeprefix(TOLD):
+            continue
+        steps = [st for st in rec["story"] if st.get("id") == str(fid)]
+        if any(st.get("kind") == "done" and st.get("at") == at for st in steps) or \
+                (steps and steps[-1].get("kind") in TOLD_SETTLED):
+            continue
+        changes[fid] = {"kind": "done", "at": at, "time": moment_label(datetime.fromisoformat(at), zone or "UTC"),
+                        "who": t.get("closed_who") or "", "where": Problems.done_where(t)}
+    return _told_edits(store, _told_mark(store, changes), settings) if changes else []
 
 
 def told_watch_over(store, at: datetime, zone: str, settings: dict) -> list[dict]:

@@ -163,13 +163,14 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
                      "🆘 Need help on Telegram (Wayan)", "Escalation sent (to: Owner)"], notes
     # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
     # FM's chat lists the FM's steps and the press, never the escalation to the owner; the owner's group the press and
-    # its escalation, never the FM's alert or reminder
+    # its escalation, never the FM's alert or reminder — the press said by the answer below them while nothing but its
+    # escalation follows it (architecture review 23, card 4: it was said twice)
     def kinds(chat):
         lines = head_text(agent.notices.heading(chat, int(iid))).split("\n")[2:]
         return [next((k for k in ("Alert sent", "Reminder sent", "🆘 Need help on", "Escalation sent")
                       if l.startswith("- " + k)), l) for l in lines]
-    assert kinds(FM_CHAT) == ["Alert sent", "Reminder sent", "🆘 Need help on"], kinds(FM_CHAT)
-    assert kinds(GROUP) == ["🆘 Need help on", "Escalation sent"], kinds(GROUP)
+    assert kinds(FM_CHAT) == ["Alert sent", "Reminder sent"], kinds(FM_CHAT)
+    assert kinds(GROUP) == ["Escalation sent"], kinds(GROUP)
 
 
 def test_a_second_close_changes_nothing_and_the_records_are_pruned_with_the_others(agent):
@@ -218,10 +219,11 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
 
 def test_a_fault_closed_in_the_kiosk_says_who_and_when_on_telegram():
     # owner, 2026-10-10: a Close in the Cockpit must act on the Telegram messages like a button: who, and when
-    from vesta_agent.tickets import kiosk_close_note
-    note = kiosk_close_note({"by": "Facility manager", "resolved_at": "2026-10-10T09:13:00.000Z"}, "Asia/Singapore")
+    # (the alert desk tells it, Notes.KIOSK_CLOSED, with its watch: test_cockpit_close_told_by_desk)
+    from vesta_shared import kiosk_words
+    note = kiosk_words.closed("Facility manager", "2026-10-10T09:13:00.000Z", "Asia/Singapore", end=True)
     assert note == "Done in the Cockpit on 10/10/2026 17:13 (Facility manager)."
-    assert kiosk_close_note({}, "UTC") == "Done in the Cockpit on {time}."     # an older Kiosk: noticed now
+    assert kiosk_words.closed("", None, "UTC", end=True) == "Done in the Cockpit on {time}."   # an older Kiosk: noticed now
 
 
 def test_the_kiosk_is_read_every_five_minutes(agent, monkeypatch):

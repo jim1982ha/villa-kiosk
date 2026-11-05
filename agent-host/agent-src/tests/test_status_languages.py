@@ -168,9 +168,17 @@ def test_a_press_is_told_in_each_chats_language(agent):
 
 
 def test_a_need_help_press_is_listed_in_each_chats_language(agent):
-    # the press is a history line (note_press, its labels kept): a later step's card lists it in the chat's words
+    # the press is a history line (note_press, its labels kept): a later step's card lists it in the chat's words —
+    # till then its answer says it (architecture review 23, card 4)
     rule(agent, "opened", 500)
     press(agent, FM_DE, "need_help")
+    assert not any("Besoin d'aide" in ln for ln in agent.notices.history_lines(1, FM_FR))
+    from types import SimpleNamespace
+
+    async def toast(_text):
+        pass
+    run(agent.buttons.press(GROUP, ["1", "done"], SimpleNamespace(name="JM", role="owner", telegram_id=GROUP), toast,
+                            name="JM"))
     lines = agent.notices.history_lines(1, FM_FR)
     assert any(re.fullmatch(rf"- 🆘 Besoin d'aide le {T} \(Anna\)", ln) for ln in lines), lines
     assert any(re.fullmatch(rf"- 🆘 Need help on {T} \(Anna\)", ln) for ln in agent.notices.history_lines(1, GROUP))

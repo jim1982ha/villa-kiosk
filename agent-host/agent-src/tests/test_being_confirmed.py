@@ -19,7 +19,7 @@ from kiosk_fake import FakeKiosk
 from villa_timeline import TimelineVilla
 from vesta_shared import alert_watch
 from vesta_shared.problems import Problems
-from vesta_shared.store import Store
+from vesta_shared.store import Notes, Store
 from vesta_agent.roster import Roster
 
 spec = importlib.util.spec_from_file_location("desk_confirm", os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"))
@@ -155,11 +155,13 @@ def test_a_kiosk_that_does_not_read_the_field_never_gets_it(tmp_path):
 
 
 def test_a_close_in_the_cockpit_before_the_desk_said_its_watch_gets_the_field_at_its_next_tick(tmp_path):
-    # closed before any tick carried the desk's wait (an alert a minute old): the desk's next tick carries it, and the
-    # fault then says when it is confirmed — still counted from the person's close
+    # closed before any tick carried the desk's wait (an alert an older desk opened, which carried it at its ticks
+    # only): the desk's next tick carries it, and the fault then says when it is confirmed — still counted from the
+    # person's close
     v, k, st = villa(tmp_path=tmp_path)
     now = datetime.now(timezone.utc)
-    door(st, now)
+    iid = door(st, now)
+    st.note(iid, {}, drop=(Notes.WATCH_TERMS,))
     run(v.tickets.repair())
     closed = (now - timedelta(minutes=1)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     (tid,) = k._kept()

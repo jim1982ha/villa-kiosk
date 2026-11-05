@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.440 (5 November 2026)
+
+- Architecture review 23. A close in the Cockpit is told by the alert desk: `Problems.person_done` (IN_COCKPIT) leaves
+  Notes.KIOSK_CLOSED, the desk's tick tells it (`cockpit_closes`, through `closed_said`, the one telling Telegram's
+  Done uses too), and the engine starts the desk at once (`Tickets.repair` returns `handed`, was `helped`; Tickets
+  takes no `settle_alert`; `kiosk_close_note` gone). The desk carries its watch terms from an alert's open (`W.carry`
+  in intake and help_alerts). A person's ticket closed as "Not a problem" passes `read_again=False` and its words.
+- skill.yaml buttons `tells`: on_reply's answer says the press (Need help); `note_press(told=)` keeps the press, and
+  `Notices.history_lines` leaves it to that answer while only its escalation follows it.
+- A task keeps a person's close: `Problems.close(at=)` / `Store.close_task(at=)`, column `last_closed_at` (kept on a
+  reopening), `closed_in_kiosk` passes words, who and when. `Problems.close_said` writes it; preventive-maintenance
+  settings `still_there_after_close.words` take `{close}` ({done}/{when} still read). `nightly.told_closes` (a "done"
+  step of TOLD_STATES), called by recheck.main.
+
 ## 0.6.439 (5 November 2026)
 
 - Architecture review 22. Notices.record returns the steps it recorded; Outcome sums them for `before` (a late

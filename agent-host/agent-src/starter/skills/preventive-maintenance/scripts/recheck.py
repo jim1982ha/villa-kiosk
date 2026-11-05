@@ -509,8 +509,9 @@ def reopened_untold(store, zone: str, settings: dict, edits: list | None = None)
 def still_there_untold(store, zone: str, settings: dict, edits: list | None = None) -> list[dict]:
     """The messages for the night check's faults opened again because their problem was read still there after a
     person closed them (Problems.STILL_THERE) that nobody has been told of yet, each told once: to settings.yaml
-    `still_there_after_close.tell`, under its `title`, its `words` ({done} where the close was given, {when} the close,
-    {what} the fault). Without them
+    `still_there_after_close.tell`, under its `title`, its `words` ({close} the person's close — where, when, who:
+    Problems.close_said —, {what} the fault; the words of a settings.yaml before 0.12.456 say {done} where it was given
+    and {when} when). Without them
     nothing is sent and the tasks stay untold — named on stderr, never guessed. `edits`: as reopened_untold's."""
     words = settings.get("still_there_after_close") or {}
     to, title, body = (str(words.get(k) or "") for k in ("tell", "title", "words"))
@@ -528,9 +529,12 @@ def still_there_untold(store, zone: str, settings: dict, edits: list | None = No
     for t in rows:
         if int(t["id"]) not in said:
             what = Problems(store).current_title(t)
-            # {done}: where the person's close was given ("Done in the Cockpit", "Done on Telegram": Problems.done_where)
-            out.append(result.message(to, body.replace("{done}", Problems.done_where(t))
-                                      .replace("{when}", kiosk_words.when(t.get("done_at"), zone))
+            # ⚠️ THE PERSON'S CLOSE, AS THEY MADE IT (architecture review 23, card 6): "{done} on {when}" read the time
+            # of this read (the task's close is gone once it opens again) and no one
+            at = t.get("last_closed_at") or t.get("done_at")
+            out.append(result.message(to, body.replace("{close}", Problems.close_said(t, zone))
+                                      .replace("{done}", Problems.done_where(t))
+                                      .replace("{when}", kiosk_words.when(at, zone))
                                       .replace("{what}", what.rstrip(".")), title=title))
         store.reopening_told(t["id"])
     return out
@@ -561,6 +565,8 @@ def main(argv=None):
     # a close sends nothing new: a P2 told earlier says it on its own message (told_cleared, owner 2026-10-20) — and an
     # offline fault an alert took over says so there; a reopening is told anew AND marked on that message
     edits = N.told_cleared(ctx.store, closed, now, ctx.zone, ctx.settings, handed=handed)
+    # a person's close of a told fault, said on its message before anything that follows it (review 23, card 7)
+    edits = N.told_closes(ctx.store, ctx.zone, ctx.settings) + edits
     told = again["send"] + reopened_untold(ctx.store, ctx.zone, ctx.settings, edits) + still_there_untold(
         ctx.store, ctx.zone, ctx.settings, edits)
     print(json.dumps({"actions": result.moved(res["actions"] + again["actions"] + found["actions"] + miss["actions"]),

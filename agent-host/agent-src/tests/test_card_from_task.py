@@ -27,9 +27,7 @@ def villa(tmp_path):
     k = FakeKiosk()
     path = str(tmp_path / "agent.db")
 
-    async def settle(_iid, _note, **_kw):
-        return 0
-    return k, Tickets(kiosk=k, state=_State(), store_path=path, settle_alert=settle), Store(path)
+    return k, Tickets(kiosk=k, state=_State(), store_path=path), Store(path)
 
 
 def an_alert_with_its_fault(k, t, st, message="Entrance door unlocked"):
@@ -115,9 +113,7 @@ def test_repairs_started_together_make_one_fault_per_alert_and_close_older_doubl
     k = _SlowKiosk()
     path = str(tmp_path / "agent.db")
 
-    async def settle(_iid, _note, **_kw):
-        return 0
-    t, st = Tickets(kiosk=k, state=_State(), store_path=path, settle_alert=settle), Store(path)
+    t, st = Tickets(kiosk=k, state=_State(), store_path=path), Store(path)
     for n, msg in ((1, "One mains phase lost"), (2, "Electrical cabinet overheating")):
         iid = st.new_incident(f"k{n}", f"rule{n}", f"sensor.example_{n}", "P1", {"message": msg})
         Problems(st).open_task("incident", iid, f"rule{n}", f"sensor.example_{n}", msg)

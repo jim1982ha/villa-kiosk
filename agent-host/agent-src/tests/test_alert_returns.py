@@ -14,7 +14,7 @@ from kiosk_fake import FakeKiosk
 from vesta_agent.kiosk import REOPENED
 from vesta_agent.tickets import Tickets
 from vesta_shared.problems import Problems, incident_runs
-from vesta_shared.store import Incident, Store
+from vesta_shared.store import Incident, Notes, Store, notes_of
 
 
 def run(c):
@@ -27,12 +27,8 @@ class _State:
 
 
 def villa(tmp_path):
-    k, path, settled = FakeKiosk(), str(tmp_path / "agent.db"), []
-
-    async def settle(iid, note, **_kw):
-        settled.append((iid, note))
-        return 0
-    return k, Tickets(kiosk=k, state=_State(), store_path=path, settle_alert=settle), Store(path), settled
+    k, path = FakeKiosk(), str(tmp_path / "agent.db")
+    return k, Tickets(kiosk=k, state=_State(), store_path=path), Store(path)
 
 
 def an_alert_with_its_fault(k, t, st, message="Entrance door unlocked"):
@@ -43,7 +39,7 @@ def an_alert_with_its_fault(k, t, st, message="Entrance door unlocked"):
 
 
 def _cleared_then_reopened(tmp_path, **note):
-    k, t, st, _ = villa(tmp_path)
+    k, t, st = villa(tmp_path)
     iid, tid, uid = an_alert_with_its_fault(k, t, st)
     Problems(st).close_incident(iid, Incident.RESOLVED, st.now(), "Cleared in the villa's system.")
     run(t.repair())
@@ -71,23 +67,23 @@ def test_an_alert_that_truly_came_back_says_back_again(tmp_path):
 
 def test_the_agents_own_clearing_is_never_a_person_closing_it_in_the_cockpit(tmp_path):
     # a fast flap: the close's clearing lands just after the return reopened the task — the times alone said "a person"
-    k, t, st, settled = villa(tmp_path)
+    k, t, st = villa(tmp_path)
     iid, tid, uid = an_alert_with_its_fault(k, t, st)
     st.reopen_task(tid, "Entrance door unlocked", note="Back again.")            # the return, first
     assert run(k.resolve_ticket(uid))                                            # the agent's clearing, after it
     run(t.repair())
     assert st.task(tid)["status"] == "open", st.task(tid)
-    assert not settled, settled                          # no "Closed in the Cockpit by VESTA Agent" sent anywhere
+    assert Notes.KIOSK_CLOSED not in notes_of(st.incident(iid))   # no "Closed in the Cockpit by VESTA Agent" told
     assert k.ticket(uid)["status"] == "open"             # the repair put its fault back
 
 
 def test_a_persons_close_in_the_cockpit_still_closes_the_task(tmp_path):
     # the other side of the same rule: a close a person made is theirs
-    k, t, st, settled = villa(tmp_path)
+    k, t, st = villa(tmp_path)
     iid, tid, uid = an_alert_with_its_fault(k, t, st)
     k.person_closes(uid, at="2099-01-01T00:00:00.000Z")
-    run(t.repair())
-    assert st.task(tid)["status"] != "open" and settled
+    assert run(t.repair())["handed"] == 1                # its close handed to the desk, which tells it
+    assert st.task(tid)["status"] != "open" and notes_of(st.incident(iid)).get(Notes.KIOSK_CLOSED)
 
 
 T0 = datetime(2026, 10, 10, 19, 0, tzinfo=timezone.utc)

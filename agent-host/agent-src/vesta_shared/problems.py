@@ -201,11 +201,13 @@ class Problems:
         return self.open_task(source, source_id, rule_id, entity_id, summary, check)[0], "new"
 
     # ---------------------------------------------------------------- closing
-    def close(self, task_id: int, status: str, note: str = "", who: str | None = None) -> None:
-        """`note`, `who`: what its fault's close says and the person who closed it, kept with the task (card())."""
+    def close(self, task_id: int, status: str, note: str = "", who: str | None = None, at: str | None = None) -> None:
+        """`note`, `who`: what its fault's close says and the person who closed it, kept with the task (card()); `at`:
+        when (now when not said)."""
         if status not in STATUSES:
             raise ValueError(f"a task closes as one of {', '.join(STATUSES)}, not {status!r}")
-        self.store.close_task(task_id, status, note, who)
+        when = _moment(at)                              # the store's own way of writing a moment
+        self.store.close_task(task_id, status, note, who, when.isoformat() if when else None)
 
     # ⚠️ CLOSING A SOURCE CLOSES WHAT IT OWES (architecture review 6, 2026-10-07). The alert desk and the night check
     # each closed an incident or a finding, then had to remember to clear its task and resolve its Kiosk fault —
@@ -246,8 +248,9 @@ class Problems:
         person, read again by the desk (alert_watch.close: `person`, `said` the line it says again — Words for the
         Cockpit's), its reply and its fault's close note the place's words (message_format.done_in: "Done on Telegram
         (JM)"). From Telegram or the tablet its task closes as a Done (close_incident); in the Cockpit the task closed
-        already (closed_in_kiosk). `read_again` False: "Not a problem while it lasts", the desk does not read it again
-        (its watch for the alert coming back stays). Returns a script's `actions` (result.moved).
+        already (closed_in_kiosk), and the desk tells it (Notes.KIOSK_CLOSED: every chat's line, with its watch).
+        `read_again` False: "Not a problem while it lasts", the desk does not read it again (its watch for the alert
+        coming back stays). Returns a script's `actions` (result.moved).
 
         ⚠️ ONE DONE, ONE ENTRY (architecture review, 2026-10-30 evening: three closes of an alert each wrote their own
         words — the reports read "Done", "Done (Closed in the Cockpit)" and "Done (Done in the Cockpit)" for one press)."""
@@ -255,8 +258,10 @@ class Problems:
         when = _moment(at)
         now_iso = when.isoformat() if when else self.store.now()
         if place == mf.IN_COCKPIT:
-            alert_watch.close(self.store, iid, Incident.DONE, now_iso,
+            alert_watch.close(self.store, iid, Incident.DONE, now_iso, t=terms,
                               person=kiosk_words.stored(said or words) if read_again else None, reply=words)
+            # told by the desk, with the watch this close wrote (Notes.KIOSK_CLOSED: architecture review 23, card 1)
+            self.store.note(iid, {Notes.KIOSK_CLOSED: kiosk_words.stored(said or words)})
             return []
         return self.close_incident(iid, Incident.DONE, now_iso, f"{words}.", who=who, reply=words,
                                    person=(person or words) if read_again else None, terms=terms,
@@ -473,7 +478,10 @@ class Problems:
         person (the alert's reply, message_format.done_in). `lasting`: closed as "Not a problem while it lasts" — the
         close holds while the problem lasts: no read again of the alert, no "still there" of a finding (NOT_A_PROBLEM)."""
         task = self.store.task(task_id)
-        self.close(task_id, NOT_A_PROBLEM if lasting else CLOSED_IN_KIOSK)
+        # ⚠️ THE PERSON'S CLOSE, KEPT (architecture review 23, card 6): who, when the Kiosk recorded it and its words —
+        # a night-check fault read still bad after it said "Done in the Cockpit on <the read's time>, but still there"
+        # with no one, and its wait counted from when the agent read the close
+        self.close(task_id, NOT_A_PROBLEM if lasting else CLOSED_IN_KIOSK, str(said or ""), who, at)
         kind, sid = self._source(task)
         # a Done in the Kiosk on a fault whose Need help the owner was asked about: the alert standing for it closes too
         if kind != "incident" and (standing := self.help.standing(HelpLink.of_task(task_id))):
@@ -600,12 +608,21 @@ class Problems:
     @staticmethod
     def done_where(task: dict) -> str:
         """Where the person's close of `task` was given, as a line says it (message_format.DONE_IN): its close note's
-        place ("Done on Telegram" — a Done on the alert standing for it), else the Cockpit's (a close in the Kiosk keeps
-        no note). ⚠️ A TELEGRAM DONE WAS "CLOSED IN THE COCKPIT" (architecture review, 2026-10-30 evening): the facility
+        place ("Done on Telegram" — a Done on the alert standing for it, "Done in the Cockpit on …"), else the
+        Cockpit's (a close in the Kiosk kept no note before 0.12.456). ⚠️ A TELEGRAM DONE WAS "CLOSED IN THE COCKPIT" (architecture review, 2026-10-30 evening): the facility
         manager read "Closed in the Cockpit on …, but still there" of a fault done on Telegram."""
         note = str(task.get("close_note") or "")
         return next((w for w in [*mf.LASTING_IN.values(), *mf.DONE_IN.values()] if note.startswith(w)),
                     mf.DONE_IN[mf.IN_COCKPIT])
+
+    @staticmethod
+    def close_said(task: dict, zone: str) -> str:
+        """The person's last close of `task` as a line says it: where, when, who — "Done in the Cockpit on 04/11/2026
+        23:45 (JM)" (message_format.acted), from what the task keeps of it (done_where, last_closed_at, closed_who),
+        kept when it opens again. ⚠️ ONE WRITER (architecture review 23, cards 6 and 7): the still-there message and the
+        night check's message say it alike."""
+        at = task.get("last_closed_at") or task.get("done_at")
+        return mf.acted(Problems.done_where(task), kiosk_words.when(at, zone), str(task.get("closed_who") or ""))
 
     def still_there_after_close(self, source: str) -> bool:
         """A person closed the latest task about finding `source`, and the finding was read still bad (its `seen_at`)

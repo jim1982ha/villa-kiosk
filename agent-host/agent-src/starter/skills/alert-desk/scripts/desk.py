@@ -165,6 +165,38 @@ def watched(said: Said, minutes: float) -> Said:
     return Said(f"{said}{gap(said)}{w}", {lang: f"{said.lang(lang)}{gap(said.lang(lang))}{w.lang(lang)}" for lang in langs})
 
 
+def closed_said(inc, pressed: Said) -> Said:
+    """How a person's close of `inc` is told on the alert in every chat: `pressed`, with the watch its close wrote —
+    unless the desk reads it again first (a Done on an alert it can read), whose last word then says the watch
+    (quiet_after_done). ⚠️ ONE TELLING, WHEREVER IT WAS PRESSED (architecture review 23, card 1): a Done in the Cockpit
+    was told by the engine, "(closed)" with no watch, while a Telegram Done said "Watch 4h"."""
+    if W.awaiting_read(inc) and judged(inc):
+        return pressed
+    return watched(pressed, W.minutes(inc))
+
+
+def cockpit_closes(store: Store, out: dict, t: dict | None = None) -> list[int]:
+    """Every alert a person closed in the Cockpit since the last look (Notes.KIOSK_CLOSED: Problems.person_done), told
+    as a Telegram close is (closed_said): its buttons go in every chat, its line says who, when and its watch. `t`: the
+    desk's terms, for a close made before they were carried. Their ids."""
+    told = []
+    for inc in store.incidents(open_only=False):
+        if f'"{Notes.KIOSK_CLOSED}"' not in (inc.get("payload") or ""):
+            continue                                                       # most have none: not read
+        if t is not None:
+            W.rewatch(store, inc, t)
+        said = store.take_note(inc["id"], Notes.KIOSK_CLOSED)
+        if not said:
+            continue
+        said = kiosk_words.read(said)
+        stop = Said(f"{said}{SW.stop('en')}", {lang: f"{text}{SW.stop(lang)}" for lang, text in said.langs.items()})
+        line = closed_said(store.incident(inc["id"]), stop)
+        out.setdefault("settle", []).append(R.settle(inc["id"], line, note_in=line.langs or None))
+        _faults_follow(out)                                                 # its fault says when VESTA confirms it
+        told.append(inc["id"])
+    return told
+
+
 def terms(params: VillaParams | None = None) -> dict:
     """What a closed alert's watch is made of (alert_watch.terms), read ONCE from the desk's settings (rules.yaml
     `behaviour:`, the villa's first): reopen_hours, the window an alert back reopens it in, and clear_minutes, the wait
@@ -509,6 +541,9 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     iid = store.new_incident(key, rule_id, eid, sev, ev, now.isoformat())
     carry_check(store, iid, route, ev)
     carry_to(store, iid, sev, ev)
+    # its watch known from the start: a close in the Cockpit before the next tick (architecture review 23, card 1: back
+    # 2 minutes later, it opened a new number)
+    W.carry(store, iid, terms(params))
     out["incident_id"] = iid
     out["decision"] = "new"
     # no status: "New" is the heading's (Incident: New #N) — and its "Alert sent" line counts the week when the same
@@ -1202,15 +1237,14 @@ def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, 
         monitoring = say("will_monitor", pressed=act, watch=lasting_in(_params(params).behaviour("clear_minutes") * 60))
         # closed at once when it cannot be read again: its watch is said here, as at every close (review J, 0.12.341:
         # "✅ Done on … (JM)." and nothing more, yet it reopened under the same number within reopen_hours)
-        if not checks:
-            pressed = watched(pressed, W.minutes(store.incident(iid)))   # and on the alert in every other chat (settle below)
+        pressed = closed_said(store.incident(iid), pressed)        # and on the alert in every other chat (settle below)
         out["send"].append(here(monitoring.only(act.langs) if checks else pressed, "closed"))
     elif option == "not_a_problem":
         # "Not a problem" (while it lasts): closed as the Cockpit's own does (Problems.person_done, read_again False) —
         # no read again, its fault closed with nothing done; its watch for the alert coming back is said, as at a close
         out["actions"] += Problems(store).person_done(iid, place, who=who, at=now.isoformat(), terms=terms(params),
                                                       read_again=False)
-        pressed = watched(pressed, W.minutes(store.incident(iid)))
+        pressed = closed_said(store.incident(iid), pressed)
         out["send"].append(here(pressed, "closed"))
     elif option == "need_help":
         helped = need_help(store, inc, act, now, out, mark=button.get("mark"), reply=label)
@@ -1240,7 +1274,7 @@ def need_help(store: Store, inc: dict, pressed: Said, now: datetime, out: dict, 
     return helped
 
 
-def help_alerts(store: Store, now: datetime, out: dict) -> list[int]:
+def help_alerts(store: Store, now: datetime, out: dict, t: dict | None = None) -> list[int]:
     """⚠️ NEED HELP ON A FAULT WITH NO ALERT (owner, 2026-10-30: every Cockpit card offers Done · Need help · Open Ticket):
     a night-check finding or a person's ticket gets an alert of its own, already escalated to the chase's escalates_to,
     standing for that fault (Notes.HELP_OF) — its Done on Telegram closes the fault, the fault's Done in the Cockpit
@@ -1253,6 +1287,8 @@ def help_alerts(store: Store, now: datetime, out: dict) -> list[int]:
         iid = store.new_incident(key, str(h.get("rule_id") or "kiosk_help"), str(h.get("entity_id") or ""), "P2", notes,
                                  now.isoformat())
         carry_to(store, iid, "P2")
+        if t is not None:
+            W.carry(store, iid, t)                     # its watch known from the start (card 1, review 23)
         store.update_incident(iid, state=Incident.ESCALATED, asked_at=now.isoformat(), escalated_at=now.isoformat(),
                               assignee=CHASE["escalates_to"])
         pressed = kiosk_words.read(h.get("said"))
@@ -1276,8 +1312,9 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out, terms(params))
         out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out, terms(params))
         out["rule_gone"] = rule_gone(store, now, client, params.behaviour("clear_minutes"), out)
+    out["cockpit_closed"] = cockpit_closes(store, out, terms(params))
     out["watch_over"] = watch_over(store, now, out, zone)
-    out["helped"] = help_alerts(store, now, out)
+    out["helped"] = help_alerts(store, now, out, terms(params))
     for inc in store.incidents(open_only=True):
         p = notes_of(inc)
         # the route's "what to do" edited while the alert is open (a villa's rules.yaml): the Kiosk fault's note and

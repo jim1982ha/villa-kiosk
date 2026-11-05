@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from datetime import datetime, timezone
 
 import pytest
 
@@ -88,7 +89,7 @@ def test_an_open_task_without_its_ticket_gets_one_once(agent):
     assert run(v.tickets.repair())["created"] == 1
     assert kiosk.tickets == [("Battery low", "sensor.example_battery")]
     assert st.task(lost)["todo_uid"] == "t1"
-    assert run(v.tickets.repair()) == {"created": 0, "reopened": 0, "resolved": 0, "helped": 0}   # nothing left to repair
+    assert run(v.tickets.repair()) == {"created": 0, "reopened": 0, "resolved": 0, "handed": 0}   # nothing left to repair
 
 
 def test_the_tasks_and_the_kiosks_tickets_agree(agent):
@@ -117,7 +118,9 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     # an alert's fault closed in the Kiosk: its incident closes too — the desk stops chasing it — and the
     # alert's message loses its buttons (villa, 2026-10-01: it kept reminding, then escalated to the owner)
     assert st.task(alert)["status"] == "closed_in_kiosk" and st.incident(iid)["closed_at"]
-    # owner, 2026-10-10: who closed it in the Cockpit, and when — as a button's footer says it
+    # owner, 2026-10-10: who closed it in the Cockpit, and when — as a button's footer says it, told by the desk
+    # (architecture review 23, card 1: with the watch its close wrote)
+    run(v.outcome.carry_out(alert_desk().tick(st, datetime.now(timezone.utc)), "alert-desk"))
     assert any("Done in the Cockpit on 10/10/2026 " in text for _, _, text in v.tg.edits)
 
 

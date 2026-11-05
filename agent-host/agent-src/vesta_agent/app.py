@@ -201,7 +201,7 @@ class Vesta:
         self.buttons = AlertButtons(state=self.state, skills=self.skills, incidents=incidents,
                                     thread=self.thread, run_job=self.run_code_job, facts=self.chat_facts)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
-                               settle_alert=self.thread.close, timezone=settings.timezone,
+                               timezone=settings.timezone,
                                story=lambda iid: self.notices.story(iid), restate_alert=self.thread.restate,
                                rechecked=lambda: {r for sk in self.skills.all().values() for r in sk.rechecks},
                                nightly_at=self.nightly_at)
@@ -733,8 +733,8 @@ class Vesta:
         """⚠️ A PRESS ON THE TABLET REACHES TELEGRAM WITHIN SECONDS (architecture review round 6, 2026-10-30): a Need help
         or a Done pressed on a card in the Kiosk waited for the next read of its faults, up to 5 minutes, then for the
         alert desk's next look, up to 5 more. The Kiosk now leaves a wake in the inbox (tablet.records_changed): the
-        faults are read at once (tickets.repair: a Done takes the alert's buttons off, a Need help is handed to the
-        desk), and a Need help handed starts the desk's frequent check now (Scheduler.frequent_now). Presses within
+        faults are read at once (tickets.repair: a Done or a Need help is handed to the desk), and a press handed starts
+        the desk's frequent check now (Scheduler.frequent_now): it takes the alert's buttons off, saying the close. Presses within
         RECORDS_GROUP_S of a read are one more read after it, never one each. The 5-minute read stays the safety net."""
         if self._records is not None:
             self._records = True                 # a read is running: one more after it
@@ -747,8 +747,9 @@ class Vesta:
                 except Exception:  # noqa: BLE001 — the 5-minute read tries again
                     log.exception("The Kiosk's faults could not be read after a press")
                     got = {}
-                if got.get("helped") and self.scheduler is not None:
-                    # the skills that answer alerts' buttons (skill.yaml on_reply: the alert desk) take the Need help now
+                if got.get("handed") and self.scheduler is not None:
+                    # the skills that answer alerts' buttons (skill.yaml on_reply: the alert desk) take the Need help, or
+                    # tell the close, now
                     self.scheduler.frequent_now(lambda sk: bool(sk.on_reply))
                 await asyncio.sleep(RECORDS_GROUP_S)
                 if not self._records:

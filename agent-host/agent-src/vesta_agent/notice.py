@@ -53,6 +53,8 @@ TAKEN_STAGE = "taken"
 CLEARED_STAGE = "cleared"
 #: The step of a close (message_format.STEPS "closed"): told by its bottom line while it stands (Notices.history_lines)
 CLOSED_STEP = "closed"
+#: The step a Need help makes (message_format.STEPS "escalated"): its line says the press (Notices.history_lines)
+ESCALATED_STAGE = "escalated"
 #: Between a step's line and the desk's words on the bottom line.
 STEP_SEP = ", "
 EXISTING = "existing"
@@ -65,10 +67,12 @@ def history_kept() -> int:
 
 
 def note_press(state, incident: int, label: str, name: str, mark: str | None = None, closes: bool = False,
-               labels: dict | None = None, place: str = ON_TELEGRAM) -> None:
+               labels: dict | None = None, place: str = ON_TELEGRAM, told: bool = False) -> None:
     """A button pressed on incident `incident`'s alert, kept in its history (the Kiosk's card says it: Notices.story).
     A button that closes the alert (skill.yaml `closes`: Done, Not a problem) is not kept: its close says "Done on
-    Telegram (…)." already. `labels`: the button's label in other languages (skill.yaml `labels`), so each chat's Status
+    Telegram (…)." already. One whose answer says the press (`told`: skill.yaml `tells` — Need help's "🆘 Need help on …
+    (Luc): Owner is asked to act.") is kept, its line left to that answer while it is the copy's last word
+    (history_lines; architecture review 23, card 4: Need help was said twice until someone acted). `labels`: the button's label in other languages (skill.yaml `labels`), so each chat's Status
     names the press in its own (owner, 2026-10-23). `place`: where it was pressed (message_format ON_TELEGRAM, ON_TABLET),
     as the Kiosk card's story says it — architecture review 21: a press on the tablet read "on Telegram" there.
 
@@ -80,6 +84,7 @@ def note_press(state, incident: int, label: str, name: str, mark: str | None = N
     history = state.incident_history(incident)
     history.append({"at": datetime.now(timezone.utc).isoformat(), "stage": PRESSED_STAGE, "label": label,
                     "name": name, **({"mark": mark} if mark else {}), **({"labels": dict(labels)} if labels else {}),
+                    **({"told": True} if told else {}),
                     **({"place": place} if place != ON_TELEGRAM else {})})
     state.set_incident_history(incident, _kept(history))
 
@@ -316,9 +321,15 @@ class Notices:
         # once something came after it (it came back), or as the close's own words once its watch is over (note_step)
         if shown and shown[-1].get("stage") == CLOSED_STEP and self.closed_now(incident):
             shown = shown[:-1]
-        for h in shown:
+        for i, h in enumerate(shown):
             roles = self._roles(h) if h.get("chats") or h.get("to") else set()
             if mine and roles and not roles & mine:
+                continue
+            # ⚠️ ONE LINE PER PRESS (architecture review 23, card 4): a press whose answer says it (skill.yaml `tells`:
+            # "🆘 Need help on … (Luc): Owner is asked to act.") is that answer while nothing but the escalation it made
+            # came after it — its own line once something did
+            if h.get("stage") == PRESSED_STAGE and h.get("told") and \
+                    all(x.get("stage") == ESCALATED_STAGE for x in history[i + 1:]):
                 continue
             # ⚠️ ONE RUN, THEN THE NEXT (owner, 2026-10-16, #43): a second run starts at its "- Back at …" line, which
             # says how many times it came (message_format.STEPS: one line, the shape of every other step)

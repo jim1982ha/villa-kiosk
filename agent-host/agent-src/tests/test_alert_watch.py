@@ -164,6 +164,16 @@ def test_telegram_the_cockpit_and_the_title_say_one_watch_whatever_reopen_hours(
                                                               if hours else (None, None, False))
 
 
+def test_an_alert_carries_its_watch_from_its_open(tmp_path):
+    # architecture review 23, card 1: closed in the Cockpit before the desk's first tick, an alert had no watch — back
+    # 2 minutes later, it opened a new number
+    store = Store(str(tmp_path / "s.sqlite"))
+    iid = desk.intake(store, door(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
+    task = store.last_task(f"incident:{iid}")
+    Problems(store).closed_in_kiosk(task["id"], "Closed in the Cockpit (JM)", at=T0.isoformat())
+    assert W.reopens(store.incident(iid), T0 + timedelta(minutes=2))
+
+
 def test_a_close_in_the_cockpit_is_watched_from_the_terms_the_desk_carried(tmp_path):
     store = Store(str(tmp_path / "s.sqlite"))
     iid = desk.intake(store, door(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
@@ -181,7 +191,7 @@ def test_a_watch_an_older_desk_carried_still_reads(tmp_path):
     # the Cockpit keeps that length, and a closed one keeps being watched, reopened and confirmed by it
     store = Store(str(tmp_path / "s.sqlite"))
     iid = desk.intake(store, door(), T0, occupancy_reader=lambda: "occupied")["incident_id"]
-    store.note(iid, {Notes.WATCH_MINUTES: 90.0})
+    store.note(iid, {Notes.WATCH_MINUTES: 90.0}, drop=(Notes.WATCH_TERMS,))    # this desk carries them from the open
     task = store.last_task(f"incident:{iid}")
     Problems(store).closed_in_kiosk(task["id"], "Closed in the Cockpit (JM)", at=T0.isoformat())
     assert seen(store, iid, T0 + timedelta(minutes=1)) == (T0 + timedelta(minutes=90),

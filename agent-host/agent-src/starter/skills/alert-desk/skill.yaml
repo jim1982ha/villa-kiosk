@@ -14,9 +14,10 @@ on_reply: "desk.py reply --incident {incident} --option {option} --from {role} -
 buttons:                      # under every message about an open alert; a press runs on_reply with its option
   # labels: the label in other languages — how each chat's Status names the press ("Terminé le … (JM)")
   # closes: on_reply closes the alert, and its close says the press ("✅ Done on … (JM)."): not also a line of its Status
+  # tells: on_reply's answer says the press ("🆘 Need help on … (JM): Owner is asked to act."): not a line of its own
   - {option: done, label: Done, closes: true,
      labels: {fr: Terminé, id: Selesai, de: Erledigt, es: Hecho, it: Fatto, nl: Klaar, zh: 已完成, ja: 完了, ko: 완료}}
-  - {option: need_help, label: Need help, mark: help,     # mark: its footer's icon (🆘)
+  - {option: need_help, label: Need help, mark: help, tells: true,     # mark: its footer's icon (🆘)
      labels: {fr: Besoin d'aide, id: Butuh bantuan, de: Brauche Hilfe, es: Necesito ayuda, it: Serve aiuto,
               nl: Hulp nodig, zh: 需要帮助, ja: 助けが必要, ko: 도움 필요}}
   # closed with nothing done, never read again while the problem lasts; back after it ended, it is a new alert (owner,

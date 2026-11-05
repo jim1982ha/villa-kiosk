@@ -653,10 +653,14 @@ def _without_ai(path: str, steps, where: str) -> list[dict]:
 
 
 def _buttons(raw) -> list[dict]:
-    """skill.yaml `buttons`: [{option, label, mark, labels, closes}] — an option is a short word (it travels in Telegram's 64
-    bytes of button data, button_data.ALERT), a label what the button says, a mark one of message_format.MARK_ICONS,
-    `labels` the label in other languages ({code: label}: how each chat's Status names a press, owner 2026-10-23),
-    `closes` true when on_reply closes the alert, whose close says the press (notice.note_press keeps no line of it)."""
+    """skill.yaml `buttons`: [{option, label, mark, labels, closes, tells}] — an option is a short word (it travels in
+    Telegram's 64 bytes of button data, button_data.ALERT), a label what the button says, a mark one of
+    message_format.MARK_ICONS, `labels` the label in other languages ({code: label}: how each chat's Status names a
+    press, owner 2026-10-23), `closes` true when on_reply closes the alert, `tells` true when on_reply's answer says the
+    press itself — a close always does ("✅ Done on … (JM).") — so its line is left to that answer while it is a copy's
+    last word (notice.Notices.history_lines; a close's: note_press keeps none).
+    ⚠️ ONE LINE PER PRESS (architecture review 23, card 4): Need help's answer, "🆘 Need help on … (Luc): Owner is asked
+    to act.", stood under a "- 🆘 Need help on … (Luc)" line of its own; only the closing buttons were left out."""
     if raw is None:
         return []
     from vesta_shared.message_format import MARK_ICONS
@@ -678,10 +682,10 @@ def _buttons(raw) -> list[dict]:
         if labels is not None and not (isinstance(labels, dict) and all(
                 isinstance(k, str) and isinstance(v, str) and 0 < len(v.strip()) <= 30 for k, v in labels.items())):
             raise SkillError(f"buttons[{i}]: labels must be {{language code: label}}, each label 30 characters at most")
-        closes = b.get("closes", False)
-        if not isinstance(closes, bool):
-            raise SkillError(f"buttons[{i}]: closes must be true or false")
-        out.append({"option": option, "label": label, "mark": mark, "closes": closes,
+        closes, tells = b.get("closes", False), b.get("tells", False)
+        if not isinstance(closes, bool) or not isinstance(tells, bool):
+            raise SkillError(f"buttons[{i}]: closes and tells must be true or false")
+        out.append({"option": option, "label": label, "mark": mark, "closes": closes, "tells": closes or tells,
                     **({"labels": {k: v.strip() for k, v in labels.items()}} if labels else {})})
     return out
 

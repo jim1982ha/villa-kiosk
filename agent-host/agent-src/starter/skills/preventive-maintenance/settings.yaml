@@ -76,9 +76,9 @@ told_cleared:
 # the alert desk's clear_minutes (its rules.yaml, read there: one setting) after the close and still bad: the fault
 # opens again ("Still there after the close."), said on the night check's message that told it (a line of its Status
 # section as the alert card says it, the one before it struck: no separate message, owner 2026-10-27); a fault no
-# message told (a P3) is told once to `tell` (a role) under `title`, `words` its body — {done} where the close was given
-# ("Done in the Cockpit", "Done on Telegram"), {when} the close's time, {what} the fault.
+# message told (a P3) is told once to `tell` (a role) under `title`, `words` its body — {close} the person's close as
+# they made it ("Done in the Cockpit on 04/11/2026 23:45 (JM)", "Done on Telegram on … (JM)"), {what} the fault.
 still_there_after_close:
   tell: fm
   title: "Fault still there after the close"
-  words: "{done} on {when}, but still there: {what}. Please look again."
+  words: "{close}, but still there: {what}. Please look again."

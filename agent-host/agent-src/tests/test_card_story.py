@@ -33,9 +33,7 @@ def villa(tmp_path, kiosk=None):
     notices = Notices(state, lambda: Policy({}, ROSTER), "UTC")
     k = kiosk or FakeKiosk()
 
-    async def settle(_iid, _note, **_kw):
-        return 0
-    t = Tickets(kiosk=k, state=state, store_path=s.store_path, settle_alert=settle, story=notices.story)
+    t = Tickets(kiosk=k, state=state, store_path=s.store_path, story=notices.story)
     st = Store(s.store_path)
     iid = st.new_incident("k", "pump_schedule", "switch.example_pump", "P2", {"message": "House pump did not run"})
     tid, _ = Problems(st).open_task("incident", iid, "pump_schedule", "switch.example_pump", "House pump did not run")
@@ -184,9 +182,7 @@ def test_a_fault_the_repair_makes_tells_its_story_in_that_same_repair(tmp_path):
     notices = Notices(state, lambda: Policy({}, ROSTER), "UTC")
     k = FakeKiosk()
 
-    async def settle(_iid, _note, **_kw):
-        return 0
-    t = Tickets(kiosk=k, state=state, store_path=s.store_path, settle_alert=settle, story=notices.story)
+    t = Tickets(kiosk=k, state=state, store_path=s.store_path, story=notices.story)
     st = Store(s.store_path)
     iid = st.new_incident("k", "watchdog", "lock.example", "P2", {"message": "Example lock unavailable"})
     Problems(st).open_task("incident", iid, "watchdog", "lock.example", "Example lock unavailable")

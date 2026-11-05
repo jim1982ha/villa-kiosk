@@ -1218,3 +1218,23 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
 - **A close keeps its own step: `notice.close_step`** (card 6), from `IncidentThread.close` when the incident is closed
   (`Notices.closed_now`; PlainWords never): the close's words and languages; a "Closing note sent" step standing takes
   them, a worded one or the watch's end stays. The Cockpit's close still has no watch (round 21's Not done).
+
+## A person's close told by its desk, one line per press, a close kept as made (architecture review 23, 2026-11-05, 0.12.456)
+
+- **The Cockpit's close goes through the desk** (cards 1, 2; round 21's Not done). It was written by the engine
+  (`Tickets._press` → `settle_alert`), which knew neither the watch nor "Not a problem" on a person's ticket. Now
+  `Problems.person_done(IN_COCKPIT)` closes the incident as before (state is the engine's, at once) and leaves mail,
+  Notes.KIOSK_CLOSED; the desk's tick tells it (`cockpit_closes`) through `closed_said`, which a Telegram Done uses too
+  (watched unless the desk reads it again first). The engine starts the desk at once (`repair()["handed"]` →
+  `Scheduler.frequent_now`). The desk carries its terms from the open, so a close before its first tick has a watch.
+  A close and a reopening in one read are told in that order at the next tick; the close then keeps no step of its own
+  (IncidentThread.close records one only while closed).
+- **One line per press: skill.yaml `tells`** (card 4). A button whose answer says the press (Need help) is still kept
+  (the Kiosk card's story names who pressed), and `history_lines` leaves its line to the answer while only the
+  escalation it made follows it.
+- **A person's close kept on its task** (cards 6, 7): `close_task(at=)` writes `done_at` and `last_closed_at` at the
+  Kiosk's moment, `closed_in_kiosk` keeps the words and who; `Problems.close_said` is the one writer of "Done in the
+  Cockpit on … (JM)" for the still-there message (`{close}`) and the night message's "done" step
+  (`nightly.told_closes`: the message's story is the record, a close before the message or after a settled step is
+  not news). The night fault's "VESTA confirms by" now counts from the person's close too (done_at).
+

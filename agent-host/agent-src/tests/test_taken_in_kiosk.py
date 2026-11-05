@@ -37,10 +37,8 @@ def villa(tmp_path):
         said.append((iid, note))
         return 1
 
-    async def settle(_iid, _note, **_kw):
-        return 0
     path = str(tmp_path / "agent.db")
-    t = Tickets(kiosk=k, state=_State(), store_path=path, settle_alert=settle, timezone="UTC", restate_alert=restate)
+    t = Tickets(kiosk=k, state=_State(), store_path=path, timezone="UTC", restate_alert=restate)
     st = Store(path)
     asked = datetime.now(timezone.utc) - timedelta(minutes=5)
     iid = st.new_incident("k", "watchdog", "lock.example_door", "P2", {"message": "Door unavailable"}, asked.isoformat())

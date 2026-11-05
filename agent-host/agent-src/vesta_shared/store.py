@@ -127,6 +127,11 @@ class Notes:
     # pressed Need help on this alert's card in the Kiosk, and when (kiosk_words.helped) — the desk escalates it as a
     # Telegram Need help does
     KIOSK_HELP = "kiosk_help"
+    # ⚠️ A CLOSE IN THE COCKPIT IS TOLD BY THE DESK (architecture review 23, card 1): mail, a person's Done or "Not a
+    # problem" on this alert's card in the Kiosk, as the Kiosk recorded it (kiosk_words.closed, stored) — the desk tells
+    # it in every chat with the watch its close wrote, as it tells a Telegram Done. The engine told it itself, without
+    # the watch: "(closed)" and no "Watch 4h", and a return within minutes opened a new number
+    KIOSK_CLOSED = "kiosk_closed"
     # the alert's claim, on an alert the desk opened for a Need help on a fault that had none (a night-check finding, a
     # person's ticket): what it stands for, "task:<id>" or "kiosk:<ticket id>" — its close closes that too
     HELP_OF = "help_of"
@@ -180,7 +185,11 @@ class Store:
         # close the Kiosk did not receive is redone as it was meant (architecture review, 2026-10-14)
         # reopen_note: what its fault's reopening says ("Back again." / "Still there after the close.") — the desk's words
         # were dropped on the way and the Kiosk wrote its own "Back again" for both (architecture review, 2026-10-18)
-        for col in ("source", "check_text", "reopened_at", "reopened_by", "close_note", "closed_who", "reopen_note"):
+        # last_closed_at: when it was last closed — kept when it opens again, as close_note and closed_who are (done_at
+        # is not): "Done in the Cockpit on 04/11/2026 23:45 (JM), but still there" said the read's time and no one
+        # (architecture review 23, card 6)
+        for col in ("source", "check_text", "reopened_at", "reopened_by", "close_note", "closed_who", "reopen_note",
+                    "last_closed_at"):
             if col not in cols:
                 self.db.execute(f"ALTER TABLE tasks ADD COLUMN {col} TEXT")
         # reopen_told_at: when someone was told of a PERSON's reopening of the task's fault in the Kiosk — NULL until a
@@ -521,9 +530,12 @@ class Store:
             q += " WHERE status=?"; args.append(status)
         return [dict(r) for r in self.db.execute(q + " ORDER BY created_at", args)]
 
-    def close_task(self, task_id: int, status: str = "done", note: str | None = None, who: str | None = None):
-        self.db.execute("UPDATE tasks SET status=?, done_at=?, close_note=?, closed_who=? WHERE id=?",
-                        (status, _now(), note or None, who or None, task_id))
+    def close_task(self, task_id: int, status: str = "done", note: str | None = None, who: str | None = None,
+                   at: str | None = None):
+        """Closed as `status` at `at` (now when not said: a person's close the Kiosk recorded earlier says its own)."""
+        at = at or _now()
+        self.db.execute("UPDATE tasks SET status=?, done_at=?, last_closed_at=?, close_note=?, closed_who=? WHERE id=?",
+                        (status, at, at, note or None, who or None, task_id))
         self.db.commit()
 
     # proposals -------------------------------------------------------------
