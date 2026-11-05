@@ -63,8 +63,9 @@ export interface ReadinessCheck {
   goes?: CheckLink[];
 }
 
-/** A word of a check's line, and the place it opens: Open issues on these faults' devices, or the Tickets tab. */
-export type CheckLink = { word: string; to: { place: "faults"; ids: string[] } | { place: "tickets" } };
+/** A word of a check's line, and the place it opens: Open issues on these faults' devices, the Tickets tab, or its own
+ *  devices' list (the devices not reporting: owner, 2026-11-05, a linked word as "faults" and "tickets", not a button). */
+export type CheckLink = { word: string; to: { place: "faults"; ids: string[] } | { place: "tickets" } | { place: "devices"; list: CheckTarget } };
 
 /**
  * A check's own devices, as the list its button opens.
@@ -198,7 +199,9 @@ export function buildReadiness(
       ? "Every configured device is reporting."
       : `${notAnswering(offline, "offline or not reporting", "device")}.`,
     entityIds: offline,
-    opens: { label: "View unavailable devices", group: { title: "Unavailable devices", icon: WifiOff, entityIds: offline }, health: true },
+    // its words open the list, as "faults" and "tickets" do on the tickets check (owner, 2026-11-05: no button)
+    goes: offline.length ? [{ word: offline.length === 1 ? "device" : "devices",
+      to: { place: "devices", list: { label: "Unavailable devices", group: { title: "Unavailable devices", icon: WifiOff, entityIds: offline }, health: true } } }] : [],
   });
 
   // ── Doors locked ─────────────────────────────────────────────────────────
