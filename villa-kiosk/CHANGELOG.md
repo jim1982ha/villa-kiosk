@@ -1,3 +1,10 @@
+## 2.496.725
+
+What you will see:
+- The remove icons' tooltips each name what they remove, in the screen's own words: "Delete the announcement
+  <announcement>" (it said "Delete this announcement"), "Take <device> off Asleep between reports" (it said "off the
+  Asleep list", a name the screen does not show).
+
 ## 2.496.724
 
 What you will see:

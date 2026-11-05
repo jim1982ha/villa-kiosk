@@ -42,8 +42,8 @@ import { PageLink } from "@/components/messages/AnnouncementContent";
 
 /** A Settings card's remove, a small round icon at the right of its strip (owner, 2026-11-06): a bin when it deletes
  *  the thing (a group, a device's settings, an announcement), an ✕ when it takes it off a list or undoes a link (a chat
- *  off a role's list, a device off the Asleep list, an unbind). `label` is its tooltip and its accessible name, saying
- *  what goes ("Delete the group Kitchen Temperature", "Take Back Door off the Asleep list"). */
+ *  off a role's list, a device off Asleep between reports, an unbind). `label` is its tooltip and its accessible name, saying
+ *  what goes ("Delete the group Kitchen Temperature", "Take Back Door off Asleep between reports"). */
 export interface CardRemove { icon: "bin" | "x"; label: string; run: () => void }
 
 /** A card's state: its words and its tone's class (fm/tone pillClass, ACCENT_PILL, QUIET_PILL). */

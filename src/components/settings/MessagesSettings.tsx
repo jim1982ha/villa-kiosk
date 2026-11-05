@@ -86,6 +86,6 @@ function FullScreenCard({ item, onRemove }: { item: FullScreenAnnouncement; onRe
           </UnitField>
         </div>
       }
-      remove={{ icon: "bin", label: "Delete this announcement", run: onRemove }} />
+      remove={{ icon: "bin", label: `Delete the announcement ${item.title}`, run: onRemove }} />
   );
 }

@@ -121,10 +121,10 @@ const KINDS = [
   ["a bound 3D object (named after its entity)", bindings("bound"), "Terrace Lamp", "", ["x", "Unbind Lamp_Kitchen from Terrace Lamp"]],
   ["an object bound to nothing", bindings("unbound"), "Mesh_Unnamed_042", "Bind"],
   ["an entity no object shows", bindings("unshown"), "Ceiling Fan", "Bind"],
-  ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "", ["x", "Take Back Door off the Asleep list"]],
+  ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "", ["x", "Take Back Door off Asleep between reports"]],
   ["a device of Devices", drawIn(h(ConfigEditor)), "Pool Pump", "", ["bin", "Remove Pool Pump's settings"]],
   ["a 3D object whose entity is gone", drawIn(h(ConfigEditor)), "fan.example_gone_fan", "Point it there"],
-  ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", "", ["bin", "Delete this announcement"]],
+  ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", "", ["bin", "Delete the announcement Front gate doorbell"]],
   ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", "", ["x", `Take Example House FM group off the ${ROLE_LABELS.ops}'s list`]],
 ];
 console.log("  every record of Settings is the Cockpit's card:");

@@ -52,7 +52,7 @@ export default function UnavailableByDesign({ title, tip }: { title: string; tip
             <RecordCard key={id} title={name(id)} lead={<Moon size={16} aria-hidden />} room={roomOf({ entityId: id })}
               tone={marked(id)}
               pills={<span><IdText id={id} /></span>}
-              remove={{ icon: "x", label: `Take ${name(id)} off the Asleep list`, run: () => set(id, false) }} />
+              remove={{ icon: "x", label: `Take ${name(id)} off Asleep between reports`, run: () => set(id, false) }} />
           ))}
         </div>
       )}
