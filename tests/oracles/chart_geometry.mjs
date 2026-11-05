@@ -174,9 +174,12 @@ console.log("\n  an outage you can SEE and POINT AT (2.496.149 — a pump's 3-mi
   const { outageLook } = await import("@/components/panels/chartUtils");
   const { STATUS_COLOR: SC, NOT_KEPT_COLOR: NK } = await import("@/utils/stateColors");
   const striped = outageLook({ from: 0, to: 1, within: "day" }).background;
-  ck("  ...its key is the band's look: striped for a step offline inside it, grey for an outage, its own for not kept",
+  ck("  ...its key is the band's look: striped for every outage, at every step; its own colour for not kept",
      /repeating-linear-gradient/.test(striped) && striped.includes(SC.unavailable)
-     && outageLook({ from: 0, to: 1 }).background === SC.unavailable && outageLook({ from: 0, to: 1, notKept: true }).background === NK
+     // owner, 2026-11-05 ("is unavailable handled the same way here?"): a 24h chart's outage was a faint grey band,
+     // the week's striped: one look for an outage at every step
+     && outageLook({ from: 0, to: 1 }).background === striped && outageLook({ from: 0, to: 1, notKept: true }).background === NK
+     && /s\.bands\.filter\(\(b\) => !b\.gap\.notKept\)/.test(lc) && /b\.gap\.notKept \? <rect/.test(lc)
      && /const outageKey = \(gap: HistoryGap\)[^\n]*outageLook\(gap\)/.test(lc)
      && /background: outageLook\(b\.gap\)\.background/.test(lc), striped);
 }

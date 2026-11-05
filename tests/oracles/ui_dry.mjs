@@ -118,10 +118,14 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
   // id with its "· 3D object: …" pushed the toggle and the pencil down a line of their own)
   const row = srcOf("components/settings/EntityMapRow.tsx");
   const tools = row.match(/<span className="entity-id-tools">([\s\S]*?)\n {12}<\/span>/)?.[1] ?? "";
-  ck("a device's id: pencil and chevron on its first line at the right, the toggle under it, the id at most 2 lines",
+  ck("a device's id: toggle, pencil and chevron on its one line at the right at every width, the id at most 2 lines",
      /<Pencil /.test(tools) && /<ChevronDown /.test(tools) && /<ChevronRight /.test(tools) && !/ConfirmToggle/.test(tools)
      && /<span className="entity-id-confirm" onClick=\{[^}]*\} onKeyDown=\{[^}]*\}>\s*<ConfirmToggle /.test(row)
-     && /\.entity-id-display \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;\s*grid-template-areas: "name tools" "confirm confirm";/.test(css)
+     // owner, 2026-11-05: "the toggle … on a second line: it shall never be possible": one row at every width, the
+     // toggle's words kept for screen readers and hidden on a narrow row (its shield and On | Off stay)
+     && /\.entity-id-display \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto auto;\s*grid-template-areas: "name confirm tools";[^}]*container-type: inline-size;/.test(css)
+     && !/grid-template-areas: "name tools"/.test(css)
+     && /@container \(max-width: \d+px\) \{\s*\.entity-id-confirm \.setting-row-name > span \{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset\(50%\);/.test(css)
      && /\.entity-id-text \{[^}]*-webkit-line-clamp: 2;[^}]*overflow: hidden;[^}]*overflow-wrap: anywhere;/.test(css)
      && /title=\{\[m\.entityId, \.\.\.\(objects \?\? \[\]\)\]\.join/.test(row)
      && !/\.entity-id-text \{[^}]*break-all/.test(css), tools);

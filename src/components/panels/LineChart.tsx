@@ -175,9 +175,8 @@ export default function LineChart({ lines, window, height = 150, status, label, 
             <g className="chart-grid">{leftAxis.map((t) => <line key={t.v} x1="0" y1={t.y} x2={W} y2={t.y} />)}</g>
             {/* A band per line, in its own slice of the plot: which sensor was
                 out is part of the fact. Before the lines — SVG paints in order. */}
-            {g.series.flatMap((s, i) => s.bands.map((b, j) => (b.gap.within ? null :
-              <rect key={`gap${i}-${j}`} x={b.x} y={b.y} width={b.w} height={b.h} fill={outageLook(b.gap).background} opacity={outageLook(b.gap).opacity} />
-            )))}
+            {g.series.flatMap((s, i) => s.bands.map((b, j) => (b.gap.notKept ? <rect key={`gap${i}-${j}`} x={b.x} y={b.y}
+              width={b.w} height={b.h} fill={outageLook(b.gap).background} opacity={outageLook(b.gap).opacity} /> : null)))}
             {!nothing && g.series.map((sg, i) => {
               const l = lines[i];
               const cls = `${l.cls ?? ""}${l.dashed ? " dashed" : ""}`;
@@ -213,9 +212,9 @@ export default function LineChart({ lines, window, height = 150, status, label, 
             )}
             {hover && <line x1={hover.x} y1={TOP} x2={hover.x} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
           </svg>
-          {/* ⚠️ A STEP OFFLINE INSIDE IT (owner, 2026-11-05): its whole width, in the stripes of a state timeline's cell
-              that saw more than one state (timelineCells.cellBackground), unavailable and clear: the line runs through */}
-          {g.series.flatMap((s, i) => s.bands.filter((b) => b.gap.within).map((b, j) => (
+          {/* ⚠️ AN OUTAGE (owner, 2026-11-05): its whole step, in the stripes of a state timeline's cell that saw more than
+              one state (chartUtils.outageLook), at every step: a step offline inside it has the line running through */}
+          {g.series.flatMap((s, i) => s.bands.filter((b) => !b.gap.notKept).map((b, j) => (
             <i key={`within${i}-${j}`} className="chart-within" aria-hidden
               style={{ left: `${(b.x / W) * 100}%`, width: `${(b.w / W) * 100}%`, top: `${(b.y / H) * 100}%`, height: `${(b.h / H) * 100}%`,
                 background: outageLook(b.gap).background }} />

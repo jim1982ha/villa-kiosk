@@ -1,3 +1,13 @@
+## 2.496.706
+
+What you will see:
+- A device's chart over 1h or 24h: an outage is striped like on 1w, 1m and 1y (it was a faint grey band, hard to
+  see), and its tooltip's key is that stripe, not the line's green dot. Its (i) says "Striped: unavailable at least
+  once in those 5min."
+- Advanced Settings › Devices: "Confirm before toggling" never drops to a second line. Every device keeps one line:
+  its name (2 lines at most), the toggle, the pencil and the chevron. On a narrow screen the toggle shows its shield
+  and On | Off without its words (the words still show on hover and are read aloud).
+
 ## 2.496.705
 
 What you will see:

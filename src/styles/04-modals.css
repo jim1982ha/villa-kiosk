@@ -571,17 +571,21 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* ⚠️ THE ID KEEPS A READABLE WIDTH (owner, 2026-11-03: on a phone "fan.cei / ling_fa / n_mas…" was cut every few
    letters beside "Confirm before toggling"): the id takes at least 180px, and the actions wrap onto their own line,
    on the right, when the two no longer fit; a long id breaks at its dots and underscores first. */
-/* ⚠️ ONE FIRST LINE (owner, 2026-11-05): the id, at most 2 lines, with the pencil and the chevron at its right; the
-   toggle on the line under it, at the right. On a wide screen all four keep one line. */
-.entity-id-display { display: grid; grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "name tools" "confirm confirm"; align-items: center; gap: 6px 8px; width: 100%; color: var(--text-secondary); }
+/* ⚠️ ONE LINE, AT EVERY WIDTH (owner, 2026-11-05: the pencil and the chevron on the id's line; "the toggle … on a second
+   line: it shall never be possible"): the id at most 2 lines, then the toggle, the pencil and the chevron at its
+   right. On a narrow row the toggle's words go (its shield and On | Off stay, the words still read aloud). */
+.entity-id-display { display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "name confirm tools"; align-items: center; gap: 6px 8px; width: 100%; color: var(--text-secondary);
+  container-type: inline-size; }
 .entity-id-text { grid-area: name; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .entity-id-tools { grid-area: tools; display: flex; align-items: center; gap: 4px; }
 .entity-id-tools .icon-btn { width: 30px; height: 30px; }
-.entity-id-confirm { grid-area: confirm; justify-self: end; }
-@media (min-width: 721px) {
-  .entity-id-display { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name confirm tools"; }
+.entity-id-confirm { grid-area: confirm; white-space: nowrap; }
+@container (max-width: 520px) {
+  .entity-id-confirm .setting-row-name > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .entity-id-confirm .on-off.config-confirm .on-off-switch { min-width: 84px; }
+  .entity-id-confirm .on-off.config-confirm .on-off-switch button { padding: 0 8px; }
 }
 @media (hover: hover) {
   .icon-btn-danger:hover { color: var(--status-danger); }

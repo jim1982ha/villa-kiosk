@@ -253,7 +253,7 @@ console.log("\n  every chart's (i): what it shows and what it may not (owner, 20
   const { barTipRows, barLayout } = await import("@/utils/barChart");
   const about = Object.fromEntries(RANGES.map((r) => [r.key, chartAbout("average", r.grainMs, now - r.hours * HOUR, kept)]));
   ck("1h and 24h: every reading in five-minute steps, a band over each five minutes an outage touched",
-     about["1h"] === about["24h"] && about["24h"] === "Every reading, in 5min steps. Grey: unavailable at least once in those 5min."
+     about["1h"] === about["24h"] && about["24h"] === "Every reading, in 5min steps. Striped: unavailable at least once in those 5min."
      // as wide as drawn: a 0.46s drop is a band of the five minutes it touched (widenGaps), its tooltip the real length
      && widenGaps([{ from: 1_000_056_000, to: 1_000_056_460 }], 0, 2e9)[0].to - widenGaps([{ from: 1_000_056_000, to: 1_000_056_460 }], 0, 2e9)[0].from === PERIOD_MS["5minute"], about["24h"]);
   ck("  ...1w: hourly averages, an hour striped when unavailable part of it, an outage under the finest figures' 5min may not show",
