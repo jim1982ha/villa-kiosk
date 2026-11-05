@@ -55,7 +55,9 @@ console.log("\n  the statistics path:");
   } });
   const now = t0 + 24 * Hr;
   const r = await loadOne(port, { kind: "statistics", ids: ["sensor.a", "sensor.b"], period: "hour", fields: ["mean", "max"], hours: 24 }, now);
-  ck("one request for every id and field", calls.length === 1 && calls[0].ids.length === 2 && calls[0].types.join() === "mean,max", calls);
+  // owner, 2026-11-05: and one of the five-minute means of those it has figures of, which say an hour offline inside it
+  ck("one request for every id and field, one of the five-minute means for an id with figures", calls.length === 2 && calls[0].ids.length === 2
+     && calls[0].types.join() === "mean,max" && calls[1].period === "5minute" && calls[1].ids.join() === "sensor.a", calls);
   ck("  ...starting where the window starts: now minus the range", calls[0].start === new Date(t0).toISOString(), calls[0].start);
   ck("a series per id per field", r["sensor.a"].mean.points.length === 3 && r["sensor.a"].max.points[0].v === 2);
   ck("an id the recorder has nothing for: an outage, not an empty zero", r["sensor.b"].mean.points.length === 0 && r["sensor.b"].mean.gaps.length === 1, r["sensor.b"]);
@@ -64,7 +66,7 @@ console.log("\n  the statistics path:");
     { kind: "statistics", ids: ["sensor.a"], period: "hour", fields: ["mean"], hours: 24 }, now).catch(() => { rejected = true; });
   ck("a failed request REJECTS — the caller's status is 'failed', not 'no data'", rejected);
   const none = await loadOne(port, { kind: "statistics", ids: [], period: "hour", fields: ["mean"], hours: 24 }, now);
-  ck("no ids: no request", Object.keys(none).length === 0 && calls.length === 1);
+  ck("no ids: no request", Object.keys(none).length === 0 && calls.length === 2);
   const since = t0 + 3 * Hr;
   ck("a calendar period runs from its start to now", JSON.stringify(requestWindow({ kind: "statistics", ids: [], period: "day", fields: ["change"], since }, now)) === JSON.stringify({ from: since, to: now }));
 }

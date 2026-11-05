@@ -843,6 +843,8 @@ input[type="range"]::-moz-range-thumb {
 .chart-range-chip.loading { opacity: 0.6; }
 .chart-range-chip-kept { font-weight: 600; opacity: 0.8; }
 /* the ribbon: in the strip under the plot the chart already has, so it adds no height and shifts nothing */
+/* a step of the figures offline inside it (LineChart, HistoryGap.within): striped over the plot, under the tooltip */
+.chart-within { position: absolute; opacity: 0.45; pointer-events: none; }
 .chart-range-ribbon { position: absolute; left: 0; right: 0; height: 4px; border-radius: 999px; background: var(--bg-input); overflow: hidden; pointer-events: none; }
 .chart-range-ribbon i { position: absolute; top: 0; bottom: 0; background: var(--accent); }
 .chart-range-none { position: absolute; inset: 0 12px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: var(--text-xs); color: var(--text-secondary); pointer-events: none; }

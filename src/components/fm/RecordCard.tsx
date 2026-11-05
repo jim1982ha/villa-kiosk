@@ -65,15 +65,25 @@ export interface RecordCardProps {
   framed?: boolean;
   /** The frame's tint: fm/tone's toneClass ("tone-warn", "tone-danger"), none when all is well. */
   tone?: string;
-  /** More of its state for its buttons' row (ActionsRow), beside its `status`: a ticket's pill of who last moved it,
-   *  drawn by the caller among its tags on a narrow card (STATE_INLINE). */
-  rowState?: ReactNode;
+  /** Its state said among its tags (a ticket's pill of who last moved it): drawn there, after `pills`, and on its
+   *  buttons' row on a wide card (ActionsRow), by this card alone. */
+  tagState?: RecordStatus | null;
   /** Its status is shown in a buttons' row of its `body` (an open issue's first problem) on a wide card. */
   statusInBody?: boolean;
 }
 
-/** The class of a pill that its card's buttons' row shows on a wide card (ActionsRow): there, it is not drawn here. */
-export const STATE_INLINE = "fm-state-inline";
+/** The class of a pill that its card's buttons' row shows on a wide card (ActionsRow): there, it is not drawn here.
+ *  ⚠️ PLACED HERE ONLY (architecture review 23): each kind of card marked its own pills with it and passed its own hints
+ *  (rowState, statusInBody), three things kept in step by hand; a card's state now goes in once (`status`, `tagState`)
+ *  and an Inbox problem's pill through StateWhereItStands. */
+const STATE_INLINE = "fm-state-inline";
+
+/** A state pill where it stands in a card's text, hidden there on a wide card when its buttons' row says it
+ *  (`atButtons`): an Inbox problem's pill of who last moved it (IssueCard). */
+export function StateWhereItStands({ atButtons, className, children }: { atButtons: boolean; className?: string; children: ReactNode }) {
+  const cls = [className, atButtons ? STATE_INLINE : ""].filter(Boolean).join(" ");
+  return <span className={cls || undefined}>{children}</span>;
+}
 
 /** ⚠️ A CARD'S STATE ON ITS BUTTONS' LINE (owner, 2026-11-05: "the coloured pill … on the same line as the buttons on
  *  desktop, vertically centered", the "Unavailable" pill too, on every card of every tab): a card's buttons' row, its
@@ -146,12 +156,13 @@ function CardPillLine({ room, check, status, atButtons }: {
 }
 
 export default function RecordCard({ title, status, lead, titlePills, room, when, check, pills, notes, body, folded, photoIds,
-  pages, amount, actions, erase, onOpen, framed = true, tone, rowState, statusInBody }: RecordCardProps) {
+  pages, amount, actions, erase, onOpen, framed = true, tone, tagState, statusInBody }: RecordCardProps) {
   const whole = folded === undefined;
   const statuses = [status ?? []].flat();
   const row = !!actions || (pages?.length ?? 0) > 0;
-  const rowPills = row && (statuses.length > 0 || rowState)
-    ? <>{statuses.map((s) => <StatusPill key={s.text} {...s} />)}{rowState}</> : undefined;
+  const rowPills = row && (statuses.length > 0 || tagState)
+    ? <>{statuses.map((s) => <StatusPill key={s.text} {...s} />)}{tagState && <StatusPill {...tagState} />}</> : undefined;
+  const tags = (pills || tagState) && <>{pills}{tagState && <StateWhereItStands atButtons={row}><StatusPill {...tagState} /></StateWhereItStands>}</>;
   const inside = (
     <>
       <div className="fm-record-head">
@@ -167,7 +178,7 @@ export default function RecordCard({ title, status, lead, titlePills, room, when
       <div className="fm-record-body">
         <div className="fm-row-main">
           {!whole && <span className="fm-card-folded">{folded}</span>}
-          {whole && pills && <RecordMeta>{pills}</RecordMeta>}
+          {whole && tags && <RecordMeta>{tags}</RecordMeta>}
           {whole && (body ?? <RecordNotes notes={notes ?? []} />)}
           {whole && (photoIds?.length ?? 0) > 0 && <EvidenceRow photoIds={photoIds!} disabled />}
         </div>

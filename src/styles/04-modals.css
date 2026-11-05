@@ -674,6 +674,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* A chart's step and aggregation beside its title ("LAST MONTH · daily avg", historyRange ChartStep, owner
    2026-10-20): smaller, muted, never upper-cased with the title. */
 .chart-step { font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); text-transform: none; letter-spacing: 0; }
+/* its (i): what the chart shows and what it may not (ChartStep, chartUtils.chartAbout) */
+.chart-step .chart-about { margin-left: 4px; vertical-align: middle; }
 
 /* A label and its one short field on the same line, the field on the right (owner, 2026-10-22). */
 .settings-field-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }

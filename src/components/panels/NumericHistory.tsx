@@ -20,9 +20,10 @@
 
 import { useState } from "react";
 import LineChart, { type ChartFilter } from "./LineChart";
-import { useHistoryRange, HistoryHeader, ChartStep } from "./historyRange";
+import { useHistoryRange, HistoryHeader, ChartStep, useKeptFrom } from "./historyRange";
 import { ExpandableChart } from "./ChartWindow";
-import { aggregationWords } from "./chartUtils";
+import { aggregationWords, chartAbout } from "./chartUtils";
+import { HOUR_MS } from "@/utils/localDay";
 import { useHistorySource } from "@/hooks/useHistorySource";
 import type { TimeWindow } from "@/utils/lineChart";
 import {
@@ -85,7 +86,9 @@ export default function NumericHistory({ series, named = false, name }: {
 
   // the chart, larger (owner, 2026-10-29): the same chart, its header, toggle and slider bound to the same choices
   // (ExpandableChart: the larger one belongs to the chart, every layout and the Weather window alike)
-  const header = (title: string) => <HistoryHeader title={title} picker={picker} step={step} />;
+  const kept = useKeptFrom();
+  const about = chartAbout("average", range.grainMs, Date.now() - range.hours * HOUR_MS, kept);
+  const header = (title: string) => <HistoryHeader title={title} picker={picker} step={step} about={about} />;
   /** A one-line chart, small (110px) or at the window's height, with its filter. */
   const oneLine = (s: NumericSeries, label: string) => {
     const f = filtered(s);
@@ -129,7 +132,7 @@ export default function NumericHistory({ series, named = false, name }: {
         <div className="field" key={s.id}>
           {i === 0
             ? header(`${s.label}, ${range.title.toLowerCase()}`)
-            : <label className="entity-label">{s.label}, {range.title.toLowerCase()}<ChartStep words={step} /></label>}
+            : <label className="entity-label">{s.label}, {range.title.toLowerCase()}<ChartStep words={step} about={about} /></label>}
           {/* the larger one carries the toggle whichever chart it is: it changes them all, as the first one's does */}
           <ExpandableChart title={s.label} head={header(`${s.label}, ${range.title.toLowerCase()}`)}
             chart={oneLine(s, `${s.label} history`)} />

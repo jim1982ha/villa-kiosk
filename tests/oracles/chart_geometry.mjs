@@ -167,7 +167,24 @@ console.log("\n  an outage you can SEE and POINT AT (2.496.149 — a pump's 3-mi
   ck("  ...and only there: each break in the line is a band's width",
      g.series[0].runs.slice(1).every((r, k) => b.some((x) => Math.abs(g.series[0].runs[k].at(-1).x - x.x) < 1e-6 && Math.abs(r[0].x - (x.x + x.w)) < 1e-6)));
   const lc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
-  ck("LineChart prints the outage row the geometry reports", /if \(out\) return \[\{ key: `\$\{i\}`, marker: keyOf\(l\), text: `\$\{who\}\$\{fmtOutage\(out, g\.window\.to\)\}` \}\];/.test(lc));
+  ck("LineChart prints the outage row the geometry reports", /const said = out \? \[\{ key: `\$\{i\}-out`, marker: keyOf\(l\), text: `\$\{who\}\$\{fmtOutage\(out, g\.window\.to, g\.spanHours\)\}` \}\] : \[\];/.test(lc)
+     && /if \(!r\) return said;/.test(lc));
+}
+
+{
+  // owner, 2026-11-05: a step of the figures offline inside it is a band its whole width, the line drawn through it,
+  // its mean still read under the pointer
+  const pts = Array.from({ length: 24 }, (_, k) => ({ t: t0 + k * H, v: 10 + k }));
+  const mark = { from: t0 + 5 * H, to: t0 + 6 * H, within: "hour" };
+  const g = chartGeometry(win, [{ pts, gaps: [mark] }], { left: 0, right: 240, top: 0, bottom: 100 });
+  const b = g.series[0].bands;
+  const h = g.hover(t0 + 5.5 * H);
+  ck("a step marked offline inside it: its band, one unbroken line through it, its mean and the outage both under the pointer",
+     b.length === 1 && b[0].gap === mark && g.series[0].runs.length === 1 && h?.outages[0] === mark && h?.readings[0]?.v === 15,
+     { bands: b.length, runs: g.series[0].runs.length, h });
+  const lc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
+  ck("  ...drawn in a state timeline's stripes for a cell of several states (timelineCells.cellBackground), never a pattern of its own",
+     /background: cellBackground\(\["unavailable", ""\], withinColor\)/.test(lc) && !/<pattern[^>]*within/.test(lc));
 }
 
 done("✅ one chart geometry; an outage is never a reading");

@@ -72,7 +72,8 @@ export interface ChartHover {
   readings: (HoverReading | null)[];
   /** Per series: the outage under the pointer — its DRAWN band, which is
    *  never narrower than MIN_BAND_OF_PLOT — or null. Where one is, that
-   *  series has no reading: what is drawn as unavailable reads as it. */
+   *  series has no reading: what is drawn as unavailable reads as it — but a
+   *  step offline inside it (HistoryGap.within) keeps its mean. */
   outages: (HistoryGap | null)[];
 }
 
@@ -258,9 +259,12 @@ export function chartGeometry(
     // pump's chart every band had the line straight across it (owner: "this
     // is not what we see in the picture"). The hover already reads the drawn
     // band as the outage; the line now agrees.
+    // ...EXCEPT a step of the figures marked offline inside it (HistoryGap.within): it has its own mean, which the line
+    // draws through the band (owner, 2026-11-05)
+    const cuts = s.gaps.filter((gap) => !gap.within);
     const runs = clipRuns(
-      lineRuns(s.pts, s.gaps, window).filter((r) => r.length >= 2).map((r) => r.map((p) => ({ x: sx(p.t), y: sy(p.v) }))),
-      bands,
+      lineRuns(s.pts, cuts, window).filter((r) => r.length >= 2).map((r) => r.map((p) => ({ x: sx(p.t), y: sy(p.v) }))),
+      bands.filter((b) => !b.gap.within),
     );
     // About four steps: a line keeps its own range (a bar chart rounds its
     // top up instead), so only the ticks INSIDE it are drawn — three steps
@@ -275,8 +279,8 @@ export function chartGeometry(
     const px = sx(t);
     const outages = series.map((sg) => sg.bands.find((b) => px >= b.x && px <= b.x + b.w)?.gap ?? null);
     const readings = input.map((s, i) => {
-      if (outages[i]) return null;
-      const r = readingAt(s.pts, s.gaps, t);
+      if (outages[i] && !outages[i]!.within) return null;
+      const r = readingAt(s.pts, s.gaps.filter((gap) => !gap.within), t);
       return r ? { t: r.t, v: r.v, x: sx(r.t), y: series[i].sy(r.v) } : null;
     });
     const shown = readings.filter((r): r is HoverReading => r !== null);

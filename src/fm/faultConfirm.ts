@@ -19,13 +19,13 @@
 // ⚠️ OPEN › CLEARED (ON THE WATCH LIST) › CLOSED (owner, 2026-10-31): a card here is NOT closed yet. Its pill said
 // "VESTA confirms by 02:00" beside the open cards' refresh icon, read as "next check" ("will it be closed at 2am?"), and a
 // Close pressed in the Cockpit said "Closed on …" on a card that was not. Its pill now says what happens then, "Closes
-// 02:00", and a Close pressed in the Cockpit says "Cleared on … (Owner)": only a
-// problem that is really over says Closed.
+// 02:00", and a Close pressed in the Cockpit says "Cleared on … (Owner)" (since architecture review 23 the button's own
+// words, "No action needed on … (Owner)"): only a problem that is really over says Closed.
 
 import { AGENT_STAMP, type AgentCadence } from "@/agent/agentApi";
 import { clockTime, momentText } from "@/utils/dateText";
 import { nextAt, withinLook } from "./faultTiming";
-import { NOT_A_PROBLEM } from "./deviceWork";
+import { NO_ACTION_NEEDED, NOT_A_PROBLEM } from "./deviceWork";
 import { agentOwned } from "./issueSource";
 import { closedAsLasting, isClearedStep, isTicketResolved, lastResolution } from "./fmEngine";
 import type { FmData, FmTicket } from "./fmTypes";
@@ -38,10 +38,11 @@ const CONFIRM_GRACE_LOOKS = 2;
 /** How a closed fault was closed, in the words of its card. */
 interface ClosedFault {
   ticket: FmTicket;
-  /** How it was cleared: "Done" (a Done on Telegram, a repair recorded), "Cleared" (the Cockpit's No action needed, nothing done,
-   *  with who pressed it; or the VESTA Agent's own clearing, no name: what it reported is over). Never "Closed": it is
-   *  not closed until VESTA lets it go (owner, 2026-10-31). */
-  word: "Done" | "Cleared" | typeof NOT_A_PROBLEM;
+  /** How it was cleared, by the action that cleared it: "Done" (a Done on Telegram, a repair recorded), "No action
+   *  needed" (the Cockpit's, nothing done, with who pressed it), "Not a problem", "Cleared" (the VESTA Agent's own
+   *  clearing, no name: what it reported is over). Never "Closed": it is not closed until VESTA lets it go (owner,
+   *  2026-10-31). */
+  word: "Done" | "Cleared" | typeof NO_ACTION_NEEDED | typeof NOT_A_PROBLEM;
   /** Who did it — the person named on its close (`who`), else the profile that recorded it (`by`); "" when unsaid or
    *  the Agent's own clearing. */
   who: string;
@@ -67,15 +68,21 @@ export function shownUntil(at: number, cadence: AgentCadence | null): number {
   return at + CONFIRM_GRACE_LOOKS * look;
 }
 
-/** How `t` was closed: from its last resolution. */
-function closedOf(t: FmTicket): ClosedFault {
+/** ⚠️ ONE TELLING OF A CLOSE, ON EVERY TAB (architecture review 23): Inbox › Closed said "Cleared on … (Owner)" with no
+ *  Reopen, Tickets › Closed "Closed by Owner, on … · Resolved" with one, of the same record. How `t` was closed (its
+ *  last resolution: the word of the action, who, when), read by both Closed sections, the Watch list and every card's
+ *  pill (faultNotes.faultLatest); `reopen`: it may be taken back, exactly when nothing will check it again: closed as
+ *  "Not a problem while it lasts" (owner, 2026-11-04), or a record a person raised, which VESTA has no check of. */
+export function closedTold(t: FmTicket): ClosedFault & { reopen: boolean } {
   const close = lastResolution(t);
-  const agents = !!close && isClearedStep(close) && !close.who && close.by === AGENT_STAMP;
+  const cleared = !!close && isClearedStep(close);
+  const agents = cleared && !close.who && close.by === AGENT_STAMP;
   return {
     ticket: t,
-    word: close?.lasting ? NOT_A_PROBLEM : close && isClearedStep(close) ? "Cleared" : "Done",
+    word: close?.lasting ? NOT_A_PROBLEM : agents ? "Cleared" : cleared ? NO_ACTION_NEEDED : "Done",
     who: agents ? "" : close?.who || authorWords(close),
     closedAt: Date.parse(close?.at ?? t.resolvedAt ?? ""),
+    reopen: isTicketResolved(t) && (closedAsLasting(t) || !agentOwned(t)),
   };
 }
 
@@ -106,7 +113,7 @@ export type AfterClose =
 
 export function afterClose(t: FmTicket, cadence: AgentCadence | null, now: number = Date.now()): AfterClose | null {
   if (!isTicketResolved(t)) return null;
-  const closed = closedOf(t);
+  const closed = closedTold(t);
   const lookMinutes = cadence && cadence.checkMinutes > 0 ? cadence.checkMinutes : null;
   const at = watchedUntil(t, cadence);
   if (!Number.isNaN(at)) {

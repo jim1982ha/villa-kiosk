@@ -32,7 +32,7 @@ import { DataWindow, Figure, LiveNote, ObservationCards } from "./WindowPieces";
 // Ten a page, with the app's one pager (the settings logs use it too).
 import { usePaged, Pager, PAGE_CARDS } from "@/components/common/Paged";
 import type { BarSeg } from "@/utils/barChart";
-import { aggregationWords, fmtChartTime, fmtStepStamp } from "./chartUtils";
+import { aggregationWords, chartAbout, fmtChartTime, fmtStepStamp } from "./chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useHistory } from "@/hooks/useHistory";
 import { fetchEnergySetup, energyRequest, energyChanges, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
@@ -133,7 +133,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
       <ObservationCards cards={T.cards} />
 
       <div className="weather-tile chart energy-wide">
-        <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour<ChartStep words={aggregationWords(PERIOD_MS.hour, "sum")} /></div><div className="weather-legend">kWh</div></div>
+        <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour<ChartStep words={aggregationWords(PERIOD_MS.hour, "sum")} about={chartAbout("total", PERIOD_MS.hour)} /></div><div className="weather-legend">kWh</div></div>
         <BarChart label="Energy used today, hour by hour" fmt={kwh} unit="kWh"
           buckets={todayP.buckets.map((b) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: "e-used" }]) }))}
           stamp={(t) => fmtStepStamp(t, PERIOD_MS.hour, 24)}
@@ -143,7 +143,7 @@ function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetu
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">Last 7 days<ChartStep words={aggregationWords(PERIOD_MS.day, "sum")} /></div>
+          <div className="weather-eyebrow">Last 7 days<ChartStep words={aggregationWords(PERIOD_MS.day, "sum")} about={chartAbout("total", PERIOD_MS.day)} /></div>
           <div className="weather-legend">{fmtKwh(T.weekTotal)} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
         </div>
         <BarChart label="Energy used, the last seven days" fmt={kwh} unit="kWh"
@@ -321,7 +321,7 @@ function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: En
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}<ChartStep words={aggregationWords(PERIOD_MS[range.period], "sum")} /></div>
+          <div className="weather-eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}<ChartStep words={aggregationWords(PERIOD_MS[range.period], "sum")} about={chartAbout("total", PERIOD_MS[range.period])} /></div>
           <div className="weather-legend">
             {series.map((s) => <span key={s.id}><i className={`key ${s.cls}`} />{s.label}</span>)}
             {hasCost && <span><i className="key cost line" />Cost · {formatMoney(costTotal, costUnit)}</span>}

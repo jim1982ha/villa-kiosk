@@ -40,8 +40,12 @@ export interface ThreadView {
  *  shows, as on Telegram's own fresh chat, VESTA's "New conversation." first. Pure. */
 export function threadView(turns: readonly Turn[], online: boolean): ThreadView {
   const typing = turns.find((t) => t.typing && !t.gone);
-  const fresh = turns.reduce((at, t) => (t.from === "person" && t.text === NEW_CONVERSATION ? t.seq : at), -1);
-  return { shown: online, lines: turns.filter((t) => !t.gone && t.answers === null && !t.typing && t.seq > fresh),
+  // ⚠️ AFTER IT IN TIME, NOT BY NUMBER (architecture review 23): the add-on keeps a rewritten turn's first time but gives
+  // it a new number (an answer whose Continue went after a press, or tidied when VESTA started), so an answer from
+  // before "New conversation", rewritten after it, came back into the emptied thread at its old time
+  const news = turns.filter((t) => t.from === "person" && t.text === NEW_CONVERSATION);
+  const cut = news.reduce<Turn | null>((last, t) => (!last || byTime(t, last) > 0 ? t : last), null);
+  return { shown: online, lines: turns.filter((t) => !t.gone && t.answers === null && !t.typing && (!cut || byTime(t, cut) > 0)),
     typingAt: typing?.at ?? null };
 }
 

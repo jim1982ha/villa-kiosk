@@ -7,9 +7,10 @@
 // facility manager's own time and name the night the agent updated the title, and the kept "Now: …" line repeated the
 // title word for word. Each step now carries its kind (FmTicketUpdate.kind, agent-contract.json `ticketUpdate`).
 
-import { NEED_HELP, NOT_A_PROBLEM } from "./deviceWork";
+import { NEED_HELP } from "./deviceWork";
+import { closedTold } from "./faultConfirm";
 import { ACCENT_PILL, pillClass } from "./tone";
-import { STAGE_WORDS, type FmStage, isClearedStep, isTicketResolved, recordLife, stageOf, standingHelp, statusChanges, stepsInTimeOrder } from "./fmEngine";
+import { STAGE_WORDS, type FmStage, isTicketResolved, helpIsLatest, recordLife, stageOf, standingHelp, statusChanges, stepsInTimeOrder } from "./fmEngine";
 import type { FmTicket, FmTicketUpdate } from "./fmTypes";
 import { authorWords } from "@/auth/roles";
 
@@ -62,18 +63,19 @@ export function faultLatest(t: FmTicket, stamp: (at: string) => string): { text:
   const stage = STAGE_WORDS[stageOf(t)];
   const ticket = recordLife(t).ticket;
   const said = (word: string, at: string, who?: string) =>
-    ({ text: `${word}${who ? ` by ${who}` : ""}, on ${stamp(at)}${ticket ? ` · ${stage.word}` : ""}`,
+    ({ text: `${word}${who ? ` by ${who},` : ""} on ${stamp(at)}${ticket ? ` · ${stage.word}` : ""}`,
        tone: stagePillClass(stageOf(t)) });
   const steps = statusSteps(t);
   const last = steps[steps.length - 1];
   const help = standingHelp(t);
-  if (help && (!last || Date.parse(help.at) >= Date.parse(last.at))) return said(`${NEED_HELP} asked`, help.at, help.by);
+  if (help && helpIsLatest(t)) return said(`${NEED_HELP} asked`, help.at, help.by);
   if (!last) {
     if (t.resolvedAt && isTicketResolved(t)) return said("Done", t.resolvedAt);
     return stageOf(t) === "ticket" ? said("Ticket opened", t.openedAt) : null;
   }
+  // closed: told as every Closed section tells it (faultConfirm.closedTold), the action's word and who
+  if (isTicketResolved(last)) { const c = closedTold(t); return said(c.word, last.at, c.who); }
   const who = last.who || authorWords(last);
-  if (isTicketResolved(last)) return said(last.lasting ? NOT_A_PROBLEM : isClearedStep(last) ? "Closed" : "Done", last.at, who);
   if (last.kind === "reopened") return said("Reopened", last.at, who);
   return last.status === "in_progress" ? said("Ticket opened", last.at, who) : null;
 }

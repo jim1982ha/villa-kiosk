@@ -19,6 +19,10 @@ import { drawableWindow, type TimeWindow } from "@/utils/lineChart";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import { emptyHistoryText, type HistoryStatus } from "@/utils/statisticsSeries";
 import { NOT_KEPT_COLOR, STATUS_COLOR } from "@/utils/stateColors";
+import { cellBackground } from "@/utils/timelineCells";
+
+/** A step offline inside it: its stripes, the unavailable colour and nothing between. */
+const withinColor = (state: string) => (state ? STATUS_COLOR.unavailable : "transparent");
 import { fmtChartValue, fmtChartTick, fmtStepStamp, fmtOutage, keptWords } from "./chartUtils";
 import { activeRange, valueExtent, type KeptChart, type ValueRange } from "@/utils/rangeFilter";
 import ChartRangeSlider, { RangeChip, rangeWords } from "./ChartRangeSlider";
@@ -172,7 +176,7 @@ export default function LineChart({ lines, window, height = 150, status, label, 
             <g className="chart-grid">{leftAxis.map((t) => <line key={t.v} x1="0" y1={t.y} x2={W} y2={t.y} />)}</g>
             {/* A band per line, in its own slice of the plot: which sensor was
                 out is part of the fact. Before the lines — SVG paints in order. */}
-            {g.series.flatMap((s, i) => s.bands.map((b, j) => (
+            {g.series.flatMap((s, i) => s.bands.map((b, j) => (b.gap.within ? null :
               <rect key={`gap${i}-${j}`} x={b.x} y={b.y} width={b.w} height={b.h} fill={b.gap.notKept ? NOT_KEPT_COLOR : STATUS_COLOR.unavailable} opacity={b.gap.notKept ? 0.5 : 0.18} />
             )))}
             {!nothing && g.series.map((sg, i) => {
@@ -210,18 +214,26 @@ export default function LineChart({ lines, window, height = 150, status, label, 
             )}
             {hover && <line x1={hover.x} y1={TOP} x2={hover.x} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
           </svg>
+          {/* ⚠️ A STEP OFFLINE INSIDE IT (owner, 2026-11-05): its whole width, in the stripes of a state timeline's cell
+              that saw more than one state (timelineCells.cellBackground), unavailable and clear: the line runs through */}
+          {g.series.flatMap((s, i) => s.bands.filter((b) => b.gap.within).map((b, j) => (
+            <i key={`within${i}-${j}`} className="chart-within" aria-hidden
+              style={{ left: `${(b.x / W) * 100}%`, width: `${(b.w / W) * 100}%`, top: `${(b.y / H) * 100}%`, height: `${(b.h / H) * 100}%`,
+                background: cellBackground(["unavailable", ""], withinColor) }} />
+          )))}
           {hover && (
             <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtStepStamp(realAt(hover.t), stepMs, dated.spanHours)}
               rows={lines.flatMap((l, i) => {
                 const r = hover.readings[i], out = hover.outages[i];
                 const who = lines.length > 1 ? `${l.label} ` : "";
                 // An outage under the pointer says so — its span and length.
-                if (out) return [{ key: `${i}`, marker: keyOf(l), text: `${who}${fmtOutage(out, g.window.to)}` }];
+                const said = out ? [{ key: `${i}-out`, marker: keyOf(l), text: `${who}${fmtOutage(out, g.window.to, g.spanHours)}` }] : [];
                 // A reading reads as the badge says it ("6.6 kW", not "6571W", 2.496.252):
-                // formatUnitValue is the one rule; a unitless line keeps the chart's number.
-                if (!r) return [];
+                // formatUnitValue is the one rule; a unitless line keeps the chart's number. A step offline inside
+                // it (HistoryGap.within) still has its mean: both are said.
+                if (!r) return said;
                 const value = l.unit?.trim() ? formatUnitValue(r.v, l.unit.trim()) : fmtChartValue(r.v);
-                return [{ key: `${i}`, marker: keyOf(l), text: `${who}${value}` }];
+                return [{ key: `${i}`, marker: keyOf(l), text: `${who}${value}` }, ...said];
               })} />
           )}
           {/* Where the kept steps were in the period, in the strip under the plot the chart already has (H - BOT). */}

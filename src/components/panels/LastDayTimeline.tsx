@@ -16,8 +16,9 @@ import { stateWords } from "@/config/reading";
 import StateTimeline from "./StateTimeline";
 import { useStateHistory } from "@/hooks/useStateHistory";
 import { historyTitle } from "@/ha/historySource";
-import { useHistoryRange, useDeviceBand, HistoryHeader } from "./historyRange";
-import { aggregationWords } from "./chartUtils";
+import { useHistoryRange, useDeviceBand, HistoryHeader, useKeptFrom } from "./historyRange";
+import { aggregationWords, chartAbout } from "./chartUtils";
+import { HOUR_MS } from "@/utils/localDay";
 import { historyStateColor, isNoHistory, paletteColorFor } from "@/utils/stateColors";
 
 export default function LastDayTimeline({
@@ -41,6 +42,7 @@ export default function LastDayTimeline({
   words?: (state: string) => string;
 }) {
   const { range, picker } = useHistoryRange();
+  const kept = useKeptFrom();
   // the window's device with bands under it: the window's one answer, theirs over the same window (useDeviceBand)
   const band = useDeviceBand(entityId);
   const own = useStateHistory(band ? null : entityId, range.hours);
@@ -51,7 +53,8 @@ export default function LastDayTimeline({
   const paint = colorFor ?? (palette ? paletteColorFor(held) : historyStateColor(entityId));
   return (
     <div className="field">
-      <HistoryHeader title={historyTitle(range.title, lastSeen)} picker={picker} step={aggregationWords(range.grainMs, null)} />
+      <HistoryHeader title={historyTitle(range.title, lastSeen)} picker={picker} step={aggregationWords(range.grainMs, null)}
+        about={chartAbout("states", range.grainMs, Date.now() - range.hours * HOUR_MS, kept)} />
       <StateTimeline
         data={data}
         colorFor={paint}

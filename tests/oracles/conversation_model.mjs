@@ -239,6 +239,12 @@ const fresh = threadView([turn(1, { from: "person", text: "Is the pump on?" }), 
   turn(4, { text: "New conversation." }), turn(5, { from: "person", text: "And the lights?" })], true);
 ck("\"New conversation\" empties the thread: only what came after the last /new shows (owner, 2026-10-29)",
    J(fresh.lines.map((t) => t.text)) === J(["New conversation.", "And the lights?"]), fresh.lines);
+// architecture review 23: the add-on keeps a rewritten turn's first time but gives it a new number
+const beforeNew = [turn(1, { from: "person", text: "Is the pump on?" }), turn(2, { text: "Yes. Continue?" }),
+  turn(3, { from: "person", text: "/new" })];
+const tidied = mergeTurns(beforeNew, [{ ...beforeNew[1], seq: 4, text: "Yes." }], false);
+ck("  ...an answer from before it, rewritten after it, stays out of the new conversation (review 23)",
+   J(threadView(tidied, true).lines.map((t) => t.text)) === J([]), threadView(tidied, true).lines);
 const words = turn(5, { key: "turn:5" }), aloud = turn(6, { key: "turn:5", speech: "s1.mp3" });
 ck("the sound that just arrived: the answer rewritten with its sound, once (ticket 24)",
    arrivedSpeech([words], [aloud]) === "s1.mp3" && arrivedSpeech([aloud], [aloud]) === null

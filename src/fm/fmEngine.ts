@@ -836,6 +836,18 @@ export function standingHelp(t: Pick<FmTicket, "status" | "updates">): HelpAsked
   return { at: ups[i].at, ...(by ? { by } : {}) };
 }
 
+/** Its standing Need help is the last thing that moved it, so its card's pill says it (faultNotes.faultLatest): no
+ *  status step after it. ⚠️ SAID ONCE (architecture review 23): the pill said "Need help asked by Owner, on …" and the
+ *  line above the buttons "🆘 Need help asked … (Owner)" again; that line now says only a help the pill does not
+ *  (deviceWork.helpAsked). */
+export function helpIsLatest(t: Pick<FmTicket, "status" | "updates">): boolean {
+  const help = standingHelp(t);
+  if (!help) return false;
+  const steps = statusChanges(t);
+  const last = steps[steps.length - 1];
+  return !last || Date.parse(help.at) >= Date.parse(last.at);
+}
+
 // ── Rules that lived in the screens (round 13, 2.496.183) ─────────────────
 // Each was written in a component or the store's context, where only a regex
 // could reach it, and several already disagreed with the engine or with each

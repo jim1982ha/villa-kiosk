@@ -3,11 +3,12 @@
 // utils/chartGeometry's hover answer, not a helper here.
 
 import { wallClock } from "@/utils/villaClock";
-import type { StateHistoryPoint } from "@/types/ha.types";
+import type { HistoryGap, StateHistoryPoint } from "@/types/ha.types";
 import { clockTime, dayMonth, dayTime, monthShort } from "@/utils/dateText";
 import { NOT_KEPT_WORDS } from "@/utils/stateColors";
 import { nextEdge } from "@/utils/timelineCells";
 import { DAY_MS, HOUR_MS, MINUTE_MS } from "@/utils/localDay";
+import { PERIOD_MS } from "@/utils/statisticsSeries";
 
 export function fmtChartValue(v: number): string {
   if (!Number.isFinite(v)) return "";
@@ -67,6 +68,44 @@ export function stepWords(stepMs: number): string {
   if (stepMs >= HOUR_MS) return "hourly";
   return `${Math.round(stepMs / MINUTE_MS)}-min`;
 }
+/** What a chart draws in each step: a measured value's mean, a device's states, or a total. */
+export type ChartShows = "average" | "states" | "total";
+
+/** A step's one word: "hour", "day", "week", "month", or its duration ("5min"). */
+function stepNoun(stepMs: number): string {
+  if (stepMs >= 28 * DAY_MS) return "month";
+  if (stepMs >= 7 * DAY_MS) return "week";
+  if (stepMs >= DAY_MS) return "day";
+  if (stepMs >= HOUR_MS) return "hour";
+  return fmtDuration(stepMs);
+}
+
+/**
+ * ⚠️ WHAT A CHART SHOWS, AND WHAT IT MAY NOT (owner, 2026-11-05: a meter offline 22min showed nothing on its 1w chart):
+ * the words of the (i) beside every chart's title (ChartStep), for its step (`stepMs`) and what it draws. `from`: where
+ * its window starts; `kept`: where the villa's system's finer record begins (historySource.keptFrom): before it, only
+ * an outage of a whole finer step shows (statisticsSeries.finerOutages). The five minutes are the recorder's finest
+ * figures (PERIOD_MS). Pure: tests/oracles/history_ranges.mjs drives every range.
+ */
+export function chartAbout(shows: ChartShows, stepMs: number, from?: number, kept?: number): string {
+  const step = stepNoun(stepMs), finest = PERIOD_MS["5minute"];
+  const before = kept !== undefined && from !== undefined && from < kept ? dayMonth(kept) : null;
+  if (shows === "total") {
+    return `${cap(stepWords(stepMs))} totals. ${a(step)} with no total written is left empty. A meter counts on through an outage, so its total stays right and no outage is shown.`;
+  }
+  if (shows === "states") {
+    return `Each ${step} shows the states it saw: striped when it saw several, grey among them when the device was unavailable, at any length.${before ? ` Before ${before}, the villa's system no longer keeps its changes.` : ""}`;
+  }
+  if (stepMs <= finest) return "Every reading. A grey band is each time the device was unavailable, at its real length.";
+  const finer = stepMs >= 7 * DAY_MS ? "day" : stepMs >= DAY_MS ? "hour" : null;
+  return `${cap(stepWords(stepMs))} averages. ${a(step)} striped grey had the device unavailable for part of it. An outage shorter than ${fmtDuration(finest)} may not show: averages do not keep it.${
+    before ? ` Before ${before}, ${finer ? `only an outage of a whole ${finer} shows` : "no outage shows"}: the villa's system keeps finer figures since then.` : ""}`;
+}
+
+const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+/** "An hour", "A day". */
+const a = (noun: string) => `${/^h/.test(noun) ? "An" : "A"} ${noun}`;
+
 export function aggregationWords(stepMs: number, aggregation: Aggregation): string {
   return aggregation ? `${stepWords(stepMs)} ${aggregation}` : stepWords(stepMs);
 }
@@ -80,16 +119,26 @@ export function cellSummary(spent: Record<string, number>, entered: Record<strin
   }));
 }
 
-/** An outage in a chart's tooltip: "Unavailable · 05:21–05:24 (3 min)", or
- *  "Unavailable since 05:21" for one still running at `now` (the window's end). */
-export function fmtOutage(gap: { from: number; to: number; actual?: { from: number; to: number }; notKept?: boolean },
-  now: number): string {
+/** The words of a step of the figures offline inside it (HistoryGap.within). */
+const DURING: Record<NonNullable<HistoryGap["within"]>, string> = { hour: "this hour", day: "this day", week: "this week" };
+
+/** An outage in a chart's tooltip: "Unavailable · 05:21–05:24 (3min)", "Unavailable since 05:21" for one still
+ *  running at `now` (the window's end), "Unavailable during this day · 3 Nov" for a step of the figures offline
+ *  inside it. ⚠️ ONE MINUTE, NOT A SPAN (owner, 2026-11-05: "Unavailable · 13:40–13:40 (1s)" for a 0.46s drop): within
+ *  one minute it says when and how long, "Unavailable at 13:40, under 1s". `spanHours`: the chart's window, a time
+ *  naming its day beyond one day (fmtChartStamp), as a "13:40" on a week's chart names none. */
+export function fmtOutage(gap: Pick<HistoryGap, "from" | "to" | "actual" | "notKept" | "within">,
+  now: number, spanHours = 24): string {
   // older than the villa's system keeps: not an outage (historySource.keptFrom, owner 2026-10-20)
   if (gap.notKept) return `${NOT_KEPT_WORDS} · before ${dayTime(gap.to)}`;
+  if (gap.within) return `Unavailable during ${DURING[gap.within]} · ${gap.within === "hour" ? dayTime(gap.from) : dayMonth(gap.from)}`;
   // The real times, when the band was widened to whole five-minute intervals.
   const g = gap.actual ?? gap;
-  if (!Number.isFinite(g.to) || g.to >= now) return `Unavailable since ${fmtChartTime(g.from)} (${fmtDuration(now - g.from)})`;
-  return `Unavailable · ${fmtChartTime(g.from)}–${fmtChartTime(g.to)} (${fmtDuration(g.to - g.from)})`;
+  const at = (t: number) => fmtChartStamp(t, spanHours);
+  if (!Number.isFinite(g.to) || g.to >= now) return `Unavailable since ${at(g.from)} (${fmtDuration(now - g.from)})`;
+  const ms = g.to - g.from;
+  if (at(g.from) === at(g.to)) return `Unavailable at ${at(g.from)}, ${ms < 1000 ? "under 1s" : `for ${fmtDuration(ms)}`}`;
+  return `Unavailable · ${at(g.from)}–${at(g.to)} (${fmtDuration(ms)})`;
 }
 
 /** An x-axis tick: the time of day while the window is two days or less,

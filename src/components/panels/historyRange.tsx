@@ -13,8 +13,10 @@
 // own picker; a range is a range whichever recorder path reads it, so each
 // entry here carries both resolutions and a view picks which ranges it offers.
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import SegmentedGroup from "@/components/common/SegmentedGroup";
+import InfoTip from "@/components/common/InfoTip";
+import { villaKeptFrom } from "@/ha/HAHistoryAPI";
 import { useStateHistory, type StateHistoryResult } from "@/hooks/useStateHistory";
 
 // The table itself is pure (utils/historyRanges): an oracle reads it by value.
@@ -99,17 +101,30 @@ export function useSharedRange(): HistoryRange {
 
 /** The heading row every history section uses: its title on the left, the
  *  range picker on the right. Keeps the three views visually identical. */
-export function HistoryHeader({ title, picker, step }: { title: string; picker: ReactNode; step: string }) {
+export function HistoryHeader({ title, picker, step, about }: { title: string; picker: ReactNode; step: string; about: string }) {
   return (
     <div className="timeline-head">
-      <label className="entity-label">{title}<ChartStep words={step} /></label>
+      <label className="entity-label">{title}<ChartStep words={step} about={about} /></label>
       {picker}
     </div>
   );
 }
 
 /** The step and aggregation beside a chart's title ("· daily avg", chartUtils.aggregationWords): the same look in a
- *  device panel's header and the Weather and Energy windows' chart heads (owner, 2026-10-20). */
-export function ChartStep({ words }: { words: string }) {
-  return <span className="chart-step"> · {words}</span>;
+ *  device panel's header and the Weather and Energy windows' chart heads (owner, 2026-10-20). ⚠️ AND ITS (i) (owner,
+ *  2026-11-05): what the chart shows and what it may not (chartUtils.chartAbout), on every chart, the app's one (i). */
+export function ChartStep({ words, about }: { words: string; about: string }) {
+  return <span className="chart-step"> · {words}<InfoTip label="What this chart shows" className="chart-about">{about}</InfoTip></span>;
+}
+
+/** Where the villa's system's finer record begins (historySource.keptFrom, read once an hour), for a chart's (i);
+ *  undefined until known. */
+export function useKeptFrom(): number | undefined {
+  const [kept, setKept] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    villaKeptFrom(Date.now()).then((k) => { if (live) setKept(k); }, () => {});
+    return () => { live = false; };
+  }, []);
+  return kept;
 }

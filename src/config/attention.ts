@@ -15,7 +15,7 @@ import { alarmText, rowText } from "@/config/reading";
 import { labelOf } from "@/config/EntityMap";
 import { deviceRoom, deviceRoomOrRecord, firstRoom, recordRoomNow, roomLabel } from "@/config/devicePlace";
 import { devicesFor, recordEntity, type VillaDevices } from "@/config/deviceGroups";
-import { alertNumberOf, closedAsLasting, DUE_WORDS, faultBegan, faultTitle, fmAttention, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
+import { alertNumberOf, closedAsLasting, DUE_WORDS, faultBegan, faultTitle, fmAttention, helpIsLatest, stageOf, standingHelp, type FmStage, type HelpAsked } from "@/fm/fmEngine";
 import type { AgentCadence } from "@/agent/agentApi";
 import { watchedRecords } from "@/fm/faultConfirm";
 import { faultLatest, notedStory } from "@/fm/faultNotes";
@@ -82,6 +82,8 @@ export interface AttentionItem {
   latest?: { text: string; tone: string } | null;
   /** Set on a fault: the Need help pressed on it that nothing has answered yet (fmEngine.standingHelp). */
   help?: HelpAsked;
+  /** Its `latest` pill says that Need help (fmEngine.helpIsLatest): its buttons do not say it again. */
+  helpInPill?: true;
   /** Set on a fault an alert raised: the number its Telegram messages carry ("#91"), which names VESTA's card of it
    *  (messagesModel.cardsOfIssue). */
   alertNumber?: number;
@@ -473,6 +475,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       story: notedStory(t),
       latest: faultLatest(t, momentText),
       help: standingHelp(t),
+      ...(helpIsLatest(t) ? { helpInPill: true as const } : {}),
       openedAt: faultBegan(t),
       ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t) } : {}),
       source: faultSource(t),

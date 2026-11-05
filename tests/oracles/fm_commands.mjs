@@ -54,7 +54,7 @@ ck("  ...its card says when and by whom", faultWhen(tk, stamp) === "Ticket opene
   ck("  ...follows the latest status: done", faultWhen({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", who: "Made" })] }, stamp)
      === "Done by Made, on 08:00 · Resolved");
   ck("  ...closed with nothing done", faultWhen({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", kind: "cleared", by: "Owner" })] }, stamp)
-     === "Closed by Owner, on 08:00 · Resolved");
+     === "No action needed by Owner, on 08:00 · Resolved");
   // the stage in the pill, in its colour: a ticket in progress the buttons' accent (owner, 2026-11-04), a closed one green
 ck("  ...its stage's colour, a closed one's too", faultLatest({ ...tk, updates: [taken] }, stamp)?.tone === "tone-accent"
    && faultLatest({ ...tk, status: "resolved", resolvedAt: later({}).at, updates: [taken, later({ status: "resolved", who: "Made" })] }, stamp)?.tone === "tone-ok");

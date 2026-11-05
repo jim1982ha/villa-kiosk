@@ -24,7 +24,7 @@ for (const c of cases ?? []) {
   const outage = fmtOutage({ from: now - ms, to: now }, now + 1);
   const title = faultTitle({ title: "x", titlePattern: "Pump offline for {since}", since: new Date(now - ms).toISOString() }, now);
   ck("  ...and the outage tooltip and a fault's title say it so",
-    outage.endsWith(`(${c.words})`) && title === `Pump offline for ${c.words}`, { outage, title });
+    (outage.endsWith(`(${c.words})`) || outage.endsWith(ms < 1000 ? ", under 1s" : `, for ${c.words}`)) && title === `Pump offline for ${c.words}`, { outage, title });
 }
 
 // ⚠️ THE OTHER PLACES (architecture review K, 2026-10-24): the Agent's look, the list's refresh, a confirming fault's

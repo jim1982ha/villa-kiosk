@@ -44,11 +44,11 @@ const acts = cardActions(pump);
 ck("a device's live state and its faults are ONE card", pump.items.length >= 2 && cardRecords(pump).length === 2, pump.items.map((i) => i.id));
 // owner, 2026-11-01: "for each issue of a potential merged cards", Edit Ticket where a ticket is open
 ck("  ...each problem its own buttons: the ticket's Edit Ticket, the fault's Open Ticket, each Done and Need help on its record alone",
-   said(acts).join(" | ") === `Done → b ${OV_DONE} | Need help → b | Not a problem → b ${NAP} | Edit Ticket → b | Done → a ${OV_DONE} | Need help → a | Not a problem → a ${NAP} | Open Ticket → a (in_progress)`, said(acts));
+   said(acts).join(" | ") === `Done → b ${OV_DONE} | Need help → b | Edit Ticket → b | Done → a ${OV_DONE} | Need help → a | Not a problem → a ${NAP} | Open Ticket → a (in_progress)`, said(acts));
 const [taken] = groupAttention([item("fault:b", "fault", "sensor.pump_power", { ticketId: "b", stage: "ticket" }),
   item("fault:c", "fault", "sensor.pump_energy", { ticketId: "c", stage: "ticket" })]);
 ck("  ...two tickets: Edit Ticket on each",
-   said(cardActions(taken)).join(" | ") === `Done → b ${OV_DONE} | Need help → b | Not a problem → b ${NAP} | Edit Ticket → b | Done → c ${OV_DONE} | Need help → c | Not a problem → c ${NAP} | Edit Ticket → c`, said(cardActions(taken)));
+   said(cardActions(taken)).join(" | ") === `Done → b ${OV_DONE} | Need help → b | Edit Ticket → b | Done → c ${OV_DONE} | Need help → c | Edit Ticket → c`, said(cardActions(taken)));
 const [lock] = groupAttention([item("alarm:lock.door", "alarm", "lock.door")]);
 // a card with no record: the same three for its device — Done and Need help raise its fault with the press, Open Ticket
 // opens the ticket form already pointed at it (owner, 2026-10-29; 2026-10-30)
@@ -73,11 +73,11 @@ ck("a ticket in progress (Tickets): Close (its resolve form; owner, 2026-11-04),
    === `Close → a,b (resolved) | Need help → a,b | No action needed → a,b ${TK_CLOSE}`
    && W.WORK_ACTIONS.ticketDone.label === "Close" && W.ticketActions([{ id: "a", stage: "ticket" }])[1].step.kind === "help");
 ck("  ...a closed record: Reopen, on it alone — and nothing else on a record that is not where the card expects it",
-   said(W.closedActions({ id: "r", stage: "closed" })).join() === "Reopen → r (open)"
-   && W.closedActions({ id: "r", stage: "fault" }).length === 0 && W.ticketActions([{ id: "f", stage: "fault" }]).length === 0
+   said(W.closedActions({ id: "r", stage: "closed" }, true)).join() === "Reopen → r (open)"
+   && W.closedActions({ id: "r", stage: "fault" }, true).length === 0 && W.ticketActions([{ id: "f", stage: "fault" }]).length === 0
    && W.overviewActions([{ id: "r", stage: "closed" }]).length === 0);
 ck("  ...ONE wording per action: every button of a kind says the same, whichever card draws it",
-   Object.entries(W.WORK_ACTIONS).every(([kind, spec]) => [acts, cardActions(taken), W.ticketActions([{ id: "a", stage: "ticket" }]), W.closedActions({ id: "r", stage: "closed" })]
+   Object.entries(W.WORK_ACTIONS).every(([kind, spec]) => [acts, cardActions(taken), W.ticketActions([{ id: "a", stage: "ticket" }]), W.closedActions({ id: "r", stage: "closed" }, true)]
      .flat().filter((a) => a.kind === kind).every((a) => a.label === spec.label && JSON.stringify(a.step) === JSON.stringify(spec.step))));
 
 console.log("\n  one answer to \"fault, ticket or closed\":");
@@ -137,7 +137,7 @@ console.log("\n  ONE card per device, on the Overview and in Tickets, and the co
      said(W.ticketActions(tickets.find((t) => t.key === "device:sensor.pump_power").records.map(W.workRecord))).join(" | ")
        === `Close → p2 (resolved) | Need help → p2 | No action needed → p2 ${TK_CLOSE}`
      && said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))).join(" | ")
-       === `Done → p1 ${OV_DONE} | Need help → p1 | Not a problem → p1 ${NAP} | Open Ticket → p1 (in_progress) | Done → p2 ${OV_DONE} | Need help → p2 | Not a problem → p2 ${NAP} | Edit Ticket → p2`,
+       === `Done → p1 ${OV_DONE} | Need help → p1 | Not a problem → p1 ${NAP} | Open Ticket → p1 (in_progress) | Done → p2 ${OV_DONE} | Need help → p2 | Edit Ticket → p2`,
      said(cardActions(overview.find((g) => g.key === "device:sensor.pump_power"))));
   ck("  ...Tickets lists the device whose ticket was opened last first, never an open fault or a closed record",
      tickets.map((t) => t.key).join() === "item:fault:n2,device:lock.back,device:sensor.pump_power", tickets.map((t) => t.key));
@@ -327,7 +327,7 @@ ck("lists that only grow are ONE folded, paged list (owner, 2026-10-14): Tickets
   ck("a ticket is ONE card: the first record carries the pill and the ticket's buttons, the closed one its Reopen, no device name above",
      /<div key=\{g\.key\} className="fm-record-card">/.test(ticketsTab) && /const records = g\.records\.map\(workRecord\);/.test(ticketsTab)
      && /record\(t, i === 0 \? stagePill\(t\) : undefined,\s*i === 0 \? <WorkButtons/.test(ticketsTab)
-     && JSX.propText(open, "actions") === "ticketActions(records)" && JSX.propText(shut, "actions") === "closedActions(workRecord(t))"
+     && JSX.propText(open, "actions") === "ticketActions(records)" && JSX.propText(shut, "actions") === "closedActions(workRecord(t), closedTold(t).reopen)"
      // its standing Need help said on it, from the same records as its buttons (checked by value below)
      && JSX.propText(open, "asked") === "helpAsked(records)"
      && !/const title = head\.entityId/.test(ticketsTab));
@@ -443,9 +443,10 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
 // night check's finding beside VESTA's alert on the same device) do not repeat "Ticket opened by … In progress"
 {
   const tab = JSX.parseTsx("components/fm/TicketsTab.tsx");
-  const pill = JSX.elements(tab, "StatusPill");
-  ck("a ticket's card says its state once: the record's pill only where the record is `stated`, the first of its card",
-     pill.length === 1 && JSX.guardsOf(pill[0]).includes("stated") && /, false, i === 0\)\)\}/.test(tt));
+  const card = JSX.elements(tab, "RecordCard").find((c) => JSX.propText(c, "tagState") !== null);
+  ck("a ticket's card says its state once: the record's pill (RecordCard tagState) only where the record is `stated`, the first of its card",
+     !!card && JSX.propText(card, "tagState") === "stated ? latest : null" && JSX.elements(tab, "StatusPill").length === 0
+     && /, false, i === 0\)\)\}/.test(tt), card && JSX.propText(card, "tagState"));
 }
 // owner, 2026-11-02: "Move the Open Ticket button from the Inbox page to the Tickets page"
 {
@@ -570,7 +571,7 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   // appear on the same line"
   ck("  ...on a narrow row, one word each under its icon: Done · Help · Ignore · Ticket, and the Tickets tab's Close · Help · Dismiss",
      seen(drawButtons(ovActs), true) === "|[icon] Done|[icon] Help|[icon] Ignore|[icon] Ticket|"
-     && seen(drawButtons(W.overviewActions([{ id: "a", stage: "ticket" }])), true) === "|[icon] Done|[icon] Help|[icon] Ignore|[icon] Ticket|"
+     && seen(drawButtons(W.overviewActions([{ id: "a", stage: "ticket" }])), true) === "|[icon] Done|[icon] Help|[icon] Ticket|"
      && seen(drawButtons(tkActs), true) === "|[icon] Close|[icon] Help|[icon] Dismiss|",
      [seen(drawButtons(ovActs), true), seen(drawButtons(tkActs), true)]);
   // owner, 2026-10-31 (iPhone screenshot): Open Ticket wrapped under Done · Need help. Measured on that screenshot, a
@@ -607,7 +608,7 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
        { pad, gap, lent, gutter, full, narrowBelow, tiles, room360: room(360) });
   }
   ck("  ...a ticket: Close, Need help and No action needed, each with its icon; a closed record: Reopen",
-     seen(drawButtons(tkActs)) === "|[icon] Close|[icon] Need help|[icon] No action needed|" && seen(drawButtons(W.closedActions({ id: "r", stage: "closed" }))) === "|[icon] Reopen|", seen(drawButtons(tkActs)));
+     seen(drawButtons(tkActs)) === "|[icon] Close|[icon] Need help|[icon] No action needed|" && seen(drawButtons(W.closedActions({ id: "r", stage: "closed" }, true))) === "|[icon] Reopen|", seen(drawButtons(tkActs)));
   // each close asks the question of the button pressed (owner, 2026-11-04: Not a problem a button of its own, no
   // longer a second yes under Done's question; tests/oracles/not_a_problem.mjs)
   const asked = (kind, key = "device:x") => ({ key, kind });
@@ -653,16 +654,23 @@ console.log("\n  a Need help pressed is said on its card, and asked once (archit
     fmData: d }).attentionItems).find((g) => g.items.some((i) => i.ticketId === "a")), null);
     return { asked: lines.find((l) => l.asked)?.asked ?? null, actions: lines.flatMap((l) => l.actions) }; };
   const ticket = (d) => d.tickets.filter((t) => t.id === "b").map(W.workRecord);
-  ck("pressed on the Inbox: its card says who asked and when, and offers no second Need help",
-     inbox(before).asked === null && JSON.stringify(inbox(after).asked) === JSON.stringify({ at, by: "Owner" })
+  // ⚠️ SAID ONCE (architecture review 23): the card's pill says it; the line above the buttons said it again
+  const pillOf = (d) => cockpitCard(groupAttention(attentionOf({ devices: devicesOf(), entities: {}, entityMap: {}, resolvedRooms: {},
+    fmData: d }).attentionItems).find((g) => g.items.some((i) => i.ticketId === "a")), null).lines.map((l) => l.latest?.text ?? "");
+  ck("pressed on the Inbox: its card's pill says who asked and when, no line repeats it, and no second Need help",
+     inbox(before).asked === null && inbox(after).asked === null
+     && pillOf(after).includes(`Need help asked by Owner, on ${momentText(at)}`)
      && said(inbox(before).actions).some((x) => x.startsWith("Need help")) && !said(inbox(after).actions).some((x) => x.startsWith("Need help")),
-     [inbox(after).asked, said(inbox(after).actions)]);
+     [inbox(after).asked, pillOf(after), said(inbox(after).actions)]);
   ck("  ...the Tickets tab's card the same, from the same records",
-     JSON.stringify(W.helpAsked(ticket(after))) === JSON.stringify({ at, by: "Owner" })
+     W.helpAsked(ticket(after)) === null
      && said(W.ticketActions(ticket(after))).join(" | ") === `Close → b (resolved) | No action needed → b ${TK_CLOSE}`
      && said(W.ticketActions(ticket(before))).some((x) => x.startsWith("Need help")), said(W.ticketActions(ticket(after))));
-  ck("  ...in words: \"🆘 Need help asked <when> (Owner)\"",
-     W.helpLine(W.helpAsked(ticket(after)), momentText) === `🆘 Need help asked ${momentText(at)} (Owner)`, W.helpLine(W.helpAsked(ticket(after)), momentText));
+  // a step after the press (a ticket opened on it): the pill says that step, so the line says the help still standing
+  const later = { ...after, tickets: after.tickets.map((t) => (t.id !== "b" ? t : { ...t, updates: [...t.updates,
+    { at: "2026-10-30T09:30:00.000Z", status: "in_progress", photoIds: [], by: "owner" }] })) };
+  ck("  ...once something moved it after the press, the pill says that, and the line \"🆘 Need help asked <when> (Owner)\" says the help",
+     W.helpLine(W.helpAsked(ticket(later)), momentText) === `🆘 Need help asked ${momentText(at)} (Owner)`, W.helpAsked(ticket(later)));
   // a record that joined the card since: Need help asks about it alone
   const joined = { ...after, tickets: [...after.tickets, rec("c", "sensor.pump_power")] };
   ck("  ...a record nobody asked about yet brings Need help back, for it alone",
