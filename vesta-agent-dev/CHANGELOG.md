@@ -1,3 +1,19 @@
+## 0.12.456
+
+What you will see:
+- Done or "Not a problem" pressed in the Cockpit is said as a Telegram press is, in every chat and on the tablet's alert
+  card: "✅ Done in the Cockpit on … (Luc). Watch 4h." under "(watch)", no longer "(closed)" with no watch. The problem
+  back within that time reopens the same alert number, even when it comes back minutes after the close.
+- "Not a problem" pressed in the Cockpit on a person's ticket with a Need help alert open says "Not a problem in the
+  Cockpit on … (JM)." and VESTA does not check it again; it said "Done in the Cockpit" and checked it.
+- Need help pressed on Telegram or the tablet is said once: "🆘 Need help on … (Luc): Owner is asked to act.", no longer
+  also a "- 🆘 Need help on … (Luc)" line above it. Once something follows, the press keeps its own line.
+- "Fault still there after the close" names the person and the time of their close: "Done in the Cockpit on 04/11/2026
+  23:45 (JM), but still there: Pump weak. Please look again.", no longer the time of the check and no name. VESTA's wait
+  before it looks again counts from that close.
+- The night check's Telegram message says when a person closes one of its faults ("Done in the Cockpit on … (JM)." under
+  Status), before any "Still-there alert sent …" that follows.
+
 ## 0.12.455
 
 What you will see:
