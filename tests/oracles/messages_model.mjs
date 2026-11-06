@@ -179,7 +179,13 @@ ck("  ...the tab lists, counts and opens what messagesView says, from the open i
   const v = messagesView({ ...base, announcements: [], closed: [gone, told], filter: "issues", selected: null });
   const w = messagesView({ ...base, announcements: [msg], closed: [gone, told], filter: "issues", selected: null });
   ck("a fault that left Watch is in Closed, a card of its own", v.closed.map((i) => i.key).join() === "closed:f,closed:g", v.closed);
-  ck("  ...one VESTA holds a message for is listed once, by that message", !w.closed.some((i) => i.key === "closed:g"), w.closed);
+  // ⚠️ BY ITS FAULT'S CARD, ITS MESSAGE INSIDE (owner, 2026-11-07: #133-P1 under Closed was VESTA's message drawn as a
+  // notification, a bell and no device, state or room): the one card of every case, as on Open issues and Watch
+  const g = w.closed.find((i) => i.key === "closed:g");
+  ck("  ...one VESTA holds a message for is listed once, by its fault's card, VESTA's message joined inside it",
+     w.closed.length === 2 && g?.kind === "issue" && g.card.lines[0].told?.key === "incident:90"
+     && !w.closed.some((i) => i.kind !== "issue") && messagePlaces({ open: [], watched: [], closed: [gone, told], announcements: [msg] }).of(msg) === "issue",
+     w.closed);
 }
 
 {
