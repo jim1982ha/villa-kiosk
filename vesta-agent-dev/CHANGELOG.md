@@ -1,3 +1,13 @@
+## 0.12.472
+
+- A visit closed on the tablet (Done, Not a problem, or any other answer) goes straight to Closed, as one the villa
+  closes; it no longer waits on the Watch list with no state.
+- A fault about an automation watching a device that no longer answers reads the same whether that device is hidden
+  or not: "The automation 'Server room person' watches 1 device that no longer answers: …".
+- While a visit is open, its last line on Telegram reads "⚠️ New alert, monitoring until 06:40" (the time moves later
+  at each new sign), in every language; the tablet's card says "monitoring until 06:40" beside its state.
+- A lock opened by hand during a visit reads "Test lock opened at the lock, 06:35".
+
 ## 0.12.471
 
 - Every alert's Status, on Telegram and on the tablet, gives each line its time alone when it happened on the alert's
