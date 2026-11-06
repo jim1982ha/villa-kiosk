@@ -45,7 +45,7 @@ a check into `tail` or `grep` inside a chain: the pipe's status is the filter's.
 "error" and pushed a tree that did not compile.
 
 **How to apply:** judge every command by its exit status, never by searching its output. The release command already
-chains every gate; use it.
+chains its fast gates and waits for CI, which runs them all; use it.
 
 ## CI is the gate
 

@@ -174,6 +174,7 @@ wait for my word before shipping, once you have finished the implementation".
 ## Time matters
 
 Bundle related items into one release, measure only what a decision rests on, and say plainly what was skipped.
+Work in progress is not widened with new findings: they go to the next round (owner, 2026-11-07).
 
 **Why:** owner, 2026-09-27, "Time matters": each release costs a full gate run and a CI wait.
 
