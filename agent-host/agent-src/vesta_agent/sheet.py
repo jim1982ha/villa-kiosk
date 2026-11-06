@@ -54,13 +54,28 @@ def chosen(photos: list[dict], shown: int) -> list[dict]:
     return [first, *rest[-(shown - 1):]] if shown > 1 else [first]
 
 
+def cells(n: int) -> tuple[tuple[int, int], list[tuple[int, int, int]]]:
+    """The layout of `n` tiles on a grid of 16:9 cells: the canvas (columns, rows) and each tile's (column, row, span).
+    The strongest spans 2x2 at the top left; the next two stack in the right column; the rest go along rows of 3 below.
+
+    ⚠️ NEVER TALLER THAN WIDE (owner's cards #131, #133, 2026-11-07): the sheet was two tiles wide and grew downwards
+    (960x1440), and Telegram on Android crops a tall photo in its chat bubble: the top and the last row's labels were
+    cut off. Up to the six visit.sheet_tiles allows it is 3 cells by 3 at most."""
+    if n <= 1:
+        return (2, 2), [(0, 0, 2)][:n]
+    out = [(0, 0, 2)] + [(2, r, 1) for r in range(min(n - 1, 2))]
+    out += [(i % 3, 2 + i // 3, 1) for i in range(max(0, n - 3))]
+    return (3, 2 + -(-max(0, n - 3) // 3)), out
+
+
 def build(photos: list[dict], shown: int, zone: str, own: str | None = None) -> bytes | None:
     """The sheet of `photos` ([{path, label, at}], the strongest first) as a JPEG, each tile labelled with its camera and
-    its time ("Parking 18:34"); None when none of them can be read. `own`: the agent's own folder of the cameras it
-    snapped for the visit (visit.Visits.snap), the one place besides MEDIA a photo is read from."""
-    from PIL import Image, ImageDraw, ImageFont
+    its time ("Parking 18:34") written on the photo itself; None when none of them can be read. `own`: the agent's own
+    folder of the cameras it snapped for the visit (visit.Visits.snap), the one place besides MEDIA a photo is read
+    from."""
+    from PIL import Image, ImageDraw, ImageFont, ImageOps
     w = tile_px()
-    h = w * 3 // 4
+    h = w * 9 // 16                                   # the cameras' own shape: each photo fills its tile, no margin
     tiles = []
     for p in chosen(photos, shown):
         path = _inside(p.get("path"), (MEDIA, own))
@@ -74,29 +89,26 @@ def build(photos: list[dict], shown: int, zone: str, own: str | None = None) -> 
             log.info("A visit photo could not be read (%s)", type(e).__name__)
     if not tiles:
         return None
-    big, rest = tiles[0], tiles[1:]
-    rows = (len(rest) + 1) // 2
-    sheet = Image.new("RGB", (2 * w, 2 * h + rows * h), "black")
+    (cols, rows), places = cells(len(tiles))
+    sheet = Image.new("RGB", (cols * w, rows * h), "black")
+    draw = ImageDraw.Draw(sheet)
     font = ImageFont.load_default(max(12, w // 20))
-    for i, (im, p) in enumerate([big, *rest]):
-        size = (2 * w, 2 * h) if i == 0 else (w, h)
-        at = (0, 0) if i == 0 else (((i - 1) % 2) * w, 2 * h + ((i - 1) // 2) * h)
-        tile = im.copy()
-        tile.thumbnail(size)
-        x, y = at[0] + (size[0] - tile.width) // 2, at[1] + (size[1] - tile.height) // 2
-        sheet.paste(tile, (x, y))
+    pad = max(4, w // 80)
+    for (im, p), (c, r, span) in zip(tiles, places):
+        x, y, size = c * w, r * h, (span * w, span * h)
+        sheet.paste(ImageOps.fit(im, size), (x, y))
         try:
             when = clock(datetime.fromisoformat(str(p.get("at"))), zone, days=False)
         except (TypeError, ValueError):
             when = ""
-        label = " ".join(x for x in (str(p.get("label") or ""), when) if x)
+        label = " ".join(t for t in (str(p.get("label") or ""), when) if t)
         if label:
-            draw = ImageDraw.Draw(sheet)
+            # on the photo, inset from its corner: a margin under it is what a crop takes first
             box = draw.textbbox((0, 0), label, font=font)
-            pad = max(4, w // 80)
-            top = at[1] + size[1] - (box[3] - box[1]) - 3 * pad
-            draw.rectangle((at[0], top, at[0] + (box[2] - box[0]) + 2 * pad, at[1] + size[1]), fill="black")
-            draw.text((at[0] + pad, top + pad - box[1]), label, fill="white", font=font)
+            bottom = y + size[1] - 2 * pad
+            top = bottom - (box[3] - box[1]) - 2 * pad
+            draw.rectangle((x + 2 * pad, top, min(x + size[0] - 1, x + 4 * pad + box[2] - box[0]), bottom), fill="black")
+            draw.text((x + 3 * pad, top + pad - box[1]), label, fill="white", font=font)
     out = io.BytesIO()
     sheet.save(out, "JPEG", quality=85)
     return out.getvalue()

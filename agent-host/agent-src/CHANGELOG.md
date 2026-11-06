@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.452 (7 November 2026)
+
+- A visit's photo sheet is landscape (owner's cards #131 960x1440, #133 960x1080: Telegram on Android crops a tall
+  photo in its bubble, the top and the last row's labels were cut off): sheet.cells lays a 3-column grid of 16:9 cells,
+  the strongest 2x2 at the top left, the next two in the right column, the rest in rows of 3 below (2w x 2h for one
+  photo, 3w x 2h up to 3, 3w x 3h up to 6); each photo cover-cropped to its tile (ImageOps.fit, no black margin), its
+  label drawn on it, bottom left, in a dark box inset from the edges. visit.sheet_tiles' hi is 6 (was 24), what the grid
+  holds wide.
+- tests/test_visit_drills.py: the sheet through build() for 1 to 6 photos (exact size, wide, each tile filled, the
+  strongest 2x2, each label on its own photo, inset) and every value the setting allows laid out wide; 8 mutations red.
+
 ## 0.6.451 (7 November 2026)
 
 - A step the villa told while it held the visit is never rung again (owner's drill #132): VESTA started while the villa

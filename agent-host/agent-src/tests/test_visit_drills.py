@@ -252,3 +252,63 @@ def test_the_tablets_card_takes_every_steps_run_and_its_fault_follows_the_strong
     assert f"visit:{vi.id}" in takes and "RUN-26" in takes and "RUN-25" in takes, takes
     (fault,) = [t for t in kiosk._all() if t.get("alertNumber") == 1]
     assert fault["entityId"] == LOCK, "the card named as Telegram's title: the lock"
+
+
+# ---------------------------------------------------------------------------------------------- the photo sheet
+#: Six cameras' photos, each one colour (4:3, not the tiles' 16:9: each must still fill its tile)
+COLOURS = [(200, 40, 40), (40, 160, 40), (40, 40, 200), (200, 160, 40), (160, 40, 200), (40, 160, 160)]
+
+
+def _near(px, colour, tol=45):
+    return all(abs(a - b) <= tol for a, b in zip(px, colour))
+
+
+def test_the_photo_sheet_is_never_taller_than_wide_each_label_on_its_own_photo(tmp_path, media):
+    # owner's cards #131 (960x1440) and #133 (960x1080): Telegram on Android cropped the tall sheet in the chat bubble,
+    # the last row's labels ("Test person 03:22") gone
+    import io as _io
+
+    from PIL import Image
+    from vesta_agent import sheet
+    paths = []
+    for i, c in enumerate(COLOURS):
+        p = media / f"cam{i}.jpg"
+        Image.new("RGB", (640, 480), c).save(p, "JPEG")
+        paths.append(p)
+    w = sheet.tile_px()
+    h = w * 9 // 16
+    want = {1: (2 * w, 2 * h), 2: (3 * w, 2 * h), 3: (3 * w, 2 * h), 4: (3 * w, 3 * h), 5: (3 * w, 3 * h), 6: (3 * w, 3 * h)}
+    for n in range(1, 7):
+        photos = [{"path": str(paths[i]), "label": f"Camera {i}", "at": at(f"03:2{i}:00")} for i in range(n)]
+        im = Image.open(_io.BytesIO(sheet.build(photos, 6, "UTC"))).convert("RGB")
+        assert im.size == want[n] and im.width >= im.height, (n, im.size)
+        _, places = sheet.cells(n)
+        assert places[0] == (0, 0, 2), "the strongest spans 2x2 at the top left"
+        for i, (c, r, span) in enumerate(places):
+            x, y, tw, th = c * w, r * h, span * w, span * h
+            colour = COLOURS[i]
+            # the photo fills its tile: its colour at the top corners and the middle (no black margin)
+            for px in ((x + 3, y + 3), (x + tw - 4, y + 3), (x + tw // 2, y + th // 2)):
+                assert _near(im.getpixel(px), colour), (n, i, px, im.getpixel(px))
+            if span == 2:
+                assert _near(im.getpixel((x + 3 * w // 2, y + 3 * h // 2)), colour), "the strongest fills 2x2"
+            # its label written on it, in the tile's bottom band, inset from the edges (the photo still shows round it)
+            band = [im.getpixel((xx, yy)) for xx in range(x, x + tw // 2) for yy in range(y + th * 3 // 4, y + th)]
+            assert sum(1 for p in band if min(p) > 200) > 20, (n, i, "no label text on the photo")
+            assert _near(im.getpixel((x + 1, y + th - 2)), colour) and _near(im.getpixel((x + 1, y + th - 30)), colour), \
+                (n, i, "the label's box starts at the tile's edge")
+            assert _near(im.getpixel((x + 20, y + th - 3)), colour), (n, i, "the label's box sits on the tile's bottom edge")
+
+
+def test_the_most_photos_the_setting_allows_still_make_a_wide_sheet():
+    # the Limits page offers visit.sheet_tiles up to its `hi`: every value it accepts lays out landscape
+    import os as _os
+
+    from vesta_agent import sheet
+    from vesta_shared import limits
+    src = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    found, _ = limits.scan([_os.path.join(src, "starter")])
+    d = found["visit.sheet_tiles"]
+    for n in range(d.lo, d.hi + 1):
+        (cols, rows), places = sheet.cells(n)
+        assert len(places) == n and cols * 16 >= rows * 9, (n, cols, rows)

@@ -1555,7 +1555,8 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     # only the lines that changed are told (the engine folds each into its line: Notices.observe)
     was = notes_of(store.incident(iid)).get(VISIT_LINES) or {}
     photos = _visit_photos(v)
-    shown = int(limit("visit.sheet_tiles", 6, unit="photos", group="text", lo=1, hi=24,
+    # at most 6: what the sheet's landscape grid holds (sheet.cells), Telegram cropping a taller picture
+    shown = int(limit("visit.sheet_tiles", 6, unit="photos", group="text", lo=1, hi=6,
                       says="How many of a visit's photos its Telegram picture shows: the strongest step's, then the latest.",
                       reached="The others are on the tablet's card; the Status says how many.", told="person"))
     if len(photos) > shown:
