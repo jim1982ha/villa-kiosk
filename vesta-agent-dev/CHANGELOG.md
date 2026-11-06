@@ -1,3 +1,15 @@
+## 0.12.471
+
+- Every alert's Status, on Telegram and on the tablet, gives each line its time alone when it happened on the alert's
+  own day ("Alert sent 05:14, 8th time in 7 days (to: Owner & FM)", "Cleared at 05:23: …"), and the day without the
+  year for a line of another day ("Reminder sent 08/11 09:20 (to: FM)"). Alerts already open read the same way at
+  their next update.
+- A visit's alert sent again for a stronger step is said on that step's own line: "Test door opened, 05:14: alert
+  sent again (to: Owner & FM)", in every language; there is no separate "Stronger signal sent" line any more.
+- A visit's motion line now ends at the detection that opened the visit: "Seen at Test motion, 05:13–05:14".
+- On the tablet, a visit's card takes the name of its strongest step (for example "Test lock") while its words change,
+  no longer only at the next step.
+
 ## 0.12.470
 
 - Nothing changes in VESTA. Updates reach the store faster: fewer checks are repeated on the developer's computer
