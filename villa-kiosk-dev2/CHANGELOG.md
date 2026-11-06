@@ -1,3 +1,13 @@
+## 2.496.730
+
+What you will see:
+- Advanced Settings › Devices: each device's "3D object" field is now the first field of its card, right under the line with its id, above Type. The "not on the map" cards show it at the same place.
+- A device's window: the small wrench button beside Edit is now the Cockpit's own "Open Ticket" button, with the same wrench icon and words as on the Cockpit's cards. It opens the same "Open a ticket" form for this device. The camera's window shows it too.
+- The counts after a section's title ("5 on the map · 1 not on the map" in Devices) are now a small switch like On | Off, the list shown filled. Tap the other one to see its list.
+- Grouped devices: its title says "1 group · 15 suggested" as the same switch. Tap "suggested" to see the suggested groups, each with Create this group; the search narrows the list shown. The separate "15 suggested groups" button beside "Show fewer" is gone.
+- Every card in Settings and Advanced Settings removes with the same bin at the right of its title band. Devices asleep between reports and the chats of Who gets the messages showed an ✕ there. Each bin's tooltip still says what it does ("Take … off Asleep between reports").
+- Shorter (i) texts: Devices now says "Every device the 3D villa can show, with its settings. Pick a list above; type in the search to find a device, or to prepare one whose 3D object is not in the model yet." Grouped devices, Asleep between reports, Device telemetry, Maintenance records, Full-screen announcements, Who gets the messages, Map look and the Upload Model / Log Out All (i) are two sentences at most too.
+
 ## 2.496.729
 
 What you will see:
