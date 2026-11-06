@@ -1,3 +1,10 @@
+## 2.496.735
+
+What you will see:
+- Under Cockpit › Inbox › Issues › Closed, pressing and holding a closed alert's card (for example "#134-P1 Test door") now asks for the superadmin code and erases it, with VESTA's message of it, like every other card there. Before, holding it did nothing.
+
+What to check: unfold Closed, press and hold a closed alert's card: the superadmin code is asked; after it, the card goes and does not come back as a separate message card.
+
 ## 2.496.734
 
 What you will see:

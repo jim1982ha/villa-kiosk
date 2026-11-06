@@ -135,7 +135,8 @@ export interface FmDataContextValue {
   registerWatcher: () => () => void;
 }
 
-const FmDataContext = createContext<FmDataContextValue | null>(null);
+/** Exported for a check that draws a card under it (tests/oracles/every_card_row.mjs); the app reads it through the hooks. */
+export const FmDataContext = createContext<FmDataContextValue | null>(null);
 
 export function FmDataProvider({ children }: { children: ReactNode }) {
   const [retention, setRetention] = useState<FmRetention | null>(null);
@@ -406,6 +407,11 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
 export function useFacilityLiveView(): void {
   const { registerWatcher } = useFmData();
   useEffect(() => registerWatcher(), [registerWatcher]);
+}
+
+/** The Facility records' context, or null outside its provider (a card drawn alone, by a check). */
+export function useFmDataOrNull(): FmDataContextValue | null {
+  return useContext(FmDataContext);
 }
 
 export function useFmData(): FmDataContextValue {

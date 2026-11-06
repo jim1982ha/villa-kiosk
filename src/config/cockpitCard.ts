@@ -291,6 +291,9 @@ export interface CardView {
   look?: "watched" | "closed";
   /** When a closed card closed (ISO): its place among what is closed. */
   closedAt?: string;
+  /** The Facility records a hold on the card erases (superadmin), with VESTA's messages it tells: a closed card's
+   *  fault, as every other record under Closed (owner, 2026-11-07); absent on a card nothing erases. */
+  erases?: string[];
   /** A watched card's two halves (fm/faultConfirm.confirmParts): its compact row says "Done on 25/10/2026 14:10 (JM)" in its text and
    *  "Closes 15:06" in its pill. */
   watched?: { did: string; when: string; tip: string };
@@ -442,7 +445,7 @@ function oneCardPerDevice(cards: readonly CardView[]): CardView[] {
  *  and who line, who closed it, how and when (faultNotes.faultMove), never words of its own. */
 export function closedCards(fmData: FmData, cadence: AgentCadence | null, now: Date, opts: CardsOpts): CardView[] {
   return closedFaults(fmData, cadence, now.getTime()).flatMap((c) => clearedCard(c.ticket, "", opts,
-    { key: `closed:${c.ticket.id}`, look: "closed", nextCheck: null,
+    { key: `closed:${c.ticket.id}`, look: "closed", nextCheck: null, erases: [c.ticket.id],
       ...(Number.isNaN(c.closedAt) ? {} : { closedAt: new Date(c.closedAt).toISOString() }) }));
 }
 
@@ -457,7 +460,7 @@ interface CardsOpts {
 /** The card of a fault no longer open: titled by its device and its room as an open issue's is, its fault's title as
  *  its line and how it closed (`did`) under it; a Reopen only under Closed, on a "Not a problem while it lasts".
  *  None when the profile may not see its device. */
-function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardView, "key" | "look" | "nextCheck" | "watched" | "closedAt">): CardView[] {
+function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardView, "key" | "look" | "nextCheck" | "watched" | "closedAt" | "erases">): CardView[] {
   const { devices, entities, entityMap, resolvedRooms, may } = opts;
   const entityId = recordEntity(t.entityId, (x) => x in entities);
   if (entityId && !may(entityId)) return [];
