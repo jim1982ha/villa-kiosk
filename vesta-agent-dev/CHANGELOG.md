@@ -1,3 +1,23 @@
+## 0.12.464
+
+What you will see, once the villa's presence automation sends a visit step by step (its next update, announced
+before it is saved); until then nothing changes:
+- One visit is ONE alert with one number and one message per chat, updated as it goes: "Seen at Parking → Entrance
+  Left → Waterwall Buddha → Main House Door, 18:34–18:35", "Outdoor entrance Lock opened at the lock (not from the
+  app), 18:35, locked again 18:36", "Someone is inside (Living Room) at 18:36", "Person seen in the Server Room at
+  18:40", and "Same time as the last 4 evenings (18:18–18:33)" when it came at about this time on 3 days of the week.
+  No "Still-there" lines and no "Cleared" in the middle.
+- Its picture is one sheet of every camera of the visit, labelled with the camera and the time, replaced in place.
+- A stronger step (a lock or a door after a camera) sends the message again, so the phone rings.
+- A reminder says what changed: "No answer after 15min. Someone went inside at 18:36. Was this visit expected?"
+- The siren question is a reply to the visit's message in the owner's chat, with no separate camera photos; the
+  Status says "Siren offered to the Owner 18:35", then how it ended. It still needs the owner's Approve.
+- The visit ends once: "Cleared on …: no further signal for 30min.", or "Expected: Jim came home at 18:40." when a
+  resident comes home (the siren question is then withdrawn).
+- Also fixed now: an alert's message no longer gets lost when its reminder replaced it and the all-clear came after;
+  an alert that comes back counts its own alerts from its return.
+- The update asks for one new access: reading the villa's media folder (read only), where the camera photos are.
+
 ## 0.12.463
 
 What you will see:

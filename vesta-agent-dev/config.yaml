@@ -10,7 +10,7 @@
 # ⚠️ BUMP `version` ON EVERY PUSH. The Supervisor resolves image:<version>, never
 # :latest, so an unchanged version is an update Home Assistant cannot see.
 name: "VESTA Agent"
-version: "0.12.463"
+version: "0.12.464"
 slug: vesta_agent_dev
 description: "Runs the VESTA Agent, the villa's AI assistant"
 url: "https://github.com/jim1982ha/villa-kiosk"
@@ -47,6 +47,10 @@ panel_title: VESTA Agent
 map:
   - type: addon_config
     read_only: false
+  # ⚠️ READ ONLY (owner, 2026-11-06: one visit, one story): the villa's camera photos of a visit (/media/vesta/…),
+  # read to draw the one picture of its Telegram card. The agent never writes there.
+  - type: media
+    read_only: true
 # SIGTERM → agent's stop grace → sidecar stop must all fit in here (SPEC 10).
 timeout: 30
 backup_exclude:
