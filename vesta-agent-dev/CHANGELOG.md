@@ -1,3 +1,12 @@
+## 0.12.463
+
+What you will see:
+- An alert that comes again several times in a row shows ONE line in its Status, with its count and its latest time,
+  on Telegram and on the tablet's card: "Still-there alert sent 06/11/2026 18:35, 3 times (to: Owner & FM)", never
+  the same line three times. The ticket's story in the Cockpit shows it once too. Alerts open now read this way as
+  soon as the app has restarted with this update.
+- "Still there: N times since …" counts the alerts that came: 5 alerts say 5 times. It said one more.
+
 ## 0.12.462
 
 What you will see:
