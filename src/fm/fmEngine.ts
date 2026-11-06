@@ -673,11 +673,11 @@ export function withoutCompletion(d: FmData, id: string): FmData {
  * close. The Kiosk's Reopen kept every field but `resolvedAt`, so a later Cockpit Close showed "Closed (Owner) · VESTA
  * confirms it at its next look" with the earlier close's watch time, while the Agent watched nothing: a watch is the
  * Agent's to write on THIS close (agent-contract.json ticket.fields.confirmsBy). The Agent's own reopen drops the same
- * two (kiosk.py reopen_ticket). Not `closesAt`: an OPEN fault's field, set and taken away by the Agent at each look.
+ * two (kiosk.py reopen_ticket), and `notWatched` (a close the Agent watches nothing after) with them. Not `closesAt`: an OPEN fault's field, set and taken away by the Agent at each look.
  * Every stage move here starts from this (withTicketAdvanced, withTicketClosed, withTicketPatch): a close also drops a
  * watch left by a Reopen made before this build. tests/oracles/fault_confirm.mjs.
  */
-export const CLOSE_ONLY_FIELDS = ["resolvedAt", "confirmsBy"] as const satisfies readonly (keyof FmTicket)[];
+export const CLOSE_ONLY_FIELDS = ["resolvedAt", "confirmsBy", "notWatched"] as const satisfies readonly (keyof FmTicket)[];
 
 /** `t` without what its last close left on it (CLOSE_ONLY_FIELDS). */
 export function withoutClose(t: FmTicket): FmTicket {
