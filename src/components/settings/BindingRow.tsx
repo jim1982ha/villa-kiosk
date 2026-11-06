@@ -9,14 +9,13 @@
 // entity no object shows are EntityCards (its entity's name, its id alone on its first line: owner, 2026-11-06), then ONE
 // field, "Bound to" / "3D object" and its search, as a device card's Linked entity (owner, 2026-11-06: "<object> is bound
 // to <entity>" above a bare search did not look like the other cards; "Other · <id> · 3D object: <object>" was a long
-// line saying nothing more); an object bound to nothing is named after the object, its field "Bind to".
+// line saying nothing more); an object bound to nothing an EntityCard too (its object's name, its id under it), its field "Bind to".
 
 import { Link2, Box, EyeOff } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { memo, useState } from "react";
 import IdText from "@/components/common/IdText";
 import SearchPicker from "@/components/common/SearchPicker";
-import RecordCard from "@/components/fm/RecordCard";
 import CardField from "./CardField";
 import EntityCard from "./EntityCard";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -45,7 +44,8 @@ export const BoundObjectCard = memo(BoundObjectCardInner);
 function UnboundObjectCardInner({ mesh, onBind }: { mesh: string; onBind: (mesh: string, entityId: string) => void }) {
   const [picked, setPicked] = useState<string | undefined>(undefined);
   return (
-    <RecordCard title={<IdText id={mesh} />} lead={<Box size={16} aria-hidden />}
+    // named as every card (owner, 2026-11-06: its strip showed the raw id): its friendly name, its id under it
+    <EntityCard entityId={mesh} lead={<Box size={16} aria-hidden />}
       body={
         <CardField label="Bind to">
           <EntityPicker value={picked} onChange={setPicked} placeholder="An entity…" allowCustom hideCurrentLabel />
