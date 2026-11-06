@@ -641,7 +641,7 @@ class Vesta:
 
     async def _visit_now(self, event: dict) -> None:
         """A visit's step with its record as the villa holds it NOW (`visit.now`: who holds it, each chat's card, the
-        villa's replies, an answer, a reminder sent), read through the app's reader — the alert desk tells the step from
+        villa's replies, an answer, a reminder sent, its latest step), read through the app's reader — the alert desk tells the step from
         it. ⚠️ AN EVENT IS THE RECORD AS IT WAS (owner's drill #129): VESTA restarted mid-visit took in the events it
         missed, each saying "VESTA holds it" from before the villa took it back — it rang the door again in both chats
         over the villa's own reply. BOUNDED, NEVER FATAL (names_seconds): unread, the event says it as it was."""
@@ -656,7 +656,8 @@ class Vesta:
             return
         attrs = ((got or {}).get(rec) or {}).get("attributes") if isinstance(got, dict) else None
         if isinstance(attrs, dict) and attrs.get("id") == event["incident_id"]:
-            v["now"] = {k: attrs.get(k) for k in ("owner", "messages", "answered", "reminded_at", "ack_seq", "closed")}
+            v["now"] = {k: attrs.get(k)
+                        for k in ("owner", "messages", "answered", "reminded_at", "ack_seq", "closed", "seq")}
 
     async def _alert_names(self, event: dict) -> None:
         """The alert's devices as the villa's system names them now, kept for its card's translation (translation.py:

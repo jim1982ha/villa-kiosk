@@ -101,6 +101,69 @@ def test_vesta_back_mid_visit_takes_the_villas_card_over_in_place_and_removes_it
     assert last["owner"] == "vesta" and sorted(last["dropped"]) == [600, 601], last
 
 
+def _held_by_the_villa(v, vi: Visit) -> record.Rec:
+    """Drill #132: VESTA stopped, the villa opened the visit, then rang its door step itself (a reply photo) while it
+    held it — the record as the villa's system holds it when VESTA starts again, read by the engine."""
+    rec = _record_of(vi)
+    replies = [{"entity_id": f"notify.example_{c}", "chat_id": c, "message_id": m, "role": "reply", "media": "photo"}
+               for c, m in ((OWNER, 600), (FM, 601))]
+    record.fire(rec, {"record": record.RECORD, "visit": vi.id, "token": "d", "set": {
+        "seq": 2, "owner": "villa", "messages": rec.attributes["messages"] + replies}})
+    assert rec.attributes["owner"] == "villa" and int(rec.attributes["seq"]) == 2, rec.attributes
+    _read_now(v, rec)
+    return rec
+
+
+def _read_now(v, rec: record.Rec) -> None:
+    v.reader._states[RECORD] = {"entity_id": RECORD, "state": rec.state, "attributes": dict(rec.attributes)}
+
+
+def test_vesta_back_while_the_villa_held_the_visit_never_rings_a_step_the_villa_told(tmp_path, kiosk, media):
+    # drill #132: the catch-up took in the missed opening (VESTA took the villa's card over and told the villa), then
+    # the missed door step with the record saying VESTA held it: VESTA rang the door again in both chats
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media, owner="pending")
+    vi.add("motion", PARKING, "03:29:42", photo=True)
+    first = vi.event("opened")
+    vi.add("door", GARDEN_DOOR, "03:30:20", photo=True)
+    second = vi.event()
+    rec = _held_by_the_villa(v, vi)
+    play(v, send(first))
+    _replay(rec, told(v))
+    assert rec.attributes["owner"] == "vesta", "the opening taken over: the record says VESTA holds it"
+    _read_now(v, rec)
+    edits = len(v.tg.edits)
+    play(v, send(second))
+    assert [(c, t[:30]) for c, t, _k in v.tg.sent if not t.startswith("Approval")] == [], "the villa rang the door"
+    for chat, card in ((OWNER, 500), (FM, 501)):
+        assert copy(v, chat)["mid"] == card, "the villa's card kept, never deleted for a new one"
+        assert (chat, card) not in v.tg.deleted
+    assert {(c, m) for c, m, _t in v.tg.edits[edits:]} >= {(OWNER, 500), (FM, 501)}, "the door folded in by an edit"
+    assert "- Garden Door opened, 03:30" in lines(copy(v, OWNER)["text"])
+    assert not [ln for ln in lines(copy(v, OWNER)["text"]) if "Stronger signal sent" in ln]
+
+
+def test_a_step_after_vesta_holds_the_visit_the_villa_never_told_still_rings(tmp_path, kiosk, media):
+    # the control: taken over from the villa at its door step, a lock opened after it is VESTA's to ring
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media, owner="pending")
+    vi.add("motion", PARKING, "03:29:42", photo=True)
+    first = vi.event("opened")
+    vi.add("door", GARDEN_DOOR, "03:30:20", photo=True)
+    rec = _held_by_the_villa(v, vi)
+    play(v, send(first))
+    _replay(rec, told(v))
+    _read_now(v, rec)
+    vi.owner = "vesta"
+    vi.add("lock", LOCK, "03:33:10", how="lock")
+    record.fire(rec, {"record": record.RECORD, "visit": vi.id, "token": "l", "set": {"seq": 3}})
+    _read_now(v, rec)
+    play(v, send(vi.event()))
+    rang = [c for c, t, _k in v.tg.sent if not t.startswith("Approval")]
+    assert sorted(rang) == [OWNER, FM], "the lock, stronger and the villa's never: sent again, it rings"
+    assert "- Stronger signal sent " in copy(v, OWNER)["text"]
+
+
 def test_a_card_deleted_in_its_chat_is_sent_again_never_kept_as_a_pointer(tmp_path, kiosk, media):
     # the group's card 1479 was gone when VESTA took it over: edited, "kept, now a pointer", then posted anew at the close
     v = villa(tmp_path, kiosk)

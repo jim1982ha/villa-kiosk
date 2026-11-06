@@ -1,3 +1,10 @@
+## 0.12.467
+
+After the visit drill of 7 November (#132):
+- When VESTA comes back during a visit the villa was handling alone, it no longer sends the alert again for a step
+  the villa already announced: it takes over the villa's message silently. A step that comes after VESTA has taken
+  the visit over still rings when it is stronger.
+
 ## 0.12.466
 
 After the first visit drills on the villa (6 November, #127 to #129):

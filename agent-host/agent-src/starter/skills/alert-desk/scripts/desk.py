@@ -1192,6 +1192,9 @@ HOME = "home"
 #: the step's event may say as it was: who holds the visit, each chat's card and the villa's replies, a person's answer,
 #: the villa's own reminder.
 VISIT_NOW = ("owner", "messages", "answered", "reminded_at")
+#: The latest step the villa told itself while it held the visit (its record's `seq` when VESTA took it over from the
+#: villa): VESTA never rings one of those again (villa_told).
+VISIT_VILLA_SEQ = "visit_villa_seq"
 
 
 def visit_of(ev) -> dict:
@@ -1204,6 +1207,22 @@ def visit_of(ev) -> dict:
         return {}
     now = v.get("now") if isinstance(v.get("now"), dict) else {}
     return {**{k: x for k, x in v.items() if k != "now"}, **{k: now[k] for k in VISIT_NOW if k in now}}
+
+
+def villa_told(store: Store, iid: int, ev) -> int:
+    """The latest step the villa told itself while it held incident `iid`'s visit, noted when the record NOW says the
+    villa holds it (its `seq` then: the villa rings a step joined while it holds the visit, and at its takeback the
+    strongest one VESTA had not taken) — never lowered. ⚠️ THE RECORD READ NOW, NOT THE OWNER (owner's drill #132):
+    VESTA restarted while the villa held a visit took in the opening it missed and took the villa's card over, so the
+    record said VESTA held it when the missed door step came in — VESTA rang the door again in both chats and deleted
+    the villa's card, a door the villa had already rung."""
+    now = ((ev or {}).get(VISIT) or {}).get("now")
+    was = notes_of(store.incident(iid)).get(VISIT_VILLA_SEQ) or 0
+    if isinstance(now, dict) and now.get("owner") == "villa" and str(now.get("seq", "")).isdigit() \
+            and int(now["seq"]) > int(was):
+        store.note(iid, {VISIT_VILLA_SEQ: int(now["seq"])})
+        return int(now["seq"])
+    return int(was)
 
 
 def _replies(v: dict) -> list[list[int]]:
@@ -1486,6 +1505,7 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         carry_to(store, iid, sev, ev)
         W.carry(store, iid, W.terms(0, 0))                 # a visit is never watched after its close
         _ladder(store, iid, ev, now, sev, route, out)
+        villa_told(store, iid, ev)                    # taken over from the villa: the steps it told, never rung again
         inc = store.incident(iid)
         out["decision"] = "new"
         lines = visit_lines(v, zone)
@@ -1504,7 +1524,9 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         iid = inc["id"]
         store.touch_incident(iid, now.isoformat())
         out["decision"] = "visit_step"
-        ring = stronger(v) and v.get("owner") != "villa"     # the villa rang itself while it held the visit
+        # the villa rang itself while it holds the visit, and every step it told while it held it (villa_told)
+        held = villa_told(store, iid, ev)
+        ring = stronger(v) and v.get("owner") != "villa" and int(_seq(v) or 0) > held
         p = store.note(iid, {k: ev[k] for k in ("message", "label", "entities", "claim", "summary") if ev.get(k) is not None})
         if ev["entity_id"] and ev["entity_id"] != inc["entity_id"]:
             store.update_incident(iid, entity_id=ev["entity_id"])

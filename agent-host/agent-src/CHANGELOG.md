@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.451 (7 November 2026)
+
+- A step the villa told while it held the visit is never rung again (owner's drill #132): VESTA started while the villa
+  held a visit took in the missed opening (its card taken over, the villa told owner vesta), then the missed door step
+  with the record now saying VESTA held it, and rang the door again in both chats, deleting the villa's card. The
+  record's `seq` is read with the rest (app.Vesta._visit_now → visit.now.seq); desk.villa_told notes it on the incident
+  (VISIT_VILLA_SEQ, never lowered) whenever the record says the villa holds the visit, new incident or existing; a
+  stronger step rings only above it. The #129 guard (owner villa now) stays.
+- tests/test_visit_drills.py: the drill replayed through the record's package, and its control (a stronger step after
+  the take-over rings); 4 mutations red.
+
 ## 0.6.450 (6 November 2026)
 
 - One visit, one story, after the owner's first drills (#127-#129):
