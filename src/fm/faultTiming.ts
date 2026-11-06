@@ -14,7 +14,7 @@
 // stood here whatever the villa had set; an Agent that does not say gets no number. The list's own refresh is this app's
 // (useStoreRefresh: STORE_ACTIVE_MS while the Cockpit is open, else the heartbeat).
 
-import { momentText } from "@/utils/dateText";
+import { momentText, statusMoment } from "@/utils/dateText";
 import { villaTime, wallClock } from "@/utils/villaClock";
 import { STORE_ACTIVE_MS, STORE_HEARTBEAT_MS } from "@/hooks/useStoreRefresh";
 import { AGENT_SOURCES, ISSUE_SOURCES, type IssueSource } from "./issueSource";
@@ -156,7 +156,7 @@ export function faultTiming(agent: boolean, cadence: AgentCadence | null = null)
 
 /** One problem of a card, as nextCheck reads it: where it comes from, how the VESTA Agent reads it again (its fault's
  *  `check`), and the fault merged onto it (attention.mergeFaults). */
-interface CheckedProblem { source?: IssueSource; check?: FmTicketCheck; fault?: CheckedProblem }
+interface CheckedProblem { source?: IssueSource; check?: FmTicketCheck; monitoredUntil?: string; openedAt?: string; fault?: CheckedProblem }
 
 type Clock = FmTicketCheck | "hand";
 
@@ -235,10 +235,26 @@ export interface CheckSaid { text: string; at: string | null; when: string; pill
  *  cardCheck); one only a person closes has none (owner, 2026-11-01: a refresh icon beside "by hand" announced a check
  *  no one will make). */
 export function checkPill(problems: readonly CheckedProblem[], cadence: AgentCadence | null, now: Date = new Date()): CheckSaid | null {
+  const watching = monitoringPill(problems);
+  if (watching) return watching;
   const next = soonest(problems, cadence, now);
   if (!next) return null;
   const text = `Next check: ${next.words}`, at = momentText(next.at);
   return { text, at, when: next.words, pill: `next check ${next.words}`, tip: `${text} (${at})` };
+}
+
+/** ⚠️ AN OPEN VISIT SAYS UNTIL WHEN IT IS MONITORED (owner, 2026-11-07): its pill read "next check within 5min" while
+ *  the visit closes on its own once nothing more is seen until its record's closes_at (FmTicket.monitoredUntil, the
+ *  VESTA Agent's) — "monitoring until 06:40", another day than the alert's "08/11 09:20" (statusMoment, the Status's
+ *  rule), as Telegram's last line says it. The latest of a card's visits; null: none is monitored. */
+function monitoringPill(problems: readonly CheckedProblem[]): CheckSaid | null {
+  const until = problems.flatMap((p) => [p, ...(p.fault ? [p.fault] : [])])
+    .filter((p) => p.monitoredUntil && !Number.isNaN(Date.parse(p.monitoredUntil)))
+    .sort((a, b) => Date.parse(b.monitoredUntil!) - Date.parse(a.monitoredUntil!))[0];
+  if (!until) return null;
+  const when = `monitoring until ${statusMoment(until.monitoredUntil!, until.openedAt ?? null)}`, at = momentText(until.monitoredUntil!);
+  return { text: `${when.charAt(0).toUpperCase()}${when.slice(1)}`, at, when, pill: when,
+    tip: `VESTA closes this alert at ${at} if nothing more is seen; each new sign moves it later.` };
 }
 
 /** A problem that is only what the map shows now (no fault on it): this tablet reads it again all the time. */

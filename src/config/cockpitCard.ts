@@ -416,9 +416,9 @@ export function confirmingCards(confirming: readonly ConfirmingFault[], opts: Ca
     // card layout; only the height of the card changes, and no Open Ticket / Close buttons"): its pill is the open
     // issues' pill, saying VESTA closes it then ("Closes 02:00", then "Closes within 5 min", owner 2026-10-31), who
     // cleared it the line under its fault
-    // ...one about to be watched has no pill until VESTA says when (faultConfirm.afterClose, architecture review round 16)
+    // ...one about to be watched too, its next look in its pill (owner, 2026-11-07: no kind of Watch card without it)
     return clearedCard(c.ticket, said.did, opts, { key: `watched:${c.ticket.id}`, look: "watched", watched: said,
-      nextCheck: c.awaiting ? null : { text: said.tip, at: null, when: said.when, pill: said.when, tip: said.tip } });
+      nextCheck: { text: said.tip, at: null, when: said.when, pill: said.when, tip: said.tip } });
   }));
 }
 

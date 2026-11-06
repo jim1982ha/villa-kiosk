@@ -42,6 +42,9 @@ const of = (id) => { const i = items.find((x) => x.id === id); if (!i) throw new
 const issue = (...ids) => ({ kind: "issue", key: ids[0], card: cockpitCard(groupAttention(ids.map(of))[0], null, new Date(now)) });
 const watched = confirmingCards([{ ticket: ticket("w1", "lock.asked"), word: "Cleared", who: "", closedAt: began, at: now + HOUR, due: false }],
   { devices, entities, entityMap, resolvedRooms, may: () => true })[0];
+// owner, 2026-11-07: #136-P1, closed by a person, on Watch before VESTA said when: no state line, no (i)
+const aboutToBe = confirmingCards([{ ticket: ticket("w2", "lock.taken"), word: "Not a problem", who: "Owner", closedAt: began, at: NaN,
+  due: false, lookMinutes: 5, awaiting: true }], { devices, entities, entityMap, resolvedRooms, may: () => true })[0];
 // ⚠️ CLOSED IS THE SAME CARD (owner, 2026-11-07: #133-P1 under Closed was VESTA's message drawn as a notification, a
 // bell, "#133-P1 (closed)" and no device, state or room): a closed fault, and a closed alert VESTA told, through the
 // Closed section's real path (closedCards, messagesView)
@@ -63,8 +66,9 @@ const closedView = messagesView({ open: [], watched: [], closed: closedOnes, ann
 const closedItem = (id) => closedView.closed.find((i) => i.key === `closed:${id}`);
 const table = { offline: issue("unavailable:camera.offline"), missing: issue("unavailable:camera.gone"), alarm: issue("alarm:binary_sensor.leak"),
   "task never done": issue("schedule:s1"), fault: issue("fault:f1"), ticket: issue("fault:f2"), watched: { kind: "issue", key: "w", card: watched },
+  "about to be watched": { kind: "issue", key: "w2", card: aboutToBe },
   closed: closedItem("c1"), "closed alert": closedItem("c2") };
-const STATED = ["ticket", "watched", "fault", "closed", "closed alert"];
+const STATED = ["ticket", "watched", "about to be watched", "fault", "closed", "closed alert"];
 
 const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 console.log("\n  each field of the row, on each kind:");
@@ -108,6 +112,9 @@ ck("each kind that has a state says it; a ticket's, its stage, who took it its w
      Object.keys(table).every((k) => first(k) !== "") && /^<div class="fm-record-state strip-warn"><span class="fm-record-status">New fault<\/span>/.test(first("fault"))
      && /fm-record-strip strip-warn"/.test(row("fault")), Object.keys(table).map((k) => [k, text(first(k))]));
   // the same fault, moved: its move says where it stands, never "New fault" (a ticket's stage, a reopening)
+  ck("every card on Watch, about to be watched or watched until a moment: its state its first line, its (i) after it",
+     ["watched", "about to be watched"].every((k) => /^<div class="fm-record-state[^"]*">[\s\S]*Closes [\s\S]*info-tip/.test(first(k))),
+     ["watched", "about to be watched"].map((k) => [k, first(k)]));
   ck("  ...only while nobody moved it: a ticket says its stage, not \"New fault\"", !/New fault/.test(row("ticket")) && !/New fault/.test(row("watched")));
 }
 {
