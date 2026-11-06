@@ -25,7 +25,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { forgetMappings, repointDevice } from "@/config/mappingEdits";
 import { matchesQuery, rowMatches } from "@/config/deviceRecord";
 import { useHA } from "@/ha/HAStateStore";
-import { useCardRoom, useVillaModel } from "@/config/VillaModel";
+import { useVillaModel } from "@/config/VillaModel";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RecordCard from "@/components/fm/RecordCard";
 import IdText from "@/components/common/IdText";
@@ -40,7 +40,6 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   const { sceneEntityIds } = villa;
   // each card's name and room, as every screen says them (a row reads no live table of its own: EntityMapRow)
   const nameOf = useEntityLabel();
-  const roomOf = useCardRoom();
   // Seed the filter when opened from a device panel's edit shortcut, so that
   // entity's row is shown immediately.
   const [search, setSearch] = useState(initialSearch ?? "");
@@ -168,7 +167,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       {orphans.length > 0 && (
         <div className="fm-list settings-cards">
           {orphans.map((id) => (
-            <RecordCard key={id} title={<IdText id={id} />} room={roomOf({ entityId: id })}
+            <RecordCard key={id} title={<IdText id={id} />}
               status={{ text: "No such entity", tone: "tone-warn" }}
               // what it means is its state's (i), never a visible paragraph (owner, 2026-10-22)
               statusTip="A 3D object in the model is named after it, so it shows as missing everywhere. If the entity was renamed, point the object at its new name; otherwise rename or remove the object in the model."

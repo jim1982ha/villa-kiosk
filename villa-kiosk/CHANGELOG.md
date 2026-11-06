@@ -1,3 +1,10 @@
+## 2.496.727
+
+What you will see:
+- Every card for a device in Settings and Advanced Settings (a group, a bound 3D object, an entity no object shows, a device asleep between reports, a device in Devices) has the same layout: the device's name in its header, its entity id alone on the line under it, then its fields.
+- The long line under the name is gone: no "Other", no "primary (keeps the map badge)" (the section's (i) says it), no "3D object: …".
+- A suggested group is named after its first device, its two ids under it joined by "+".
+
 ## 2.496.726
 
 What you will see:

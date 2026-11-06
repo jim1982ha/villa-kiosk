@@ -6,14 +6,12 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useConfig } from "@/config/ConfigContext";
-import { useEntityLabel } from "@/hooks/useEntityLabel";
 import SearchOrAdd, { SearchEmpty, useSearchHit } from "@/components/common/SearchOrAdd";
 import type { AddOffer } from "@/config/searchOrAdd";
 import { deviceMatches } from "@/config/deviceRecord";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
-import RecordCard from "@/components/fm/RecordCard";
-import IdText from "@/components/common/IdText";
-import { useCardRoom } from "@/config/VillaModel";
+import EntityCard from "./EntityCard";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { Moon } from "lucide-react";
 import Fold from "./Fold";
 import { countOf } from "@/utils/countOf";
@@ -26,7 +24,6 @@ export default function UnavailableByDesign({ title, tip }: { title: string; tip
   // as every screen names a device (owner, 2026-10-28: one owner of a device's name; it printed the platform's)
   const name = useEntityLabel();
   const set = (id: string, on: boolean) => update({ unavailableByDesign: withItem(ids, id, on) });
-  const roomOf = useCardRoom();
   const [search, setSearch] = useState("");
   const src = useDeviceSearch();
   const shown = useMemo(() => ids.filter((id) => deviceMatches(id, search, src)), [ids, search, src]);
@@ -38,7 +35,7 @@ export default function UnavailableByDesign({ title, tip }: { title: string; tip
   const add = (id: string) => { set(id, true); setSearch(""); hit(id); };
   const showOne = (id: string) => { setSearch(id); hit(id); };
   // folded under its title like Grouped devices (owner, 2026-10-22: the same chevron and closed line); its field first,
-  // each device the Cockpit's card (owner, 2026-11-06): its name, its room and id, its ✕ at its strip's right
+  // each device an EntityCard (owner, 2026-11-06): its name, its id, its ✕ at its strip's right
   return (
     <Fold title={title} tip={tip} summary={countOf(ids.length, "device")}>
       <SearchOrAdd query={search} onQuery={(q) => { setSearch(q); hit(null); }} placeholder="Search, or a device to add…"
@@ -49,9 +46,8 @@ export default function UnavailableByDesign({ title, tip }: { title: string; tip
       {shown.length > 0 && (
         <div className="fm-list settings-cards" ref={listRef}>
           {shown.map((id) => (
-            <RecordCard key={id} title={name(id)} lead={<Moon size={16} aria-hidden />} room={roomOf({ entityId: id })}
+            <EntityCard key={id} entityId={id} lead={<Moon size={16} aria-hidden />}
               tone={marked(id)}
-              pills={<span><IdText id={id} /></span>}
               remove={{ icon: "x", label: `Take ${name(id)} off Asleep between reports`, run: () => set(id, false) }} />
           ))}
         </div>

@@ -134,8 +134,11 @@ console.log("\n  every card of the app, wherever it is drawn:");
     // Settings' records (owner, 2026-11-06): a 3D object bound to nothing (no device, so no room), a full-screen
     // announcement (every tablet's), a chat that gets the messages (a person's phone or group)
     "settings/BindingRow.tsx": 1, "settings/MessagesSettings.tsx": 1, "settings/WhoGetsMessages.tsx": 1,
-    // a device of Devices: its room under its name was redundant (owner, 2026-11-06: "no added value")
-    "settings/EntityMapRow.tsx": 1 };
+    // a missing entity's 3D object (no device, so no room)
+    "settings/ConfigEditor.tsx": 1,
+    // ⚠️ EVERY SETTINGS CARD FOR AN ENTITY, the one EntityCard: its name, its id alone under it (owner, 2026-11-06: a
+    // device's room under its name "no added value"; "only showing the baseline entity name", the room line redundant)
+    "settings/EntityCard.tsx": 1 };
   const cards = files.map((f) => { const all = elements(parseTsx(`components/${f}`), "RecordCard");
     return { f, all, roomless: all.filter((e) => propText(e, "room") === undefined || propText(e, "room") === null).length,
       perCaller: all.filter((e) => /\|\| undefined/.test(propText(e, "room") ?? "")).length }; });

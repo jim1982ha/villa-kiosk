@@ -16,7 +16,6 @@
 
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useEntityLabel } from "@/hooks/useEntityLabel";
 import SearchOrAdd, { SearchEmpty } from "@/components/common/SearchOrAdd";
 import type { AddOffer } from "@/config/searchOrAdd";
 import { deviceMatches, matchesQuery } from "@/config/deviceRecord";
@@ -29,18 +28,15 @@ import { addMapping, bindMesh, unbindMesh } from "@/config/mappingEdits";
 import { loadMeshCatalog } from "@/utils/meshCatalog";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { unshownEntities } from "@/config/deviceGroups";
-import { useCardRoom, useDeviceIdentity } from "@/config/VillaModel";
+import { useDeviceIdentity } from "@/config/VillaModel";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 
 /** The list the section shows: its bound objects, its objects bound to nothing, the entities no object shows. */
 type ListView = "bound" | "unbound" | "unshown";
 
 export default function BindingsTable({ title, tip }: { title: string; tip?: ReactNode }) {
-  // THE name a device is shown by (useEntityLabel) — this list printed HA's raw friendly_name.
-  const entityLabel = useEntityLabel();
   const { config, update } = useConfig();
   const { entities, suppressedEntityIds } = useHA();
-  const roomOf = useCardRoom();
   // ⚠️ THE TITLE'S COUNTS OPEN THE LISTS, ONE AT A TIME (owner, 2026-11-06: "4 bound · 829 unbound · 88 not shown" in the
   // title, then again as a line of three toggles under it): bound first
   const [view, setView] = useState<ListView>("bound");
@@ -131,8 +127,7 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
         : narrowed && boundFound.length === 0 ? <SearchEmpty query={search} noun="bound object" offer={offer} onAdd={addEntity} /> : (
         <div className="fm-list settings-cards">
           {boundShown.visible.map((mesh) => (
-            <BoundObjectCard key={mesh} mesh={mesh} entityId={config.meshBindings[mesh]} name={entityLabel(config.meshBindings[mesh])}
-              room={roomOf({ entityId: config.meshBindings[mesh] })} onBind={bind} onUnbind={unbind} />
+            <BoundObjectCard key={mesh} mesh={mesh} entityId={config.meshBindings[mesh]} onBind={bind} onUnbind={unbind} />
           ))}
         </div>
       ))}
@@ -152,7 +147,7 @@ export default function BindingsTable({ title, tip }: { title: string; tip?: Rea
         : narrowed && unmappedFound.length === 0 ? <SearchEmpty query={search} noun="entity" offer={offer} onAdd={addEntity} /> : (
         <div className="fm-list settings-cards">
           {unmappedShown.visible.map((id) => (
-            <UnshownEntityCard key={id} entityId={id} name={entityLabel(id)} room={roomOf({ entityId: id })}
+            <UnshownEntityCard key={id} entityId={id}
               objects={unbound} onBind={bind} />
           ))}
         </div>
