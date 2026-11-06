@@ -46,10 +46,10 @@ const ready = parseTsx("components/fm/ReadinessTab.tsx");
 ck("Readiness' devices: the one list, every device reachable (no \"+N more\" that cannot be tapped)",
    calls(ready, "useTruncated").length === 1 && elements(ready, "ShowAll").length === 1
    && !/\.slice\(0, 8\)|more\s*<\/span>/.test(ready.getText()) && elements(ready, "CheckDevices").length === 1);
-for (const f of ["settings/BindingsTable.tsx", "settings/ConfigEditor.tsx", "settings/GroupedDevices.tsx"]) {
+for (const f of ["settings/ConfigEditor.tsx", "settings/GroupedDevices.tsx"]) {
   const t = parseTsx(`components/${f}`);
-  // Bound 3D objects pages each of its three lists (owner, 2026-11-06: an object bound to nothing listed all 829)
-  const lists = f === "settings/BindingsTable.tsx" ? 3 : 1;
+  // Devices pages each of its two lists, on the map and not (owner, 2026-11-06: a list of 829 objects was drawn whole)
+  const lists = f === "settings/ConfigEditor.tsx" ? 2 : 1;
   ck(`  ...${f.split("/")[1]}: the same`, calls(t, "useTruncated").length === lists && elements(t, "ShowAll").length === lists
      && elements(t, "ShowAll").every((s) => propText(s, "noun")));
 }

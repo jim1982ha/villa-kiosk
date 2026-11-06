@@ -40,7 +40,6 @@ const strips = FILES.filter((f) => /role="tablist"/.test(readFileSync(f, "utf8")
 // the screen MUST hold, so deleting one from the source fails here.
 const SECTIONS = [
   ["Villa location", "villa"],
-  ["Bound 3D objects", "villa"],
   ["Auto-detected entity settings", "devices"],
   ["Grouped devices", "devices"],
   ["Device telemetry", "system"],
@@ -58,7 +57,13 @@ for (let i = 1; i < parts.length; i += 2) chunks[parts[i]] = (chunks[parts[i]] ?
 const titleIn = (chunk, title) =>
   new RegExp(`<div className="settings-section-title">\\s*${title}\\s*</div>`).test(chunk)
   || new RegExp(`<TipTitle title="${title}"`).test(chunk)
-  || new RegExp(`<(?:BindingsTable|GroupedDevices|UnavailableByDesign) title="${title}" tip=`).test(chunk);
+  || new RegExp(`<(?:ConfigEditor|GroupedDevices|UnavailableByDesign)\\b[^>]*?\\btitle="${title}" tip=`).test(chunk);
+
+// owner, 2026-11-06: Villa's "Bound 3D objects" became each device's "3D object" field, in Devices: no tab draws it,
+// and no Settings file names it outside a comment (its section and its lists are gone, not hidden)
+const code = (t) => t.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+const bound3d = FILES.filter((f) => /Bound 3D objects|BindingsTable|BindingRow/.test(code(readFileSync(f, "utf8")))).map((f) => f.slice(SRC.length + 1));
+const bound3dTabs = Object.keys(chunks).filter((t) => titleIn(chunks[t], "Bound 3D objects"));
 
 const misplaced = [];
 for (const [title, want] of SECTIONS) {
@@ -91,7 +96,10 @@ ck("exactly one hand-written tab strip, and it is ModalTabs",
    strips.length === 1 && strips[0] === "components/common/ModalTabs.tsx");
 // four from 2.496.561 to 2.496.669 (Messages); three again: its settings are in Settings › Messages (owner, 2026-11-03)
 ck("Advanced Settings renders three tabs", Object.keys(chunks).sort().join(",") === "devices,system,villa");
-ck("all five sections survive, each in exactly one tab", misplaced.length === 0);
+ck("all four sections survive, each in exactly one tab", misplaced.length === 0);
+ck("no tab draws Bound 3D objects any more, and no source names it or its parts outside a comment",
+   bound3dTabs.length === 0 && bound3d.length === 0);
+if (bound3d.length) console.log(`      still naming Bound 3D objects: ${bound3d.join(", ")}`);
 // owner, 2026-10-24: at the header's right, Back taking its footer place (where Settings' "Advanced Settings" is)
 ck("Log Out All is the header's own control, on every tab, never inside one",
    /logout=\{roleCan\(role, "editConfig"\) && <LogoutAll \/>\}/.test(modal) && (modal.match(/<LogoutAll \/>/g) ?? []).length === 1

@@ -137,21 +137,21 @@ const { ShowAll } = await import("@/components/common/TruncatedList");
 const more = draw(h(ShowAll, { list: { visible: [], hidden: 114, expanded: false, paged: null, toggle() {}, go() {} }, noun: "entity", plural: "entities" }));
 ck("  ...a list inside a section opens by the same chevron and words, never an outlined button",
    /^<button type="button" class="fold-toggle mt" aria-expanded="false"><svg[\s\S]*?lucide-chevron-right[\s\S]*?<\/svg>Show all, 114 more entities<\/button>$/.test(more), more);
-const settingsDir = ["BindingsTable", "GroupedDevices", "UnavailableByDesign", "ConfigEditor"].map((n) => readFileSync(new URL(`../../src/components/settings/${n}.tsx`, import.meta.url), "utf8"));
-ck("  ...Bound 3D objects' lists and the suggested groups too: no chevron drawn by hand in Advanced Settings' sections",
+const settingsDir = ["GroupedDevices", "UnavailableByDesign", "ConfigEditor", "EntityMapRow"].map((n) => readFileSync(new URL(`../../src/components/settings/${n}.tsx`, import.meta.url), "utf8"));
+ck("  ...Devices' two lists and the suggested groups too: no chevron drawn by hand in Advanced Settings' sections",
    settingsDir.every((s) => !/<Chevron(?:Down|Right)\b/.test(s)) && !/fm-disclosure/.test(modals + css("07-facility.css")));
 
 console.log("\n  the rows' parts:");
 const { default: UnitField } = await import("@/components/common/UnitField");
 const unit = draw(h(UnitField, { unit: "s" }, h("input", { value: "10", readOnly: true })));
 ck("a time and its unit joined in one field: \"10s\"", unit === '<span class="unit-field"><input readonly="" value="10"/><span class="unit-field-unit" aria-hidden="true">s</span></span>', unit);
-// owner, 2026-11-06: a record's remove is its card's bar (RecordCard: "Remove", "Remove group", "Unbind"), never a corner
-// icon; the small icon button stays a line's own tool (a device's pencil)
-const recordFiles = ["MessagesSettings", "EntityMapRow", "GroupedDevices", "BindingRow", "UnavailableByDesign", "WhoGetsMessages"]
+// owner, 2026-11-06: a record's remove is the small icon button at its card's strip's right (RecordCard), never a
+// button of a Settings file's own
+const recordFiles = ["MessagesSettings", "EntityMapRow", "GroupedDevices", "UnavailableByDesign", "WhoGetsMessages"]
   .map((n) => [n, readFileSync(new URL(`../../src/components/settings/${n}.tsx`, import.meta.url), "utf8")]);
-ck("  ...the small icon button of a line: round, borderless, one size (a device's pencil); a record's remove in its card's bar",
+ck("  ...the small icon button: round, borderless, one size (a record's remove, RecordCard's); none of a Settings file's own",
    /\.icon-btn-sm \{ width: var\(--row-icon\); height: var\(--row-icon\);[^}]*border: 0; border-radius: 50%; background: transparent;/.test(modals)
-   && /className="icon-btn-sm"/.test(recordFiles.find(([n]) => n === "EntityMapRow")[1])
+   && /className=\{`icon-btn-sm fm-record-remove/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8"))
    && recordFiles.every(([, t]) => !/className="icon-btn(-sm)? danger"|className="icon-btn( |")/.test(t)),
    recordFiles.filter(([, t]) => /className="icon-btn(-sm)? danger"|className="icon-btn( |")/.test(t)).map(([n]) => n));
 const { default: AddOnLine } = await import("@/components/common/AddOnLine");
@@ -163,7 +163,7 @@ const id = draw(h(IdText, { id: "fan.example_house_guest_room" }));
 ck("an entity id breaks after its dots and underscores only, never mid-word (\"…_roo / m\")",
    JSON.stringify(idParts("fan.example_house_guest_room")) === JSON.stringify(["fan.", "example_", "house_", "guest_", "room"])
    && id === "fan.<wbr/>example_<wbr/>house_<wbr/>guest_<wbr/>room" && text(id).replace(/\|/g, "") === "fan.example_house_guest_room"
-   && /\.entity-id-text \{[^}]*overflow-wrap: break-word;/.test(modals) && !/break-all|overflow-wrap: anywhere/.test(readFileSync(new URL("../../src/components/settings/BindingsTable.tsx", import.meta.url), "utf8")), id);
+   && /\.entity-id-text \{[^}]*overflow-wrap: break-word;/.test(modals) && !/break-all|overflow-wrap: anywhere/.test(readFileSync(new URL("../../src/components/settings/MappingFields.tsx", import.meta.url), "utf8")), id);
 
 console.log("\n  the telemetry's moments, the villa's time, the app's format:");
 const { telemetryTime } = await import("@/components/settings/TelemetryPanel");

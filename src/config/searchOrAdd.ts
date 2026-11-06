@@ -22,7 +22,7 @@ export interface AddOffer {
   exactWords: (device: string) => string;
   /** Only these domains are offered. */
   domains?: readonly string[];
-  /** An id the villa's system does not have yet may be added (Bound 3D objects prepares one): its row's words. */
+  /** An id the villa's system does not have yet may be added (Devices prepares one): its row's words. */
   ahead?: (entityId: string) => string;
 }
 

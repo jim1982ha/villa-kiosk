@@ -625,52 +625,41 @@ label.toggle span { user-select: none; line-height: 1.4; }
   .entity-picker-clear:hover { background: var(--bg-panel); color: var(--text-primary); }
 }
 
-/* Entity ID cell: id text on the left, action icons (edit + delete) pinned right
-   so every card lines up identically. */
 /* ⚠️ THE ID KEEPS A READABLE WIDTH (owner, 2026-11-03: on a phone "fan.cei / ling_fa / n_mas…" was cut every few
    letters beside "Confirm before toggling"): the id takes at least 180px, and the actions wrap onto their own line,
    on the right, when the two no longer fit; a long id breaks at its dots and underscores first. */
-/* ⚠️ THE ID'S LINE (owner, 2026-11-05: the pencil on the id's line): the id at most 2 lines, then the toggle and the
-   pencil at its right; on a narrow row the toggle's words go (its shield and On | Off stay, the words still read
-   aloud). ⚠️ ON A PHONE, THE TOGGLE ON A LINE OF ITS OWN (owner, 2026-11-06: "Confirm before toggling" with its On | Off
+/* ⚠️ THE ID'S LINE (owner, 2026-11-05): the id at most 2 lines, then the toggle at its right (its pencil went with
+   the "3D object" field, owner 2026-11-06); on a narrow row the toggle's words go (its shield and On | Off stay, the
+   words still read aloud). ⚠️ ON A PHONE, THE TOGGLE ON A LINE OF ITS OWN (owner, 2026-11-06: "Confirm before toggling" with its On | Off
    under the id's line, never on it; on a laptop it stays on the id's line): the card is measured (its work-row
    container, RecordCard), the words back, On | Off at the line's right. The card is never folded (no chevron). */
-.entity-id-display { display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
-  grid-template-areas: "name confirm tools"; align-items: center; gap: 6px 8px; width: 100%; color: var(--text-secondary);
+.entity-id-display { display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name confirm"; align-items: center; gap: 6px 8px; width: 100%; color: var(--text-secondary);
   container-type: inline-size; }
 .entity-id-text { grid-area: name; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   line-clamp: 2; overflow: hidden; overflow-wrap: break-word; }
-.entity-id-tools { grid-area: tools; display: flex; align-items: center; gap: 4px; }
 .entity-id-confirm { grid-area: confirm; white-space: nowrap; }
 @container (max-width: 520px) {
   .entity-id-confirm .setting-row-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .entity-id-confirm .on-off.config-confirm .on-off-switch { min-width: 84px; }
   .entity-id-confirm .on-off.config-confirm .on-off-switch button { padding: 0 8px; }
 }
-/* A device card's first line: its shown box, then its id's line (or the remap row). Before the phone's rule below, which
-   it would otherwise outrank by coming later. */
+/* A device card's first line: its shown box, then its id's line. Before the phone's rule below, which it would
+   otherwise outrank by coming later. */
 .device-first-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
 /* ⚠️ THE BOX AND THE ID ON ONE LINE (owner, 2026-11-06: on a phone the box sat alone at the left, centred between the
    id's line and the toggle's): the card's first line is one grid there, its id's line laid into it (display: contents),
-   line 1 the box, the id and the pencil, line 2 "Confirm before toggling" under them; on a laptop it stays one row. */
+   line 1 the box and the id, line 2 "Confirm before toggling" under them; on a laptop it stays one row. */
 @container work-row (max-width: 519px) {
-  .device-first-line { display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas: "box name tools" "confirm confirm confirm"; align-items: center; gap: 6px 10px; }
+  .device-first-line { display: grid; grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "box name" "confirm confirm"; align-items: center; gap: 6px 10px; }
   .device-first-line > input[type="checkbox"] { grid-area: box; }
   .device-first-line > .entity-id-display { display: contents; }
-  .device-first-line > .remap-row { grid-column: 2 / -1; }
   .entity-id-display .entity-id-confirm { display: flex; }
   .entity-id-display .entity-id-confirm:empty { display: none; }
   .entity-id-display .entity-id-confirm .on-off.config-confirm { flex: 1 1 auto; }
   .entity-id-display .entity-id-confirm .setting-row-label { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
 }
-
-
-/* Redirect-entity picker: one line (field + Apply + Cancel) on desktop,
-   wraps to its own line as a pair on narrow screens. */
-.remap-row { display: flex; align-items: flex-start; gap: 8px; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
-.remap-picker { flex: 1 1 220px; min-width: 160px; }
-.remap-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 
 /* The shown box on a device's card — match the toggle style */
 .device-card input[type="checkbox"] {
@@ -786,7 +775,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 /* a settings list of cards: room above it as above any list */
 .settings-cards { margin-top: 8px; }
-/* a device group's members and its "Add another entity…", on one line, wrapping */
+/* a device group's members and its "Add another entity…", a device's 3D objects and its "Add a 3D object…": the pills
+   and the compact search on one line, wrapping */
 .group-members { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .group-members-add { flex: 1 1 180px; min-width: 140px; }
 
@@ -804,12 +794,11 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* what a folded section holds, after its title, in the body's case */
 .section-summary { margin-left: 8px; font-size: var(--text-xs); font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
 .fold-body { margin-top: 8px; }
-/* A section's counts that each open their own list (ListSection `views`): the summary's words, " · " between them,
-   the one shown in the accent and underlined; each a finger's reach tall */
+/* A section's counts that each show their own list (FoldedList SectionViewButtons: Devices): the summary's words,
+   " · " between them, the one shown in the accent and underlined; each a finger's reach tall */
 .section-views { display: inline-flex; flex-wrap: wrap; align-items: center; margin-left: 0; }
 /* the title whole on its line; too narrow, the counts and the (i) on the next */
 .with-tip:has(> .section-views) { flex-wrap: wrap; column-gap: 8px; row-gap: 0; }
-.with-tip > .fold-toggle:has(+ .section-views) { flex: 0 0 auto; }
 .section-view { min-height: var(--touch-min); padding: 0 2px; border: 0; background: none; font: inherit; color: inherit;
   cursor: pointer; }
 .section-view + .section-view::before { content: "·"; display: inline-block; margin: 0 6px 0 4px; color: var(--text-dim); }

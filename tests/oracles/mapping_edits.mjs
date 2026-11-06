@@ -71,10 +71,11 @@ console.log("  one edit at a time:");
 }
 {
   const c = apply(cfg(), me.bindMesh("pump_mesh", "switch.pump"));
-  ck("bind: the mesh points at the entity, which gets a mapping", c.meshBindings.pump_mesh === "switch.pump" && !!c.entityMap["switch.pump"]);
-  const u = apply(c, me.unbindMesh("pump_mesh"));
-  ck("unbind: the binding goes, the mapping stays", !("pump_mesh" in u.meshBindings) && !!u.entityMap["switch.pump"]);
-  ck("unbind: a mesh with no binding, no change", J(me.unbindMesh("nothing")(cfg())) === "{}");
+  ck("add a 3D object: it shows the entity, which gets a mapping", c.meshBindings.pump_mesh === "switch.pump" && !!c.entityMap["switch.pump"]);
+  const u = apply(c, me.takeObjectOff("pump_mesh", "switch.pump"));
+  ck("take it off: its binding goes (its name matches nothing: no \"shows nothing\" stored), the mapping stays",
+     !("pump_mesh" in u.meshBindings) && !!u.entityMap["switch.pump"], u.meshBindings);
+  ck("take off an object from a device it does not show: no change", J(me.takeObjectOff("lamp_mesh", "fan.other")(cfg())) === "{}");
 }
 {
   const c = apply(cfg(), me.forgetMappings(["light.a"]));
@@ -111,8 +112,99 @@ console.log("\n  a removed device's 3D object, pointed at another entity:");
 {
   // pin the caller (2.496.327 tested its rule and asked the wrong list): the screen asks with the MODEL's objects
   const ed = readFileSync(new URL("../../src/components/settings/ConfigEditor.tsx", import.meta.url), "utf8");
-  ck("Advanced Settings asks with the model's objects and re-points them all",
-     /orphans: orphanIds \} = villa\.settings/.test(ed) && /useVillaModel\(\)/.test(ed) && /repointDevice\(id, to,/.test(ed) && /repointDevice\(oldKey, newId,/.test(ed));
+  ck("Advanced Settings asks with the model's objects and re-points them all (\"Point it there\", its one caller)",
+     /orphans: orphanIds \} = villa\.settings/.test(ed) && /useVillaModel\(\)/.test(ed) && (ed.match(/repointDevice\(/g) ?? []).length === 1
+     && /repointDevice\(id, to,/.test(ed));
+  // owner, 2026-11-06: the pencil that redirected a device's object is gone, with its edit's second caller
+  ck("  ...and a device's card has no pencil: its 3D objects are added and taken off in its field (bindMesh, takeObjectOff)",
+     /bindMesh\(object, id,/.test(ed) && /takeObjectOff\(object, id\)/.test(ed)
+     && !/remap|Pencil/i.test(ed.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1")));
+}
+
+console.log("\n  a device's \"3D object\" field, on a model (owner, 2026-11-06):");
+{
+  const em = await import("@/config/EntityMap");
+  const D = await import("@/config/deviceRecord");
+  const de = await import("@/config/dismissedEntities");
+  const { unshownEntities } = await import("@/config/deviceGroups");
+  const { normaliseConfig, DEFAULT_CONFIG } = await import("@/config/AppConfig");
+  const { diffSharedConfig, applySharedConfigDiff, pickSharedConfig, parseSharedConfig } = await import("@/config/deviceConfig");
+  const map = (id, type) => ({ entityId: id, type });
+  // (a) an object named after its device, (b) one bound to its device by hand, (c) one with no device, (d) a device no
+  // object shows; around them a model's other shapes: a curtain's poses, a lamp in parts, an exporter's form of a name
+  const entityMap = {
+    "light.example_terrace_lamp": map("light.example_terrace_lamp", "light"), "light.example_hall": map("light.example_hall", "light"),
+    "cover.example_curtain": map("cover.example_curtain", "cover"), "light.example_desk": map("light.example_desk", "light"),
+    "fan.example_ceiling": map("fan.example_ceiling", "fan"),
+  };
+  const meshBindings = { Lamp_Kitchen: "light.example_hall", Spot_primitive0: "fan.example_ceiling", "light.example_desk": "light.example_hall", Odd_Mesh: "notanentity" };
+  const catalog = ["light.example_terrace_lamp", "light_example_terrace_lamp", "Lamp_Kitchen", "Mesh_Unnamed_042", "cover.example_curtain__open",
+    "cover.example_curtain__closed.001", "light.example_desk_primitive0", "Spot_primitive0", "Spot_primitive1", "switch.example_unmapped", "Wall_01", "Odd_Mesh"];
+  const A = "light.example_terrace_lamp", B = "Lamp_Kitchen", C = "Mesh_Unnamed_042", DOOR = "binary_sensor.example_back_door";
+  const ent = (id) => ({ entity_id: id, state: "on", attributes: { friendly_name: id } });
+  const entities = Object.fromEntries([...Object.keys(entityMap), DOOR, "switch.example_unmapped"].map((id) => [id, ent(id)]));
+  const config = { ...cfg(), entityMap, meshBindings };
+  const resolve = (c) => Object.fromEntries(catalog.map((m) => [m, em.resolveMeshToMapping(m, c.entityMap, c.meshBindings)?.entityId ?? null]));
+  const links = (c) => D.objectLinks(catalog, c.entityMap, c.meshBindings);
+  const notOnMap = (c) => unshownEntities({ entities, entityMap: c.entityMap, folding: new Map(), suppressed: new Set(), knownType: (id) => !!em.inferTypeFromEntityId(id) });
+
+  // what the 2.496.728 resolver answered for this model (git b86204d7, run once): a config with no "shows nothing" in it
+  // resolves every object as it did, so an existing install keeps every device where it was
+  const BEFORE = { "light.example_terrace_lamp": "light.example_terrace_lamp", "light_example_terrace_lamp": "light.example_terrace_lamp",
+    "Lamp_Kitchen": "light.example_hall", "Mesh_Unnamed_042": null, "cover.example_curtain__open": "cover.example_curtain",
+    "cover.example_curtain__closed.001": "cover.example_curtain", "light.example_desk_primitive0": "light.example_hall",
+    "Spot_primitive0": "fan.example_ceiling", "Spot_primitive1": null, "switch.example_unmapped": "switch.example_unmapped", "Wall_01": null, "Odd_Mesh": null };
+  ck("no \"shows nothing\" stored: every object of the model shows the device it showed before", J(resolve(config)) === J(BEFORE), resolve(config));
+  ck("  ...and the field's answer is the map's (meshEntityOf, before the shown box)",
+     catalog.every((m) => em.meshEntityOf(m, entityMap, meshBindings) === BEFORE[m]));
+
+  const l0 = links(config);
+  ck("the field lists (a) for its device (linked by its name; an exporter's form of the name is an object of its own) and (b) for its (bound)",
+     J(l0.byDevice.get(A)) === J([A, "light_example_terrace_lamp"])
+     && (l0.byDevice.get("light.example_hall") ?? []).includes(B), Object.fromEntries(l0.byDevice));
+  ck("  ...a curtain's poses one object, a lamp's parts one object", J(l0.byDevice.get("cover.example_curtain")) === J(["cover.example_curtain"])
+     && J(l0.byDevice.get("fan.example_ceiling")) === J(["Spot"]), [l0.byDevice.get("cover.example_curtain"), l0.byDevice.get("fan.example_ceiling")]);
+  ck("  ...(c) shows nothing, and its search lists it first, \"shows nothing yet\"",
+     l0.shows.get(C) === null && D.objectOffers("", l0, "light.example_hall")[0].shows === null
+     && D.objectOffers("mesh_unnamed", l0, "light.example_hall").map((o) => o.object).join() === C);
+
+  const added = apply(config, me.bindMesh(C, "light.example_hall"));
+  ck("adding (c) to a device binds it: the resolver now shows that device on it, and its field lists it",
+     em.resolveMeshToMapping(C, added.entityMap, added.meshBindings)?.entityId === "light.example_hall" && links(added).byDevice.get("light.example_hall").includes(C));
+  const moved = apply(config, me.bindMesh("Spot", "light.example_hall"));
+  ck("  ...an object showing another device moves here, every part of it (a part's own binding goes)",
+     resolve(moved).Spot_primitive0 === "light.example_hall" && resolve(moved).Spot_primitive1 === "light.example_hall" && !("Spot_primitive0" in moved.meshBindings), moved.meshBindings);
+
+  const offB = apply(config, me.takeObjectOff(B, "light.example_hall"));
+  ck("✕ on (b) unbinds it: no binding left, it shows nothing", !(B in offB.meshBindings) && resolve(offB)[B] === null, offB.meshBindings);
+
+  const offA = apply(config, me.takeObjectOff(A, A));
+  ck("✕ on (a), linked by its name: \"shows nothing\" stored, the resolver returns no device for it (its every form)",
+     offA.meshBindings[A] === em.SHOWS_NOTHING && resolve(offA)[A] === null && em.meshEntityOf(A, offA.entityMap, offA.meshBindings) === null
+     && em.resolveMeshToMapping("light.example_terrace_lamp.001", offA.entityMap, offA.meshBindings) === null, offA.meshBindings);
+  ck("  ...every other object unchanged, and its device keeps its settings (on the map, its field the other object)",
+     catalog.filter((m) => em.normaliseMeshName(m) !== A).every((m) => resolve(offA)[m] === BEFORE[m]) && !!offA.entityMap[A]
+     && J(links(offA).byDevice.get(A)) === J(["light_example_terrace_lamp"]) && !notOnMap(offA).includes(A));
+  const sceneIds = new Set(Object.values(resolve(offA)).filter(Boolean));
+  ck("  ...(a) is no orphan (\"No such entity\"), nor any device's object, even an entity the villa's system lost",
+     !de.orphanObjects(sceneIds, (id) => !!entities[id], offA.meshBindings).includes(A)
+     && !de.orphanObjects([A], () => false, offA.meshBindings).includes(A) && de.orphanObjects([A], () => false, config.meshBindings).includes(A)
+     && [...links(offA).byDevice.values()].every((objs) => !objs.includes(A)));
+  ck("  ...and adding it again shows its device", resolve(apply(offA, me.bindMesh(A, A)))[A] === A);
+  // stored, synced and read back: one more binding, its value the empty id
+  const stored = normaliseConfig(JSON.parse(JSON.stringify({ ...DEFAULT_CONFIG, ...offA })));
+  const base = pickSharedConfig({ ...DEFAULT_CONFIG, ...config }), next = pickSharedConfig({ ...DEFAULT_CONFIG, ...offA });
+  const synced = applySharedConfigDiff(base, diffSharedConfig(base, next));
+  const server = parseSharedConfig(JSON.parse(JSON.stringify(synced)));
+  ck("  ...\"shows nothing\" survives a save and a load, and the sync to every tablet (the store's own read too)",
+     stored.meshBindings[A] === em.SHOWS_NOTHING && synced.meshBindings[A] === em.SHOWS_NOTHING && server.meshBindings?.[A] === em.SHOWS_NOTHING,
+     [stored.meshBindings, synced.meshBindings, server.meshBindings]);
+
+  ck("(d) is \"not on the map\"", notOnMap(config).includes(DOOR) && !D.deviceRows(config.entityMap, new Set()).some((r) => r.id === DOOR));
+  const shown = apply(config, me.bindMesh(C, DOOR, entities[DOOR]));
+  ck("  ...after a 3D object added to it, it is on the map: a row of Devices, its object in its field, the resolver showing it",
+     !notOnMap(shown).includes(DOOR) && D.deviceRows(shown.entityMap, new Set()).some((r) => r.id === DOOR)
+     && J(links(shown).byDevice.get(DOOR)) === J([C]) && resolve(shown)[C] === DOOR);
 }
 
 console.log("\n  two edits in the same moment:");
@@ -125,7 +217,7 @@ console.log("\n  two edits in the same moment:");
   const c = apply(snapshot, me.patchMapping("light.a", { label: "X" }), me.patchMapping("light.a", { badgeColor: "#f00" }));
   ck("each edit reads the config the previous one left: both land", c.entityMap["light.a"].label === "X" && c.entityMap["light.a"].badgeColor === "#f00");
   const d = apply(snapshot, me.bindMesh("m2", "fan.x"), me.repointDevice("light.a", "light.b"));
-  ck("a bind then a remap: both land", d.meshBindings.m2 === "fan.x" && d.meshBindings["light.a"] === "light.b" && !!d.entityMap["fan.x"]);
+  ck("an object added then a device re-pointed: both land", d.meshBindings.m2 === "fan.x" && d.meshBindings["light.a"] === "light.b" && !!d.entityMap["fan.x"]);
 }
 
 console.log("\n  nothing builds a mapping patch by hand any more:");

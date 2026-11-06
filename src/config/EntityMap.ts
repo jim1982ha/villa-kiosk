@@ -337,7 +337,7 @@ export function normaliseMeshName(meshName: string): string {
  * ever use a SINGLE underscore, so "__" is a distinctive, low-collision
  * marker a real entity_id essentially never contains naturally. If one ever
  * did, resolution for that one entity would need a manual mesh binding
- * (Advanced Settings' remap) as a fallback — an accepted, documented trade-off
+ * (a device's "3D object" field in Advanced Settings) as a fallback — an accepted, documented trade-off
  * for keeping this convention simple rather than threading per-type
  * vocabulary knowledge into name resolution, which happens before an
  * entity's type is even known.
@@ -371,11 +371,27 @@ export function extractVariantSuffix(meshName: string): string | null {
 }
 
 /**
+ * ⚠️ A 3D OBJECT TAKEN OFF ITS DEVICE (owner, 2026-11-06: the same ✕ for every object in a device's "3D object" field,
+ * one linked by its name too): its binding is this empty id, which no entity has. As every binding it wins over the
+ * object's name, so the map shows nothing on it although the name still matches a device. An older Kiosk reads it as
+ * no binding at all (its `if (boundId)`): there the object shows the device its name matches again, nothing breaks.
+ */
+export const SHOWS_NOTHING = "";
+
+/** The device a 3D object shows (its entity id), or null: the resolver's answer before a profile's denied types and a
+ *  device's "shown" box, which hide a device without changing which object is its (Advanced Settings' "3D object"). */
+export function meshEntityOf(
+  meshName: string, map: Record<string, EntityMapping>, bindings: Record<string, string>,
+): string | null {
+  return resolveMeshUnchecked(meshName, map, bindings)?.entityId ?? null;
+}
+
+/**
  * Resolve a tapped mesh name to an EntityMapping using several strategies, in
  * priority order. Returns null for non-interactive meshes (walls, furniture).
  *
  * Strategy order:
- *   0) explicit user binding (meshName -> entity_id) — the turnkey path,
+ *   0) explicit user binding (meshName -> entity_id, or SHOWS_NOTHING) — the turnkey path,
  *   1-4) name-based matching (mesh named with the entity_id / alias / inferred).
  */
 export function resolveMeshToMapping(
@@ -407,9 +423,10 @@ function resolveMeshUnchecked(
 
   const base = normaliseMeshName(meshName);
 
-  // 0) Explicit binding wins (raw name or normalised name).
+  // 0) Explicit binding wins (raw name or normalised name), "shows nothing" too: over the name, which may still match.
   // mappingForEntityId already handles type-upgrade for old "sensor" fallbacks.
   const boundId = bindings[meshName] ?? bindings[base];
+  if (boundId === SHOWS_NOTHING) return null;
   if (boundId) return mappingForEntityId(boundId, map);
 
   // 1) Exact entity_id match (mesh named with the entity_id).

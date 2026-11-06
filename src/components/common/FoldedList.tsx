@@ -15,7 +15,7 @@ import { Pager, usePaged, PAGE_CARDS } from "./Paged";
 
 /** THE "this opens more" control (owner, 2026-11-06: a chevron after the title in one place, an outlined button in
  *  another): its chevron before its words, pointing down while open. A section's title (ListSection) and a list inside
- *  a section ("3 unbound objects", "Show all, 114 more entities") are each this one button, the section's in its
+ *  a section ("3 suggested groups", "Show all, 114 more entities") are each this one button, the section's in its
  *  title's style. */
 export function FoldToggle({ open, onToggle, children, className = "" }: {
   open: boolean; onToggle: () => void; children: ReactNode; className?: string;
@@ -28,9 +28,9 @@ export function FoldToggle({ open, onToggle, children, className = "" }: {
   );
 }
 
-/** ⚠️ A SECTION'S COUNTS OPEN ITS LISTS (owner, 2026-11-06: Bound 3D objects said "4 bound · 829 unbound · 88 not
- *  shown" in its title and again as a line of three toggles under it): each count after the title is the way to its
- *  own list, one shown at a time, the one shown marked. */
+/** ⚠️ A SECTION'S COUNTS OPEN ITS LISTS (owner, 2026-11-06: a section said "4 bound · 829 unbound · 88 not shown" in
+ *  its title and again as a line of three toggles under it): each count after the title is the way to its own list,
+ *  one shown at a time, the one shown marked (Devices: "120 on the map · 88 not on the map"). */
 export interface SectionViews {
   items: readonly { key: string; words: string }[];
   /** The list shown while the section is open. */
@@ -38,13 +38,29 @@ export interface SectionViews {
   onShow: (key: string) => void;
 }
 
+/** A section's counts after its title, each a button showing its own list, the one shown marked (Devices' title,
+ *  never folded: settings/ConfigEditor; a folded section's were too, until its one, Villa's Bound 3D objects, went). */
+export function SectionViewButtons({ title, views }: { title: string; views: SectionViews }) {
+  return (
+    <span className="section-summary section-views" role="group" aria-label={`${title}: which list`}>
+      {views.items.map((v) => {
+        const shown = v.key === views.shown;
+        return (
+          <button key={v.key} type="button" className={`section-view${shown ? " shown" : ""}`} aria-pressed={shown}
+            onClick={() => views.onShow(v.key)}>{v.words}</button>
+        );
+      })}
+    </span>
+  );
+}
+
 /** One section of a list — Open issues, Notifications, Closed, Recent work — its name and count, its (i) right after
  *  them (`tip`, owner 2026-10-31: next to the words, not at the far end), folded or open by its chevron (owner,
  *  2026-10-28: each collapsible). Advanced Settings' folded sections are this too (settings/Fold): `summary` says what
  *  is inside where a count alone would not ("1 group · 2 suggested"), `bare` leaves its content as it is drawn (a
  *  section's working part, not a list of cards). */
-export function ListSection({ title, count, summary, views, open, onToggle, tip, bare = false, children }: {
-  title: string; count?: number; summary?: string; views?: SectionViews; open: boolean; onToggle: () => void; tip?: ReactNode;
+export function ListSection({ title, count, summary, open, onToggle, tip, bare = false, children }: {
+  title: string; count?: number; summary?: string; open: boolean; onToggle: () => void; tip?: ReactNode;
   bare?: boolean; children: ReactNode;
 }) {
   return (
@@ -53,19 +69,8 @@ export function ListSection({ title, count, summary, views, open, onToggle, tip,
         <div className="with-tip">
           <FoldToggle className="messages-section-toggle settings-section-title" open={open} onToggle={onToggle}>
             <span className="fold-toggle-words">{title}{count ? ` (${count})` : ""}</span>
-            {summary && !views && <span className="section-summary">{summary}</span>}
+            {summary && <span className="section-summary">{summary}</span>}
           </FoldToggle>
-          {views && (
-            <span className="section-summary section-views" role="group" aria-label={`${title}: which list`}>
-              {views.items.map((v) => {
-                const shown = open && v.key === views.shown;
-                return (
-                  <button key={v.key} type="button" className={`section-view${shown ? " shown" : ""}`} aria-pressed={shown}
-                    onClick={() => views.onShow(v.key)}>{v.words}</button>
-                );
-              })}
-            </span>
-          )}
           {tip}
         </div>
       </div>

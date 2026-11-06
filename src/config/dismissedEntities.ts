@@ -12,11 +12,12 @@
 // the same device. One function, one answer.
 
 import type { HassEntity } from "@/types/ha.types";
+import { SHOWS_NOTHING } from "./EntityMap";
 
 // ⚠️ THE MODEL IS THE GROUND TRUTH (owner, 2026-10-14). A 3D object named after an entity IS a device of this Kiosk:
 // it is never removed here — not by "Remove N", not by a row's bin, not by an old dismissal on record. If Home
 // Assistant does not have its entity, every surface says so ("Not in Home Assistant"); what changes it is the model
-// (rename or delete the object) or a re-mapping (Bound 3D objects, "Point it there"). Until 2.496.348 a dismissal
+// (rename or delete the object) or a re-mapping (Devices' "Point it there", a device's "3D object" field). Until 2.496.348 a dismissal
 // applied to such an object too: the map kept its badge while Needs attention and Settings' banner forgot it —
 // "media_player.tv" was Unavailable on the map and nowhere else.
 
@@ -31,7 +32,7 @@ export function dismissedEntitySet(
 
 /**
  * The 3D objects of the loaded model whose entity Home Assistant does not have, and that are not pointed at one it
- * has — every one, listed by Advanced Settings with "Point it there" (owner, 2026-10-14: the warning appeared only
+ * has nor shown as nothing (EntityMap.SHOWS_NOTHING) — every one, listed by Advanced Settings with "Point it there" (owner, 2026-10-14: the warning appeared only
  * when the exact id was typed in the search, and opening Settings showed nothing). Sorted, for a stable list.
  */
 export function orphanObjects(
@@ -42,8 +43,9 @@ export function orphanObjects(
   const out: string[] = [];
   for (const id of sceneEntityIds) {
     if (inHa(id)) continue;
+    // pointed at an entity it has, or taken off every device (it shows nothing: nothing is missing)
     const bound = meshBindings[id];
-    if (bound && inHa(bound)) continue;
+    if (bound === SHOWS_NOTHING || (bound && inHa(bound))) continue;
     out.push(id);
   }
   return out.sort();

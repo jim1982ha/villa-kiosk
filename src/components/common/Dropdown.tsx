@@ -32,15 +32,13 @@ interface DropdownOption<T extends string> {
 }
 
 export default function Dropdown<T extends string>({
-  value, options, onChange, ariaLabel, title, style, className, disabled,
+  value, options, onChange, ariaLabel, title, className, disabled,
 }: {
   value: T;
   options: readonly DropdownOption<T>[];
   onChange: (value: T) => void;
   ariaLabel?: string;
   title?: string;
-  /** The button's own look (BindingRow's compact inline controls). */
-  style?: CSSProperties;
   className?: string;
   disabled?: boolean;
 }) {
@@ -115,7 +113,6 @@ export default function Dropdown<T extends string>({
         ref={button}
         type="button"
         className={`dropdown${open ? " is-open" : ""}${className ? ` ${className}` : ""}`}
-        style={style}
         title={title}
         disabled={disabled}
         aria-haspopup="listbox"
