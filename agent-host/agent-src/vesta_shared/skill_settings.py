@@ -71,3 +71,21 @@ def behaviour(settings: dict) -> dict[str, float]:
     """A settings file's `behaviour:` section: the defaults params.behaviour() falls back to."""
     b = settings.get("behaviour") or {}
     return {k: v for k, v in b.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+
+
+def behaviour_names(skills_dir: str) -> set[str]:
+    """Every name a skill's settings files give a `behaviour:` value (the settings a villa helper vesta_<name> may
+    set, params.VillaParams.behaviour): the shipped files of every skill in `skills_dir`."""
+    names: set[str] = set()
+    try:
+        skills = os.listdir(skills_dir)
+    except OSError:
+        return names
+    for skill in skills:
+        folder = os.path.join(skills_dir, skill)
+        if skill.startswith(".") or not os.path.isdir(folder):
+            continue
+        for fn in os.listdir(folder):
+            if fn.endswith((".yaml", ".yml")) and not fn.startswith((VILLA_PREFIX, ".")):
+                names |= set(behaviour(_read(folder, fn)))
+    return names

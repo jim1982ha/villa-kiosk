@@ -423,6 +423,16 @@ class UI:
         body = await request.json()
         if not isinstance(body.get("id"), dict) or "value" not in body:
             raise Refused(["No limit sent."])
+        if isinstance(body["id"].get("villa"), str):
+            # a value the villa sets itself (its helper wins over the skill's): the agent sets it there, the page holds
+            # no access to the villa
+            res = await requests_box.ask(self.s.data_dir, "villa_setting",
+                                         {"entity_id": body["id"]["villa"], "value": body["value"]}, timeout=45)
+            if res is None:
+                raise Refused(["The agent did not answer: it is stopped, or waiting for a setting (see its log)."], 503)
+            if not res.get("ok"):
+                raise Refused([res.get("error") or "The villa's system did not take it."], 502)
+            return web.json_response({"ok": True})
         return web.json_response(self.limits.save(body["id"], body["value"]))
 
     async def policy_form(self, request):

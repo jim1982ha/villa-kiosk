@@ -27,7 +27,7 @@ import time
 
 log = logging.getLogger("vesta.requests")
 
-KINDS = ("try", "refresh_tools")
+KINDS = ("try", "refresh_tools", "villa_setting")
 ID = re.compile(r"^[A-Za-z0-9_-]{8,40}$")
 STALE_SECONDS = 300            # a request nobody answered, or an answer nobody read: removed after this
 TAKEN_STALE_SECONDS = 1200     # one being carried out: longer than a try may run (skills.run_script, 900 s)

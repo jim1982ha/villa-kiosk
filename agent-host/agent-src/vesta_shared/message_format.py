@@ -573,12 +573,16 @@ JINJA_FILE = os.path.join(os.path.dirname(__file__), "..", "homeassistant", "cus
 #: priority_does) — read here as data for the villa's template, never typed (skills before code).
 ALERT_DESK_RULES = os.path.join(os.path.dirname(__file__), "..", "starter", "skills", "alert-desk", "rules.yaml")
 #: The alert desk's words (its words.yaml): a visit's lines, which the villa writes itself, in English, while VESTA is
-#: away (owner, 2026-11-06: one visit, one story, VESTA on or off) — the template reads their English from here.
+#: away (owner, 2026-11-06: one visit, one story, VESTA on or off) — the villa's visit words read their English from
+#: here (package_visit_words); its buttons, from the desk's skill.yaml.
 ALERT_DESK_WORDS = os.path.join(os.path.dirname(ALERT_DESK_RULES), "words.yaml")
-#: The words.yaml entries the villa's template writes a visit with
+ALERT_DESK_SKILL = os.path.join(os.path.dirname(ALERT_DESK_RULES), "skill.yaml")
+#: The words.yaml entries the villa's presence automation writes a visit with (its title, its lines, its reminder, a
+#: press it recorded while VESTA is away)
 VISIT_WORDS = ("visit_seen", "visit_lock_here", "visit_lock_app", "visit_opened", "visit_locked_again", "visit_inside",
                "visit_person", "visit_changed_lock", "visit_changed_door", "visit_changed_inside",
-               "visit_changed_motion", "visit_changed_person", "visit_expected", "visit_ended", "visit_home", "no_answer")
+               "visit_changed_motion", "visit_changed_person", "visit_expected", "visit_ended", "visit_home", "no_answer",
+               "visit_title_opened", "visit_noted", "visit_noise", "visit_changed_noise", "visit_drill")
 
 
 def priority_to(rules: dict) -> dict[str, str]:
@@ -610,8 +614,6 @@ def jinja_words() -> str:
     from .timeutil import MOMENT_FORMAT
     with open(ALERT_DESK_RULES, encoding="utf-8") as f:
         rules = yaml.safe_load(f) or {}
-    with open(ALERT_DESK_WORDS, encoding="utf-8") as f:
-        said = yaml.safe_load(f) or {}
     lit = lambda v: json.dumps(v, ensure_ascii=False)
     names = {w.lower(): r for words in (ROLE_WORDS, ROLE_SHORT) for r, w in words.items()}
     return "\n".join([
@@ -624,7 +626,6 @@ def jinja_words() -> str:
         f"{{%- set vm_words = {lit(STAGE_WORDS)} -%}}",
         f"{{%- set vm_time_format = {lit(MOMENT_FORMAT)} -%}}",
         f"{{%- set vm_status_break = {lit(STATUS_BREAK)} -%}}",
-        f"{{%- set vm_visit_words = {lit({k: said[k]['en'] for k in VISIT_WORDS})} -%}}",
         JINJA_END,
     ])
 
@@ -720,6 +721,59 @@ def write_package(path: str = PACKAGE_FILE) -> bool:
     return new != src
 
 
+VISIT_FILE = os.path.join(os.path.dirname(__file__), "..", "homeassistant", "packages", "vesta_visit.yaml")
+VISIT_BEGIN = "        # VISIT WORDS: written by vesta_shared.message_format.package_visit_words — python -m vesta_shared.message_format"
+VISIT_END = "        # END VISIT WORDS"
+#: Where each button's press is said once it was pressed on Telegram, by the kind of press: a Done, a "Not a problem"
+#: (a close while it lasts), a take-on (`takes: true`); any other button says its label and the place.
+PRESSED_ON_TELEGRAM = {"done": DONE_IN, "not_a_problem": LASTING_IN}
+
+
+def package_visit_words() -> str:
+    """The attributes of the villa's "VESTA visit words" sensor (packages/vesta_visit.yaml): the English the villa's
+    presence automation writes a visit with while VESTA is away — `words` (words.yaml's English of VISIT_WORDS),
+    `buttons` (the alert desk's [option, label], in its order), `pressed` (each press as a line says it, pressed on
+    Telegram), `closes` (the options that close an alert) and `moment` (timeutil.MOMENT_FORMAT, "Done on {moment}").
+
+    ⚠️ A BLUEPRINT CANNOT READ A TEMPLATE'S VARIABLE (phase C of one visit, one story, 2026-11-06): the words were a
+    `vm_visit_words` set inside vesta_message.jinja, which a blueprint's own templates never see (a variable set in an
+    included file stays there), and the villa's installed copy of the template is not updated by any tool. A sensor's
+    attributes are read by every template; the words stay the desk's, written here, never by hand."""
+    import yaml
+    from .timeutil import MOMENT_FORMAT
+    with open(ALERT_DESK_WORDS, encoding="utf-8") as f:
+        said = yaml.safe_load(f) or {}
+    with open(ALERT_DESK_SKILL, encoding="utf-8") as f:
+        buttons = [b for b in (yaml.safe_load(f) or {}).get("buttons") or [] if isinstance(b, dict) and b.get("option")]
+    lit = lambda v: json.dumps(v, ensure_ascii=False)   # noqa: E731
+
+    def pressed(b: dict) -> str:
+        place = TAKEN_IN if b.get("takes") else PRESSED_ON_TELEGRAM.get(str(b["option"]))
+        return place[ON_TELEGRAM] if place else f"{b['label']} {ON_PLACE[ON_TELEGRAM]}"
+    lines = [VISIT_BEGIN]
+    for key, value in (("words", {k: said[k]["en"] for k in VISIT_WORDS}),
+                       ("buttons", [[str(b["option"]), str(b["label"])] for b in buttons]),
+                       ("pressed", {str(b["option"]): pressed(b) for b in buttons}),
+                       ("closes", [str(b["option"]) for b in buttons if b.get("closes")]),
+                       ("moment", MOMENT_FORMAT)):
+        lines += [f"          {key}: >-", f"            {{{{ {lit(value)} }}}}"]
+    lines.append(VISIT_END)
+    return "\n".join(lines)
+
+
+def write_visit_words(path: str = VISIT_FILE) -> bool:
+    """The visit package's words block rewritten from `package_visit_words`; True when it changed."""
+    with open(path, encoding="utf-8") as f:
+        src = f.read()
+    a, b = src.index(VISIT_BEGIN), src.index(VISIT_END) + len(VISIT_END)
+    new = src[:a] + package_visit_words() + src[b:]
+    if new != src:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new)
+    return new != src
+
+
 if __name__ == "__main__":
     print("vesta_message.jinja:", "words rewritten" if write_jinja() else "already up to date")
     print("vesta_message.yaml:", "chats by priority rewritten" if write_package() else "already up to date")
+    print("vesta_visit.yaml:", "visit words rewritten" if write_visit_words() else "already up to date")

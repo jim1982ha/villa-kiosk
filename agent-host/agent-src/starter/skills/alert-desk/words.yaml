@@ -418,6 +418,19 @@ visit_opened:
   ja: "{name} が開きました、{time}"
   ko: "{name} 열림, {time}"
 
+# the visit's title once a lock or a door is its strongest step, as the villa writes it while VESTA is away
+visit_title_opened:
+  en: "{name} opened while the villa is empty"
+  fr: "{name} ouverte alors que la villa est vide"
+  id: "{name} dibuka saat vila kosong"
+  de: "{name} geöffnet, während die Villa leer ist"
+  es: "{name} abierta mientras la villa está vacía"
+  it: "{name} aperta mentre la villa è vuota"
+  nl: "{name} geopend terwijl de villa leeg is"
+  zh: "别墅无人时 {name} 被打开"
+  ja: "ヴィラが無人の間に {name} が開きました"
+  ko: "빌라가 비어 있는 동안 {name} 열림"
+
 # after a lock's line, once it was locked again within the visit
 visit_locked_again:
   en: ", locked again {time}"
@@ -455,6 +468,20 @@ visit_person:
   zh: "{time} 在{room}看到有人"
   ja: "{time} {room}で人を検知"
   ko: "{time} {room}에서 사람 감지"
+
+# a room's sound sensor heard something while the visit was open (owner, 2026-11-06: a sound adds its line to an open
+# visit and never opens one; it says what it is, never "Someone is inside")
+visit_noise:
+  en: "Sound heard in the {room} at {time}"
+  fr: "Bruit entendu dans {room} à {time}"
+  id: "Suara terdengar di {room} pada {time}"
+  de: "Geräusch gehört in {room} um {time}"
+  es: "Ruido oído en {room} a las {time}"
+  it: "Rumore sentito in {room} alle {time}"
+  nl: "Geluid gehoord in {room} om {time}"
+  zh: "{time} 在{room}听到声音"
+  ja: "{time} {room}で音を検知"
+  ko: "{time} {room}에서 소리 감지"
 
 # a resident came home while the visit was open: the visit was expected, and it closes by itself (owner, 2026-11-06)
 visit_home:
@@ -589,6 +616,17 @@ visit_changed_person:
   zh: "{time} 在{room}看到有人。"
   ja: "{time} に{room}で人が検知されました。"
   ko: "{time}에 {room}에서 사람이 감지되었습니다."
+visit_changed_noise:
+  en: "A sound was heard in the {room} at {time}."
+  fr: "Un bruit a été entendu dans {room} à {time}."
+  id: "Suara terdengar di {room} pada {time}."
+  de: "Um {time} wurde in {room} ein Geräusch gehört."
+  es: "Se oyó un ruido en {room} a las {time}."
+  it: "È stato sentito un rumore in {room} alle {time}."
+  nl: "Er is om {time} geluid gehoord in {room}."
+  zh: "{time} 在{room}听到声音。"
+  ja: "{time} に{room}で音が検知されました。"
+  ko: "{time}에 {room}에서 소리가 감지되었습니다."
 visit_expected:
   en: "Was this visit expected?"
   fr: "Cette visite était-elle prévue?"
@@ -613,6 +651,32 @@ visit_ended:
   zh: "{quiet}内没有新的信号"
   ja: "{quiet}の間、新たな信号なし"
   ko: "{quiet} 동안 추가 신호 없음"
+
+# a drill's title and every line the villa sends alone for it (the automation's Drill input): marked as a test
+visit_drill:
+  en: "TEST: {title}"
+  fr: "TEST: {title}"
+  id: "UJI: {title}"
+  de: "TEST: {title}"
+  es: "PRUEBA: {title}"
+  it: "PROVA: {title}"
+  nl: "TEST: {title}"
+  zh: "测试：{title}"
+  ja: "テスト：{title}"
+  ko: "테스트: {title}"
+
+# after a press of Open Ticket or Need help the villa recorded while VESTA is away: nothing more happens until it is back
+visit_noted:
+  en: "VESTA acts on it when it is back"
+  fr: "VESTA s’en occupe à son retour"
+  id: "VESTA menanganinya saat aktif kembali"
+  de: "VESTA kümmert sich darum, sobald es wieder da ist"
+  es: "VESTA se ocupará cuando vuelva"
+  it: "VESTA se ne occuperà al suo ritorno"
+  nl: "VESTA pakt het op zodra het terug is"
+  zh: "VESTA 恢复后会处理"
+  ja: "VESTA が復帰したら対応します"
+  ko: "VESTA가 돌아오면 처리합니다"
 
 # the siren asked during a visit: a line of the visit's story, its outcome said after it once decided
 visit_siren:

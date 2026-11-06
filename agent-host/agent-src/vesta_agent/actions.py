@@ -434,6 +434,27 @@ class Actions:
                                       "error": str(e)[:error_short_chars()]})
             return False
 
+    async def set_villa_setting(self, entity_id: str, value: float, names: set[str]) -> bool:
+        """A behaviour's villa value (input_number.vesta_<name>, `name` one of `names`: a skill's behaviour) set to
+        `value`, asked on the VESTA Agent page by its administrator (the Limits tab): the one value the skills and the
+        villa's own automations read. Only such a helper, never a device; recorded like every call."""
+        from vesta_shared.params import HELPER_DOMAIN
+        domain, _, obj = str(entity_id).partition(".")
+        name = obj[len("vesta_"):] if obj.startswith("vesta_") else ""
+        if domain != HELPER_DOMAIN or name not in names:
+            self.state.log("refused", {"system": True, "domain": domain, "service": "set_value", "entity": entity_id,
+                                       "reason": "not a behaviour's villa value"})
+            return False
+        try:
+            await asyncio.to_thread(self.writer_factory().call_service, HELPER_DOMAIN, "set_value",
+                                    {"entity_id": entity_id, "value": value})
+            self.state.log("executed", {"system": True, "domain": HELPER_DOMAIN, "service": "set_value", "entity": entity_id})
+            return True
+        except Exception as e:  # noqa: BLE001 — said on the page
+            self.state.log("failed", {"system": True, "domain": HELPER_DOMAIN, "service": "set_value", "entity": entity_id,
+                                      "error": str(e)[:error_short_chars()]})
+            return False
+
     # ------------------------------------------------------------------ system
     def system(self, domain: str, service: str, entity_id: str, data: dict | None = None, siren: str | None = None) -> bool:
         """A call the code makes for itself (the agent's heartbeat helper). Listed in policy.system_actions only — or the

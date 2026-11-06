@@ -22,6 +22,21 @@ input_text:
     mode: text
     icon: mdi:account-wrench
 
+# How long a person has to answer an alert before being asked again (owner, 2026-11-06: one visit, one story). ONE
+# value for the villa and the VESTA Agent: the Agent's alert desk reads it first (its "reask_minutes", this helper
+# being there), and the CRITICAL Presence Guard's Visit mode sends its one plain reminder after it while VESTA is
+# away. A new number starts at its minimum: set it once after it first appears. No `initial:`, so the value set is
+# kept across restarts.
+input_number:
+  vesta_reask_minutes:
+    name: VESTA reminder after
+    min: 1
+    max: 240
+    step: 1
+    mode: box
+    unit_of_measurement: min
+    icon: mdi:bell-ring-outline
+
 template:
   - triggers:
       - trigger: homeassistant

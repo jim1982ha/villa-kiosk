@@ -49,7 +49,6 @@
 {%- set vm_words = {"new": "New alert", "existing": "Still open", "watch": "Cleared on {time}.", "closed": "Cleared on {time}."} -%}
 {%- set vm_time_format = "%d/%m/%Y %H:%M" -%}
 {%- set vm_status_break = "\n" -%}
-{%- set vm_visit_words = {"visit_seen": "Seen at {places}, {span}", "visit_lock_here": "{name} opened at the lock (not from the app), {time}", "visit_lock_app": "{name} opened from the app ({who}), {time}", "visit_opened": "{name} opened, {time}", "visit_locked_again": ", locked again {time}", "visit_inside": "Someone is inside ({room}) at {time}", "visit_person": "Person seen in the {room} at {time}", "visit_changed_lock": "{name} was opened at {time}.", "visit_changed_door": "{name} opened at {time}.", "visit_changed_inside": "Someone went inside at {time}.", "visit_changed_motion": "Seen at {place} at {time}.", "visit_changed_person": "A person was seen in the {room} at {time}.", "visit_expected": "Was this visit expected?", "visit_ended": "no further signal for {quiet}", "visit_home": "Expected: {name} came home at {time}", "no_answer": "No answer after {after}"} -%}
 {#- END WORDS -#}
 {%- set vm_by = vm_priority_to.get(vm_priority | default('', true) | string | trim | upper) -%}
 {%- set vm_r = vm_to | default('', true) | string | trim -%}

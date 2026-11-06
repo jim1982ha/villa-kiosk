@@ -1,0 +1,188 @@
+# VESTA visit — the villa's record of a visit under way (owner, 2026-11-06: "one visit, one story").
+# While the villa reads empty, every presence signal within the visit window joins ONE visit: one alert, one message
+# per chat, its story told in place. The CRITICAL Presence Guard blueprint (Visit mode) keeps the visit here, so a
+# restart or a reload never loses it, and the VESTA Agent tells the villa what it did with it through the script below
+# (its only way to write: a script, named by the villa's own event, never a name written in the Agent).
+# Everything this file creates is named vesta_visit*:
+#
+#   sensor.vesta_visit          the record: open / closed; its attributes are the visit (steps, photos, cards, who
+#                               holds it, the answer). Written ONLY by the event vesta_visit_record (the blueprint and
+#                               the script below); a field an event does not name keeps its value. Kept across a
+#                               restart and a reload (trigger-based). Not recorded in the history (state, not history:
+#                               large attributes), from the next restart on.
+#   sensor.vesta_visit_words    the English words the villa writes a visit with while VESTA is away (VESTA writes its
+#                               own, in each chat's language). Written by the VESTA Agent's
+#                               `python -m vesta_shared.message_format`: never edit the block by hand.
+#   script.vesta_visit_tell     how the VESTA Agent tells the villa what it did: it holds the visit, its number, the
+#                               cards it shows in each chat, the step it has told, an answer, a reminder sent.
+#
+# Helpers live in this package file, never made from the screens (owner, 2026-10-18).
+
+template:
+  - triggers:
+      - trigger: event
+        event_type: vesta_visit_record
+        event_data:
+          record: sensor.vesta_visit
+    variables:
+      # the fields this event sets (a field it does not name keeps its value); `vis`: the visit it is about — a patch
+      # for another visit than the one recorded (VESTA telling late) changes nothing (each field checks it: `this`, the
+      # record as it stands, is known only there)
+      d: "{{ trigger.event.data.set if trigger.event.data.set is mapping else {} }}"
+      vis: "{{ trigger.event.data.visit | default('', true) }}"
+    sensor:
+      - name: VESTA visit
+        unique_id: vesta_visit
+        default_entity_id: sensor.vesta_visit
+        icon: mdi:shield-home-outline
+        state: >-
+          {%- set s = d.get('state') if ('id' in d or vis == this.attributes.get('id')) else none -%}
+          {{ s if s in ['open', 'closed'] else (this.state if this.state in ['open', 'closed'] else 'closed') }}
+        attributes:
+          id: "{{ d.get('id', this.attributes.get('id')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('id') }}"
+          automation: "{{ d.get('automation', this.attributes.get('automation')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('automation') }}"
+          seq: "{{ d.get('seq', this.attributes.get('seq', 0)) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('seq', 0) }}"
+          opened_at: "{{ d.get('opened_at', this.attributes.get('opened_at')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('opened_at') }}"
+          last_at: "{{ d.get('last_at', this.attributes.get('last_at')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('last_at') }}"
+          closes_at: "{{ d.get('closes_at', this.attributes.get('closes_at')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('closes_at') }}"
+          told_at: "{{ d.get('told_at', this.attributes.get('told_at')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('told_at') }}"
+          step: "{{ d.get('step', this.attributes.get('step')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('step') }}"
+          strongest: "{{ d.get('strongest', this.attributes.get('strongest')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('strongest') }}"
+          steps: "{{ d.get('steps', this.attributes.get('steps', [])) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('steps', []) }}"
+          photos: "{{ d.get('photos', this.attributes.get('photos', [])) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('photos', []) }}"
+          entities: "{{ d.get('entities', this.attributes.get('entities', [])) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('entities', []) }}"
+          messages: "{{ d.get('messages', this.attributes.get('messages', [])) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('messages', []) }}"
+          owner: "{{ d.get('owner', this.attributes.get('owner')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('owner') }}"
+          number: "{{ d.get('number', this.attributes.get('number')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('number') }}"
+          name: "{{ d.get('name', this.attributes.get('name')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('name') }}"
+          ack_seq: "{{ d.get('ack_seq', this.attributes.get('ack_seq', 0)) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('ack_seq', 0) }}"
+          answered: "{{ d.get('answered', this.attributes.get('answered')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('answered') }}"
+          reminded_at: "{{ d.get('reminded_at', this.attributes.get('reminded_at')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('reminded_at') }}"
+          closed: "{{ d.get('closed', this.attributes.get('closed')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('closed') }}"
+          status: "{{ d.get('status', this.attributes.get('status')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('status') }}"
+          candidate: "{{ d.get('candidate', this.attributes.get('candidate')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('candidate') }}"
+          # which write this is (the writer waits until it reads it back before its next step)
+          token: "{{ trigger.event.data.token | default('') }}"
+
+  - sensor:
+      - name: VESTA visit words
+        unique_id: vesta_visit_words
+        default_entity_id: sensor.vesta_visit_words
+        icon: mdi:message-text-outline
+        state: "ok"
+        attributes:
+        # VISIT WORDS: written by vesta_shared.message_format.package_visit_words — python -m vesta_shared.message_format
+          words: >-
+            {{ {"visit_seen": "Seen at {places}, {span}", "visit_lock_here": "{name} opened at the lock (not from the app), {time}", "visit_lock_app": "{name} opened from the app ({who}), {time}", "visit_opened": "{name} opened, {time}", "visit_locked_again": ", locked again {time}", "visit_inside": "Someone is inside ({room}) at {time}", "visit_person": "Person seen in the {room} at {time}", "visit_changed_lock": "{name} was opened at {time}.", "visit_changed_door": "{name} opened at {time}.", "visit_changed_inside": "Someone went inside at {time}.", "visit_changed_motion": "Seen at {place} at {time}.", "visit_changed_person": "A person was seen in the {room} at {time}.", "visit_expected": "Was this visit expected?", "visit_ended": "no further signal for {quiet}", "visit_home": "Expected: {name} came home at {time}", "no_answer": "No answer after {after}", "visit_title_opened": "{name} opened while the villa is empty", "visit_noted": "VESTA acts on it when it is back", "visit_noise": "Sound heard in the {room} at {time}", "visit_changed_noise": "A sound was heard in the {room} at {time}.", "visit_drill": "TEST: {title}"} }}
+          buttons: >-
+            {{ [["done", "Done"], ["not_a_problem", "Not a problem"], ["open_ticket", "Open Ticket"], ["need_help", "Need help"]] }}
+          pressed: >-
+            {{ {"done": "Done on Telegram", "not_a_problem": "Not a problem on Telegram", "open_ticket": "Ticket opened on Telegram", "need_help": "Need help on Telegram"} }}
+          closes: >-
+            {{ ["done", "not_a_problem"] }}
+          moment: >-
+            {{ "%d/%m/%Y %H:%M" }}
+        # END VISIT WORDS
+
+script:
+  vesta_visit_tell:
+    alias: VESTA visit tell
+    description: How the VESTA Agent tells the villa what it did with the visit under way. Only for the visit recorded.
+    icon: mdi:shield-sync-outline
+    mode: queued
+    max: 10
+    fields:
+      record:
+        name: Record
+        description: The visit record the villa's event named.
+        required: true
+        selector:
+          entity:
+            domain: sensor
+      visit:
+        name: Visit
+        description: The visit's id, as the villa's event named it.
+        required: true
+        selector:
+          text: {}
+      owner:
+        name: Who holds it
+        description: vesta once the VESTA Agent tells the visit itself.
+        selector:
+          text: {}
+      number:
+        name: Number
+        description: The alert's number at the VESTA Agent.
+        selector:
+          number:
+            min: 1
+            max: 999999999
+            mode: box
+      name:
+        name: Name
+        description: The alert's name, as every message says it.
+        selector:
+          text: {}
+      ack_seq:
+        name: Step told
+        description: The latest step the VESTA Agent has told.
+        selector:
+          number:
+            min: 0
+            max: 100000
+            mode: box
+      messages:
+        name: Cards
+        description: The card each chat shows now.
+        selector:
+          object: {}
+      answered:
+        name: Answer
+        description: A person's answer (option, by, at, where).
+        selector:
+          object: {}
+      reminded_at:
+        name: Reminder sent
+        description: When the VESTA Agent sent its reminder.
+        selector:
+          text: {}
+    sequence:
+      - condition: template
+        value_template: "{{ record is defined and visit is defined and state_attr(record, 'id') == visit }}"
+      - variables:
+          # each chat's card as VESTA names it ({chat_id, message_id}), with the villa's own name for that chat
+          # (entity_id) and what the message is (photo or text) when the villa sent it; the villa's replies are kept
+          cards: >-
+            {%- set cur = state_attr(record, 'messages') or [] -%}
+            {%- set ns = namespace(m=[]) -%}
+            {%- for m in (messages if messages is defined and messages is list else []) if m is mapping -%}
+              {%- set old = cur | selectattr('chat_id', 'eq', m.chat_id | int(0)) | list -%}
+              {%- set same = old | selectattr('message_id', 'eq', m.message_id | int(0)) | list -%}
+              {%- set ns.m = ns.m + [{'entity_id': (old[0].entity_id if old else ''), 'chat_id': m.chat_id | int(0),
+                  'message_id': m.message_id | int(0), 'role': 'card', 'media': (same[0].media if same else '')}] -%}
+            {%- endfor -%}
+            {{ ns.m + (cur | selectattr('role', 'eq', 'reply') | list) }}
+          fields_set: >-
+            {%- set ns = namespace(d={}) -%}
+            {%- if owner is defined and owner -%}{%- set ns.d = dict(ns.d, owner=owner) -%}{%- endif -%}
+            {%- if number is defined and number -%}{%- set ns.d = dict(ns.d, number=number | int) -%}{%- endif -%}
+            {%- if name is defined and name -%}{%- set ns.d = dict(ns.d, name=name) -%}{%- endif -%}
+            {%- if ack_seq is defined and ack_seq is not none -%}{%- set ns.d = dict(ns.d, ack_seq=[ack_seq | int(0), state_attr(record, 'ack_seq') | int(0)] | max) -%}{%- endif -%}
+            {%- if messages is defined and messages is list and messages -%}{%- set ns.d = dict(ns.d, messages=cards) -%}{%- endif -%}
+            {%- if answered is defined and answered is mapping -%}{%- set ns.d = dict(ns.d, answered=answered) -%}{%- endif -%}
+            {%- if reminded_at is defined and reminded_at -%}{%- set ns.d = dict(ns.d, reminded_at=reminded_at) -%}{%- endif -%}
+            {{ ns.d }}
+      - event: vesta_visit_record
+        event_data:
+          record: "{{ record }}"
+          visit: "{{ visit }}"
+          token: "{{ context.id }}"
+          set: "{{ fields_set }}"
+
+# The record is state, not history (its attributes are large): left out of the history. A recorder setting is read
+# at start only: this applies from the next restart; until then the recorder keeps it (attributes above its size
+# limit are left out, with a warning in the log).
+recorder:
+  exclude:
+    entities:
+      - sensor.vesta_visit

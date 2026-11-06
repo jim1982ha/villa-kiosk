@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.449 (6 November 2026)
+
+- One visit, one story, phase C's needs (owner, 2026-11-06): what the villa's presence automation (CRITICAL Presence
+  Guard, Visit mode) sends is read.
+  - The villa's own visit words are the attributes of `sensor.vesta_visit_words` (new tracked package
+    `homeassistant/packages/vesta_visit.yaml`: the visit record, its words, `script.vesta_visit_tell`), written by
+    `message_format.package_visit_words` (words.yaml's English, skill.yaml's buttons, the presses on Telegram, the
+    closing options, the moment); `vm_visit_words` removed from `jinja_words` and vesta_message.jinja (a blueprint
+    cannot read a variable set inside an included template). New words, every language: `visit_title_opened`,
+    `visit_noted`, `visit_noise`, `visit_changed_noise`, `visit_drill`.
+  - `homeassistant/packages/vesta_message.yaml` gains `input_number.vesta_reask_minutes`, the one reminder delay.
+  - A press on the villa's own buttons (`/visit_<option> <time>`) on a card VESTA took over is the villa's
+    (`button_data.villas`: no "Unknown button.", no late "VESTA was restarting"); its answer comes as a `step` with
+    `answered` and no step. `owner: pending` lets VESTA ring a stronger step. The villa's reminder moves the chase on
+    at any step, from the villa's time.
+  - A room's sound (kind `noise`, owner 2026-11-06): its own line ("Sound heard in the Server Room at 18:40"), never an
+    alert by itself, never a siren source (`desk.NOT_A_REASON`). A drill (`visit.drill`) never offers the siren.
+- The Limits tab shows a skill behaviour the villa sets itself (`input_number.vesta_<name>`, `VillaParams.villa_setting`
+  from the skills' kept copy) and its Save sets that helper through the agent (requests_box `villa_setting`,
+  `Vesta.villa_setting`, `Actions.set_villa_setting`: only a behaviour's helper, within its min/max).
+- tests/test_visit_villa_side.py (7 tests) and test_ha_message_layout's visit words test, 16 mutations red.
+
 ## 0.6.448 (6 November 2026)
 
 - One visit, one story, the Agent's side (owner, 2026-11-06, #125-P1/#126-P1, phase B1): `vesta_critical_event` phase

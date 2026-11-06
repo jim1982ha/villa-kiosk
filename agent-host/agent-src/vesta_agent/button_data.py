@@ -21,6 +21,18 @@ PARTS = {APPROVAL: 2, CONTINUE: 1, ALERT: 2, REPORT: 2, TICKET: 2, COMMAND: 1, D
 FOR_PEOPLE_ONLY = {CONTINUE, ALERT, REPORT, TICKET, COMMAND, DECLINE}
 
 
+#: ⚠️ THE VILLA'S OWN BUTTONS ARE THE VILLA'S (one visit, one story, 2026-11-06): a visit's first message carries the
+#: villa's buttons ("/visit_done <its time>", a command the villa's automation answers and records), and VESTA takes
+#: that message over. A press on it before VESTA's buttons replace them is the villa's to answer — answered here too,
+#: the person read "Unknown button." over the villa's own answer. Its answer reaches VESTA with the villa's next event.
+VILLA_COMMAND = "/"
+
+
+def villas(data: str) -> bool:
+    """Is `data` a button of the villa's own (a command its automation answers), never one the agent wrote?"""
+    return str(data or "").startswith(VILLA_COMMAND)
+
+
 def make(kind: str, *parts) -> str:
     assert kind in PARTS and len(parts) == PARTS[kind], (kind, parts)
     return ":".join([kind, *(str(p) for p in parts)])

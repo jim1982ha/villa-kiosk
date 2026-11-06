@@ -1174,8 +1174,14 @@ VISIT_LINES = "visit_lines"
 VISIT_SIREN = "visit_siren"
 #: A press the villa recorded while VESTA was away, already applied (its moment).
 VISIT_ANSWER = "visit_answer"
-#: The kinds of a visit's step the villa derives (lock, door, inside, motion) and a lock locked again (relock).
-LOCK, DOOR, INSIDE, MOTION, RELOCK, PERSON = "lock", "door", "inside", "motion", "relock", "person"
+#: The kinds of a visit's step the villa derives (lock, door, inside, motion, a room camera's person, a room's sound)
+#: and a lock locked again (relock).
+LOCK, DOOR, INSIDE, MOTION, RELOCK, PERSON, NOISE = "lock", "door", "inside", "motion", "relock", "person", "noise"
+#: ⚠️ A SOUND NEVER OPENS A VISIT (owner, 2026-11-06): a room's sound sensor, which the villa counts as indoor activity,
+#: adds its line to a visit already open and is never a reason for one — nor a source the siren counts. The villa
+#: never opens a visit on it; a visit this desk first hears of with nothing but sounds is no alert here either.
+#: Kinds that are no reason for an alert or a siren of their own:
+NOT_A_REASON = (RELOCK, NOISE)
 #: Why the villa closed a visit before its quiet window (`visit.closed.why`): a resident came home (owner, 2026-11-06)
 HOME = "home"
 
@@ -1222,7 +1228,7 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str]]:
       whatever lock or door came between;
     - each lock opened, how ("at the lock (not from the app)", "from the app (<user>)") and when it was locked again;
     - each door opened; someone inside, the room and when they went in; a person a room's camera saw, the room and
-      when."""
+      when; a room's sound, the room and when it was first heard (never "someone is inside")."""
     gap = timedelta(minutes=float(RULES["siren"]["window_min"]))
     lines: dict[str, dict] = {}
     passes: list[dict] = []
@@ -1248,6 +1254,8 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str]]:
             lines["inside"] = {"kind": INSIDE, "s": s, "first": at, "last": at}
         elif kind == PERSON and f"person:{eid}" not in lines:
             lines[f"person:{eid}"] = {"kind": PERSON, "s": s, "first": at, "last": at}
+        elif kind == NOISE and f"noise:{eid}" not in lines:
+            lines[f"noise:{eid}"] = {"kind": NOISE, "s": s, "first": at, "last": at}
     out = []
     for key, ln in lines.items():
         hm = lambda t: clock(t, zone, days=False)   # noqa: E731
@@ -1264,6 +1272,8 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str]]:
             said = say("visit_opened", name=_place(ln["s"]), time=hm(ln["first"]))
         elif ln["kind"] == PERSON:
             said = say("visit_person", room=str(ln["s"].get("area") or _place(ln["s"])), time=hm(ln["first"]))
+        elif ln["kind"] == NOISE:
+            said = say("visit_noise", room=str(ln["s"].get("area") or _place(ln["s"])), time=hm(ln["first"]))
         else:
             said = say("visit_inside", room=str(ln["s"].get("area") or _place(ln["s"])), time=hm(ln["first"]))
         out.append((key, said, ln["last"].isoformat()))
@@ -1373,10 +1383,10 @@ def visit_siren(store: Store, iid: int, v: dict, ev: dict) -> dict | None:
     per visit. ⚠️ ONE VISIT IS ONE INCIDENT: the gate counted open intrusion incidents, which one visit can never be.
     Its question goes as a reply to the visit's card (siren.Request), the cameras that showed nothing lately snapped
     into the visit's sheet, and its outcome is a line of the visit's story. Still only ASKED, of the owner."""
-    if notes_of(store.incident(iid)).get(VISIT_SIREN):
-        return None
+    if notes_of(store.incident(iid)).get(VISIT_SIREN) or v.get("drill") is True:
+        return None                                   # once per visit; a drill (the villa's Drill input) never asks
     cfg = RULES["siren"]
-    steps = [s for s in visit_steps(v) if s.get("kind") != RELOCK]
+    steps = [s for s in visit_steps(v) if s.get("kind") not in NOT_A_REASON]
     if not steps:
         return None
     since = max(_when(s["at"]) for s in steps) - timedelta(minutes=cfg["window_min"])
@@ -1434,6 +1444,11 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     if route.get("intrusion") and not ev.get("occupancy"):
         ev["occupancy"] = occupancy_reader()
     ring = False
+    if inc is None and not [s for s in visit_steps(v) if s.get("kind") not in NOT_A_REASON]:
+        # nothing but a room's sound (NOT_A_REASON): no alert — the villa never opens a visit on it
+        out["decision"] = "visit_sound_only"
+        store.audit("alert-desk", "visit_sound_only", {"rule": rule_id, "visit": vid})
+        return out
     if inc is None:
         if not takes_up(sev):
             out["decision"] = "maintenance_mode"; store.audit("alert-desk", "suppressed_maintenance", ev); return out
@@ -1445,8 +1460,6 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         _ladder(store, iid, ev, now, sev, route, out)
         inc = store.incident(iid)
         out["decision"] = "new"
-        if v.get("reminded_at") and store.move(iid, (Incident.ASKED,), Incident.REASKED, reasked_at=now.isoformat()):
-            pass                                        # the villa reminded already: VESTA's chase goes on from there
         lines = visit_lines(v, zone)
         told = same_time(store, inc, _when(v.get("opened_at")) or now, params, zone)
         if told:
@@ -1478,6 +1491,10 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         out["ha_messages"] = [R.ha_message(iid, details(p, rule_id), None, stage="update", messages=_cards(v),
                                            takes=[f"{VISIT}:{vid}"])]
     out["incident_id"] = iid
+    if v.get("reminded_at"):
+        # the villa reminded already (it held the visit: VESTA away at its start, or silent mid-visit): VESTA's chase
+        # goes on from there, never sending that reminder again
+        store.move(iid, (Incident.ASKED,), Incident.REASKED, reasked_at=(_when(v["reminded_at"]) or now).isoformat())
     store.note(iid, {VISIT: v, "ha_incident": vid})
     # only the lines that changed are told (the engine folds each into its line: Notices.observe)
     was = notes_of(store.incident(iid)).get(VISIT_LINES) or {}

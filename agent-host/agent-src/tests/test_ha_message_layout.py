@@ -302,3 +302,42 @@ def test_every_rule_sends_to_the_chats_of_its_priority_written_once_from_the_ale
             assert villa("follow", bp, rule, follow) == desk.priority({}, desk.route_for(rule, bp)), (bp, rule)
     assert villa("p3", "critical_binary_trip", "automation.x", follow) == "P3"
     assert villa("follow", "critical_condition", "automation.x", None) == "P1"
+
+
+def test_the_villas_visit_words_are_the_desks_written_once_into_the_visit_package():
+    # owner, 2026-11-06 (one visit, one story): while VESTA is away the villa's presence automation writes a visit
+    # itself, in the desk's English. A blueprint cannot read a variable set inside the template it includes, so the
+    # words are the attributes of the package's "VESTA visit words" sensor, written by message_format — never by hand
+    import ast
+    from vesta_shared.message_format import (JINJA_BEGIN, JINJA_END, VISIT_BEGIN, VISIT_END, VISIT_WORDS,
+                                             package_visit_words)
+    from vesta_shared.timeutil import MOMENT_FORMAT
+    path = os.path.join(HA, "packages", "vesta_visit.yaml")
+    with open(path, encoding="utf-8") as f:
+        src = f.read()
+    assert src[src.index(VISIT_BEGIN):src.index(VISIT_END) + len(VISIT_END)] == package_visit_words(), \
+        "run: python -m vesta_shared.message_format"
+    (sensor,) = [s for t in yaml.safe_load(src)["template"] for s in t.get("sensor", [])
+                 if s["unique_id"] == "vesta_visit_words"]
+    def native(text):                     # what Home Assistant keeps of a rendered attribute: its value's type
+        try:
+            return ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            return text
+    got = {k: native(_env().from_string(v).render()) for k, v in sensor["attributes"].items()}
+    skills = os.path.join(os.path.dirname(__file__), "..", "starter", "skills", "alert-desk")
+    with open(os.path.join(skills, "words.yaml"), encoding="utf-8") as f:
+        words = yaml.safe_load(f)
+    with open(os.path.join(skills, "skill.yaml"), encoding="utf-8") as f:
+        buttons = yaml.safe_load(f)["buttons"]
+    assert got["words"] == {k: words[k]["en"] for k in VISIT_WORDS}
+    assert {"visit_title_opened", "visit_noted"} <= set(got["words"]), "the two words only the villa writes"
+    assert got["buttons"] == [[b["option"], b["label"]] for b in buttons], "the desk's buttons, in its order"
+    assert got["closes"] == [b["option"] for b in buttons if b.get("closes")] == ["done", "not_a_problem"]
+    assert got["pressed"] == {"done": "Done on Telegram", "not_a_problem": "Not a problem on Telegram",
+                              "open_ticket": "Ticket opened on Telegram", "need_help": "Need help on Telegram"}
+    assert got["moment"] == MOMENT_FORMAT
+    # ONE mechanism: the template no longer carries a copy the blueprint could never read
+    with open(os.path.join(HA, "custom_templates", "vesta_message.jinja"), encoding="utf-8") as f:
+        jinja = f.read()
+    assert "visit" not in jinja[jinja.index(JINJA_BEGIN):jinja.index(JINJA_END)]

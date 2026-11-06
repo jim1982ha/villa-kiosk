@@ -690,8 +690,8 @@ class Vesta:
         if m.event_type == "telegram_callback":
             msg = q.get("message") or {}
             cid = q.get("chat_id") or (msg.get("chat") or {}).get("id")
-            if not self.state.is_own_message(cid, msg.get("message_id")):
-                return
+            if not self.state.is_own_message(cid, msg.get("message_id")) or button_data.villas(q.get("data")):
+                return                   # the villa's own button: the villa answered it (button_data.villas)
             data = q.get("data") or ""
             kind, parts = button_data.read(data)
 
@@ -970,8 +970,8 @@ class Vesta:
         msg = q.get("message") or {}
         cid = q.get("chat_id") or (msg.get("chat") or {}).get("id")
         mid = msg.get("message_id")
-        if not self.state.is_own_message(cid, mid):
-            return
+        if not self.state.is_own_message(cid, mid) or button_data.villas(q.get("data")):
+            return                       # a press of the villa's own buttons on a card VESTA took over: the villa's
         cid = int(cid)
         data = q.get("data") or ""
         presser = q.get("user_id")
@@ -1098,6 +1098,8 @@ class Vesta:
         if req.get("kind") == "refresh_tools":
             await self.refresh_server_tools()
             return {"ok": bool(self.server_tools), "tools": len(self.server_tools)}
+        if req.get("kind") == "villa_setting":
+            return await self.villa_setting(str(req.get("entity_id") or ""), req.get("value"))
         if req.get("kind") == "try":
             try:
                 skill, script, args = requests_box.try_of(req)
@@ -1105,6 +1107,26 @@ class Vesta:
                 return {"ok": False, "error": str(e)}
             return await asyncio.to_thread(self.try_command, skill, script, args)
         return {"ok": False, "error": "Unknown request."}
+
+    async def villa_setting(self, entity_id: str, value) -> dict:
+        """The Limits tab's save of a behaviour the villa sets itself (params.VillaParams.villa_setting): the helper set
+        on the villa, within its own bounds, and the skills' copy told at once."""
+        from vesta_shared.params import keep_state, kept_params
+        from vesta_shared.skill_settings import behaviour_names
+        from vesta_shared.store import Store
+        store = Store(self.s.store_path)
+        names = behaviour_names(self.s.skills_dir)
+        obj = entity_id.partition(".")[2]
+        now = kept_params(store).villa_setting(obj[len("vesta_"):]) if obj.startswith("vesta_") else None
+        if not now or now["entity_id"] != entity_id:
+            return {"ok": False, "error": f"The villa has no setting {entity_id}."}
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or \
+                (now["min"] is not None and value < now["min"]) or (now["max"] is not None and value > now["max"]):
+            return {"ok": False, "error": f"{entity_id} takes a number from {now['min']} to {now['max']}."}
+        if not await self.actions.set_villa_setting(entity_id, value, names):
+            return {"ok": False, "error": "The villa's system did not take it (see the agent's log)."}
+        keep_state(store, entity_id, str(float(value)))
+        return {"ok": True}
 
     def try_command(self, skill_name: str, script: str, args: list[str]) -> dict:
         """Skills › Offline Test: one command on the live villa, its arguments checked as when the AI asks, run

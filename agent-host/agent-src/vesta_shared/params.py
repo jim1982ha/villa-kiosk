@@ -95,6 +95,25 @@ class VillaParams:
         except MissingParameter:
             return None
 
+    def villa_setting(self, name: str) -> dict | None:
+        """The villa's own number for behaviour `name` — its helper input_number.vesta_<name> with a value — as the
+        VESTA Agent page shows and sets it: {entity_id, value, min, max}; None when the villa has none.
+
+        ⚠️ ONE VALUE (owner, 2026-11-06: the reminder delay is the villa's input_number.vesta_reask_minutes, which its
+        presence automation reads too): the page showed the skill's value beside a helper that wins over it."""
+        eid = f"{HELPER_DOMAIN}.vesta_{name}"
+        h = next((h for h in self.helpers if h.get("entity_id") == eid), None)
+        st = self.states.get(eid)
+        if not has_value(st):
+            return None
+        try:
+            value = float(st)
+        except (TypeError, ValueError):
+            return None
+        num = lambda k: float(h[k]) if h and isinstance(h.get(k), (int, float)) else None   # noqa: E731
+        return {"entity_id": eid, "value": int(value) if value.is_integer() else value, "min": num("min"),
+                "max": num("max")}
+
     def behaviour(self, name: str) -> float:
         """Behavioural setting: villa helper vesta_<name> if present, else the skill's default. A value neither gives
         is named, never guessed (MissingParameter)."""
@@ -149,6 +168,28 @@ class VillaParams:
         return cls(helpers=d.get("helpers", []), states=d.get("states", {}))
 
 
+#: The kind of helper a behaviour's villa value is (VillaParams.villa_setting): a number the page can set
+HELPER_DOMAIN = "input_number"
+#: The skill store's copy of the villa's helpers (live_params keeps it; the page reads it, never the villa itself)
+PARAMS_CACHE = "villa_params"
+
+
+def kept_params(store) -> "VillaParams":
+    """The villa's helpers as the skills last read them (live_params' copy in the skill store), however old; empty when
+    none was read yet."""
+    kept = store.cache_get(PARAMS_CACHE) or {}
+    return VillaParams(helpers=kept.get("helpers") or [], states=kept.get("states") or {})
+
+
+def keep_state(store, entity_id: str, state: str) -> None:
+    """The kept copy told that `entity_id` now reads `state` (the agent just set it): the page and the skills read it
+    at once, not after their next reading of the villa."""
+    kept = store.cache_get(PARAMS_CACHE)
+    if isinstance(kept, dict):
+        kept.setdefault("states", {})[entity_id] = state
+        store.cache_put(PARAMS_CACHE, kept)
+
+
 def live_params(client, store, max_age_minutes: float | None = None, now=None,
                 defaults: dict | None = None) -> "VillaParams":
     """The villa's parameters as Home Assistant has them now, kept for `max_age_minutes` in the skill store (a script
@@ -166,7 +207,7 @@ def live_params(client, store, max_age_minutes: float | None = None, now=None,
                                      "again.",
                                 reached="They are read again; if the villa's system does not answer, the last copy is "
                                         "used, however old.", told="")
-    kept = store.cache_get("villa_params") or {}
+    kept = store.cache_get(PARAMS_CACHE) or {}
     try:
         fresh = kept and now - datetime.fromisoformat(kept["at"]) < timedelta(minutes=max_age_minutes)
     except (KeyError, ValueError):
@@ -175,7 +216,7 @@ def live_params(client, store, max_age_minutes: float | None = None, now=None,
         try:
             helpers, states = (client() if callable(client) else client).helpers()
             kept = {"at": now.isoformat(), "helpers": helpers, "states": states}
-            store.cache_put("villa_params", kept)
+            store.cache_put(PARAMS_CACHE, kept)
         except Exception:  # noqa: BLE001 — Home Assistant unreachable: the last copy, or the defaults
             pass
     return VillaParams(helpers=kept.get("helpers") or [], states=kept.get("states") or {}, defaults=dict(defaults or {}))

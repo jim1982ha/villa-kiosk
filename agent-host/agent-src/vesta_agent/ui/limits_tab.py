@@ -138,6 +138,11 @@ def _number(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+def value_of(over, shipped):
+    """A skill's value as the skills read it without the villa's helper: the villa's file's, else the shipped one."""
+    return over if over is not None else shipped
+
+
 def _words(v) -> bool:
     return isinstance(v, list) and bool(v) and all(isinstance(x, str) for x in v)
 
@@ -221,6 +226,9 @@ class LimitsTab:
                         "unit": d.unit, "lo": d.lo, "hi": d.hi, "reached": d.reached, "told": TOLD.get(d.told, d.told),
                         "also": "Only here: this limit is written in the agent's code, and set on this tab.",
                         "where": [s for s in d.sites]})
+        from vesta_shared.params import kept_params
+        from vesta_shared.store import Store
+        self._villa = kept_params(Store(self.s.store_path)) if os.path.exists(self.s.store_path) else None
         for skill in self.skills():
             out += self._skill_rows(skill)
         out = self._villa_wide(out)
@@ -299,22 +307,38 @@ class LimitsTab:
                     # file — the skill becomes the villa's copy and its updates wait (skills.py: "edited")
                     also += (" Saving it here makes this skill your own copy: its updates then wait for you in "
                              f"Skills › {skill} › Compare.")
-                if path[0] == "behaviour":
+                villa_set = self._villa_setting(path)
+                if villa_set:
+                    # ⚠️ ONE VALUE (owner, 2026-11-06): the villa's own helper wins, so it is the value shown and set
+                    value = villa_set["value"]
+                    also = (f"Set on the villa: its helper {villa_set['entity_id']} holds it, read by the skills and "
+                            f"the villa's own automations; saving here changes that helper. The skill's own value, "
+                            f"used without it: {value_of(over, shipped)}.")
+                elif path[0] == "behaviour":
                     also += (f" If the villa's system has a helper input_number.vesta_{path[-1]}, that helper's value "
                              "wins over this one.")
                 if name == "brain":
                     kind, choices = "choice", list(PROFILES)
                 else:
                     kind, choices = ("list" if isinstance(shipped, list) else "number"), None
-                rows.append({"id": {"src": "skill", "skill": skill, "file": fn, "path": list(path)},
+                rows.append({"id": {"src": "skill", "skill": skill, "file": fn, "path": list(path),
+                                    **({"villa": villa_set["entity_id"]} if villa_set else {})},
                              "group": SKILL_GROUP, "section": skill, "name": f"{fn} › {name}",
                              "label": said or name.replace("_", " "), "value": value, "default": shipped,
                              "kind": kind, "choices": choices, "unit": unit_of(str(path[-1])) if kind == "number" else "",
-                             "lo": 0 if _number(shipped) and shipped >= 0 else None,
-                             "hi": 1 if kind == "number" and unit_of(str(path[-1])) == SHARE else None,
+                             "lo": villa_set["min"] if villa_set else 0 if _number(shipped) and shipped >= 0 else None,
+                             "hi": villa_set["max"] if villa_set else
+                             1 if kind == "number" and unit_of(str(path[-1])) == SHARE else None,
                              "reached": "", "told": "", "also": also,
                              "where": [f"{skill}/{villa_fn if (over is not None or not own) else fn}"]})
         return rows
+
+    def _villa_setting(self, path) -> dict | None:
+        """The villa's own value of a skill's behaviour at `path` (params.VillaParams.villa_setting), None otherwise."""
+        villa = getattr(self, "_villa", None)
+        if villa is None or len(path) != 2 or path[0] != "behaviour":
+            return None
+        return villa.villa_setting(str(path[-1]))
 
     def _villa_wide(self, rows: list[dict]) -> list[dict]:
         """`rows` with each villa-wide setting (vesta_shared.daily.VILLA_WIDE) of every skill made ONE row: its value
@@ -337,7 +361,11 @@ class LimitsTab:
                         ". Saving here sets them all."
             also += (f" If the villa's system has a helper input_number.vesta_{key}, that helper's value wins over "
                      "this one.")
-            out.append({**first, "id": {"src": "shared", "key": key}, "section": "every skill", "name": f"behaviour › {key}",
+            villa = next((r["id"]["villa"] for r in each if r["id"].get("villa")), None)
+            if villa:
+                also = next(r["also"] for r in each if r["id"].get("villa"))
+            out.append({**first, "id": {"src": "shared", "key": key, **({"villa": villa} if villa else {})},
+                        "section": "every skill", "name": f"behaviour › {key}",
                         "label": WIDE_WORDS.get(key, key.replace("_", " ")),
                         "value": max(values.values(), key=list(values.values()).count) if differ else first["value"],
                         "also": also, "where": sorted(w for r in each for w in r["where"])})
