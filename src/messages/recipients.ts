@@ -78,26 +78,20 @@ export function textOf(ids: readonly string[]): string | null {
   return text.length <= LIST_MAX_CHARS ? text : null;
 }
 
-/** The changes this tablet sent that the villa may not show yet: the list last sent, and every text the villa may
- *  hold while they land (the one it held before the first, then each one sent). */
-export interface SentLists { ids: readonly string[]; texts: readonly string[] }
+/** One change to a list made in Settings and held until its Save (config/pendingEdits `hold`): a chat added (`on`) or
+ *  taken off. */
+export interface ListChange { id: string; on: boolean }
 
-/** The list a new change builds on. Two changes in a row, the second before the villa shows the first, used to build
- *  each from the list on screen, so the second wrote over the first (architecture review round 17): while the villa
- *  still shows one of the texts this tablet's changes passed through, the next builds on the last one sent; once it
- *  shows anything else (another tablet's change), on the villa's. */
-export function listBase(villaText: string | undefined | null, sent: SentLists | null): string[] {
-  return sent && sent.texts.includes(villaText ?? "") ? [...sent.ids] : targetsOf(villaText);
+/** A list with the held changes laid over it, in their order: what the card shows, and what Save sends, over the
+ *  villa's list as it is THEN (another tablet's change meanwhile is kept). Pure. */
+export function withChanges(ids: readonly string[], changes: readonly ListChange[]): string[] {
+  let out = [...ids];
+  for (const c of changes) out = c.on ? (out.includes(c.id) ? out : [...out, c.id]) : out.filter((x) => x !== c.id);
+  return out;
 }
 
-/** One change to a list, planned over what the villa shows and what this tablet has sent: the text to send (null
- *  when the list would not fit the helper, and nothing is sent) and what this tablet will have sent after it. */
-export function planChange(villaText: string | undefined | null, sent: SentLists | null,
-  change: (ids: string[]) => string[]): { text: string | null; sent: SentLists | null } {
-  const ids = targetsOf(change(listBase(villaText, sent)).join(AGREED.separator));
-  const text = textOf(ids);
-  if (text === null) return { text, sent };
-  const now = villaText ?? "";
-  const before = sent && sent.texts.includes(now) ? sent.texts : [now];
-  return { text, sent: { ids, texts: [...before, text] } };
+/** The held changes after one more over the villa's list `villa`: each chat's last change only, and none that the
+ *  villa already holds (a chat taken off then added back is no change: Save greys again). Pure. */
+export function heldChanges(villa: readonly string[], held: readonly ListChange[], next: ListChange): ListChange[] {
+  return [...held.filter((c) => c.id !== next.id), next].filter((c) => villa.includes(c.id) !== c.on);
 }

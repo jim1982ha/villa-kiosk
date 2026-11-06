@@ -1,3 +1,14 @@
+## 2.496.732
+
+What you will see:
+- Settings › Messages › Who gets the messages: each chat's card now shows its id after its name, in grey: "Fabien (notify.fabien)". On a phone the id may go to the next line after the name; it is never cut inside a word.
+- Taking a chat off a list, or adding one, now waits for Save like every other setting. The card goes (or comes) at once and Save turns green; Save writes the list to the villa, Cancel puts it back as it was. Before, the list was written at once and Save stayed grey, so you could not tell it was saved.
+- A chat's language waits for Save too, and Cancel puts it back. A chat taken off every list still loses its language, and Cancel brings both back.
+- If the villa cannot take the list, Settings stays open and says so above Save ("The Owner's list could not be saved: try again."); press Save again, or Cancel.
+- Cancel no longer says "Who gets the messages was already saved": nothing in Settings or Advanced Settings is saved before Save any more.
+
+What to check: on the tablet, open Settings › Messages, take a chat off a list. Save should turn green. Press Cancel and open Settings again: the chat is still there. Take it off again and press Save: it stays off.
+
 ## 2.496.731
 
 What you will see:

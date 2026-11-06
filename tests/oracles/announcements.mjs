@@ -487,9 +487,10 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
     && /\.versions\b/.test(readFileSync(f, "utf8")));
   ck("  ...no screen picks a version itself", pickers.length === 0, pickers);
   const settings = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
+  const { SETTINGS_KEYS } = await import("@/config/configSlice");
   ck("the tablet's own setting, in Settings › Messages, in this dialog's draft (Save / Cancel)",
-     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="Language on this tablet"/.test(settings)
-     && /tabletLanguages\(config\.chatLanguages\)/.test(settings));
+     SETTINGS_KEYS.includes("tabletLanguage") && SETTINGS_KEYS.includes("chatLanguages") && /ariaLabel="Language on this tablet"/.test(settings)
+     && /tabletLanguages\(v\.chatLanguages\)/.test(settings));
   // owner, 2026-11-03 ("very badly explained … clearer and also shorter"): nothing to choose, nothing drawn; the chats'
   // column says what their menu is
   const { elements, guardsOf, parseTsx, propText } = await import("../consistency/jsx.mjs");

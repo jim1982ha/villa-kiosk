@@ -43,25 +43,17 @@ const draft = (over = {}) => {
 }
 const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
 
-// ⚠️ WHAT WAS SAVED AT ONCE IS SAID KEPT (architecture review 19 #1, 2026-11-03): a chat added to a list stayed on it
-// while Cancel said "nothing was kept"
+// ⚠️ NOTHING IS SAVED AT ONCE (owner, 2026-11-06: one way of saving; architecture review 19 #1 had Cancel name "Who gets
+// the messages" as already saved): Cancel says the one notice, whatever was changed; Settings' Save carries the error
+// of a list the villa refused (tests/oracles/settings_save.mjs drives the lists themselves)
 {
   const d = draft({ keptAtOnce: ["Who gets the messages"] });
   const log = await run(d.commit, "cancel");
-  ck("Cancel with changes and a list saved at once: undoes the draft, says the list was kept",
-     d.did.join() === "discarded" && log[1] === "Other changes cancelled. Who gets the messages was already saved.", log);
-  const only = await run(draft({ dirty: false, keptAtOnce: ["Who gets the messages"] }).commit, "cancel");
-  ck("  ...a list change alone: says it was saved, never silent", only[1] === "Who gets the messages was already saved.", only);
-}
-{
-  const tree = parseTsx("components/settings/SettingsModal.tsx");
-  const who = elements(tree, "WhoGetsMessages");
-  ck("Settings hands Who gets the messages its onSaved, and the dialog's commit carries keptAtOnce",
-     who.length === 1 && /setKeptAtOnce/.test(propText(who[0], "onSaved") ?? "")
-     && /const commit = \{[^}]*keptAtOnce,/.test(src("components/settings/SettingsModal.tsx")), who.length);
-  const lists = src("components/settings/WhoGetsMessages.tsx");
-  ck("  ...which calls it after a list saved and after a language set",
-     /if \(sent\.ok\) onSaved\?\.\(\);/.test(lists) && /withChatLanguage\(c\.chatLanguages, id, code\) \}\)\);\s*onSaved\?\.\(\);/.test(lists));
+  ck("Cancel never names a section as already saved: what changed is cancelled",
+     d.did.join() === "discarded" && log.join("|") === `closed|${CANCELLED_NOTICE}`, log);
+  const st = src("components/settings/SettingsModal.tsx");
+  ck("  ...no dialog keeps a list of what it saved at once", !/keptAtOnce/.test(st + src("components/common/ModalFooter.tsx"))
+     && /const commit = \{\s*dirty: slice\.dirty,\s*saving: slice\.saving,\s*error: slice\.problem,\s*save: slice\.save,/.test(st));
 }
 
 const footer = elements(parseTsx("components/common/ModalFooter.tsx"), "button").map((b) => propText(b, "aria-label"));

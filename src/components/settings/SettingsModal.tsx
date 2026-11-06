@@ -7,7 +7,6 @@
 // There's no HA URL/token here anymore: the kiosk always reaches Home Assistant
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
-import { useState } from "react";
 import Window from "@/components/common/Window";
 import { eyeHeightOf } from "@/babylon/walkerSpawn";
 import ModalFooter, { footerExits } from "@/components/common/ModalFooter";
@@ -29,7 +28,7 @@ import { useHA } from "@/ha/HAStateStore";
 import { useDraftedSlice } from "@/hooks/useDraftedSlice";
 import { useScenePreview } from "@/hooks/useScenePreview";
 import { DEFAULT_SITE_TITLE, type RenderConfig } from "@/config/AppConfig";
-import { ADVANCED_SETTINGS_KEYS } from "@/config/configSlice";
+import { SETTINGS_KEYS } from "@/config/configSlice";
 import type { SceneManager } from "@/babylon/SceneManager";
 import { fmtDuration } from "@/components/panels/chartUtils";
 import { ANNOUNCEMENT_NOTICE_MS, languageName, tabletLanguages } from "@/messages/announcements";
@@ -73,44 +72,26 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
   // blob goes to localStorage on each write), and the draft records what THIS
   // dialog changed, item by item (its ledger):
   //
-  //   dirty   = something it changed is not back to what it was
-  //   Save    = keep it, and forget the ledger
-  //   Discard = put exactly those items back, which reverts the scene AND the store
+  //   dirty   = something it changed is not back to what it was, or a change is held for Save
+  //   Save    = keep it, send what is held to the villa (Who gets the messages' lists), and forget the ledger
+  //   Discard = put exactly those items back, which reverts the scene AND the store; drop what is held
   //
-  // All of that is useDraftedSlice. ⚠️ THE SLICE IS EVERY KEY THIS DIALOG
-  // WRITES, listed once — and it is the ONLY way this dialog writes: `set`
-  // accepts no other key, so a control writing a key Discard would not
-  // restore is a type error, not a silent gap (tests/oracles/settings_baseline.mjs).
-  const SETTINGS_KEYS = [
-    "badgeStyle", "eyeHeight", "highlightInteractive", "naturalScrolling",
-    "render", "showSummaryBar", "siteTitle", "theme",
-    "walkSpeed", "ringsFullScreen", "tabletLanguage",
-    // ⚠️ THE VILLA'S (owner, 2026-11-03: moved here from Advanced Settings' Messages tab): a shared key, through the same
-    // draft, Save keeping it and Cancel putting it back on every tablet.
-    "fullScreen",
-    // ⚠️ THE VILLA'S, NOT THIS DEVICE'S (owner, 2026-10-22: moved here from Advanced Settings): a shared key
-    // (deviceConfig), so writing it reaches every tablet — through the same draft as every other option here, Save
-    // keeping it and Cancel putting it back.
-    "roomGlowAndCones",
-    // ⚠️ AND EVERYTHING ADVANCED SETTINGS EDITS (owner, 2026-10-22: it joins this dialog's Save / Cancel). Advanced
-    // Settings opens OVER this dialog, writes live through ConfigContext.update, and closes back here: these keys are
-    // in this ONE draft, so its changes make Save live, Save keeps them, and Cancel puts them back as they were before
-    // this dialog changed them — to every tablet, through the same update.
-    ...ADVANCED_SETTINGS_KEYS,
-  ] as const;
+  // All of that is useDraftedSlice. ⚠️ THE SLICE IS EVERY KEY THIS DIALOG WRITES (configSlice SETTINGS_KEYS, listed
+  // once) — and it is the ONLY way this dialog writes (tests/oracles/settings_baseline.mjs, settings_save.mjs).
   const slice = useDraftedSlice(SETTINGS_KEYS);
   const v = slice.view;
-  const languages = [...new Set([...tabletLanguages(config.chatLanguages), v.tabletLanguage])];
+  const languages = [...new Set([...tabletLanguages(v.chatLanguages), v.tabletLanguage])];
   // The 3D view follows what this dialog shows (hooks/useScenePreview): a slider is felt while it is dragged, and
   // Cancel puts the view back by the same path. ⚠️ NO SLIDER MOVES THE SCENE ITSELF (to 2.496.499, Cancel within the
   // half-second the write waits left the camera at the cancelled eye height).
   useScenePreview(manager, v);
 
-  // the sections saved at once while the dialog is open (Who gets the messages): Cancel says they were kept
-  const [keptAtOnce, setKeptAtOnce] = useState<string[]>([]);
+  // ⚠️ ONE WAY OF SAVING (owner, 2026-11-06): every control here, Who gets the messages' lists included, waits for
+  // Save; nothing is saved at once (the "already saved" sections Cancel used to name are gone)
   const commit = {
     dirty: slice.dirty,
-    keptAtOnce,
+    saving: slice.saving,
+    error: slice.problem,
     save: slice.save,
     // The sliders, the fields and the scene's preview read the slice's view,
     // so they all follow the reverted config with nothing to re-apply.
@@ -186,9 +167,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
       {tab === "messages" && (
         // ⚠️ ONE SECTION FOR FULL SCREEN (owner, 2026-11-03): this tablet's switch, then the villa's list, each picked
         // announcement with its own seconds (moved here from Advanced Settings' Messages tab, which is gone). The list
-        // and "Who gets the messages" only for a profile that may edit the villa's setup. The list writes through this
-        // dialog's one draft like every option here (Save keeps it, Cancel puts it back; its seconds wait in the
-        // draft's pending store); "Who gets the messages" is saved on the villa at once, as before.
+        // and "Who gets the messages" only for a profile that may edit the villa's setup. Both through this dialog's one
+        // draft like every option here (Save keeps, Cancel puts back; the seconds wait in the draft's pending store, a
+        // list's change is held there until Save sends it to the villa).
         <PendingFields pending={slice.pending}>
           <TipTitle title="Full-screen announcements" tip={<>
             The announcements picked here fill the screen of every tablet where full screen is on, each for its own
@@ -207,7 +188,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
                 Who gets the villa's alerts and VESTA's messages on Telegram: urgent (P1) alerts go to both lists, P2
                 alerts to the {ROLE_LABELS.ops}. With a list empty, they go to every Telegram chat.
               </>} />
-              <WhoGetsMessages onSaved={() => setKeptAtOnce((k) => k.includes(LISTS_TITLE) ? k : [...k, LISTS_TITLE])} />
+              <WhoGetsMessages languages={v.chatLanguages} onLanguages={(chatLanguages) => slice.set({ chatLanguages }, { now: true })} />
             </>
           )}
           {/* ticket 28 of "One inbox" (owner, 2026-10-30): which of the chats' languages this tablet shows VESTA's
