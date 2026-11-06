@@ -1,3 +1,8 @@
+## 2.496.740
+
+What you will see:
+- While VESTA Agent is off, a visit the villa announces shows under Issues as an alert's card, the same card as every alert: its state first, every line of its story and every photo (tap one for full size), brought up to date at each step, then under Closed once the villa ends it. It no longer sits under Notifications as a bell with its first line only. When VESTA takes the visit over, its card replaces this one.
+
 ## 2.496.739
 
 What you will see:
