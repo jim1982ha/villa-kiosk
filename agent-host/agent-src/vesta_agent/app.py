@@ -197,7 +197,9 @@ class Vesta:
         self.thread = IncidentThread(self.state, settings.timezone, edit=(self.delivery.edit if self.tg else None),
                                      delete=(self.delivery.delete if self.tg else None), words=self.notices,
                                      name=incidents.name, mirror=self.messages.keep,
-                                     translations=lambda: self.translations)
+                                     translations=lambda: self.translations,
+                                     media=(self.delivery.edit_media if self.tg else None),
+                                     send=(self.delivery.send if self.tg else None))
         self.buttons = AlertButtons(state=self.state, skills=self.skills, incidents=incidents,
                                     thread=self.thread, run_job=self.run_code_job, facts=self.chat_facts)
         self.tickets = Tickets(kiosk=self.kiosk, state=self.state, store_path=settings.store_path,
@@ -232,10 +234,17 @@ class Vesta:
                              mirror=self.messages.keep)
         # a job asked for in a chat, start to end (chat_jobs.py); what it tells a chat goes titled, through the poster
         self.chat_jobs = ChatJobs(self.delivery, self._safe, self.work, facts=self.chat_facts, poster=self.poster)
+        # a visit of the villa's presence automation (visit.py): its sheet, the villa told, its siren in its story
+        from .outcome import camera_photo
+        from .visit import Visits
+        self.visits = Visits(state=self.state, thread=self.thread, notices=self.notices,
+                             photo=lambda cam: camera_photo(self.reader, cam), out_dir=settings.out_dir,
+                             timezone_name=settings.timezone, tell=self.actions.tell_villa, name=self.name_of,
+                             withdraw=lambda aid: self.approvals.withdraw(aid))
         # an approval request from start to end (approvals.py); the siren's gate asks through it too
         self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
                                    post=self.poster.post, timezone_name=settings.timezone, safe=self._safe,
-                                   edit=self.delivery.edit, tablet_keeps=lambda: self.kiosk.enabled)
+                                   edit=self.delivery.edit, tablet_keeps=lambda: self.kiosk.enabled, visits=self.visits)
         # what the AI is told before it answers (briefing.py): the skills' status checks, the chat's facts, the question;
         # where it was written: a chat's label, else a tablet's conversation (tablet.WHERE), which chat_label says by
         # naming none — one tablet test, not a second copy (architecture review round 10)
@@ -248,7 +257,7 @@ class Vesta:
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
                                reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
                                notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone,
-                               poster=self.poster, ask=self.approvals.ask, incidents=incidents)
+                               poster=self.poster, ask=self.approvals.ask, incidents=incidents, visits=self.visits)
         self.server_tools: list[dict] = []
         # the reports (ai_jobs.py): run, made without the AI, started from a chat
         # one AI turn, decided once: its tools by who asks, its brain, limit, record and folder (turn.py)

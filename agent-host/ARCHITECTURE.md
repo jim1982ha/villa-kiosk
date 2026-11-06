@@ -1306,3 +1306,23 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
 - Mutations red (tests/test_open_ticket_telegram.py): the place ignored, the mark left out, TAKEN_IN not among
   closed_where's tables, one language's words removed.
 
+
+## One visit, one story: the Agent's side (owner, 2026-11-06, 0.12.464, phase B1)
+
+The villa's presence automation will group every presence signal of one visit itself (its record, `visit` in
+`vesta_critical_event`: phase `opened` for the first step, `step` for each later one, `resolved` once). Until the
+villa sends `step` (phase C), nothing live changes: an event without `visit` takes the old path.
+
+| Job | One owner |
+|---|---|
+| A visit's ONE alert, its story lines, its reminder words, its siren gate (distinct step sources, once per visit), its close (no watch; "Expected: … came home at …") | `desk.py` visit_intake, visit_lines, visit_siren, visit_reminder, resolved |
+| A story line, the same key folded into its line wherever it stands (the one fold: `_merged`); a copy's bottom line leaves only notices out (`_cut`) | `notice.Notices.observe` |
+| A quiet step: every copy's heading drawn again, buttons and bottom line kept | `IncidentThread.reheaded` (refold shares it) |
+| The villa's cards taken over from the record (`visit.messages`), never a card the thread holds or replaced; the generic fix for every run's messages (`replaced`) | `Outcome.adopt_ha`, `IncidentThread.held` |
+| The photo sheet (Pillow), sent with a card that rings, put in place elsewhere (editMessageMedia; a text card sent again as a photo) | `sheet.build`, `visit.Visits.jpeg/picture`, `IncidentThread.picture` |
+| The villa told (owner, ack, cards, answered, reminded_at) through the script its event names | `visit.Visits.tell`, `actions.Actions.tell_villa` (scripts only) |
+| The siren of a visit: a reply to its card, cameras snapped into its sheet, its outcome a story line, withdrawn when a resident came home | `siren.Request.gate`, `visit.Visits.snap/offered/decided/withdraw`, `approvals.Approvals.withdraw` |
+
+The tablet's card takes the visit's announcement by its key `visit:<id>` (agreement `vestaMessage.takes`): its photos
+are the villa's own; the Agent pushes no photo list. Removed as dead (no blueprint sends it, read on the villa
+2026-11-06): the alert's `snapshot` field, `result.snapshot`, the `snapshot.get` action; the siren's own pictures stay.

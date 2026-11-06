@@ -225,6 +225,9 @@ STEPS: dict[str, Step] = {
     "back": Step("Back: alert sent", "existing", timed=True, starts_run=True,
                  line="Back at {at}{times} (to: {who})"),
     "still": Step("Still-there alert sent", "existing", timed=True),
+    # a visit's step stronger than every one before it (a lock after motion): its card sent again, so it rings — its
+    # bottom line says the step and when (owner, 2026-11-06: one visit, one story; a break-in is never folded quietly)
+    "stronger": Step("Stronger signal sent", "existing", timed=True),
     "reopened": Step("Reopen request sent", "existing", timed=True, every_copy=True),
     "closed": Step("Closing note sent", "closed", timed=False),
 }
@@ -569,6 +572,13 @@ JINJA_FILE = os.path.join(os.path.dirname(__file__), "..", "homeassistant", "cus
 #: The alert desk's own settings (its released rules.yaml): whom each priority reaches is ITS table (people_roles,
 #: priority_does) — read here as data for the villa's template, never typed (skills before code).
 ALERT_DESK_RULES = os.path.join(os.path.dirname(__file__), "..", "starter", "skills", "alert-desk", "rules.yaml")
+#: The alert desk's words (its words.yaml): a visit's lines, which the villa writes itself, in English, while VESTA is
+#: away (owner, 2026-11-06: one visit, one story, VESTA on or off) — the template reads their English from here.
+ALERT_DESK_WORDS = os.path.join(os.path.dirname(ALERT_DESK_RULES), "words.yaml")
+#: The words.yaml entries the villa's template writes a visit with
+VISIT_WORDS = ("visit_seen", "visit_lock_here", "visit_lock_app", "visit_opened", "visit_locked_again", "visit_inside",
+               "visit_person", "visit_changed_lock", "visit_changed_door", "visit_changed_inside",
+               "visit_changed_motion", "visit_changed_person", "visit_expected", "visit_ended", "visit_home", "no_answer")
 
 
 def priority_to(rules: dict) -> dict[str, str]:
@@ -600,6 +610,8 @@ def jinja_words() -> str:
     from .timeutil import MOMENT_FORMAT
     with open(ALERT_DESK_RULES, encoding="utf-8") as f:
         rules = yaml.safe_load(f) or {}
+    with open(ALERT_DESK_WORDS, encoding="utf-8") as f:
+        said = yaml.safe_load(f) or {}
     lit = lambda v: json.dumps(v, ensure_ascii=False)
     names = {w.lower(): r for words in (ROLE_WORDS, ROLE_SHORT) for r, w in words.items()}
     return "\n".join([
@@ -612,6 +624,7 @@ def jinja_words() -> str:
         f"{{%- set vm_words = {lit(STAGE_WORDS)} -%}}",
         f"{{%- set vm_time_format = {lit(MOMENT_FORMAT)} -%}}",
         f"{{%- set vm_status_break = {lit(STATUS_BREAK)} -%}}",
+        f"{{%- set vm_visit_words = {lit({k: said[k]['en'] for k in VISIT_WORDS})} -%}}",
         JINJA_END,
     ])
 

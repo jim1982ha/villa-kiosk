@@ -299,6 +299,39 @@ class Telegram:
             log.warning("editMessageCaption failed: %s", e)
             return False
 
+    async def edit_media(self, chat_id: int, message_id: int, photo: bytes, caption: str,
+                         keyboard: dict | None = None) -> str:
+        """The picture of one of the bot's photo messages replaced by `photo` (a JPEG), its caption `caption` and its
+        buttons `keyboard` written with it — an edit: no sound (editMessageMedia). "shown"; "not_media" when the message
+        is a text one (Telegram cannot turn it into a photo: the caller sends it again as one); "refused" otherwise."""
+        caption = tight_punctuation(caption)[:telegram_caption_chars()]
+        media = {"type": "photo", "media": "attach://sheet", "caption": caption,
+                 **_italic("caption_entities", caption)}
+
+        def form() -> aiohttp.FormData:
+            f = aiohttp.FormData()
+            f.add_field("chat_id", str(chat_id))
+            f.add_field("message_id", str(message_id))
+            f.add_field("media", json.dumps(media))
+            if keyboard:
+                f.add_field("reply_markup", json.dumps(keyboard))
+            f.add_field("sheet", photo, filename="sheet.jpg", content_type="image/jpeg")
+            return f
+        try:
+            await self._post_form("editMessageMedia", form)
+            return "shown"
+        except TelegramError as e:
+            words = str(e).lower()
+            if NOT_MODIFIED in words:
+                return "shown"
+            log.warning("editMessageMedia failed: %s", e)
+            return "not_media" if any(w in words for w in NOT_MEDIA) else "refused"
+
+
+#: Telegram's words when editMessageMedia meets a message with no picture to replace (a text message).
+NOT_MEDIA = ("there is no media in the message", "message has no media", "can't be edited", "message_not_media")
+
+
 def _italic(key: str, text: str) -> dict:
     """{key: how Telegram shows this message} — the one style table, vesta_shared.message_format.TELEGRAM — else {}.
 

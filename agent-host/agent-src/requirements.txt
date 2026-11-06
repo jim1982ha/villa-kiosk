@@ -3,3 +3,5 @@ aiohttp==3.14.3
 PyYAML==6.0.3
 Jinja2==3.1.6
 ruamel.yaml==0.19.1
+# a visit's photo sheet (vesta_agent/sheet.py): the image has no picture library; wheels for aarch64 and amd64
+Pillow==12.0.0

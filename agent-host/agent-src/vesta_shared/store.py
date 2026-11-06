@@ -433,13 +433,18 @@ class Store:
 
     def reopen_incident(self, iid: int, at: str, message: str | None = None) -> None:
         """Incident `iid`, closed, open again at `at`: the run that ended is kept as an occurrence (opened, closed, how,
-        its own words `message`); runs older than runs_kept_days() go."""
+        its own words `message`, how many alerts it counted); runs older than runs_kept_days() go. The new run counts
+        its own alerts from one, seen last at `at`.
+
+        ⚠️ A RUN COUNTS ITS OWN (owner, 2026-11-06, #125-P1: "6 times since 18:20" in a run reopened at 18:34): the count
+        went on from the run that ended, and the reopening counted itself once more on top."""
         inc = self.incident(iid)
         cutoff = (datetime.fromisoformat(at) - timedelta(days=self.runs_kept_days())).isoformat()
         past = [o for o in json.loads(inc.get("occurrences") or "[]") if o["opened_at"] >= cutoff] + [
             {"opened_at": inc.get("reopened_at") or inc["opened_at"], "closed_at": inc.get("closed_at"), "state": inc.get("state"),
-             **({"message": message} if message else {})}]
-        self.update_incident(iid, closed_at=None, reply=None, reopened_at=at, occurrences=json.dumps(past))
+             "count": inc.get("count"), **({"message": message} if message else {})}]
+        self.update_incident(iid, closed_at=None, reply=None, reopened_at=at, occurrences=json.dumps(past), count=1,
+                             last_seen_at=at)
 
     def incident_occurrences(self) -> list[dict]:
         """Every run of every incident as its own row — an incident reopened "Back again" is as many alerts as it had

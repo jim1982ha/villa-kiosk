@@ -51,7 +51,7 @@ class Poster:
                    stage: str | None = None, mark: str | None = None, also=None,
                    title: str | None = None, told=None, reply_to: int | None = None,
                    status_in: dict | None = None, keep: str | bool | None = None,
-                   language: str | None = None) -> int | None:
+                   language: str | None = None, sheet: str | None = None) -> int | None:
         """The message in `chat`: its heading — who it is for (`roles`), the incident and its history — unless it answers
         the person who asked, in their chat, or is `plain`; its parts laid out (layout.py) to fit ONE Telegram message —
         a photo's or a file's caption included, so the copy recorded is the message sent; then its `thread` (an incident,
@@ -60,7 +60,8 @@ class Poster:
         ({code: text}) — an alert's copy says the one its chat reads. `keep`: a note sent on its own is also kept for the
         tablet (True; or the skill's own `key`, so a later rewrite replaces it there too) — a reply to a person is not;
         sent by a scheduled run it is kept as a report, with its `document` and the `language` its words are in (one
-        version of several: kiosk_messages.reported). The message id, or None when nothing arrived."""
+        version of several: kiosk_messages.reported). `sheet`: `photo` is a visit's sheet (its fingerprint): the tablet's
+        card takes the villa's own photos instead. The message id, or None when nothing arrived."""
         # "{time}": the moment it says what happened, as every notice writes one (10/10/2026 15:04, the villa's time)
         now = datetime.now(timezone.utc)
         text, status, lead = (layout.fill_time(x, now, self.tz) for x in (text, status, lead))
@@ -112,7 +113,7 @@ class Poster:
                               origin=origin, **({"reply_to": reply_to} if reply_to else {}))
         if mid and thread is not None and self.thread is not None:
             await self.thread.post(thread, chat, mid, {**p, "limit": limit}, buttons=bool(keyboard), keyboard=keyboard,
-                                   photo=photo)
+                                   photo=None if sheet else photo, sheet=sheet)
         elif thread is not None and self.thread is not None:
             # ⚠️ THE TABLET TOO WHEN TELEGRAM DID NOT TAKE IT (off, or refused): the thread records only what arrived, and
             # the tablet is the second place precisely for when Telegram is not there (spec, "Without the internet").

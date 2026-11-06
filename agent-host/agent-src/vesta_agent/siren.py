@@ -64,9 +64,12 @@ class Request:
     camera shows now, (base64, mime) or None; `name(entity)`: its name as the villa's system gives it."""
 
     def __init__(self, *, policy: Callable, state, actions, ask: Callable[..., Awaitable[int]] | None,
-                 post: Callable[..., Awaitable], photo: Callable[[str], Awaitable], name: Callable[[str], str]):
+                 post: Callable[..., Awaitable], photo: Callable[[str], Awaitable], name: Callable[[str], str],
+                 visits=None):
         self.policy, self.state, self.actions, self.ask = policy, state, actions, ask
         self.post, self.photo, self.name = post, photo, name
+        # visit.Visits: a visit's request is part of its one story (its card, its sheet, a line of its Status)
+        self.visits = visits
 
     async def gate(self, gate: dict, origin=None, shown: set | None = None) -> dict:
         """Carry out a script's gate: {asked: bool, why: what kept it from being asked ("" when asked), warned: the
@@ -97,7 +100,17 @@ class Request:
         if msg and self.ask is None:
             answer, msg = "no way to ask for an approval here (built without the approvals)", None
         head = prompt
-        if msg:
+        visit = int(gate["visit"]) if str(gate.get("visit") or "").isdigit() and self.visits is not None else None
+        replies: dict[int, int] = {}
+        if msg and visit is not None:
+            # ⚠️ A VISIT'S REQUEST IS PART OF ITS ONE STORY (owner, 2026-11-06, 18:35: six "Camera snapshot" messages, then
+            # the request, beside the visit's card): the cameras that showed nothing lately go into the visit's sheet,
+            # and the question is a reply to its card in each owner chat, whose picture they look at
+            await self.visits.snap(visit, gate.get("cameras"))
+            replies = {c: m for c in msg.chats if (m := self.visits.card(visit, c))}
+            if gate.get("seen") and msg.chats and set(replies) >= set(msg.chats):
+                head = f"{prompt} {gate['seen']}"
+        elif msg:
             # ⚠️ THE PICTURE BEFORE THE QUESTION, AND SAID ONLY WHEN SENT (owner's Telegram, 2026-10-31 00:19: "Look at
             # the snapshot", and none came): the cameras the desk found near the signals, each in every chat of the
             # request first; the request says to look only when every one of its chats has a picture
@@ -106,10 +119,13 @@ class Request:
                 head = f"{prompt} {gate['seen']}"
         # ⚠️ THE INTRUSION IS SAID, WHATEVER BECOMES OF THE REQUEST (architecture review 21): its words travel only as
         # the siren request's lead — a request no owner chat received showed them nowhere
-        if msg and not await self.ask(msg, head=head, origin=origin):
+        if msg and not await self.ask(msg, head=head, origin=origin, **({"reply_to": replies} if replies else {})):
             answer, msg = "no chat of the owner's received the request", None
         if msg:
             out["asked"] = True
+            if visit is not None:
+                await self.visits.offered(visit, msg.approval_id, str(gate.get("offered") or ""),
+                                          gate.get("offered_in") if isinstance(gate.get("offered_in"), dict) else None)
             return out
         out["why"] = answer
         out["warned"] = await self._warn(gate, origin, f"The siren cannot be requested: {answer}")

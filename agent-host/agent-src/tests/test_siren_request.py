@@ -73,11 +73,6 @@ def test_the_request_names_the_devices_and_the_camera_that_can_show_them(tmp_pat
     assert gate["cameras"] == [CAMERA] and gate["seen"] and "snapshot" not in gate["prompt"]
 
 
-def test_an_alerts_own_snapshot_comes_first(tmp_path, pack):
-    gate = two_signals(Store(str(tmp_path / "s.sqlite")), snapshot="camera.example_porch")
-    assert gate["cameras"] == ["camera.example_porch", CAMERA]
-
-
 def test_no_camera_no_picture_mentioned(tmp_path, monkeypatch):
     # no knowledge pack (no area known) and no alert naming a camera: the request never speaks of a picture
     monkeypatch.delenv("VESTA_PACK", raising=False)

@@ -55,6 +55,9 @@ CLEARED_STAGE = "cleared"
 CLOSED_STEP = "closed"
 #: The step a Need help makes (message_format.STEPS "escalated"): its line says the press (Notices.history_lines)
 ESCALATED_STAGE = "escalated"
+#: A line of a visit's story (owner, 2026-11-06: one visit, one story): what was seen, in the desk's words, kept under
+#: its `fold` key — the same key again is the same line said anew (Notices.observe), never a notice sent
+SEEN_STAGE = "seen"
 #: Between a step's line and the desk's words on the bottom line.
 STEP_SEP = ", "
 EXISTING = "existing"
@@ -170,6 +173,30 @@ def fold(history: list[dict]) -> tuple[list[dict], list[int]]:
             out.append(h)
         held.append(len(out) - 1)
     return out, held
+
+
+def observed(h: dict) -> bool:
+    """Is history line `h` a line of a visit's story (Notices.observe) rather than a notice sent?"""
+    return bool(h.get("fold"))
+
+
+def _cut(history: list[dict], n: int) -> tuple[list[dict], set[int]]:
+    """`history` without its last `n` NOTICES — the steps a copy's bottom line says — and the positions left out. A
+    visit's story lines are kept wherever they stand: they are no notice, and every copy lists them (Notices.observe)."""
+    gone: set[int] = set()
+    for i in range(len(history) - 1, -1, -1):
+        if len(gone) == n:
+            break
+        if not observed(history[i]):
+            gone.add(i)
+    return [h for i, h in enumerate(history) if i not in gone], gone
+
+
+def _fold_target(history: list[dict], line: dict) -> int | None:
+    """Where story line `line` folds into: the line of its key, wherever it stands — "Seen at Parking → Entrance Left →
+    … → Main House Door" stays ONE line across the lock's line and the card sent again between two cameras: one line per
+    kind of step, said anew where it began. None: a new line."""
+    return next((i for i in range(len(history) - 1, -1, -1) if history[i].get("fold") == line["fold"]), None)
 
 
 #: 2nd, 3rd, 11th: the English ordinal of "6th time in 7 days" (status_words writes every language's).
@@ -315,7 +342,7 @@ class Notices:
         if not before and history and _same_step(history[-1], {"stage": stage, **self._reach_field(int(incident))}):
             # the step this notice is folds into the last one (record): its bottom line says it, never the line above too
             before = 1
-        history = history[:len(history) - before] if before else history
+        history = _cut(history, before)[0] if before else history
         who = self.to_line(int(incident), also, history) or audience(self.roles_for(chat, to), short=True) or "this chat"
         try:
             label = self.name(int(incident))
@@ -352,13 +379,16 @@ class Notices:
         history = self.state.incident_history(incident)
         # `latest_excluded`: the last steps recorded, left out — a copy refreshed with the notice just sent, whose own
         # bottom line already says it (Outcome's refresh of the other chats)
-        shown = history[:len(history) - latest_excluded] if latest_excluded else history
+        gone = _cut(history, latest_excluded)[1] if latest_excluded else set()
         # ⚠️ A CLOSE STANDING IS ITS BOTTOM LINE (owner, 2026-11-05, #118): redrawn while closed, the card listed
         # "- Closing note sent 00:19" above "✅ Not a problem on 00:19 (Jm). Watch 1h." — the same close. Its step shows
         # once something came after it (it came back), or as the close's own words once its watch is over (note_step)
-        if shown and shown[-1].get("stage") == CLOSED_STEP and self.closed_now(incident):
-            shown = shown[:-1]
-        for i, h in enumerate(shown):
+        kept = [i for i in range(len(history)) if i not in gone]
+        if kept and history[kept[-1]].get("stage") == CLOSED_STEP and self.closed_now(incident):
+            gone.add(kept[-1])
+        for i, h in enumerate(history):
+            if i in gone:
+                continue
             roles = self._roles(h) if h.get("chats") or h.get("to") else set()
             if mine and roles and not roles & mine:
                 continue
@@ -409,10 +439,39 @@ class Notices:
             if found is not None:
                 befores[int(chat)] = found[0]
         self.state.set_incident_history(incident, new)
-        # a copy that left its newest `n` steps to its bottom line leaves the lines holding them (a repeat its bottom
+        # a copy that left its newest `n` notices to its bottom line leaves the lines holding them (a repeat its bottom
         # line says: the whole line, counted, is said there)
-        return {chat: self.heading(chat, int(incident), before=len(new) - held[len(old) - n] if n else 0)
-                for chat, n in befores.items()}
+        def left(n: int) -> int:
+            first = min(_cut(old, n)[1]) if n else len(old)
+            return sum(1 for h in new[held[first]:] if not observed(h)) if first < len(old) else 0
+        return {chat: self.heading(chat, int(incident), before=left(n)) for chat, n in befores.items()}
+
+    def observe(self, incident: int, lines: list[dict]) -> dict[int, str]:
+        """A visit's story lines (result.seen: {key, note, note_in?, at?}) in incident `incident`'s history — a key it
+        holds already is THAT line said anew (`_fold_target`, the one fold: `_merged`), a new key a new line — and the
+        heading each chat's copy shows then, its bottom line's notices still left to it: {chat: heading}.
+
+        ⚠️ ONE VISIT, ONE STORY (owner, 2026-11-06, #125-P1): four cameras, a lock and the living room in two minutes were
+        a "Still-there alert sent" line each, and a second alert for the lock. Each kind of step is now one line,
+        updated in place in every copy, on the tablet and in the Kiosk fault's story (`story`)."""
+        history = self.state.incident_history(incident)
+        befores = {}
+        for chat, rec in self.state.incident_chats(incident):
+            h = layout.head_of((rec.get("parts") or {}).get("head"))
+            found = self.story_of(incident, chat, h["history"]) if h and "history" in h else None
+            befores[int(chat)] = found[0] if found is not None else 0
+        now = datetime.now(timezone.utc).isoformat()
+        for ln in lines:
+            line = {"at": str(ln.get("at") or now), "stage": SEEN_STAGE, "fold": str(ln["key"]),
+                    "note": str(ln["note"]).rstrip("."),
+                    "note_in": {k: str(v).rstrip(".") for k, v in (ln.get("note_in") or {}).items() if isinstance(v, str)}}
+            i = _fold_target(history, line)
+            if i is None:
+                history.append(line)
+            elif history[i].get("note") != line["note"] or history[i].get("note_in") != line["note_in"]:
+                history[i] = _merged(history[i], line)
+        self.state.set_incident_history(incident, _kept(history))
+        return {chat: self.heading(chat, int(incident), before=n) for chat, n in befores.items()}
 
     def concerns(self, chat: int, roles) -> bool:
         """Is a step sent to `roles` one of chat `chat`'s — a role of the chat's among them (a chat with no role, or a

@@ -364,3 +364,265 @@ lowered:
     zh: "{time} 降为 {priority}：仅作记录。无需回复。"
     ja: "{time} に {priority} に引き下げ：記録のみ。返信は不要です。"
     ko: "{time}에 {priority}(으)로 낮춤: 기록만 합니다. 답장할 필요 없음."
+
+# ---- one visit, one story (owner, 2026-11-06): while the villa reads empty, every presence signal of one VESTA rule's
+# visit is ONE alert. Its Status tells the visit, one line per kind of step, each line updated as the visit grows:
+# {places} the places seen in a row ("Parking → Entrance Left"), {span} their first and last moment ("18:34–18:35"),
+# {name} a lock's or a door's name, {room} the room, {time} / {who} as said. Names stay as the villa names them.
+visit_seen:
+  en: "Seen at {places}, {span}"
+  fr: "Vu à {places}, {span}"
+  id: "Terlihat di {places}, {span}"
+  de: "Gesehen bei {places}, {span}"
+  es: "Visto en {places}, {span}"
+  it: "Visto a {places}, {span}"
+  nl: "Gezien bij {places}, {span}"
+  zh: "在 {places} 被看到，{span}"
+  ja: "{places} で検知、{span}"
+  ko: "{places}에서 감지, {span}"
+
+visit_lock_here:
+  en: "{name} opened at the lock (not from the app), {time}"
+  fr: "{name} ouverte sur la serrure (pas depuis l’app), {time}"
+  id: "{name} dibuka di kunci (bukan dari aplikasi), {time}"
+  de: "{name} am Schloss geöffnet (nicht über die App), {time}"
+  es: "{name} abierta en la cerradura (no desde la app), {time}"
+  it: "{name} aperta dalla serratura (non dall’app), {time}"
+  nl: "{name} geopend aan het slot (niet via de app), {time}"
+  zh: "{name} 在锁上被打开（不是通过应用），{time}"
+  ja: "{name} が錠で開けられました（アプリからではありません）、{time}"
+  ko: "{name} 잠금장치에서 열림 (앱이 아님), {time}"
+
+visit_lock_app:
+  en: "{name} opened from the app ({who}), {time}"
+  fr: "{name} ouverte depuis l’app ({who}), {time}"
+  id: "{name} dibuka dari aplikasi ({who}), {time}"
+  de: "{name} über die App geöffnet ({who}), {time}"
+  es: "{name} abierta desde la app ({who}), {time}"
+  it: "{name} aperta dall’app ({who}), {time}"
+  nl: "{name} geopend via de app ({who}), {time}"
+  zh: "{name} 通过应用被打开（{who}），{time}"
+  ja: "{name} がアプリから開けられました（{who}）、{time}"
+  ko: "{name} 앱에서 열림 ({who}), {time}"
+
+# a door, or a lock the villa could not tell how it was opened
+visit_opened:
+  en: "{name} opened, {time}"
+  fr: "{name} ouverte, {time}"
+  id: "{name} dibuka, {time}"
+  de: "{name} geöffnet, {time}"
+  es: "{name} abierta, {time}"
+  it: "{name} aperta, {time}"
+  nl: "{name} geopend, {time}"
+  zh: "{name} 被打开，{time}"
+  ja: "{name} が開きました、{time}"
+  ko: "{name} 열림, {time}"
+
+# after a lock's line, once it was locked again within the visit
+visit_locked_again:
+  en: ", locked again {time}"
+  fr: ", refermée à {time}"
+  id: ", dikunci lagi {time}"
+  de: ", wieder verriegelt {time}"
+  es: ", cerrada de nuevo {time}"
+  it: ", richiusa {time}"
+  nl: ", weer op slot {time}"
+  zh: "，{time} 重新上锁"
+  ja: "、{time} に再施錠"
+  ko: ", {time}에 다시 잠김"
+
+visit_inside:
+  en: "Someone is inside ({room}) at {time}"
+  fr: "Quelqu’un est à l’intérieur ({room}) à {time}"
+  id: "Ada orang di dalam ({room}) pada {time}"
+  de: "Jemand ist drinnen ({room}) um {time}"
+  es: "Hay alguien dentro ({room}) a las {time}"
+  it: "Qualcuno è dentro ({room}) alle {time}"
+  nl: "Er is iemand binnen ({room}) om {time}"
+  zh: "{time} 有人在室内（{room}）"
+  ja: "{time} 屋内に人がいます（{room}）"
+  ko: "{time} 실내에 누군가 있음 ({room})"
+
+# a person a room's camera saw (owner, 2026-11-06: it joins an open visit, its photo in the sheet, no notice of its own)
+visit_person:
+  en: "Person seen in the {room} at {time}"
+  fr: "Personne vue dans {room} à {time}"
+  id: "Orang terlihat di {room} pada {time}"
+  de: "Person gesehen in {room} um {time}"
+  es: "Persona vista en {room} a las {time}"
+  it: "Persona vista in {room} alle {time}"
+  nl: "Persoon gezien in {room} om {time}"
+  zh: "{time} 在{room}看到有人"
+  ja: "{time} {room}で人を検知"
+  ko: "{time} {room}에서 사람 감지"
+
+# a resident came home while the visit was open: the visit was expected, and it closes by itself (owner, 2026-11-06)
+visit_home:
+  en: "Expected: {name} came home at {time}"
+  fr: "Prévu: {name} est rentré à {time}"
+  id: "Sudah diperkirakan: {name} pulang pada {time}"
+  de: "Erwartet: {name} ist um {time} nach Hause gekommen"
+  es: "Esperado: {name} llegó a casa a las {time}"
+  it: "Previsto: {name} è rientrato alle {time}"
+  nl: "Verwacht: {name} kwam om {time} thuis"
+  zh: "预期之内：{name} 于 {time} 回家"
+  ja: "予定どおり：{name} が {time} に帰宅"
+  ko: "예정됨: {name}님이 {time}에 귀가"
+
+# "Same time as the last 4 evenings (18:18–18:33)": the part of the day of the visit's start, each from the villa's
+# hour `starts_at_hour` (to the next one's)
+same_time_morning:
+  starts_at_hour: 5  # The villa's hour (0 to 23) from which a visit's start counts as morning in its "same time" line.
+  en: "Same time as the last {n} mornings ({span})"
+  fr: "Même heure que les {n} derniers matins ({span})"
+  id: "Jam yang sama seperti {n} pagi terakhir ({span})"
+  de: "Gleiche Uhrzeit wie an den letzten {n} Morgen ({span})"
+  es: "A la misma hora que las últimas {n} mañanas ({span})"
+  it: "Stessa ora delle ultime {n} mattine ({span})"
+  nl: "Zelfde tijd als de laatste {n} ochtenden ({span})"
+  zh: "与最近 {n} 个早晨同一时间（{span}）"
+  ja: "直近 {n} 回の朝と同じ時刻（{span}）"
+  ko: "최근 {n}번의 아침과 같은 시간 ({span})"
+same_time_afternoon:
+  starts_at_hour: 12  # The villa's hour (0 to 23) from which a visit's start counts as afternoon in its "same time" line.
+  en: "Same time as the last {n} afternoons ({span})"
+  fr: "Même heure que les {n} derniers après-midi ({span})"
+  id: "Jam yang sama seperti {n} siang terakhir ({span})"
+  de: "Gleiche Uhrzeit wie an den letzten {n} Nachmittagen ({span})"
+  es: "A la misma hora que las últimas {n} tardes ({span})"
+  it: "Stessa ora degli ultimi {n} pomeriggi ({span})"
+  nl: "Zelfde tijd als de laatste {n} middagen ({span})"
+  zh: "与最近 {n} 个下午同一时间（{span}）"
+  ja: "直近 {n} 回の午後と同じ時刻（{span}）"
+  ko: "최근 {n}번의 오후와 같은 시간 ({span})"
+same_time_evening:
+  starts_at_hour: 17  # The villa's hour (0 to 23) from which a visit's start counts as evening in its "same time" line.
+  en: "Same time as the last {n} evenings ({span})"
+  fr: "Même heure que les {n} derniers soirs ({span})"
+  id: "Jam yang sama seperti {n} sore terakhir ({span})"
+  de: "Gleiche Uhrzeit wie an den letzten {n} Abenden ({span})"
+  es: "A la misma hora que las últimas {n} noches ({span})"
+  it: "Stessa ora delle ultime {n} sere ({span})"
+  nl: "Zelfde tijd als de laatste {n} avonden ({span})"
+  zh: "与最近 {n} 个傍晚同一时间（{span}）"
+  ja: "直近 {n} 回の夕方と同じ時刻（{span}）"
+  ko: "최근 {n}번의 저녁과 같은 시간 ({span})"
+same_time_night:
+  starts_at_hour: 22  # The villa's hour (0 to 23) from which a visit's start counts as night in its "same time" line.
+  en: "Same time as the last {n} nights ({span})"
+  fr: "Même heure que les {n} dernières nuits ({span})"
+  id: "Jam yang sama seperti {n} malam terakhir ({span})"
+  de: "Gleiche Uhrzeit wie in den letzten {n} Nächten ({span})"
+  es: "A la misma hora que las últimas {n} madrugadas ({span})"
+  it: "Stessa ora delle ultime {n} notti ({span})"
+  nl: "Zelfde tijd als de laatste {n} nachten ({span})"
+  zh: "与最近 {n} 个夜晚同一时间（{span}）"
+  ja: "直近 {n} 回の夜と同じ時刻（{span}）"
+  ko: "최근 {n}번의 밤과 같은 시간 ({span})"
+
+# the visit's photo sheet on Telegram holds the strongest and the latest; the tablet's card every one
+visit_more_photos:
+  en: "+{n} more photos on the tablet"
+  fr: "+{n} autres photos sur la tablette"
+  id: "+{n} foto lainnya di tablet"
+  de: "+{n} weitere Fotos auf dem Tablet"
+  es: "+{n} fotos más en la tableta"
+  it: "+{n} altre foto sul tablet"
+  nl: "+{n} foto's meer op de tablet"
+  zh: "平板上还有 {n} 张照片"
+  ja: "タブレットに他 {n} 枚の写真"
+  ko: "태블릿에 사진 {n}장 더"
+
+# a reminder of a visit says what changed since its first alert, then asks
+visit_changed_lock:
+  en: "{name} was opened at {time}."
+  fr: "{name} a été ouverte à {time}."
+  id: "{name} dibuka pada {time}."
+  de: "{name} wurde um {time} geöffnet."
+  es: "{name} se abrió a las {time}."
+  it: "{name} è stata aperta alle {time}."
+  nl: "{name} is om {time} geopend."
+  zh: "{name} 在 {time} 被打开。"
+  ja: "{name} が {time} に開けられました。"
+  ko: "{name}이(가) {time}에 열렸습니다."
+visit_changed_door:
+  en: "{name} opened at {time}."
+  fr: "{name} s’est ouverte à {time}."
+  id: "{name} terbuka pada {time}."
+  de: "{name} ging um {time} auf."
+  es: "{name} se abrió a las {time}."
+  it: "{name} si è aperta alle {time}."
+  nl: "{name} ging om {time} open."
+  zh: "{name} 在 {time} 打开。"
+  ja: "{name} が {time} に開きました。"
+  ko: "{name}이(가) {time}에 열렸습니다."
+visit_changed_inside:
+  en: "Someone went inside at {time}."
+  fr: "Quelqu’un est entré à {time}."
+  id: "Seseorang masuk pada {time}."
+  de: "Jemand ist um {time} hineingegangen."
+  es: "Alguien entró a las {time}."
+  it: "Qualcuno è entrato alle {time}."
+  nl: "Iemand ging om {time} naar binnen."
+  zh: "有人在 {time} 进入室内。"
+  ja: "{time} に誰かが屋内に入りました。"
+  ko: "{time}에 누군가 안으로 들어갔습니다."
+visit_changed_motion:
+  en: "Seen at {place} at {time}."
+  fr: "Vu à {place} à {time}."
+  id: "Terlihat di {place} pada {time}."
+  de: "Gesehen bei {place} um {time}."
+  es: "Visto en {place} a las {time}."
+  it: "Visto a {place} alle {time}."
+  nl: "Gezien bij {place} om {time}."
+  zh: "{time} 在 {place} 被看到。"
+  ja: "{time} に {place} で検知。"
+  ko: "{time}에 {place}에서 감지."
+visit_changed_person:
+  en: "A person was seen in the {room} at {time}."
+  fr: "Une personne a été vue dans {room} à {time}."
+  id: "Seseorang terlihat di {room} pada {time}."
+  de: "Eine Person wurde um {time} in {room} gesehen."
+  es: "Se vio a una persona en {room} a las {time}."
+  it: "È stata vista una persona in {room} alle {time}."
+  nl: "Er is om {time} een persoon gezien in {room}."
+  zh: "{time} 在{room}看到有人。"
+  ja: "{time} に{room}で人が検知されました。"
+  ko: "{time}에 {room}에서 사람이 감지되었습니다."
+visit_expected:
+  en: "Was this visit expected?"
+  fr: "Cette visite était-elle prévue?"
+  id: "Apakah kunjungan ini sudah diperkirakan?"
+  de: "War dieser Besuch erwartet?"
+  es: "¿Se esperaba esta visita?"
+  it: "Questa visita era prevista?"
+  nl: "Werd dit bezoek verwacht?"
+  zh: "这次来访是预期的吗？"
+  ja: "この訪問は予定されていましたか？"
+  ko: "예정된 방문이었습니까?"
+
+# a visit's end: the villa read no further signal for its window
+visit_ended:
+  en: "no further signal for {quiet}"
+  fr: "plus aucun signal pendant {quiet}"
+  id: "tidak ada sinyal lagi selama {quiet}"
+  de: "kein weiteres Signal seit {quiet}"
+  es: "ninguna señal más durante {quiet}"
+  it: "nessun altro segnale per {quiet}"
+  nl: "geen signaal meer gedurende {quiet}"
+  zh: "{quiet}内没有新的信号"
+  ja: "{quiet}の間、新たな信号なし"
+  ko: "{quiet} 동안 추가 신호 없음"
+
+# the siren asked during a visit: a line of the visit's story, its outcome said after it once decided
+visit_siren:
+  en: "Siren offered to the {role} {time}"
+  fr: "Sirène proposée au {role} à {time}"
+  id: "Sirene ditawarkan kepada {role} pada {time}"
+  de: "Sirene dem {role} angeboten um {time}"
+  es: "Sirena ofrecida al {role} a las {time}"
+  it: "Sirena proposta al {role} alle {time}"
+  nl: "Sirene aangeboden aan de {role} om {time}"
+  zh: "{time} 已向{role}提议拉响警报"
+  ja: "{time} に{role}へサイレンを提案"
+  ko: "{time}에 {role}에게 사이렌 제안"

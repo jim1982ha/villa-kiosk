@@ -242,22 +242,6 @@ def test_an_unreadable_rules_file_keeps_the_last_good_rules_and_the_siren_that_s
     assert not other.check_service("switch", "turn_off", "switch.pump", system=True, siren="switch.siren_a").allowed
 
 
-def test_a_newer_snapshot_of_an_incident_replaces_the_older_one(tmp_path):
-    # architecture review 18: "Incident #N · Snapshot" was never kept with its incident, so every one piled up
-    from ha_fake import FakeHA
-    v = make_agent(tmp_path, {}, roster=Roster.of(owner=[(JM, "JM_O")]),
-                   reader=FakeHA(images={"camera.door": "SlBFRw=="}))
-    res = {"send": [{"to": "owner", "text": "Door forced."}], "actions": [{"action": "snapshot.get", "entity_id": "camera.door",
-                                                                           "incident_id": 9}]}
-    run(v.outcome.carry_out(res))
-    first = v.tg.next_id                                                # the snapshot: the last message sent
-    # under the heading every message of the agent's carries (owner, 2026-10-10: "all formatted the same way")
-    assert v.tg.sent[-1][1].startswith("#9 (new)\nTo: Owner\n")
-    assert v.tg.sent[-1][1].endswith("\nCamera snapshot\nStatus:\n⚠️ New alert")
-    run(v.outcome.carry_out(res))
-    assert (JM, first) in v.tg.deleted
-
-
 def test_a_member_of_a_listed_group_acts_with_its_role_without_a_people_row(tmp_path):
     # owner, 2026-10-10: "any person from a Telegram group shall be able to inherit from the group role"
     RITA = 555

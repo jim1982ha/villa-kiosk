@@ -12,6 +12,7 @@ What it records, in the order it happened:
   sent       (chat, text, keyboard)      every message Telegram would show, each part of a long one, a caption included
   photos     (chat, (base64, mime))      documents  (chat, path)
   toasts     (callback id, text)         edits      (chat, message id, text)
+  media_edits (chat, message id, jpeg, caption, keyboard): a picture replaced (a message sent without one: "not_media")
   deleted    (chat, message id)          fetched    file ids     typing_in   chats
 `refuse = {"send"}` makes send fail as Telegram does (TelegramError); `{"blocked"}` as Telegram refuses a chat (a person
 who never sent /start: 403, `refused`) — `{"blocked <chat id>"}` that one chat only; `{"photo"}` only a message with a photo;
@@ -35,6 +36,9 @@ class FakeTelegram:
         self.buttoned: list = []         # (chat, message, keyboard): buttons put under a message already sent
         self.toasts, self.edits, self.deleted, self.fetched, self.typing_in = [], [], [], [], []
         self.edit_keyboards = []
+        self.replies: list = []            # (chat, message id, the message it answers): a send with reply_to
+        self.media_edits: list = []       # (chat, message, jpeg bytes, caption, keyboard): editMessageMedia
+        self.with_photo: set = set()      # (chat, message) of every message sent with a picture (a test may add the villa's)
         self.refuse: set[str] = set()
         self.next_id = 1000
 
@@ -61,9 +65,12 @@ class FakeTelegram:
             self.sent.append((chat_id, part.text, part.keyboard))
             if part.media == "photo":
                 self.photos.append((chat_id, photo_b64))
+                self.with_photo.add((chat_id, self.next_id))
             if part.media == "document":
                 self.documents.append((chat_id, document))
             ids.append(self.next_id)
+        if reply_to and ids:
+            self.replies.append((chat_id, ids[0], int(reply_to)))
         return ids
 
     async def download(self, file_id, limit=20 * 1024 * 1024):
@@ -96,6 +103,15 @@ class FakeTelegram:
         self.edits.append((chat_id, message_id, text))
         self.edit_keyboards.append(keyboard)             # the buttons an edit gave the message (None: they went)
         return True
+
+    async def edit_media(self, chat_id, message_id, photo, caption, keyboard=None):
+        """editMessageMedia: refused on a message that carries no picture, as Telegram refuses it ("not_media")."""
+        if "edit" in self.refuse:
+            return "refused"
+        if (chat_id, message_id) not in self.with_photo:
+            return "not_media"
+        self.media_edits.append((chat_id, message_id, photo, tight_punctuation(caption), keyboard))
+        return "shown"
 
     def __getattr__(self, name):          # getUpdates, leaveChat... must never be reached
         raise AssertionError(f"Telegram.{name} must never be called")

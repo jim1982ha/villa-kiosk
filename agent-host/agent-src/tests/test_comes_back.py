@@ -189,14 +189,13 @@ def test_a_door_closed_in_the_kiosk_is_read_again_as_a_done_is(tmp_path):
     assert fm["status"] == "Done in the Cockpit, but Door still reads unlocked: still open. VESTA keeps watching it."
 
 
-def test_an_alert_back_again_says_home_assistants_latest_words_and_brings_its_picture(tmp_path):
+def test_an_alert_back_again_says_home_assistants_latest_words(tmp_path):
     store = Store(str(tmp_path / "s.sqlite"))
     desk.intake(store, ev("automation.garden", "binary_sensor.garden", 0), T0)
     desk.intake(store, ev("automation.garden", "binary_sensor.garden", 5, phase="resolved"), T0 + timedelta(minutes=5))
-    back = desk.intake(store, {**ev("automation.garden", "binary_sensor.garden", 60), "summary": "Motion again at the pool",
-                               "snapshot": "camera.garden"}, T0 + timedelta(minutes=60))
+    back = desk.intake(store, {**ev("automation.garden", "binary_sensor.garden", 60), "summary": "Motion again at the pool"},
+                       T0 + timedelta(minutes=60))
     assert all(s["text"].startswith("Motion again at the pool") for s in back["send"])
-    assert [a for a in back["actions"] if a["action"] == "snapshot.get"]
 
 
 def test_no_test_store_ships_inside_the_app():

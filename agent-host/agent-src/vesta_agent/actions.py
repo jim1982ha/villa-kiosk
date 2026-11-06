@@ -15,6 +15,8 @@ tool it sees creates an approval request). The code then:
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 import logging
 import time
@@ -411,6 +413,26 @@ class Actions:
             return {"ok": True, "text": f"Done: {', '.join(self.names(e) for e, _ in rows)} {expect}."}
         return {"ok": False, "unconfirmed": [(self.names(e), s) for e, s in bad],
                 "text": "Not confirmed: " + ", ".join(f"{self.names(e)} reads {s}" for e, s in bad) + ". I will not retry by myself."}
+
+    # ------------------------------------------------------------------ the villa told of its visit
+    async def tell_villa(self, script: str, data: dict) -> bool:
+        """The villa's own script `script` run with `data`: VESTA telling the villa what it did with a visit (visit.py)
+        — the cards it shows, that it holds the visit, an answer, a reminder sent. Only a script, and only the one the
+        villa's own event named (the alert desk passes it on, never a name written in the agent): it writes the villa's
+        record of its visit, it acts on no device. ⚠️ GATED HERE, NEVER BY THE AI (rules/agent-code.md "The engine
+        delivers what must be seen"); its call recorded like every other."""
+        domain, _, service = str(script).partition(".")
+        if domain != "script" or not service or "." in service:
+            self.state.log("refused", {"system": True, "domain": domain, "service": service, "reason": "not a script"})
+            return False
+        try:
+            await asyncio.to_thread(self.writer_factory().call_service, "script", service, dict(data))
+            self.state.log("executed", {"system": True, "domain": "script", "service": service})
+            return True
+        except Exception as e:  # noqa: BLE001 — the villa keeps its visit itself (its own wait)
+            self.state.log("failed", {"system": True, "domain": "script", "service": service,
+                                      "error": str(e)[:error_short_chars()]})
+            return False
 
     # ------------------------------------------------------------------ system
     def system(self, domain: str, service: str, entity_id: str, data: dict | None = None, siren: str | None = None) -> bool:

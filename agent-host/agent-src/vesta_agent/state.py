@@ -460,6 +460,29 @@ class State:
             self.drop("siren:stop_at")
             self.drop("siren:entity")
 
+    # A visit (visit.py): the cameras snapped into its sheet, the sheet its cards show, the siren request it asked.
+    def visit_snaps(self, incident: int | str) -> list[dict]:
+        return json.loads(self.get(f"visitsnaps:{incident}") or "[]")
+
+    def set_visit_snaps(self, incident: int | str, snaps: list[dict]) -> None:
+        self.put(f"visitsnaps:{incident}", json.dumps(snaps))
+
+    def visit_sheet(self, incident: int | str) -> str | None:
+        return self.get(f"visitsheet:{incident}")
+
+    def set_visit_sheet(self, incident: int | str, made: str) -> None:
+        self.put(f"visitsheet:{incident}", made)
+
+    def visit_siren(self, approval_id: str) -> dict | None:
+        """The visit a siren request belongs to, and its story line's words ({incident, said, said_in})."""
+        return json.loads(self.get(f"visitsiren:{approval_id}") or "null")
+
+    def set_visit_siren(self, approval_id: str, record: dict | None) -> None:
+        if record is None:
+            self.drop(f"visitsiren:{approval_id}")
+        else:
+            self.put(f"visitsiren:{approval_id}", json.dumps(record))
+
     # A scheduled job's last slot: claimed once per slot, by one tick.
     def claim_job_slot(self, job: str, slot_iso: str, ident: str | None = None) -> bool:
         """True if this tick claims `job` for `slot_iso`; False if it already ran in that slot.

@@ -152,6 +152,15 @@ class Delivery:
         text. False: not there any more, or refused (Telegram off)."""
         return await self._place(chat_id).edit(chat_id, message_id, plain_text(text), keyboard)
 
+    async def edit_media(self, chat_id: int, message_id: int, photo: bytes, text: str, keyboard: dict | None = None) -> str:
+        """One of the agent's photo messages gets a new picture, its caption `text` and its buttons with it (a visit's
+        sheet): "shown", "not_media" (a text message: send it again as a photo) or "refused" — and "refused" for a place
+        that holds no Telegram picture (Telegram off, a tablet's conversation)."""
+        place = self._place(chat_id)
+        if not hasattr(place, "edit_media"):
+            return "refused"
+        return await place.edit_media(chat_id, message_id, photo, plain_text(text), keyboard)
+
     async def settle(self, p, said: str, keyboard: dict | None = None) -> bool:
         """A pressed message (`p`, press.Press) stays whole, what the press did written under it, its buttons gone (or
         `keyboard`, the ones still to press). ⚠️ WITHIN ITS OWN LIMIT (review 32): a page's message is a file's caption
@@ -265,6 +274,14 @@ class TelegramChats:
         if not ok:
             self.state.log("edit_refused", {"chat": chat_id, "message": message_id})
         return bool(ok)
+
+    async def edit_media(self, chat_id: int, message_id: int, photo: bytes, text: str, keyboard: dict | None = None) -> str:
+        if self.tg is None:
+            return "refused"
+        said = await self.tg.edit_media(int(chat_id), int(message_id), photo, text, keyboard)
+        if said != "shown":
+            self.state.log("edit_refused", {"chat": chat_id, "message": message_id, "media": said})
+        return said
 
     async def buttons(self, chat_id: int, message_id: int, keyboard: dict | None) -> bool:
         if self.tg is None:

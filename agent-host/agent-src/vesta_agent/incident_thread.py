@@ -43,6 +43,10 @@ Delete = Callable[[int, int], Awaitable]
 #: minutes — housekeeping runs every 30 seconds, so a 10-minute internet cut outlived them and left the buttons.
 
 
+#: How many of a chat's earlier copies of an incident are remembered as replaced (never taken over again).
+REPLACED_KEPT = 50
+
+
 def owed_for() -> timedelta:
     return timedelta(hours=limit("telegram.edit_retry_hours", 2, unit="hours", group="text", lo=1, hi=72,
                                  says="How long a message Telegram refused to update is tried again (its buttons "
@@ -79,7 +83,7 @@ class PlainWords:
 class IncidentThread:
     def __init__(self, state, timezone: str, edit: Edit | None = None, delete: Delete | None = None, *,
                  words=None, name: Callable[[int | str], str] = incident_tag, translations: Callable[[], object] | None = None,
-                 mirror=None):
+                 mirror=None, media: Callable[..., Awaitable] | None = None, send: Callable[..., Awaitable] | None = None):
         """⚠️ EVERY COLLABORATOR AT CONSTRUCTION (architecture review 2026-10-30, round 2): eight of them were set on the
         thread after it was built, each a None the code had to test for, and one forgotten was a feature silently off.
 
@@ -106,6 +110,9 @@ class IncidentThread:
         self._translations = translations or (lambda: None)
         self._wanted: dict[tuple[str, int], tuple] = {}  # (incident, chat) → its words still to translate, once recorded
         self.mirror = mirror
+        # a copy's picture replaced (delivery.Delivery.edit_media: "shown", "not_media", "refused"), and a copy sent
+        # again as a photo when it is a text message (delivery.Delivery.send): a visit's sheet (`picture`)
+        self.media, self.send = media, send
         self._locks: dict[str, asyncio.Lock] = {}
 
     def _lock(self, iid: int | str) -> asyncio.Lock:
@@ -113,11 +120,12 @@ class IncidentThread:
         return self._locks.setdefault(str(iid), asyncio.Lock())
 
     async def post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
-                   keyboard: dict | None = None, photo=None) -> None:
+                   keyboard: dict | None = None, photo=None, sheet: str | None = None) -> None:
         """Message `mid`, just sent to `chat` with these `parts` (layout.py), is now incident `iid`'s message there: the
-        earlier one goes. `photo`: the picture it carries ((base64, mime): a snapshot), kept for the tablet."""
+        earlier one goes. `photo`: the picture it carries ((base64, mime): a snapshot), kept for the tablet; `sheet`:
+        the visit's sheet it carries (its fingerprint: `picture` leaves it as it is)."""
         async with self._lock(iid):
-            await self._post(iid, chat, mid, parts, buttons=buttons, keyboard=keyboard, photo=photo)
+            await self._post(iid, chat, mid, parts, buttons=buttons, keyboard=keyboard, photo=photo, sheet=sheet)
 
     def taken(self, iid: int | str, run: str) -> None:
         """The villa's automation run `run` (its context id) is incident `iid`'s: its announcement on the tablet gives way
@@ -200,7 +208,7 @@ class IncidentThread:
         return told
 
     async def _post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
-                    keyboard: dict | None = None, photo=None) -> None:
+                    keyboard: dict | None = None, photo=None, sheet: str | None = None) -> None:
         old = self.state.incident_message(iid, chat)
         if old and old["mid"] != mid:
             gone = bool(self.delete and await self.delete(chat, old["mid"]))
@@ -210,10 +218,16 @@ class IncidentThread:
             # what happened to the earlier copy, said (owner, 2026-10-10: two messages of #14 stayed in the group)
             log.info("%s in chat %s: message %s replaced by %s (%s)", iid, chat, old["mid"], mid,
                      "deleted" if gone else "kept, now a pointer" if self.edit else "kept")
+        # ⚠️ A CARD REPLACED IS NEVER TAKEN OVER AGAIN (owner, 2026-11-06, #125-P1 at 18:53): the reminder replaced the
+        # villa's card 1464 by 1472; the all-clear of the same automation run named 1464 again, the take-over edited a
+        # message gone ("message to edit not found"), recorded it, and deleted the live 1472. The ids replaced are kept
+        replaced = [*((old or {}).get("replaced") or []), *([old["mid"]] if old and old["mid"] != mid else [])][-REPLACED_KEPT:]
         # its buttons kept with it: a quiet update (`sync`) or a retry (`catch_up`) shows them again, never drops them
         self.state.set_incident_message(iid, chat, {"mid": mid, "parts": parts, "text": layout.render(parts),
                                                     "buttons": buttons, "settled": False,
-                                                    **({"kb": keyboard} if buttons and keyboard else {})})
+                                                    **({"kb": keyboard} if buttons and keyboard else {}),
+                                                    **({"replaced": replaced} if replaced else {}),
+                                                    **({"sheet": sheet} if sheet else {})})
         self.tell(iid, parts, keyboard if buttons else None, photo)
         want, tr = self._wanted.pop((str(iid), int(chat)), None), self._translations()
         if want and tr is not None:
@@ -472,15 +486,62 @@ class IncidentThread:
         ONE line, counted (words.refold: the history folded, each copy's heading drawn again), quietly; the tablet's
         card with it. Its buttons and bottom line stay. Returns how many changed."""
         async with self._lock(iid):
+            return await self._reheaded(iid, self.words.refold(int(iid)))
+
+    async def reheaded(self, iid: int | str, heads: dict, body: str | None = None) -> int:
+        """Every copy of incident `iid` shows the heading `heads` gives its chat ({chat: heading}: notice.Notices.observe,
+        a visit's story as it stands) and, when given, the alert's new `body` — quietly, an edit, its buttons and bottom
+        line kept; the tablet's card with it. Returns how many changed."""
+        async with self._lock(iid):
+            return await self._reheaded(iid, heads, body)
+
+    async def _reheaded(self, iid: int | str, heads: dict, body: str | None = None) -> int:
+        n = 0
+        for chat, head in heads.items():
+            rec = self.state.incident_message(iid, chat)
+            if not rec or not rec.get("mid"):
+                continue
+            p = {**layout.of(rec), "head": head}
+            if body is not None and body != p.get("body"):
+                p = self._own_words(iid, chat, layout.changed(p, body=body))
+            if layout.render(p) != rec.get("text"):
+                n += await self._show(iid, chat, rec, p)
+        return n
+
+    async def picture(self, iid: int | str, jpeg: bytes, keyboard: Callable[[int], dict | None] | None = None) -> int:
+        """Every copy of incident `iid` carries the picture `jpeg` (a visit's sheet), its caption drawn again within a
+        caption's limit and its buttons kept — replaced in place, no sound; a copy that is a text message (Telegram
+        gives no text message a picture) sent again as a photo, which replaces it (`_post`) and rings once. Returns
+        how many copies carry it now."""
+        import base64
+        import hashlib
+        from vesta_shared.messaging import telegram_caption_chars
+        made = hashlib.sha1(jpeg).hexdigest()
+        async with self._lock(iid):
             n = 0
-            for chat, head in self.words.refold(int(iid)).items():
-                rec = self.state.incident_message(iid, chat)
-                if not rec or not rec.get("mid"):
+            for chat, rec in self.state.incident_chats(iid):
+                if not rec.get("mid") or rec.get("sheet") == made:
                     continue
-                p = {**layout.of(rec), "head": head}
-                if layout.render(p) != rec.get("text"):
-                    n += await self._show(iid, chat, rec, p)
+                p = {**layout.of(rec), "limit": telegram_caption_chars()}
+                text = layout.render(p)
+                live = rec.get("buttons") and not rec.get("settled")
+                kb = ((keyboard(chat) if keyboard else None) or rec.get("kb")) if live else None
+                said = await self.media(chat, rec["mid"], jpeg, text, kb) if self.media else "refused"
+                if said == "shown":
+                    self.state.set_incident_message(iid, chat, {**rec, "parts": p, "text": text, "sheet": made})
+                    n += 1
+                elif said == "not_media" and self.send:
+                    mid = await self.send(chat, text, keyboard=kb, photo=(base64.b64encode(jpeg).decode(), "image/jpeg"))
+                    if mid:
+                        await self._post(iid, chat, mid, p, buttons=bool(kb), keyboard=kb, sheet=made)
+                        n += 1
             return n
+
+    def held(self, iid: int | str, chat: int, mid: int) -> bool:
+        """Does chat `chat` already hold a copy of incident `iid` — `mid` itself, a newer one, or one that replaced
+        `mid`? Then `mid` is never taken over again."""
+        rec = self.state.incident_message(iid, chat)
+        return bool(rec) and (int(rec.get("mid") or 0) == int(mid) or int(mid) in (rec.get("replaced") or []))
 
     async def translated(self, iid: int | str, chat: int, draw: Callable[[int | str, int, dict], dict]) -> bool:
         """The copy of `iid` in `chat` drawn again now that its words are known in its language (`draw`: its parts as

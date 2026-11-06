@@ -6,7 +6,7 @@ A skill script prints its decision in the standard form; this module does it:
               keyboard = the alert buttons of the message's incident_id
   (a skill builds these with vesta_shared/result.py: the shape there, the words in the skill)
   actions:    faults_changed (a task's fault opened, reopened or closed: the repair) · ticket {summary, entity_id?,
-              note?} (a fault about no task: a chat's) · snapshot.get {entity_id, incident_id}
+              note?} (a fault about no task: a chat's)
               (older, still read as faults_changed: ticket {task_id, …}, ticket.resolve, ticket.reopen)
   siren_gate: {armed, prompt, to, cameras?, seen?}  → handed to siren.Request: an Approve / Refuse request to the owner
               for the policy's siren, the cameras' pictures first; when it cannot be asked, the
@@ -37,13 +37,14 @@ review, 2026-10-07): this one carries a result out with them.
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import os
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
 from vesta_shared.message_format import KIOSK_UNREACHED, STEPS
-from vesta_shared.result import FAULTS_CHANGED, TAKE_ON
+from vesta_shared.result import FAULTS_CHANGED, REDRAW, SHEET, TAKE_ON, TELL_VILLA, WITHDRAW_SIREN
 from vesta_shared.ha_client import error_short_chars
 
 from . import layout
@@ -63,7 +64,7 @@ log = logging.getLogger("vesta.outcome")
 #: What a script result can ask the engine to carry out — the keys carry_out reads. ⚠️ ONE LIST
 #: (architecture review, 0.12.38): the model's run_skill_script tool kept its own copy, so a key added here
 #: would be carried out on schedule and silently skipped when the model ran the same script.
-CARRIED_KEYS = ("send", "actions", "siren_gate", "settle", "ha_messages", "edits")
+CARRIED_KEYS = ("send", "actions", "siren_gate", "settle", "ha_messages", "edits", "seen")
 
 
 def has_work(res) -> bool:
@@ -73,8 +74,9 @@ def has_work(res) -> bool:
 
 
 async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
-    """What a camera shows now, as (base64, mime) for Telegram's sendPhoto; None when it gave no image.
-    The alert desk's snapshot (a chat reply carries the pictures the AI looked at: tools.Toolbox.photos)."""
+    """What a camera shows now, as (base64, mime) for Telegram's sendPhoto; None when it gave no image: the siren's
+    pictures before its question, a visit's camera snapped into its sheet (a chat reply carries the pictures the AI
+    looked at: tools.Toolbox.photos)."""
     if not str(entity_id or "").startswith("camera."):
         return None
     blocks = await asyncio.to_thread(reader.tool_content, "ha_get_camera_image", {"entity_id": entity_id})
@@ -84,7 +86,7 @@ async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
 class Outcome:
     def __init__(self, *, policy: Callable, state, send: Callable[..., Awaitable], actions, reader, tickets, buttons,
                  thread, notices=None, out_dir: str = "", timezone_name: str = "UTC", poster=None, ask=None, incidents=None,
-                 edit: Callable[..., Awaitable] | None = None):
+                 edit: Callable[..., Awaitable] | None = None, visits=None):
         self.policy = policy
         self.state = state
         self.actions = actions
@@ -102,9 +104,11 @@ class Outcome:
         # and the parts above when alone
         self.poster = poster or Poster(send=send, thread=thread, notices=notices, timezone_name=timezone_name, edit=edit)
         # the siren's request, its whole life (siren.py): this module only hands it the gate
+        # a visit's sheet, the villa told what VESTA did with it, its siren told in its story (visit.Visits)
+        self.visits = visits
         self.siren = siren.Request(policy=policy, state=state, actions=actions, ask=ask, post=self.poster.post,
                                    photo=lambda cam: camera_photo(self.reader, cam),
-                                   name=lambda cam: self.actions.names(cam))
+                                   name=lambda cam: self.actions.names(cam), visits=visits)
 
     async def rewrite(self, e: dict, skill_name: str | None) -> int:
         """A message sent earlier with this `key` (result.message key=), rewritten in every chat it went to, in its
@@ -162,6 +166,16 @@ class Outcome:
         done = {"sent": 0, "not_sent": 0, "tickets": 0, "resolved": 0, "unrouted": 0, "edited": 0}
         if not isinstance(res, dict) or not res:
             return done
+        # a visit's story lines FIRST: every copy this result draws or posts lists them (notice.Notices.observe); the
+        # heading each copy shows then, for a quiet redraw (result.redraw)
+        heads: dict[int, dict] = {}
+        story: dict[int, list[dict]] = {}
+        for ln in res.get("seen") or []:
+            if isinstance(ln, dict) and str(ln.get("incident_id") or "").isdigit() and ln.get("key") and ln.get("note"):
+                story.setdefault(int(ln["incident_id"]), []).append(ln)
+        if self.notices:
+            for iid, lines in story.items():
+                heads[iid] = self.notices.observe(iid, lines)
         route = Routing(self.policy())
         chats: set[int] = set()
         items = list(res.get("send") or []) + self.unkept_backups(res)
@@ -212,6 +226,21 @@ class Outcome:
                 await self.thread.close(int(s["incident_id"]), str(s.get("note") or ""), mark=s.get("mark"),
                                         note_in=s.get("note_in") if isinstance(s.get("note_in"), dict) else None,
                                         final=s.get("final") is True, closed=s.get("closed") is True)
+        # a visit's sheet, made once: the copies this result sends carry it (a card sent again rings once, with its
+        # picture), the others get it in place (result.sheet, below)
+        sheets: dict[int, tuple[bytes, str]] = {}
+        if self.visits is not None:
+            for a in res.get("actions") or []:
+                if isinstance(a, dict) and a.get("action") == SHEET and str(a.get("incident_id") or "").isdigit():
+                    try:
+                        got = await self.visits.jpeg(int(a["incident_id"]), list(a.get("photos") or []),
+                                                     int(a.get("shown") or 1))
+                    except Exception:  # noqa: BLE001 — the card goes without its sheet, never not at all
+                        log.exception("Incident #%s: its photo sheet could not be made", a["incident_id"])
+                        got = None
+                    if got:
+                        import hashlib
+                        sheets[int(a["incident_id"])] = (got, hashlib.sha1(got).hexdigest())
         for item in unrouted:
             done["unrouted"] += 1
             self.state.log("send_unrouted", {"to": item.get("to"), "skill": skill_name})
@@ -238,8 +267,11 @@ class Outcome:
                 else:
                     log.warning("Skill %s attached %r, which is not a file of the out folder: sent without it", skill_name, att)
             # the incident's message in this chat now: the earlier one there goes
+            pic = sheets.get(int(iid)) if iid and not doc else None
             mid = await self.poster.post(chat, text, status=item.get("status") or "", roles=roles,
                                    incident=int(iid) if iid else None, keyboard=kb, document=doc,
+                                   **({"photo": (base64.b64encode(pic[0]).decode(), "image/jpeg"), "sheet": pic[1]}
+                                      if pic else {}),
                                    thread=int(iid) if iid else None, origin=origin, stage=item.get("stage"),
                                    mark=item.get("mark"), also=going.get(int(iid)) if iid else sent_to.get(id(item)),
                                    title=item.get("title"), told=told.get((int(iid), item.get("stage"))) if iid else None,
@@ -331,6 +363,21 @@ class Outcome:
                 elif kind == "ticket":
                     if await self.tickets.create(a.get("summary", ""), a.get("entity_id") or None, a.get("note") or None):
                         done["tickets"] += 1
+                elif kind == REDRAW and str(a.get("incident_id") or "").isdigit() and self.thread is not None:
+                    # a visit's step no stronger than the ones before: every copy edited, no sound
+                    iid = int(a["incident_id"])
+                    done["edited"] += await self.thread.reheaded(
+                        iid, heads.get(iid) or (self.notices.observe(iid, []) if self.notices else {}), a.get("body"))
+                elif kind == SHEET and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
+                    iid = int(a["incident_id"])
+                    if iid in sheets:
+                        await self.visits.picture(iid, [], 1, sheets[iid][0])
+                elif kind == TELL_VILLA and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
+                    iid = int(a["incident_id"])
+                    await self.visits.tell(iid, str(a.get("script") or ""), dict(a.get("fields") or {}),
+                                           self.incidents.name(iid) if self.incidents is not None else "")
+                elif kind == WITHDRAW_SIREN and str(a.get("incident_id") or "").isdigit() and self.visits is not None:
+                    await self.visits.withdraw(int(a["incident_id"]))
                 elif kind == TAKE_ON and str(a.get("incident_id") or "").isdigit():
                     # Open Ticket on Telegram (owner, 2026-11-05): the Kiosk's own take-on, or a plain answer and the
                     # buttons back — never a press that looks taken and is not
@@ -339,16 +386,6 @@ class Outcome:
                         done["tickets"] += 1
                     elif self.thread is not None:
                         await self.thread.unsettle(iid, KIOSK_UNREACHED, lambda c, i=iid: self.buttons.still(i, c))
-                elif kind == "snapshot.get":
-                    photo = await camera_photo(self.reader, a.get("entity_id"))
-                    if photo:
-                        # its own thread: a newer snapshot of the incident replaces the older one in each chat; under the
-                        # heading of every message the agent sends on its own (owner, 2026-10-10: "all formatted the same")
-                        iid = int(a["incident_id"]) if str(a.get("incident_id") or "").isdigit() else None
-                        # a chat that just got this camera's picture above the siren's request is not sent it twice
-                        for chat in [c for c in chats if (c, a.get("entity_id")) not in shown]:
-                            await self.poster.post(chat, "Camera snapshot", incident=iid, photo=photo,
-                                             thread=f"snapshot-{a.get('incident_id')}", origin=origin)
                 else:
                     self.state.log("action_ignored", {"action": kind, "skill": skill_name})
                     log.warning("Skill %s asked for an action this agent does not know: %s", skill_name, kind)
@@ -377,17 +414,30 @@ class Outcome:
         the roles the incident's other messages of this result go to; `told`: those of this same step. Returns each
         chat taken over with the roles the copy there is about (notice.Notices.went_to)."""
         ctx, iid, text = (h or {}).get("context"), (h or {}).get("incident_id"), (h or {}).get("text") or ""
-        if not (ctx and str(iid or "").isdigit() and text):
+        named = (h or {}).get("messages")
+        if not ((ctx or named is not None) and str(iid or "").isdigit() and text):
             return []
-        # the villa's announcement of this run gives way to the incident's card on the tablet, whatever Telegram did
+        # the villa's announcement of this run (or of its visit, by its key) gives way to the incident's card on the
+        # tablet, whatever Telegram did
         if self.thread is not None:
-            self.thread.taken(int(iid), str(ctx))
-        found = self.state.ha_sent(ctx)
-        for wait in HA_SENT_WAIT_S:
-            if found:
-                break
-            await asyncio.sleep(wait)
+            for run in ([str(ctx)] if ctx else []) + [str(t) for t in (h.get("takes") or [])]:
+                self.thread.taken(int(iid), run)
+        if named is not None:
+            # the cards the villa's record names, never the run's messages; a chat already holding a copy of the
+            # incident keeps it (`held`: its card, or one that replaced the card named)
+            found = [(int(c), int(m)) for c, m in named
+                     if self.thread is None or not self.thread.held(int(iid), int(c), int(m))]
+        else:
             found = self.state.ha_sent(ctx)
+            for wait in HA_SENT_WAIT_S:
+                if found:
+                    break
+                await asyncio.sleep(wait)
+                found = self.state.ha_sent(ctx)
+            # ⚠️ NEVER A MESSAGE THE THREAD ALREADY REPLACED (owner, 2026-11-06, #125-P1 at 18:53): the all-clear of a run
+            # named the card its reminder had replaced; taken over, the live copy was deleted for a message gone
+            found = [(c, m) for c, m in found
+                     if self.thread is None or int(m) not in ((self.state.incident_message(int(iid), c) or {}).get("replaced") or [])]
         out = []
         for chat, mid in found:
             # Home Assistant's own alert, taken over: the incident's text, the earlier messages' times, its buttons

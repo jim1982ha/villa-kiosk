@@ -8,9 +8,10 @@ A Kiosk fault's note was "what to check" in one script and "Check: …" in anoth
 
 The engine's reader is vesta_agent/outcome.py (carry_out); its keys:
     send        [message(...)]            settle   [settle(...)]
-    actions     [fault(...), resolved(...), snapshot(...)]
+    actions     [fault(...), resolved(...)]
     siren_gate  siren(...)
     ha_messages [ha_message(...)]
+    seen        [seen(...)]               a visit's story lines, recorded before anything of the result is drawn
 """
 from __future__ import annotations
 
@@ -207,11 +208,6 @@ def take_on(incident: int, by: str) -> dict:
     return {"action": TAKE_ON, "incident_id": int(incident), "by": str(by)}
 
 
-def snapshot(entity_id: str, incident: int) -> dict:
-    """A camera's picture, sent with an alert."""
-    return {"action": "snapshot.get", "entity_id": entity_id, "incident_id": int(incident)}
-
-
 def _in(key: str, texts: dict | None) -> dict:
     """{key: the words in other languages} — only real words, English left out (it is the plain field); {} for none."""
     got = {k: v for k, v in (texts or {}).items() if isinstance(k, str) and k != "en" and isinstance(v, str) and v}
@@ -231,14 +227,24 @@ def settle(incident: int, note: str, mark: str | None = None, note_in: dict | No
 
 
 def ha_message(incident: int, text: str, context: str | None, stage: str | None = None, status: str | None = None,
-               status_in: dict | None = None, as_it_stands: bool = False) -> dict:
+               status_in: dict | None = None, as_it_stands: bool = False, messages=None, takes=None) -> dict:
     """Home Assistant's own messages of the automation run `context` (the event's context) become `incident`'s
     messages, rewritten as `text` under the incident's heading, like every other notice about it (`stage`: STAGES;
     `status_in`: as `message`'s). `as_it_stands`: the incident closed before this message (the rule's late all-clear)
-    — a chat's copy keeps the close it shows, word for word; `status` is for a chat that shows none."""
+    — a chat's copy keeps the close it shows, word for word; `status` is for a chat that shows none.
+
+    `messages`: [(chat, message id)] — the villa's own cards, named by the villa itself (a visit's record:
+    `visit.messages`), taken over in place of the run's messages. ⚠️ NEVER FROM A RUN FOR A VISIT (owner, 2026-11-06,
+    #125-P1 at 18:53): the run's messages included a card the reminder had already replaced; the record names the
+    card each chat shows now. A chat already holding a copy of the incident is never taken over again. `takes`: the
+    villa's announcements on the tablet this card stands for, by their key ("visit:<id>")."""
     m = {"incident_id": int(incident), "text": text, "context": context,
          **({"status": status, **_in("status_in", status_in)} if status else {}),
          **({"as_it_stands": True} if as_it_stands else {})}
+    if messages is not None:
+        m["messages"] = [[int(c), int(mid)] for c, mid in messages]
+    if takes:
+        m["takes"] = [str(t) for t in takes]          # the villa's announcements it stands for on the tablet, by key
     if stage is not None:
         if stage not in STAGES:
             raise ValueError(f"stage must be one of {', '.join(STAGES)}")
@@ -252,3 +258,42 @@ def siren(armed: bool, prompt: str | None, to: tuple[str, ...] = ("owner", "fm")
     `prompt` goes to every chat of `to`. Never fired by a script. `detail` may carry `cameras` (whose pictures
     the engine sends before the question) and `seen` (the words added to the question once they arrived)."""
     return {"armed": bool(armed), "prompt": prompt, "to": list(to), **detail}
+
+
+def seen(incident: int, key: str, note: str, note_in: dict | None = None, at: str | None = None) -> dict:
+    """One line of a visit's story on incident `incident` (owner, 2026-11-06: one visit, one story): `note` in the
+    desk's words ({code: text} in `note_in`), `key` the line it is — the same key again is the SAME line, said anew
+    (the engine folds it, notice.Notices.observe: "Seen at Parking → Entrance Left, 18:34–18:35"); `at`: its moment."""
+    return {"incident_id": int(incident), "key": _key(key), "note": str(note), **_in("note_in", note_in),
+            **({"at": str(at)} if at else {})}
+
+
+#: The actions of a visit (desk.py visit_intake), as the engine reads them.
+REDRAW, SHEET, TELL_VILLA, WITHDRAW_SIREN = "incident.redraw", "visit.sheet", "visit.tell", "visit.withdraw_siren"
+
+
+def withdraw_siren(incident: int) -> dict:
+    """The siren's question asked within visit `incident`, still waiting, withdrawn: the visit was expected (a resident
+    came home) — every copy says so and loses its buttons."""
+    return {"action": WITHDRAW_SIREN, "incident_id": int(incident)}
+
+
+def redraw(incident: int, body: str | None = None) -> dict:
+    """Every copy of `incident` drawn again quietly with its story as it stands (a visit's step that is no stronger:
+    an edit, no sound), its buttons and bottom line kept; `body`: its new alert words, when they changed."""
+    return {"action": REDRAW, "incident_id": int(incident), **({"body": str(body)} if body is not None else {})}
+
+
+def sheet(incident: int, photos: list[dict], shown: int) -> dict:
+    """The picture of every copy of `incident` becomes ONE sheet of the visit's photos (`photos`: [{path, label, at,
+    strongest?}], the strongest first), at most `shown` tiles; the tablet's card carries them all."""
+    return {"action": SHEET, "incident_id": int(incident), "photos": list(photos), "shown": int(shown)}
+
+
+def tell_villa(incident: int, script: str, fields: dict) -> dict:
+    """The villa told what VESTA did with its visit, through the script the villa's event named (`visit.tell_script`,
+    never a name written here): `fields` (owner, number, ack_seq, answered, reminded_at…); the engine adds `messages`,
+    each chat's card as it stands after this result."""
+    if not str(script).startswith("script.") or "\n" in str(script):
+        raise ValueError("the villa is told through one of its scripts")
+    return {"action": TELL_VILLA, "incident_id": int(incident), "script": str(script), "fields": dict(fields)}

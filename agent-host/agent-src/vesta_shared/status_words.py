@@ -43,7 +43,7 @@ WORDS: dict[str, dict] = {
     "fr": {
         "status": "Statut", "to": " (à: {who})", "roles": {"owner": "Propriétaire", "fm": "FM"}, "nobody": "personne",
         "sent": "Envoyé", "line": "{sent} le {at}{to}",
-        "steps": {"new": "Alerte envoyée", "reminder": "Rappel envoyé", "escalated": "Escalade envoyée",
+        "steps": {"stronger": "Signal plus fort envoyé", "new": "Alerte envoyée", "reminder": "Rappel envoyé", "escalated": "Escalade envoyée",
                   "update": "Mise à jour envoyée", "back": "Retour: alerte envoyée",
                   "still": "Alerte « toujours là » envoyée", "reopened": "Demande de réouverture envoyée",
                   "closed": "Note de clôture envoyée"},
@@ -60,7 +60,7 @@ WORDS: dict[str, dict] = {
     "id": {
         "status": "Status", "to": " (kepada: {who})", "roles": {"owner": "Pemilik", "fm": "FM"}, "nobody": "tidak ada",
         "sent": "Terkirim", "line": "{sent} {at}{to}",
-        "steps": {"new": "Peringatan terkirim", "reminder": "Pengingat terkirim", "escalated": "Eskalasi terkirim",
+        "steps": {"stronger": "Sinyal lebih kuat terkirim", "new": "Peringatan terkirim", "reminder": "Pengingat terkirim", "escalated": "Eskalasi terkirim",
                   "update": "Pembaruan terkirim", "back": "Kembali: peringatan terkirim",
                   "still": "Peringatan \"masih ada\" terkirim", "reopened": "Permintaan buka kembali terkirim",
                   "closed": "Catatan penutupan terkirim"},
@@ -77,7 +77,7 @@ WORDS: dict[str, dict] = {
     "de": {
         "status": "Status", "to": " (an: {who})", "roles": {"owner": "Eigentümer", "fm": "FM"}, "nobody": "niemand",
         "sent": "Gesendet", "line": "{sent} am {at}{to}",
-        "steps": {"new": "Alarm gesendet", "reminder": "Erinnerung gesendet", "escalated": "Eskalation gesendet",
+        "steps": {"stronger": "Stärkeres Signal gesendet", "new": "Alarm gesendet", "reminder": "Erinnerung gesendet", "escalated": "Eskalation gesendet",
                   "update": "Aktualisierung gesendet", "back": "Zurück: Alarm gesendet",
                   "still": "Alarm „noch da“ gesendet", "reopened": "Bitte um Wiedereröffnung gesendet",
                   "closed": "Abschlussnachricht gesendet"},
@@ -94,7 +94,7 @@ WORDS: dict[str, dict] = {
     "es": {
         "status": "Estado", "to": " (para: {who})", "roles": {"owner": "Propietario", "fm": "FM"}, "nobody": "nadie",
         "sent": "Enviado", "line": "{sent} el {at}{to}",
-        "steps": {"new": "Alerta enviada", "reminder": "Recordatorio enviado", "escalated": "Escalado enviado",
+        "steps": {"stronger": "Señal más fuerte enviada", "new": "Alerta enviada", "reminder": "Recordatorio enviado", "escalated": "Escalado enviado",
                   "update": "Actualización enviada", "back": "De vuelta: alerta enviada",
                   "still": "Alerta «sigue ahí» enviada", "reopened": "Solicitud de reapertura enviada",
                   "closed": "Nota de cierre enviada"},
@@ -111,7 +111,7 @@ WORDS: dict[str, dict] = {
     "it": {
         "status": "Stato", "to": " (a: {who})", "roles": {"owner": "Proprietario", "fm": "FM"}, "nobody": "nessuno",
         "sent": "Inviato", "line": "{sent} il {at}{to}",
-        "steps": {"new": "Avviso inviato", "reminder": "Promemoria inviato", "escalated": "Escalation inviata",
+        "steps": {"stronger": "Segnale più forte inviato", "new": "Avviso inviato", "reminder": "Promemoria inviato", "escalated": "Escalation inviata",
                   "update": "Aggiornamento inviato", "back": "Di nuovo: avviso inviato",
                   "still": "Avviso «ancora presente» inviato", "reopened": "Richiesta di riapertura inviata",
                   "closed": "Nota di chiusura inviata"},
@@ -128,7 +128,7 @@ WORDS: dict[str, dict] = {
     "nl": {
         "status": "Status", "to": " (aan: {who})", "roles": {"owner": "Eigenaar", "fm": "FM"}, "nobody": "niemand",
         "sent": "Verzonden", "line": "{sent} op {at}{to}",
-        "steps": {"new": "Melding verzonden", "reminder": "Herinnering verzonden", "escalated": "Escalatie verzonden",
+        "steps": {"stronger": "Sterker signaal verzonden", "new": "Melding verzonden", "reminder": "Herinnering verzonden", "escalated": "Escalatie verzonden",
                   "update": "Update verzonden", "back": "Terug: melding verzonden",
                   "still": "Melding 'nog steeds' verzonden", "reopened": "Verzoek tot heropenen verzonden",
                   "closed": "Afsluitbericht verzonden"},
@@ -145,7 +145,7 @@ WORDS: dict[str, dict] = {
     "zh": {
         "status": "状态", "to": " (发给: {who})", "roles": {"owner": "业主", "fm": "FM"}, "nobody": "无人",
         "sent": "已发送", "line": "{at} {sent}{to}",
-        "steps": {"new": "已发送警报", "reminder": "已发送提醒", "escalated": "已发送升级通知", "update": "已发送更新",
+        "steps": {"stronger": "已发送更强信号", "new": "已发送警报", "reminder": "已发送提醒", "escalated": "已发送升级通知", "update": "已发送更新",
                   "back": "再次出现：已发送警报", "still": "已发送“仍存在”警报", "reopened": "已发送重新打开请求",
                   "closed": "已发送关闭通知"},
         "lines": {"new": "{at} 已发送警报{times}{to}", "back": "{at} 再次出现{times}{to}"},
@@ -161,7 +161,7 @@ WORDS: dict[str, dict] = {
     "ja": {
         "status": "状況", "to": " (宛先: {who})", "roles": {"owner": "オーナー", "fm": "FM"}, "nobody": "なし",
         "sent": "送信済み", "line": "{at} {sent}{to}",
-        "steps": {"new": "アラート送信", "reminder": "リマインダー送信", "escalated": "エスカレーション送信",
+        "steps": {"stronger": "より強い信号を送信", "new": "アラート送信", "reminder": "リマインダー送信", "escalated": "エスカレーション送信",
                   "update": "更新送信", "back": "再発：アラート送信", "still": "「継続中」アラート送信",
                   "reopened": "再オープン依頼送信", "closed": "終了通知送信"},
         "lines": {"new": "{at} アラート送信{times}{to}", "back": "{at} 再発{times}{to}"},
@@ -177,7 +177,7 @@ WORDS: dict[str, dict] = {
     "ko": {
         "status": "상태", "to": " (수신: {who})", "roles": {"owner": "소유자", "fm": "FM"}, "nobody": "없음",
         "sent": "전송됨", "line": "{at} {sent}{to}",
-        "steps": {"new": "알림 전송", "reminder": "리마인더 전송", "escalated": "에스컬레이션 전송", "update": "업데이트 전송",
+        "steps": {"stronger": "더 강한 신호 전송", "new": "알림 전송", "reminder": "리마인더 전송", "escalated": "에스컬레이션 전송", "update": "업데이트 전송",
                   "back": "재발: 알림 전송", "still": "'계속됨' 알림 전송", "reopened": "재개 요청 전송",
                   "closed": "종료 알림 전송"},
         "lines": {"new": "{at} 알림 전송{times}{to}", "back": "{at} 재발{times}{to}"},

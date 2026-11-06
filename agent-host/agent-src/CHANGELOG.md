@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.448 (6 November 2026)
+
+- One visit, one story, the Agent's side (owner, 2026-11-06, #125-P1/#126-P1, phase B1): `vesta_critical_event` phase
+  `step` and the `visit` object (desk.py `visit_intake`; `PHASES` gains `step`; an event without `visit` takes the old
+  path). The visit's ONE incident (key `rule:<uid>|visit`), its cards adopted from `visit.messages`
+  (`result.ha_message(messages=, takes=)`; never a card the thread holds: `IncidentThread.held`), its story lines
+  (`result.seen` → `Notices.observe`: the same key folded into its line by the one fold `_merged`; a copy's bottom
+  line leaves only notices out, `notice._cut`), quiet steps redrawn (`result.redraw` → `IncidentThread.reheaded`), a
+  stronger step sent again with stage `stronger` (`message_format.STEPS`, every language), the photo sheet
+  (`sheet.build` with Pillow 12.0.0, `visit.Visits`, `IncidentThread.picture`, `Telegram.edit_media`), the villa told
+  through the script its event names (`result.tell_villa`, `Actions.tell_villa`: scripts only), reminders that say
+  what changed, "Same time as the last N evenings" (`behaviour.same_time_minutes` / `same_time_days`, words.yaml
+  `same_time_*` with `starts_at_hour`), the siren gate on the visit's distinct step sources once per visit (a reply to
+  its card, cameras snapped into the sheet, its outcome a story line: `siren.Request`, `Visits.offered/decided`),
+  person steps, the close when a resident came home (siren withdrawn: `Approvals.withdraw`), no watch after a visit.
+  Words in words.yaml (10 languages); the villa's English in `vm_visit_words` (vesta_message.jinja, generated).
+- Never take over a card the thread already replaced (#125-P1 at 18:53, every rule): `IncidentThread._post` keeps
+  `replaced`, `Outcome.adopt_ha` skips them.
+- A reopened alert counts its own alerts (`store.reopen_incident` count 1, the repeat's "since" its return).
+- Removed as dead: the alert's `snapshot` field, `result.snapshot`, the `snapshot.get` action (no rule sends it).
+- tests/test_visit_story.py (16 tests, 28 mutations red).
+
 ## 0.6.447 (6 November 2026)
 
 - One line per problem in an alert's Status (owner, 2026-11-06, #125-P1): four cameras' "opened" events of one run

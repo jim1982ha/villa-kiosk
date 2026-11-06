@@ -111,3 +111,5 @@ behaviour:
   alert_fatigue_per_month: 20  # An automation alerting more often than this, unanswered, is named as one to retune.
   reopen_hours: 4              # An alert that comes back within this long after its incident closed reopens it ("Back again") instead of starting a new one.
   clear_minutes: 10            # How long what an alert reported must stay gone before the alert is ended (read again every few minutes).
+  same_time_minutes: 30        # How close to a visit's start time (either side) an earlier alert of the same automation counts as "the same time" ("Same time as the last 4 evenings").
+  same_time_days: 3            # On how many earlier days of the last week the same automation must have alerted at about the same time for a visit to say so.

@@ -48,7 +48,7 @@ COUNTS = {"min_signals": "signals", "starts_min": "starts", "cycle_min_runs": "r
           "blocks_per_day": "blocks a day", "battery_trend_drop_per_day": "points a day", "timeout": "seconds", "web_searches_max": "searches"}
 #: The unit of a share: a number from 0 to 1, its bounds the unit's own (review L, 2026-10-25: a share took 5)
 SHARE = "share (0 to 1)"
-_UNITS = ((r"(?:^|_)usd$", "US$"), (r"(?:^|_)kwh$", "kWh"), (r"_w$", "W"), (r"(?:^|_)pct(?:_above)?$", "%"),
+_UNITS = ((r"(?:^|_)usd$", "US$"), (r"(?:^|_)at_hour$", "o'clock"), (r"(?:^|_)kwh$", "kWh"), (r"_w$", "W"), (r"(?:^|_)pct(?:_above)?$", "%"),
           (r"(?:^|_)points$", "points"), (r"(?:^|_)(?:s|seconds)$", "seconds"), (r"(?:^|_)(?:min|minutes)$", "minutes"),
           (r"(?:^|_)hours$", "hours"), (r"(?:^|_)days$", "days"), (r"(?:^|_)weeks$", "weeks"),
           (r"(?:^|_)months$", "months"), (r"(?:^|_)ratio$", "times"), (r"(?:^|_)(?:share|fraction|margin|spread)(?:_|$)", SHARE))

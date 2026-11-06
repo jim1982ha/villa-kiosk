@@ -101,9 +101,10 @@ def approval_thread(approval_id: str) -> str:
 class Approvals:
     def __init__(self, *, state, policy: Callable, actions, thread, post: Callable[..., Awaitable], timezone_name: str,
                  safe: Callable[[Awaitable], Awaitable], edit: Callable[..., Awaitable] | None = None,
-                 tablet_keeps: Callable[[], bool] = lambda: False):
+                 tablet_keeps: Callable[[], bool] = lambda: False, visits=None):
         self.state, self.policy, self.actions, self.thread = state, policy, actions, thread
         self.post = post                # posting.Poster.post: the one way a message is put in a chat
+        self.visits = visits            # visit.Visits: a visit's siren request told as a line of its story
         self.edit = edit                # delivery.Delivery.edit: the asker's answer, told each step (answered)
         self.tablet_keeps = tablet_keeps  # a Kiosk keeps VESTA's messages: a request may wait there (ask)
         self.tz, self._safe = timezone_name, safe
@@ -112,10 +113,10 @@ class Approvals:
         self._watching: set[asyncio.Task] = set()
 
     # ------------------------------------------------------------------ asked and shown
-    async def ask(self, msg, head: str = "", origin=None) -> int:
+    async def ask(self, msg, head: str = "", origin=None, reply_to: dict | None = None) -> int:
         """An approval request (actions.request's Outgoing) in every chat it is for, each copy one message of the same
         thread: a press in one settles them all. `head`: why it is asked (the intrusion), kept when the body changes.
-        Returns how many chats have it.
+        Returns how many chats have it. `reply_to`: {chat: message} the copy there answers (a visit's card).
 
         ⚠️ NONE IS "UNDELIVERED", NEVER "WAITING" (architecture review 21): recorded pending before the sends, a request
         no chat received was told to the AI as waiting until it expired — "it is waiting for your approval", no button
@@ -126,7 +127,8 @@ class Approvals:
         n = 0
         for chat in msg.chats:
             if await self.post(chat, msg.text, status=msg.status, lead=head, roles={msg.to} if msg.to else (), title=TITLE,
-                               keyboard=msg.keyboard, thread=approval_thread(msg.approval_id), origin=origin):
+                               keyboard=msg.keyboard, thread=approval_thread(msg.approval_id), origin=origin,
+                               **({"reply_to": reply_to[chat]} if reply_to and reply_to.get(chat) else {})):
                 n += 1
         if not msg.chats and self.tablet_keeps():
             # ⚠️ NO TELEGRAM CHAT MAY APPROVE IT, THE TABLET DOES (owner, 2026-10-29): kept for the tablet alone, with its
@@ -160,6 +162,8 @@ class Approvals:
         """The asker's answer (answered) says where the request stands now, under its own words: one message. Forgotten
         once the request is settled."""
         told, ap = self.state.approval_answer(aid), self.state.approval(aid)
+        if self.visits is not None:
+            await self.visits.decided(aid, ap)          # a visit's siren: its story says what became of it
         if not told or not ap or self.edit is None or ap["status"] == "pending":
             return
         line = note(ap["status"], ap.get("decided_name") or "", time=self._at(ap["decided_at"])) if ap.get("decided_at") else ""
@@ -291,6 +295,15 @@ class Approvals:
             await self._tell_asker(ap["id"])
             n += 1
         return n
+
+    async def withdraw(self, aid: str) -> bool:
+        """Request `aid`, still waiting, withdrawn now — a visit someone came home to (visit.Visits.withdraw): every copy
+        says so and loses its buttons, as when expire finds someone home. False when it no longer waited."""
+        if not self.state.withdraw_approval(aid):
+            return False
+        await self.thread.close(approval_thread(aid), note("withdrawn"))
+        await self._tell_asker(aid)
+        return True
 
     # ------------------------------------------------------------------ what the AI is told
     def now(self, now: datetime | None = None) -> str:
