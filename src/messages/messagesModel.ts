@@ -158,11 +158,12 @@ export function shownTogether(villa: readonly Announcement[], vesta: readonly An
  * Whether `newer` stands in place of `older` — ⚠️ THE ONE RULE (owner, 2026-10-28: "the same code … consistently used"),
  * read by the Messages list (shownTogether) and by the notice (noticeModel), on arrival and against what is kept: its
  * rewrite (the same key, the same feed: a ring answered, VESTA's card at its next step), or VESTA's card that took the
- * villa's own message over (its run among the card's `takes`). Pure.
+ * villa's own message over: its run, or its key, among the card's `takes` (a visit's one announcement, rewritten at each
+ * step, each by another run: "One visit, one story", 2026-11-06). Pure.
  */
 export const supersedes = (newer: Announcement, older: Announcement): boolean => newer !== older
   && ((newer.key !== null && newer.key === older.key && newer.feed === older.feed && newer.seq > older.seq)
-    || (!!older.run && (newer.takes ?? []).includes(older.run)));
+    || (older.feed !== "vesta" && (newer.takes ?? []).some((t) => t === older.run || (older.key !== null && t === older.key))));
 
 /** What the page holds after `incoming`: each one added once, a rewrite (same key, a newer number) in place of what
  *  it rewrites, an older copy never over a newer. Ordered by number, oldest first, as the add-on keeps them. */

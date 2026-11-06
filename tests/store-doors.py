@@ -14,9 +14,11 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import os
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 try:
@@ -270,42 +272,45 @@ async def main() -> None:
     ck("  ...nor when every one was tidied away", [a["seq"] for a in body["announcements"]] == [7] and body["last"] == 7, body)
     ck("each answer says the first number still kept: a page drops what it holds below it", body["first"] == 7, body)
 
-    # ── one line per key, with its photo (2.496.558, 2026-10-28) ────────────────────────────────────────────────────
-    print("  /announcements, one line per key, with its photo:")
+    # ── one line per key, with its photos (2.496.558, 2026-10-28; a list of them: "One visit, one story", 2.496.731) ──
+    print("  /announcements, one line per key, with its photos:")
     media = TMP / "media"
     (media / "cams").mkdir(parents=True)
     proxy.MEDIA_DIR = str(media)
     (media / "cams" / "ring1.jpg").write_bytes(proxy._JPEG_MAGIC + b"first ring")
     kev = lambda msg, **more: {"event_type": proxy.ANNOUNCEMENT_EVENT, "data": {"message": msg, **more}}
     (DATA / "announcements.json").write_text("[]")
+    # the villa's single `photo` (one path), as the doorbell still sends it until phase D: read as a list of one
     await proxy._record_announcement(app, kev("<b>Ring</b>", key="run-1", photo=f"{media}/cams/ring1.jpg",
                                                buttons=[[["🔓 Unlock", "/unlock_gate"]]]))
     status, body = await call("GET", "/announcements", owner)
     ring = body["announcements"][0]
-    photo_file = DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / ring.get("photo", "none")
-    ck("the ring is kept with its key, its button and a copy of its photo",
-       ring.get("key") == "run-1" and ring.get("buttons") == [[["🔓 Unlock", "/unlock_gate"]]]
+    ring_photo = (ring.get("photos") or [{}])[0].get("id", "none")
+    photo_file = DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / ring_photo
+    ck("the ring is kept with its key, its button and a copy of its photo: a list of one, no camera named, the ring's time",
+       ring.get("key") == "run-1" and ring.get("buttons") == [[["🔓 Unlock", "/unlock_gate"]]] and "photo" not in ring
+       and ring.get("photos") == [{"id": ring_photo, "label": "", "at": ring["at"]}]
        and photo_file.is_file() and photo_file.read_bytes().endswith(b"first ring"), ring)
     (media / "cams" / "ring1.jpg").write_bytes(proxy._JPEG_MAGIC + b"second ring")
-    r = await client.get(f"/announcement-photo/{ring.get('photo')}", headers=owner)
+    r = await client.get(f"/announcement-photo/{ring_photo}", headers=owner)
     ck("  ...served to the owner as it was when the ring came, even after the file changed",
        r.status == 200 and (await r.read()).endswith(b"first ring") and r.headers.get("Content-Type") == "image/jpeg",
        r.status)
-    r = await client.get(f"/announcement-photo/{ring.get('photo')}", headers=guest)
+    r = await client.get(f"/announcement-photo/{ring_photo}", headers=guest)
     status, gbody = await call("GET", "/announcements", guest)
     ck("  ...a guest sees it while it is the current notification (owner, 2026-10-28)",
-       r.status == 200 and gbody["announcements"][0].get("photo") == ring.get("photo"), (r.status, gbody))
+       r.status == 200 and gbody["announcements"][0].get("photos") == ring["photos"], (r.status, gbody))
     await proxy._record_announcement(app, kev("<b>Weekly test</b>"))
-    r = await client.get(f"/announcement-photo/{ring.get('photo')}", headers=guest)
+    r = await client.get(f"/announcement-photo/{ring_photo}", headers=guest)
     status, gbody = await call("GET", "/announcements", guest)
     ck("  ...but not once another notification came after it: 403, and its list names no photo",
-       r.status == 403 and all("photo" not in a for a in gbody["announcements"]), (r.status, gbody))
+       r.status == 403 and all("photos" not in a and "photo" not in a for a in gbody["announcements"]), (r.status, gbody))
     ck("  ...nor once it is older than the current notification's time, even as the newest",
-       proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + proxy.ANNOUNCEMENT_CURRENT_S + 1) is None
-       and proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 1) == ring.get("photo"))
+       proxy._current_photo_names([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + proxy.ANNOUNCEMENT_CURRENT_S + 1) == set()
+       and proxy._current_photo_names([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 1) == {ring_photo})
     ck("  ...as long as the ring holds the screen: a longer full-screen time keeps it current (architecture review 2026-10-30)",
-       proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 90, 120) == ring.get("photo")
-       and proxy._current_photo([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 121, 120) is None)
+       proxy._current_photo_names([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 90, 120) == {ring_photo}
+       and proxy._current_photo_names([{**ring, "seq": 9}], proxy._iso_epoch(ring["at"]) + 121, 120) == set())
     # each picked announcement its own seconds (owner, 2026-11-03): current for the LONGEST; a config an older Kiosk
     # stored (the titles and one time for all) read in today's shape by the store (_device_config_today), as the page
     # reads its own (config/migrations.ts)
@@ -336,15 +341,79 @@ async def main() -> None:
     await proxy._record_announcement(app, kev("<b>Opened at 09:03</b>", key="run-1"))
     status, body = await call("GET", "/announcements", owner)
     same = [a for a in body["announcements"] if a.get("key") == "run-1"]
-    ck("the rewrite REPLACES the ring (one line), comes as a newer one, has no button, keeps the first photo",
+    ck("the rewrite REPLACES the ring (one line), comes as a newer one, has no button, keeps the first photos",
        len(same) == 1 and same[0]["message"] == "<b>Opened at 09:03</b>" and same[0]["seq"] > ring["seq"]
-       and "buttons" not in same[0] and same[0].get("photo") == ring.get("photo"), body)
+       and "buttons" not in same[0] and same[0].get("photos") == ring["photos"], body)
     await proxy._record_announcement(app, kev("<b>Other</b>"))
     await proxy._record_announcement(app, kev("<b>Other</b>"))
     status, body = await call("GET", "/announcements", owner)
     ck("  ...while two announcements with no key stay two lines",
        [a["message"] for a in body["announcements"]].count("<b>Other</b>") == 2, body)
     # (A photo path outside the media folder, or not a picture: the private security suite.)
+
+    # ── a visit: every camera's photo, labelled, the strongest first, one record rewritten at each step ──────────────
+    # ("One visit, one story", owner 2026-11-06: the villa fires its announcement after each step, key "visit:<id>")
+    for cam in ("lock", "parking", "entrance", "door", "inside"):
+        (media / "cams" / f"{cam}.jpg").write_bytes(proxy._JPEG_MAGIC + f"photo of {cam}".encode())
+    shot = lambda cam, label, at: {"path": f"{media}/cams/{cam}.jpg", "label": label, "at": at}
+    step3 = [shot("lock", "Entrance lock", "2026-11-06T18:35:40+00:00"), shot("parking", "Parking", "2026-11-06T18:34:10+00:00"),
+             shot("entrance", "Entrance left", "2026-11-06T18:34:47+00:00"), shot("door", "Main door", "2026-11-06T18:35:41+00:00")]
+    copies_before = set(p.name for p in (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR).iterdir())
+    await proxy._record_announcement(app, kev("<b>Visit</b>", key="visit:v1", photos=step3))
+    status, body = await call("GET", "/announcements", owner)
+    visit = [a for a in body["announcements"] if a.get("key") == "visit:v1"]
+    told = visit[0].get("photos", []) if visit else []
+    ck("a visit's four photos kept in the villa's order, the main one first, each with its camera and time",
+       len(visit) == 1 and [(p["label"], p["at"]) for p in told] == [
+           ("Entrance lock", "2026-11-06T18:35:40+00:00"), ("Parking", "2026-11-06T18:34:10+00:00"),
+           ("Entrance left", "2026-11-06T18:34:47+00:00"), ("Main door", "2026-11-06T18:35:41+00:00")]
+       and [(DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / p["id"]).read_bytes() for p in told]
+       == [proxy._JPEG_MAGIC + f"photo of {c}".encode() for c in ("lock", "parking", "entrance", "door")], visit)
+    step4 = step3 + [shot("inside", "Living room", "2026-11-06T18:36:50+00:00")]
+    await proxy._record_announcement(app, kev("<b>Visit, someone inside</b>", key="visit:v1", photos=step4))
+    status, body = await call("GET", "/announcements", owner)
+    visit = [a for a in body["announcements"] if a.get("key") == "visit:v1"]
+    retold = visit[0].get("photos", []) if visit else []
+    copies = set(p.name for p in (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR).iterdir()) - copies_before
+    ck("  ...the next step REPLACES it (one line), its five photos, the four earlier ones the same copies (none made twice)",
+       len(visit) == 1 and visit[0]["message"] == "<b>Visit, someone inside</b>"
+       and [p["id"] for p in retold[:4]] == [p["id"] for p in told] and retold[4]["label"] == "Living room"
+       and copies == {p["id"] for p in retold}, (visit, sorted(copies)))
+    status, gbody = await call("GET", "/announcements", guest)
+    gvisit = [a for a in gbody["announcements"] if a.get("key") == "visit:v1"]
+    served = [(await client.get(f"/announcement-photo/{p['id']}", headers=guest)).status for p in retold]
+    ck("  ...a guest is told its every photo while it is the current notification, and served each",
+       len(gvisit) == 1 and gvisit[0].get("photos") == retold and served == [200] * 5, (gbody, served))
+    odd = [shot("door", "Main door", "2026-11-06T18:35:41+00:00"), {"path": "/etc/passwd", "label": "x"}, "x",
+           shot("door", "Again", "2026-11-06T18:35:42+00:00"), {**shot("lock", "  Entrance lock  ", "not a time")}]
+    srcs = proxy._announcement_photo_sources(kev("<b>V</b>", photos=odd))
+    ck("  ...one that is no picture in the media folder is left out, a file named twice kept once, a label trimmed, a "
+       "time that is none left empty (the announcement's own then)",
+       [(os.path.basename(p["path"]), p["label"], p["at"]) for p in srcs]
+       == [("door.jpg", "Main door", "2026-11-06T18:35:41+00:00"), ("lock.jpg", "Entrance lock", "")], srcs)
+    many = [{"path": str(media / "cams" / f"m{i}.jpg"), "label": f"C{i}"} for i in range(30)]
+    for i in range(30):
+        (media / "cams" / f"m{i}.jpg").write_bytes(proxy._JPEG_MAGIC + bytes([i]))
+    limit = proxy.VESTA_MESSAGE_LIMITS["photos"]
+    ck(f"  ...at most the agreement's {limit}, the first ones", [p["label"] for p in proxy._announcement_photo_sources(
+        kev("<b>V</b>", photos=many))] == [f"C{i}" for i in range(limit)])
+    # ⚠️ formats outlive their writer: a record an older Kiosk kept with its single `photo` (before 2.496.731)
+    legacy_id = "e" * 32 + ".jpg"
+    (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / legacy_id).write_bytes(proxy._JPEG_MAGIC + b"kept before")
+    stored = json.loads((DATA / "announcements.json").read_text())
+    stored.append({"seq": max(a["seq"] for a in stored) + 1, "at": proxy._now_iso(), "message": "<b>Old ring</b>",
+                   "key": "old-1", "photo": legacy_id})
+    (DATA / "announcements.json").write_text(json.dumps(stored))
+    proxy.ANNOUNCEMENT_PHOTO_GRACE_S, held_grace = 0, proxy.ANNOUNCEMENT_PHOTO_GRACE_S
+    await proxy._record_announcement(app, kev("<b>Later</b>"))
+    proxy.ANNOUNCEMENT_PHOTO_GRACE_S = held_grace
+    status, body = await call("GET", "/announcements", owner)
+    old_ring = next((a for a in body["announcements"] if a.get("key") == "old-1"), {})
+    ck("a record kept with the single `photo` an older Kiosk wrote is read as its list of one, written back so, its file "
+       "kept by the sweep",
+       old_ring.get("photos") == [{"id": legacy_id, "label": "", "at": old_ring.get("at")}] and "photo" not in old_ring
+       and all("photo" not in a for a in on_disk("announcements.json"))
+       and (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / legacy_id).is_file(), (old_ring, on_disk("announcements.json")[-3:]))
     pending = DATA / proxy.ANNOUNCEMENT_PHOTO_DIR / ("f" * 32 + ".jpg")
     pending.write_bytes(proxy._JPEG_MAGIC)
     proxy._sweep_announcement_photos([], [])
@@ -463,14 +532,37 @@ fresh = proxy._announcements_with([], {"seq": 1, "key": "Q", "message": "Ask", "
 ck("  ...never on a record that never asked, and never taken from the writer",
    "asked" not in note[-1] and "asked" not in fresh[-1], (note, fresh))
 
-# ── VESTA's card shows the picture of the villa's message it took over (owner, 2026-11-02: #107 on the tablet) ──────
+# ── VESTA's card shows the pictures of the villa's messages it took over (owner, 2026-11-02: #107 on the tablet) ─────
 print("\n  a card that took a villa message over:")
-kept = [{"seq": 1, "run": "R-OLD", "photo": "a.jpg"}, {"seq": 2, "run": "R-1", "message": "no photo"},
-        {"seq": 3, "run": "R-1", "photo": "b.jpg"}, {"seq": 4, "run": "R-2", "photo": "c.jpg"}]
-ck("the newest photo of a run it took over; none when no run of it carried one",
-   proxy._taken_photo(kept, ["R-1"]) == "b.jpg" and proxy._taken_photo(kept, ["R-1", "R-2"]) == "c.jpg"
-   and proxy._taken_photo(kept, ["R-3"]) is None and proxy._taken_photo(kept, []) is None,
-   [proxy._taken_photo(kept, t) for t in (["R-1"], ["R-1", "R-2"], ["R-3"])])
+ph = lambda i: {"id": i, "label": i[0].upper(), "at": "2026-11-06T18:00:00+00:00"}
+kept = [{"seq": 1, "run": "R-OLD", "photos": [ph("a.jpg")]}, {"seq": 2, "run": "R-1", "message": "no photo"},
+        {"seq": 3, "run": "R-1", "photos": [ph("b.jpg")]}, {"seq": 4, "run": "R-2", "photos": [ph("c.jpg"), ph("b.jpg")]},
+        {"seq": 5, "key": "visit:v1", "run": "R-9", "photos": [ph("d.jpg"), ph("e.jpg"), ph("f.jpg"), ph("g.jpg")]},
+        {"seq": 6, "run": "R-5", "photos": [ph("h.jpg")]}]
+names = lambda takes: [p["id"] for p in proxy._taken_photos(kept, takes)]
+ck("the photos of the runs it took over, the newest message's first, each once; none when none carried one",
+   names(["R-1"]) == ["b.jpg"] and names(["R-1", "R-5"]) == ["h.jpg", "b.jpg"] and names(["R-1", "R-2"]) == ["c.jpg", "b.jpg"]
+   and names(["R-3"]) == [] and names([]) == [], [names(t) for t in (["R-1"], ["R-1", "R-5"], ["R-1", "R-2"], ["R-3"])])
+ck("  ...a visit's one announcement taken by its key: its four photos in its order, labels kept",
+   proxy._taken_photos(kept, ["visit:v1"]) == kept[4]["photos"], proxy._taken_photos(kept, ["visit:v1"]))
+mixed = proxy._message_photos("own.jpg", proxy._taken_photos(kept, ["R-2"]), "2026-11-06T19:00:00+00:00")
+same = proxy._message_photos("b.jpg", proxy._taken_photos(kept, ["R-2"]), "2026-11-06T19:00:00+00:00")
+ck("  ...its own picture first (no camera named, its time), then the taken ones, each once (the same picture: one id)",
+   [p["id"] for p in mixed] == ["own.jpg", "c.jpg", "b.jpg"] and mixed[0] == {"id": "own.jpg", "label": "",
+                                                                              "at": "2026-11-06T19:00:00+00:00"}
+   and [p["id"] for p in same] == ["b.jpg", "c.jpg"], (mixed, same))
+seen = proxy._photos_seen({"seq": 1, "photos": [ph("a.jpg"), ph("b.jpg")]}, {"b.jpg"})
+gone = proxy._photos_seen({"seq": 1, "photos": [ph("a.jpg")], "text": "t"}, {"b.jpg"})
+turn = proxy._photos_seen({"seq": 1, "photos": ["a.jpg"]}, set())
+ck("a profile that may not view cameras is told only the current notification's photos; none left, no list",
+   seen == {"seq": 1, "photos": [ph("b.jpg")]} and gone == {"seq": 1, "text": "t"} and turn == {"seq": 1}, (seen, gone, turn))
+listed = proxy._announcements_kept([{"seq": 1, "at": "2026-11-06T10:00:00+00:00", "photo": "z.jpg"},
+                                    {"seq": 2, "at": "2026-11-06T10:01:00+00:00", "photo": "", "message": "m"},
+                                    {"seq": 3, "photos": [ph("y.jpg")], "photo": "x.jpg"}], time.time(), 0, 10**6)
+ck("the tidy reads an older Kiosk's single `photo` as a list of one; an empty one as none; a list already there wins",
+   listed == [{"seq": 1, "at": "2026-11-06T10:00:00+00:00", "photos": [{"id": "z.jpg", "label": "",
+                                                                       "at": "2026-11-06T10:00:00+00:00"}]},
+              {"seq": 2, "at": "2026-11-06T10:01:00+00:00", "message": "m"}, {"seq": 3, "photos": [ph("y.jpg")]}], listed)
 
 # ── the villa's settings in today's shape (architecture review round 17) ───────────────────────────────────────
 # villa-settings.json: each single-value setting's default and bounds, read by the app and by this server; its

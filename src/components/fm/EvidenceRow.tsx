@@ -99,7 +99,7 @@ export default function EvidenceRow({
       {error && <div className="fm-inline-error">{error}</div>}
       {viewing !== null && (
         <PhotoLightbox
-          photoIds={photoIds}
+          photos={photoIds.map((id) => ({ src: evidenceUrl(id) }))}
           index={viewing}
           onIndexChange={setViewing}
           onClose={() => setViewing(null)}

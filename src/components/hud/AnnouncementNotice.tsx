@@ -19,10 +19,10 @@ import type { Announcement } from "@/messages/announcements";
 import { NO_NOTICE, noticeStep } from "@/messages/noticeModel";
 import { useAnnouncements } from "@/messages/AnnouncementsContext";
 import { announcementWords, idOf } from "@/messages/messagesModel";
-import { AnnouncementPhoto, RecordButtons } from "@/components/messages/AnnouncementContent";
+import { PhotoRow, RecordButtons } from "@/components/messages/AnnouncementContent";
 
-/** One announcement, drawn — pure (a check draws it): its photo above its words when it has one (a ring's snapshot,
- *  the notice then square-cornered: 08-shared.css), its title and the first line of what it says, then `buttons` (its
+/** One announcement, drawn — pure (a check draws it): its photos above its words when it has some (a ring's snapshot,
+ *  a visit's every camera: PhotoRow; the notice then square-cornered: 08-shared.css), its title and the first line of what it says, then `buttons` (its
  *  RecordButtons: the doorbell's Unlock, an approval's Approve / Refuse). A rewrite of the same record replaces it in
  *  place (the add-on's key). Its ✕ (NoticeView: every notice's) closes it before its time (`onDismiss`: the notices'
  *  record, noticeModel "dismissed"). */
@@ -38,7 +38,7 @@ export function AnnouncementNoticeView({ announcement, onDismiss, buttons, step 
   const words = line ? `${title} · ${line}` : title;
   return (
     <NoticeView tone="info" icon={<Bell size={16} />} onDismiss={onDismiss}>
-      {announcement.photo && <AnnouncementPhoto id={announcement.photo} className="vesta-notice-photo" />}
+      <PhotoRow photos={announcement.photos} />
       {words}
       {buttons}
     </NoticeView>
@@ -62,7 +62,8 @@ const RING_C = 2 * Math.PI * RING_R;
  *
  * ⚠️ THE NIGHT LOOK, THE COUNTDOWN ROUND CLOSE (owner, 2026-11-04: proposal 5 of the five, "implement it fully"; and
  * "show a timer … that count down when the notification will disappear"): a dark screen whatever the theme (a camera's
- * night picture reads best on it), its title and what it says at the top, its photo as large as the screen allows, then
+ * night picture reads best on it), its title and what it says at the top, its main photo as large as the screen allows
+ * and its other photos in a row under it (PhotoRow `lead`), then
  * its buttons (the doorbell's Unlock, an approval's) and Close inside a ring that empties as its time runs out, with
  * "Closes in 24s" beside it. No "To:" line here: it says whom the villa sent it to on Telegram, never who is looking (it
  * read "To: FM" on the owner's tablet); its Inbox card keeps it. The shell's header, body and footer, as every window
@@ -88,7 +89,7 @@ export function AnnouncementFullScreenView({ announcement, onDismiss, buttons, t
         )}
       </div>
       <div className="modal-body announcement-night-body">
-        {announcement.photo && <AnnouncementPhoto id={announcement.photo} className="announcement-night-photo" />}
+        <PhotoRow photos={announcement.photos} lead />
       </div>
       <div className="modal-footer announcement-night-actions">
         {buttons}

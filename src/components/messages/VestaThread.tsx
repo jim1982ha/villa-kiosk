@@ -14,7 +14,7 @@ import ModalFooter from "@/components/common/ModalFooter";
 import { NEW_CONVERSATION, QUESTION_MAX, SPOKEN_WAITING, TALK_SAID, pressableOf, type Turn } from "@/messages/conversation";
 import { useConversation } from "@/messages/ConversationContext";
 import { followOf, unanswered, vestaWorking } from "@/messages/conversationModel";
-import { AnnouncementPhoto, PageLink, RecordButtons } from "./AnnouncementContent";
+import { PageLink, PhotoRow, RecordButtons } from "./AnnouncementContent";
 import TalkButton from "./TalkButton";
 
 /** One line of the thread: who said it, when, its words, the camera pictures VESTA looked at and the page it attached
@@ -46,7 +46,8 @@ export function TurnLine({ turn, canOpenPage, onListen, playing = false, onStop 
           </button>
         )}
       </div>
-      {turn.photos.map((id) => <AnnouncementPhoto key={id} id={id} className="announcement-full-photo" />)}
+      {/* the camera pictures the answer carries: the one row of photos, no camera named (the answer's words say it) */}
+      <PhotoRow photos={turn.photos.map((id) => ({ id, label: "", at: "" }))} />
       {turn.text && <p className="vesta-turn-text">{turn.text}</p>}
       {turn.voice && !turn.text && <p className="vesta-turn-text muted">{SPOKEN_WAITING}</p>}
       {turn.page && canOpenPage && <PageLink page={turn.page} />}

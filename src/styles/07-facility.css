@@ -304,6 +304,12 @@
   left: 50%; transform: translateX(-50%);
   color: rgba(255, 255, 255, 0.8); font-size: var(--text-xs);
 }
+/* a photo's camera and time (an announcement's), above its count */
+.fm-lightbox-label {
+  position: absolute; bottom: calc(max(14px, var(--safe-bottom)) + 22px);
+  left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px);
+  color: #fff; font-size: var(--text-sm); text-align: center; overflow-wrap: anywhere;
+}
 
 /* Square icon-only variant of .btn, for a secondary action that sits beside a
    worded one (the panel footer's "report a fault" next to "Edit"). */

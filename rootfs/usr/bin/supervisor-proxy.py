@@ -3976,8 +3976,8 @@ ANNOUNCEMENT_RETRY_S = (5, 60)
 ANNOUNCEMENT_KEY_MAX = 200
 ANNOUNCEMENT_BUTTONS_MAX = 6
 ANNOUNCEMENT_BUTTON_TEXT_MAX = 64
-#: The villa's media folder (config.yaml `map: media`, read-only): where an announcement's `photo` is, a camera's
-#: snapshot taken for it. The add-on copies it into its own store the moment the announcement arrives, so the next
+#: The villa's media folder (config.yaml `map: media`, read-only): where an announcement's `photos` are, the cameras'
+#: snapshots taken for it. The add-on copies it into its own store the moment the announcement arrives, so the next
 #: ring cannot change it and it lives exactly as long as its announcement.
 MEDIA_DIR = "/media"
 class KeptFiles:
@@ -3992,8 +3992,9 @@ class KeptFiles:
     door's (a photo: viewCameras or the current ring; a sound: the profile its turn answered; a voice: the Agent once).
     The Facility documents and evidence are not these: their ids are the page's, their life the records-kept days'."""
 
-    def __init__(self, folder: str, endings: tuple[str, ...], grace_s=lambda: 0, max_age_s=lambda: None):
-        self.folder, self.grace_s, self.max_age_s = folder, grace_s, max_age_s
+    def __init__(self, folder: str, endings: tuple[str, ...], grace_s=lambda: 0, max_age_s=lambda: None,
+                 by_content: bool = False):
+        self.folder, self.grace_s, self.max_age_s, self.by_content = folder, grace_s, max_age_s, by_content
         self.re = re.compile(r"^[0-9a-f]{32}(?:" + "|".join(re.escape(e) for e in endings) + r")$")
 
     def path(self, name: str) -> str | None:
@@ -4001,10 +4002,16 @@ class KeptFiles:
         return _data(self.folder, name) if isinstance(name, str) and self.re.match(name) else None
 
     def keep(self, data: bytes, ending: str = "") -> str:
-        """`data` kept under a new name; its name. Blocking."""
+        """`data` kept under a new name; its name. Blocking. ⚠️ `by_content` (the photos): the name is the picture's own
+        (its hash), so the same picture kept again is the same file, its age started again, never a second copy (a
+        visit's announcement names every earlier step's photo again at each step: "One visit, one story", 2026-11-06)."""
         os.makedirs(_data(self.folder), exist_ok=True)
-        name = secrets.token_hex(16) + ending
-        atomic_write(_data(self.folder, name), lambda out: out.write(data))
+        name = (hashlib.sha256(data).hexdigest()[:32] if self.by_content else secrets.token_hex(16)) + ending
+        path = _data(self.folder, name)
+        if self.by_content and os.path.isfile(path):
+            os.utime(path)
+            return name
+        atomic_write(path, lambda out: out.write(data))
         return name
 
     def take(self, name: str) -> bytes | None:
@@ -4044,7 +4051,7 @@ ANNOUNCEMENT_PHOTO_TYPES = {".jpg": (".jpg", "image/jpeg", _JPEG_MAGIC), ".jpeg"
                             ".png": (".png", "image/png", b"\x89PNG")}
 ANNOUNCEMENT_PHOTO_MAX_BYTES = FM_EVIDENCE_MAX_BYTES
 #: every kept photo, a ring's, a VESTA message's, a conversation turn's: one folder, one sweep (KeptFiles)
-PHOTOS = KeptFiles(ANNOUNCEMENT_PHOTO_DIR, (".jpg", ".png"), grace_s=lambda: ANNOUNCEMENT_PHOTO_GRACE_S)
+PHOTOS = KeptFiles(ANNOUNCEMENT_PHOTO_DIR, (".jpg", ".png"), grace_s=lambda: ANNOUNCEMENT_PHOTO_GRACE_S, by_content=True)
 ANNOUNCEMENT_PHOTO_RE = PHOTOS.re
 
 
@@ -4068,8 +4075,8 @@ def _announcement_buttons(raw) -> list:
 
 def _announcement_record(event, seq: int) -> dict | None:
     """The record kept for one bus event, or None when it is not an announcement. Pure — tests/store-doors.py
-    drives it. `seq` orders them: a page asks for what came after the last one it holds. The photo is not in it: the
-    file is copied apart (_announcement_photo_source)."""
+    drives it. `seq` orders them: a page asks for what came after the last one it holds. The photos are not in it: the
+    files are copied apart (_announcement_photo_sources)."""
     if not ANNOUNCEMENT_EVENT or not isinstance(event, dict) or event.get("event_type") != ANNOUNCEMENT_EVENT:
         return None
     data = event.get("data")
@@ -4091,12 +4098,10 @@ def _announcement_record(event, seq: int) -> dict | None:
     return rec
 
 
-def _announcement_photo_source(event) -> str | None:
-    """The announcement's photo as a real file inside the villa's media folder, or None. ⚠️ THE PATH COMES FROM AN
-    EVENT: anything outside the media folder (a `..`, a link out of it, another folder) or of another type is
-    refused, whoever fired it."""
-    data = event.get("data") if isinstance(event, dict) else None
-    raw = data.get("photo") if isinstance(data, dict) else None
+def _media_photo(raw) -> str | None:
+    """One photo path an event names, as a real file inside the villa's media folder, or None. ⚠️ THE PATH COMES FROM AN
+    EVENT: anything outside the media folder (a `..`, a link out of it, another folder) or of another type is refused,
+    whoever fired it."""
     if not isinstance(raw, str) or not raw.strip():
         return None
     root = os.path.realpath(MEDIA_DIR)
@@ -4104,6 +4109,46 @@ def _announcement_photo_source(event) -> str | None:
     if not path.startswith(root + os.sep) or os.path.splitext(path)[1].lower() not in ANNOUNCEMENT_PHOTO_TYPES:
         return None
     return path if os.path.isfile(path) else None
+
+
+def _photo_label(raw) -> str:
+    """A photo's label (the camera that took it), trimmed and cut at the agreement's length; empty without one."""
+    return raw.strip()[:int(VESTA_MESSAGE_LIMITS.get("photoLabel") or 0)] if isinstance(raw, str) else ""
+
+
+def _announcement_photo_sources(event) -> list:
+    """The announcement's photos as real files inside the villa's media folder, in its order (its main photo first, the
+    strongest signal's: "One visit, one story", owner 2026-11-06): [{path, label, at}], each file once, at most the
+    agreement's count (vestaMessage.limits.photos); one that is not such a file is left out (_media_photo). `at` is empty
+    when the event says no time: the announcement's own then (_record_announcement).
+    ⚠️ `photo` (ONE path, no label), the villa's single photo before `photos`: the villa's automations (the doorbell, the
+    presence guard) still send it, so it is read as a list of one until they move to `photos` (phase D of "One visit, one
+    story" removes this reading)."""
+    data = event.get("data") if isinstance(event, dict) else None
+    if not isinstance(data, dict):
+        return []
+    raw = data.get("photos") if isinstance(data.get("photos"), list) else [{"path": data.get("photo")}]
+    out, seen = [], set()
+    for one in raw:
+        path = _media_photo(one.get("path")) if isinstance(one, dict) else None
+        if path is None or path in seen:
+            continue
+        seen.add(path)
+        at = one.get("at")
+        out.append({"path": path, "label": _photo_label(one.get("label")),
+                    "at": at if isinstance(at, str) and _iso_epoch(at) is not None else ""})
+    # (the agreement unreadable: its one photo still, never none: a ring reaches the tablet without the Agent's file)
+    return out[:max(1, int(VESTA_MESSAGE_LIMITS.get("photos") or 0))]
+
+
+def _copy_announcement_photos(sources: list) -> list:
+    """Each of `sources` copied into the add-on's store ([{id, label, at}], in their order); one that is not the picture
+    its name says is left out (_copy_announcement_photo). Blocking: called on a worker thread."""
+    out = []
+    for one in sources:
+        if name := _copy_announcement_photo(one["path"]):
+            out.append({"id": name, "label": one["label"], "at": one["at"]})
+    return out
 
 
 def _copy_announcement_photo(src: str) -> str | None:
@@ -4121,8 +4166,9 @@ def _copy_announcement_photo(src: str) -> str | None:
 
 
 def _write_announcement_photo(body: bytes, kept_as: str) -> str:
-    """`body` written under a new id ("<hex>.jpg") in the photo folder; its name. ONE FOLDER FOR EVERY KEPT PHOTO (a ring's,
-    a snapshot under VESTA's alert): one sweep, one serving rule. Blocking: called on a worker thread."""
+    """`body` written in the photo folder under its own id ("<hex>.jpg": the picture's, KeptFiles by_content); its name.
+    ONE FOLDER FOR EVERY KEPT PHOTO (a ring's, a visit's, a snapshot under VESTA's alert): one sweep, one serving rule.
+    Blocking: called on a worker thread."""
     return PHOTOS.keep(body, kept_as)
 
 
@@ -4158,15 +4204,15 @@ def _ring_current_s() -> int:
     return max(ANNOUNCEMENT_CURRENT_S, _villa_setting("fullScreen"))
 
 
-def _current_photo(items: list, now: float, current_s: int = ANNOUNCEMENT_CURRENT_S) -> str | None:
-    """The photo of the current notification, or None: the newest announcement's, while it is new (`current_s`:
-    _ring_current_s). Pure — tests/store-doors.py drives it."""
+def _current_photo_names(items: list, now: float, current_s: int = ANNOUNCEMENT_CURRENT_S) -> set:
+    """The photos of the current notification (their names), or none: the newest announcement's, every one of them,
+    while it is new (`current_s`: _ring_current_s). Pure — tests/store-doors.py drives it."""
     newest = max((a for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)),
                  key=lambda a: a["seq"], default=None)
     at = _iso_epoch(newest.get("at")) if newest else None
     if newest is None or at is None or not 0 <= now - at <= current_s:
-        return None
-    return newest.get("photo") or None
+        return set()
+    return _names_in([newest], "photo")
 
 
 #: A copy younger than this is never swept: it is copied BEFORE its record is written (outside the store's lock, the
@@ -4175,7 +4221,7 @@ ANNOUNCEMENT_PHOTO_GRACE_S = 120
 
 
 def _names_in(records, kind: str) -> set:
-    """Every kept file of `kind` `records` name — "photo": an announcement's or a message's `photo`, a turn's `photos`;
+    """Every kept file of `kind` `records` name — "photo": an announcement's, a message's or a turn's `photos`;
     "page": a message's or a turn's `page`, in each of its languages; "speech": a turn's sound. ⚠️ ONE READER OF WHAT A
     RECORD NAMES (architecture review, 2026-10-30): each sweep and each door spelled the fields itself, and a
     conversation's page, missed by the per-profile rule its photo got, was served to any facility profile. Pure."""
@@ -4184,12 +4230,18 @@ def _names_in(records, kind: str) -> set:
         if not isinstance(a, dict):
             continue
         if kind == "photo":
-            named |= {a.get("photo")} | set(a.get("photos") if isinstance(a.get("photos"), list) else ())
+            named |= {_photo_name(p) for p in (a.get("photos") if isinstance(a.get("photos"), list) else ())}
         elif kind == "page":
             named |= {a.get("page")} | {w.get("page") for w in (a.get("languages") or {}).values() if isinstance(w, dict)}
         elif kind == "speech":
             named.add(a.get("speech"))
     return {n for n in named if isinstance(n, str) and n}
+
+
+def _photo_name(photo) -> str | None:
+    """One entry of a record's `photos`, its kept file's name: an announcement's or a VESTA message's {id, label, at}, a
+    conversation turn's bare name."""
+    return photo.get("id") if isinstance(photo, dict) else photo
 
 
 def _photos_named(records) -> set:
@@ -4220,7 +4272,8 @@ def _sweep_announcement_photos(_stored, kept) -> None:
 
 def _announcements_with(stored: list, rec: dict) -> list:
     """The store with `rec` added. ⚠️ ONE LINE PER KEY: an announcement naming the key of a kept one REPLACES it (the
-    ring becomes "Opened at …"); a rewrite with no photo keeps the first one's — and VESTA's report its job and page
+    ring becomes "Opened at …"; a visit's every step, "One visit, one story" 2026-11-06, its photos then the step's whole
+    list); a rewrite with no photos keeps the first one's — and VESTA's report its job and page
     (the night check's message rewritten by a later check stays a report). ⚠️ `asked` (agent-contract.json `asked`):
     set on a rewrite of one that offered buttons, or had asked before — the one fact a rewrite loses and the tablet needs
     to tell a request answered (approved, refused, expired, a ring opened or missed) from a note that never asked, so it
@@ -4236,10 +4289,23 @@ def _announcements_with(stored: list, rec: dict) -> list:
     return stored + [rec]
 
 
+def _photos_listed(rec: dict) -> dict:
+    """A record as this Kiosk keeps it: one an older Kiosk wrote with its single `photo` (a name) read as its `photos`, a
+    list of one ({id, label: "", at: the record's}). ⚠️ FORMATS OUTLIVE THEIR WRITER (rules/git-gates-ci.md): the
+    announcements and VESTA's messages kept before 2.496.731 name their picture so; read through every tidy, so the
+    sweep never takes their file for an orphan, and written back so at the next write. Pure."""
+    if "photo" not in rec:
+        return rec
+    out = {k: v for k, v in rec.items() if k != "photo"}
+    if isinstance(rec["photo"], str) and rec["photo"] and "photos" not in out:
+        out["photos"] = [{"id": rec["photo"], "label": "", "at": rec.get("at") if isinstance(rec.get("at"), str) else ""}]
+    return out
+
+
 def _announcements_kept(items: list, now: float, days: int, max_bytes: int) -> list:
-    """The announcements still kept: none older than `days` (0 = for ever), then the newest that fit `max_bytes`.
-    Pure — tests/store-doors.py drives it."""
-    kept = [a for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)]
+    """The announcements still kept, each in this Kiosk's shape (_photos_listed): none older than `days` (0 = for ever),
+    then the newest that fit `max_bytes`. Pure — tests/store-doors.py drives it."""
+    kept = [_photos_listed(a) for a in items if isinstance(a, dict) and isinstance(a.get("seq"), int)]
     if days > 0:
         cutoff = now - days * 86400
         kept = [a for a in kept if (_iso_epoch(a.get("at")) or now) >= cutoff]
@@ -4257,15 +4323,15 @@ ANNOUNCED = Feed(ANNOUNCEMENTS, _announcements_tidy, after=_sweep_announcement_p
 
 
 async def _record_announcement(_app: web.Application, event) -> dict | None:
-    """Keep one announcement (its photo copied first) and wake every page waiting for it (Feed.add)."""
+    """Keep one announcement (its photos copied first) and wake every page waiting for it (Feed.add)."""
     if _announcement_record(event, 0) is None:
         return None
-    src = await asyncio.to_thread(_announcement_photo_source, event)
-    photo = await asyncio.to_thread(_copy_announcement_photo, src) if src else None
+    sources = await asyncio.to_thread(_announcement_photo_sources, event)
+    photos = await asyncio.to_thread(_copy_announcement_photos, sources) if sources else []
 
     def record(seq: int) -> dict:
         rec = _announcement_record(event, seq)
-        return {**rec, "photo": photo} if photo else rec
+        return {**rec, "photos": [{**p, "at": p["at"] or rec["at"]} for p in photos]} if photos else rec
 
     return await ANNOUNCED.add(record, _announcements_with)
 
@@ -4320,17 +4386,16 @@ async def _listen_announcements(app: web.Application) -> None:
 
 
 async def _current_photos() -> set:
-    """The photo of the current notification now, as a set of one name or none: the newest record of the villa's
+    """The photos of the current notification now (their names), or none: the newest record of the villa's
     announcements and VESTA's messages together (a snapshot under VESTA's alert is a notification's photo too, and a newer
-    notice of either kind takes the current place), while it is new (_current_photo). The two feeds number apart, so each
-    gives its newest and the later of the two decides."""
+    notice of either kind takes the current place), while it is new (_current_photo_names). The two feeds number apart,
+    so each gives its newest and the later of the two decides."""
     newest = []
     for feed in (ANNOUNCED, MESSAGED):
         items = [a for a in await asyncio.to_thread(feed.items) if isinstance(a, dict)]
         newest += [max(items, key=lambda a: a["seq"])] if items else []
     newest.sort(key=lambda a: _iso_epoch(a.get("at")) or 0)
-    photo = _current_photo(newest[-1:], time.time(), await asyncio.to_thread(_ring_current_s))
-    return {photo} if photo else set()
+    return _current_photo_names(newest[-1:], time.time(), await asyncio.to_thread(_ring_current_s))
 
 
 def _after_of(request: web.Request) -> int | None | web.Response:
@@ -4346,8 +4411,8 @@ def _feed_handler(feed: "Feed", field: str, own=None, said=None):
     the newer ones, the answer waiting up to ANNOUNCEMENT_WAIT_S for one to arrive. ⚠️ ONE READ FOR EVERY FEED (owner,
     2026-10-28: "the same code … consistently used"): the villa's announcements and VESTA's messages are answered by
     this one, the guest's photo rule included — a profile that may not view cameras is told only the current
-    notification's photo (_current_photos; announcement_photo_handler refuses it the others too), and never a
-    conversation's pictures. `own(record, profile)`: the records this session's profile reads, when a feed holds several
+    notification's photos (_current_photos; announcement_photo_handler refuses it the others too), and never a
+    conversation's pictures (none is ever the current notification's). `own(record, profile)`: the records this session's profile reads, when a feed holds several
     profiles' (VESTA's conversation: each its own, never another's); `said()`: what else the read answers."""
     async def handler(request: web.Request) -> web.Response:
         if (refused := _refuse(request)) is not None:
@@ -4362,10 +4427,18 @@ def _feed_handler(feed: "Feed", field: str, own=None, said=None):
         kept = [a["seq"] for a in await asyncio.to_thread(feed.items) if mine(a)]
         if not _may(profile, "viewCameras"):
             current = await _current_photos()
-            items = [{k: v for k, v in a.items() if k != "photos" and (k != "photo" or v in current)} for a in items]
+            items = [_photos_seen(a, current) for a in items]
         return web.json_response({field: items, "last": last, "first": first, "kept": kept, **(said() if said else {})},
                                  headers={"Cache-Control": "no-store"})
     return handler
+
+
+def _photos_seen(record: dict, current: set) -> dict:
+    """`record` as a profile that may not view cameras is told it: its `photos` only those of the current notification
+    (`current`), none left: no `photos`. Pure — tests/store-doors.py drives it."""
+    out = {k: v for k, v in record.items() if k != "photos"}
+    seen = [p for p in record.get("photos") or () if _photo_name(p) in current]
+    return {**out, "photos": seen} if seen else out
 
 
 announcements_handler = _feed_handler(ANNOUNCED, "announcements")
@@ -4373,7 +4446,7 @@ announcements_handler = _feed_handler(ANNOUNCED, "announcements")
 
 async def announcement_photo_handler(request: web.Request) -> web.StreamResponse:
     """One kept photo, by the id its record names — to a profile that may view cameras, and to any other only while it
-    is the current notification's (ANNOUNCEMENT_CURRENT_S). ⚠️ A CONVERSATION'S PICTURE IS ITS PROFILE'S (architecture
+    is the current notification's, one of its photos (ANNOUNCEMENT_CURRENT_S). ⚠️ A CONVERSATION'S PICTURE IS ITS PROFILE'S (architecture
     review, 2026-10-30): the pictures an answer carries share the folder, and any profile that may view cameras could
     fetch another profile's by its id — guarded only by an id no one can guess. One named by a conversation turn alone
     (no announcement nor VESTA message names it) goes to the profile whose turn it is, as an answer's sound does."""
@@ -4404,7 +4477,7 @@ VESTA_MESSAGE_LIMITS: dict = dict((AGENT_CONTRACT_TABLE.get("vestaMessage") or {
 #: list, read here and by the Agent's test Kiosk (architecture review 2026-10-29, round 2)
 # (the agreement unreadable: the same three, never fewer: a rewritten report would lose its page — review round 3)
 KEPT_ON_REWRITE: tuple = tuple((AGENT_CONTRACT_TABLE.get("vestaMessage") or {}).get("keptOnRewrite")
-                               or ("photo", "page", "report"))
+                               or ("photos", "page", "report"))
 VESTA_MESSAGES_MAX_BYTES = 2_000_000
 VESTA_MESSAGE_LANGUAGE_RE = re.compile(r"^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$")
 
@@ -4456,7 +4529,7 @@ def _report_pages() -> set:
 
 def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
     """The record kept for one pushed message, or None when it names no key or says nothing. Pure — tests/store-doors.py
-    drives it. The photo is not in it: the picture is kept apart (_keep_pushed_photo). Every limit is the agreement's."""
+    drives it. The photos are not in it: they are kept apart (_message_photos). Every limit is the agreement's."""
     if not VESTA_MESSAGE_LIMITS or not isinstance(body, dict):
         return None
     key = _vm_text(body.get("key"), "key")
@@ -4496,15 +4569,34 @@ def _vesta_message_record(body, seq: int, now_iso: str) -> dict | None:
 MESSAGES = JsonStore("vesta-messages.json", [], VESTA_MESSAGES_MAX_BYTES + 100_000)
 
 
-def _taken_photo(announcements: list, takes) -> str | None:
-    """The photo of the newest kept villa announcement of a run VESTA's card took over (its `takes`), or None. ⚠️ THE
-    CARD SHOWS THE VILLA'S PICTURE (owner, 2026-11-02: #107's card on the tablet had no photo while the villa's own
-    message, which it stands in place of, carried the camera's): the card replaces that message on the tablet
-    (messagesModel.supersedes), so the picture went with it. Pure — tests/store-doors.py drives it."""
-    runs = {t for t in takes or () if isinstance(t, str)}
-    hit = [a for a in announcements if isinstance(a, dict) and a.get("run") in runs and a.get("photo")]
-    return max(hit, key=lambda a: a.get("seq") or 0)["photo"] if hit else None
+def _taken_photos(announcements: list, takes) -> list:
+    """The photos of the kept villa announcements VESTA's card took over (its `takes`: their run, or their key — a visit's
+    one announcement, "One visit, one story" 2026-11-06), the newest announcement's first, each in its own order, each
+    once; none when none carried one. ⚠️ THE CARD SHOWS THE VILLA'S PICTURES (owner, 2026-11-02: #107's card on the tablet
+    had no photo while the villa's own message, which it stands in place of, carried the camera's): the card replaces
+    that message on the tablet (messagesModel.supersedes), so the pictures go with it. Pure — tests/store-doors.py drives
+    it."""
+    named = {t for t in takes or () if isinstance(t, str)}
+    hit = [a for a in announcements if isinstance(a, dict) and (a.get("run") in named or a.get("key") in named)]
+    out, seen = [], set()
+    for a in sorted(hit, key=lambda a: a.get("seq") or 0, reverse=True):
+        for p in a.get("photos") or ():
+            if isinstance(p, dict) and p.get("id") not in seen:
+                seen.add(p.get("id"))
+                out.append(p)
+    return out
 
+
+def _message_photos(own: str | None, taken: list, at: str) -> list:
+    """A VESTA message's photos: its own picture first (one, the push's `photo`, kept as `own`), then those of the villa
+    messages it took over (_taken_photos), each once, at most the agreement's count. Pure — tests/store-doors.py drives
+    it."""
+    out, seen = [], set()
+    for p in ([{"id": own, "label": "", "at": at}] if own else []) + list(taken):
+        if p["id"] not in seen:
+            seen.add(p["id"])
+            out.append(p)
+    return out[:int(VESTA_MESSAGE_LIMITS.get("photos") or 0)]
 
 
 def _vesta_messages_tidy(items) -> list:
@@ -4513,8 +4605,8 @@ def _vesta_messages_tidy(items) -> list:
                                VESTA_MESSAGES_MAX_BYTES)
 
 
-#: VESTA's messages, the feed's second kind: one line per key (a rewrite REPLACES, keeping the first one's photo), a photo
-#: swept with the record that named it.
+#: VESTA's messages, the feed's second kind: one line per key (a rewrite REPLACES, keeping the first one's photos), a
+#: photo swept with the record that named it.
 MESSAGED = Feed(MESSAGES, _vesta_messages_tidy, after=_sweep_announcement_photos)
 
 
@@ -4530,14 +4622,15 @@ async def agent_vesta_message_handler(request: web.Request) -> web.Response:
         return body
     if _vesta_message_record(body, 0, _now_iso()) is None:
         return web.json_response({"error": "a message names a key and says something"}, status=400)
-    photo = await asyncio.to_thread(_keep_pushed_photo, body["photo"]) if body.get("photo") else None
-    # none of its own: the picture of the villa's message it took over (_taken_photo); a rewrite keeps it (KEPT_ON_REWRITE)
-    if photo is None and isinstance(body.get("takes"), list):
-        photo = _taken_photo(await asyncio.to_thread(ANNOUNCED.items), body["takes"])
+    # ⚠️ its own picture is ONE base64 `photo`, as the Agent sends it today, the first of its photos (_message_photos)
+    own = await asyncio.to_thread(_keep_pushed_photo, body["photo"]) if body.get("photo") else None
+    # then the pictures of the villa's messages it took over (_taken_photos); a rewrite with none keeps them (KEPT_ON_REWRITE)
+    taken = _taken_photos(await asyncio.to_thread(ANNOUNCED.items), body["takes"]) if isinstance(body.get("takes"), list) else []
 
     def record(seq: int) -> dict:
         rec = _vesta_message_record(body, seq, _now_iso())
-        return {**rec, "photo": photo} if photo else rec
+        photos = _message_photos(own, taken, rec["at"])
+        return {**rec, "photos": photos} if photos else rec
 
     rec = await MESSAGED.add(record, _announcements_with)
     return web.json_response({"ok": True, "seq": rec["seq"]})

@@ -1,5 +1,6 @@
 // src/components/fm/PhotoLightbox.tsx
-// Full-size viewer for evidence photos.
+// Full-size viewer for photos: a record's evidence (EvidenceRow), an announcement's camera photos (AnnouncementContent
+// PhotoRow: a visit's every camera, "One visit, one story", owner 2026-11-06). ONE viewer for every photo the app shows.
 //
 // Evidence only does its job if someone can actually LOOK at it. Until now a
 // photo attached to a fault or a spend entry existed as a 44px thumbnail in
@@ -13,15 +14,18 @@
 // is a phone-sized JPEG, not something that needs a pan-and-zoom surface.
 
 import { useCallback } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { evidenceUrl } from "@/fm/fmApi";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useArrowStep } from "@/hooks/useArrowStep";
 
+/** One photo the viewer shows: where it is served, and its words under it (an announcement's camera and time). */
+export interface ViewedPhoto { src: string; label?: string }
+
 export default function PhotoLightbox({
-  photoIds, index, onIndexChange, onClose,
+  photos, index, onIndexChange, onClose,
 }: {
-  photoIds: string[];
+  photos: readonly ViewedPhoto[];
   index: number;
   onIndexChange: (next: number) => void;
   onClose: () => void;
@@ -30,7 +34,7 @@ export default function PhotoLightbox({
   // below: they are this surface's navigation, not a dismissal, and the modal
   // hook has no opinion about them.
   const dialogRef = useModalA11y(onClose);
-  const count = photoIds.length;
+  const count = photos.length;
   // Wraps, so holding the arrow key never dead-ends on a set of two or three.
   const step = useCallback((delta: number) => {
     if (count > 0) onIndexChange((index + delta + count) % count);
@@ -39,9 +43,10 @@ export default function PhotoLightbox({
   useArrowStep(step);
 
   if (count === 0) return null;
-  const id = photoIds[Math.min(index, count - 1)];
+  const photo = photos[Math.min(index, count - 1)];
 
-  return (
+  // in the page's body, above everything: a photo opened from a notice (a transformed, passing box) or from a modal
+  const view = (
     <div ref={dialogRef} className="fm-lightbox" onClick={onClose} role="dialog" aria-modal="true"
       aria-label={`Photo ${index + 1} of ${count}`}>
       <button className="fm-lightbox-close" onClick={onClose} aria-label="Close photo">
@@ -56,8 +61,9 @@ export default function PhotoLightbox({
       )}
       {/* Stops the backdrop's close handler: tapping the photo itself should
           not dismiss the thing you are trying to look at. */}
-      <img src={evidenceUrl(id)} alt={`Evidence photo ${index + 1}`}
+      <img src={photo.src} alt={photo.label || `Photo ${index + 1}`}
         onClick={(e) => e.stopPropagation()} />
+      {photo.label && <div className="fm-lightbox-label">{photo.label}</div>}
       {count > 1 && (
         <button
           className="fm-lightbox-nav next"
@@ -68,4 +74,5 @@ export default function PhotoLightbox({
       {count > 1 && <div className="fm-lightbox-count">{index + 1} / {count}</div>}
     </div>
   );
+  return typeof document !== "undefined" ? createPortal(view, document.body) : view;
 }
