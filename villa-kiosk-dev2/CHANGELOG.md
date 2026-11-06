@@ -1,3 +1,16 @@
+## 2.496.729
+
+What you will see:
+- Advanced Settings › Devices: every device's card has a new last field, "3D object". It shows the objects of the 3D model that show this device, whether the object is named after the device or was linked by hand. Each object has an ✕ to take it off the device, and "Add a 3D object…" searches the model's objects: those that show nothing yet come first, and one already showing another device says which, and moves here when you pick it.
+- An object taken off with its ✕ shows nothing on the map, even when its name matches the device. Add it again to bring the device back on it.
+- The Devices title now has two counts, "on the map" and "not on the map". Tap one to see that list. "Not on the map" lists the devices no 3D object shows, each as the same card with an empty "3D object" field. Pick an object and the device moves to the map.
+- The search above the list also prepares a device whose 3D object is not in the model yet: type its entity id and pick "Prepare".
+- The pencil after a device's id and the "· 3D object: …" text are gone.
+- Advanced Settings › Villa: the "Bound 3D objects" section is gone. Everything it did is now on each device's card.
+- A search list opened inside a card (a 3D object, a group's members, a linked entity) is no longer cut off at the bottom of the card.
+
+What to check: on the tablet, each device still shows on the same object of the map as before. Devices' "not on the map" count should match the old "not shown" count.
+
 ## 2.496.728
 
 What you will see:
