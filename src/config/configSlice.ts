@@ -10,6 +10,7 @@ import {
 } from "./deviceConfig";
 import type { ConfigEdit } from "./mappingEdits";
 import { VILLA_SETTING_NAMES, type VillaSettingKey } from "./villaSettings";
+import { SHOWS_NOTHING } from "./EntityMap";
 import { applyKeyed, diffKeyed, type Keyed, type KeyedDiff } from "@/utils/keyedSync";
 
 export type Slice<K extends keyof AppConfig> = Pick<AppConfig, K>;
@@ -144,7 +145,8 @@ export const SETTING_NAMES: Readonly<Record<VillaSettingKey | "fullScreen" | "ch
 function subjectOf(key: string, id: string, item: unknown): ReplacedSubject {
   const setting = (SETTING_NAMES as Partial<Record<string, string>>)[key];
   if (setting) return { setting };
-  if (key === "meshBindings" && typeof item === "string") return { device: item };
+  // a 3D object shown as nothing (EntityMap.SHOWS_NOTHING) stands for no device: told by its own name
+  if (key === "meshBindings" && typeof item === "string" && item !== SHOWS_NOTHING) return { device: item };
   if (key === "deviceGroups" && item && typeof item === "object" && "primaryEntityId" in item) {
     return { device: String((item as { primaryEntityId: unknown }).primaryEntityId) };
   }

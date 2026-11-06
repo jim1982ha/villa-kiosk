@@ -127,31 +127,32 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
      && !!narrow && /grid-template-columns: minmax\(0, 1fr\);/.test(narrow[1]) && /grid-column: 1;/.test(narrow[2]), [token.map((m) => m[0]), narrow?.[0]]);
   // ...and every name fits the column: the device card's, an announcement's, a chat's (the longest, "Linked entity")
   // owner, 2026-11-06 (later): the bound cards' "Bound to", a group's "Members": every card's field this one CardField
-  const names = ["Type", "Category", "Label", "Intensity", "Linked entity", "On screen", "Language", "Bound to", "Bind to", "3D object", "Members"];
+  const names = ["Type", "Category", "Label", "Intensity", "Linked entity", "On screen", "Language", "3D object", "Members"];
   const { readdirSync } = await import("node:fs");
   const settingsDir = join(SRC, "components/settings");
   const drawnNames = readdirSync(settingsDir).filter((f) => f.endsWith(".tsx"))
-    .flatMap((f) => [...srcOf(`components/settings/${f}`).matchAll(/cell\("\w+", "([^"]+)"|<CardField label="([^"]+)"/g)].map((m) => m[1] ?? m[2]));
+    .flatMap((f) => [...srcOf(`components/settings/${f}`).matchAll(/cell\("\w+", "([^"]+)"|<CardField label="([^"]+)"|export const \w+_FIELD = "([^"]+)"/g)].map((m) => m[1] ?? m[2] ?? m[3]));
   ck("  ...every card's field the one CardField: no card draws its own name-and-control row",
      readdirSync(settingsDir).filter((f) => f !== "CardField.tsx" && /card-field/.test(srcOf(`components/settings/${f}`))).length === 0
-     && ["Bound to", "Bind to", "3D object", "Members", "Language", "On screen"].every((n) => drawnNames.includes(n)), drawnNames);
+     && ["3D object", "Members", "Language", "On screen"].every((n) => drawnNames.includes(n)), drawnNames);
   ck("  ...every field's name one of the column's, the longest \"Linked entity\"", drawnNames.length > 0 && drawnNames.every((n) => names.includes(n))
      && Math.max(...drawnNames.map((n) => n.length)) === "Linked entity".length, drawnNames);
   // owner, 2026-11-03: a device's id was cut every few letters beside "Confirm before toggling" on a phone. Owner,
-  // 2026-11-05: the pencil and the chevron on the id's own line, at its right; the id never more than 2 lines (a long
-  // id with its "· 3D object: …" pushed the toggle and the pencil down a line of their own)
+  // 2026-11-05: the id never more than 2 lines (a long id with its "· 3D object: …" pushed the toggle down a line of
+  // its own). Owner, 2026-11-06: its 3D objects are its "3D object" field, the pencil that redirected one is gone
   const row = srcOf("components/settings/EntityMapRow.tsx");
-  const tools = row.match(/<span className="entity-id-tools">([\s\S]*?)\n\s*<\/span>/)?.[1] ?? "";
+  const firstLine = row.match(/<div className="entity-id-display">([\s\S]*?)\n\s{8}<\/div>/)?.[1] ?? "";
   // owner, 2026-11-06: never folded (no chevron); on a phone "Confirm before toggling" a line of its own under the id,
   // its words shown; on a laptop it stays on the id's line
   const phone = css.match(/@container work-row \(max-width: 519px\) \{([^@]*?)\n\}/g)?.find((b) => /entity-id-display/.test(b)) ?? "";
-  ck("a device's id: the toggle and the pencil on its line at the right on a laptop, no chevron; on a phone the toggle on its own line under it, its words shown",
-     /<Pencil /.test(tools) && !/Chevron/.test(row) && !/ConfirmToggle/.test(tools)
-     && /<span className="entity-id-confirm">\s*<ConfirmToggle /.test(row)
-     && /\.entity-id-display \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto auto;\s*grid-template-areas: "name confirm tools";[^}]*container-type: inline-size;/.test(css)
+  ck("a device's id: the toggle on its line at the right on a laptop, no pencil, no chevron; on a phone the toggle on its own line under it, its words shown",
+     firstLine !== "" && !/Pencil|entity-id-tools|button/.test(firstLine) && !/Chevron|Pencil|[Rr]emap/.test(row)
+     && !/\.entity-id-tools|\.remap-/.test(css)
+     && /<span className="entity-id-confirm">\s*<ConfirmToggle /.test(firstLine)
+     && /\.entity-id-display \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;\s*grid-template-areas: "name confirm";[^}]*container-type: inline-size;/.test(css)
      // owner, 2026-11-06: on a phone the box sat alone at the left, centred between the id's line and the toggle's: the
-     // first line one grid there, line 1 the box, the id and the pencil, line 2 the toggle under them
-     && /\.device-first-line \{ display: grid; grid-template-columns: auto minmax\(0, 1fr\) auto;\s*grid-template-areas: "box name tools" "confirm confirm confirm"; align-items: center;/.test(phone)
+     // first line one grid there, line 1 the box and the id, line 2 the toggle under them
+     && /\.device-first-line \{ display: grid; grid-template-columns: auto minmax\(0, 1fr\);\s*grid-template-areas: "box name" "confirm confirm"; align-items: center;/.test(phone)
      && /\.device-first-line > input\[type="checkbox"\] \{ grid-area: box; \}/.test(phone)
      && /\.device-first-line > \.entity-id-display \{ display: contents; \}/.test(phone)
      && /<div className="device-first-line">\s*<input\s+type="checkbox"/.test(row)
@@ -163,8 +164,8 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
      // (common/IdText), a part longer than the line alone breaking within it
      && /\.entity-id-text \{[^}]*-webkit-line-clamp: 2;[^}]*overflow: hidden;[^}]*overflow-wrap: break-word;/.test(css)
      && /<IdText id=\{m\.entityId\} \/>/.test(row)
-     && /title=\{\[m\.entityId, \.\.\.\(objects \?\? \[\]\)\]\.join/.test(row)
-     && !/\.entity-id-text \{[^}]*break-all/.test(css), tools);
+     && /<span className="entity-id-text" title=\{m\.entityId\}>/.test(firstLine) && !/3D object:/.test(row)
+     && !/\.entity-id-text \{[^}]*break-all/.test(css), firstLine);
 }
 done("✅ one segmented group, one on/off, one save button, one outside-close, one ticker");
 

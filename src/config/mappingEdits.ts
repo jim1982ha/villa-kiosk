@@ -15,7 +15,7 @@ import type { AppConfig } from "./AppConfig";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import { roomKey } from "./roomKey";
 import type { HassEntity } from "@/types/ha.types";
-import { createDefaultMapping, isOwnLabel } from "./EntityMap";
+import { SHOWS_NOTHING, createDefaultMapping, isOwnLabel, meshEntityOf, normaliseMeshName } from "./EntityMap";
 import { forgetEntities } from "./dismissedEntities";
 
 /** A change to the config, computed from the config it applies to. */
@@ -52,7 +52,7 @@ export function addMapping(entityId: string, entity?: Pick<HassEntity, "attribut
 }
 
 /**
- * "Change entity": every 3D object that shows `oldId` now shows `newId` — the object named after
+ * "Point it there" (a 3D object whose entity is gone, in Devices): every 3D object that shows `oldId` now shows `newId` — the object named after
  * the old id (bound by that name) AND every object bound to it by hand — and the device's settings
  * move with it, leaving no row behind (architecture review 2026-10-12, candidate 1: this was two
  * edits, remapMapping and repointObjects, and the second left `entityMap[oldId]` stranded).
@@ -100,20 +100,29 @@ export function adoptDetected(
   };
 }
 
-/** Bind a 3D object to an entity (replacing any binding it had), making sure
- *  the entity has a mapping. */
-export function bindMesh(meshName: string, entityId: string, entity?: Pick<HassEntity, "attributes">): ConfigEdit {
+/** The bindings without those of `object` (every part and pose of it: normaliseMeshName) that `drop` says go. */
+function withoutObject(bindings: Record<string, string>, object: string, drop: (id: string) => boolean): Record<string, string> {
+  return Object.fromEntries(Object.entries(bindings).filter(([mesh, id]) => normaliseMeshName(mesh) !== object || !drop(id)));
+}
+
+/** A 3D object (its name without export suffixes) shows `entityId` — every part and pose of it, whatever it showed
+ *  before ("Add a 3D object…" on a device's card) — and the entity has a mapping, so a device not on the map is on it. */
+export function bindMesh(object: string, entityId: string, entity?: Pick<HassEntity, "attributes">): ConfigEdit {
   return (config) => ({
-    meshBindings: { ...config.meshBindings, [meshName]: entityId },
+    meshBindings: { ...withoutObject(config.meshBindings, object, () => true), [object]: entityId },
     entityMap: addMapping(entityId, entity)(config).entityMap ?? config.entityMap,
   });
 }
 
-/** Unbind a 3D object. The entity's mapping is kept. */
-export function unbindMesh(meshName: string): ConfigEdit {
+/** A 3D object taken off a device (its ✕ in the device's "3D object" field): its bindings to the device go, and when
+ *  the map would still show a device on it (its name matches one), it shows nothing (SHOWS_NOTHING). The device's
+ *  mapping is kept; an object that does not show the device is left as it is. */
+export function takeObjectOff(object: string, entityId: string): ConfigEdit {
   return (config) => {
-    if (!(meshName in config.meshBindings)) return {};
-    const { [meshName]: _gone, ...meshBindings } = config.meshBindings;
+    const meshBindings = withoutObject(config.meshBindings, object, (id) => id === entityId);
+    const unbound = Object.keys(meshBindings).length < Object.keys(config.meshBindings).length;
+    if (!unbound && meshEntityOf(object, config.entityMap, config.meshBindings) !== entityId) return {};
+    if (meshEntityOf(object, config.entityMap, meshBindings) !== null) meshBindings[object] = SHOWS_NOTHING;
     return { meshBindings };
   };
 }

@@ -89,8 +89,8 @@ export function roomIdSet(
  * assignment for the same device, two sources of truth that had no way to reconcile. Now there is
  * exactly one: HA's Area wins whenever the device has one; geometric detection (which drawn room
  * polygon the device's own 3D anchor sits inside) is the fallback for whatever HA hasn't organised
- * into an Area yet. Nothing in the kiosk writes a room any more — see BindingsTable.tsx /
- * EntityMapRow.tsx, which used to. "" = no room (stored as is: RoomShare uploads this table).
+ * into an Area yet. Nothing in the kiosk writes a room any more — Advanced Settings' device cards
+ * (EntityMapRow.tsx) and its old bound-objects table used to. "" = no room (stored as is: RoomShare uploads this table).
  */
 export function resolveEntityRoom(
   areaName: string | undefined,

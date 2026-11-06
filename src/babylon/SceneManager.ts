@@ -2537,7 +2537,7 @@ export class SceneManager {
    *  commit — used to run BOTH of those back-to-back on the main thread with
    *  no gap, which is what made the *next* click feel like it "didn't
    *  register": it was queued behind a multi-second block. Debouncing the
-   *  COMMIT (ConfigEditor/BindingsTable/SettingsModal's draft-state pattern)
+   *  COMMIT (ConfigEditor/SettingsModal's draft-state pattern)
    *  only reduces how OFTEN this runs, not how long any single run blocks.
    *  yieldFrame() between the two heavy calls — the exact technique already
    *  proven at initial load — turns one long freeze into two shorter ones

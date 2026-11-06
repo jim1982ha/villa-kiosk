@@ -22,7 +22,6 @@ import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
 import { useGlbUpload, ModelFileInput } from "./useGlbUpload";
 import ConfigEditor from "./ConfigEditor";
-import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 import UnavailableByDesign from "./UnavailableByDesign";
@@ -366,18 +365,6 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
             </div>
 
             <PresenceSensor />
-
-            {/* No collapse: `BindingsTable` already opens on its three counts
-                with the lists themselves behind their own toggles, so this
-                tab states how much is bound without a click. */}
-            <BindingsTable title="Bound 3D objects" tip={<>
-              Each bound 3D object controls a device's entity when tapped in the villa: change which entity here,
-              without reloading the model; its name and display settings are with the device, in Devices. To prepare
-              an entity whose 3D object is not in the model yet, add it here: its settings apply as soon as a model
-              with an object named after its entity ID is uploaded. To bind one, expand the unbound objects and pick
-              an entity for it. The entities not shown on the map have no 3D object: add one in the 3D model, or bind
-              an unbound object to one, to control it from the villa.
-            </>} />
           </>
         )}
 
@@ -391,14 +378,16 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
                 rather than by clicking. Arriving from a device panel's "edit"
                 pre-fills the filter, so the row that was come for is one of
                 the few on screen. */}
-            <TipTitle title="Auto-detected entity settings" tip={<>
+            <ConfigEditor initialSearch={focusEntityId} title="Auto-detected entity settings" tip={<>
               Entities listed here are auto-detected because their 3D object in the model is already named with the
-              entity ID (e.g. camera.driveway). Edit the display name, room or panel type without reloading the model.
-              Changes here apply to every device that opens the kiosk: this configuration is stored centrally by the
-              add-on, like the 3D model itself, not per browser. With none yet, upload a model whose objects are named
-              after entity IDs, or prepare one in Villa › Bound 3D objects.
+              entity ID (e.g. camera.driveway). Edit the display name, category or panel type without reloading the model.
+              Each device's 3D object field holds the objects that show it: add one with its search (an object no
+              device has yet, or one moved from another device), or take one off with its ✕. The counts show the
+              devices on the map and those no 3D object shows yet. To prepare an entity whose 3D object is not in the
+              model yet, type its entity ID in the search: its settings apply as soon as a model with an object named
+              after it is uploaded. Changes here apply to every device that opens the kiosk: this configuration is
+              stored centrally by the add-on, like the 3D model itself, not per browser.
             </>} />
-            <ConfigEditor initialSearch={focusEntityId} />
 
             <GroupedDevices title="Grouped devices" tip={<>
               Fold several entities that are really one physical device (e.g. a combo sensor with separate

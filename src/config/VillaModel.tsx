@@ -142,7 +142,7 @@ export function useVillaModelValue(sets: VillaSets): VillaModel {
 
   // Advanced Settings' device list and what it must say is missing — the same dismissal as every set above.
   const settings = useMemo(() => {
-    const rows = deviceRows(entityMap, config.meshBindings, dismissedIds);
+    const rows = deviceRows(entityMap, dismissedIds);
     const gaps = inventoryGaps({
       rowIds: rows.map((r) => r.id), sceneEntityIds, inHa: (id) => !!entities[id], meshBindings: config.meshBindings,
       haReady: connected && Object.keys(entities).length > 0,

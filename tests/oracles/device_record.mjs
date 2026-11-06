@@ -14,12 +14,21 @@ const map = {
   "fan.gone": { entityId: "fan.gone", type: "fan" },
 };
 const bindings = { "light.terrace_old": "light.patio", pool_lamp_mesh: "light.patio" };
-const rows = D.deviceRows(map, bindings, new Set(["fan.gone"]));
+const rows = D.deviceRows(map, new Set(["fan.gone"]));
 ck("every stored device is a row — a hand-linked one included", rows.map((r) => r.id).join() === "light.hall,light.patio");
 ck("  ...a removed one is not", !rows.some((r) => r.id === "fan.gone"));
-ck("a row says which objects are linked to it by name", rows[1].objects.join() === "light.terrace_old,pool_lamp_mesh" && rows[0].objects.length === 0);
+// the model's objects (a lamp in two parts, an object bound by hand, one named after its device, a wall)
+const links = D.objectLinks(["light.terrace_old", "pool_lamp_mesh_primitive0", "pool_lamp_mesh_primitive1", "light.hall", "Wall_01"], map, bindings);
+ck("a device's 3D objects: those bound to it and the one named after it, each object once (its parts one object)",
+   (links.byDevice.get("light.patio") ?? []).join() === "light.terrace_old,pool_lamp_mesh" && (links.byDevice.get("light.hall") ?? []).join() === "light.hall",
+   Object.fromEntries(links.byDevice));
+ck("  ...and every object says what it shows, a wall nothing", links.shows.get("Wall_01") === null && links.shows.get("pool_lamp_mesh") === "light.patio",
+   Object.fromEntries(links.shows));
+const offers = (q) => D.objectOffers(q, links, "light.hall").map((o) => `${o.object}:${o.shows}`).join();
+ck("its search: the objects not showing it, those showing nothing first, found by their name",
+   offers("") === "Wall_01:null,light.terrace_old:light.patio,pool_lamp_mesh:light.patio" && offers("POOL") === "pool_lamp_mesh:light.patio", offers(""));
 
-const patio = rows[1];
+const patio = "light.patio", patioObjects = links.byDevice.get(patio);
 // the villa's system's entities (placeholder names): the patio light named "Patio2F Center" there, stored "light patio"
 const ents = {
   "light.hall": { entity_id: "light.hall", state: "on", attributes: { friendly_name: "Hall ceiling" } },
@@ -29,11 +38,11 @@ const ents = {
 };
 const src = { entityMap: { ...map, "light.patio": { ...map["light.patio"], label: "Terrace lamp" } }, entities: ents,
   resolvedRooms: { "light.patio": "Patio 2F", "switch.pump": "Pool", "sensor.pump_temp": "Pool", "light.hall": "Hall" } };
-ck("found by the name the map shows (labelOf), and the villa's system's own", D.rowMatches(patio, "Terrace", src)
-   && D.rowMatches(patio, "Patio2F Center", src) && !D.rowMatches(patio, "no such lamp", src));
-ck("  ...by its id, its room, a linked object; case-insensitive",
-   ["LIGHT.PATIO", "patio 2f", "terrace_old"].every((q) => D.rowMatches(patio, q, src)));
-ck("  ...an empty search finds everything", D.rowMatches(patio, "  ", src));
+ck("found by the name the map shows (labelOf), and the villa's system's own", D.deviceMatches(patio, "Terrace", src)
+   && D.deviceMatches(patio, "Patio2F Center", src) && !D.deviceMatches(patio, "no such lamp", src));
+ck("  ...by its id, its room, one of its 3D objects; case-insensitive",
+   ["LIGHT.PATIO", "patio 2f", "terrace_old", "POOL_LAMP"].every((q) => D.deviceMatches(patio, q, src, patioObjects)) && !D.deviceMatches(patio, "terrace_old", src));
+ck("  ...an empty search finds everything", D.deviceMatches(patio, "  ", src));
 
 // ⚠️ ONE DEVICE SEARCH (architecture review 2026-10-31 round 12 #2): typing "pool" found a device by its room in one
 // box only. Every box, by value: the shown name, the villa's system's name, the room, the id
@@ -41,9 +50,8 @@ console.log("\n  one device search, every box (\"pool\" is a room here, \"Patio2
 const texts = D.deviceSearchTexts("light.patio", src);
 ck("what a device is found by: its name on screen, the villa's system's name, its room and its id",
    ["Terrace lamp", "Patio2F Center", "Patio 2F", "light.patio"].every((t) => texts.includes(t)), texts);
-const pumpRow = { id: "switch.pump", mapping: { entityId: "switch.pump", type: "switch" }, objects: [] };
 ck("Settings › Devices: by room and by the villa's system's name",
-   D.rowMatches(pumpRow, "pool", src) && D.rowMatches(pumpRow, "pump relay", src));
+   D.deviceMatches("switch.pump", "pool", src) && D.deviceMatches("switch.pump", "pump relay", src));
 ck("\"Add a device…\" (EntityPicker): by room too, of its domains only",
    D.entitySearch("pool", src).join() === "sensor.pump_temp,switch.pump" && D.entitySearch("pool", src, ["switch"]).join() === "switch.pump"
    && D.entitySearch("patio2f center", src).join() === "light.patio", D.entitySearch("pool", src));
@@ -84,9 +92,9 @@ ck("  ...every device for an empty search (the shared picker opens on a tap)", t
 }
 
 const ed = readFileSync(new URL("../../src/components/settings/ConfigEditor.tsx", import.meta.url), "utf8");
-ck("Advanced Settings lists the villa model's deviceRows and filters with rowMatches on the shown name (no own list rule)",
+ck("Advanced Settings lists the villa model's deviceRows and filters with deviceMatches on the shown name and its objects (no own list rule)",
    /const \{ rows: allRows, stale: staleIds, orphans: orphanIds \} = villa\.settings;/.test(ed)
-   && /deviceRows\(entityMap, config\.meshBindings, dismissedIds\)/.test(readFileSync(new URL("../../src/config/VillaModel.tsx", import.meta.url), "utf8"))
-   && /rowMatches\(r, search, searchSource\)/.test(ed) && !/boundEntityIds/.test(ed));
+   && /deviceRows\(entityMap, dismissedIds\)/.test(readFileSync(new URL("../../src/config/VillaModel.tsx", import.meta.url), "utf8"))
+   && /deviceMatches\(r\.id, search, searchSource, links\.byDevice\.get\(r\.id\)\)/.test(ed) && !/boundEntityIds/.test(ed));
 
 done("✅ one device list: every device once, found by the name it shows");

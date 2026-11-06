@@ -1,10 +1,10 @@
 // Settings and Advanced Settings show their records as the Cockpit's card (owner, 2026-11-06: "the same card in Settings
-// and Advanced Settings"): a device group and a suggested one, a bound 3D object, an object bound to nothing, an entity
-// no object shows, a device asleep between reports, a device of Devices and a 3D object whose entity is gone, a
-// full-screen announcement, a chat that gets the messages. Each is drawn here through its real section and read: its
-// frame is RecordCard's, its name is in the strip, its action is in the bar; the rows and tables it replaced are gone.
-// The telemetry stays a log list, its columns reordered (time, kind, device, words), and Bound 3D objects' title counts
-// open its lists (the line of three toggles under the title is gone).
+// and Advanced Settings"): a device group and a suggested one, a device asleep between reports, a device of Devices, one
+// not on the map and a 3D object whose entity is gone, a full-screen announcement, a chat that gets the messages. Each
+// is drawn here through its real section and read: its frame is RecordCard's, its name is in the strip, its action is
+// in the bar; the rows and tables it replaced are gone. The telemetry stays a log list, its columns reordered (time,
+// kind, device, words). Devices' title counts show its two lists, and each device's "3D object" field holds the
+// objects that show it (owner, 2026-11-06: it replaced Villa's "Bound 3D objects" and the pencil on a device's id).
 //
 // The sections fold their content until tapped and keep their contexts private: a loader (below) opens the folds for
 // the drawing and exports the contexts, as the screenshot harness does. Nothing else of the code is changed.
@@ -21,8 +21,7 @@ const PATCH = {
   "/src/components/settings/Fold.tsx": [["useState(false)", "useState(true)"]],
   "/src/components/settings/GroupedDevices.tsx": [["useState(false)", "useState(true)"],
     ['const [search, setSearch] = useState("")', 'const [search, setSearch] = useState(globalThis.__q ?? "")']],
-  "/src/components/settings/BindingsTable.tsx": [['useState("bound")', 'useState(globalThis.__view ?? "bound")'],
-    ['const [search, setSearch] = useState("")', 'const [search, setSearch] = useState(globalThis.__q ?? "")']],
+  "/src/components/settings/ConfigEditor.tsx": [['useState("on")', 'useState(globalThis.__view ?? "on")']],
   "/src/components/settings/UnavailableByDesign.tsx": [['const [search, setSearch] = useState("")', 'const [search, setSearch] = useState(globalThis.__q ?? "")']],
   "/src/components/common/SearchPicker.tsx": [["useState(!!startOpen)", "useState(!!startOpen || !!globalThis.__open)"]],
 };
@@ -41,7 +40,8 @@ export async function load(url, context, next) {
 register(`data:text/javascript,${encodeURIComponent(HOOK)}`);
 
 globalThis.localStorage = globalThis.localStorage ?? (() => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k) }; })();
-localStorage.setItem("villa-kiosk:mesh-catalog", JSON.stringify(["Lamp_Kitchen", "Mesh_Unnamed_042"]));
+// the model's objects: one bound by hand, one named after its device, one showing nothing, a wall
+localStorage.setItem("villa-kiosk:mesh-catalog", JSON.stringify(["Lamp_Kitchen", "switch.example_pool_pump", "Mesh_Unnamed_042", "Wall_01"]));
 const { __Ctx: ConfigCtx } = await import("@/config/ConfigContext");
 const { __Ctx: HACtx } = await import("@/ha/HAStateStore");
 const { VillaModelProvider } = await import("@/config/VillaModel");
@@ -80,7 +80,7 @@ const ha = { entities, suppressedEntityIds: new Set(), hiddenInHaEntityIds: new 
   connection: "connected", haConfig: { location_name: "The Example House" }, lastError: null, serviceError: null,
   getEntitiesSnapshot: () => entities, connected: true, ws: null, subscribe: () => noop, subscribeAll: () => noop, callService: async () => ({ ok: true }),
   connect: async () => {}, setUnavailableByDesign: noop };
-const rows = Object.entries(config.entityMap).map(([id, mapping]) => ({ id, mapping, objects: [] }));
+const rows = Object.entries(config.entityMap).map(([id, mapping]) => ({ id, mapping }));
 const villa = { settings: { rows, stale: [], orphans: ["fan.example_gone_fan"] }, sceneEntityIds: new Set() };
 const quiet = (f) => { const e = console.error; console.error = () => {}; try { return f(); } finally { console.error = e; } };
 const drawIn = (el) => quiet(() => draw(h(ConfigCtx.Provider, { value: cfg }, h(HACtx.Provider, { value: ha },
@@ -106,24 +106,23 @@ const cards = (html) => {
 };
 
 const { default: GroupedDevices } = await import("@/components/settings/GroupedDevices");
-const { default: BindingsTable } = await import("@/components/settings/BindingsTable");
 const { default: UnavailableByDesign } = await import("@/components/settings/UnavailableByDesign");
 const { default: ConfigEditor } = await import("@/components/settings/ConfigEditor");
 const { FullScreenAnnouncements } = await import("@/components/settings/MessagesSettings");
 const { default: WhoGetsMessages } = await import("@/components/settings/WhoGetsMessages");
 const { ROLE_LABELS } = await import("@/auth/roles");
-const bindings = (view) => { globalThis.__view = view; return drawIn(h(BindingsTable, { title: "Bound 3D objects" })); };
+const DEVICES = "Auto-detected entity settings";
+/** Devices, the list its title's count `view` shows ("on" the map, "off" it), `search` typed (as a panel's edit opens it). */
+const devices = (view = "on", search) => { globalThis.__view = view; try { return drawIn(h(ConfigEditor, { title: DEVICES, tip: "What it does.", initialSearch: search })); } finally { globalThis.__view = undefined; } };
 
 // [kind, drawn, its name, its bar's words ("" no bar), its remove at its strip's right ([icon, tooltip]) or none]
 const KINDS = [
   ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", "", ["bin", "Delete the group Kitchen Temperature"]],
   ["  ...a suggested group, its main action first", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Pool Pump Power", "Create this group"],
-  ["a bound 3D object (named after its entity)", bindings("bound"), "Terrace Lamp", "", ["x", "Unbind Lamp_Kitchen from Terrace Lamp"]],
-  ["an object bound to nothing", bindings("unbound"), "Mesh Unnamed 042", "Bind"],
-  ["an entity no object shows", bindings("unshown"), "Ceiling Fan", "Bind"],
   ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "", ["x", "Take Back Door off Asleep between reports"]],
-  ["a device of Devices", drawIn(h(ConfigEditor)), "Pool Pump", "", ["bin", "Remove Pool Pump's settings"]],
-  ["a 3D object whose entity is gone", drawIn(h(ConfigEditor)), "Example Gone Fan", "Point it there"],
+  ["a device of Devices", devices(), "Pool Pump", "", ["bin", "Remove Pool Pump's settings"]],
+  ["a device not on the map (Devices' second list)", devices("off"), "Ceiling Fan", ""],
+  ["a 3D object whose entity is gone", devices(), "Example Gone Fan", "Point it there"],
   ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", "", ["bin", "Delete the announcement Front gate doorbell"]],
   ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", "", ["x", `Take Example House FM group off the ${ROLE_LABELS.ops}'s list`]],
 ];
@@ -192,7 +191,7 @@ console.log("\n  the remove icon (owner, 2026-11-06): a press is the button's, S
   const giving = walk(new URL("../../src/", import.meta.url)).filter((u) => { const t = readFileSync(u, "utf8"); return /<(RecordCard|EntityCard)\b/.test(t) && /^\s*remove=\{/m.test(t); })
     .map((u) => u.pathname.split("/src/")[1]).sort();
   ck("  ...the files giving a card its remove are Settings' alone, never a Cockpit card",
-     JSON.stringify(giving) === JSON.stringify(["components/settings/BindingRow.tsx", "components/settings/EntityMapRow.tsx", "components/settings/GroupedDevices.tsx",
+     JSON.stringify(giving) === JSON.stringify(["components/settings/EntityMapRow.tsx", "components/settings/GroupedDevices.tsx",
        "components/settings/MessagesSettings.tsx", "components/settings/UnavailableByDesign.tsx", "components/settings/WhoGetsMessages.tsx"]), giving);
   // its glyph drawn into the strip's padding so the band keeps its height; its touch target 44px
   const facility = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
@@ -217,8 +216,8 @@ console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and
   const SECTIONS = [
     ["Grouped devices", groups(""), "Search groups, or a device to group…"],
     ["Asleep between reports", asleep(""), "Search, or a device to add…"],
-    ["Auto-detected entity settings", drawIn(h(ConfigEditor)), "Search by id, label or room…"],
-    ["Bound 3D objects", bindings("bound"), "Search objects, or a device to prepare…"],
+    [DEVICES, devices(), "Search, or a device to prepare…"],
+    [`${DEVICES}, not on the map`, devices("off"), "Search, or a device to prepare…"],
   ];
   for (const [name, html, words] of SECTIONS) {
     // the list's fields: the one shared field, plus the pickers INSIDE its cards (a group's "Add another entity…", a
@@ -249,40 +248,41 @@ console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and
      JSON.stringify(offers(door)) === JSON.stringify(["Back Door / binary_sensor.example_back_door / On the list"]) && JSON.stringify(names(door)) === JSON.stringify(["Back Door"])
      && JSON.stringify(offers(lamp)) === JSON.stringify(["Terrace Lamp / light.example_terrace_lamp / Add to the list"]) && names(lamp).length === 0
      && /No device on the list has “lamp”\./.test(text(lamp)) && />Add Terrace Lamp to the list</.test(lamp), [offers(door), offers(lamp), names(lamp)]);
-  const auto = typed("", h(ConfigEditor, { initialSearch: "pool" }));
-  ck("Auto-detected entity settings: the same field, narrowing only (no suggestions)",
-     JSON.stringify(names(auto)) === JSON.stringify(["Pool Pump", "Pool Pump Power"]) && !/picker-dropdown/.test(field(auto)), [names(auto), field(auto).slice(0, 200)]);
-  globalThis.__view = "bound";
-  const bound = typed("terrace", h(BindingsTable, { title: "Bound 3D objects" }));
-  const ahead = typed("light.example_new_lamp", h(BindingsTable, { title: "Bound 3D objects" }));
-  ck("Bound 3D objects: the same — a device \"Already in Devices\" or \"Prepare it\", an id not there yet prepared ahead; the list narrowed",
-     JSON.stringify(offers(bound)) === JSON.stringify(["Terrace Lamp / light.example_terrace_lamp / Already in Devices"]) && JSON.stringify(names(bound)) === JSON.stringify(["Terrace Lamp"])
-     && offers(ahead)[0] === "! Prepare “light.example_new_lamp” / not there yet, will activate when it appears"
-     && offers(typed("fan", h(BindingsTable, { title: "Bound 3D objects" }))).includes("Ceiling Fan / fan.example_ceiling_fan / Prepare it"),
-     [offers(bound), names(bound), offers(ahead)]);
+  // Devices' field narrows the list shown, and prepares a device (it was Bound 3D objects', owner 2026-11-06)
+  const at = (q, view) => { globalThis.__view = view; try { return typed("", h(ConfigEditor, { title: DEVICES, initialSearch: q })); } finally { globalThis.__view = undefined; } };
+  const pumps = at("pool", "on"), terrace = at("terrace", "on"), prepared = at("light.example_new_lamp", "on"), fan = at("fan", "off");
+  ck(`${DEVICES}: the same field narrows the list shown (by a name, a room, or one of its 3D objects)`,
+     JSON.stringify(names(pumps)) === JSON.stringify(["Pool Pump", "Pool Pump Power"]) && JSON.stringify(names(at("lamp_kitchen", "on"))) === JSON.stringify(["Terrace Lamp"])
+     && JSON.stringify(names(fan)) === JSON.stringify(["Ceiling Fan"]), [names(pumps), names(at("lamp_kitchen", "on")), names(fan)]);
+  ck("  ...and offers its devices: one on the map \"On the map\", one no object shows \"Not on the map\", an id not there yet prepared ahead",
+     JSON.stringify(offers(terrace)) === JSON.stringify(["Terrace Lamp / light.example_terrace_lamp / On the map"])
+     && offers(fan).includes("Ceiling Fan / fan.example_ceiling_fan / Not on the map")
+     && offers(prepared)[0] === "! Prepare “light.example_new_lamp” / not there yet, will activate when it appears", [offers(terrace), offers(fan), offers(prepared)]);
   const { readdirSync } = await import("node:fs");
   const dir = new URL("../../src/components/settings/", import.meta.url);
   const using = readdirSync(dir).filter((f) => /<SearchOrAdd\b/.test(readFileSync(new URL(f, dir), "utf8"))).sort();
-  ck("  ...the four lists draw the one SearchOrAdd, none its own search box",
-     JSON.stringify(using) === JSON.stringify(["BindingsTable.tsx", "ConfigEditor.tsx", "GroupedDevices.tsx", "UnavailableByDesign.tsx"])
+  ck("  ...the three sections draw the one SearchOrAdd, none its own search box",
+     JSON.stringify(using) === JSON.stringify(["ConfigEditor.tsx", "GroupedDevices.tsx", "UnavailableByDesign.tsx"])
      && readdirSync(dir).every((f) => !/<input\s+type="search"/.test(readFileSync(new URL(f, dir), "utf8"))), using);
 }
 
-console.log("\n  Bound 3D objects: its title's counts open its lists:");
+console.log("\n  Devices: its title's counts show its lists:");
 {
-  const head = (html) => inside(html, "cockpit-issues-head");
-  // what each list holds: the object bound, the one bound to nothing, the entities no object shows
-  const LISTS = { bound: ["Terrace Lamp"], unbound: ["Mesh Unnamed 042"], unshown: ["Back Door", "Ceiling Fan"] };
+  const head = (html) => inside(html, "settings-section-title");
+  // what each list holds (its first few): the devices on the map, the devices no object shows (a group's member is
+  // shown by its group's badge)
+  const LISTS = { on: ["Kitchen Temperature", "Pool Pump", "Pool Pump Power"], off: ["Back Door", "Ceiling Fan"] };
   const views = (html) => [...head(html).matchAll(/<button type="button" class="section-view( shown)?" aria-pressed="(true|false)">([^<]*)<\/button>/g)].map((m) => [m[3], m[2] === "true"]);
-  ck("its three counts are buttons after its title, the list shown marked (bound first)",
-     JSON.stringify(views(bindings("bound"))) === JSON.stringify([["1 bound", true], ["1 unbound", false], ["2 not shown", false]]), views(bindings("bound")));
+  ck("its two counts are buttons after its title, the list shown marked (on the map first)",
+     JSON.stringify(views(devices())) === JSON.stringify([["4 on the map", true], ["2 not on the map", false]])
+     && /^<div class="settings-section-title with-tip">Auto-detected entity settings<span class="section-summary section-views"/.test(head(devices())), [views(devices()), head(devices()).slice(0, 160)]);
+  const devicesOf = (html) => cards(html).filter((c) => c.bar !== "Point it there").map((c) => c.name);
   ck("  ...each count shows its own list, one at a time",
-     Object.entries(LISTS).every(([v, names], i) => { const html = bindings(v); const shown = views(html).map(([, s]) => s);
-       return shown.filter(Boolean).length === 1 && shown[i] && JSON.stringify(cards(html).map((c) => c.name)) === JSON.stringify(names); }),
-     ["bound", "unbound", "unshown"].map((v) => [views(bindings(v)), cards(bindings(v)).map((c) => c.name)]));
-  const body = inside(bindings("bound"), "fold-body");
-  ck("  ...and the line of three toggles under the title is gone (no \"bound object\" fold, no summary line)",
-     !/fold-toggle|bound object|section-summary">/.test(body.replace(/Show all[^<]*/g, "")) && !/class="section-summary">/.test(head(bindings("bound"))), body.slice(0, 400));
+     Object.entries(LISTS).every(([v, want], i) => { const html = devices(v); const shown = views(html).map(([, s]) => s);
+       return shown.filter(Boolean).length === 1 && shown[i] && JSON.stringify(devicesOf(html)) === JSON.stringify(want); }),
+     ["on", "off"].map((v) => [views(devices(v)), devicesOf(devices(v))]));
+  ck("  ...the missing entity's object with the devices on the map, never with those not on it",
+     cards(devices()).some((c) => c.bar === "Point it there") && !cards(devices("off")).some((c) => c.bar === "Point it there"));
 }
 
 console.log("\n  every card stands out: one edge and shadow, the theme's:");
@@ -296,42 +296,51 @@ console.log("\n  every card stands out: one edge and shadow, the theme's:");
   const hs = [...base.matchAll(/--hairline-strong: ([^;]+);/g)].length, hl = [...base.matchAll(/--hairline: ([^;]+);/g)].length;
   ck("  ...the edge the theme's stronger hairline (defined in each theme), a faint shadow under it",
      /--card-border: 1px solid var\(--hairline-strong\);/.test(base) && /--card-shadow: 0 1px 3px var\(--shadow\);/.test(base) && hs === hl && hs >= 3, [hs, hl]);
-  const drawn = cards(bindings("bound"))[0]?.card ?? "";
+  const drawn = cards(devices())[0]?.card ?? "";
   ck("  ...drawn: a Settings card is that frame", /^<div class="fm-record-card">/.test(drawn), drawn.slice(0, 80));
 }
 
 console.log("\n  a device of Devices: never folded, no room line, its toggle under its id on a phone:");
 {
-  const html = drawIn(h(ConfigEditor));
+  const html = devices();
   const card = cards(html).find((c) => c.name === "Pool Pump")?.card ?? "";
   // owner, 2026-11-06: what the chevron opened is always shown; its room under its name said nothing more
   ck("its fields always shown (Type, Category, Label…), no chevron, nothing to expand",
      /card-field-label">Type</.test(card) && /card-field-label">Label</.test(card) && !/lucide-chevron|aria-expanded|role="button"/.test(inside(card, "device-first-line")), inside(card, "device-first-line"));
   ck("  ...no quiet line (its room)", card !== "" && !/fm-record-meta/.test(card), card);
-  ck("  ...its id line: the box, the id, the pencil, its Confirm before toggling (a switch, which a tap turns)",
-     /type="checkbox"[\s\S]*entity-id-text[\s\S]*entity-id-tools[\s\S]*lucide-pencil[\s\S]*entity-id-confirm/.test(card)
-     && /Confirm before toggling/.test(inside(card, "entity-id-confirm")), card);
+  ck("  ...its id line: the box, the id, its Confirm before toggling (a switch, which a tap turns); no pencil, no \"3D object: …\"",
+     /type="checkbox"[\s\S]*entity-id-text[\s\S]*entity-id-confirm/.test(inside(card, "device-first-line"))
+     && /Confirm before toggling/.test(inside(card, "entity-id-confirm")) && text(inside(card, "entity-id-text")).replace(/\|/g, "") === "switch.example_pool_pump"
+     && !/lucide-pencil|entity-id-tools|Redirect/.test(html) && !/3D object:/.test(text(html)), inside(card, "device-first-line"));
 }
 
-console.log("\n  Bound 3D objects: a bound object's card is its entity's:");
+console.log("\n  a device's \"3D object\" field (owner, 2026-11-06): its objects, each with its ✕, then a search to add one:");
 {
-  const card = cards(bindings("bound"))[0]?.card ?? "";
-  // owner, 2026-11-06 (later): "more like" a device's card: its name, its line, then "Bound to" and the search on one line
-  const field = (html) => [...html.matchAll(/<div class="card-field"><span class="card-field-label">([^<]+)<\/span>/g)].map((m) => m[1]);
-  ck("its strip its entity's name with the list's icon, its first line its id alone",
-     /fm-record-lead"><svg[^>]*lucide-link2?/.test(inside(card, "fm-record-strip")) && text(inside(card, "fm-record-name")) === "|Terrace Lamp|"
-     && text(inside(card, "fm-record-meta")).replace(/\|/g, "") === "light.example_terrace_lamp", [text(inside(card, "fm-record-strip")), text(inside(card, "fm-record-meta"))]);
-  ck("  ...then one field, \"Bound to\" and the search that changes it (no sentence), its ✕ unbinding it",
-     JSON.stringify(field(card)) === '["Bound to"]' && /card-field-label">Bound to<\/span><div class="picker/.test(card) && !/is bound to/.test(card)
-     && cards(bindings("bound"))[0].remove?.label === "Unbind Lamp_Kitchen from Terrace Lamp", text(inside(card, "fm-record-main")));
-  const loose = cards(bindings("unbound"))[0]?.card ?? "";
-  // owner, 2026-11-06 (later): its strip showed the raw id; its friendly name there, its id under it, as every card
-  ck("  ...an object bound to nothing: its name, its id under it, its field \"Bind to\", Bind",
-     text(inside(loose, "fm-record-name")).replace(/\|/g, "") === "Mesh Unnamed 042" && text(inside(loose, "fm-record-meta")).replace(/\|/g, "") === "Mesh_Unnamed_042"
-     && JSON.stringify(field(loose)) === '["Bind to"]', loose);
-  const unshown = cards(bindings("unshown")).find((c) => c.name === "Ceiling Fan")?.card ?? "";
-  ck("  ...an entity no object shows: its name, room · id, its field \"3D object\"",
-     /fan\.example_ceiling_fan/.test(text(inside(unshown, "fm-record-meta")).replace(/\|/g, "")) && JSON.stringify(field(unshown)) === '["3D object"]', unshown);
+  const field = (card) => inside(card.slice(card.indexOf('card-field-label">3D object<')), "group-members");
+  const pills = (card) => [...field(card).matchAll(/<span class="fm-entity-chip fm-chip-static fm-chip-removable">([^<]*)<[\s\S]*?aria-label="([^"]*)"/g)].map((m) => [m[1], unescape(m[2])]);
+  const lamp = cards(devices("on", "terrace")).find((c) => c.name === "Terrace Lamp")?.card ?? "", pump = cards(devices()).find((c) => c.name === "Pool Pump")?.card ?? "";
+  ck("an object bound by hand shows on its device's card, its ✕ \"Take <object> off <device>\"",
+     JSON.stringify(pills(lamp)) === JSON.stringify([["Lamp_Kitchen", "Take Lamp_Kitchen off Terrace Lamp"]]), pills(lamp));
+  ck("  ...an object linked by its name the same, with the same ✕", JSON.stringify(pills(pump)) === JSON.stringify([["switch.example_pool_pump", "Take switch.example_pool_pump off Pool Pump"]]), pills(pump));
+  ck("  ...then the compact search, \"Add a 3D object…\", in the same field",
+     /<div class="group-members-add"><div class="picker"><div class="config-search config-search-compact">[\s\S]*?placeholder="Add a 3D object…"/.test(field(lamp)), field(lamp));
+  globalThis.__open = true;
+  const open = cards(devices("on", "terrace")).find((c) => c.name === "Terrace Lamp")?.card ?? "";
+  globalThis.__open = false;
+  const rows = [...field(open).matchAll(/<button class="row picker-option">([\s\S]*?)<\/button>/g)].map((m) => text(m[1].replace(/<wbr\/>/g, "")).replace(/^\||\|$/g, "").replace(/\|/g, " / "));
+  ck("  ...its search lists the model's objects not showing it: those showing nothing first, each saying what picking it does",
+     JSON.stringify(rows) === JSON.stringify(["Mesh_Unnamed_042 / shows nothing yet", "Wall_01 / shows nothing yet", "switch.example_pool_pump / shows Pool Pump, moves it here"]), rows);
+  const off = cards(devices("off")).find((c) => c.name === "Ceiling Fan")?.card ?? "";
+  ck("a device not on the map: the same card, its id alone under its name, its \"3D object\" field empty, no box, no bin",
+     text(inside(off, "fm-record-meta")).replace(/\|/g, "") === "fan.example_ceiling_fan" && pills(off).length === 0 && /placeholder="Add a 3D object…"/.test(field(off))
+     && !/type="checkbox"|fm-record-remove/.test(off), off);
+  // pin the caller: what the field's add and ✕ write is the edit the model's check drives (mapping_edits.mjs)
+  const { elements, parseTsx, propText } = await import("../consistency/jsx.mjs");
+  const ed = parseTsx("components/settings/ConfigEditor.tsx");
+  const rowsDrawn = elements(ed, "EntityMapRow");
+  ck("  ...both lists' cards are EntityMapRow, given the one add (bindMesh) and the one ✕ (takeObjectOff)",
+     rowsDrawn.length === 2 && rowsDrawn.every((r) => propText(r, "onAddObject") === "addObject" && propText(r, "onTakeObjectOff") === "takeOff")
+     && /bindMesh\(object, id, entitiesRef\.current\[id\]\)/.test(ed.getText()) && /takeObjectOff\(object, id\)/.test(ed.getText()), rowsDrawn.map((r) => r.getText().slice(0, 80)));
 }
 
 console.log("\n  every card for an entity: its friendly name in its strip, its id alone on its first line:");
@@ -341,11 +350,9 @@ console.log("\n  every card for an entity: its friendly name in its strip, its i
   const { labelOf } = await import("@/config/EntityMap");
   const ENTITY = [
     ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "sensor.example_kitchen_temperature"],
-    ["a bound 3D object", bindings("bound"), "light.example_terrace_lamp"],
-    ["an entity no object shows", bindings("unshown"), "fan.example_ceiling_fan"],
+    ["a device not on the map", devices("off"), "fan.example_ceiling_fan"],
     ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "binary_sensor.example_back_door"],
-    ["a 3D object bound to nothing", bindings("unbound"), "Mesh_Unnamed_042"],
-    ["a 3D object whose entity is gone", drawIn(h(ConfigEditor)), "fan.example_gone_fan"],
+    ["a 3D object whose entity is gone", devices(), "fan.example_gone_fan"],
   ];
   for (const [kind, html, id] of ENTITY) {
     const name = labelOf(id, config.entityMap, entities);
@@ -355,7 +362,7 @@ console.log("\n  every card for an entity: its friendly name in its strip, its i
   }
   const pump = cards(drawIn(h(GroupedDevices, { title: "Grouped devices" }))).find((c) => c.bar === "Create this group")?.card ?? "";
   ck("  ...a suggested group: its primary's name, its two ids joined by \"+\"", /\+/.test(text(inside(pump, "fm-record-meta"))) && !/Other|primary/.test(text(inside(pump, "fm-record-meta"))), text(inside(pump, "fm-record-meta")));
-  const device = cards(drawIn(h(ConfigEditor))).find((c) => c.name === "Pool Pump")?.card ?? "";
+  const device = cards(devices()).find((c) => c.name === "Pool Pump")?.card ?? "";
   ck("  ...a device of Devices: its name, its id on its box's line (no second line)", device !== "" && !/fm-record-meta/.test(device), device.slice(0, 200));
 }
 
@@ -364,9 +371,9 @@ console.log("\n  every card's field: its name in the one column, its control bes
   const named = (html, name) => [...(cards(html).find((c) => c.name === name)?.card ?? "").matchAll(/<div class="card-field"><span class="card-field-label">([^<]+)<\/span>/g)].map((m) => m[1]);
   const FIELDS = [
     ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", ["Members"]],
-    ["a bound 3D object", bindings("bound"), "Terrace Lamp", ["Bound to"]],
-    ["an object bound to nothing", bindings("unbound"), "Mesh Unnamed 042", ["Bind to"]],
-    ["an entity no object shows", bindings("unshown"), "Ceiling Fan", ["3D object"]],
+    ["a device of Devices (a switch)", devices(), "Pool Pump", ["Type", "Category", "Label", "Linked entity", "3D object"]],
+    ["  ...a light, its intensity too", devices("on", "terrace"), "Terrace Lamp", ["Type", "Category", "Label", "Intensity", "Linked entity", "3D object"]],
+    ["a device not on the map", devices("off"), "Ceiling Fan", ["3D object"]],
     ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", ["On screen"]],
     ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", ["Language"]],
   ];
@@ -394,4 +401,4 @@ console.log("\n  Device telemetry: a log list, its columns time, kind, device, w
      && !/\.telemetry-[a-z]+ \{[^}]*order:/.test(css));
 }
 
-done("✅ Settings' records are the Cockpit's card, each remove an icon at its strip's right; the telemetry a log in time order; Bound 3D objects' counts open its lists");
+done("✅ Settings' records are the Cockpit's card, each remove an icon at its strip's right; the telemetry a log in time order; Devices' counts show its lists, each device's 3D objects its field");

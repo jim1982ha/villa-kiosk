@@ -53,7 +53,7 @@ ck("  ...the old hint classes are gone", !/fm-form-intro|fm-kept-note|fm-card-te
 const advanced = readFileSync(ROOT + "components/settings/ConfigEditorModal.tsx", "utf8");
 const settings = readFileSync(ROOT + "components/settings/SettingsModal.tsx", "utf8");
 ck("  ...each section's explanation is its title's (i) (TipTitle, or a folded section's `tip`: settings/Fold), and Settings' options carry theirs",
-   (advanced.match(/<TipTitle title=/g) ?? []).length + (advanced.match(/<(?:BindingsTable|GroupedDevices|UnavailableByDesign) title="[^"]+" tip=\{/g) ?? []).length >= 7
+   (advanced.match(/<TipTitle title=/g) ?? []).length + (advanced.match(/<(?:ConfigEditor|GroupedDevices|UnavailableByDesign)\b[^>]*?\btitle="[^"]+" tip=\{/g) ?? []).length >= 7
    // a setting line's (i) is its `tip` (common/SettingRow): every tip= that is not a section title's
    && (settings.match(/\btip=[{"]/g) ?? []).length - (settings.match(/<TipTitle\b[^\n]*\btip=/g) ?? []).length >= 6);
 {

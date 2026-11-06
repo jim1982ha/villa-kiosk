@@ -21,13 +21,13 @@ const copies = walk(SRC).filter((f) => /"media_player",\s*"switch",\s*"input_boo
 ck("the type list is written once (types/ha.types)", copies.length === 1 && copies[0] === "types/ha.types.ts", copies);
 
 const read = (p) => readFileSync(new URL(`../../src/components/settings/${p}`, import.meta.url), "utf8");
-const mf = read("MappingFields.tsx"), br = read("BindingRow.tsx"), er = read("EntityMapRow.tsx");
-// architecture review 2026-10-12, candidate 1: ONE editor for a device's fields — its row in Devices.
-// The Villa tab's bound-objects row keeps the LINK only (it carried the same fields).
-ck("a device's fields are edited in ONE table (Devices), the bound-objects row holds the link only",
-   /<MappingFields /.test(er) && !/<MappingFields|import MappingFields/.test(br));
-const own = [br, er].map((s) => [/effectiveCategory\(/, /lightIntensityRatio/, /linkedEntityId/, /requireConfirm/].filter((r) => r.test(s)).length);
-ck("  ...and neither renders type, category, intensity, the confirm box or the linked entity itself", own.every((n) => n === 0), own);
+const mf = read("MappingFields.tsx"), er = read("EntityMapRow.tsx");
+// architecture review 2026-10-12, candidate 1: ONE editor for a device's fields — its card in Devices (the Villa
+// tab's bound-objects row, which carried the same fields, then the link alone, is gone: owner, 2026-11-06)
+const editors = readdirSync(new URL("../../src/components/settings/", import.meta.url)).filter((f) => /<MappingFields /.test(read(f)));
+ck("a device's fields are edited in ONE place, its card in Devices", JSON.stringify(editors) === '["EntityMapRow.tsx"]', editors);
+const own = [er].map((s) => [/effectiveCategory\(/, /lightIntensityRatio/, /linkedEntityId/, /requireConfirm/].filter((r) => r.test(s)).length);
+ck("  ...and the card renders none of type, category, intensity, the confirm box or the linked entity itself", own.every((n) => n === 0), own);
 ck("the label commits one way: half a second after typing, or at once on leaving the field",
    /usePendingField<string>\(`device:\$\{entryKey\}:label`, TYPED_COMMIT_MS\)/.test(mf) && /const TYPED_COMMIT_MS = 500;/.test(mf)
    && /onBlur=\{label\.flush\}/.test(mf));
@@ -41,7 +41,7 @@ ck("the label commits one way: half a second after typing, or at once on leaving
      && !/Motion sensor|draftField\(\{ motion/.test(code(mf)) && !/Motion sensor/.test(ce));
   ck("  ...described truthfully: a camera's may be its motion sensor or a switch; nothing says long-press or arms",
      /placeholder=\{m\.type === "camera" \? "Linked entity, its motion sensor or a switch…" : "Linked entity, a switch or a sensor…"\}/.test(mf)
-     && ![mf, br, er].some((x) => /long-press|arms detection|ring only/.test(code(x))));
+     && ![mf, er].some((x) => /long-press|arms detection|ring only/.test(code(x))));
 }
 
 // owner, 2026-10-12: the Label field printed the entity-id fallback as if typed, while the title above it

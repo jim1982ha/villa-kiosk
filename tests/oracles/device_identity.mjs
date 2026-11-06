@@ -154,8 +154,8 @@ ck("the open panel lists its device's readings, each opening its own panel",
 ck("grouping never trades controls for a summary: only a READING-led group opens the combined view",
    /if \(group && \(mapping\.type === "sensor" \|\| mapping\.type === "binary_sensor"\)\)/.test(router)
    && /deviceReadings=\{false\}/.test(src("components/panels/DeviceGroupPanel.tsx")));
-ck("Settings' 'not shown anywhere' and the group editor ask deviceGroups, not their own rules",
-   /unshownEntities\(\{/.test(src("components/settings/BindingsTable.tsx")) && !/!config\.entityMap\[id\] && !suppressedEntityIds\.has\(id\)/.test(src("components/settings/BindingsTable.tsx"))
+ck("Devices' 'not on the map' and the group editor ask deviceGroups, not their own rules",
+   /unshownEntities\(\{/.test(src("components/settings/ConfigEditor.tsx")) && !/!config\.entityMap\[id\] && !suppressedEntityIds\.has\(id\)/.test(src("components/settings/ConfigEditor.tsx"))
    && /groupEdit\(config, e\)/.test(src("components/settings/GroupedDevices.tsx")) && /groupEdit\(c, e\)/.test(src("components/settings/GroupedDevices.tsx"))
    && !/groupedEntityIds|upsertGroup/.test(src("components/settings/GroupedDevices.tsx")));
 

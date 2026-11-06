@@ -1,8 +1,9 @@
 // Where three Settings pieces live and how they read (owner, 2026-10-12):
 //  * the model's north offset and "Set North" sit in Advanced Settings, under
 //    the villa's coordinates — not in Settings;
-//  * "Bound 3D objects" is ONE section in one voice — "Pre-configure a new
-//    entity" was a second heading in finer print;
+//  * preparing an entity is the device list's own search, in one voice — "Pre-configure a new
+//    entity" was a second heading in finer print (in Villa's "Bound 3D objects", whose job is
+//    Devices' since 2026-11-06);
 //  * the telemetry list is one line per event, ending in "…" when it does not fit.
 import { readFileSync } from "node:fs";
 import { ck, done } from "../consistency/check.mjs";
@@ -11,7 +12,7 @@ const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf
 const strip = (s) => s.replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 const advanced = strip(src("components/settings/ConfigEditorModal.tsx"));
 const settings = strip(src("components/settings/SettingsModal.tsx"));
-const bindings = strip(src("components/settings/BindingsTable.tsx"));
+const devices = strip(src("components/settings/ConfigEditor.tsx"));
 const css = src("styles/08-shared.css");
 
 ck("Settings no longer carries the north offset", !/northOffsetDeg|Set North/.test(settings));
@@ -24,11 +25,11 @@ ck("  ...Set North, then its slider", /function NorthOffset[\s\S]*<SettingSlider
    && /update\(\{ northOffsetDeg: northOffsetFacing\(h\) \}\)/.test(advanced) && /onChange=\{\(northOffsetDeg\) => update\(\{ northOffsetDeg \}\)\}/.test(advanced));
 ck("  ...and the Dashboard hands it the view's heading", /viewHeadingDeg=\{manager \? \(\) => manager\.viewHeadingDeg\(\) : undefined\}/.test(src("pages/Dashboard.tsx")));
 
-ck("Bound 3D objects has no second heading of its own", !/Pre-configure a new entity/.test(bindings));
+ck("Devices has no second heading to prepare an entity", !/Pre-configure a new entity/.test(devices) && (devices.match(/<TipTitle\b/g) ?? []).length === 1);
 // its explanation is its title's (i) since 2026-10-22 (owner: no visible description text)
-ck("  ...and its title's ONE (i) says both what it does and how to prepare an entity — no paragraph of its own",
-   /<BindingsTable title="Bound 3D objects" tip=\{<>[\s\S]*?To prepare\s+an entity whose 3D object is not in the model yet/.test(advanced)
-   && !/To prepare an entity/.test(bindings));
+ck("  ...and its title's ONE (i) says what the 3D object field does and how to prepare an entity — no paragraph of its own",
+   /<ConfigEditor initialSearch=\{focusEntityId\} title="Auto-detected entity settings" tip=\{<>[\s\S]*?3D object field[\s\S]*?To prepare an entity whose 3D object is not in the\s+model yet/.test(advanced)
+   && !/To prepare an entity/.test(devices));
 
 const rule = css.match(/\.telemetry-row > \.telemetry-summary \{([^}]*)\}/)?.[1] ?? "";
 ck("a telemetry row is one line: the summary does not wrap and ends in …",
@@ -125,4 +126,4 @@ ck("its (i) is the section title's, the owner's words then everything it deletes
    && /<SettingRow className="setting-field" icon=\{<CalendarClock size=\{16\} \/>\} label=\{<label htmlFor="records-kept">Days records are kept<\/label>\}>/.test(advanced)
    && !/<InfoTip/.test(advanced.slice(advanced.indexOf("function RecordsKept"), advanced.indexOf("function LogoutAll"))));
 
-done("✅ north under the coordinates, one Bound 3D objects section, one line per telemetry event");
+done("✅ north under the coordinates, preparing an entity in Devices' one field, one line per telemetry event");
