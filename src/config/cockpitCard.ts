@@ -19,7 +19,7 @@ import type { AgentCadence } from "@/agent/agentApi";
 import { cardCheck, LIVE_CHECK, watchedLive, type CheckSaid } from "@/fm/faultTiming";
 import { closedActions, helpAsked, overviewActions, workRecord, type WorkAction, type WorkRecord } from "@/fm/deviceWork";
 import type { HelpAsked } from "@/fm/fmEngine";
-import type { IssueSource } from "@/fm/issueSource";
+import { faultSource, type IssueSource } from "@/fm/issueSource";
 import { clockTime, docDate, momentText } from "@/utils/dateText";
 import { sinceText } from "./presence";
 import { closedFaults, closedTold, confirmParts, type ConfirmingFault } from "@/fm/faultConfirm";
@@ -471,7 +471,10 @@ function clearedCard(t: FmTicket, did: string, opts: CardsOpts, own: Pick<CardVi
     ...own,
     ...cardHead(device, title, t.room),
     entityId: device?.key,
-    lead: null,
+    // ⚠️ A CLOSED CARD NEVER WEARS THE WATCH (owner, 2026-11-07: Closed cards showed the Watch list's green check):
+    // the check is the Watch card's alone; a closed one wears where it came from, as an open issue does, in the status
+    // vocabulary's grey of what is over (its strip's tone)
+    lead: own.look === "closed" ? { sources: [faultSource(t)], severities: ["lost"] } : null,
     lines: [{ key: `fault:${t.id}`, records: [], actions: own.look === "closed" ? closedActions(workRecord(t), closedTold(t).reopen) : [], asked: null, text: device && title !== device.label ? title : "", story: [], openedAt: faultBegan(t),
       closing: own.look === "closed" ? null : did, state: [],
       ...(own.look === "closed" ? { move: faultMove(t) } : {}),

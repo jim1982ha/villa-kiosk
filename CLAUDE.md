@@ -50,9 +50,10 @@ script and no general JS test runner: `tsc -b` (strict, `noUnusedLocals`,
 **Oracles** (`tests/oracles/*.mjs`) are plain Node scripts — Node strips the
 types, imports go through `tests/consistency/alias-hook.mjs`. Prefer checks
 that DRIVE VALUES through a pure module over regexes on source (markup shape: `tests/consistency/jsx.mjs`
-reads elements, props and their `&&` guards from the compiler's tree); when a check
-is added, prove it can fail: `npm run mutate -- FILE 'old' 'new' -- CMD` (RED = it catches it;
-the file always comes back; `--restore` after a killed run).
+reads elements, props and their `&&` guards from the compiler's tree). Each fix's
+main check is shown red ONCE without the fix: `npm run mutate -- FILE 'old' 'new' -- CMD`
+(RED = it catches it; the file always comes back; `--restore` after a killed run), or the
+fix reverted. Not a mutation per assertion (owner, 2026-11-07).
 
 ⚠️ **`tests/` is gitignored and 83 files under it are tracked anyway** (5 at
 `tests/`, 76 in `tests/oracles/`, 2 in `tests/consistency/`), by negation
@@ -67,9 +68,13 @@ lives in the tracked `tools/release.py`). Verify with
 Write the new entry at the TOP of `villa-kiosk/CHANGELOG.md` (what the owner
 will SEE, in plain words) — its `## x.y.z` heading IS the version — stage what
 ships by name, then `ship`: it writes the version to `package.json`,
-`villa-kiosk/config.yaml` and the lockfile, runs every gate on what is staged,
+`villa-kiosk/config.yaml` and the lockfile, runs only the FAST gates on what is
+staged (the oracles naming a changed file, the build, the hard rules, and a
+check whose own subject is staged: the security suite when the proxy is),
 commits, pushes `HEAD:dev2`, and exits **0 only when `villa-kiosk-dev2/` on
-`main` names the version** (3 = pushed, not published: read CI). It refuses
+`main` names the version** (3 = pushed, not published: read CI). CI runs EVERY
+gate before the add-on is built: red, nothing is published (owner, 2026-11-07:
+"simplify massively"). `npm run gates` still runs them all on demand. It refuses
 main, unstaged tracked changes, and a changelog entry not above the release.
 `--dry-run` shows the plan. Never hand-edit `villa-kiosk-dev2/`.
 
@@ -79,13 +84,15 @@ The VESTA Agent has the same module on `agent-dev`:
 `agent-host/agent-src/CHANGELOG.md`, required when agent-src changes). Its
 tests run with `agent-host/.venv/bin/python` (gitignored, Python 3.13; how to
 rebuild it is at `PY` in `release.py`); there is no `python` on this machine.
+Its `ship` likewise runs here only the fast gates and the tests that name a
+changed file; CI runs every gate before the image is built.
 
 **Backport to main** (only on the owner's word): `npm run backport --
 --owner-asked` (dev2 worktree; `--dry-run` shows the plan). It merges
 `origin/dev2` `--no-ff` into `origin/main` in a temporary worktree, refuses
-unless the tree equals dev2 apart from main's own folders (found, not named:
-`villa-kiosk-dev2/`, `vesta-agent-dev/`), runs every gate on the merged tree
-with this checkout's `node_modules`/`.scratch` linked, pushes with
+unless dev2's CI for its head commit is green and the tree equals dev2 apart
+from main's own folders (found, not named: `villa-kiosk-dev2/`,
+`vesta-agent-dev/`), runs no gate itself (main's CI runs them all), pushes with
 `VK_ALLOW_MAIN=1`, and exits **0 only when the merge's CI runs are green**
 (3 = pushed, not confirmed). Never by hand.
 

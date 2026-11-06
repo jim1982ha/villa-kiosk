@@ -1,3 +1,18 @@
+## 2.496.737
+
+What you will see:
+- Under Cockpit › Inbox › Issues › Closed, a closed card no longer wears the green check of the Watch list: it shows where its problem came from (the alert's siren, the moon of the maintenance check…) in grey. Cards under Watch keep their green check.
+- Under an issue whose VESTA message is not on the tablet, the short story of what was sent gives each line its time alone on the alert's own day ("Alert sent (to: Facility Manager) · 05:14"), and "08/11 09:20" for a line of another day, as Telegram does.
+
+What to check: Cockpit › Inbox › Issues › Closed: no closed card shows the green check; Watch: its cards still do.
+
+## 2.496.736
+
+What you will see:
+- Nothing changes on the tablet. Updates reach the store faster: fewer checks are repeated on the developer's computer before an update is sent, and the store's build still runs every check before it offers the update.
+
+What to check: nothing on the tablet.
+
 ## 2.496.735
 
 What you will see:

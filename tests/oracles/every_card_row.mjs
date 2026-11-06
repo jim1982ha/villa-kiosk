@@ -11,7 +11,7 @@ const { attentionOf, groupAttention, sinceEntities } = await import("@/config/at
 const { cockpitCard, confirmingCards, rowWhen, TIME_UNKNOWN } = await import("@/config/cockpitCard");
 const { InboxCard } = await import("@/components/cockpit/MessagesTab");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
-const { momentText, clockTime } = await import("@/utils/dateText");
+const { momentText, clockTime, dayShort, statusMoment } = await import("@/utils/dateText");
 const { loadHistory, stateSinceAnswer, stateSinceRequests } = await import("@/ha/historySource");
 
 const HOUR = 3_600_000, now = Date.now(), began = now - 5 * HOUR, restart = now - HOUR;
@@ -115,6 +115,9 @@ ck("each kind that has a state says it; a ticket's, its stage, who took it its w
   const item = table["closed alert"];
   const row = draw(h(InboxCard, { item, opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
   const strip = inside(row, "fm-record-strip"), caps = [...row.matchAll(/<figcaption>([^<]*)<\/figcaption>/g)].map((m) => m[1]);
+  ck("its Status under Closed: its moments on the alert's own day are its time alone (statusMoment, the Agent's rule)",
+     statusMoment(began, began) === clockTime(began) && statusMoment(began + 26 * HOUR, began) === `${dayShort(began + 26 * HOUR)} ${clockTime(began + 26 * HOUR)}`
+     && statusMoment(began, null) === momentText(began), [statusMoment(began, began), statusMoment(began + 26 * HOUR, began)]);
   ck("a closed alert VESTA told is listed once, by its fault's card: never also VESTA's message as a card of its own",
      closedView.closed.length === 2 && closedView.closed.every((i) => i.kind === "issue"), closedView.closed);
   ck("  ...its strip: its alert's chip, its device's name; its state its first line; its room its quiet line",
@@ -123,6 +126,16 @@ ck("each kind that has a state says it; a ticket's, its stage, who took it its w
   ck("  ...its message's every photo in one row, each its camera and its own time, never one photo at the close",
      caps.length === 2 && caps[0] === `Parking · ${clockTime(began)}` && caps[1] === `Door · ${clockTime(began + 60_000)}`
      && /Status:/.test(row) && /✅ Cleared on 07\/11\/2026 03:45\./.test(row), caps);
+}
+{
+  // owner, 2026-11-07: closed cards under Closed wore the Watch list's green check, as a watched "House Pump Power" did —
+  // the check is the Watch card's alone; every kind of closed card wears where it came from, in the grey of what is over
+  const row = (k) => draw(h(InboxCard, { item: table[k], opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
+  const lead = (k) => inside(inside(row(k), "fm-record-strip"), "fm-record-lead");
+  ck("a closed card never wears the Watch check: a closed fault and a closed alert wear their source, grey; Watch keeps its check",
+     /fault-watched-icon/.test(lead("watched")) && ["closed", "closed alert"].every((k) => !/fault-watched-icon/.test(row(k))
+       && /cockpit-attention-icon cockpit-attention-lost/.test(lead(k))),
+     ["watched", "closed", "closed alert"].map((k) => [k, lead(k)]));
 }
 {
   // owner, 2026-11-07: a hold on #134-P1's card under Closed did nothing, the villa's message beside it asked for the

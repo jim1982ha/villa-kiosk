@@ -27,10 +27,12 @@ then assert inside it. A prop the component honours and nobody passes is the sam
 
 ## A test must have gone red
 
-A test is a claim until it has failed. After writing a check, break the code it guards (`npm run mutate` on the Kiosk,
-`tools/mutate.py` on the Agent), watch it go red, then restore.
+A test is a claim until it has failed. Each FIX gets one red proof: its main test, shown to fail without the fix
+(`npm run mutate` on the Kiosk, `tools/mutate.py` on the Agent, or the fix reverted), then green with it. Not a
+mutation for every assertion or every check.
 
-**Why:** many checks here passed during the bug they were written for.
+**Why:** many checks here passed during the bug they were written for. Owner, 2026-11-07 ("simplify massively"): a
+mutation for every check made each fix slow, and releases too slow.
 
 **How to apply:**
 - Assert over EVERY member of the applicable set, never "at least one".
