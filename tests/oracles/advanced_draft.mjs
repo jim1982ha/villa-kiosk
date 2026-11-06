@@ -41,6 +41,8 @@ const EDITS = [
   ["a group made", (c) => groupEdit(c, { kind: "create", primaryEntityId: "light.hall", id: "g1" })],
   ["asleep between reports", (c) => ({ unavailableByDesign: withDevice(c.unavailableByDesign, "binary_sensor.door", true) })],
   ["records kept", { recordsKeptDays: 90 }],
+  ["maintenance mode", { maintenanceMode: true }],
+  ["Set North (the view's heading)", { northOffsetDeg: 245 }],
 ];
 
 console.log("  every section's edit, through the draft:");
@@ -64,7 +66,9 @@ console.log("\n  the wiring:");
   const src = (p) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
   const st = src("components/settings/SettingsModal.tsx"), adv = src("components/settings/ConfigEditorModal.tsx");
   const db = src("pages/Dashboard.tsx");
-  ck("Settings' one draft holds Advanced Settings' keys", /\.\.\.ADVANCED_SETTINGS_KEYS,\s*\] as const;/.test(st) && /useDraftedSlice\(SETTINGS_KEYS\)/.test(st));
+  const { SETTINGS_KEYS } = await import("@/config/configSlice");
+  ck("Settings' one draft holds Advanced Settings' keys", KEYS.every((k) => SETTINGS_KEYS.includes(k)) && /useDraftedSlice\(SETTINGS_KEYS\)/.test(st)
+     && /import \{ SETTINGS_KEYS \} from "@\/config\/configSlice";/.test(st));
   ck("Advanced Settings over Settings closes back to it; on its own, the same draft is its own Save / Cancel",
      /const own = useDraftedSlice\(ADVANCED_SETTINGS_KEYS\);/.test(adv)
      && /const commit = withinSettings \? undefined : \{ dirty: own\.dirty, save: own\.save, discard: \(\) => \{ own\.discard\(\); \} \};/.test(adv)

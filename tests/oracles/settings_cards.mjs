@@ -129,7 +129,7 @@ const KINDS = [
   ["a device not on the map (Devices' second list)", devices("off"), "Ceiling Fan", ""],
   ["a 3D object whose entity is gone", devices(), "Example Gone Fan", "Point it there"],
   ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", "", "Delete the announcement Front gate doorbell"],
-  ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", "", `Take Example House FM group off the ${ROLE_LABELS.ops}'s list`],
+  ["a chat that gets the messages", drawIn(h(WhoGetsMessages, { languages: {}, onLanguages: noop })), "Example House FM group (notify.example_fm_group)", "", `Take Example House FM group off the ${ROLE_LABELS.ops}'s list`],
 ];
 console.log("  every record of Settings is the Cockpit's card:");
 for (const [kind, html, name, action, remove] of KINDS) {
@@ -382,7 +382,7 @@ console.log("\n  every card's field: its name in the one column, its control bes
     ["  ...a light, its intensity too", devices("on", "terrace"), "Terrace Lamp", ["3D object", "Type", "Category", "Label", "Intensity", "Linked entity"]],
     ["a device not on the map", devices("off"), "Ceiling Fan", ["3D object"]],
     ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", ["On screen"]],
-    ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", ["Language"]],
+    ["a chat that gets the messages", drawIn(h(WhoGetsMessages, { languages: {}, onLanguages: noop })), "Example House FM group (notify.example_fm_group)", ["Language"]],
   ];
   for (const [kind, html, name, want] of FIELDS)
     ck(`${kind}: ${want.map((w) => `"${w}"`).join(", ")}`, JSON.stringify(named(html, name)) === JSON.stringify(want), named(html, name));
@@ -431,6 +431,35 @@ console.log("\n  Device telemetry: a log list, its columns time, kind, device, w
   ck("  ...on a phone the time, kind and device on the first line, the words under them (never moved by `order`)",
      /@media \(max-width: 640px\) \{[^@]*\.telemetry-row \{ flex-wrap: wrap;[^@]*\.telemetry-row > \.telemetry-summary \{ flex: 1 1 100%; \}[^@]*\.telemetry-row > \.telemetry-meta \{ flex: 1 1 0; min-width: 0;/.test(phone)
      && !/\.telemetry-[a-z]+ \{[^}]*order:/.test(css));
+}
+
+
+// owner, 2026-11-06: a chat's card names it with its id after it, "Fabien (notify.fabien)", the id quiet, broken only by
+// IdText's rule (a phone wraps after the name or after a "." or "_", never inside a word of the id)
+console.log("\n  a chat's name and its id, in its strip:");
+{
+  const { namedIdText } = await import("@/components/common/IdText");
+  const html = drawIn(h(WhoGetsMessages, { languages: {}, onLanguages: noop }));
+  const strips = [...html.matchAll(/<span class="fm-record-name">([\s\S]*?)<\/span><button/g)].map((m) => m[1]);
+  ck("each chat's strip: its name, then its id in brackets, quiet, after a space",
+     strips.length === 2 && strips[0] === 'Example Owner <span class="named-id">(notify.<wbr/>example_<wbr/>owner_<wbr/>chat)</span>'
+     && strips[1] === 'Example House FM group <span class="named-id">(notify.<wbr/>example_<wbr/>fm_<wbr/>group)</span>', strips);
+  ck("  ...its words \"Example Owner (notify.example_owner_chat)\", the name first",
+     cards(html).map((c) => c.name).join("|") === [namedIdText("Example Owner", "notify.example_owner_chat"),
+       namedIdText("Example House FM group", "notify.example_fm_group")].join("|")
+     && namedIdText("Example Owner", "notify.example_owner_chat") === "Example Owner (notify.example_owner_chat)"
+     && namedIdText("notify.example_x", "notify.example_x") === "notify.example_x", cards(html).map((c) => c.name));
+  ck("  ...the id quiet and unbroken inside a word: the name's \"anywhere\" break not inherited",
+     /\.named-id \{ color: var\(--text-secondary\); font-weight: 500; overflow-wrap: normal; word-break: normal; \}/.test(
+       readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8")));
+  // the same need elsewhere: every Settings card naming an entity shows its id (EntityCard's id line, or the chat's strip);
+  // a full-screen announcement is no entity
+  const dir = new URL("../../src/components/settings/", import.meta.url);
+  const { readdirSync } = await import("node:fs");
+  const drawers = readdirSync(dir).filter((f) => f.endsWith(".tsx") && /<RecordCard\b/.test(readFileSync(new URL(f, dir), "utf8")));
+  ck("  ...every other Settings card naming an entity has its id line (EntityCard); an announcement is no entity",
+     JSON.stringify(drawers.sort()) === JSON.stringify(["EntityCard.tsx", "MessagesSettings.tsx", "WhoGetsMessages.tsx"])
+     && /title=\{<NamedId name=\{name\(id\)\} id=\{id\} \/>\}/.test(readFileSync(new URL("WhoGetsMessages.tsx", dir), "utf8")), drawers);
 }
 
 done("✅ Settings' records are the Cockpit's card, each remove an icon at its strip's right; the telemetry a log in time order; Devices' counts show its lists, each device's 3D objects its field");

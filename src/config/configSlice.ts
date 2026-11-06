@@ -132,6 +132,24 @@ export const ADVANCED_SETTINGS_KEYS = [
   "recordsKeptDays", "maintenanceMode",
 ] as const satisfies readonly (keyof AppConfig)[];
 
+/**
+ * Every key the Settings dialog writes, listed once — the ONLY way it writes: its draft's `set` accepts no other key, so
+ * a control writing a key Cancel would not restore is a type error, not a silent gap (tests/oracles/settings_baseline.mjs,
+ * tests/oracles/settings_save.mjs). This tablet's look and comfort, then the villa's shared ones, then everything Advanced
+ * Settings edits (owner, 2026-10-22: it joins this dialog's Save / Cancel; it opens OVER Settings and closes back here).
+ *
+ * ⚠️ `chatLanguages` TOO (owner, 2026-11-06: ONE WAY OF SAVING): a chat's language, set beside it in Who gets the
+ * messages, was written at once outside the draft. The lists themselves are the villa's, not settings: their changes are
+ * held in the draft's pending store and sent by Save (config/pendingEdits `hold`).
+ */
+export const SETTINGS_KEYS = [
+  "badgeStyle", "eyeHeight", "highlightInteractive", "naturalScrolling",
+  "render", "showSummaryBar", "siteTitle", "theme",
+  "walkSpeed", "ringsFullScreen", "tabletLanguage",
+  "fullScreen", "chatLanguages", "roomGlowAndCones",
+  ...ADVANCED_SETTINGS_KEYS,
+] as const satisfies readonly (keyof AppConfig)[];
+
 /** Whose change another tablet replaced: a device (by entity id) or one of the villa's settings. */
 export type ReplacedSubject = { device: string } | { setting: string };
 

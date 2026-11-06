@@ -10,6 +10,7 @@
 
 import { CHAT_LANGUAGES } from "./recipients";
 import { ingressPath } from "@/ha/ingress";
+import { clockTime } from "@/utils/dateText";
 import { fetchFeed, type FeedRead } from "./feed";
 import type { FullScreenAnnouncement } from "@/config/AppConfig";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
@@ -25,9 +26,10 @@ export interface Announcement {
   text: string;
   /** The layout's bottom line ("⚠️ New alert", "✅ Cleared on 28/10/2026 14:05."); empty when there is none. */
   status: string;
-  /** Its photo's id in the add-on (a ring's snapshot, copied when it arrived; announcementPhotoUrl serves it); null
-   *  without one, or for a profile that may not view cameras (the add-on does not name it). */
-  photo: string | null;
+  /** Its photos, the main one first (a visit's strongest signal's: "One visit, one story", owner 2026-11-06), each kept
+   *  by the add-on (copied when it arrived; announcementPhotoUrl serves it) with its camera and time; none without, or
+   *  for a profile that may not view cameras past the current notification (the add-on does not name them). */
+  photos: AnnouncementPhoto[];
   /** What ties it to its rewrite (the add-on keeps one per key); null without one. */
   key: string | null;
   /** The buttons it offers (the doorbell's Unlock), label and command as the villa sent them: the Kiosk names no
@@ -39,7 +41,8 @@ export interface Announcement {
   /** VESTA's card: the Status lines above its bottom line (the history: alert sent, reminder, pressed…); none for the
    *  villa's own. */
   story?: string[];
-  /** VESTA's card: the automation runs whose villa announcements it stands for (shown in their place). */
+  /** VESTA's card: the villa announcements it stands for (shown in their place): each an automation run, or an
+   *  announcement's key (a visit's one announcement, replaced at each step). */
   takes?: string[];
   /** The villa's own: the automation run that announced it (the add-on reads it from the event). */
   run?: string;
@@ -60,6 +63,16 @@ export interface Announcement {
   /** VESTA's card: its words in other languages, by code (agent-contract.json vestaMessage `languages`): which one a
    *  tablet shows is that tablet's (inLanguage). */
   versions?: Record<string, LanguageVersion>;
+}
+
+/** One photo of an announcement: the add-on's id, the camera that took it (empty when the villa named none: a ring's),
+ *  when it was taken (ISO). */
+export interface AnnouncementPhoto { id: string; label: string; at: string }
+
+/** One photo's words under it: its camera and its time ("Parking · 18:34"), the time alone when no camera is named.
+ *  The same under a thumbnail and in the full-size view. Pure: tests/oracles/announcements.mjs. */
+export function photoCaption(p: AnnouncementPhoto): string {
+  return [p.label, p.at ? clockTime(p.at) : ""].filter(Boolean).join(" · ");
 }
 
 /** One of VESTA's cards in another language: its words, its bottom line, a report's page; each absent when VESTA holds
@@ -257,7 +270,7 @@ export function parseAnnouncement(raw: unknown): Announcement | null {
   if (!parts.title && !parts.text) return null;
   const key = typeof r.key === "string" && r.key ? r.key : null;
   return {
-    seq: r.seq, at: atOf(r), ...parts, photo: photoOf(r), key,
+    seq: r.seq, at: atOf(r), ...parts, photos: photosOf(r), key,
     buttons: key ? buttonsOf(r.buttons) : [],
     ...(typeof r.run === "string" && r.run ? { run: r.run } : {}),
     ...(r.asked === true ? { asked: true } : {}),
@@ -270,7 +283,13 @@ function numbered(raw: unknown): (Record<string, unknown> & { seq: number }) | n
   return r && typeof r.seq === "number" && Number.isInteger(r.seq) ? (r as Record<string, unknown> & { seq: number }) : null;
 }
 const atOf = (r: Record<string, unknown>) => (typeof r.at === "string" ? r.at : "");
-const photoOf = (r: Record<string, unknown>) => (typeof r.photo === "string" && PHOTO_ID.test(r.photo) ? r.photo : null);
+/** A record's `photos` ([{id, label, at}], the main one first), each whose id is one of the add-on's; any other left out. */
+const photosOf = (r: Record<string, unknown>): AnnouncementPhoto[] => (Array.isArray(r.photos) ? r.photos : [])
+  .flatMap((p): AnnouncementPhoto[] => {
+    const o = p && typeof p === "object" ? (p as Record<string, unknown>) : {};
+    return typeof o.id === "string" && PHOTO_ID.test(o.id)
+      ? [{ id: o.id, label: typeof o.label === "string" ? o.label.trim() : "", at: typeof o.at === "string" ? o.at : "" }] : [];
+  });
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x !== "") : []);
 
@@ -291,7 +310,7 @@ export function parseVestaMessage(raw: unknown): Announcement | null {
   if (!title && !text && !lines.length) return null;
   return {
     seq: r.seq, at: atOf(r), title, to: typeof r.to === "string" ? r.to : "", text,
-    status: lines[lines.length - 1] ?? "", story: lines.slice(0, -1), photo: photoOf(r),
+    status: lines[lines.length - 1] ?? "", story: lines.slice(0, -1), photos: photosOf(r),
     key: r.key, buttons: vestaButtons(r.buttons), feed: "vesta", takes: strings(r.takes),
     ...(r.asked === true ? { asked: true } : {}),
     ...(typeof r.stage === "string" && r.stage ? { vestaStage: r.stage } : {}),
@@ -374,7 +393,7 @@ export function languageName(code: string): string {
 export const fetchVestaMessages = (after: number | null, stop: AbortSignal): Promise<FeedRead<Announcement> | null> =>
   fetchFeed("vesta-messages", "messages", parseVestaMessage, after, stop);
 
-/** Where the add-on serves an announcement's photo. */
+/** Where the add-on serves one of an announcement's photos (its id). */
 export const announcementPhotoUrl = (id: string): string => ingressPath(`announcement-photo/${id}`);
 
 /** What became of a press: the villa's system has it; the button is no longer offered (the ring was answered, opened

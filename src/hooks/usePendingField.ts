@@ -29,6 +29,16 @@ export interface PendingField<T> {
  *  days, a number of seconds); leaving the field or Enter writes it at once. One pause for every such field. */
 export const FIELD_COMMIT_MS = 1500;
 
+/** The dialog's pending store itself, for a section holding several changes of its own (Who gets the messages: one
+ *  held change per list, pendingEdits `hold`), re-rendered on each change. */
+export function usePendingStore(): PendingEdits {
+  const pending = useContext(PendingContext);
+  if (!pending) throw new Error("usePendingStore must be used inside PendingFields");
+  const version = () => pending.version;
+  useSyncExternalStore(pending.subscribe, version, version);
+  return pending;
+}
+
 export function usePendingField<T>(key: string, delayMs: number): PendingField<T> {
   const pending = useContext(PendingContext);
   if (!pending) throw new Error("usePendingField must be used inside PendingFields");

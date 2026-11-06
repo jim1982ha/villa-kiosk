@@ -291,6 +291,10 @@ console.log("\n  one place at every moment (architecture review round 16: faultC
     ["  ...its moment past, the verdict due", written, T0 + 61 * 60_000, "watch"],
     ["  ...two looks past its moment, no verdict: let go", written, T0 + 60 * 60_000 + 2 * LOOK + 1_000, "closed"],
     ["  ...no confirmsBy ever (an older Agent): two looks after the close", done0, T0 + 2 * LOOK + 1_000, "closed"],
+    // ⚠️ owner's drills, 2026-11-06: a visit the villa closed sat on Watch with no "Closes" line for two looks; the
+    // Agent says it watches nothing after it (`notWatched`): under Closed from its close on
+    ["a close the Agent watches nothing after (notWatched), at once", { ...done0, notWatched: true }, T0, "closed"],
+    ["  ...8s later", { ...done0, notWatched: true }, T0 + 8_000, "closed"],
   ];
   for (const [what, t, now, want] of steps) {
     const w = where(t, now);
@@ -415,8 +419,14 @@ console.log("\n  a reopen in the Kiosk takes the watch away (architecture review
   const resolvedNow = applyFmCommand(legacy, { type: "advanceTickets", ids: ["w1"], to: "resolved", step: { photoIds: [] } }, k(1));
   ck("  ...or marked resolved: none either, and its resolution time is this one",
      !("confirmsBy" in resolvedNow.tickets[0]) && resolvedNow.tickets[0].resolvedAt === at(1));
-  ck("the fields a reopen takes away are the Agent's reopen's (kiosk.py reopen_ticket drops resolvedAt and confirmsBy)",
-     [...CLOSE_ONLY_FIELDS].sort().join() === "confirmsBy,resolvedAt", CLOSE_ONLY_FIELDS);
+  ck("the fields a reopen takes away are the Agent's reopen's (kiosk.py reopen_ticket drops resolvedAt, confirmsBy and notWatched)",
+     [...CLOSE_ONLY_FIELDS].sort().join() === "confirmsBy,notWatched,resolvedAt", CLOSE_ONLY_FIELDS);
+  const unwatched = { ...EMPTY_FM_DATA, tickets: [{ ...doneW1, confirmsBy: undefined, notWatched: true }] };
+  const back = applyFmCommand(unwatched, { type: "advanceTickets", ids: ["w1"], to: "open", step: { photoIds: [] } }, k(1));
+  ck("  ...a reopen of a close the Agent watched nothing after takes `notWatched` away with it",
+     back.tickets[0].status === "open" && !("notWatched" in back.tickets[0]));
+  ck("the agreement declares notWatched among the fault's fields (listed in /agent/v1/info ticket_fields, never before the list)",
+     typeof contract.ticket.fields.notWatched === "string" && !contract.ticket.fieldsBeforeList.includes("notWatched"));
   ck("the agreement says it: a reopen by either side removes the watch",
      /A reopen by either side removes it\./.test(contract.ticket.fields.confirmsBy));
 }

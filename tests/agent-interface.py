@@ -571,27 +571,30 @@ async def main() -> None:
                    json={**sent, "body": "Camera snapshot", "photo": base64.b64encode(jpeg).decode()})
     status, body = await jget("/vesta-messages", cookie("ops"))
     one = body["messages"]
-    ck("a rewrite of the same key REPLACES the record (one line), numbered anew, with its photo",
+    pic = (one[0].get("photos") or [{}])[0].get("id", "none") if one else "none"
+    ck("a rewrite of the same key REPLACES the record (one line), numbered anew, with its photo (its list of one, its time)",
        r.status == 200 and len(one) == 1 and one[0]["body"] == "Camera snapshot" and one[0]["seq"] == 2
-       and (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / one[0].get("photo", "none")).read_bytes() == jpeg, body)
+       and "photo" not in one[0] and one[0]["photos"] == [{"id": pic, "label": "", "at": one[0]["at"]}]
+       and (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / pic).read_bytes() == jpeg, body)
     r = await post("/agent/v1/vesta-message", headers=bearer(),
                    json={**sent, "status": ["- Alert sent", "- Reminder sent", "✅ Done"], "buttons": []})
     status, body = await jget("/vesta-messages", cookie("ops"))
     one = body["messages"]
     ck("  ...a later rewrite with no photo keeps the first one's; with no buttons it withdraws them",
-       len(one) == 1 and one[0].get("photo") and "buttons" not in one[0] and one[0]["status"][-1] == "✅ Done", body)
+       len(one) == 1 and [p["id"] for p in one[0].get("photos", [])] == [pic] and "buttons" not in one[0]
+       and one[0]["status"][-1] == "✅ Done", body)
     status, gbody = await jget("/vesta-messages", cookie("guest"))
-    r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    r = await get(f"/announcement-photo/{pic}", headers=cookie("guest"))
     ck("  ...a guest sees that photo while it is the current notification, as a ring's (owner, 2026-10-28)",
-       gbody["messages"][0].get("photo") == one[0]["photo"] and r.status == 200, (r.status, gbody))
+       gbody["messages"][0].get("photos") == one[0]["photos"] and r.status == 200, (r.status, gbody))
     # architecture review, 2026-10-30: current as long as the ring holds the screen (the villa's longest full-screen time)
     held, read = proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read_status
     proxy.ANNOUNCEMENT_CURRENT_S = 0
     proxy.DEVICE_CONFIG.read_status = lambda: ({}, True)
     await asyncio.sleep(1.1)
-    r_gone = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    r_gone = await get(f"/announcement-photo/{pic}", headers=cookie("guest"))
     proxy.DEVICE_CONFIG.read_status = lambda: ({"fullScreen": [{"title": "T", "seconds": 120}]}, True)
-    r_held = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    r_held = await get(f"/announcement-photo/{pic}", headers=cookie("guest"))
     proxy.ANNOUNCEMENT_CURRENT_S, proxy.DEVICE_CONFIG.read_status = held, read
     ck("  ...current for as long as the villa's longest full-screen time holds it on screen (403 past it, 200 within it)",
        r_gone.status == 403 and r_held.status == 200, (r_gone.status, r_held.status))
@@ -600,26 +603,34 @@ async def main() -> None:
     await proxy._record_announcement(None, {"event_type": proxy.ANNOUNCEMENT_EVENT, "time_fired": soon,
                                             "data": {"message": "<b>Other</b>"}})
     ck("  ...a villa announcement's sweep leaves a message's photo alone (one folder, two feeds)",
-       (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / one[0]["photo"]).is_file())
-    r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+       (TMP / "data" / proxy.ANNOUNCEMENT_PHOTO_DIR / pic).is_file())
+    r = await get(f"/announcement-photo/{pic}", headers=cookie("guest"))
     ck("  ...and a newer villa announcement takes the current place: the guest's photo is 403", r.status == 403, r.status)
     await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "note:1", "title": "Morning digest", "body": "New"})
     status, gbody = await jget("/vesta-messages", cookie("guest"))
-    r = await get(f"/announcement-photo/{one[0]['photo']}", headers=cookie("guest"))
+    r = await get(f"/announcement-photo/{pic}", headers=cookie("guest"))
     ck("  ...but not once a newer message came: the list names no photo and the file is 403",
-       r.status == 403 and all("photo" not in m for m in gbody["messages"]), (r.status, gbody))
+       r.status == 403 and all("photos" not in m and "photo" not in m for m in gbody["messages"]), (r.status, gbody))
     status, body = await jget("/vesta-messages", cookie("owner"))
     ck("  ...the owner still sees it, and two keys are two lines", len(body["messages"]) == 2
-       and body["messages"][0].get("photo"), body)
+       and body["messages"][0].get("photos"), body)
     # owner, 2026-11-02: #107's card had no photo on the tablet while the villa's own message it took over carried one
+    taken = {"id": "taken.jpg", "label": "Parking", "at": "2026-11-06T18:34:10+00:00"}
     await proxy.ANNOUNCED.add(lambda seq: {"seq": seq, "at": proxy._now_iso(), "message": "Motion", "run": "RUN-P",
-                                           "photo": "taken.jpg"}, proxy._announcements_with)
+                                           "photos": [taken]}, proxy._announcements_with)
+    # ...and a visit's one announcement, by its key ("One visit, one story", 2026-11-06): every camera, the strongest first
+    visit = [{"id": f"v{i}.jpg", "label": f"Camera {i}", "at": f"2026-11-06T18:3{i}:00+00:00"} for i in range(4)]
+    await proxy.ANNOUNCED.add(lambda seq: {"seq": seq, "at": proxy._now_iso(), "message": "Visit", "key": "visit:v1",
+                                           "run": "RUN-V", "photos": visit}, proxy._announcements_with)
     await post("/agent/v1/vesta-message", headers=bearer(), json={**sent, "key": "incident:91", "takes": ["RUN-P"]})
     await post("/agent/v1/vesta-message", headers=bearer(), json={**sent, "key": "incident:92", "takes": ["RUN-Q"]})
+    await post("/agent/v1/vesta-message", headers=bearer(), json={**sent, "key": "incident:93", "takes": ["visit:v1"]})
     status, body = await jget("/vesta-messages", cookie("owner"))
     by_key = {m["key"]: m for m in body["messages"]}
-    ck("a card with no photo of its own shows the photo of the villa message it took over (its `takes`); none without one",
-       by_key["incident:91"].get("photo") == "taken.jpg" and "photo" not in by_key["incident:92"], by_key)
+    ck("a card with no photo of its own shows the photos of the villa message it took over (its `takes`: a run, or a "
+       "visit's key, its every camera in order, labelled); none without one",
+       by_key["incident:91"].get("photos") == [taken] and "photos" not in by_key["incident:92"]
+       and by_key["incident:93"].get("photos") == visit, by_key)
     for bad in ({"title": "no key"}, {"key": "k"}, {"key": "k", "buttons": "x"}, [1], "text"):
         r = await post("/agent/v1/vesta-message", headers=bearer(), json=bad)
         ck(f"a push of {str(bad)[:28]!r} is refused (400), nothing kept", r.status == 400, r.status)
@@ -627,7 +638,8 @@ async def main() -> None:
         await post("/agent/v1/vesta-message", headers=bearer(), json={"key": "bad-photo", "title": "t", "photo": photo})
     status, body = await jget("/vesta-messages", cookie("owner"))
     bad_photo = next(m for m in body["messages"] if m["key"] == "bad-photo")
-    ck("a photo that is not a picture is dropped, the message kept without it", "photo" not in bad_photo, bad_photo)
+    ck("a photo that is not a picture is dropped, the message kept without it",
+       "photo" not in bad_photo and "photos" not in bad_photo, bad_photo)
     r = await post("/agent/v1/vesta-message", headers=bearer(), json={
         "key": "k" * 500, "title": "T" * 900, "roles": ["r"] * 30, "status": ["s"] * 90,
         "buttons": [{"label": "b", "kind": "i", "id": str(n)} for n in range(20)] + [{"label": "no id"}, "x"]})

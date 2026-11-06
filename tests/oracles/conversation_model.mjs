@@ -94,7 +94,7 @@ const { announcementWords } = await import("@/messages/messagesModel");
 const { AnnouncementNoticeView } = await import("@/components/hud/AnnouncementNotice");
 const SHOW = { fullScreen: [], ringsFullScreen: false };
 const motion = { seq: 50, at: "2026-10-29T10:00:00Z", title: "Motion detected", to: "", text: "Outdoor 2F", status: "",
-  photo: null, key: null, buttons: [] };
+  photos: [], key: null, buttons: [] };
 const refused = { ...approval, seq: 5, buttons: [], status: "Refused on 29/10/2026 13:50 (JM). Nothing was done." };
 let shown = [{ type: "arrived", announcement: approval, rewrite: false, settings: SHOW },
   { type: "arrived", announcement: motion, rewrite: false, settings: SHOW }].reduce(noticeStep, NO_NOTICE);

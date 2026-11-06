@@ -7,7 +7,7 @@ import { ck, done } from "../consistency/check.mjs";
 import { h, draw, inside, text } from "../consistency/screen.mjs";
 import { readFileSync } from "node:fs";
 const { messagesView, mergeAnnouncements, FILTERS, messagePlaces, readAtOpening, openingFilter, followingFilter, shownTogether,
-  afterRead, cardsOfIssue } = await import("@/messages/messagesModel");
+  afterRead, cardsOfIssue, supersedes } = await import("@/messages/messagesModel");
 // the unread mark, as the page's provider reads it (messagePlaces), `issues` the open issues
 const unreadOf = (kept, read, issues = []) => messagePlaces({ open: issues, watched: [], announcements: kept, read }).unread;
 const { parseVestaMessage, inLanguage } = await import("@/messages/announcements");
@@ -15,7 +15,7 @@ const { noticeStep, NO_NOTICE } = await import("@/messages/noticeModel");
 
 const card = (key, extra = {}) => ({ key, title: `Device ${key}`, lead: null, nextCheck: null, actions: [], lines: [], ...extra });
 const ann = (seq, extra = {}) => ({ seq, at: `2026-10-28T1${seq % 10}:00:00+08:00`, title: `T${seq}`, to: "", text: "",
-  status: "", photo: null, key: null, buttons: [], ...extra });
+  status: "", photos: [], key: null, buttons: [], ...extra });
 const J = JSON.stringify;
 
 console.log("  the filters, on one line:");
@@ -504,6 +504,24 @@ console.log("\n  VESTA's card, one per alert, as on Telegram:");
      J(shown.map((a) => a.title)) === J(["#90-P2 (watch)", "Weekly test"]), shown.map((a) => a.title));
   ck("  ...without VESTA's card (VESTA stopped) the villa's own show: never blank",
      shownTogether(villa, []).length === 3);
+  // ("One visit, one story", owner 2026-11-06): a visit is ONE villa announcement (key "visit:<id>"), rewritten at each
+  // step by another automation run; VESTA's card takes it by its key, whatever run wrote it last
+  const step1 = ann(4, { key: "visit:v1", run: "RUN-1", title: "Parking motion while the villa is empty", at: "2026-11-06T18:20:00+08:00",
+    photos: [{ id: "p1.jpg", label: "Parking", at: "2026-11-06T18:20:00+08:00" }] });
+  const step4 = ann(7, { key: "visit:v1", run: "RUN-4", title: "Entrance lock opened while the villa is empty", at: "2026-11-06T18:35:40+08:00",
+    photos: [{ id: "p4.jpg", label: "Entrance lock", at: "2026-11-06T18:35:40+08:00" }, { id: "p1.jpg", label: "Parking", at: "2026-11-06T18:20:00+08:00" }] });
+  const otherVisit = ann(8, { key: "visit:v2", run: "RUN-9", title: "Another visit", at: "2026-11-06T21:00:00+08:00" });
+  const held = mergeAnnouncements([step1, villa[2]], [step4, otherVisit]);
+  ck("a visit's next step REPLACES its announcement on the page (one line per key, its title and photos the step's)",
+     J(held.map((x) => [x.seq, x.title])) === J([[3, "Weekly test"], [7, "Entrance lock opened while the villa is empty"], [8, "Another visit"]])
+     && J(held.find((x) => x.seq === 7).photos.map((p) => p.id)) === J(["p4.jpg", "p1.jpg"]), held.map((x) => x.seq));
+  const visitCard = { ...parseVestaMessage(record(4, { key: "incident:125", title: "#125-P1 (new)", takes: ["visit:v1"] })), seq: 11 };
+  const one = shownTogether(held, [visitCard]);
+  ck("  ...VESTA's card takes the visit by its key, whatever run wrote it: one card per visit; another visit stays",
+     J(one.map((x) => x.title)) === J(["#125-P1 (new)", "Weekly test", "Another visit"]), one.map((x) => x.title));
+  ck("  ...never a VESTA card by another's key (one feed's key is not the other's)",
+     !supersedes({ ...visitCard, takes: ["incident:90"] }, card90) && supersedes(visitCard, step4) && supersedes(visitCard, step1)
+     && !supersedes(visitCard, otherVisit));
   const view = messagesView({ open: [], watched: [], announcements: shown, filter: "notifications", selected: null });
   ck("  ...listed newest first by time, VESTA's card keyed by its thread (one line as it is rewritten)",
      J(view.notifications.map((i) => i.key)) === J(["n3", "v:incident:90"]), view.notifications.map((i) => i.key));

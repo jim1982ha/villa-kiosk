@@ -1,6 +1,7 @@
 // src/components/messages/AnnouncementContent.tsx
 // An announcement's own parts, drawn the same wherever it shows: its buttons (the doorbell's Unlock, labels and
-// commands the villa's) with what became of a press, and its whole content (photo, words, bottom line, buttons) for
+// commands the villa's) with what became of a press, its photos (PhotoRow), and its whole content (photos, words,
+// bottom line, buttons) for
 // the full screen and the Cockpit's Messages (ticket 17 of "One inbox"). The notice draws its one line with the same
 // buttons (components/hud/AnnouncementNotice).
 
@@ -13,17 +14,49 @@ import { roleCan } from "@/auth/permissions";
 import { useConfirmDialog, type Question } from "@/hooks/useConfirmDialog";
 import { useAnnouncementPress } from "@/messages/AnnouncementsContext";
 import { useConversation } from "@/messages/ConversationContext";
-import { announcementPhotoUrl, offeredButtons, pressedRow, type Announcement, type AnnouncementButton,
-  type Pressable } from "@/messages/announcements";
+import { announcementPhotoUrl, offeredButtons, photoCaption, pressedRow, type Announcement, type AnnouncementButton,
+  type AnnouncementPhoto, type Pressable } from "@/messages/announcements";
+import PhotoLightbox from "@/components/fm/PhotoLightbox";
 import type { PressState } from "@/messages/presses";
 
-/** An announcement's photo, served by the add-on; hidden when the add-on refuses it (review Q round 2): a guest is
- *  served only the current notification's photo (supervisor-proxy.py _current_photo), so a page that read it while it
- *  was current drew an empty frame once it was not. The add-on decides; the page only hides what it is refused. */
-export function AnnouncementPhoto({ id, className }: { id: string; className: string }) {
-  const [refused, setRefused] = useState<string | null>(null);
-  if (refused === id) return null;
-  return <img className={className} src={announcementPhotoUrl(id)} alt="" onError={() => setRefused(id)} />;
+/**
+ * ⚠️ AN ANNOUNCEMENT'S PHOTOS, ONE ROW (owner, 2026-11-06, "One visit, one story": every photo of the visit in the one
+ * notification): each a thumbnail with its camera and time under it (photoCaption), in the record's order, the main
+ * one first (the strongest signal's); a tap opens it full size in the one viewer (PhotoLightbox), the row's others a
+ * swipe away. A photo the add-on refuses is hidden (review Q round 2): a guest is served only the current
+ * notification's photos (supervisor-proxy.py _current_photo_names), so a page that read them while current drew empty
+ * frames once they were not. `lead`: the main photo as large as the place allows, the others in a row under it (the
+ * full screen). The same row on every screen: the notice, the full screen, the Inbox's card, an issue's, VESTA's
+ * conversation. Pure: a check draws it.
+ */
+export function PhotoRow({ photos, lead = false }: { photos: readonly AnnouncementPhoto[]; lead?: boolean }) {
+  const [refused, setRefused] = useState<ReadonlySet<string>>(() => new Set());
+  const [viewing, setViewing] = useState<number | null>(null);
+  const shown = photos.filter((p) => !refused.has(p.id));
+  if (shown.length === 0) return null;
+  const tile = (p: AnnouncementPhoto, i: number) => {
+    const caption = photoCaption(p);
+    return (
+      <figure key={p.id} className="photo-tile">
+        <button type="button" className="photo-tile-open"
+          aria-label={`View photo ${i + 1} of ${shown.length}${caption ? `, ${caption}` : ""}`}
+          onClick={(e) => { e.stopPropagation(); setViewing(i); }}>
+          <img src={announcementPhotoUrl(p.id)} alt="" onError={() => setRefused((was) => new Set(was).add(p.id))} />
+        </button>
+        {caption && <figcaption>{caption}</figcaption>}
+      </figure>
+    );
+  };
+  const tiles = shown.map(tile);
+  return (
+    <div className={`photo-row${lead ? " photo-row-lead" : ""}`}>
+      {lead ? <>{tiles[0]}{tiles.length > 1 && <div className="photo-row-rest">{tiles.slice(1)}</div>}</> : tiles}
+      {viewing !== null && (
+        <PhotoLightbox photos={shown.map((p) => ({ src: announcementPhotoUrl(p.id), label: photoCaption(p) }))}
+          index={viewing} onIndexChange={setViewing} onClose={() => setViewing(null)} />
+      )}
+    </div>
+  );
 }
 
 /** A page VESTA attached (a report's, an investigation's), opened in the document viewer — ONE link for every place a
@@ -93,7 +126,7 @@ export function pressOrAsk(b: AnnouncementButton, ask: (q: Question) => void, pr
   else press(b.command);
 }
 
-/** Everything an announcement says, below its title: its photo large, all its words, its bottom line — then `buttons`
+/** Everything an announcement says, below its title: its photos (PhotoRow), all its words, its bottom line — then `buttons`
  *  (RecordButtons, where the screen shows them under the words). Pure: a check draws it. */
 export function AnnouncementContent({ announcement, buttons }: { announcement: Announcement; buttons?: ReactNode }) {
   const story = announcement.story ?? [];
@@ -101,7 +134,7 @@ export function AnnouncementContent({ announcement, buttons }: { announcement: A
     <>
       {/* who it is for, as Telegram's "To:" line says it */}
       {announcement.to && <p className="announcement-full-to">To: {announcement.to}</p>}
-      {announcement.photo && <AnnouncementPhoto id={announcement.photo} className="announcement-full-photo" />}
+      <PhotoRow photos={announcement.photos} />
       {announcement.text && <p className="announcement-full-text">{announcement.text}</p>}
       {/* VESTA's card: its Status story, then where it stands, as on Telegram */}
       {(story.length > 0 || announcement.status) && (

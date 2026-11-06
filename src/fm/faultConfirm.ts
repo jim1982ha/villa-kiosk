@@ -120,9 +120,11 @@ export function afterClose(t: FmTicket, cadence: AgentCadence | null, now: numbe
     return now > shownUntil(at, cadence) ? { place: "closed", fault: closed }
       : { place: "watch", fault: { ...closed, at, due: now >= at, lookMinutes, awaiting: false } };
   }
-  // its confirmsBy not written yet: on Watch, with no moment to say, until the Agent answers
+  // its confirmsBy not written yet: on Watch, with no moment to say, until the Agent answers — ⚠️ unless the Agent
+  // closed it watching nothing (`notWatched`: a visit ends once; owner's drills 2026-11-06, one on Watch with no
+  // "Closes" line, another in Closed): Closed at once
   const resolvedAt = Date.parse(t.resolvedAt ?? "");
-  if (!closedAsLasting(t) && agentOwned(t) && now <= shownUntil(resolvedAt, cadence)) {
+  if (!closedAsLasting(t) && !t.notWatched && agentOwned(t) && now <= shownUntil(resolvedAt, cadence)) {
     return { place: "awaiting", fault: { ...closed, at: NaN, due: false, lookMinutes, awaiting: true } };
   }
   return { place: "closed", fault: closed };

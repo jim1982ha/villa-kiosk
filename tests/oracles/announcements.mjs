@@ -5,8 +5,12 @@
 import { readFileSync } from "node:fs";
 import { h, draw } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
-const { readLayout, parseAnnouncement, ANNOUNCEMENT_NOTICE_MS, noticeFor, pressOf, PRESS_SAID, titleSentences } =
-  await import("@/messages/announcements");
+import { parseTsx, elements, propText } from "../consistency/jsx.mjs";
+const { readLayout, parseAnnouncement, parseVestaMessage, ANNOUNCEMENT_NOTICE_MS, noticeFor, pressOf, PRESS_SAID, titleSentences,
+  photoCaption } = await import("@/messages/announcements");
+const { setVillaTimeZone } = await import("@/utils/villaClock");
+setVillaTimeZone("UTC");   // the photos' times below are written in the villa's zone: one fixed here
+const { AnnouncementContent } = await import("@/components/messages/AnnouncementContent");
 const { watchFeed } = await import("@/messages/feed");
 const { afterRead, announcementWords } = await import("@/messages/messagesModel");
 const { pressesOf } = await import("@/messages/presses");
@@ -34,7 +38,7 @@ ck("a stored record becomes an announcement; one this build cannot read is left 
    && parseAnnouncement(null) === null);
 
 console.log("\n  each one kept after the page opened is shown once:");
-const a = (seq) => ({ seq, at: "", title: `T${seq}`, to: "", text: "", status: "", photo: null, key: null, buttons: [] });
+const a = (seq) => ({ seq, at: "", title: `T${seq}`, to: "", text: "", status: "", photos: [], key: null, buttons: [] });
 const answers = [{ items: [a(1), a(2)], last: 2, kept: [1, 2] }, null, { items: [a(3)], last: 3 }, { items: [], last: 3 },
   { items: [a(4), a(5)], last: 5 }, { items: [], last: 1 }, { items: [a(2)], last: 2 }];
 const asked = [];
@@ -212,18 +216,69 @@ ck("the one notice, news tone, title then the first line of what it says",
    && html.includes("🔔 Visitor · At the door") && !html.includes("more"), html);
 ck("  ...shown for 10s", ANNOUNCEMENT_NOTICE_MS === 10_000, ANNOUNCEMENT_NOTICE_MS);
 globalThis.window = { location: { pathname: "/" } };   // the add-on's own address (no Ingress prefix)
-const photoHtml = draw(h(AnnouncementNoticeView, { announcement: { ...a(1), title: "🔔 Visitor", photo: "x.jpg" } }));
+const ringPhoto = [{ id: "x.jpg", label: "", at: "2026-11-06T18:30:05+00:00" }];
+const photoHtml = draw(h(AnnouncementNoticeView, { announcement: { ...a(1), title: "🔔 Visitor", photos: ringPhoto } }));
 // owner, 2026-10-28 (2.496.562): the pill's round ends around a photo read "pretty much wrong"; the photo keeps its size
-// (its squared corners are every notice's now: tests/oracles/notices.mjs)
-ck("  ...a ring's photo above its words, served by the add-on; none drawn without one",
-   /<span class="vesta-notice-text"><img class="vesta-notice-photo" src="\/announcement-photo\/x\.jpg" alt=""\/>🔔 Visitor<\/span>/.test(photoHtml)
-   && !html.includes("<img"), photoHtml);
+// (its squared corners are every notice's now: tests/oracles/notices.mjs); a ring's one photo is a row of one
+ck("  ...a ring's photo above its words, served by the add-on, its time under it; none drawn without one",
+   /<span class="vesta-notice-text"><div class="photo-row"><figure class="photo-tile"><button type="button" class="photo-tile-open"[^>]*><img src="\/announcement-photo\/x\.jpg" alt=""\/><\/button><figcaption>18:30<\/figcaption><\/figure><\/div>🔔 Visitor<\/span>/.test(photoHtml)
+   && !html.includes("<img") && !html.includes("photo-row"), photoHtml);
 
 console.log("\n  what a record says about itself:");
-const rec = parseAnnouncement({ seq: 4, message: ring, photo: "0123456789abcdef0123456789abcdef.jpg" });
-ck("its photo, by the add-on's id", rec?.photo === "0123456789abcdef0123456789abcdef.jpg", rec);
-const sly = parseAnnouncement({ seq: 5, message: ring, photo: "../../options.json" });
-ck("  ...a photo name that is not one of the add-on's ids is not drawn", sly?.photo === null, sly);
+// ("One visit, one story", owner 2026-11-06): a visit's every camera, each labelled camera + time, the strongest first
+const ID = (c) => `${c.repeat(32)}.jpg`;
+const visitPhotos = [
+  { id: ID("a"), label: "Entrance lock", at: "2026-11-06T18:35:40+00:00" }, { id: ID("b"), label: "Parking", at: "2026-11-06T18:34:10+00:00" },
+  { id: ID("c"), label: "Entrance left", at: "2026-11-06T18:34:47+00:00" }, { id: ID("d"), label: "Main door", at: "2026-11-06T18:35:41+00:00" }];
+const rec = parseAnnouncement({ seq: 4, message: ring, key: "visit:v1", photos: visitPhotos });
+ck("its photos, by the add-on's ids, in the record's order (the main one first), each with its camera and time",
+   JSON.stringify(rec?.photos) === JSON.stringify(visitPhotos), rec);
+const sly = parseAnnouncement({ seq: 5, message: ring, photos: [{ id: "../../options.json", label: "x", at: "" }, "x", null,
+  { id: ID("e"), label: "  Gate  ", at: 5 }] });
+ck("  ...a photo name that is not one of the add-on's ids is not drawn; a label trimmed, a time that is no text none",
+   JSON.stringify(sly?.photos) === JSON.stringify([{ id: ID("e"), label: "Gate", at: "" }]), sly);
+const legacy = parseAnnouncement({ seq: 6, message: ring, photo: ID("f") });
+ck("  ...the single `photo` of an older record is never read here: the add-on hands every record on as `photos`",
+   JSON.stringify(legacy?.photos) === "[]" && !("photo" in (legacy ?? {})), legacy);
+const vesta = parseVestaMessage({ seq: 7, key: "incident:125", title: "#125-P1", photos: visitPhotos });
+ck("  ...VESTA's card reads its photos the same way", JSON.stringify(vesta?.photos) === JSON.stringify(visitPhotos), vesta);
+ck("a photo's words: its camera and its time, the time alone when no camera is named",
+   photoCaption(visitPhotos[0]) === "Entrance lock · 18:35" && photoCaption({ id: ID("g"), label: "", at: "2026-11-06T18:30:05+00:00" }) === "18:30"
+   && photoCaption({ id: ID("g"), label: "Gate", at: "" }) === "Gate", visitPhotos.map(photoCaption));
+{
+  const card = draw(h(AnnouncementContent, { announcement: { ...a(8), title: "Visit", photos: visitPhotos } }));
+  const tiles = [...card.matchAll(/<figure class="photo-tile"><button type="button" class="photo-tile-open" aria-label="([^"]*)"><img src="\/announcement-photo\/([0-9a-f]{32}\.jpg)" alt=""\/><\/button><figcaption>([^<]*)<\/figcaption><\/figure>/g)]
+    .map((m) => [m[1], m[2], m[3]]);
+  ck("a visit's card draws its four photos in one row, in order, the main one first, each labelled camera + time, each a "
+     + "button that opens it full size",
+     card.includes('<div class="photo-row">') && JSON.stringify(tiles) === JSON.stringify([
+       ["View photo 1 of 4, Entrance lock · 18:35", ID("a"), "Entrance lock · 18:35"], ["View photo 2 of 4, Parking · 18:34", ID("b"), "Parking · 18:34"],
+       ["View photo 3 of 4, Entrance left · 18:34", ID("c"), "Entrance left · 18:34"], ["View photo 4 of 4, Main door · 18:35", ID("d"), "Main door · 18:35"]]),
+     [tiles, card]);
+  const one = draw(h(AnnouncementContent, { announcement: { ...a(9), title: "Ring", photos: [visitPhotos[1]] } }));
+  // ONE ROW ON EVERY SCREEN (rules "One card, every case"): the notice, the full screen, the Inbox's, Watch's and Closed's
+  // cards and an issue's (AnnouncementContent), VESTA's conversation: each draws PhotoRow, none an announcement photo itself
+  const { readdirSync } = await import("node:fs");
+  const tsx = readdirSync(new URL("../../src/", import.meta.url), { recursive: true }).filter((f) => /\.tsx?$/.test(f));
+  const servers = tsx.filter((f) => /announcementPhotoUrl\(/.test(src(f).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "")));
+  const rows = tsx.filter((f) => /<PhotoRow /.test(src(f))).sort();
+  ck("  ...the photos drawn by the one row only: the announcement's content, the notice and full screen, the conversation",
+     JSON.stringify(servers.filter((f) => !f.endsWith("messages/announcements.ts")))
+       === JSON.stringify(["components/messages/AnnouncementContent.tsx"])
+     && JSON.stringify(rows) === JSON.stringify(["components/hud/AnnouncementNotice.tsx",
+       "components/messages/AnnouncementContent.tsx", "components/messages/VestaThread.tsx"])
+     && ["components/cockpit/IssueCard.tsx", "components/cockpit/MessagesTab.tsx"].every((f) => /<AnnouncementContent /.test(src(f))),
+     [servers, rows]);
+  ck("  ...a ring's one photo: a row of one; none: no row", (one.match(/class="photo-tile"/g) ?? []).length === 1
+     && !draw(h(AnnouncementContent, { announcement: { ...a(9), title: "Ring" } })).includes("photo-"), one);
+  // the tap: the tile opens the one viewer, every photo of the row in it (its words under each), never a second viewer
+  const row = parseTsx("components/messages/AnnouncementContent.tsx");
+  const viewer = elements(row, "PhotoLightbox");
+  const opens = elements(row, "button").map((b) => propText(b, "onClick")).filter((c) => /setViewing\(i\)/.test(c ?? ""));
+  ck("  ...a tap opens the one full-size viewer (PhotoLightbox), the row's every photo in it with its words",
+     viewer.length === 1 && propText(viewer[0], "photos") === "shown.map((p) => ({ src: announcementPhotoUrl(p.id), label: photoCaption(p) }))"
+     && propText(viewer[0], "index") === "viewing" && opens.length === 1, [viewer.map((v) => propText(v, "photos")), opens]);
+}
 ck("  ...in the column, before the passing notice (a motion notice never replaces a ring)",
    /<ServiceErrorToast \/>\s*<AnnouncementNotice \/>\s*<AppNotice /.test(src("pages/Dashboard.tsx")));
 
@@ -333,13 +388,13 @@ ck("  ...nor for a title not picked, nor when the ring is answered (its cleared 
      === JSON.stringify({ fullScreenMs: null, noticeMs: 10_000 }));
 
 const { AnnouncementFullScreenView, countdownOf } = await import("@/components/hud/AnnouncementNotice");
-const fullHtml = draw(h(AnnouncementFullScreenView, { announcement: { ...offered, photo: "x.jpg", text: "Someone is at the door.\nGate A",
+const fullHtml = draw(h(AnnouncementFullScreenView, { announcement: { ...offered, photos: ringPhoto, text: "Someone is at the door.\nGate A",
   status: "⚠️ New alert", to: "FM" }, onDismiss: () => {}, buttons: h(RecordButtons, { record: offered }), totalMs: 45_000, leftMs: 24_000 }));
 // owner, 2026-11-04: proposal 5, "Night, the countdown around Close"; and a timer counting down to when it goes
 ck("full screen, the night look: its title, all it says, its photo large, its buttons, and Close in its countdown ring",
    /class="modal-header announcement-night-head"[\s\S]*class="modal-body announcement-night-body"[\s\S]*class="modal-footer announcement-night-actions"/.test(fullHtml)
    && fullHtml.includes(">🔔 Visitor at Gate A</h2>")
-   && /class="announcement-night-photo" src="\/announcement-photo\/x\.jpg"/.test(fullHtml)
+   && /class="photo-row photo-row-lead"><figure class="photo-tile">[\s\S]*?<img src="\/announcement-photo\/x\.jpg"/.test(fullHtml)
    && fullHtml.includes("Gate A</p>") && fullHtml.includes("⚠️ New alert") && fullHtml.includes(">🔓 Unlock</button>")
    && /aria-label="Close, it closes by itself in 24s"/.test(fullHtml) && fullHtml.includes(">Closes in 24s<"), fullHtml);
 ck("  ...no \"To:\" line: whom Telegram sent it to, never who is looking (it read \"To: FM\" on the owner's tablet)",
@@ -432,9 +487,10 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
     && /\.versions\b/.test(readFileSync(f, "utf8")));
   ck("  ...no screen picks a version itself", pickers.length === 0, pickers);
   const settings = readFileSync(new URL("../../src/components/settings/SettingsModal.tsx", import.meta.url), "utf8");
+  const { SETTINGS_KEYS } = await import("@/config/configSlice");
   ck("the tablet's own setting, in Settings › Messages, in this dialog's draft (Save / Cancel)",
-     /"ringsFullScreen", "tabletLanguage"/.test(settings) && /ariaLabel="Language on this tablet"/.test(settings)
-     && /tabletLanguages\(config\.chatLanguages\)/.test(settings));
+     SETTINGS_KEYS.includes("tabletLanguage") && SETTINGS_KEYS.includes("chatLanguages") && /ariaLabel="Language on this tablet"/.test(settings)
+     && /tabletLanguages\(v\.chatLanguages\)/.test(settings));
   // owner, 2026-11-03 ("very badly explained … clearer and also shorter"): nothing to choose, nothing drawn; the chats'
   // column says what their menu is
   const { elements, guardsOf, parseTsx, propText } = await import("../consistency/jsx.mjs");

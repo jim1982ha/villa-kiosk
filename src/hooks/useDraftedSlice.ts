@@ -42,8 +42,14 @@ export interface DraftedSlice<K extends keyof AppConfig> {
   set: (shown: Partial<Slice<K>>, opts?: { now?: boolean; stored?: Partial<Slice<K>> }) => void;
   /** Anything THIS dialog changed since it opened (or was last saved) and has not put back; no other write is one. */
   dirty: boolean;
-  /** Keep the changes: write what is waiting, and forget what was changed. */
-  save: () => void;
+  /** Keep the changes: write what is waiting, send what is held for the villa (pendingEdits `hold`), and forget what
+   *  was changed. `true` at once with nothing held; else once every held change landed, `false` when one did not
+   *  (it stays held, said in `problem`, for Save again or Cancel). */
+  save: () => boolean | Promise<boolean>;
+  /** A held change Save could not send, in words (the footer's error); null otherwise. */
+  problem: string | null;
+  /** Save is sending the held changes. */
+  saving: boolean;
   /** Put back exactly what this dialog changed — written, so the scene and every tablet follow — and return the
    *  slice as it then is, for the caller to re-apply anything it drives directly. */
   discard: () => Slice<K>;
@@ -77,6 +83,8 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
   const [heard, setHeard] = useState(0);
   const [typing, setTyping] = useState<Partial<Slice<K>>>({});
   const [replaced, setReplaced] = useState<ReplacedSubject[]>([]);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const latest = useRef({ config, keys });
   latest.current = { config, keys };
   useEffect(() => onDialogEdit((prev, next) => {
@@ -120,9 +128,26 @@ export function useDraftedSlice<K extends keyof AppConfig>(keys: readonly K[], d
       for (const write of pending.take()) update(write);
       ledger.current = EMPTY_LEDGER;
       setHeard((n) => n + 1);
+      const held = pending.held();
+      setProblem(null);
+      if (held.length === 0) return true;
+      setSaving(true);
+      return Promise.all(held.map(async ([key, send]) => {
+        const said = await send().catch(() => "It could not be saved: try again.");
+        if (said === null) pending.forget(key);
+        return said;
+      })).then((said) => {
+        const problems = said.filter((s): s is string => s !== null);
+        setSaving(false);
+        setProblem(problems.length > 0 ? problems.join(" ") : null);
+        return problems.length === 0;
+      });
     },
+    problem,
+    saving,
     discard: () => {
       pending.drop();
+      setProblem(null);
       setTyping({});
       const undo = ledger.current;
       ledger.current = EMPTY_LEDGER;

@@ -89,10 +89,26 @@
 }
 .vesta-notice > svg:first-child { flex: 0 0 auto; color: var(--tone); }
 .vesta-notice-text { min-width: 0; overflow-wrap: anywhere; }
-/* an announcement's photo (a ring's snapshot), above its words (owner, 2026-10-28: the pill's round ends around a photo
-   read "pretty much wrong"; the photo keeps its size) */
-/* the photo centred over the words (owner, 2026-10-29), in the pop-up as in the card */
-.vesta-notice-photo { display: block; max-width: min(240px, 100%); max-height: 160px; margin: 0 auto 6px; border-radius: 8px; object-fit: cover; }
+/* ⚠️ AN ANNOUNCEMENT'S PHOTOS, ONE ROW (AnnouncementContent PhotoRow; owner, 2026-11-06, "One visit, one story"): each
+   a thumbnail with its camera and time under it, the main one first, a tap opens it full size; they wrap on a narrow
+   phone. A photo alone keeps the size one photo had (a ring's snapshot, 2.496.562). The same row on every screen. */
+.photo-row { display: flex; flex-wrap: wrap; gap: 8px; }
+/* sizes in pixels, never aspect-ratio alone: an older iPad's Safari has none (rules "iPhone and Android alike") */
+.photo-tile { --tile-w: 120px; margin: 0; display: flex; flex-direction: column; gap: 2px; width: var(--tile-w); min-width: 0; }
+.photo-tile-open {
+  display: block; width: 100%; height: calc(var(--tile-w) * 3 / 4); padding: 0; border: 0; background: var(--hairline);
+  border-radius: 8px; overflow: hidden; cursor: pointer; pointer-events: auto;
+}
+.photo-tile-open img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.photo-tile:only-child { width: auto; max-width: min(320px, 100%); }
+.photo-tile:only-child .photo-tile-open { height: auto; }
+.photo-tile:only-child .photo-tile-open img { height: auto; max-height: 320px; object-fit: contain; }
+.photo-tile figcaption { font-size: var(--text-2xs); color: var(--text-secondary); text-align: center; overflow-wrap: anywhere; }
+/* in a notice: centred over the words (owner, 2026-10-29), smaller; one photo alone as it was (240px by 160px) */
+.vesta-notice .photo-row { justify-content: center; margin-bottom: 6px; }
+.vesta-notice .photo-tile { --tile-w: 88px; }
+.vesta-notice .photo-tile:only-child { max-width: min(240px, 100%); }
+.vesta-notice .photo-tile:only-child .photo-tile-open img { max-height: 160px; object-fit: cover; }
 /* the buttons a ring offers (the doorbell's Unlock), under its words; they wrap on a narrow phone */
 .vesta-notice-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
 .vesta-notice-action { pointer-events: auto; min-height: var(--touch-min); padding: 0 16px; }
@@ -102,8 +118,7 @@
   pointer-events: auto; background: none; border: none; color: var(--text-secondary); cursor: pointer;
   display: flex; padding: 2px; flex: 0 0 auto;
 }
-/* an announcement's words, photo and status, as its Inbox card and VESTA's conversation draw them (AnnouncementContent) */
-.announcement-full-photo { min-height: 0; max-width: 100%; flex: 0 1 auto; max-height: 60%; border-radius: 12px; object-fit: contain; }
+/* an announcement's words, photos and status, as its Inbox card and VESTA's conversation draw them (AnnouncementContent) */
 .announcement-full-title { overflow-wrap: anywhere; }
 .announcement-full-text { margin: 0; font-size: var(--text-xl); white-space: pre-line; overflow-wrap: anywhere; }
 .announcement-full-status { margin: 0; color: var(--text-secondary); display: flex; flex-direction: column; gap: 2px; }
@@ -127,9 +142,14 @@
 .announcement-night-head .announcement-full-title { margin: 0; font-size: var(--text-2xl); color: var(--night-ink); }
 .announcement-night-text { margin: 0; color: var(--night-muted); font-size: var(--text-md); white-space: pre-line; overflow-wrap: anywhere; }
 .announcement-night .announcement-night-body { display: flex; overflow: hidden; padding: 20px 40px; }
-.announcement-night-photo {
-  flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain; border-radius: 18px; background: var(--night-photo);
-}
+/* its main photo as large as the screen allows, the others in a row under it (PhotoRow `lead`) */
+.photo-row-lead { flex: 1 1 auto; min-height: 0; width: 100%; flex-direction: column; flex-wrap: nowrap; gap: 12px; }
+.photo-row-lead > .photo-tile, .photo-row-lead > .photo-tile:only-child { flex: 1 1 auto; min-height: 0; width: 100%; max-width: none; }
+.photo-row-lead > .photo-tile > .photo-tile-open { flex: 1 1 auto; min-height: 0; height: auto; border-radius: 18px; }
+.photo-row-lead > .photo-tile > .photo-tile-open img { height: 100%; max-height: none; object-fit: contain; }
+.photo-row-rest { display: flex; gap: 8px; overflow-x: auto; flex: 0 0 auto; }
+.announcement-night .photo-tile-open { background: var(--night-photo); }
+.announcement-night .photo-tile figcaption { color: var(--night-muted); font-size: var(--text-sm); }
 .announcement-night .announcement-night-actions {
   justify-content: center; gap: 20px; flex-wrap: wrap; background: transparent;
   padding: 0 40px max(24px, env(safe-area-inset-bottom));
@@ -220,7 +240,7 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
 .messages-card-body .announcement-full-text { font-size: var(--text-sm); color: var(--text-secondary); }
 .messages-card-body .announcement-full-to, .messages-card-body .announcement-full-status {
   font-size: var(--text-2xs); color: var(--text-dim); }
-.messages-card-body .announcement-full-photo { max-height: 320px; align-self: center; }
+.messages-card-body .photo-row { justify-content: center; }
 @media (max-width: 860px) { .messages-filters { overflow-x: auto; } }
 /* a fault the VESTA Agent is confirming: its check in the status green; its card is an open issue's (owner, 2026-10-23) */
 .fault-watched-icon { color: var(--status-on); }
@@ -543,7 +563,6 @@ body:has(.camera-fullscreen) .vesta-notice.below-camera { display: none; }
   /* a plain icon (owner's phone, 2026-10-29: a framed box that pushed the answer down) */
   border: 0; background: none; box-shadow: none; color: var(--text-secondary); }
 .vesta-turn-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-base); }
-.vesta-turn .announcement-full-photo { max-height: 320px; align-self: flex-start; }
 .vesta-thread-ask { display: flex; gap: 8px; align-items: flex-end; flex: 0 0 auto; padding-top: 6px;
   background: var(--bg-modal); }
 .vesta-thread-ask textarea { flex: 1 1 auto; min-width: 0; resize: vertical; font: inherit; font-size: var(--text-base);

@@ -86,6 +86,10 @@
   border-radius: 999px; background: color-mix(in srgb, var(--strip) 22%, transparent); }
 .fm-record-name { flex: 0 1 auto; min-width: 0; color: var(--text-primary); overflow-wrap: anywhere;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+/* a name's id after it in the strip (common/IdText NamedId, a chat of Who gets the messages): the strip's quiet words, as
+   its time; it breaks only where IdText puts a <wbr> (after a "." or "_"), never inside a word, the name's "anywhere"
+   not inherited */
+.named-id { color: var(--text-secondary); font-weight: 500; overflow-wrap: normal; word-break: normal; }
 .fm-record-when { margin-left: auto; font-size: var(--text-xs); font-weight: 500; color: var(--text-secondary); }
 /* a Settings card's remove (RecordCard `remove`, owner 2026-11-06): the small round icon button at the strip's right end,
    where a Cockpit card says its time; drawn 30px into the strip's padding so the band keeps its height, its touch
@@ -303,6 +307,12 @@
   position: absolute; bottom: max(14px, var(--safe-bottom));
   left: 50%; transform: translateX(-50%);
   color: rgba(255, 255, 255, 0.8); font-size: var(--text-xs);
+}
+/* a photo's camera and time (an announcement's), above its count */
+.fm-lightbox-label {
+  position: absolute; bottom: calc(max(14px, var(--safe-bottom)) + 22px);
+  left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px);
+  color: #fff; font-size: var(--text-sm); text-align: center; overflow-wrap: anywhere;
 }
 
 /* Square icon-only variant of .btn, for a secondary action that sits beside a

@@ -1,3 +1,32 @@
+## 2.496.733
+
+What you will see:
+- A visit of the villa's presence alert that VESTA closed goes straight to Closed on the tablet. Before, a closed visit could sit under Watch for about ten minutes with no "Closes" line, while another one was already under Closed.
+
+What to check: after the next visit drill ends ("Cleared on …: no further signal for 5min" on Telegram), open the tablet's Cockpit: the visit's card is under Closed at once, never under Watch. This needs the VESTA Agent update of the same evening.
+
+## 2.496.732
+
+What you will see:
+- Settings › Messages › Who gets the messages: each chat's card now shows its id after its name, in grey: "Fabien (notify.fabien)". On a phone the id may go to the next line after the name; it is never cut inside a word.
+- Taking a chat off a list, or adding one, now waits for Save like every other setting. The card goes (or comes) at once and Save turns green; Save writes the list to the villa, Cancel puts it back as it was. Before, the list was written at once and Save stayed grey, so you could not tell it was saved.
+- A chat's language waits for Save too, and Cancel puts it back. A chat taken off every list still loses its language, and Cancel brings both back.
+- If the villa cannot take the list, Settings stays open and says so above Save ("The Owner's list could not be saved: try again."); press Save again, or Cancel.
+- Cancel no longer says "Who gets the messages was already saved": nothing in Settings or Advanced Settings is saved before Save any more.
+
+What to check: on the tablet, open Settings › Messages, take a chat off a list. Save should turn green. Press Cancel and open Settings again: the chat is still there. Take it off again and press Save: it stays off.
+
+## 2.496.731
+
+What you will see:
+- A notification's photos are now a row of small pictures, each with the camera's name and the time under it ("Parking · 18:34"). The main photo comes first. Tap a picture to see it full size; the arrows show the others, and the ✕ closes it.
+- This is ready for the coming "one visit, one story" alerts: the villa will send one notification per visit with a photo from every camera that saw it, and the tablet will show all of them on the one card, updated at each step instead of a new card each time.
+- VESTA's card of an alert shows every photo of the villa's messages it replaces, not only the last one.
+- The same row is on the notice that pops up, on the full screen (the main photo large, the others under it), on the Cockpit's cards (Inbox, Watch, Closed, Open issues) and in VESTA's conversation.
+- A doorbell ring still shows its one photo, as large as before, and photos already on the tablet from before this version still show. Their time is shown under them; they have no camera name.
+
+What to check: on the tablet, open an alert or a doorbell ring in the Cockpit that has a photo. You should see the photo with its time under it; tap it and it opens full size.
+
 ## 2.496.730
 
 What you will see:

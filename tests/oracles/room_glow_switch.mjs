@@ -173,7 +173,7 @@ console.log("\n  where it is set (owner, 2026-10-22: in Settings, on the Map loo
   const glow = elements(parseTsx("components/settings/SettingsModal.tsx"), "OnOffToggle")
     .filter((e) => propText(e, "ariaLabel") === '"Room glow and camera cones"');
   ck("an On | Off under the Map look, through Settings' one draft (Save keeps it, Cancel writes it back), editConfig only",
-     /"roomGlowAndCones",[^\]]*?\] as const;/.test(st) && glow.length === 1
+     (await import("@/config/configSlice")).SETTINGS_KEYS.includes("roomGlowAndCones") && glow.length === 1
      && propText(glow[0], "onChange") === "(roomGlowAndCones) => slice.set({ roomGlowAndCones }, { now: true })"
      && propText(glow[0], "on") === "v.roomGlowAndCones" && guardsOf(glow[0]).includes('can("editConfig")'), glow.map(guardsOf));
   ck("  ...its (i) says it applies to every tablet; Advanced Settings no longer has it",
