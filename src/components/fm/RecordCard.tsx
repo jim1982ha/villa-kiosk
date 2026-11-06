@@ -154,7 +154,7 @@ export function RecordGroup({ children, actions }: { children: ReactNode; action
   );
 }
 
-/** ⚠️ A CARD'S QUESTION TAKES ITS BAR (owner, 2026-11-05): "Done? VESTA checks it again before it closes." on a line of
+/** ⚠️ A CARD'S QUESTION TAKES ITS BAR (owner, 2026-11-05): "Close this ticket? Nothing was done, …" on a line of
  *  its own, then the bar [the main action][Cancel], the main action first as everywhere on the card. */
 export function CardAsk({ question, icon, confirmLabel, onConfirm, onCancel }: {
   question: ReactNode; icon?: ReactNode; confirmLabel: ReactNode;

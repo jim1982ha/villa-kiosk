@@ -115,8 +115,8 @@ console.log("\n  Done · Need help · Open Ticket on every issue card (owner, 20
        done.tickets.every((t) => t.status === "resolved" && last(t).kind === undefined && last(t).note !== "Closed without action")
        && done.completions.filter((c) => c.ticketId === a.id || c.ticketId === b.id).length === 2
        && done.completions.every((c) => c.by === "Owner" && c.role === "owner"), done);
-    ck("  ...the issue card's Done asks first and files work (work: true); the Tickets tab's Close stays a no-action close",
-       WORK_ACTIONS.done.step.kind === "close" && WORK_ACTIONS.done.step.work === true
+    ck("  ...the issue card's Done closes as pressed and files work (work: true, no question); the Tickets tab's Close stays a no-action close",
+       WORK_ACTIONS.done.step.kind === "close" && WORK_ACTIONS.done.step.work === true && !WORK_ACTIONS.done.step.ask
        && WORK_ACTIONS.closeTicket.step.kind === "close" && !WORK_ACTIONS.closeTicket.step.work
        && WORK_ACTIONS.doneNew.step.kind === "raiseThen" && WORK_ACTIONS.doneNew.step.then === "done");
     const wb = (await import("node:fs")).readFileSync(new URL("../../src/components/fm/WorkButtons.tsx", import.meta.url), "utf8");
