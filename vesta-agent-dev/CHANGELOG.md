@@ -1,3 +1,14 @@
+## 0.12.465
+
+Prepares the villa's side of "one visit, one story"; nothing changes until the presence automation is updated
+(announced before it is saved):
+- The reminder delay is one value: when the villa has its "VESTA reminder after" setting, the VESTA Agent page shows
+  it in Limits › Skill settings (alert-desk, "reask minutes") and saving it there changes the villa's setting.
+- A press on the villa's own buttons of a visit is answered by the villa only: no more "Unknown button." beside it.
+- A room's sound (the server and storage rooms) adds "Sound heard in the Server Room at 18:40" to a visit already
+  open; on its own it never raises an alert, and it never counts toward offering the siren.
+- A test visit (a drill) is marked "TEST" and never offers the siren.
+
 ## 0.12.464
 
 What you will see, once the villa's presence automation sends a visit step by step (its next update, announced
