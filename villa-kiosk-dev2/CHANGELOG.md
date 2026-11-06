@@ -1,3 +1,10 @@
+## 2.496.736
+
+What you will see:
+- Nothing changes on the tablet. Updates reach the store faster: fewer checks are repeated on the developer's computer before an update is sent, and the store's build still runs every check before it offers the update.
+
+What to check: nothing on the tablet.
+
 ## 2.496.735
 
 What you will see:
