@@ -1,3 +1,8 @@
+## 2.496.738
+
+What you will see:
+- Pressing Done on an issue card closes it at once, as Not a problem does. It no longer asks "Done? VESTA checks it again before it closes." first. A ticket's "No action needed" still asks, since it records that nothing was done.
+
 ## 2.496.737
 
 What you will see:
