@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.450 (6 November 2026)
+
+- One visit, one story, after the owner's first drills (#127-#129):
+  - every step told as taken, an edit too: tells of one visit one at a time, their cards read when they go
+    (visit.Visits.tell); the package's record keeps its `ack_seq` from ever going back (two tells crossing at
+    22:42:02 took the relock back) and a record never written keeps the villa's first write (its id none, the
+    candidate's visit '': every visit was lost until a reset); a step of a visit already closed is told too;
+  - the record as the villa holds it NOW (app.Vesta._visit_now → visit.now; desk.visit_of): owner, cards, replies,
+    answer, reminder — a late event never rings a step the villa rang; the villa's replies removed once VESTA holds the
+    visit (`drop`, the script's `dropped`);
+  - a message deleted in its chat is GONE (telegram.GONE): never taken over (outcome.adopt_ha sends the card there
+    instead, its sheet with it), never retried, a delete of it is done;
+  - a visit's close edits its one card (desk._close sends no new message for a visit);
+  - the Status in time order (notice._in_time; result.seen `since`); "Alert sent" at the villa's opened_at
+    (result.ha_message `at`, Outcome records each step at its `at`);
+  - "opened from the app" with no one known (words.yaml visit_lock_app_plain, the package's words), never "(?)";
+  - "stronger" is a listed step (message_format.Step.listed): its line in the Status, the card's state "New alert"
+    (Notices.word: a visit's last notice its alert or a stronger signal);
+  - the tablet: every step's run taken, the visit's key never crowded out (kiosk_messages._finished); the fault about
+    its strongest step's device (Problems.card entity_id, kiosk.placed); a close watching nothing says so
+    (`notWatched`, agreement copied from dev2 2.496.733).
+- tests/test_visit_drills.py, tests/test_visit_record.py (the tracked package rendered); 18 mutations red.
+
 ## 0.6.449 (6 November 2026)
 
 - One visit, one story, phase C's needs (owner, 2026-11-06): what the villa's presence automation (CRITICAL Presence

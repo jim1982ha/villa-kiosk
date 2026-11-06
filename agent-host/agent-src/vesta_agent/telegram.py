@@ -51,6 +51,24 @@ def _failed(method: str, body: dict) -> TelegramError:
 
 #: Telegram's words when an edit changes nothing (it already shows this), or targets a photo's or a file's caption.
 NOT_MODIFIED, NO_TEXT = "message is not modified", "no text in the message to edit"
+#: Telegram's words for a message no longer in its chat (deleted there, by anyone): an edit or a delete of it can never
+#: succeed, so it is neither retried nor taken over (GONE).
+NOT_FOUND = ("message to edit not found", "message to delete not found")
+
+
+class _Gone:
+    """What an edit answers for a message no longer in its chat: false like any refusal, but never tried again and
+    never kept as a copy (incident_thread.IncidentThread: owner's drills 2026-11-06, the group's cards 1475 and 1479
+    deleted in the chat, edited and pointed at for two hours, then posted anew at the close)."""
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return "GONE"
+
+
+GONE = _Gone()
 
 #: A photo's or a file's caption: the first part of its text — its value when the agent started; the code reads
 #: telegram_caption_chars() at each use (the villa's limit, changed on the page without a restart)
@@ -241,6 +259,9 @@ class Telegram:
             await self.api("deleteMessage", chat_id=chat_id, message_id=message_id)
             return True
         except TelegramError as e:
+            if any(w in str(e) for w in NOT_FOUND):
+                log.info("Message %s in chat %s was already gone", message_id, chat_id)
+                return True                         # gone, as asked: never pointed at as if it stayed
             log.warning("deleteMessage failed: %s", e)
             return False
 
@@ -286,7 +307,7 @@ class Telegram:
                 return True                         # it already says this: shown
             if NO_TEXT not in str(e):
                 log.warning("editMessageText failed: %s", e)
-                return False
+                return GONE if any(w in str(e) for w in NOT_FOUND) else False
         # ⚠️ A PHOTO'S OR A FILE'S MESSAGE HAS A CAPTION, NOT A TEXT (architecture review 21): editMessageText is refused
         # there, every time — an alert sent with its file kept its buttons for good
         try:
@@ -297,13 +318,14 @@ class Telegram:
             if NOT_MODIFIED in str(e):
                 return True
             log.warning("editMessageCaption failed: %s", e)
-            return False
+            return GONE if any(w in str(e) for w in NOT_FOUND) else False
 
     async def edit_media(self, chat_id: int, message_id: int, photo: bytes, caption: str,
                          keyboard: dict | None = None) -> str:
         """The picture of one of the bot's photo messages replaced by `photo` (a JPEG), its caption `caption` and its
         buttons `keyboard` written with it — an edit: no sound (editMessageMedia). "shown"; "not_media" when the message
-        is a text one (Telegram cannot turn it into a photo: the caller sends it again as one); "refused" otherwise."""
+        is a text one (Telegram cannot turn it into a photo: the caller sends it again as one); "gone" when it is no
+        longer in its chat (GONE); "refused" otherwise."""
         caption = tight_punctuation(caption)[:telegram_caption_chars()]
         media = {"type": "photo", "media": "attach://sheet", "caption": caption,
                  **_italic("caption_entities", caption)}
@@ -325,7 +347,8 @@ class Telegram:
             if NOT_MODIFIED in words:
                 return "shown"
             log.warning("editMessageMedia failed: %s", e)
-            return "not_media" if any(w in words for w in NOT_MEDIA) else "refused"
+            return "not_media" if any(w in words for w in NOT_MEDIA) else "gone" if any(w in words for w in NOT_FOUND) \
+                else "refused"
 
 
 #: Telegram's words when editMessageMedia meets a message with no picture to replace (a text message).

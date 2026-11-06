@@ -766,6 +766,9 @@ class Problems:
                 # closed as "Not a problem while it lasts" (on Telegram or the tablet): its fault says so too
                 "lasting": task.get("status") == NOT_A_PROBLEM,
                 "reopen_note": task.get("reopen_note") or None,
+                # the device it is about NOW: a visit's alert is its strongest step's (owner's drills, 2026-11-06: the
+                # tablet's card kept "Test motion" while Telegram's title said the door, then the lock)
+                "entity_id": (self.store.incident(sid) or {}).get("entity_id") or None if kind == "incident" else None,
                 "todo": self.check_of(task)}
 
     # ⚠️ A PERSON'S CLOSE IS WATCHED, AND THE COCKPIT SAYS SO (owner, 2026-10-23: "keep the Fault card visible in the

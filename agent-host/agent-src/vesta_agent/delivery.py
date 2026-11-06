@@ -36,7 +36,7 @@ from . import layout
 from .layout import fit  # noqa: F401 — one message's text at its limit: layout.fit (Delivery's edit uses it)
 from .in_progress import InProgress
 from .routing import JOB, Origin, Routing
-from .telegram import TelegramError
+from .telegram import GONE, TelegramError
 
 log = logging.getLogger("vesta")
 
@@ -272,8 +272,8 @@ class TelegramChats:
             return False
         ok = await self.tg.edit(int(chat_id), int(message_id), fit(text), keyboard)
         if not ok:
-            self.state.log("edit_refused", {"chat": chat_id, "message": message_id})
-        return bool(ok)
+            self.state.log("edit_refused", {"chat": chat_id, "message": message_id, **({"gone": True} if ok is GONE else {})})
+        return ok if ok is GONE else bool(ok)          # gone from its chat: said so (telegram.GONE), never retried
 
     async def edit_media(self, chat_id: int, message_id: int, photo: bytes, text: str, keyboard: dict | None = None) -> str:
         if self.tg is None:

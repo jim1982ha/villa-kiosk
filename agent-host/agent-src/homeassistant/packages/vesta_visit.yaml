@@ -27,7 +27,8 @@ template:
     variables:
       # the fields this event sets (a field it does not name keeps its value); `vis`: the visit it is about — a patch
       # for another visit than the one recorded (VESTA telling late) changes nothing (each field checks it: `this`, the
-      # record as it stands, is known only there)
+      # record as it stands, is known only there). ⚠️ A RECORD NEVER WRITTEN HAS NO ID (owner's drills, 2026-11-06): its
+      # id is none, the villa's first write names visit '' — compared as they stood, every visit was lost until a reset
       d: "{{ trigger.event.data.set if trigger.event.data.set is mapping else {} }}"
       vis: "{{ trigger.event.data.visit | default('', true) }}"
     sensor:
@@ -36,31 +37,35 @@ template:
         default_entity_id: sensor.vesta_visit
         icon: mdi:shield-home-outline
         state: >-
-          {%- set s = d.get('state') if ('id' in d or vis == this.attributes.get('id')) else none -%}
+          {%- set s = d.get('state') if ('id' in d or vis == (this.attributes.get('id') or '')) else none -%}
           {{ s if s in ['open', 'closed'] else (this.state if this.state in ['open', 'closed'] else 'closed') }}
         attributes:
-          id: "{{ d.get('id', this.attributes.get('id')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('id') }}"
-          automation: "{{ d.get('automation', this.attributes.get('automation')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('automation') }}"
-          seq: "{{ d.get('seq', this.attributes.get('seq', 0)) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('seq', 0) }}"
-          opened_at: "{{ d.get('opened_at', this.attributes.get('opened_at')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('opened_at') }}"
-          last_at: "{{ d.get('last_at', this.attributes.get('last_at')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('last_at') }}"
-          closes_at: "{{ d.get('closes_at', this.attributes.get('closes_at')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('closes_at') }}"
-          told_at: "{{ d.get('told_at', this.attributes.get('told_at')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('told_at') }}"
-          step: "{{ d.get('step', this.attributes.get('step')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('step') }}"
-          strongest: "{{ d.get('strongest', this.attributes.get('strongest')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('strongest') }}"
-          steps: "{{ d.get('steps', this.attributes.get('steps', [])) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('steps', []) }}"
-          photos: "{{ d.get('photos', this.attributes.get('photos', [])) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('photos', []) }}"
-          entities: "{{ d.get('entities', this.attributes.get('entities', [])) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('entities', []) }}"
-          messages: "{{ d.get('messages', this.attributes.get('messages', [])) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('messages', []) }}"
-          owner: "{{ d.get('owner', this.attributes.get('owner')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('owner') }}"
-          number: "{{ d.get('number', this.attributes.get('number')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('number') }}"
-          name: "{{ d.get('name', this.attributes.get('name')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('name') }}"
-          ack_seq: "{{ d.get('ack_seq', this.attributes.get('ack_seq', 0)) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('ack_seq', 0) }}"
-          answered: "{{ d.get('answered', this.attributes.get('answered')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('answered') }}"
-          reminded_at: "{{ d.get('reminded_at', this.attributes.get('reminded_at')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('reminded_at') }}"
-          closed: "{{ d.get('closed', this.attributes.get('closed')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('closed') }}"
-          status: "{{ d.get('status', this.attributes.get('status')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('status') }}"
-          candidate: "{{ d.get('candidate', this.attributes.get('candidate')) if ('id' in d or vis == this.attributes.get('id')) else this.attributes.get('candidate') }}"
+          id: "{{ d.get('id', this.attributes.get('id')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('id') }}"
+          automation: "{{ d.get('automation', this.attributes.get('automation')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('automation') }}"
+          seq: "{{ d.get('seq', this.attributes.get('seq', 0)) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('seq', 0) }}"
+          opened_at: "{{ d.get('opened_at', this.attributes.get('opened_at')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('opened_at') }}"
+          last_at: "{{ d.get('last_at', this.attributes.get('last_at')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('last_at') }}"
+          closes_at: "{{ d.get('closes_at', this.attributes.get('closes_at')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('closes_at') }}"
+          told_at: "{{ d.get('told_at', this.attributes.get('told_at')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('told_at') }}"
+          step: "{{ d.get('step', this.attributes.get('step')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('step') }}"
+          strongest: "{{ d.get('strongest', this.attributes.get('strongest')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('strongest') }}"
+          steps: "{{ d.get('steps', this.attributes.get('steps', [])) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('steps', []) }}"
+          photos: "{{ d.get('photos', this.attributes.get('photos', [])) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('photos', []) }}"
+          entities: "{{ d.get('entities', this.attributes.get('entities', [])) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('entities', []) }}"
+          messages: "{{ d.get('messages', this.attributes.get('messages', [])) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('messages', []) }}"
+          owner: "{{ d.get('owner', this.attributes.get('owner')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('owner') }}"
+          number: "{{ d.get('number', this.attributes.get('number')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('number') }}"
+          name: "{{ d.get('name', this.attributes.get('name')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('name') }}"
+          # the latest step VESTA told: it only grows within a visit (two tells read the record at the same moment: the
+          # later one never takes it back); a new visit (its `id` written) starts again from what it says
+          ack_seq: >-
+            {{ (d.get('ack_seq', 0) | int(0)) if 'id' in d else ([d.get('ack_seq', 0) | int(0), this.attributes.get('ack_seq', 0) | int(0)] | max)
+               if vis == (this.attributes.get('id') or '') else this.attributes.get('ack_seq', 0) }}
+          answered: "{{ d.get('answered', this.attributes.get('answered')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('answered') }}"
+          reminded_at: "{{ d.get('reminded_at', this.attributes.get('reminded_at')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('reminded_at') }}"
+          closed: "{{ d.get('closed', this.attributes.get('closed')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('closed') }}"
+          status: "{{ d.get('status', this.attributes.get('status')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('status') }}"
+          candidate: "{{ d.get('candidate', this.attributes.get('candidate')) if ('id' in d or vis == (this.attributes.get('id') or '')) else this.attributes.get('candidate') }}"
           # which write this is (the writer waits until it reads it back before its next step)
           token: "{{ trigger.event.data.token | default('') }}"
 
@@ -73,7 +78,7 @@ template:
         attributes:
         # VISIT WORDS: written by vesta_shared.message_format.package_visit_words — python -m vesta_shared.message_format
           words: >-
-            {{ {"visit_seen": "Seen at {places}, {span}", "visit_lock_here": "{name} opened at the lock (not from the app), {time}", "visit_lock_app": "{name} opened from the app ({who}), {time}", "visit_opened": "{name} opened, {time}", "visit_locked_again": ", locked again {time}", "visit_inside": "Someone is inside ({room}) at {time}", "visit_person": "Person seen in the {room} at {time}", "visit_changed_lock": "{name} was opened at {time}.", "visit_changed_door": "{name} opened at {time}.", "visit_changed_inside": "Someone went inside at {time}.", "visit_changed_motion": "Seen at {place} at {time}.", "visit_changed_person": "A person was seen in the {room} at {time}.", "visit_expected": "Was this visit expected?", "visit_ended": "no further signal for {quiet}", "visit_home": "Expected: {name} came home at {time}", "no_answer": "No answer after {after}", "visit_title_opened": "{name} opened while the villa is empty", "visit_noted": "VESTA acts on it when it is back", "visit_noise": "Sound heard in the {room} at {time}", "visit_changed_noise": "A sound was heard in the {room} at {time}.", "visit_drill": "TEST: {title}"} }}
+            {{ {"visit_seen": "Seen at {places}, {span}", "visit_lock_here": "{name} opened at the lock (not from the app), {time}", "visit_lock_app": "{name} opened from the app ({who}), {time}", "visit_lock_app_plain": "{name} opened from the app, {time}", "visit_opened": "{name} opened, {time}", "visit_locked_again": ", locked again {time}", "visit_inside": "Someone is inside ({room}) at {time}", "visit_person": "Person seen in the {room} at {time}", "visit_changed_lock": "{name} was opened at {time}.", "visit_changed_door": "{name} opened at {time}.", "visit_changed_inside": "Someone went inside at {time}.", "visit_changed_motion": "Seen at {place} at {time}.", "visit_changed_person": "A person was seen in the {room} at {time}.", "visit_expected": "Was this visit expected?", "visit_ended": "no further signal for {quiet}", "visit_home": "Expected: {name} came home at {time}", "no_answer": "No answer after {after}", "visit_title_opened": "{name} opened while the villa is empty", "visit_noted": "VESTA acts on it when it is back", "visit_noise": "Sound heard in the {room} at {time}", "visit_changed_noise": "A sound was heard in the {room} at {time}.", "visit_drill": "TEST: {title}"} }}
           buttons: >-
             {{ [["done", "Done"], ["not_a_problem", "Not a problem"], ["open_ticket", "Open Ticket"], ["need_help", "Need help"]] }}
           pressed: >-
@@ -104,12 +109,12 @@ script:
         description: The visit's id, as the villa's event named it.
         required: true
         selector:
-          text: {}
+          text:
       owner:
         name: Who holds it
         description: vesta once the VESTA Agent tells the visit itself.
         selector:
-          text: {}
+          text:
       number:
         name: Number
         description: The alert's number at the VESTA Agent.
@@ -122,7 +127,7 @@ script:
         name: Name
         description: The alert's name, as every message says it.
         selector:
-          text: {}
+          text:
       ack_seq:
         name: Step told
         description: The latest step the VESTA Agent has told.
@@ -135,23 +140,30 @@ script:
         name: Cards
         description: The card each chat shows now.
         selector:
-          object: {}
+          object:
       answered:
         name: Answer
         description: A person's answer (option, by, at, where).
         selector:
-          object: {}
+          object:
       reminded_at:
         name: Reminder sent
         description: When the VESTA Agent sent its reminder.
         selector:
-          text: {}
+          text:
+      dropped:
+        name: Replies removed
+        description: The villa's replies the VESTA Agent removed once it held the visit (their message ids).
+        selector:
+          object:
     sequence:
       - condition: template
         value_template: "{{ record is defined and visit is defined and state_attr(record, 'id') == visit }}"
       - variables:
           # each chat's card as VESTA names it ({chat_id, message_id}), with the villa's own name for that chat
-          # (entity_id) and what the message is (photo or text) when the villa sent it; the villa's replies are kept
+          # (entity_id) and what the message is (photo or text) when the villa sent it; the villa's replies are kept,
+          # but those VESTA removed (`dropped`: it holds the visit, its one card tells it all)
+          gone: "{{ (dropped if dropped is defined and dropped is list else []) | map('int', 0) | list }}"
           cards: >-
             {%- set cur = state_attr(record, 'messages') or [] -%}
             {%- set ns = namespace(m=[]) -%}
@@ -161,14 +173,15 @@ script:
               {%- set ns.m = ns.m + [{'entity_id': (old[0].entity_id if old else ''), 'chat_id': m.chat_id | int(0),
                   'message_id': m.message_id | int(0), 'role': 'card', 'media': (same[0].media if same else '')}] -%}
             {%- endfor -%}
-            {{ ns.m + (cur | selectattr('role', 'eq', 'reply') | list) }}
+            {{ (ns.m if ns.m else (cur | rejectattr('role', 'eq', 'reply') | list))
+               + (cur | selectattr('role', 'eq', 'reply') | rejectattr('message_id', 'in', gone) | list) }}
           fields_set: >-
             {%- set ns = namespace(d={}) -%}
             {%- if owner is defined and owner -%}{%- set ns.d = dict(ns.d, owner=owner) -%}{%- endif -%}
             {%- if number is defined and number -%}{%- set ns.d = dict(ns.d, number=number | int) -%}{%- endif -%}
             {%- if name is defined and name -%}{%- set ns.d = dict(ns.d, name=name) -%}{%- endif -%}
-            {%- if ack_seq is defined and ack_seq is not none -%}{%- set ns.d = dict(ns.d, ack_seq=[ack_seq | int(0), state_attr(record, 'ack_seq') | int(0)] | max) -%}{%- endif -%}
-            {%- if messages is defined and messages is list and messages -%}{%- set ns.d = dict(ns.d, messages=cards) -%}{%- endif -%}
+            {%- if ack_seq is defined and ack_seq is not none -%}{%- set ns.d = dict(ns.d, ack_seq=ack_seq | int(0)) -%}{%- endif -%}
+            {%- if (messages is defined and messages is list and messages) or gone -%}{%- set ns.d = dict(ns.d, messages=cards) -%}{%- endif -%}
             {%- if answered is defined and answered is mapping -%}{%- set ns.d = dict(ns.d, answered=answered) -%}{%- endif -%}
             {%- if reminded_at is defined and reminded_at -%}{%- set ns.d = dict(ns.d, reminded_at=reminded_at) -%}{%- endif -%}
             {{ ns.d }}

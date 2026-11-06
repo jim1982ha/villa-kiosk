@@ -74,8 +74,9 @@ def test_a_stronger_step_before_vesta_said_it_holds_the_visit_rings_from_vesta(t
     n = len(v.tg.sent)
     vi.add("lock", LOCK, "18:35:40", how="lock")
     play(v, send(vi.event()))
-    rang = [c for c, t, _k in v.tg.sent[n:] if "Stronger signal sent" in t]
+    rang = [c for c, t, _k in v.tg.sent[n:] if "Outdoor entrance Lock opened while the villa is empty" in t]
     assert sorted(rang) == [OWNER, FM], v.tg.sent[n:]
+    assert all("- Stronger signal sent " in copy(v, c)["text"] for c in (OWNER, FM))
 
 
 # ---------------------------------------------------------------------------------------------- the villa's reminder

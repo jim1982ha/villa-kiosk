@@ -18,12 +18,12 @@ What it records, in the order it happened:
 who never sent /start: 403, `refused`) — `{"blocked <chat id>"}` that one chat only; `{"photo"}` only a message with a photo;
 `{"second part"}` fails from a message's second part on, the first having arrived (TelegramError.delivered);
 `{"delete"}` makes delete answer False (a message past Telegram's 48 hours); `{"edit"}` makes edit answer False (a network
-blip, a deleted message). Anything else reached on it — getUpdates,
+blip); `gone` holds the messages deleted in their chat by someone else (an edit answers GONE, a delete True). Anything else reached on it — getUpdates,
 leaveChat — raises: the agent must never call them.
 """
 from __future__ import annotations
 
-from vesta_agent.telegram import TelegramError, layout
+from vesta_agent.telegram import GONE, TelegramError, layout
 from vesta_shared.messaging import tight_punctuation
 
 BOT = {"id": 8000, "username": "Villa_Test_bot"}
@@ -39,6 +39,7 @@ class FakeTelegram:
         self.replies: list = []            # (chat, message id, the message it answers): a send with reply_to
         self.media_edits: list = []       # (chat, message, jpeg bytes, caption, keyboard): editMessageMedia
         self.with_photo: set = set()      # (chat, message) of every message sent with a picture (a test may add the villa's)
+        self.gone: set = set()            # (chat, message) deleted in the chat by someone else: Telegram finds it no more
         self.refuse: set[str] = set()
         self.next_id = 1000
 
@@ -81,6 +82,8 @@ class FakeTelegram:
         self.toasts.append((callback_id, text))
 
     async def delete(self, chat_id, message_id):
+        if (chat_id, message_id) in self.gone:
+            return True                      # already gone (the real one says so: telegram.Telegram.delete)
         if "delete" in self.refuse:          # Telegram's 48 hours are over: the message stays
             return False
         self.deleted.append((chat_id, message_id))
@@ -97,6 +100,8 @@ class FakeTelegram:
         return True
 
     async def edit(self, chat_id, message_id, text, keyboard=None):
+        if (chat_id, message_id) in self.gone:
+            return GONE                      # "message to edit not found"
         if "edit" in self.refuse:
             return False
         text = tight_punctuation(text)        # as the real one (telegram.Telegram.edit)
@@ -106,6 +111,8 @@ class FakeTelegram:
 
     async def edit_media(self, chat_id, message_id, photo, caption, keyboard=None):
         """editMessageMedia: refused on a message that carries no picture, as Telegram refuses it ("not_media")."""
+        if (chat_id, message_id) in self.gone:
+            return "gone"
         if "edit" in self.refuse:
             return "refused"
         if (chat_id, message_id) not in self.with_photo:

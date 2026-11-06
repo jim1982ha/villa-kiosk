@@ -201,6 +201,10 @@ class Step(NamedTuple):
     #: UNDOES AN ENDING (owner, 2026-11-05): each chat keeps its own steps, yet the owner's group, which read "Done …
     #: Watch 4h", kept it under "(existing)" while the facility manager alone read the reopening
     every_copy: bool = False
+    #: its line stays among the Status lines and the bottom line is where the alert stands (its title word's): a step
+    #: that is part of the story, never the alert's state. ⚠️ (owner's drills, 2026-11-06: the tablet's card read
+    #: "Stronger signal sent 22:57, TEST: Test door opened while the villa is empty (to: Owner & FM)" as its state)
+    listed: bool = False
 
 
 #: EVERY STEP OF AN ALERT, ONE LINE EACH (architecture review, 2026-10-17: a step was named in five tables — the
@@ -225,9 +229,10 @@ STEPS: dict[str, Step] = {
     "back": Step("Back: alert sent", "existing", timed=True, starts_run=True,
                  line="Back at {at}{times} (to: {who})"),
     "still": Step("Still-there alert sent", "existing", timed=True),
-    # a visit's step stronger than every one before it (a lock after motion): its card sent again, so it rings — its
-    # bottom line says the step and when (owner, 2026-11-06: one visit, one story; a break-in is never folded quietly)
-    "stronger": Step("Stronger signal sent", "existing", timed=True),
+    # a visit's step stronger than every one before it (a lock after motion): its card sent again, so it rings — a line
+    # of its Status, the card's state "New alert" again (owner, 2026-11-06: one visit, one story; a break-in is never
+    # folded quietly; the state line is the short state)
+    "stronger": Step("Stronger signal sent", "new", timed=False, listed=True),
     "reopened": Step("Reopen request sent", "existing", timed=True, every_copy=True),
     "closed": Step("Closing note sent", "closed", timed=False),
 }
@@ -579,7 +584,7 @@ ALERT_DESK_WORDS = os.path.join(os.path.dirname(ALERT_DESK_RULES), "words.yaml")
 ALERT_DESK_SKILL = os.path.join(os.path.dirname(ALERT_DESK_RULES), "skill.yaml")
 #: The words.yaml entries the villa's presence automation writes a visit with (its title, its lines, its reminder, a
 #: press it recorded while VESTA is away)
-VISIT_WORDS = ("visit_seen", "visit_lock_here", "visit_lock_app", "visit_opened", "visit_locked_again", "visit_inside",
+VISIT_WORDS = ("visit_seen", "visit_lock_here", "visit_lock_app", "visit_lock_app_plain", "visit_opened", "visit_locked_again", "visit_inside",
                "visit_person", "visit_changed_lock", "visit_changed_door", "visit_changed_inside",
                "visit_changed_motion", "visit_changed_person", "visit_expected", "visit_ended", "visit_home", "no_answer",
                "visit_title_opened", "visit_noted", "visit_noise", "visit_changed_noise", "visit_drill")

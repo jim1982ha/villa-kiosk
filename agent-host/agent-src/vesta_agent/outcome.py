@@ -198,10 +198,26 @@ class Outcome:
         asked: dict[int, list[tuple[int, bool]]] = {}   # incident → (chat, reached) of the facility manager's, with buttons
         # the villa's own messages first (its rule's alert in the group), taken over as the incident's copy there — the
         # roles it is about are the step's, else its priority's, never the chat's (notice.Notices.went_to)
+        # a visit's sheet, made once: the copies this result sends carry it (a card sent again rings once, with its
+        # picture), the others get it in place (result.sheet, below)
+        sheets: dict[int, tuple[bytes, str]] = {}
+        if self.visits is not None:
+            for a in res.get("actions") or []:
+                if isinstance(a, dict) and a.get("action") == SHEET and str(a.get("incident_id") or "").isdigit():
+                    try:
+                        got = await self.visits.jpeg(int(a["incident_id"]), list(a.get("photos") or []),
+                                                     int(a.get("shown") or 1))
+                    except Exception:  # noqa: BLE001 — the card goes without its sheet, never not at all
+                        log.exception("Incident #%s: its photo sheet could not be made", a["incident_id"])
+                        got = None
+                    if got:
+                        import hashlib
+                        sheets[int(a["incident_id"])] = (got, hashlib.sha1(got).hexdigest())
         adopted: set[tuple[int, int, str | None]] = set()        # (incident, chat, step) shown by a taken-over copy
         for h in res.get("ha_messages") or []:
             hid, stage = int(h.get("incident_id") or 0), h.get("stage")
-            for chat, roles in await self.adopt_ha(h, skill_name, going.get(hid), told.get((hid, stage))):
+            for chat, roles in await self.adopt_ha(h, skill_name, going.get(hid), told.get((hid, stage)),
+                                                   sheet=sheets.get(hid)):
                 notice(hid, stage, chat, roles)
                 posted.setdefault(hid, []).append((chat, stage, going.get(hid) or roles))
                 adopted.add((hid, chat, stage))
@@ -226,21 +242,6 @@ class Outcome:
                 await self.thread.close(int(s["incident_id"]), str(s.get("note") or ""), mark=s.get("mark"),
                                         note_in=s.get("note_in") if isinstance(s.get("note_in"), dict) else None,
                                         final=s.get("final") is True, closed=s.get("closed") is True)
-        # a visit's sheet, made once: the copies this result sends carry it (a card sent again rings once, with its
-        # picture), the others get it in place (result.sheet, below)
-        sheets: dict[int, tuple[bytes, str]] = {}
-        if self.visits is not None:
-            for a in res.get("actions") or []:
-                if isinstance(a, dict) and a.get("action") == SHEET and str(a.get("incident_id") or "").isdigit():
-                    try:
-                        got = await self.visits.jpeg(int(a["incident_id"]), list(a.get("photos") or []),
-                                                     int(a.get("shown") or 1))
-                    except Exception:  # noqa: BLE001 — the card goes without its sheet, never not at all
-                        log.exception("Incident #%s: its photo sheet could not be made", a["incident_id"])
-                        got = None
-                    if got:
-                        import hashlib
-                        sheets[int(a["incident_id"])] = (got, hashlib.sha1(got).hexdigest())
         for item in unrouted:
             done["unrouted"] += 1
             self.state.log("send_unrouted", {"to": item.get("to"), "skill": skill_name})
@@ -300,9 +301,18 @@ class Outcome:
         for e in res.get("edits") or []:
             done["edited"] += await self.rewrite(e, skill_name)
         recorded: dict[int, int] = {}                        # incident → the steps this result added to its history
+        # when each step happened, when the desk says (a visit's alert taken over late: when the villa sent it)
+        at_of: dict[tuple[int, str | None], datetime] = {}
+        for x in list(res.get("ha_messages") or []) + list(res.get("send") or []):
+            iid_x = (x or {}).get("incident_id") if isinstance(x, dict) else None
+            if str(iid_x or "").isdigit() and x.get("at"):
+                try:
+                    at_of[(int(iid_x), x.get("stage"))] = datetime.fromisoformat(str(x["at"]))
+                except ValueError:
+                    pass
         if self.notices:
             for (iid, stage), chs in noticed.items():
-                recorded[iid] = recorded.get(iid, 0) + self.notices.record(iid, stage, chs)
+                recorded[iid] = recorded.get(iid, 0) + self.notices.record(iid, stage, chs, at=at_of.get((iid, stage)))
         # ⚠️ ONE INCIDENT, ONE PICTURE (owner, 2026-10-11): a reminder went to the facility manager only, and the group's
         # copy kept "(new)" and the first alert — every other copy now shows what was just sent, quietly
         for iid, shown_in in posted.items():
@@ -325,8 +335,12 @@ class Outcome:
             # each chat's heading as the copy just sent was headed, the chat's own steps listed (notice.heading: one)
             head_for = (lambda c, i=iid, st=last_stage, al=last_also, n=steps_now:
                         self.notices.heading(c, i, stage=st, also=al, before=n)) if self.notices else None
+            # a step whose line stays in the Status (Step.listed: a stronger signal) is a line the copies just sent did
+            # not hold yet (drawn before it was recorded): they are drawn again too, quietly
+            listed = any((STEPS.get(st or "") and STEPS[st].listed) for (i, st) in noticed if i == iid)
             if latest.get("parts"):
-                await self.thread.sync(iid, layout.of(latest), skip={c for c, _s, _a in shown_in}, quiet=elsewhere,
+                await self.thread.sync(iid, layout.of(latest), skip=set() if listed else {c for c, _s, _a in shown_in},
+                                       quiet=elsewhere,
                                        head_for=head_for, keyboard=(
                     lambda c, i=iid: self.buttons.keyboard(i, c, skill_name)) if skill_name and self.buttons.open(iid) else None)
         # ⚠️ AN ALERT NOBODY ASKED TO ANSWER RECEIVED (architecture review 25): Telegram refused every chat of the people
@@ -409,9 +423,11 @@ class Outcome:
         p = layout.of(rec) if rec else {}
         return (p["status"], p.get("said")) if p.get("status") else None
 
-    async def adopt_ha(self, h: dict, skill_name: str | None = None, also=None, told=None) -> list[tuple[int, set[str]]]:
+    async def adopt_ha(self, h: dict, skill_name: str | None = None, also=None, told=None,
+                       sheet: tuple[bytes, str] | None = None) -> list[tuple[int, set[str]]]:
         """Home Assistant's messages of one automation run become incident messages (outcome key ha_messages). `also`:
-        the roles the incident's other messages of this result go to; `told`: those of this same step. Returns each
+        the roles the incident's other messages of this result go to; `told`: those of this same step; `sheet`: the
+        visit's sheet (jpeg, fingerprint), the picture of a card sent in place of one gone from its chat. Returns each
         chat taken over with the roles the copy there is about (notice.Notices.went_to)."""
         ctx, iid, text = (h or {}).get("context"), (h or {}).get("incident_id"), (h or {}).get("text") or ""
         named = (h or {}).get("messages")
@@ -472,7 +488,16 @@ class Outcome:
             # translated; not yet, as written, and translated once recorded — never waited for
             if said:
                 p = self.thread.own_words(int(iid), chat, p)
-            await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb)
+            if not await self.thread.adopt(int(iid), chat, mid, p, keyboard=kb):
+                # ⚠️ NO LONGER IN ITS CHAT (owner's drill #129: the group's card deleted there): the chat gets the
+                # incident's own copy instead — its one message about it — never a dead id kept as its card
+                if named is not None and await self.poster.post(
+                        chat, text, status=status, roles=roles, incident=int(iid), keyboard=kb, thread=int(iid),
+                        stage=h.get("stage"), also=also, told=told, status_in=status_in or None,
+                        **({"photo": (base64.b64encode(sheet[0]).decode(), "image/jpeg"), "sheet": sheet[1]}
+                           if sheet else {})):
+                    out.append((chat, roles))
+                continue
             # ⚠️ TAKEN OVER, IT IS THE AGENT'S (2026-10-17): a press is handled only on the agent's own messages, and this
             # one carries its Done / Need help — never remembered, a press on the rule's first copy was left unanswered
             self.state.remember_message(chat, mid)

@@ -212,10 +212,11 @@ def test_the_evening_of_06_11_is_one_alert_one_message_per_chat_one_story(tmp_pa
         assert "- Someone is inside (Living Room) at 18:36" in st, st
         assert not [ln for ln in st if "Still-there" in ln or "Cleared" in ln], st
         assert sum(ln.startswith("- Seen at") for ln in st) == 2, st
-        assert text.startswith("#4-P1 (existing)\n") and "Outdoor entrance Lock opened while the villa is empty" in text
-        # its stronger step rang: the card sent again with the sheet as its picture, the villa's card gone
-        assert re.fullmatch(rf"⚠️ ⚙️ Stronger signal sent {TICKET_RE}, Outdoor entrance Lock opened while the villa is empty "
-                            r"\(to: Owner & FM\)", st[-1]), st
+        assert text.startswith("#4-P1 (new)\n") and "Outdoor entrance Lock opened while the villa is empty" in text
+        # its stronger step rang: the card sent again with the sheet as its picture, the villa's card gone — a line of
+        # its Status, the card's state the short one (owner's drills, 2026-11-06)
+        assert [ln for ln in st if re.fullmatch(rf"- Stronger signal sent {TICKET_RE} \(to: Owner & FM\)", ln)], st
+        assert st[-1] == "⚠️ New alert", st
     assert (OWNER, 500) in v.tg.deleted and (FM, 501) in v.tg.deleted
     # one message per chat: every copy VESTA posted but the card is gone
     for chat in (OWNER, FM):
@@ -337,8 +338,8 @@ def test_a_door_forced_after_motion_rings_and_arms_the_siren_never_folded_quietl
     play(v, send(vi.event()))
     rang = [(c, t) for c, t, _k in v.tg.sent[sent_before:] if not t.startswith("Approval")]
     assert sorted(c for c, _t in rang) == [OWNER, FM], "the door is stronger than motion: sent again, it rings"
-    assert all("Stronger signal sent " in t and "Garden Door opened while the villa is empty (to: Owner & FM)" in t
-               for _c, t in rang)
+    assert all(t.startswith("#1-P1 (new)\n") and "Garden Door opened while the villa is empty" in t for _c, t in rang)
+    assert "- Stronger signal sent " in copy(v, OWNER, 1)["text"] and "- Stronger signal sent " in copy(v, FM, 1)["text"]
     assert "- Garden Door opened, 02:10" in lines(copy(v, OWNER, 1)["text"])
     assert v.state.approvals_in("pending"), "two sources in the siren's window, the villa empty: the owner is asked"
     # another motion after it is no stronger: an edit, no sound

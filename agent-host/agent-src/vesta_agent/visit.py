@@ -45,6 +45,7 @@ class Visits:
         self._withdraw = withdraw         # approvals.Approvals.withdraw: a waiting request withdrawn, every copy told
         self.state, self.thread, self.notices = state, thread, notices
         self.photo, self.out_dir, self.tz, self._tell, self.keyboard = photo, out_dir, timezone_name, tell, keyboard
+        self._locks: dict[int, asyncio.Lock] = {}
 
     # ------------------------------------------------------------------ the sheet
     async def jpeg(self, iid: int, photos: list[dict], shown: int) -> bytes | None:
@@ -65,18 +66,37 @@ class Visits:
     # ------------------------------------------------------------------ the villa told
     async def tell(self, iid: int, script: str, fields: dict, name: str = "") -> bool:
         """The villa's `script` run with `fields`, the cards each chat shows of incident `iid` now (`messages`) and the
-        alert's name (`name`, "#125-P1"). False when there is no way to tell it or it refused (the villa then takes the
-        visit back itself after its own wait: never in the critical path)."""
+        alert's name (`name`, "#125-P1"). `fields["drop"]`: the villa's replies ([chat, message id]) VESTA removes now it
+        holds the visit — its one card tells it all (owner, 2026-11-06, #129: "Deleted message" and the villa's "TEST:
+        Test door opened at 22:55." stayed under VESTA's card); the villa is told which went (`dropped`). False when
+        there is no way to tell it or it refused (the villa then takes the visit back itself after its own wait: never
+        in the critical path).
+
+        ⚠️ ONE TELL AT A TIME PER VISIT, ITS CARDS READ WHEN IT GOES (owner's drill #127, 22:42:02): the lock's and the
+        relock's results told the villa within the same second, each with the cards it had read earlier — the relock's
+        step was taken back by the older one, the villa thought VESTA silent and took the visit back a minute later."""
         if self._tell is None or not str(script).startswith("script."):
             return False
-        cards = [{"chat_id": int(c), "message_id": int(r["mid"]), "role": "card"}
-                 for c, r in self.state.incident_chats(iid) if r.get("mid")]
-        data = {**{k: v for k, v in fields.items() if v is not None}, "messages": cards, **({"name": name} if name else {})}
-        try:
-            return bool(await self._tell(script, data))
-        except Exception as e:  # noqa: BLE001 — the villa keeps the visit itself
-            log.warning("Incident #%s: the villa could not be told of its visit (%s)", iid, type(e).__name__)
-            return False
+        fields = dict(fields)
+        drop = fields.pop("drop", None) or []
+        async with self._locks.setdefault(int(iid), asyncio.Lock()):
+            dropped = []
+            for pair in drop:
+                try:
+                    chat, mid = int(pair[0]), int(pair[1])
+                except (TypeError, ValueError, IndexError):
+                    continue
+                if self.thread.delete is not None and await self.thread.delete(chat, mid):
+                    dropped.append(mid)
+            cards = [{"chat_id": int(c), "message_id": int(r["mid"]), "role": "card"}
+                     for c, r in self.state.incident_chats(iid) if r.get("mid")]
+            data = {**{k: v for k, v in fields.items() if v is not None}, "messages": cards,
+                    **({"name": name} if name else {}), **({"dropped": dropped} if dropped else {})}
+            try:
+                return bool(await self._tell(script, data))
+            except Exception as e:  # noqa: BLE001 — the villa keeps the visit itself
+                log.warning("Incident #%s: the villa could not be told of its visit (%s)", iid, type(e).__name__)
+                return False
 
     # ------------------------------------------------------------------ the siren of a visit
     def card(self, iid: int, chat: int) -> int | None:

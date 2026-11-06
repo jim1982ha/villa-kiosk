@@ -227,7 +227,8 @@ def settle(incident: int, note: str, mark: str | None = None, note_in: dict | No
 
 
 def ha_message(incident: int, text: str, context: str | None, stage: str | None = None, status: str | None = None,
-               status_in: dict | None = None, as_it_stands: bool = False, messages=None, takes=None) -> dict:
+               status_in: dict | None = None, as_it_stands: bool = False, messages=None, takes=None,
+               at: str | None = None) -> dict:
     """Home Assistant's own messages of the automation run `context` (the event's context) become `incident`'s
     messages, rewritten as `text` under the incident's heading, like every other notice about it (`stage`: STAGES;
     `status_in`: as `message`'s). `as_it_stands`: the incident closed before this message (the rule's late all-clear)
@@ -237,7 +238,9 @@ def ha_message(incident: int, text: str, context: str | None, stage: str | None 
     `visit.messages`), taken over in place of the run's messages. ⚠️ NEVER FROM A RUN FOR A VISIT (owner, 2026-11-06,
     #125-P1 at 18:53): the run's messages included a card the reminder had already replaced; the record names the
     card each chat shows now. A chat already holding a copy of the incident is never taken over again. `takes`: the
-    villa's announcements on the tablet this card stands for, by their key ("visit:<id>")."""
+    villa's announcements on the tablet this card stands for, by their key ("visit:<id>"). `at`: when the step
+    happened, its Status line's moment — a visit's alert taken over late is "Alert sent" when the VILLA sent it (owner's
+    drill #129: "Alert sent 22:57", VESTA's take-over, for an alert sent at 22:55)."""
     m = {"incident_id": int(incident), "text": text, "context": context,
          **({"status": status, **_in("status_in", status_in)} if status else {}),
          **({"as_it_stands": True} if as_it_stands else {})}
@@ -245,6 +248,8 @@ def ha_message(incident: int, text: str, context: str | None, stage: str | None 
         m["messages"] = [[int(c), int(mid)] for c, mid in messages]
     if takes:
         m["takes"] = [str(t) for t in takes]          # the villa's announcements it stands for on the tablet, by key
+    if at:
+        m["at"] = str(at)                              # when the step happened (a visit's alert: when the villa sent it)
     if stage is not None:
         if stage not in STAGES:
             raise ValueError(f"stage must be one of {', '.join(STAGES)}")
@@ -260,12 +265,14 @@ def siren(armed: bool, prompt: str | None, to: tuple[str, ...] = ("owner", "fm")
     return {"armed": bool(armed), "prompt": prompt, "to": list(to), **detail}
 
 
-def seen(incident: int, key: str, note: str, note_in: dict | None = None, at: str | None = None) -> dict:
+def seen(incident: int, key: str, note: str, note_in: dict | None = None, at: str | None = None,
+         since: str | None = None) -> dict:
     """One line of a visit's story on incident `incident` (owner, 2026-11-06: one visit, one story): `note` in the
     desk's words ({code: text} in `note_in`), `key` the line it is — the same key again is the SAME line, said anew
-    (the engine folds it, notice.Notices.observe: "Seen at Parking → Entrance Left, 18:34–18:35"); `at`: its moment."""
+    (the engine folds it, notice.Notices.observe: "Seen at Parking → Entrance Left, 18:34–18:35"); `at`: its latest
+    moment; `since`: when it began, where a new line stands among the Status lines (in time order)."""
     return {"incident_id": int(incident), "key": _key(key), "note": str(note), **_in("note_in", note_in),
-            **({"at": str(at)} if at else {})}
+            **({"at": str(at)} if at else {}), **({"since": str(since)} if since else {})}
 
 
 #: The actions of a visit (desk.py visit_intake), as the engine reads them.

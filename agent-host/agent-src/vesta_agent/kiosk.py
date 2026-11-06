@@ -346,6 +346,16 @@ def retitled(title: str) -> Amend:
     return amend
 
 
+def placed(entity_id: str) -> Amend:
+    """An open fault is about the device its problem names NOW (a visit's strongest step: its card's name follows, as
+    Telegram's title does). Nothing when it is closed or already says it."""
+    def amend(t: dict) -> dict | None:
+        if t.get("status") == "resolved" or not entity_id or t.get("entityId") == entity_id:
+            return None
+        return dict(t, entityId=entity_id)
+    return amend
+
+
 def noted(lines: list[dict]) -> Amend:
     """Lines of what happened about an open fault on Telegram ([{at, note}], notice.Notices.story), each a "noted" step
     at its own time; a line the fault already has is not written again."""
@@ -774,7 +784,7 @@ class Kiosk:
                     if mine and str(t.get("title") or "") != title[:fault_title_chars()]:
                         upd["was"] = str(t.get("title") or "")  # the title it replaces: the card's "Was:" (review 31)
                     # open again: no longer resolved, nor being confirmed (a person's close watched, then still bad)
-                    was, t = t, {k: v for k, v in t.items() if k not in ("resolvedAt", "confirmsBy")}
+                    was, t = t, {k: v for k, v in t.items() if k not in ("resolvedAt", "confirmsBy", "notWatched")}
                     tickets[i] = self._gated(was, dict(t, status="open", title=title[:fault_title_chars()] if mine else t.get("title"),
                                                        updates=list(t.get("updates") or []) + [upd]))
                     data["tickets"] = tickets
@@ -807,14 +817,17 @@ class Kiosk:
         return await self._edit(change)
 
     async def resolve_ticket(self, tid: str, note: str | None = None, who: str | None = None,
-                             confirms_by: str | None = None, lasting: bool = False) -> bool:
+                             confirms_by: str | None = None, lasting: bool = False, not_watched: bool = False) -> bool:
         """Mark one of the agent's tickets resolved. By `who` — a person's Done: their name on the card, and the work
         recorded as the Kiosk's own "Mark resolved" records it (a completion, in Recent work; review 31: a Done on
         Telegram never appeared there). Without — the agent's own clearing of a problem gone: kind "cleared", never a
         repair in any figure. `confirms_by`: when the agent reads it again to confirm a person's close (`confirmsBy`, a
         Kiosk that reads it only: _gated). `lasting`: a person's "Not a problem while it lasts" (on Telegram or the
         tablet): a close with no work done (kind "cleared", no completion) carrying `lasting`, by `who`, as the Cockpit's
-        own records it (the agreement's ticketUpdate). False when it is gone or closed."""
+        own records it (the agreement's ticketUpdate). `not_watched`: nothing is watched after this close (the
+        agreement's ticket.fields.notWatched, a Kiosk that reads it only): it goes to Closed at once, never "about to be
+        watched" (owner's drills, 2026-11-06: a visit closed sat on Watch with no "Closes" line). False when it is gone
+        or closed."""
         def change(data: dict) -> bool:
             tickets = list(data.get("tickets") or [])
             for i, t in enumerate(tickets):
@@ -837,6 +850,7 @@ class Kiosk:
                         upd["kind"] = CLEARED
                     tickets[i] = self._gated(t, dict(t, status="resolved", resolvedAt=now,
                                                      **({"confirmsBy": confirms_by} if confirms_by else {}),
+                                                     **({"notWatched": True} if not_watched and not confirms_by else {}),
                                                      updates=list(t.get("updates") or []) + [upd]))
                     data["tickets"] = tickets
                     return True

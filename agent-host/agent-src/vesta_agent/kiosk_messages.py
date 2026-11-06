@@ -194,8 +194,12 @@ def _finished(rec: dict, photo: str | None) -> dict:
     rec["roles"] = _lines(roles_of(rec["to"]), "roles", "role")
     # the villa's runs it stands for: the NEWEST kept when there are more (the older ones' messages are long tidied away
     # on the tablet; agent-contract.json vestaMessage says so)
+    # ⚠️ A KEY IS NEVER CROWDED OUT (owner's drills, 2026-11-06): a visit's card takes every step's run, and its one
+    # announcement by its key ("visit:<id>") — kept whatever the number of runs, the newest runs after it
     takes = [str(t) for t in rec.get("takes") or [] if t]
-    rec["takes"] = takes[-agreed_limit("takes"):] if agreed_limit("takes") else []
+    keys, runs = [t for t in takes if ":" in t], [t for t in takes if ":" not in t]
+    room = max(agreed_limit("takes") - len(keys), 0)
+    rec["takes"] = (keys + (runs[-room:] if room else []))[-agreed_limit("takes"):] if agreed_limit("takes") else []
     rec["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     rec = {k: v for k, v in rec.items() if v not in ("", [], {}, None)}
     return {**rec, "photo": photo} if photo else rec

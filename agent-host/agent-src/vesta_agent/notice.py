@@ -175,21 +175,54 @@ def fold(history: list[dict]) -> tuple[list[dict], list[int]]:
     return out, held
 
 
+_NO_STEP = STEPS["update"]
+
+
 def observed(h: dict) -> bool:
     """Is history line `h` a line of a visit's story (Notices.observe) rather than a notice sent?"""
     return bool(h.get("fold"))
 
 
+def listed(h: dict) -> bool:
+    """Is history line `h` a notice whose line stays among the Status lines while its bottom line says where the alert
+    stands (message_format.Step.listed: a stronger signal, its card's state "New alert")?"""
+    return bool((STEPS.get(h.get("stage") or "") or _NO_STEP).listed)
+
+
 def _cut(history: list[dict], n: int) -> tuple[list[dict], set[int]]:
     """`history` without its last `n` NOTICES — the steps a copy's bottom line says — and the positions left out. A
-    visit's story lines are kept wherever they stand: they are no notice, and every copy lists them (Notices.observe)."""
+    visit's story lines are kept wherever they stand: they are no notice, and every copy lists them (Notices.observe);
+    a listed notice (a stronger signal) is one of the `n` and stays too."""
     gone: set[int] = set()
+    counted = 0
     for i in range(len(history) - 1, -1, -1):
-        if len(gone) == n:
+        if counted == n:
             break
         if not observed(history[i]):
-            gone.add(i)
+            counted += 1
+            if not listed(history[i]):      # its line stays: the bottom line says where the alert stands instead
+                gone.add(i)
     return [h for i, h in enumerate(history) if i not in gone], gone
+
+
+def _in_time(history: list[dict], line: dict, at: str) -> list[dict]:
+    """`history` with `line` placed in time order: after every step at or before `at`, before the first one later.
+    ⚠️ IN TIME ORDER (owner's drill #129: "Seen at Test motion, 22:55–22:58 / Alert sent 22:57 / Test door opened,
+    22:55"): VESTA taking over a visit late recorded its alert and its lines as it heard of them."""
+    t = _moment(at)
+    for i, h in enumerate(history):
+        mine = _moment(h.get("since") or h.get("at"))
+        if t is not None and mine is not None and mine > t:
+            return history[:i] + [line] + history[i:]
+    return history + [line]
+
+
+def _moment(at) -> datetime | None:
+    try:
+        m = datetime.fromisoformat(str(at))
+    except (TypeError, ValueError):
+        return None
+    return m if m.tzinfo else m.replace(tzinfo=timezone.utc)
 
 
 def _fold_target(history: list[dict], line: dict) -> int | None:
@@ -464,10 +497,12 @@ class Notices:
         for ln in lines:
             line = {"at": str(ln.get("at") or now), "stage": SEEN_STAGE, "fold": str(ln["key"]),
                     "note": str(ln["note"]).rstrip("."),
-                    "note_in": {k: str(v).rstrip(".") for k, v in (ln.get("note_in") or {}).items() if isinstance(v, str)}}
+                    "note_in": {k: str(v).rstrip(".") for k, v in (ln.get("note_in") or {}).items() if isinstance(v, str)},
+                    **({"since": str(ln["since"])} if ln.get("since") else {})}
             i = _fold_target(history, line)
             if i is None:
-                history.append(line)
+                # a step of the visit where it began among the others; a line of no moment of its own after them
+                history = _in_time(history, line, line["since"]) if line.get("since") else history + [line]
             elif history[i].get("note") != line["note"] or history[i].get("note_in") != line["note_in"]:
                 history[i] = _merged(history[i], line)
         self.state.set_incident_history(incident, _kept(history))
@@ -596,6 +631,15 @@ class Notices:
                 return "watch" if self.watching(int(incident)) else "closed"
         except Exception:  # noqa: BLE001 — the heading is written without it, never not at all
             pass
+        if history:
+            # ⚠️ A VISIT UNANSWERED IS STILL A NEW ALERT (owner's drills, 2026-11-06: the tablet's card read "Still open"
+            # under a visit's quiet step): its card is redrawn at every step, and where it stands is its last notice's
+            # — its alert, or a stronger signal that sent it again — until a reminder or an answer says more
+            steps = self.state.incident_history(int(incident)) if str(incident).isdigit() else []
+            if any(h.get("fold") for h in steps):
+                last = next((h for h in reversed(steps) if not h.get("fold") and h.get("stage")), None)
+                if last and (last["stage"] == "new" or (STEPS.get(last["stage"]) or _NO_STEP).listed):
+                    return "new"
         return EXISTING if history else "new"
 
     def retitle(self, incident, head, chat: int = 0):
@@ -650,6 +694,8 @@ class Notices:
             # cameras' "opened" events of one run — is that line counted at its latest moment, never a line per repeat.
             # Still this result's step (1): the other chats' copies leave it to the bottom line that says it now
             history[-1] = _merged(history[-1], line)
+        elif at is not None:
+            history = _in_time(history, line, line["at"])        # a step dated by the desk: where it happened
         else:
             history.append(line)
         self.state.set_incident_history(incident, _kept(history))

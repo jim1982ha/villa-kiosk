@@ -1,3 +1,20 @@
+## 0.12.466
+
+After the first visit drills on the villa (6 November, #127 to #129):
+- Every step of a visit is told to the villa as taken, a lock locked again too: the villa no longer takes the visit
+  back a minute later and writes its own words over VESTA's card.
+- VESTA back after a restart takes over the villa's own card in place (number, photo sheet, story, buttons) and
+  removes the villa's reply messages under it: one message per chat. It no longer rings the door a second time when
+  the villa already did.
+- A card someone deleted in a chat is sent again once, never pointed at; the close no longer posts a new message: the
+  card itself says "Cleared on …", its photo sheet kept.
+- The Status is in time order, and "Alert sent" says when the villa sent the alert, not when VESTA took it over.
+- A lock opened from the app by no known person says "opened from the app", never "(?)".
+- "Stronger signal sent" is a line of the Status; the card's state stays "New alert" (on Telegram and the tablet).
+- The tablet: each step's notification is taken by the visit's card (no second notification), the card is named after
+  the strongest step's device (the lock, the door), and a closed visit goes straight to Closed (with VESTA (dev2)
+  2.496.733 or later).
+
 ## 0.12.465
 
 Prepares the villa's side of "one visit, one story"; nothing changes until the presence automation is updated

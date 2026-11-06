@@ -18,7 +18,8 @@ from vesta_shared import kiosk_words, result
 from vesta_shared.problems import Problems
 from vesta_shared.when import Spec
 
-from .kiosk import ASK_HELP, CLOSE, MINE, REOPEN, TAKE, KioskError, closing, confirming, noted, retitled, tagged, todo
+from .kiosk import ASK_HELP, CLOSE, MINE, REOPEN, TAKE, KioskError, closing, confirming, noted, placed, retitled, tagged, \
+    todo
 from .kiosk import fault_title_chars
 from vesta_shared.messaging import headline, incident_tag
 from vesta_shared.message_format import IN_COCKPIT, ON_TELEGRAM, STEPS
@@ -378,6 +379,9 @@ class Tickets:
                     # the title the agent last gave it, not the one it has: a title a person wrote stays (kiosk.retitled)
                     if title and (card.get("agent_title") or card.get("title")) != title:
                         amends.append(retitled(title))
+                    # the device it is about now: its card's name (a visit's strongest step)
+                    if want.get("entity_id") and card.get("entity_id") != want["entity_id"]:
+                        amends.append(placed(want["entity_id"]))
                     # the alert's number, as every chat writes it, and where it came from (owner, 2026-10-14)
                     # its duration worded when shown — never on a title a person wrote: theirs, as it is
                     pattern = self._pattern(want, card) or (
@@ -413,8 +417,10 @@ class Tickets:
                             amends.append(noted(lines))
                     fixed += await self.kiosk.amend(uid, *amends)
                 elif card["status"] != "resolved" and (t.get("done_at") or "") >= recent:
+                    # nothing watched after it (no watch, no read-again): Closed at once on the tablet
                     n = await self.kiosk.resolve_ticket(uid, note=want["note"], **({"who": want["who"]} if want["who"] else {}),
-                                                        confirms_by=want["confirms_by"], lasting=want["lasting"])
+                                                        confirms_by=want["confirms_by"], lasting=want["lasting"],
+                                                        not_watched=not want["confirms_by"])
                     fixed += n; resolved += n
                 elif card["status"] == "resolved" and card.get("confirms_by") != want["confirms_by"]:
                     # a person's close being confirmed (owner, 2026-10-23): "VESTA confirms by …" while the alert desk

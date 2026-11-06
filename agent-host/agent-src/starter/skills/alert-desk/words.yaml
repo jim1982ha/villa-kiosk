@@ -405,6 +405,20 @@ visit_lock_app:
   ja: "{name} がアプリから開けられました（{who}）、{time}"
   ko: "{name} 앱에서 열림 ({who}), {time}"
 
+# a lock opened through the villa's system by no known person, the lock naming no one either: never "(?)" (owner's
+# drill #127, 2026-11-06: "opened from the app (?)")
+visit_lock_app_plain:
+  en: "{name} opened from the app, {time}"
+  fr: "{name} ouverte depuis l’app, {time}"
+  id: "{name} dibuka dari aplikasi, {time}"
+  de: "{name} über die App geöffnet, {time}"
+  es: "{name} abierta desde la app, {time}"
+  it: "{name} aperta dall’app, {time}"
+  nl: "{name} geopend via de app, {time}"
+  zh: "{name} 通过应用被打开，{time}"
+  ja: "{name} がアプリから開けられました、{time}"
+  ko: "{name} 앱에서 열림, {time}"
+
 # a door, or a lock the villa could not tell how it was opened
 visit_opened:
   en: "{name} opened, {time}"

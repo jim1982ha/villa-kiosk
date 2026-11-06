@@ -32,6 +32,7 @@ from vesta_shared.messaging import incident_tag
 from vesta_shared.status_words import pick
 
 from . import kiosk_messages, layout
+from .telegram import GONE
 
 log = logging.getLogger("vesta.thread")
 
@@ -255,15 +256,21 @@ class IncidentThread:
         tr = self._translations()
         return tr.draw(iid, chat, p) if tr is not None else p
 
-    async def adopt(self, iid: int, chat: int, mid: int, parts: dict, keyboard: dict | None = None) -> None:
+    async def adopt(self, iid: int, chat: int, mid: int, parts: dict, keyboard: dict | None = None) -> bool:
         """One of Home Assistant's own messages (a VESTA rule's alert, its all-clear) belongs to incident `iid`: it is
         rewritten as the incident's message — its number, the original alert and, while it is open, its buttons
-        (`keyboard`) — and replaces the earlier one."""
+        (`keyboard`) — and replaces the earlier one. False when it is no longer in its chat (telegram.GONE): it is
+        never kept as the incident's copy, the caller posts one (owner's drill #129: the group's card deleted in the
+        chat was taken over, its next step "kept, now a pointer" to a message nobody could see)."""
         text = layout.render(parts)
         async with self._lock(iid):
             if self.edit:
-                await self.edit(chat, mid, text, keyboard) if keyboard else await self.edit(chat, mid, text)
+                said = await (self.edit(chat, mid, text, keyboard) if keyboard else self.edit(chat, mid, text))
+                if said is GONE:
+                    log.info("%s in chat %s: message %s is no longer there: not taken over", iid, chat, mid)
+                    return False
             await self._post(iid, chat, mid, parts, buttons=bool(keyboard), keyboard=keyboard)
+            return True
 
     async def stray(self, iid: int | str, chat: int, mid: int) -> bool:
         """A message of incident `iid` in `chat` that is NOT its message there (a button pressed on it): it goes, or —
@@ -576,14 +583,19 @@ class IncidentThread:
         text = layout.render(p)
         # a copy that keeps its buttons keeps them through the edit, and through a retry (`catch_up`: its "kb")
         keyboard = keyboard or (rec.get("kb") if rec.get("buttons") and not rec.get("settled") else None)
-        ok = bool(self.edit and await (self.edit(chat, rec["mid"], text, keyboard) if keyboard
-                                       else self.edit(chat, rec["mid"], text)))
+        said = await (self.edit(chat, rec["mid"], text, keyboard) if keyboard
+                      else self.edit(chat, rec["mid"], text)) if self.edit else False
+        ok = bool(said)
         now = datetime.now(timezone.utc)
         since = rec.get("owed_since") or now.isoformat()
         rec = {k: v for k, v in rec.items() if k not in ("owed", "owed_since", "owed_tries")} | {"parts": p, "text": text}
         if keyboard:
             rec["kb"] = keyboard
-        if not ok:
+        if said is GONE:
+            # deleted in its chat: no retry can ever show it (it was tried again for two hours)
+            log.info("%s in chat %s: message %s is no longer there", iid, chat, rec["mid"])
+            rec["gone"] = True
+        elif not ok:
             rec |= {"owed": now - datetime.fromisoformat(since) < owed_for(), "owed_since": since}
             if not rec["owed"]:
                 rec.pop("owed_since")   # given up: a later change starts its own two hours (architecture review 23)

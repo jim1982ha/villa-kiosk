@@ -782,8 +782,10 @@ def _close(store: Store, inc: dict, now: datetime, out: dict, settled: str,
     # its alert and reminders, in every chat, lose their buttons: nobody presses for something already over
     out.setdefault("settle", []).append(R.settle(inc["id"], settled,
                                                  note_in=settled.langs if isinstance(settled, Said) else None))
-    if inc["state"] in Incident.CHASED:
+    if inc["state"] in Incident.CHASED and not notes_of(inc).get(VISIT):
         # the same words as every other copy (owner, 2026-10-11: one incident, one picture; ✅ already says no reply)
+        # ⚠️ A VISIT ENDS ON ITS ONE CARD (owner's drills #127-#129: the close was a NEW message in the chats chased,
+        # without its photo): its settle above edits every chat's card in place, its sheet and story kept
         out["send"] += tell(inc["severity"], "closed", incident=inc["id"], chased=True, **about(inc, settled))
     return settled
 
@@ -1186,10 +1188,29 @@ NOT_A_REASON = (RELOCK, NOISE)
 HOME = "home"
 
 
+#: What the villa's record says NOW of the visit (the engine reads it as the step arrives: app.Vesta._visit_now) and
+#: the step's event may say as it was: who holds the visit, each chat's card and the villa's replies, a person's answer,
+#: the villa's own reminder.
+VISIT_NOW = ("owner", "messages", "answered", "reminded_at")
+
+
 def visit_of(ev) -> dict:
-    """The villa's visit an event or an incident's notes carry ({} for none)."""
+    """The villa's visit an event or an incident's notes carry ({} for none) — as the villa's record holds it now when
+    the engine read it (`now`): ⚠️ AN EVENT TAKEN IN LATE IS THE RECORD AS IT WAS (owner's drill #129: VESTA restarted
+    mid-visit took in the steps it missed, each saying VESTA held the visit, after the villa had taken it back and rung
+    the door itself — VESTA rang it again in both chats)."""
     v = (ev or {}).get(VISIT)
-    return v if isinstance(v, dict) else {}
+    if not isinstance(v, dict):
+        return {}
+    now = v.get("now") if isinstance(v.get("now"), dict) else {}
+    return {**{k: x for k, x in v.items() if k != "now"}, **{k: now[k] for k in VISIT_NOW if k in now}}
+
+
+def _replies(v: dict) -> list[list[int]]:
+    """The villa's replies under the visit's cards ([chat, message id]: its photos and lines while it held the visit)."""
+    return [[int(m["chat_id"]), int(m["message_id"])] for m in v.get("messages") or []
+            if isinstance(m, dict) and m.get("role") == "reply" and str(m.get("chat_id", "")).lstrip("-").isdigit()
+            and str(m.get("message_id", "")).isdigit()]
 
 
 def _when(iso) -> datetime | None:
@@ -1220,8 +1241,9 @@ def _span(first: datetime, last: datetime, zone: str) -> str:
     return a if a == b else f"{a}–{b}"
 
 
-def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str]]:
-    """The visit's story, one line per kind of step, in the order they began: (key, words, moment).
+def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str, str]]:
+    """The visit's story, one line per kind of step, in the order they began: (key, words, its latest moment, the
+    moment it began — where it stands among the Status lines: owner's drill #129, its lines out of time order).
 
     - the cameras seen in a row, one line per pass ("Seen at Parking → Entrance Left, 18:34–18:35"): a pass ends when
       no camera saw anything for the siren's window (rules.yaml siren.window_min — what the siren counts together),
@@ -1263,9 +1285,11 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str]]:
             said = say("visit_seen", places=" → ".join(ln["places"]), span=_span(ln["first"], ln["last"], zone))
         elif ln["kind"] == LOCK:
             s, how = ln["s"], str(ln["s"].get("how") or "")
+            who = how.partition(":")[2].strip()
             said = say("visit_lock_here", name=_place(s), time=hm(ln["first"])) if how == "lock" else \
-                say("visit_lock_app", name=_place(s), who=how.partition(":")[2] or "?", time=hm(ln["first"])) \
-                if how.startswith("app") else say("visit_opened", name=_place(s), time=hm(ln["first"]))
+                say("visit_lock_app", name=_place(s), who=who, time=hm(ln["first"])) if how.startswith("app") and who \
+                else say("visit_lock_app_plain", name=_place(s), time=hm(ln["first"])) if how.startswith("app") \
+                else say("visit_opened", name=_place(s), time=hm(ln["first"]))
             if ln.get("again"):
                 said = joined([said, say("visit_locked_again", time=hm(ln["again"]))], "")
         elif ln["kind"] == DOOR:
@@ -1276,7 +1300,7 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str]]:
             said = say("visit_noise", room=str(ln["s"].get("area") or _place(ln["s"])), time=hm(ln["first"]))
         else:
             said = say("visit_inside", room=str(ln["s"].get("area") or _place(ln["s"])), time=hm(ln["first"]))
-        out.append((key, said, ln["last"].isoformat()))
+        out.append((key, said, ln["last"].isoformat(), ln["first"].isoformat()))
     return out
 
 
@@ -1437,9 +1461,13 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     # the alert's words: the strongest step's title as the villa writes it ("<name> opened while the villa is empty")
     ev = {**ev, "message": ev.get("label") or ev.get("message"), "entity_id": str(top.get("entity_id") or "")}
     inc = _find_by_ha_incident(store, vid)
-    if inc is None and _find_by_ha_incident(store, vid, closed_within=timedelta(days=W.late_close_days()), now=now):
-        # a step of a visit a person already closed (it crossed the villa's close): nothing more to tell
+    late = _find_by_ha_incident(store, vid, closed_within=timedelta(days=W.late_close_days()), now=now) if inc is None \
+        else None
+    if late:
+        # a step of a visit a person already closed (it crossed the villa's close): nothing more to tell — but told as
+        # taken, or the villa, waiting for VESTA, takes the visit back and tells it again itself
         out["decision"] = "visit_closed"
+        visit_told(late, out, ack_seq=_seq(v))
         return out
     if route.get("intrusion") and not ev.get("occupancy"):
         ev["occupancy"] = occupancy_reader()
@@ -1463,13 +1491,15 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         lines = visit_lines(v, zone)
         told = same_time(store, inc, _when(v.get("opened_at")) or now, params, zone)
         if told:
-            lines.append(("same_time", told, now.isoformat()))
+            lines.append(("same_time", told, now.isoformat(), None))
         text = details(ev, rule_id)
         # its card in each chat is the one the villa sent (its record names it), taken over in place: its number,
         # heading and buttons; a chat with none gets VESTA's own
+        # "Alert sent" when the villa sent it, whenever VESTA takes it over (a restart in between: owner's drill #129)
+        sent = (_when(v.get("opened_at")) or now).isoformat()
         out["ha_messages"] = [R.ha_message(iid, text, ev.get("_context_id"), stage="new", messages=_cards(v),
-                                           takes=[f"{VISIT}:{vid}"])]
-        out["send"] += tell(sev, "new", incident=iid, ladder=route.get("ladder", True), text=text)
+                                           takes=[f"{VISIT}:{vid}"], at=sent)]
+        out["send"] += [{**m, "at": sent} for m in tell(sev, "new", incident=iid, ladder=route.get("ladder", True), text=text)]
     else:
         iid = inc["id"]
         store.touch_incident(iid, now.isoformat())
@@ -1482,14 +1512,18 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         lines = visit_lines(v, zone)
         if ring:
             out["decision"] = "visit_stronger"
-            # its bottom line: "Stronger signal sent 06/11/2026 18:35, <the step's title> (to: Owner & FM)"
+            # its line "Stronger signal sent 06/11/2026 18:35 (to: Owner & FM)" in the Status, the card's state "New
+            # alert" (message_format.STEPS "stronger": listed); the step itself is the card's title and its story line
             out["send"] += tell(inc["severity"], "stronger", incident=iid, ladder=route.get("ladder", True),
-                                **about(inc, Said(str(ev["message"]))))
+                                **about(inc, Said("")))
         else:
             out["actions"].append(R.redraw(iid, body=details(p, rule_id)))
         # a chat whose card the thread does not hold yet (VESTA was away when the villa sent it): taken over too
-        out["ha_messages"] = [R.ha_message(iid, details(p, rule_id), None, stage="update", messages=_cards(v),
-                                           takes=[f"{VISIT}:{vid}"])]
+        # ⚠️ EVERY STEP'S RUN TAKEN (owner's drills: each visit was also a notification on the tablet, "TEST: Test door
+        # opened…"): each step is its own run of the villa's automation, its announcement a record a Kiosk before the
+        # visit's key knows only by its run
+        out["ha_messages"] = [R.ha_message(iid, details(p, rule_id), ev.get("_context_id"), stage="update",
+                                           messages=_cards(v), takes=[f"{VISIT}:{vid}"])]
     out["incident_id"] = iid
     if v.get("reminded_at"):
         # the villa reminded already (it held the visit: VESTA away at its start, or silent mid-visit): VESTA's chase
@@ -1503,12 +1537,12 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
                       says="How many of a visit's photos its Telegram picture shows: the strongest step's, then the latest.",
                       reached="The others are on the tablet's card; the Status says how many.", told="person"))
     if len(photos) > shown:
-        lines.append(("photos", say("visit_more_photos", n=len(photos) - shown), now.isoformat()))
-    news = [(k, said, at) for k, said, at in lines if was.get(k) != str(said)]
+        lines.append(("photos", say("visit_more_photos", n=len(photos) - shown), now.isoformat(), None))
+    news = [ln for ln in lines if was.get(ln[0]) != str(ln[1])]
     if news:
         _faults_follow(out)                            # the Kiosk fault's story follows at once (tickets.repair)
-    out["seen"] = [R.seen(iid, k, str(said), said.langs, at) for k, said, at in news]
-    store.note(iid, {VISIT_LINES: {**was, **{k: str(said) for k, said, _at in news}}})
+    out["seen"] = [R.seen(iid, k, str(said), said.langs, at, since=first) for k, said, at, first in news]
+    store.note(iid, {VISIT_LINES: {**was, **{k: str(said) for k, said, _at, _first in news}}})
     if photos:
         out["actions"].append(R.sheet(iid, photos, shown))
     # a press the villa recorded while VESTA was away: that person's answer, applied once, never asked again
@@ -1522,9 +1556,17 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         gate = visit_siren(store, iid, v, ev)
         if gate:
             out["siren_gate"] = gate
-    visit_told(store.incident(iid), out, ack_seq=(v.get("step") or {}).get("seq") or v.get("seq"))
+    # ⚠️ EVERY STEP TOLD AS TAKEN, AN EDIT AS A RING (owner's drill #127: the relock, an edit, was never told; a
+    # minute later the villa took the visit back and wrote its own words over VESTA's cards); the villa's replies go,
+    # VESTA's one card tells it all (#129)
+    visit_told(store.incident(iid), out, ack_seq=_seq(v), drop=_replies(v) or None)
     store.audit("alert-desk", out["decision"], {"incident": iid, "visit": vid, "rings": ring})
     return out
+
+
+def _seq(v: dict):
+    """The step this event tells (a press handed over carries none: the visit's latest)."""
+    return (v.get("step") or {}).get("seq") or v.get("seq")
 
 
 def siren_minutes() -> int:

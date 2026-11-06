@@ -652,7 +652,12 @@ def _kinds_and_fields(t: dict) -> tuple[set, set]:
 
 
 def test_a_kiosk_that_lists_everything_gets_every_kind_and_field_the_agent_writes():
-    kinds, fields = _kinds_and_fields(_every_write(FakeKiosk()))
+    k = FakeKiosk()
+    kinds, fields = _kinds_and_fields(_every_write(k))
+    # a close the agent watches nothing after (a visit: owner's drills, 2026-11-06) says so, on another fault
+    tid = run(k.add_ticket("Door opened while the villa is empty", entity_id="lock.example", number=7))
+    run(k.resolve_ticket(tid, note="Cleared.", not_watched=True))
+    fields |= _kinds_and_fields(k.ticket(tid))[1]
     agreed = json.load(open(CONTRACT))
     # every kind but a person's own (Need help: the Kiosk's card writes it, the agent reads it)
     from vesta_agent.kiosk import PERSON_KINDS

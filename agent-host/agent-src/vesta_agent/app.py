@@ -616,6 +616,7 @@ class Vesta:
                 f"{event['incident_id']}:{event.get('phase') or ''}:{event['timestamp']}"):
             log.info("Alert already taken in: %s (%s)", event.get("label") or event.get("rule_id"), event.get("phase"))
             return
+        await self._visit_now(event)
         os.makedirs(os.path.join(self.s.out_dir, "events"), exist_ok=True)
         path = os.path.join(self.s.out_dir, "events", f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}.json")
         with open(path, "w", encoding="utf-8") as f:
@@ -637,6 +638,25 @@ class Vesta:
         if not handled:
             log.warning("Alert received but no skill handles critical events (alert-desk deleted?)")
         self.state.log("critical_event", {"rule": event.get("rule_id"), "phase": event.get("phase"), "handled": handled})
+
+    async def _visit_now(self, event: dict) -> None:
+        """A visit's step with its record as the villa holds it NOW (`visit.now`: who holds it, each chat's card, the
+        villa's replies, an answer, a reminder sent), read through the app's reader — the alert desk tells the step from
+        it. ⚠️ AN EVENT IS THE RECORD AS IT WAS (owner's drill #129): VESTA restarted mid-visit took in the events it
+        missed, each saying "VESTA holds it" from before the villa took it back — it rang the door again in both chats
+        over the villa's own reply. BOUNDED, NEVER FATAL (names_seconds): unread, the event says it as it was."""
+        v = event.get("visit")
+        rec = v.get("record") if isinstance(v, dict) else None
+        if not (isinstance(rec, str) and rec.startswith("sensor.") and event.get("incident_id")):
+            return
+        try:
+            got = await asyncio.wait_for(asyncio.to_thread(self.reader.states, [rec]), timeout=names_seconds())
+        except Exception as e:  # noqa: BLE001 — a timeout too: the event as it was
+            log.info("The visit's record could not be read (%s): its event is taken as it was", type(e).__name__)
+            return
+        attrs = ((got or {}).get(rec) or {}).get("attributes") if isinstance(got, dict) else None
+        if isinstance(attrs, dict) and attrs.get("id") == event["incident_id"]:
+            v["now"] = {k: attrs.get(k) for k in ("owner", "messages", "answered", "reminded_at", "ack_seq", "closed")}
 
     async def _alert_names(self, event: dict) -> None:
         """The alert's devices as the villa's system names them now, kept for its card's translation (translation.py:
