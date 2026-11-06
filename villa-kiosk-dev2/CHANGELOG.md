@@ -1,3 +1,10 @@
+## 2.496.739
+
+What you will see:
+- A card on the Watch list always shows its state and its (i), also in the moment before VESTA says when it closes it ("Closes within 5min").
+- With VESTA Agent 0.12.472, a visit closed on the tablet (Done, Not a problem or any other answer) goes straight to Closed.
+- While a visit is open, its card says "monitoring until 06:40" beside its state, in place of "next check within 5min"; the time moves later at each new sign, and reads "08/11 09:20" when it falls on another day.
+
 ## 2.496.738
 
 What you will see:
