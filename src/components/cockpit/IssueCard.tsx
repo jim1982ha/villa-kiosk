@@ -3,7 +3,7 @@
 // Overview tab's list, one card per device; the Overview became Messages › Open issues (ticket 17 of "One inbox", owner
 // 2026-10-28). The villa by room / floor / category and Recent activity were removed before (owner, 2026-10-20).
 
-import { momentText } from "@/utils/dateText";
+import { momentText, statusMoment } from "@/utils/dateText";
 import type { ReactNode } from "react";
 import WorkButtons, { useCardWork, type RaisedFault } from "@/components/fm/WorkButtons";
 import { useRecordPlace } from "@/components/fm/useRecordPlace";
@@ -111,7 +111,8 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused, erase }: {
       number={strip.number}
       // where its problems come from, in place of a warning sign (owner, 2026-10-14) — legend: the (i)
       // a fault being confirmed: a check in the status vocabulary's green, in place of its source (owner, 2026-10-23)
-      lead={card.look
+      // ...the Watch list's only: a closed card wears its source, in grey (cockpitCard.clearedCard)
+      lead={card.look === "watched"
         ? <IconTip k="watch" icon={<WatchedIcon size={18} />} />
         : icons.head ? <SourceIcons {...icons.head} /> : undefined}
       // when its problems are read again: a pill at the right of its first line (owner, 2026-11-06); hovering it says it
@@ -139,7 +140,7 @@ function LineWords({ line, look }: { line: CardLine; look: CardView["look"] }) {
       {/* its Status once: the state line says where it stands (cockpitCard.toldShown) */}
       {told ? <div className="messages-card-body"><AnnouncementContent announcement={told} /></div> : (line.story.length > 0 && (
         <ul className="cockpit-attention-story">
-          {line.story.map((s) => <li key={`${s.at} ${s.note}`} className="cockpit-attention-latest">{s.note} · {momentText(s.at)}</li>)}
+          {line.story.map((s) => <li key={`${s.at} ${s.note}`} className="cockpit-attention-latest">{s.note} · {statusMoment(s.at, line.openedAt)}</li>)}
         </ul>
       ))}
       {/* when the VESTA Agent closes it if it stays right (owner, 2026-10-21); on the Watch list, how it was cleared is

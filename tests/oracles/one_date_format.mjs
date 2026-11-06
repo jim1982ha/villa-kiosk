@@ -37,6 +37,6 @@ const locale = tsFiles(SRC).flatMap((f) => [...readFileSync(f, "utf8").matchAll(
 ck("no locale day form left anywhere in the app", locale.length === 0, locale);
 const T2 = Object.keys(T).sort().join();
 ck("  ...dateText offers the agreement's forms and the months' names, nothing else",
-   T2 === "clockTime,dayShort,docDate,momentText,monthShort,monthYear", T2);
+   T2 === "clockTime,dayShort,docDate,momentText,monthShort,monthYear,statusMoment", T2);
 
 done("✅ one date format wherever a person reads");

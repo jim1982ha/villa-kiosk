@@ -74,6 +74,15 @@ export function monthYear(t: string | number | Date): string {
   return valid(d) ? d.toLocaleDateString([], inVillaZone({ month: "long", year: "numeric" })) : "";
 }
 
+/** "05:14" — a moment of an alert's Status on the alert's own day (`day`: a moment of that day, the card's strip's),
+ *  "08/11 09:20" on another day; the whole moment with no day. ⚠️ THE AGENT'S RULE (owner, 2026-11-07, every alert,
+ *  Telegram and the tablet alike: the VESTA Agent's timeutil.status_moment, from the same agreement): the short story
+ *  under an issue said "Alert sent (to: FM) · 07/11/2026 05:14" under a strip that says the day already. */
+export function statusMoment(t: string | number | Date, day?: string | number | Date | null): string {
+  if (day == null || !valid(at(day))) return momentText(t);
+  return docDate(t) === docDate(day) ? clockTime(t) : `${dayShort(t)} ${clockTime(t)}`;
+}
+
 /** "20/10/2026 02:00" — a moment, as the VESTA Agent's messages write it on Telegram (its timeutil.moment_label, the
  *  agreement's form): a card's steps, a ticket's history, a document's "Generated:", the Overview's "Next check", a
  *  chart's tooltip beyond today, an upload's or an Agent edit's time. */
