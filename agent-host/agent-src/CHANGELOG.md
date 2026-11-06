@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.447 (6 November 2026)
+
+- One line per problem in an alert's Status (owner, 2026-11-06, #125-P1): four cameras' "opened" events of one run
+  were four steps, the Status listing "Still-there alert sent 06/11/2026 18:35 (to: Owner & FM)" three times.
+  `Notices.record` folds a step repeated right after itself (`message_format.folds`: every step but a run's start and a
+  close; the same reach) into ONE line, its latest moment, `times` and `ats`; its line says the count
+  (`status_words.repeats`, `message_format.REPEATS` ", 3 times", in every language), and `Notices.heading` leaves it
+  to the bottom line of the notice that repeats it. The Kiosk fault's story (`kiosk.noted`) replaces its lines of the
+  earlier moments with the one counted line. Migrated at start (`Notices.refold`, `IncidentThread.refold`): a history
+  recorded a line per repeat is folded and every copy, the tablet's card with it, drawn again.
+- The still-there count said one alert more than came (#125-P1: "6 times since 18:20" after 5): `desk.intake` added 1
+  to a count `_restated` had read after `touch_incident` counted it.
+- tests/test_repeated_step.py through the villa's events, the desk as the engine runs it, the chats, the tablet's card,
+  the fault and a restart; 11 mutations red.
+
 ## 0.6.446 (6 November 2026)
 
 - Architecture review 28: a take-on said where it was pressed (`message_format.TAKEN_IN`, `places.taken` in each

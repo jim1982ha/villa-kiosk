@@ -140,7 +140,9 @@ def test_a_closing_note_a_note_and_a_long_story_say_what_telegram_says(tmp_path)
     # past the 20 lines kept, the counted line has no moment of its own: Telegram's alone (the card keeps every line
     # it was given, so it loses none)
     for i in range(30):
-        notices.record(iid, "reminder", [(FM, "fm")], at=datetime.now(timezone.utc) + timedelta(minutes=100 + i))
+        # two kinds in turn: a step repeated in a row is ONE line (owner, 2026-11-06), never a long story
+        notices.record(iid, ("reminder", "escalated")[i % 2], [(FM, "fm")],
+                       at=datetime.now(timezone.utc) + timedelta(minutes=100 + i))
     assert any("earlier" in x for x in notices.history_lines(iid))
     told_there = [x for x in notices.history_lines(iid) if "earlier notices" not in x and "Ticket opened" not in x]
     assert all(x.get("at") for x in notices.story(iid)) and len(notices.story(iid)) == len(told_there)

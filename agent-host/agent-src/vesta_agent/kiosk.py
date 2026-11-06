@@ -352,12 +352,35 @@ def noted(lines: list[dict]) -> Amend:
     def amend(t: dict) -> dict | None:
         if t.get("status") == "resolved":
             return None
-        # ⚠️ BY ITS MOMENT, NEVER ITS WORDS (architecture review, 2026-10-15): a reworded stage ("Reminder sent")
-        # or a People change re-wrote every past line, and each was added again under the new words
-        have = {u.get("at") for u in t.get("updates") or [] if isinstance(u, dict) and u.get("kind") == NOTED}
-        new = [{"at": x["at"], "status": t.get("status") or "open", "photoIds": [], "kind": NOTED,
-                "note": str(x["note"])[:update_note_chars()]} for x in lines if x["at"] not in have]
-        return dict(t, updates=list(t.get("updates") or []) + new) if new else None
+        ups = list(t.get("updates") or [])
+
+        def mine(u, at) -> bool:
+            return isinstance(u, dict) and u.get("kind") == NOTED and u.get("at") == at
+        changed = False
+        for x in lines:
+            step = {"at": x["at"], "status": t.get("status") or "open", "photoIds": [], "kind": NOTED,
+                    "note": str(x["note"])[:update_note_chars()]}
+            # ⚠️ ONE LINE PER PROBLEM (owner, 2026-11-06, #125-P1): a step repeated in a row is one line, counted, at
+            # its latest moment (notice.Notices.record): the fault's lines of its earlier moments (`ats`) give way to
+            # it — the first in place (its writer kept), the others gone. Only this agent's own Telegram lines.
+            earlier = [at for at in x.get("ats") or () if at != x["at"]]
+            at_now = [i for i, u in enumerate(ups) if mine(u, x["at"])]
+            before = [i for i, u in enumerate(ups) if any(mine(u, at) for at in earlier)]
+            if not before:
+                # ⚠️ BY ITS MOMENT, NEVER ITS WORDS (architecture review, 2026-10-15): a reworded stage ("Reminder
+                # sent") or a People change re-wrote every past line, and each was added again under the new words —
+                # only a count grown since is written again (the same moment, its line counted)
+                if not at_now:
+                    ups.append(step); changed = True
+                elif x.get("ats") and ups[at_now[0]].get("note") != step["note"]:
+                    ups[at_now[0]] = {**ups[at_now[0]], "note": step["note"]}; changed = True
+                continue
+            first = (at_now + before)[0]
+            ups[first] = {**ups[first], **step}
+            gone = set(at_now + before) - {first}
+            ups = [u for i, u in enumerate(ups) if i not in gone]
+            changed = True
+        return dict(t, updates=ups) if changed else None
     return amend
 
 

@@ -283,8 +283,9 @@ def test_the_history_names_roles_and_keeps_its_first_alert(tmp_path):
     v = make_agent(tmp_path, {}, roster=Roster.of(fm=[(FM, "Fabien"), (444, "Ketut")]))
     v.notices.record(5, "new", [(FM, "fm"), (444, "fm")])
     keep_roster(v.s, Roster.of(fm=[(FM, "Fabien"), (555, "Made")]))     # Ketut gone from the Kiosk's list, Made in
-    for _ in range(25):
-        v.notices.record(5, "reminder", [(FM, "fm"), (555, "fm")])
+    for i in range(25):
+        # two kinds in turn: the same step in a row is ONE line, counted (owner, 2026-11-06)
+        v.notices.record(5, ("reminder", "escalated")[i % 2], [(FM, "fm"), (555, "fm")])
     lines = head_text(v.notices.heading(FM, 5, "fm")).split("\n")
     assert lines[1] == "To: FM" and lines[2].startswith("- Alert sent ") and lines[2].endswith(" (to: FM)")
     assert lines[3] == "- … 7 earlier notices" and len(lines) == 2 + 20

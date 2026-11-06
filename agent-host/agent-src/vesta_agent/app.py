@@ -363,6 +363,16 @@ class Vesta:
                 log.error("Telegram: %s", e)
         else:
             log.info("Telegram: off (the app's setting \"Agent replies on Telegram\" is off): nothing is sent")
+        # an alert's step recorded once per repeat by an engine before 0.6.447 (#125-P1: "Still-there alert sent …" three
+        # times): ONE line, counted, in its history and every copy, before the tablet is told its cards (tell_open)
+        refolded = 0
+        for iid in self.state.incident_histories_since(None):
+            try:
+                refolded += await self.thread.refold(iid)
+            except Exception:  # noqa: BLE001 — that alert keeps its lines to its next step; the start goes on
+                log.exception("Incident #%s: its repeated steps could not be folded", iid)
+        if refolded:
+            log.info("Records: %s alert message(s) now say a repeated step once, with its count", refolded)
         if self.kiosk.enabled:
             try:
                 await self.kiosk.check()

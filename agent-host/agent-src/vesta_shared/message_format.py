@@ -228,6 +228,21 @@ STEPS: dict[str, Step] = {
     "reopened": Step("Reopen request sent", "existing", timed=True, every_copy=True),
     "closed": Step("Closing note sent", "closed", timed=False),
 }
+#: How often a step repeated in a row, after its moment: "Still-there alert sent 06/11/2026 18:35, 3 times (to: Owner &
+#: FM)" (status_words writes each other language's, in the desk's own "Still there: 6 times since …" words).
+#: ⚠️ ONE LINE PER PROBLEM (owner, 2026-11-06, #125-P1): four cameras saw one person within a minute, the villa's rule
+#: sent four "opened" events, and the Status listed "Still-there alert sent 06/11/2026 18:35 (to: Owner & FM)" three
+#: times — each repeat recorded as a step of its own (notice.Notices.record folds it into the one before now).
+REPEATS = ", {n} times"
+
+
+def folds(stage: str | None) -> bool:
+    """Does a step of `stage` repeated right after one of the same stage make ONE line with its count (REPEATS)? Every
+    step but a run's start ("Alert sent", "Back at …": each counts its own week) and a close (one close, one step)."""
+    s = STEPS.get(stage or "")
+    return bool(s) and not s.starts_run and s.title != "closed"
+
+
 #: A button pressed on an alert: the answer in its own chat is no step of its own — the press is the story's line
 #: (notice.note_press), never also an "Update sent" (architecture review, 2026-10-15).
 PRESSED_STAGE = "pressed"

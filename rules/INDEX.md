@@ -30,7 +30,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [The owner verifies by screenshots](owner-rules.md#the-owner-verifies-by-screenshots) — no browser testing; say what to check on which device
 - [iPhone and Android alike](owner-rules.md#iphone-and-android-alike) — every change works on iPhone too; fallbacks for late Safari APIs; group controls that wrap
 - [One line per problem](owner-rules.md#one-line-per-problem) — a repeated problem is one line with a count, on every surface
-- [Forms, charts and lists](owner-rules.md#forms-charts-and-lists) — Y axis with grid, pickers not free text (who does the work: typed), 10-row pages, Light/Auto/Dark
+- [Forms, charts and lists](owner-rules.md#forms-charts-and-lists) — Y axis with grid, pickers not free text (who does the work: typed), 10-row pages, Light/Auto/Dark; an outage seen at 24h shows at 1w/1m/1y, however short
 - [Fill, don't paint](owner-rules.md#fill-dont-paint) — use the empty band; never recolour it
 - [Private stays private](owner-rules.md#private-stays-private) — docs/, villa data and the security suite never reach the repository
 
@@ -135,8 +135,8 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [Animations own their clock](kiosk-code.md#animations-own-their-clock) — never `engine.getDeltaTime()`; per-second rates
 - [Node green, browser dead](kiosk-code.md#node-green-browser-dead) — never store `setTimeout`/`fetch` as a field or default
 - [Debug text can crash](kiosk-code.md#debug-text-can-crash) — no `!` on a value a debug line formats
-- [A card's state is one pill](kiosk-code.md#a-cards-state-is-one-pill) — a card's state only on its first line, in its strip's colour; the strip names it; text says what is wrong; who moved it its who line; a condition in a shared format that makes a second format goes to the owner first
-- [A row's every field, on every kind of card](kiosk-code.md#a-rows-every-field-on-every-kind-of-card) — strip (icons, alert name, name, time), state line, quiet line (room, next check), words, who, bar; proven on every kind, never only the kinds touched
+- [A card's state is one pill](kiosk-code.md#a-cards-state-is-one-pill) — a card's state only on its first line, in its strip's colour, every card that can have one ("New fault"); the strip names it; text says what is wrong; who moved it its who line; a condition in a shared format that makes a second format goes to the owner first
+- [A row's every field, on every kind of card](kiosk-code.md#a-rows-every-field-on-every-kind-of-card) — strip (icons, alert name, name, time), state line (next check pill at its right), quiet line (room), words, who, bar; proven on every kind, never only the kinds touched; Settings' records are this card too
 - [One status vocabulary](kiosk-code.md#one-status-vocabulary) — status colours only from STATUS_COLOR; red means needs attention
 - [A badge on a chip is an unresolved room](kiosk-code.md#a-badge-on-a-chip-is-an-unresolved-room) — check the room resolver's id set before placement
 - [Rename a key when its default changes](kiosk-code.md#rename-a-key-when-its-default-changes) — saveConfig writes the whole config

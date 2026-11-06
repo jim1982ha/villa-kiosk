@@ -520,7 +520,9 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         cur = _restated(store, cur, ev, sev, now, route, out)
         # the villa's time, written as every message writes one ("Mon 05/10/2026 08:00"): it showed "2026-10-03T00:00", UTC
         since = day_time_label(villa_time(cur["opened_at"], zone or "UTC"), weekday=True)
-        status = say("still_count", count=cur["count"] + 1, since=since)
+        # ⚠️ COUNTED ONCE (owner, 2026-11-06, #125-P1: "6 times since 18:20" after 5 alerts): `cur` is read again after
+        # touch_incident counted this one (_restated), so its count is this alert's already — the "+ 1" counted it twice
+        status = say("still_count", count=cur["count"], since=since)
         # Home Assistant's own new message for it takes the incident's number, and replaces its older ones
         # ⚠️ THE RULE ALERTED AGAIN, NOT A REMINDER (owner, 2026-10-17, #45: "Reminder sent 11:38 to Owner & FM" — the
         # load had moved from phase C to phase B and the villa's rule alerted again; a reminder is the desk's own chase)

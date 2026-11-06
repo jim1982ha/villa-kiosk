@@ -52,7 +52,7 @@ def owed_for() -> timedelta:
 
 class PlainWords:
     """A thread's words as given: its copies' headings, Status and language with no notices to draw them (a test, or a
-    thread built before them). notice.Notices is the one the engine uses: the same six methods."""
+    thread built before them). notice.Notices is the one the engine uses: the same seven methods."""
 
     def retitle(self, iid, head: str, chat: int = 0) -> str:
         return head
@@ -72,6 +72,9 @@ class PlainWords:
     def closed_now(self, incident: int) -> bool:
         return False
 
+    def refold(self, incident: int) -> dict:
+        return {}
+
 
 class IncidentThread:
     def __init__(self, state, timezone: str, edit: Edit | None = None, delete: Delete | None = None, *,
@@ -84,7 +87,8 @@ class IncidentThread:
         incident): the whole heading again, title, "To:" and EVERY earlier step, used when a copy's status is REPLACED
         (owner, 2026-10-15: "Escalation sent … to Owner" vanished when "Ticket opened…" replaced it); `lang` (chat) and
         `restatus` (chat, parts): each chat's Status in its own language (owner, 2026-10-23); `story_of` (incident,
-        chat, its lines): a copy drawn before its heading held every step, told for everyone (tell_open).
+        chat, its lines): a copy drawn before its heading held every step, told for everyone (tell_open); `refold`
+        (incident): a history recorded a line per repeat, folded, and each copy's heading then.
         `name`: incidents.Incidents.name, how the incident is named ("#9-P2") in a pointer to its newer message.
         `translations` () → translation.Translations (or None): the alert's own words in each chat's language, when known,
         else asked for in the background (owner, 2026-10-23); a lookup, since they are built on this thread. None: as
@@ -461,6 +465,21 @@ class IncidentThread:
                 live = rec.get("buttons") and not rec.get("settled")
                 n += await self._show(iid, chat, rec, p, keyboard=(keyboard(chat) if live and keyboard else None),
                                       tell=tell)
+            return n
+
+    async def refold(self, iid: int | str) -> int:
+        """Every copy of incident `iid` whose Status listed a step once per repeat (an engine before 0.6.447) shows it as
+        ONE line, counted (words.refold: the history folded, each copy's heading drawn again), quietly; the tablet's
+        card with it. Its buttons and bottom line stay. Returns how many changed."""
+        async with self._lock(iid):
+            n = 0
+            for chat, head in self.words.refold(int(iid)).items():
+                rec = self.state.incident_message(iid, chat)
+                if not rec or not rec.get("mid"):
+                    continue
+                p = {**layout.of(rec), "head": head}
+                if layout.render(p) != rec.get("text"):
+                    n += await self._show(iid, chat, rec, p)
             return n
 
     async def translated(self, iid: int | str, chat: int, draw: Callable[[int | str, int, dict], dict]) -> bool:

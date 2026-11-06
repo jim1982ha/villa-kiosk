@@ -192,7 +192,7 @@ being planned for faults that clear themselves while the "being confirmed" card 
 
 Every Cockpit card says the same things at the same place, folded or opened, in the Inbox or on Tickets (owner,
 2026-11-05, "Status on top", then the second card that day): its strip (its name and when it began, in the state's
-colour), its state on its first line, its room and next check, its words, who moved it, then its buttons along its
+colour), its state on its first line with its next check a pill at that line's right, its room, its words, who moved it, then its buttons along its
 bottom edge, the main one first. One card per device in
 Open issues and Watch alike. A state never repeats the card's words; a state says something real (no next check
 without a time). A change to a card is
@@ -277,6 +277,15 @@ Dark look. Long names never overflow their field.
 
 **Not a known set:** who does the work ("Done by", "Who's handling it") is typed every time, never offered from earlier
 records nor from the browser's memory (owner, 2026-11-02: "it shall be a value the user has to manually enter").
+
+**An outage seen finer shows coarser:** as soon as a device was unavailable at all in a step of a finer chart (1h,
+24h), the step of every coarser chart that holds it (the hour at 1w, the day at 1m, the week at 1y) is striped
+"Unavailable", with the same words in its tooltip ("Unavailable at 06:58, for 10s"), however short the drop, a
+fraction of a second included (owner, 2026-11-05 "At least one … during that period"; 2026-11-06: "as soon as an
+occurrence is seen in the lower granularity, it shall appear in the higher granularity"). Never a floor (a whole five
+minutes, a second) that hides at 1w what 24h shows. The only limit is what the villa's system still keeps in detail
+(about 10 days): before it, the chart's (i) says which outages can still show. All outages come from the one history
+reader (src/ha/historySource.ts), never a second route.
 
 ## Fill, don't paint
 
