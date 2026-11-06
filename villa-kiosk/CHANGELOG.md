@@ -1,3 +1,11 @@
+## 2.496.726
+
+What you will see:
+- Advanced Settings › Villa › Bound 3D objects: each bound object's card looks like a device's card in Devices. Its name, then its room, its id and its 3D object on one line, then one field, "Bound to", with the search that changes it on the same line. The sentence "… is bound to …" is gone.
+- An object bound to nothing has the field "Bind to", an entity no object shows has the field "3D object", each name in the same column as a device's "Linked entity".
+- Grouped devices: a group's members and "Add another entity…" sit in a field named "Members", in that same column.
+- Every field of every Settings and Advanced Settings card is now drawn the same way, so the names and the boxes line up on every card.
+
 ## 2.496.725
 
 What you will see:

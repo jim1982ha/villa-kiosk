@@ -311,17 +311,37 @@ console.log("\n  a device of Devices: never folded, no room line, its toggle und
 console.log("\n  Bound 3D objects: a bound object's card is its entity's:");
 {
   const card = cards(bindings("bound"))[0]?.card ?? "";
-  ck("its strip its entity's name with the list's icon, its quiet line room · id, as an asleep device's",
+  // owner, 2026-11-06 (later): "more like" a device's card: its name, its line, then "Bound to" and the search on one line
+  const field = (html) => [...html.matchAll(/<div class="card-field"><span class="card-field-label">([^<]+)<\/span>/g)].map((m) => m[1]);
+  ck("its strip its entity's name with the list's icon, its quiet line room · id · its 3D object, as a device card says it",
      /fm-record-lead"><svg[^>]*lucide-link2?/.test(inside(card, "fm-record-strip")) && text(inside(card, "fm-record-name")) === "|Terrace Lamp|"
-     && text(inside(card, "fm-record-meta")).replace(/\|/g, "") === "Otherlight.example_terrace_lamp", [text(inside(card, "fm-record-strip")), text(inside(card, "fm-record-meta"))]);
-  ck("  ...its words \"<object> is bound to <entity>\", then the search that changes it, its ✕ unbinding it",
-     /<p class="binding-said">/.test(card) && text(inside(card, "binding-said")).replace(/\|/g, "") === "Lamp_Kitchen is bound to Terrace Lamp"
-     && card.indexOf("binding-said") < card.indexOf('class="picker"') && cards(bindings("bound"))[0].remove?.label === "Unbind Lamp_Kitchen from Terrace Lamp", text(inside(card, "fm-record-main")));
+     && text(inside(card, "fm-record-meta")).replace(/\|/g, "") === "Otherlight.example_terrace_lamp3D object: Lamp_Kitchen", [text(inside(card, "fm-record-strip")), text(inside(card, "fm-record-meta"))]);
+  ck("  ...then one field, \"Bound to\" and the search that changes it (no sentence), its ✕ unbinding it",
+     JSON.stringify(field(card)) === '["Bound to"]' && /card-field-label">Bound to<\/span><div class="picker/.test(card) && !/is bound to/.test(card)
+     && cards(bindings("bound"))[0].remove?.label === "Unbind Lamp_Kitchen from Terrace Lamp", text(inside(card, "fm-record-main")));
   const loose = cards(bindings("unbound"))[0]?.card ?? "";
-  ck("  ...an object bound to nothing: its name, the search, Bind; no quiet line",
-     text(inside(loose, "fm-record-name")).replace(/\|/g, "") === "Mesh_Unnamed_042" && !/fm-record-meta/.test(loose) && /class="picker"/.test(loose), loose);
+  ck("  ...an object bound to nothing: its name, its field \"Bind to\", Bind; no quiet line",
+     text(inside(loose, "fm-record-name")).replace(/\|/g, "") === "Mesh_Unnamed_042" && !/fm-record-meta/.test(loose) && JSON.stringify(field(loose)) === '["Bind to"]', loose);
   const unshown = cards(bindings("unshown")).find((c) => c.name === "Ceiling Fan")?.card ?? "";
-  ck("  ...an entity no object shows: its name, room · id", /fan\.example_ceiling_fan/.test(text(inside(unshown, "fm-record-meta")).replace(/\|/g, "")), unshown);
+  ck("  ...an entity no object shows: its name, room · id, its field \"3D object\"",
+     /fan\.example_ceiling_fan/.test(text(inside(unshown, "fm-record-meta")).replace(/\|/g, "")) && JSON.stringify(field(unshown)) === '["3D object"]', unshown);
+}
+
+console.log("\n  every card's field: its name in the one column, its control beside it, as a device's Linked entity:");
+{
+  const named = (html, name) => [...(cards(html).find((c) => c.name === name)?.card ?? "").matchAll(/<div class="card-field"><span class="card-field-label">([^<]+)<\/span>/g)].map((m) => m[1]);
+  const FIELDS = [
+    ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", ["Members"]],
+    ["a bound 3D object", bindings("bound"), "Terrace Lamp", ["Bound to"]],
+    ["an object bound to nothing", bindings("unbound"), "Mesh_Unnamed_042", ["Bind to"]],
+    ["an entity no object shows", bindings("unshown"), "Ceiling Fan", ["3D object"]],
+    ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", ["On screen"]],
+    ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", ["Language"]],
+  ];
+  for (const [kind, html, name, want] of FIELDS)
+    ck(`${kind}: ${want.map((w) => `"${w}"`).join(", ")}`, JSON.stringify(named(html, name)) === JSON.stringify(want), named(html, name));
+  const group = cards(drawIn(h(GroupedDevices, { title: "Grouped devices" }))).find((c) => c.name === "Kitchen Temperature")?.card ?? "";
+  ck("  ...a group's members and its \"Add another entity…\" inside its Members field", /card-field-label">Members<\/span><div class="group-members">/.test(group), group);
 }
 
 console.log("\n  Device telemetry: a log list, its columns time, kind, device, words:");

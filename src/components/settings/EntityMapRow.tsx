@@ -24,6 +24,7 @@ import { Pencil, Check, X } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import IdText from "@/components/common/IdText";
 import RecordCard from "@/components/fm/RecordCard";
+import CardField from "./CardField";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import MappingFields, { ConfirmToggle, useMappingDraft } from "./MappingFields";
@@ -154,7 +155,7 @@ function EntityMapRow({
           {!editing && (
             <MappingFields entryKey={entryKey} entityId={m.entityId} mapping={m} entity={entity}
               cell={(key, label, field) => (
-                <div key={key} className="card-field"><span className="card-field-label">{label}</span>{field}</div>
+                <CardField key={key} label={label}>{field}</CardField>
               )} />
           )}
         </div>

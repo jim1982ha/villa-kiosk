@@ -446,7 +446,7 @@ console.log("\n  VESTA's words in this tablet's language (ticket 28 of \"One inb
   // owner, 2026-11-06: each chat the Cockpit's card, its menu its one field, named as the column was
   // 2026-11-06: "Language", to fit the cards' one name column (the card names the chat, the section says VESTA writes)
   ck("  ...each chat's menu named \"Language\"",
-     /<span className="card-field-label">Language<\/span>\s*<Dropdown className="recipients-language"/.test(
+     /<CardField label="Language">\s*<Dropdown className="recipients-language"/.test(
        readFileSync(new URL("../../src/components/settings/WhoGetsMessages.tsx", import.meta.url), "utf8")));
 }
 

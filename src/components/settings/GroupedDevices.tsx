@@ -11,6 +11,7 @@ import { Layers, Plus, Sparkles } from "lucide-react";
 import { FoldToggle } from "@/components/common/FoldedList";
 import IdText from "@/components/common/IdText";
 import RecordCard from "@/components/fm/RecordCard";
+import CardField from "./CardField";
 import { useCardRoom } from "@/config/VillaModel";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import EntityPicker from "./EntityPicker";
@@ -115,7 +116,8 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
 
       {/* ⚠️ EACH GROUP THE COCKPIT'S CARD (owner, 2026-11-06): its name (its primary's) in the strip, the group's icon
           before it; its room, its primary's id and what the primary does on its quiet line; its members and "Add another
-          entity…" its words; its bin at its strip's right (owner, 2026-11-06), so it has no bar */}
+          entity…" its one field, "Members" (owner, 2026-11-06: every card's fields as a device's); its bin at its strip's
+          right (owner, 2026-11-06), so it has no bar */}
       {shown.visible.length > 0 && (
         <div className="fm-list settings-cards" ref={listRef}>
           {shown.visible.map((group) => (
@@ -125,7 +127,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
               pills={<><span><IdText id={group.primaryEntityId} /></span><span>primary (keeps the map badge)</span></>}
               body={
                 // the member pills and the "add another" picker share one line, the picker compact at the pills' height
-                <div className="group-members">
+                <CardField label="Members"><div className="group-members">
                   {group.memberEntityIds.map((id) => (
                     <RemovablePill key={id} label={entityLabel(id)} tip={id} removeLabel="Remove from group"
                       onRemove={() => removeMember(group, id)} />
@@ -138,7 +140,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
                       compact
                     />
                   </div>
-                </div>
+                </div></CardField>
               }
               remove={{ icon: "bin", label: `Delete the group ${entityLabel(group.primaryEntityId)}`, run: () => deleteGroup(group.id) }} />
           ))}

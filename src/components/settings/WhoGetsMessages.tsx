@@ -22,6 +22,7 @@ import { ROLE_LABELS } from "@/auth/roles";
 import { CHAT_LANGUAGES, ROLE_LISTS, droppedChats, planChange, targetsOf, withChatLanguage, type SentLists } from "@/messages/recipients";
 import { useConfig } from "@/config/ConfigContext";
 import RecordCard from "@/components/fm/RecordCard";
+import CardField from "./CardField";
 import { MessageCircle } from "lucide-react";
 import Dropdown from "@/components/common/Dropdown";
 import AddOnLine from "@/components/common/AddOnLine";
@@ -90,12 +91,11 @@ export default function WhoGetsMessages({ onSaved }: {
                 {ids.map((id) => (
                   <RecordCard key={id} title={name(id)} lead={<MessageCircle size={16} aria-hidden />}
                     body={
-                      <div className="card-field">
-                        <span className="card-field-label">Language</span>
+                      <CardField label="Language">
                         <Dropdown className="recipients-language" ariaLabel={`The language ${name(id)} reads VESTA's messages in`}
                           value={languages[id] ?? "en"} onChange={(code) => setLanguage(id, code)}
                           options={Object.entries(CHAT_LANGUAGES).map(([code, words]) => ({ value: code, label: words }))} />
-                      </div>
+                      </CardField>
                     }
                     remove={{ icon: "x", label: `Take ${name(id)} off the ${who}'s list`, run: () => void save((now) => withItem(now, id, false)) }} />
                 ))}

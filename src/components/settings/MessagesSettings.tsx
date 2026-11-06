@@ -12,6 +12,7 @@ import SearchPicker from "@/components/common/SearchPicker";
 import AddOnLine from "@/components/common/AddOnLine";
 import UnitField from "@/components/common/UnitField";
 import RecordCard from "@/components/fm/RecordCard";
+import CardField from "./CardField";
 import { Maximize } from "lucide-react";
 
 interface Props {
@@ -71,8 +72,7 @@ function FullScreenCard({ item, onRemove }: { item: FullScreenAnnouncement; onRe
   return (
     <RecordCard title={item.title} lead={<Maximize size={16} aria-hidden />}
       body={
-        <div className="card-field">
-          <span className="card-field-label">On screen</span>
+        <CardField label="On screen">
           {/* the seconds and their unit joined, "10s" (owner, 2026-11-06: a box and a separate "s"; rules: durations
               are joined), in one field (common/UnitField) */}
           <UnitField unit="s">
@@ -84,7 +84,7 @@ function FullScreenCard({ item, onRemove }: { item: FullScreenAnnouncement; onRe
               onKeyDown={(e) => e.key === "Enter" && field.flush()}
             />
           </UnitField>
-        </div>
+        </CardField>
       }
       remove={{ icon: "bin", label: `Delete the announcement ${item.title}`, run: onRemove }} />
   );

@@ -126,9 +126,15 @@ console.log("\n  the on/off setting (owner, 2026-11-03: \"a toggle where user ca
      && !/\.card-field > [^{]*\{[^}]*(max-width|flex: 0 0 var)/.test(css)
      && !!narrow && /grid-template-columns: minmax\(0, 1fr\);/.test(narrow[1]) && /grid-column: 1;/.test(narrow[2]), [token.map((m) => m[0]), narrow?.[0]]);
   // ...and every name fits the column: the device card's, an announcement's, a chat's (the longest, "Linked entity")
-  const names = ["Type", "Category", "Label", "Intensity", "Linked entity", "On screen", "Language"];
-  const drawnNames = ["components/settings/MappingFields.tsx", "components/settings/MessagesSettings.tsx", "components/settings/WhoGetsMessages.tsx"]
-    .flatMap((f) => [...srcOf(f).matchAll(/cell\("\w+", "([^"]+)"|<span className="card-field-label">([^<]+)<\/span>/g)].map((m) => m[1] ?? m[2]));
+  // owner, 2026-11-06 (later): the bound cards' "Bound to", a group's "Members": every card's field this one CardField
+  const names = ["Type", "Category", "Label", "Intensity", "Linked entity", "On screen", "Language", "Bound to", "Bind to", "3D object", "Members"];
+  const { readdirSync } = await import("node:fs");
+  const settingsDir = join(SRC, "components/settings");
+  const drawnNames = readdirSync(settingsDir).filter((f) => f.endsWith(".tsx"))
+    .flatMap((f) => [...srcOf(`components/settings/${f}`).matchAll(/cell\("\w+", "([^"]+)"|<CardField label="([^"]+)"/g)].map((m) => m[1] ?? m[2]));
+  ck("  ...every card's field the one CardField: no card draws its own name-and-control row",
+     readdirSync(settingsDir).filter((f) => f !== "CardField.tsx" && /card-field/.test(srcOf(`components/settings/${f}`))).length === 0
+     && ["Bound to", "Bind to", "3D object", "Members", "Language", "On screen"].every((n) => drawnNames.includes(n)), drawnNames);
   ck("  ...every field's name one of the column's, the longest \"Linked entity\"", drawnNames.length > 0 && drawnNames.every((n) => names.includes(n))
      && Math.max(...drawnNames.map((n) => n.length)) === "Linked entity".length, drawnNames);
   // owner, 2026-11-03: a device's id was cut every few letters beside "Confirm before toggling" on a phone. Owner,
