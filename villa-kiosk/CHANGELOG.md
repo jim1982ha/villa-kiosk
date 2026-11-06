@@ -1,3 +1,11 @@
+## 2.496.734
+
+What you will see:
+- Under Cockpit › Inbox › Issues › Closed, an alert VESTA handled (a visit drill, a parking alert) now shows the same card as every other one: the alert's name ("#133-P1") and the device's name at the top with the time, "Cleared" as its first line, the room under it, then VESTA's words, the photos and the Status. Before, it showed a different card: a bell, "#133-P1 (closed)" with no device name, no state and no room.
+- The photos of such an alert are the ones VESTA's message holds, in one row, each with its camera and the time it was taken; a tap opens it full size.
+
+What to check: open Cockpit › Inbox › Issues and unfold Closed. Each closed alert card starts with its "#n-P1" chip and the device's name ("Test door"), then "Cleared". After the next visit drill ends, its closed card shows every photo of the visit in a row, each named with its camera and time. The drills that ended before you installed 2.496.733 (#127 to #133) keep what the older version had kept, one photo or none, under the time of their end: their other photos were never copied to the tablet.
+
 ## 2.496.733
 
 What you will see:

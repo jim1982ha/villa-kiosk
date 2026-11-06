@@ -39,8 +39,8 @@ interface MessagesView {
   watched: MessageItem[];
   /** The announcements, newest first. */
   notifications: MessageItem[];
-  /** What is over — VESTA's card "#90-P2 (closed)", the villa's own ✅ message, a fault with neither — newest first: their
-   *  own folded section, after Watch (owner, 2026-10-28), never among the notifications (announcements.alertStage). */
+  /** What is over — a closed fault (VESTA's message of its alert inside its card), VESTA's card "#90-P2 (closed)" no
+   *  fault holds, the villa's own ✅ message — newest first: their own folded section, after Watch (owner, 2026-10-28), never among the notifications (announcements.alertStage). */
   closed: MessageItem[];
   /** VESTA's reports, newest first: their own filter and section, never among the notifications. */
   reports: MessageItem[];
@@ -226,16 +226,21 @@ export type MessagePlace = Place | "issue";
  *  away from Notifications was worked out twice, by messagesView for the list and by the page's provider for the mark
  *  (it built the open and watched cards again for unreadOf), and two checks matched the source to keep them alike.
  *  Both read this now, from the same `open` and `watched` (config/cockpitIssues). Pure. */
-export function messagePlaces({ open, watched, announcements, read = [] }: {
+export function messagePlaces({ open, watched, closed = [], announcements, read = [] }: {
   open: readonly CardView[];
   watched: readonly CardView[];
+  /** The faults that are over (config/cockpitIssues): VESTA's card of an alert one of them holds is listed with it. */
+  closed?: readonly CardView[];
   announcements: readonly Announcement[];
   /** What this tablet has read (readAtOpening); none: everything unread. */
   read?: readonly string[];
 }): { of: (a: Announcement) => MessagePlace; unread: number; unreadReports: number } {
   // ⚠️ A WATCHED ALERT IS LISTED ONCE, IN WATCH (owner, 2026-10-28), AN ALERT WITH A TICKET ONCE, WITH ITS ISSUE (owner,
   // 2026-10-29, as Telegram shows one message): its card opens on its Open issues or Watch line, never also a notification
-  const withIssue = new Set([...open, ...watched].flatMap((c) => cardsOfIssue(c, announcements)));
+  // ⚠️ ...AND A CLOSED ALERT ONCE, BY ITS FAULT'S CARD (owner, 2026-11-07: #133-P1 under Closed was VESTA's message drawn
+  // as a notification, a bell and "#133-P1 (closed)" with no device, no state, no room): the one card of every case,
+  // its message's words, photos and Status inside it as on Open issues and Watch
+  const withIssue = new Set([...open, ...watched, ...closed].flatMap((c) => cardsOfIssue(c, announcements)));
   const of = (a: Announcement): MessagePlace => (withIssue.has(a) ? "issue" : placeOf(a));
   const seen = new Set(read);
   // ⚠️ LISTED WITH ITS ISSUE, NO UNREAD (architecture review 2026-10-29 #2): counted, the mark opened Messages on an
@@ -288,7 +293,7 @@ export const NOTHING_WAITING = "Nothing waiting. Answered rings and finished ite
 export function messagesView({ open, watched, closed: closedFaults = [], announcements, filter, selected }: {
   open: readonly CardView[];
   watched: readonly CardView[];
-  /** The faults that are over (config/cockpitIssues); one VESTA holds a message for is listed by that message. */
+  /** The faults that are over (config/cockpitIssues), each its card, VESTA's message of its alert joined inside it. */
   closed?: readonly CardView[];
   announcements: readonly Announcement[];
   filter: MessagesFilter;
@@ -304,7 +309,7 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
   const watchedItems = showIssues ? watched.map(issueItem) : [];
   // each record in ONE place, the one the unread mark counts by (messagePlaces): VESTA's card of an alert an open or
   // watched issue holds is listed with that issue, never also as a notification
-  const { of } = messagePlaces({ open, watched, announcements });
+  const { of } = messagePlaces({ open, watched, closed: closedFaults, announcements });
   // newest first, by time (two feeds: their numbers do not compare)
   const asNotes = (shown: boolean, place: MessagePlace, kind: "notification" | "report" = "notification"):
     MessageItem[] => (shown
@@ -314,7 +319,8 @@ export function messagesView({ open, watched, closed: closedFaults = [], announc
   // ⚠️ A PROBLEM'S LIFE IS ONE PLACE (owner, 2026-10-28): open, then watched once it cleared, then closed — Watch and
   // Closed are shown with the issues, never with the notifications
   // each record in ONE place (placeOf): a report under Reports, an alert that is over in Watch or Closed
-  const closedIssues = showIssues ? closedFaults.filter((c) => cardsOfIssue(c, announcements).length === 0).map(issueItem) : [];
+  // every closed fault its card, as told (issueAsTold): VESTA's message of its alert inside it, never a card of its own
+  const closedIssues = showIssues ? closedFaults.map(issueItem) : [];
   const closedAt = (i: MessageItem) => Date.parse((i.kind === "issue" ? i.card.closedAt : i.announcement.at) ?? "") || 0;
   const closed = [...closedIssues, ...asNotes(showIssues, "closed")].sort((a, b) => closedAt(b) - closedAt(a));
   const watchedCards = asNotes(showIssues, "watch");

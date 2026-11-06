@@ -11,7 +11,7 @@ const { attentionOf, groupAttention, sinceEntities } = await import("@/config/at
 const { cockpitCard, confirmingCards, rowWhen, TIME_UNKNOWN } = await import("@/config/cockpitCard");
 const { InboxCard } = await import("@/components/cockpit/MessagesTab");
 const { EMPTY_FM_DATA } = await import("@/fm/fmTypes");
-const { momentText } = await import("@/utils/dateText");
+const { momentText, clockTime } = await import("@/utils/dateText");
 const { loadHistory, stateSinceAnswer, stateSinceRequests } = await import("@/ha/historySource");
 
 const HOUR = 3_600_000, now = Date.now(), began = now - 5 * HOUR, restart = now - HOUR;
@@ -42,8 +42,29 @@ const of = (id) => { const i = items.find((x) => x.id === id); if (!i) throw new
 const issue = (...ids) => ({ kind: "issue", key: ids[0], card: cockpitCard(groupAttention(ids.map(of))[0], null, new Date(now)) });
 const watched = confirmingCards([{ ticket: ticket("w1", "lock.asked"), word: "Cleared", who: "", closedAt: began, at: now + HOUR, due: false }],
   { devices, entities, entityMap, resolvedRooms, may: () => true })[0];
+// ⚠️ CLOSED IS THE SAME CARD (owner, 2026-11-07: #133-P1 under Closed was VESTA's message drawn as a notification, a
+// bell, "#133-P1 (closed)" and no device, state or room): a closed fault, and a closed alert VESTA told, through the
+// Closed section's real path (closedCards, messagesView)
+const { closedCards } = await import("@/config/cockpitCard");
+const { messagesView } = await import("@/messages/messagesModel");
+const { parseVestaMessage } = await import("@/messages/announcements");
+const closedAt = new Date(now - HOUR).toISOString();
+const shut = (id, extra = {}) => ticket(id, "lock.asked", { status: "resolved", resolvedAt: closedAt, notWatched: true,
+  // the Agent's close as it writes it (kiosk.py close_fault: a "cleared" kind, its note), `by` the Kiosk's stamp
+  updates: [{ at: closedAt, status: "resolved", photoIds: [], kind: "cleared", note: "Cleared: back to normal.", by: "VESTA Agent" }], ...extra });
+const closedFm = { ...EMPTY_FM_DATA, tickets: [shut("c1"), shut("c2", { alertNumber: 133, alertPriority: "P1" })] };
+const closedOnes = closedCards(closedFm, null, new Date(now), { devices, entities, entityMap, resolvedRooms, may: () => true });
+globalThis.window = globalThis.window ?? { location: { pathname: "/" } };   // a photo's address: the add-on's own (no Ingress prefix)
+const PHOTO = (n) => `${String(n).repeat(32)}.jpg`;
+const vesta133 = parseVestaMessage({ seq: 7, key: "incident:133", at: closedAt, title: "#133-P1 (closed)", stage: "closed", to: "Owner & FM",
+  body: "Test door opened while the villa is empty", status: ["- Alert sent 03:39", "✅ Cleared on 07/11/2026 03:45."],
+  photos: [{ id: PHOTO(1), label: "Parking", at: new Date(began).toISOString() }, { id: PHOTO(2), label: "Door", at: new Date(began + 60_000).toISOString() }] });
+const closedView = messagesView({ open: [], watched: [], closed: closedOnes, announcements: [vesta133], filter: "issues", selected: null });
+const closedItem = (id) => closedView.closed.find((i) => i.key === `closed:${id}`);
 const table = { offline: issue("unavailable:camera.offline"), missing: issue("unavailable:camera.gone"), alarm: issue("alarm:binary_sensor.leak"),
-  "task never done": issue("schedule:s1"), fault: issue("fault:f1"), ticket: issue("fault:f2"), watched: { kind: "issue", key: "w", card: watched } };
+  "task never done": issue("schedule:s1"), fault: issue("fault:f1"), ticket: issue("fault:f2"), watched: { kind: "issue", key: "w", card: watched },
+  closed: closedItem("c1"), "closed alert": closedItem("c2") };
+const STATED = ["ticket", "watched", "fault", "closed", "closed alert"];
 
 const { AttentionCard } = await import("@/components/cockpit/IssueCard");
 console.log("\n  each field of the row, on each kind:");
@@ -65,7 +86,7 @@ for (const [name, item] of Object.entries(table)) {
   const state = inside(main, "fm-record-state"), said = text(state).replace(/\|/g, "");
   const meta = inside(row, "fm-record-meta");
   ck("  ...its state the card's first line (none in its strip), its room the quiet line's first words, nothing of its state in the words or that line",
-     (said.length > 0) === ((item.card.status ?? []).length > 0 || name === "ticket" || name === "watched" || name === "fault")
+     (said.length > 0) === ((item.card.status ?? []).length > 0 || STATED.includes(name))
      && (!said || main.startsWith(`<div class="fm-record-main"><div class="fm-record-state`)) && !strip.includes("fm-record-status")
      && (item.card.status ?? []).every((s) => said.includes(s.text)) && text(meta).startsWith(`|${item.card.room}|`)
      && !/Missing|Unavailable|In progress|Never recorded/.test(text(meta) + text(inside(row, "cockpit-attention-sub-title") || "")), [said, meta, row]);
@@ -88,6 +109,20 @@ ck("each kind that has a state says it; a ticket's, its stage, who took it its w
      && /fm-record-strip strip-warn"/.test(row("fault")), Object.keys(table).map((k) => [k, text(first(k))]));
   // the same fault, moved: its move says where it stands, never "New fault" (a ticket's stage, a reopening)
   ck("  ...only while nobody moved it: a ticket says its stage, not \"New fault\"", !/New fault/.test(row("ticket")) && !/New fault/.test(row("watched")));
+}
+{
+  // owner, 2026-11-07: the closed visit #133-P1 drawn as every card, its message's photos a row inside it
+  const item = table["closed alert"];
+  const row = draw(h(InboxCard, { item, opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }));
+  const strip = inside(row, "fm-record-strip"), caps = [...row.matchAll(/<figcaption>([^<]*)<\/figcaption>/g)].map((m) => m[1]);
+  ck("a closed alert VESTA told is listed once, by its fault's card: never also VESTA's message as a card of its own",
+     closedView.closed.length === 2 && closedView.closed.every((i) => i.kind === "issue"), closedView.closed);
+  ck("  ...its strip: its alert's chip, its device's name; its state its first line; its room its quiet line",
+     /<span class="fm-record-number">#133-P1<\/span><span class="fm-record-name">/.test(strip) && text(inside(strip, "fm-record-name")) === "|Asked|"
+     && !/\(closed\)/.test(row) && inside(row, "fm-record-state") !== "" && text(inside(row, "fm-record-meta")).startsWith("|Hall|"), row);
+  ck("  ...its message's every photo in one row, each its camera and its own time, never one photo at the close",
+     caps.length === 2 && caps[0] === `Parking · ${clockTime(began)}` && caps[1] === `Door · ${clockTime(began + 60_000)}`
+     && /Status:/.test(row) && /✅ Cleared on 07\/11\/2026 03:45\./.test(row), caps);
 }
 {
   // owner, 2026-11-05: "#91-P1" a small chip in the strip, before the name, from the record (fmEngine.alertLabel)
