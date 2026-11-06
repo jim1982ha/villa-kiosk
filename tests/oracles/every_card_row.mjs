@@ -125,6 +125,25 @@ ck("each kind that has a state says it; a ticket's, its stage, who took it its w
      && /Status:/.test(row) && /✅ Cleared on 07\/11\/2026 03:45\./.test(row), caps);
 }
 {
+  // owner, 2026-11-07: a hold on #134-P1's card under Closed did nothing, the villa's message beside it asked for the
+  // superadmin code: every record under Closed is held to erase, the same way
+  const { cardErase } = await import("@/components/cockpit/IssueCard");
+  const { FmDataContext } = await import("@/fm/FmDataContext");
+  // under the Facility records, as in the app: the hold erases through their one write (removeTicket)
+  const fm = { removeTicket: async () => true };
+  const held = (item) => /fm-erasable/.test(draw(h(FmDataContext.Provider, { value: fm },
+    h(InboxCard, { item, opened: true, canManage: false, onOpenEntity() {}, onEditTicket() {}, onRaiseTicket() {} }))));
+  const note = closedView.closed.length ? messagesView({ open: [], watched: [], closed: [], announcements: [vesta133], filter: "issues", selected: null }).closed[0] : null;
+  ck("every card under Closed is held to erase: a closed fault, a closed alert VESTA told, a message no fault holds; never an open one",
+     held(table.closed) && held(table["closed alert"]) && note?.kind === "notification" && held(note)
+     && !held(table.fault) && !held(table.watched), [note?.kind]);
+  const done = [];
+  const erase = cardErase(table["closed alert"].card, async (id, t) => done.push(`ticket ${id} ${t}`), async (a, t) => done.push(`message ${a.key} ${t}`));
+  await erase.run("T");
+  ck("  ...held, its fault and VESTA's message of it go, behind the code", done.join() === "ticket c2 T,message incident:133 T"
+     && erase.detail === "#133-P1 Asked" && cardErase(table.fault.card, async () => {}, async () => {}) === undefined, done);
+}
+{
   // owner, 2026-11-05: "#91-P1" a small chip in the strip, before the name, from the record (fmEngine.alertLabel)
   const alerted = attentionOf({ devices, entities, entityMap, resolvedRooms, sinceOf,
     fmData: { ...EMPTY_FM_DATA, tickets: [ticket("f7", "lock.asked", { alertNumber: 91, alertPriority: "P1", status: "in_progress" })] } }).attentionItems;

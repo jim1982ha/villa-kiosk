@@ -10,7 +10,10 @@ import { useRecordPlace } from "@/components/fm/useRecordPlace";
 import type { RecordPlace } from "@/fm/recordPlace";
 import { cardIcons, cardStrip, lineStrip, rowWhen, toldShown, type CardLine, type CardView } from "@/config/cockpitCard";
 import { IconTip, SourceIcons, WatchedIcon } from "@/components/fm/sourceIcons";
-import RecordCard, { type CardPart } from "@/components/fm/RecordCard";
+import RecordCard, { type CardPart, type RecordCardProps } from "@/components/fm/RecordCard";
+import { useFmDataOrNull } from "@/fm/FmDataContext";
+import { backendFetch } from "@/auth/sessionLost";
+import { eraseMessage, type Announcement } from "@/messages/announcements";
 import { moveWho } from "@/fm/faultNotes";
 import { ACCENT_PILL } from "@/fm/tone";
 import { AnnouncementContent } from "@/components/messages/AnnouncementContent";
@@ -36,14 +39,34 @@ export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicke
   // a profile that does not manage Facility work, or a problem with nothing to do (a watched one): no buttons
   const buttons = (line: CardLine) => (canManage && line.actions.length > 0
     ? <LineActions card={card} line={line} onEditTicket={onEditTicket} onRaiseTicket={onRaiseTicket} /> : null);
-  return <AttentionCard card={card} onOpenEntity={onOpenEntity} buttons={buttons} focused={focused} />;
+  const fm = useFmDataOrNull();
+  return <AttentionCard card={card} onOpenEntity={onOpenEntity} buttons={buttons} focused={focused}
+    erase={fm ? cardErase(card, fm.removeTicket, (a, token) => eraseMessage(a, token, backendFetch)) : undefined} />;
+}
+
+/** ⚠️ EVERY CLOSED RECORD IS ERASED THE SAME WAY (owner, 2026-11-07: a hold on #134-P1's card under Closed did nothing,
+ *  while the villa's message beside it asked for the superadmin code): held, the card's records (`erases`) and VESTA's
+ *  messages it tells are erased, behind the superadmin code (RecordCard `erase`: ErasableRow), as a message's card and a
+ *  ticket are. None on a card nothing erases (an open issue, Watch). Pure: a check runs it. */
+export function cardErase(card: CardView, removeTicket: (id: string, token: string) => Promise<unknown>,
+  removeMessage: (a: Announcement, token: string) => Promise<unknown>): RecordCardProps["erase"] {
+  const ids = card.erases ?? [];
+  if (ids.length === 0) return undefined;
+  const told = card.lines.flatMap((l) => (l.told ? [l.told] : []));
+  return {
+    title: "Erase this record", detail: [card.lines[0]?.alertLabel, card.title].filter(Boolean).join(" "),
+    run: async (token) => {
+      for (const id of ids) await removeTicket(id, token);
+      for (const a of told) await removeMessage(a, token);
+    },
+  };
 }
 
 /** The card itself, drawn — THE Cockpit card (RecordCard), as every list's (architecture review, 2026-10-15): its
  *  strip (its source icons, its alert's name, its name, its time), where it stands, its room and next check, its
  *  problems. Its name opens the device. Draws `card` (config/cockpitCard) and nothing else: what it says is decided
  *  there, by value (cardStrip, lineStrip, faultNotes.moveWho). Pure: a check draws it. */
-export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
+export function AttentionCard({ card, onOpenEntity, buttons, focused, erase }: {
   /** The issue as told (messagesModel issueAsTold): a line holding VESTA's message of its alert draws it. */
   card: CardView;
   onOpenEntity: (id: string) => void;
@@ -51,6 +74,8 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
   buttons?: (line: CardLine) => ReactNode;
   /** Marked, as the card a device window's warning asked for (owner, 2026-10-24). */
   focused?: boolean;
+  /** What a hold on it erases (cardErase): a closed card's records. */
+  erase?: RecordCardProps["erase"];
 }) {
   const icons = cardIcons(card);
   const strip = cardStrip(card);
@@ -93,6 +118,7 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused }: {
       // in words, with its date and time (owner, 2026-10-19). On the Watch list the first line says when it closes.
       check={card.nextCheck && !watch ? { pill: card.nextCheck.pill, tip: card.nextCheck.tip } : undefined}
       parts={parts}
+      erase={erase}
       // its strip's colour when nothing is said (cardStrip); a fault being confirmed: its frame marked (owner, 2026-10-23)
       tone={[strip.tone, card.look === "watched" ? "fault-watched" : "", focused ? "cockpit-focus" : ""].filter(Boolean).join(" ")}
     />
