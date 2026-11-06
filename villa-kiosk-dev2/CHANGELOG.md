@@ -1,3 +1,10 @@
+## 2.496.733
+
+What you will see:
+- A visit of the villa's presence alert that VESTA closed goes straight to Closed on the tablet. Before, a closed visit could sit under Watch for about ten minutes with no "Closes" line, while another one was already under Closed.
+
+What to check: after the next visit drill ends ("Cleared on …: no further signal for 5min" on Telegram), open the tablet's Cockpit: the visit's card is under Closed at once, never under Watch. This needs the VESTA Agent update of the same evening.
+
 ## 2.496.732
 
 What you will see:
