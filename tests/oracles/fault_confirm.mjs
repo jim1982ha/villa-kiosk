@@ -104,9 +104,11 @@ ck("  ...and the map's fault marks (the amber \"!\") only its device",
 
 console.log("\n  in the Open issues list, last, uncounted, marked:");
 const cards = confirmingCards(conf, { devices, entities, entityMap: {}, resolvedRooms: { "lock.door": "Hall" }, may: () => true });
-ck("one card per fault, titled by its device, its fault's title its line (its alert's name its chip), the confirm line under it, no buttons; one about to be watched, no pill",
+// ⚠️ one about to be watched has its state too (owner, 2026-11-07, #136-P1 with none): the Agent's next look, no moment
+ck("one card per fault, titled by its device, its fault's title its line (its alert's name its chip), the confirm line under it, no buttons; one about to be watched, its next look its pill",
    cards.length === 4 && cards.every((c) => c.look === "watched" && c.lines.every((l) => l.actions.length === 0))
-   && cards.slice(0, 3).every((c) => c.nextCheck?.when) && cards[3].nextCheck === null && cards[3].lines[0].closing === `Done${on(-2)} (JM)`
+   && cards.slice(0, 3).every((c) => c.nextCheck?.when) && cards[3].nextCheck?.when === "Closes within 5min" && cards[3].nextCheck?.tip
+   && cards[3].lines[0].closing === `Done${on(-2)} (JM)`
    && cards[1].title === "door" && cards[1].room === "Hall" && cards[1].lines[0].text === "Door unlocked" && cards[1].lines[0].alertLabel === "#65"
    && cards[1].lines[0].closing === `Done${on(-2)} (JM)` && cards[1].nextCheck.tip === line("w1").split(" · ")[1], cards[1]);
 {
@@ -395,7 +397,7 @@ console.log("\n  a reopen in the Kiosk takes the watch away (architecture review
      r.alertNumber === 65 && r.entityId === "lock.front_door" && r.updates.length === 3 && r.check === "minutes");
   const closedAgain = applyFmCommand(reopenedHere, { type: "closeTickets", ids: ["w1"] }, k(2));
   // ...on Watch, about to be (faultConfirm.afterClose), saying no moment until the Agent writes this close's
-  const unsaid = (d, now) => confirmingFaults(d, CADENCE, now).every((c) => c.awaiting && Number.isNaN(c.at) && confirmParts(c).when === "");
+  const unsaid = (d, now) => confirmingFaults(d, CADENCE, now).every((c) => c.awaiting && Number.isNaN(c.at) && !/\d:\d\d/.test(confirmParts(c).when));
   ck("  ...a Cockpit Close a minute later: resolved, and NO watch time until the Agent writes one",
      closedAgain.tickets[0].status === "resolved" && unsaid(closedAgain, NOW + 2 * 60_000),
      confirmingFaults(closedAgain, CADENCE, NOW + 2 * 60_000).map(confirmLine));

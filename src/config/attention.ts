@@ -65,6 +65,8 @@ export interface AttentionItem {
   critical?: boolean;
   /** Set on a fault: how the VESTA Agent reads it again to close it (FmTicket.check) — the card's "Next check". */
   check?: FmTicketCheck;
+  /** Set on a fault of an open visit (FmTicket.monitoredUntil): when it closes if nothing more is seen — its pill. */
+  monitoredUntil?: string;
   /** Set on a fault the VESTA Agent will close if it stays as it is now (FmTicket.closesAt): when, and what its device
    *  reads now and since when — "Locked since 14:38 · closes at about 14:49 if it stays locked" (cockpitCard). `since`:
    *  read from its history (useStateSince), never its last_changed. */
@@ -483,6 +485,7 @@ export function attentionOf(opts: AttentionInputs): Pick<VillaProblems, "attenti
       ...(alertNumberOf(t) !== undefined ? { alertNumber: alertNumberOf(t), alertLabel: faultAlertLabel(t) } : {}),
       source: faultSource(t),
       check: t.check,
+      ...(t.monitoredUntil ? { monitoredUntil: t.monitoredUntil } : {}),
       closing: closingOf(t.closesAt, entityId ? entities[entityId] : undefined, entityId, sinceOf, t.openedAt),
       // lost contact — isOffline, or an entity the villa's system no longer has (Missing), as devices.unavailable
       // reads it: the device's offline line takes it. ⚠️ A MISSING ENTITY TOO (architecture review, 2026-10-21): only

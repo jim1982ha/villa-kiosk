@@ -81,6 +81,19 @@ ck("  ...its next check a pill, the last thing of its first line (after its stat
    PILL.test(stateLine(issue)) && stateLine(issue).indexOf("fm-record-status") < stateLine(issue).indexOf("fm-record-check")
    && !/fm-record-check|next check/.test(meta(issue)), [stateLine(issue), meta(issue)]);
 {
+  // owner, 2026-11-07: an open visit's pill says until when it is monitored, as Telegram's last line, never its next look
+  const { clockTime, dayShort } = await import("@/utils/dateText");
+  const opened = new Date(2026, 10, 7, 6, 32).toISOString(), until = new Date(2026, 10, 7, 7, 2), later = new Date(2026, 10, 8, 9, 20);
+  const visit = (at) => { const [g] = groupAttention([{ id: "fault:v1", kind: "fault", title: "#136 · Test door", detail: "Fault",
+    entityId: "lock.example", ticketId: "v1", stage: "fault", source: "alert", check: "minutes", openedAt: opened,
+    monitoredUntil: at.toISOString(), device: { key: "lock.example", label: "Test lock", room: "Hall" } }]);
+    return stateLine(draw(h(AttentionCard, { card: cockpitCard(g, CADENCE), onOpenEntity: () => {} }))); };
+  ck("an open visit's pill: \"monitoring until\" its time on the alert's day, its day and time another day; never its next look",
+     visit(until).endsWith(`</svg>monitoring until ${clockTime(until)}</span></div>`)
+     && visit(later).endsWith(`</svg>monitoring until ${dayShort(later)} ${clockTime(later)}</span></div>`)
+     && !/next check/.test(visit(until)) && /fm-record-check/.test(visit(until)), [visit(until), visit(later)]);
+}
+{
   const facility = readFileSync(new URL("../../src/styles/07-facility.css", import.meta.url), "utf8");
   const rule = facility.match(/\n:is\(\.fm-record-state, \.fm-record-part-head\) \.fm-record-check \{([^}]*)\}/)?.[1] ?? "";
   ck("  ...at that line's right (pushed by its margin), whole, the line wrapping it under its state when both do not fit",

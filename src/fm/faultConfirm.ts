@@ -168,8 +168,13 @@ export function closedWords(c: ClosedFault): string {
  *  check, the one that closes it): `when` its words ("Closes 15:06", once past "Closes
  *  within 5 min", the Agent's next look, as faultTiming says it), `tip` what touching it says. */
 export function confirmParts(c: ConfirmingFault): { did: string; when: string; tip: string } {
-  // about to be watched: how it was cleared alone, no moment until the Agent writes it (its card has no pill)
-  if (c.awaiting) return { did: closedWords(c), when: "", tip: "" };
+  // ⚠️ ABOUT TO BE WATCHED, THE SAME FIELDS (owner, 2026-11-07: #136-P1 on Watch with no state line and no (i), every
+  // other Watch card "Closes 02:00" with its (i)): no moment until the Agent writes it, so its state is the Agent's next
+  // look, when it says one
+  if (c.awaiting) {
+    return { did: closedWords(c), when: `Closes ${c.lookMinutes ? withinLook({ checkMinutes: c.lookMinutes }) : "at VESTA's next look"}`,
+      tip: "VESTA says at its next look whether this is watched or closed." };
+  }
   const by = clockTime(c.at);
   return {
     did: closedWords(c),
