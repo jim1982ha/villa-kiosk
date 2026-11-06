@@ -1,3 +1,14 @@
+## 2.496.731
+
+What you will see:
+- A notification's photos are now a row of small pictures, each with the camera's name and the time under it ("Parking · 18:34"). The main photo comes first. Tap a picture to see it full size; the arrows show the others, and the ✕ closes it.
+- This is ready for the coming "one visit, one story" alerts: the villa will send one notification per visit with a photo from every camera that saw it, and the tablet will show all of them on the one card, updated at each step instead of a new card each time.
+- VESTA's card of an alert shows every photo of the villa's messages it replaces, not only the last one.
+- The same row is on the notice that pops up, on the full screen (the main photo large, the others under it), on the Cockpit's cards (Inbox, Watch, Closed, Open issues) and in VESTA's conversation.
+- A doorbell ring still shows its one photo, as large as before, and photos already on the tablet from before this version still show. Their time is shown under them; they have no camera name.
+
+What to check: on the tablet, open an alert or a doorbell ring in the Cockpit that has a photo. You should see the photo with its time under it; tap it and it opens full size.
+
 ## 2.496.730
 
 What you will see:
