@@ -110,7 +110,9 @@ export const WORK_ACTIONS: Record<WorkActionKind, WorkActionSpec> = {
   // shall do the same thing"): an alert's card had VESTA's Done · Need help, a fault's Open Ticket · Close
   // ⚠️ A DONE IS WORK DONE, WHEREVER IT IS PRESSED (owner, 2026-10-30, review round 4: Done on Telegram filed a
   // completion in Recent work, the same Done on the Cockpit card a "Closed without action" gone after 90 days)
-  done: { label: DONE, step: { kind: "close", ask: { question: "Done? VESTA checks it again before it closes.", confirmLabel: DONE }, work: true } },
+  // ⚠️ NO QUESTION (owner, 2026-11-07: "remove this confirmation message when user click on `Done`"): it asked
+  // "Done? VESTA checks it again before it closes." first; it closes as pressed, as Not a problem does
+  done: { label: DONE, step: { kind: "close", work: true } },
   needHelp: { label: NEED_HELP, short: HELP, step: { kind: "help" } },
   // ⚠️ NO QUESTION (owner, 2026-11-04: "When I click 'ignore' I don't want to see the confirmation message since it's
   // redundant"): it closes as pressed, as VESTA's own "Not a problem" does on Telegram and the tablet

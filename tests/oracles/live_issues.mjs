@@ -32,7 +32,7 @@ const item = (id, kind, entityId, extra = {}) => ({ id, kind, title: id, detail:
 const said = (acts) => acts.map((a) => `${a.label} → ${[...a.ids].sort().join(",")}${a.step.kind === "close" ? (a.step.ask ? ` [${a.step.ask.question} / ${a.step.ask.confirmLabel}]` : " [closes as pressed]") : ""}${a.step.kind === "stage" ? ` (${a.step.to})` : ""}`);
 // owner, 2026-10-30: Done · Need help · Open Ticket on every issue card, one Done closing everything on it; owner,
 // 2026-11-05: in the order Done · Not a problem · Open Ticket · Need help, on the tablet and on Telegram
-const OV_DONE = "[Done? VESTA checks it again before it closes. / Done]", TK_CLOSE = "[Close this ticket? Nothing was done, no cost is recorded. / No action needed]";
+const OV_DONE = "[closes as pressed]", TK_CLOSE = "[Close this ticket? Nothing was done, no cost is recorded. / No action needed]";
 // owner, 2026-11-04: Not a problem is a button of its own, after Need help, its label short, its meaning in its question
 // owner, 2026-11-04: "When I click 'ignore' I don't want to see the confirmation message since it's redundant"
 const NAP = "[closes as pressed]";
@@ -635,10 +635,10 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
   // longer a second yes under Done's question; tests/oracles/not_a_problem.mjs)
   const asked = (kind, key = "device:x") => ({ key, kind });
   // owner, 2026-11-05: its question on a line of its own, then [the main action][Cancel], the main action first
-  ck("  ...the button pressed asks ITS question in place of the buttons: Done's, the ticket's No action needed; Not a problem has none",
-     seen(drawButtons(ovActs, asked("done"))) === "|[icon] Done? VESTA checks it again before it closes.|Done|Cancel|"
-     && /^<div class="fm-record-ask"><svg[\s\S]*?<\/svg><span>Done\?[^<]*<\/span><\/div><button type="button" class="btn ghost fm-bar-main">Done<\/button><button type="button" class="btn ghost">Cancel<\/button>$/.test(drawButtons(ovActs, asked("done")))
+  ck("  ...the button pressed asks ITS question in place of the buttons: the ticket's No action needed; Done and Not a problem have none (owner, 2026-11-07)",
+     seen(drawButtons(ovActs, asked("done"))) === "|[icon] Done|[icon] Not a problem|[icon] Open Ticket|[icon] Need help|"
      && seen(drawButtons(ovActs, asked("notAProblem"))) === "|[icon] Done|[icon] Not a problem|[icon] Open Ticket|[icon] Need help|"
+     && /^<div class="fm-record-ask"><svg[\s\S]*?<\/svg><span>Close this ticket\?[^<]*<\/span><\/div><button type="button" class="btn ghost fm-bar-main">No action needed<\/button><button type="button" class="btn ghost">Cancel<\/button>$/.test(drawButtons(tkActs, asked("closeTicket")))
      && seen(drawButtons(tkActs, asked("closeTicket"))) === "|[icon] Close this ticket? Nothing was done, no cost is recorded.|No action needed|Cancel|",
      [seen(drawButtons(ovActs, asked("done"))), seen(drawButtons(ovActs, asked("notAProblem"))), seen(drawButtons(tkActs, asked("closeTicket")))]);
   {
@@ -652,8 +652,8 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     walk(tree);
     const press = (label) => buttons.find((b) => b.props.kind === label)?.props.onClick();
     press("notAProblem"); press("done");
-    ck("  ...Not a problem closes as pressed, as lasting with no work, no question first (owner, 2026-11-04); Done still asks",
-       JSON.stringify(calls) === JSON.stringify([["close", "a", false, true], ["ask", "done"]]), calls);
+    ck("  ...Not a problem closes as pressed, as lasting with no work (owner, 2026-11-04); Done closes as pressed, as work done (owner, 2026-11-07): no question first",
+       JSON.stringify(calls) === JSON.stringify([["close", "a", false, true], ["close", "a", true, false]]), calls);
   }
   ck("  ...another card's question leaves this one's buttons; a card with nothing to act on draws nothing",
      seen(drawButtons(tkActs, asked("closeTicket", "device:y"))) === "|[icon] Close|[icon] No action needed|[icon] Need help|" && drawButtons([]) === "");
