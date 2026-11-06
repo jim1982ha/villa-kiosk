@@ -137,7 +137,10 @@ ck("the card shows the Agent's rows when an Agent is connected OR one of its fau
   const inHead = head ? head.children.filter((c) => c.getText().trim()).map((c) => c.getText().replace(/\s+/g, " ")) : [];
   ck("it is Open issues' own (i), drawn right after the section's title, in the same group (Messages)",
      propText(issues, "tip") === "canManage ? <FaultTiming /> : undefined"
-     && inHead.length === 2 && inHead[0].startsWith('<FoldToggle className="messages-section-toggle') && inHead[1] === "{tip}",
+     // between them only a section's lists' counts (Grouped devices; the Inbox's sections have none)
+     && inHead.length === 2 && inHead[0].startsWith('<FoldToggle className="messages-section-toggle')
+     && inHead[1] === "{views ? <span className=\"title-after\"><SectionViewButtons title={title} views={views} open={open} />{tip}</span> : tip}"
+     && propText(issues, "views") === null,
      inHead);
 }
 

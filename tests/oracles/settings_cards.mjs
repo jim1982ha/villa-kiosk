@@ -19,7 +19,7 @@ const PATCH = {
   "/src/config/ConfigContext.tsx": [["", "export { ConfigContext as __Ctx };"]],
   "/src/ha/HAStateStore.tsx": [["", "export { HAStateContext as __Ctx };"]],
   "/src/components/settings/Fold.tsx": [["useState(false)", "useState(true)"]],
-  "/src/components/settings/GroupedDevices.tsx": [["useState(false)", "useState(true)"],
+  "/src/components/settings/GroupedDevices.tsx": [['useState("groups")', 'useState(globalThis.__gview ?? "groups")'],
     ['const [search, setSearch] = useState("")', 'const [search, setSearch] = useState(globalThis.__q ?? "")']],
   "/src/components/settings/ConfigEditor.tsx": [['useState("on")', 'useState(globalThis.__view ?? "on")']],
   "/src/components/settings/UnavailableByDesign.tsx": [['const [search, setSearch] = useState("")', 'const [search, setSearch] = useState(globalThis.__q ?? "")']],
@@ -86,11 +86,14 @@ const quiet = (f) => { const e = console.error; console.error = () => {}; try { 
 const drawIn = (el) => quiet(() => draw(h(ConfigCtx.Provider, { value: cfg }, h(HACtx.Provider, { value: ha },
   h(VillaModelProvider, { value: villa }, h(PendingFields, { pending: new PendingEdits(noop) }, el))))));
 
+/** A segmented control's options: its words, and whether it is the one pressed (filled). */
+const views = (html) => [...html.matchAll(/<button type="button" class="(active)?" aria-pressed="(true|false)">([^<]*)<\/button>/g)]
+  .map((m) => [m[3], m[2] === "true" && m[1] === "active"]);
 const unescape = (t) => t.replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
 /** A strip's remove: its icon and its words (its tooltip and aria-label are one `label`); null when it has none. */
 const removeOf = (strip) => {
-  const m = /<button type="button" class="icon-btn-sm fm-record-remove( danger)?" aria-label="([^"]*)" data-icon="(bin|x)"><svg[^>]*lucide-(trash-2|x)\b/.exec(strip);
-  return m ? { icon: m[3], glyph: m[4], label: unescape(m[2]), danger: !!m[1], last: strip.endsWith("</svg></button></div>") } : null;
+  const m = /<button type="button" class="icon-btn-sm fm-record-remove( danger)?" aria-label="([^"]*)"><svg[^>]*lucide-([a-z0-9-]+)/.exec(strip);
+  return m ? { glyph: m[3], label: unescape(m[2]), danger: !!m[1], last: strip.endsWith("</svg></button></div>") } : null;
 };
 /** Every card drawn: its frame's whole markup, its strip's name, its bar's words, its strip's remove. */
 const cards = (html) => {
@@ -115,25 +118,29 @@ const DEVICES = "Auto-detected entity settings";
 /** Devices, the list its title's count `view` shows ("on" the map, "off" it), `search` typed (as a panel's edit opens it). */
 const devices = (view = "on", search) => { globalThis.__view = view; try { return drawIn(h(ConfigEditor, { title: DEVICES, tip: "What it does.", initialSearch: search })); } finally { globalThis.__view = undefined; } };
 
-// [kind, drawn, its name, its bar's words ("" no bar), its remove at its strip's right ([icon, tooltip]) or none]
+/** Grouped devices, the list its title's count `view` shows ("groups", "suggested"). */
+const grouped = (view = "groups") => { globalThis.__gview = view; try { return drawIn(h(GroupedDevices, { title: "Grouped devices" })); } finally { globalThis.__gview = undefined; } };
+// [kind, drawn, its name, its bar's words ("" no bar), its remove's tooltip at its strip's right, or none]
 const KINDS = [
-  ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", "", ["bin", "Delete the group Kitchen Temperature"]],
-  ["  ...a suggested group, its main action first", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Pool Pump Power", "Create this group"],
-  ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "", ["x", "Take Back Door off Asleep between reports"]],
-  ["a device of Devices", devices(), "Pool Pump", "", ["bin", "Remove Pool Pump's settings"]],
+  ["a device group", grouped(), "Kitchen Temperature", "", "Delete the group Kitchen Temperature"],
+  ["  ...a suggested group, its main action first", grouped("suggested"), "Pool Pump Power", "Create this group"],
+  ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "", "Take Back Door off Asleep between reports"],
+  ["a device of Devices", devices(), "Pool Pump", "", "Remove Pool Pump's settings"],
   ["a device not on the map (Devices' second list)", devices("off"), "Ceiling Fan", ""],
   ["a 3D object whose entity is gone", devices(), "Example Gone Fan", "Point it there"],
-  ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", "", ["bin", "Delete the announcement Front gate doorbell"]],
-  ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", "", ["x", `Take Example House FM group off the ${ROLE_LABELS.ops}'s list`]],
+  ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", "", "Delete the announcement Front gate doorbell"],
+  ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", "", `Take Example House FM group off the ${ROLE_LABELS.ops}'s list`],
 ];
 console.log("  every record of Settings is the Cockpit's card:");
 for (const [kind, html, name, action, remove] of KINDS) {
   const card = cards(html).find((c) => c.name === name);
-  const said = remove ? `its ${remove[0] === "bin" ? "bin" : "✕"} "${remove[1]}" at its strip's right` : "no remove";
+  // ⚠️ ONE REMOVE ICON (owner, 2026-11-06): the bin on every card, its tooltip its own words; it was an ✕ on a card
+  // taking a thing off a list (a device off Asleep between reports, a chat off a role's list)
+  const said = remove ? `its bin "${remove}" at its strip's right` : "no remove";
   ck(`${kind}: a card named "${name}" in its strip, ${action ? `"${action}" in its bar` : "no bar"}, ${said}`,
      !!card && card.bar === action && card.bars === (action ? 1 : 0)
-     && (remove ? !!card.remove && card.remove.icon === remove[0] && card.remove.glyph === (remove[0] === "bin" ? "trash-2" : "x")
-       && card.remove.label === remove[1] && card.remove.last && card.remove.danger === (remove[0] === "bin") : card.remove === null),
+     && (remove ? !!card.remove && card.remove.glyph === "trash-2" && card.remove.label === remove && card.remove.last && card.remove.danger
+       : card.remove === null),
      cards(html).map(({ name, bar, bars, remove }) => ({ name, bar, bars, remove })));
 }
 // owner, 2026-11-06: a remove is an icon in the band, never a word in a bar; a bar holding nothing is not drawn
@@ -176,8 +183,8 @@ console.log("\n  the remove icon (owner, 2026-11-06): a press is the button's, S
   };
   const ran = [], opened = [];
   const tree = expand(h(RecordCard, { title: "Kitchen Temperature", onOpen: () => opened.push(1),
-    remove: { icon: "bin", label: "Delete the group Kitchen Temperature", run: () => ran.push(1) } }).type({ title: "Kitchen Temperature",
-    onOpen: () => opened.push(1), remove: { icon: "bin", label: "Delete the group Kitchen Temperature", run: () => ran.push(1) } }));
+    remove: { label: "Delete the group Kitchen Temperature", run: () => ran.push(1) } }).type({ title: "Kitchen Temperature",
+    onOpen: () => opened.push(1), remove: { label: "Delete the group Kitchen Temperature", run: () => ran.push(1) } }));
   const button = tree.find((e) => e.type === "button" && /fm-record-remove/.test(e.props.className ?? ""));
   const stopped = [];
   const ev = (k) => ({ stopPropagation: () => stopped.push(k) });
@@ -272,15 +279,14 @@ console.log("\n  Devices: its title's counts show its lists:");
   // what each list holds (its first few): the devices on the map, the devices no object shows (a group's member is
   // shown by its group's badge)
   const LISTS = { on: ["Kitchen Temperature", "Pool Pump", "Pool Pump Power"], off: ["Back Door", "Ceiling Fan"] };
-  const views = (html) => [...head(html).matchAll(/<button type="button" class="section-view( shown)?" aria-pressed="(true|false)">([^<]*)<\/button>/g)].map((m) => [m[3], m[2] === "true"]);
-  ck("its two counts are buttons after its title, the list shown marked (on the map first)",
-     JSON.stringify(views(devices())) === JSON.stringify([["4 on the map", true], ["2 not on the map", false]])
-     && /^<div class="settings-section-title with-tip">Auto-detected entity settings<span class="section-summary section-views"/.test(head(devices())), [views(devices()), head(devices()).slice(0, 160)]);
+  ck("its two counts after its title are the one segmented control, compact, the list shown filled (on the map first)",
+     JSON.stringify(views(head(devices()))) === JSON.stringify([["4 on the map", true], ["2 not on the map", false]])
+     && /^<div class="settings-section-title with-tip">Auto-detected entity settings<span class="title-after"><div class="segmented segmented-compact section-views" role="group" aria-label="Auto-detected entity settings: which list">/.test(head(devices())), [views(head(devices())), head(devices()).slice(0, 200)]);
   const devicesOf = (html) => cards(html).filter((c) => c.bar !== "Point it there").map((c) => c.name);
   ck("  ...each count shows its own list, one at a time",
-     Object.entries(LISTS).every(([v, want], i) => { const html = devices(v); const shown = views(html).map(([, s]) => s);
+     Object.entries(LISTS).every(([v, want], i) => { const html = devices(v); const shown = views(head(html)).map(([, s]) => s);
        return shown.filter(Boolean).length === 1 && shown[i] && JSON.stringify(devicesOf(html)) === JSON.stringify(want); }),
-     ["on", "off"].map((v) => [views(devices(v)), devicesOf(devices(v))]));
+     ["on", "off"].map((v) => [views(head(devices(v))), devicesOf(devices(v))]));
   ck("  ...the missing entity's object with the devices on the map, never with those not on it",
      cards(devices()).some((c) => c.bar === "Point it there") && !cards(devices("off")).some((c) => c.bar === "Point it there"));
 }
@@ -360,7 +366,7 @@ console.log("\n  every card for an entity: its friendly name in its strip, its i
     ck(`${kind}: "${name}" (its entity's name, every screen's) in its strip, "${id}" alone under it`,
        card !== "" && text(inside(card, "fm-record-meta")).replace(/\|/g, "") === id, [cards(html).map((c) => c.name), text(inside(card, "fm-record-meta"))]);
   }
-  const pump = cards(drawIn(h(GroupedDevices, { title: "Grouped devices" }))).find((c) => c.bar === "Create this group")?.card ?? "";
+  const pump = cards(grouped("suggested")).find((c) => c.bar === "Create this group")?.card ?? "";
   ck("  ...a suggested group: its primary's name, its two ids joined by \"+\"", /\+/.test(text(inside(pump, "fm-record-meta"))) && !/Other|primary/.test(text(inside(pump, "fm-record-meta"))), text(inside(pump, "fm-record-meta")));
   const device = cards(devices()).find((c) => c.name === "Pool Pump")?.card ?? "";
   ck("  ...a device of Devices: its name, its id on its box's line (no second line)", device !== "" && !/fm-record-meta/.test(device), device.slice(0, 200));
@@ -371,8 +377,9 @@ console.log("\n  every card's field: its name in the one column, its control bes
   const named = (html, name) => [...(cards(html).find((c) => c.name === name)?.card ?? "").matchAll(/<div class="card-field"><span class="card-field-label">([^<]+)<\/span>/g)].map((m) => m[1]);
   const FIELDS = [
     ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", ["Members"]],
-    ["a device of Devices (a switch)", devices(), "Pool Pump", ["Type", "Category", "Label", "Linked entity", "3D object"]],
-    ["  ...a light, its intensity too", devices("on", "terrace"), "Terrace Lamp", ["Type", "Category", "Label", "Intensity", "Linked entity", "3D object"]],
+    // owner, 2026-11-06: "3D object" first, right under the card's first line, above Type (it was the last)
+    ["a device of Devices (a switch)", devices(), "Pool Pump", ["3D object", "Type", "Category", "Label", "Linked entity"]],
+    ["  ...a light, its intensity too", devices("on", "terrace"), "Terrace Lamp", ["3D object", "Type", "Category", "Label", "Intensity", "Linked entity"]],
     ["a device not on the map", devices("off"), "Ceiling Fan", ["3D object"]],
     ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", ["On screen"]],
     ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", ["Language"]],
@@ -381,6 +388,31 @@ console.log("\n  every card's field: its name in the one column, its control bes
     ck(`${kind}: ${want.map((w) => `"${w}"`).join(", ")}`, JSON.stringify(named(html, name)) === JSON.stringify(want), named(html, name));
   const group = cards(drawIn(h(GroupedDevices, { title: "Grouped devices" }))).find((c) => c.name === "Kitchen Temperature")?.card ?? "";
   ck("  ...a group's members and its \"Add another entity…\" inside its Members field", /card-field-label">Members<\/span><div class="group-members">/.test(group), group);
+}
+
+console.log("\n  Grouped devices: its title's counts show its groups or its suggestions:");
+{
+  // owner, 2026-11-06: "Show fewer" and the suggestions' own "15 suggested groups" toggle sat side by side on one line
+  const head = (html) => inside(html, "with-tip");
+  const shown = (html) => cards(html).map((c) => [c.name, c.bar]);
+  const groupsHtml = grouped(), suggestedHtml = grouped("suggested");
+  ck("its counts after its title: \"1 group · 1 suggested\", the one segmented control, the groups shown first",
+     JSON.stringify(views(head(groupsHtml))) === JSON.stringify([["1 group", true], ["1 suggested", false]])
+     && /<\/button><span class="title-after"><div class="segmented segmented-compact section-views" role="group" aria-label="Grouped devices: which list">/.test(head(groupsHtml)),
+     [views(head(groupsHtml)), head(groupsHtml).slice(0, 400)]);
+  ck("  ...the groups: the groups' cards, no suggestion", JSON.stringify(shown(groupsHtml)) === JSON.stringify([["Kitchen Temperature", ""]]), shown(groupsHtml));
+  ck("  ...the suggested: the suggestion cards, Create this group their main action, no group",
+     JSON.stringify(shown(suggestedHtml)) === JSON.stringify([["Pool Pump Power", "Create this group"]])
+     && JSON.stringify(views(head(suggestedHtml))) === JSON.stringify([["1 group", false], ["1 suggested", true]]), [shown(suggestedHtml), views(head(suggestedHtml))]);
+  const typedIn = (q, view) => { globalThis.__q = q; try { return grouped(view); } finally { globalThis.__q = undefined; } };
+  ck("  ...the search narrows the list shown (a suggestion found by either of its devices)",
+     shown(typedIn("pool pump power", "suggested")).length === 1 && shown(typedIn("pool", "suggested")).length === 1
+     && shown(typedIn("kitchen", "suggested")).length === 0 && /No suggested group has “kitchen”\./.test(text(typedIn("kitchen", "suggested")))
+     && JSON.stringify(shown(typedIn("pool", "groups"))) === "[]", [shown(typedIn("pool", "suggested")), shown(typedIn("kitchen", "suggested"))]);
+  ck("  ...no fold of their own beside \"Show all / Show fewer\" (\"suggested groups\" said nowhere, one fold toggle: the title's)",
+     [groupsHtml, suggestedHtml].every((x) => !/suggested group/.test(text(x)) && (x.match(/class="fold-toggle[ "]/g) ?? []).length === 1)
+     && !/FoldToggle|showSuggestions/.test(readFileSync(new URL("../../src/components/settings/GroupedDevices.tsx", import.meta.url), "utf8")),
+     [groupsHtml, suggestedHtml].map((x) => [text(x).match(/.{0,40}suggested group.{0,40}/)?.[0], (x.match(/class="fold-toggle[ "]/g) ?? []).length]));
 }
 
 console.log("\n  Device telemetry: a log list, its columns time, kind, device, words:");

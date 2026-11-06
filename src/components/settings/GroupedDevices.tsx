@@ -8,7 +8,6 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import AskDialog from "@/components/common/AskDialog";
 import { Layers, Plus, Sparkles } from "lucide-react";
-import { FoldToggle } from "@/components/common/FoldedList";
 import EntityCard from "./EntityCard";
 import CardField from "./CardField";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
@@ -28,6 +27,9 @@ import { countOf } from "@/utils/countOf";
 import { groupMatches } from "@/config/deviceRecord";
 import { useDeviceSearch } from "@/hooks/useDeviceSearch";
 
+/** The list Grouped devices shows: its groups, or the groups it suggests. */
+type GroupView = "groups" | "suggested";
+
 export default function GroupedDevices({ title, tip }: { title: string; tip?: ReactNode }) {
   const { config, update } = useConfig();
   const { entityDeviceIds } = useHA();
@@ -35,7 +37,9 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
   /** A refusal to show in the app's own dialog — see AskDialog for why this is
    *  not `alert()`. */
   const [notice, setNotice] = useState<string | null>(null);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  // ⚠️ ITS TWO LISTS ARE ITS TITLE'S COUNTS (owner, 2026-11-06: "Show fewer" and the suggestions' own "15 suggested
+  // groups" toggle sat side by side on one line): "N groups · N suggested", one shown at a time, the groups first
+  const [picked, setPicked] = useState<GroupView>("groups");
   const [search, setSearch] = useState("");
 
   // ⚠️ EVERY DEVICE OF THE GROUP, BY WHAT ANY DEVICE IS FOUND BY (deviceRecord.deviceSearchTexts: the name on screen,
@@ -49,6 +53,13 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
     () => suggestDeviceGroups(config.entityMap, config.deviceGroups, entityDeviceIds),
     [config.entityMap, config.deviceGroups, entityDeviceIds],
   );
+  // the search narrows the list shown: a suggestion by either of its two devices
+  const suggested = useMemo(() => suggestions.filter((s) =>
+    groupMatches({ primaryEntityId: s.primaryEntityId, memberEntityIds: [s.memberEntityId] }, search, searchSource)),
+  [suggestions, search, searchSource]);
+  const shownSuggestions = useTruncated(suggested);
+  // no suggestion left (the last one created): the groups
+  const view: GroupView = suggestions.length ? picked : "groups";
   // Every edit goes through deviceGroups.groupEdit, which enforces "one
   // entity, one group" (2.496.260). It is asked TWICE: once against what this
   // render shows, to explain a refusal, and again inside update() against
@@ -97,18 +108,23 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
       )}
       {/* what this section does is its title's (i) (ConfigEditorModal, owner 2026-10-22: no visible description) */}
 
-      <Fold title={title} tip={tip} summary={countOf(config.deviceGroups.length, "group")
-        + (suggestions.length ? ` · ${suggestions.length} suggested` : "")}>
+      <Fold title={title} tip={tip} summary={countOf(config.deviceGroups.length, "group")} views={suggestions.length ? {
+        items: [
+          { key: "groups", words: countOf(config.deviceGroups.length, "group") },
+          { key: "suggested", words: `${suggestions.length} suggested` },
+        ],
+        shown: view, onShow: (k) => setPicked(k as GroupView),
+      } : undefined}>
 
       <SearchOrAdd query={search} onQuery={typed} placeholder="Search groups, or a device to group…"
         offer={offer} onAdd={createGroup} onFound={showGroup} />
 
-      {config.deviceGroups.length === 0 && !search.trim() && (
+      {view === "groups" && config.deviceGroups.length === 0 && !search.trim() && (
         <p className="muted body-text mt">No grouped devices yet.</p>
       )}
 
-      {matches.length === 0 && search.trim() !== "" && (
-        <SearchEmpty query={search} noun="group" offer={offer} onAdd={createGroup} />
+      {(view === "groups" ? matches : suggested).length === 0 && search.trim() !== "" && (
+        <SearchEmpty query={search} noun={view === "groups" ? "group" : "suggested group"} offer={offer} onAdd={createGroup} />
       )}
 
       {/* ⚠️ EACH GROUP AN ENTITYCARD (owner, 2026-11-06): its primary's name in the strip, the group's icon before it;
@@ -116,7 +132,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
           the section's (i) did not: owner, 2026-11-06); its members and "Add another
           entity…" its one field, "Members" (owner, 2026-11-06: every card's fields as a device's); its bin at its strip's
           right (owner, 2026-11-06), so it has no bar */}
-      {shown.visible.length > 0 && (
+      {view === "groups" && shown.visible.length > 0 && (
         <div className="fm-list settings-cards" ref={listRef}>
           {shown.visible.map((group) => (
             <EntityCard key={group.id} entityId={group.primaryEntityId} lead={<Layers size={16} aria-hidden />}
@@ -138,24 +154,16 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
                   </div>
                 </div></CardField>
               }
-              remove={{ icon: "bin", label: `Delete the group ${entityLabel(group.primaryEntityId)}`, run: () => deleteGroup(group.id) }} />
+              remove={{ label: `Delete the group ${entityLabel(group.primaryEntityId)}`, run: () => deleteGroup(group.id) }} />
           ))}
         </div>
       )}
-      <ShowAll list={shown} noun="group" />
-
-      {/* Suggestions — collapsed by default: this section only shows what's
-          already grouped unless you go looking for more. */}
-      {suggestions.length > 0 && (
-        <FoldToggle open={showSuggestions} onToggle={() => setShowSuggestions((s) => !s)}>
-          <Sparkles size={16} aria-hidden /> {countOf(suggestions.length, "suggested group")}
-        </FoldToggle>
-      )}
+      {view === "groups" && <ShowAll list={shown} noun="group" />}
 
       {/* a suggested group: the same card, its main action first in its bar */}
-      {showSuggestions && (
+      {view === "suggested" && shownSuggestions.visible.length > 0 && (
         <div className="fm-list settings-cards">
-          {suggestions.map((s) => (
+          {shownSuggestions.visible.map((s) => (
             <EntityCard key={`${s.primaryEntityId}|${s.memberEntityId}`} entityId={s.primaryEntityId} also={[s.memberEntityId]}
               lead={<Sparkles size={16} aria-hidden />}
               actions={
@@ -166,6 +174,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
           ))}
         </div>
       )}
+      {view === "suggested" && <ShowAll list={shownSuggestions} noun="suggested group" />}
       </Fold>
     </div>
   );

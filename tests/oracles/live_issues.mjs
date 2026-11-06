@@ -471,12 +471,12 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
 {
   const tab = JSX.parseTsx("components/fm/TicketsTab.tsx");
   const bar = JSX.elements(tab, "div").find((d) => JSX.propText(d, "className") === '"tickets-toolbar"');
-  const label = bar ? JSX.elements(bar, "WorkLabel") : [];
+  const label = bar ? JSX.elements(bar, "WorkButton") : [];
   const form = JSX.elements(tab, "FaultForm").find((f) => JSX.propText(f, "presetEntity") !== null);
   ck("  ...its first line: Open Ticket, in the cards' words and wrench, opening the one \"Open a ticket\" form above the tickets",
-     label.length === 1 && JSX.propText(label[0], "kind") === '"raiseTicket"' && JSX.propText(label[0].parent, "onClick") === "() => setRaising({})"
+     label.length === 1 && JSX.propText(label[0], "kind") === '"raiseTicket"' && JSX.propText(label[0], "onClick") === "() => setRaising({})"
      && !!form && JSX.propText(form, "presetEntity") === "raising.entity" && JSX.guardsOf(form).join() === "raising");
-  ck("  ...pointed at a device when asked (a device's wrench, an Inbox card): FacilitySections hands the Cockpit's request on",
+  ck("  ...pointed at a device when asked (a device window's Open Ticket, an Inbox card): FacilitySections hands the Cockpit's request on",
      /raiseFor=\{reportFaultFor\} onRaiseOpened=\{onFaultFormOpened\}/.test(readFileSync(new URL("../../src/components/fm/FacilitySections.tsx", import.meta.url), "utf8"))
      && /setRaising\(\{ entity: raiseFor \}\)/.test(tt));
 }
@@ -488,7 +488,7 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
   const bar = JSX.elements(tab, "div").find((d) => cls(d) === '"messages-toolbar"');
   const kids = bar ? bar.children.filter((c) => JSX.tagOf(c) || (c.expression && c.getText().trim())) : [];
   const actions = bar ? JSX.elements(bar, "div").find((d) => cls(d) === '"messages-toolbar-actions"') : undefined;
-  const open = actions ? JSX.elements(actions, "WorkLabel") : [];
+  const open = actions ? JSX.elements(actions, "WorkButton") : [];
   ck("the filters' line: the filters, then at its right a guest's Report a problem; never Open Ticket, nor its form",
      !!bar && JSX.tagOf(kids[0]) === "div" && cls(kids[0]) === '"messages-filters"' && !!actions
      && open.length === 0 && /Report a problem/.test(actions.getText()) && !/raiseTicket|<FaultForm /.test(msg),
@@ -499,9 +499,9 @@ ck("  ...and no figures above them (in progress, mean resolution, closed with no
      && !JSX.elements(tab, "ListSection").some((s) => JSX.propText(s, "actions") !== null));
   const { WORK_ACTIONS } = await import("@/fm/deviceWork");
   const wb = JSX.parseTsx("components/fm/WorkButtons.tsx");
-  ck("  ...the Tickets tab's Open Ticket: the card's words and wrench, defined once (WorkLabel, the card's buttons draw it too)",
+  ck("  ...the Tickets tab's Open Ticket: the card's words and wrench, defined once (WorkButton, the card's buttons draw it too)",
      WORK_ACTIONS.raiseTicket.label === "Open Ticket" && WORK_ACTIONS.openTicket.label === WORK_ACTIONS.raiseTicket.label
-     && JSX.elements(wb, "WorkLabel").length === 1 && JSX.propText(JSX.elements(wb, "WorkLabel")[0], "kind") === "a.kind");
+     && JSX.elements(wb, "WorkButton").length === 1 && JSX.propText(JSX.elements(wb, "WorkButton")[0], "kind") === "a.kind");
   const shared = readFileSync(new URL("../../src/styles/08-shared.css", import.meta.url), "utf8");
   // owner, 2026-10-31: on a phone (360 to 430 px) Open Ticket still dropped to its own line, 2 to 42 px short in
   // WebKit; the filter's button says "Notifs", its section keeps "Notifications"
@@ -648,9 +648,9 @@ console.log("\n  the buttons, drawn — ONE close-with-confirm for both tabs:");
     const tree = WorkButtons({ actions: ovActs, cardKey: "device:x", work: pressing });
     const buttons = [];
     const walk = (n) => { if (!n || typeof n !== "object") return; if (Array.isArray(n)) return n.forEach(walk);
-      if (n.type === "button") buttons.push(n); walk(n.props?.children); };
+      if (n.type === "button" || n.type?.name === "WorkButton") buttons.push(n); walk(n.props?.children); };
     walk(tree);
-    const press = (label) => buttons.find((b) => JSON.stringify(b.props.children).includes(`"kind":"${label}"`))?.props.onClick();
+    const press = (label) => buttons.find((b) => b.props.kind === label)?.props.onClick();
     press("notAProblem"); press("done");
     ck("  ...Not a problem closes as pressed, as lasting with no work, no question first (owner, 2026-11-04); Done still asks",
        JSON.stringify(calls) === JSON.stringify([["close", "a", false, true], ["ask", "done"]]), calls);

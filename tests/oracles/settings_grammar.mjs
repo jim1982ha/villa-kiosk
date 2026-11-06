@@ -129,10 +129,23 @@ ck("  ...every telemetry tool keeps its name and its tooltip (its word hidden on
 
 console.log("\n  one look for \"this opens more\":");
 const { default: Fold } = await import("@/components/settings/Fold");
-const fold = quiet(() => draw(h(Fold, { title: "Grouped devices", tip: "What it does.", summary: "1 group · 2 suggested" }, h("p", null, "inside"))));
+const fold = quiet(() => draw(h(Fold, { title: "Asleep between reports", tip: "What it does.", summary: "3 devices" }, h("p", null, "inside"))));
 ck("a folded section is the Cockpit's: its chevron, then its title, what it holds after it, its (i) right after",
-   /^<section class="messages-section"><div class="cockpit-issues-head"><div class="with-tip"><button type="button" class="fold-toggle messages-section-toggle settings-section-title" aria-expanded="false"><svg[\s\S]*?lucide-chevron-right[\s\S]*?<\/svg><span class="fold-toggle-words">Grouped devices<\/span><span class="section-summary">1 group · 2 suggested<\/span><\/button><span class="info-tip/.test(fold)
+   /^<section class="messages-section"><div class="cockpit-issues-head"><div class="with-tip"><button type="button" class="fold-toggle messages-section-toggle settings-section-title" aria-expanded="false"><svg[\s\S]*?lucide-chevron-right[\s\S]*?<\/svg><span class="fold-toggle-words">Asleep between reports<\/span><span class="section-summary">3 devices<\/span><\/button><span class="info-tip/.test(fold)
    && !/inside/.test(fold), fold);
+// owner, 2026-11-06: a folded section's lists (Grouped devices: its groups, its suggestions) are its title's counts,
+// the one segmented control after its title, outside its toggle; none filled while folded, a press opens it on its list
+{
+  const shown = [];
+  const views = { items: [{ key: "groups", words: "1 group" }, { key: "suggested", words: "2 suggested" }], shown: "groups", onShow: (k) => shown.push(k) };
+  const folded = quiet(() => draw(h(Fold, { title: "Grouped devices", tip: "What it does.", summary: "1 group", views }, h("p", null, "inside"))));
+  // owner, 2026-11-06 (phone): the (i) alone on a second line; the counts and the (i) go under the title together
+  ck("  ...its lists' counts after its title, the one segmented control, outside the toggle, with its (i) as one unit, none filled while folded, no summary",
+     /<\/button><span class="title-after"><div class="segmented segmented-compact section-views" role="group" aria-label="Grouped devices: which list"><button type="button" class="" aria-pressed="false">1 group<\/button><button type="button" class="" aria-pressed="false">2 suggested<\/button><\/div><span class="info-tip/.test(folded)
+     && !/section-summary">1 group/.test(folded) && !/inside/.test(folded), folded);
+  ck("  ...a count pressed while folded opens the section on its list",
+     /views=\{views && \{ \.\.\.views, onShow: \(key\) => \{ setOpen\(true\); views\.onShow\(key\); \} \}\}/.test(readFileSync(new URL("../../src/components/settings/Fold.tsx", import.meta.url), "utf8")));
+}
 const { ShowAll } = await import("@/components/common/TruncatedList");
 const more = draw(h(ShowAll, { list: { visible: [], hidden: 114, expanded: false, paged: null, toggle() {}, go() {} }, noun: "entity", plural: "entities" }));
 ck("  ...a list inside a section opens by the same chevron and words, never an outlined button",
@@ -151,7 +164,7 @@ const recordFiles = ["MessagesSettings", "EntityMapRow", "GroupedDevices", "Unav
   .map((n) => [n, readFileSync(new URL(`../../src/components/settings/${n}.tsx`, import.meta.url), "utf8")]);
 ck("  ...the small icon button: round, borderless, one size (a record's remove, RecordCard's); none of a Settings file's own",
    /\.icon-btn-sm \{ width: var\(--row-icon\); height: var\(--row-icon\);[^}]*border: 0; border-radius: 50%; background: transparent;/.test(modals)
-   && /className=\{`icon-btn-sm fm-record-remove/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8"))
+   && /className="icon-btn-sm fm-record-remove danger"/.test(readFileSync(new URL("../../src/components/fm/RecordCard.tsx", import.meta.url), "utf8"))
    && recordFiles.every(([, t]) => !/className="icon-btn(-sm)? danger"|className="icon-btn( |")/.test(t)),
    recordFiles.filter(([, t]) => /className="icon-btn(-sm)? danger"|className="icon-btn( |")/.test(t)).map(([n]) => n));
 const { default: AddOnLine } = await import("@/components/common/AddOnLine");

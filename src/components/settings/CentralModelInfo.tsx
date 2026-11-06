@@ -71,12 +71,8 @@ export default function CentralModelInfo({
               since the upload left the top bar (2.496.516); a second text for a profile that cannot upload was
               never drawn (this part is only shown with "Upload Model") */}
           <div style={{ marginTop: 8, color: "var(--text-dim)" }}>
-            Stored in the add-on's own <code>/data</code> volume (on disk as <code>villa.glb</code>)
-            and served to every client from there, an upload overwrites it, so re-uploading a new
-            file replaces the villa for everyone (the name above is the file it came from). The
-            room-data sidecar (<code>.rooms.json</code>, emitted next to the GLB by the Blender
-            pipeline) lives alongside it. Upload both with Upload Model, beside this (i); there's no
-            path to configure.
+            Upload Model, beside this (i), replaces the villa's 3D model on every tablet. Upload its room file
+            (<code>.rooms.json</code>) with it.
           </div>
     </>
   );

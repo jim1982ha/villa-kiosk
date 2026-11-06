@@ -27,9 +27,21 @@ ck("  ...and the Dashboard hands it the view's heading", /viewHeadingDeg=\{manag
 
 ck("Devices has no second heading to prepare an entity", !/Pre-configure a new entity/.test(devices) && (devices.match(/<TipTitle\b/g) ?? []).length === 1);
 // its explanation is its title's (i) since 2026-10-22 (owner: no visible description text)
-ck("  ...and its title's ONE (i) says what the 3D object field does and how to prepare an entity — no paragraph of its own",
-   /<ConfigEditor initialSearch=\{focusEntityId\} title="Auto-detected entity settings" tip=\{<>[\s\S]*?3D object field[\s\S]*?To prepare an entity whose 3D object is not in the\s+model yet/.test(advanced)
+// owner, 2026-11-06: the (i) ran to nine lines ("entity ID", "the add-on"): two short sentences, said at a glance
+ck("  ...and its title's ONE (i), two short sentences: what the list is, and that its search finds or prepares a device",
+   /<ConfigEditor initialSearch=\{focusEntityId\} title="Auto-detected entity settings" tip=\{<>\s*Every device the 3D villa can show, with its settings\. Pick a list above; type in the search to find a\s+device, or to prepare one whose 3D object is not in the model yet\.\s*<\/>\} \/>/.test(advanced)
    && !/To prepare an entity/.test(devices));
+// ...and every (i) of Settings and Advanced Settings the same: at most two sentences, no "entity ID", no "add-on", never
+// the platform's name. Read from the source: each `tip=` (a string or a fragment), its expressions left as words.
+{
+  const tipsOf = (t) => [...t.matchAll(/\btip=(?:"([^"]*)"|\{<>([\s\S]*?)<\/>\})/g)].map((m) => (m[1] ?? m[2]).replace(/\{[^{}]*\}/g, "N").replace(/\s+/g, " ").trim())
+    .concat([...t.matchAll(/<InfoTip label="[^"]*">([\s\S]*?)<\/InfoTip>/g)].map((m) => m[1].replace(/<[^>]+>|\{[^{}]*\}|\{?\w+ && \(?|\)?\}/g, " ").replace(/\s+/g, " ").trim()));
+  const files = { advanced, settings, model: strip(src("components/settings/CentralModelInfo.tsx")).replace(/[\s\S]*marginTop: 8[^>]*>/, 'tip={<>').replace(/<\/div>\s*<\/>[\s\S]*/, "</>}") };
+  const tips = Object.values(files).flatMap(tipsOf).filter((t) => t !== "");
+  const sentences = (t) => t.split(/[.!?](?:\s|$)/).filter((x) => x.trim() !== "").length;
+  const long = tips.filter((t) => sentences(t) > 2 || /entity ID|add-on|Home Assistant/i.test(t));
+  ck("  ...every (i) of Settings and Advanced Settings at most two sentences, in the owner's words", tips.length >= 12 && long.length === 0, [tips.length, long]);
+}
 
 const rule = css.match(/\.telemetry-row > \.telemetry-summary \{([^}]*)\}/)?.[1] ?? "";
 ck("a telemetry row is one line: the summary does not wrap and ends in …",

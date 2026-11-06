@@ -40,7 +40,7 @@ interface CockpitModalProps {
   tab: CockpitTab;
   onTab: (tab: CockpitTab) => void;
   /** Tickets opens "Open a ticket" pointed at this device (a device
-   *  panel's wrench, an Inbox card's Open Ticket); the request is dropped once the form has it. */
+   *  window's Open Ticket, an Inbox card's); the request is dropped once the form has it. */
   reportFaultFor?: string;
   onFaultFormOpened?: () => void;
   /** An Inbox card's Open Ticket for a device with no record. */

@@ -1,5 +1,5 @@
 // src/components/panels/DeviceWindowPieces.tsx
-// WHAT EVERY DEVICE WINDOW SHOWS BESIDES ITS OWN CONTENT — its warning sign, Edit, the fault wrench, "Also on this
+// WHAT EVERY DEVICE WINDOW SHOWS BESIDES ITS OWN CONTENT — its warning sign, Edit, Open Ticket, "Also on this
 // device" (DeviceReadings) — defined once, from the open panel's actions (PanelActionsContext), and drawn by both
 // frames: the card window (BasePanel) and the camera's full screen (CameraPanel). Each frame chooses WHERE a piece
 // sits and its look (`className`); whether it shows, what it says and what a tap does are decided here.
@@ -8,7 +8,8 @@
 // none of these, so an offline camera listed in the Cockpit had no warning sign, no Edit and no wrench in its window,
 // and its readings were nowhere — each piece added to BasePanel had to be copied into it, and the last few were not.
 
-import { Pencil, TriangleAlert, Wrench } from "lucide-react";
+import { Pencil, TriangleAlert } from "lucide-react";
+import { WorkButton } from "@/components/fm/WorkButtons";
 import { usePanelActions } from "./PanelActionsContext";
 import { useDeviceIssue } from "@/components/cockpit/useVillaAttention";
 import type { AttentionSeverity } from "@/config/attention";
@@ -47,15 +48,11 @@ export function EditButton({ className = "btn ghost", icon = false }: { classNam
     : <button type="button" className={className} onClick={onEdit}>Edit</button>;
 }
 
-/** The wrench: report a fault for this device. Icon-only beside Edit: a shortcut for a device already looked at, not a
- *  primary action (the title and label carry the meaning). */
-export function ReportFaultButton({ className = "btn ghost icon-only" }: { className?: string }) {
+/** ⚠️ THE COCKPIT'S OPEN TICKET (owner, 2026-11-06: an icon-only wrench sat beside Edit, a second look for the act the
+ *  Cockpit's cards call Open Ticket): the one WorkButton, the Cockpit's icon, words and look, opening "Open a ticket"
+ *  pointed at this device, in every device window (the card window's footer, the camera's header). */
+export function OpenTicketButton() {
   const { may, onReportFault } = usePanelActions();
   if (!may.reportFault) return null;
-  return (
-    <button type="button" className={className} onClick={onReportFault}
-      title="Report a fault for this device" aria-label="Report a fault for this device">
-      <Wrench size={16} aria-hidden="true" />
-    </button>
-  );
+  return <WorkButton kind="raiseTicket" onClick={onReportFault} />;
 }

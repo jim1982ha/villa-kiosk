@@ -5,7 +5,7 @@
 // the Faults tab, a second list of the same open faults the Overview already showed.
 //
 // ⚠️ A NEW TICKET IS OPENED HERE (owner, 2026-11-02: "it makes no sense to see the dedicated button in the Inbox page";
-// it sat on the Inbox's filters' line from 2026-10-31): the tab's own Open Ticket, a device window's wrench and an Inbox
+// it sat on the Inbox's filters' line from 2026-10-31): the tab's own Open Ticket, a device window's and an Inbox
 // card's Open Ticket for a device with no record all open this one form (FaultForm), which saves a ticket in progress.
 //
 // Time-to-resolution is what evidences supervision, so the app stamps the resolution time itself.
@@ -30,7 +30,7 @@ import { faultMove, faultNoteLines, moveState, moveWho, stagePillClass } from "@
 import { closedTold } from "@/fm/faultConfirm";
 import { SourceIcons } from "./sourceIcons";
 import { faultSource } from "@/fm/issueSource";
-import WorkButtons, { CARD_BUTTON, WorkLabel, useCardWork } from "./WorkButtons";
+import WorkButtons, { WorkButton, useCardWork } from "./WorkButtons";
 import FoldedList from "@/components/common/FoldedList";
 import { useFmTerms } from "@/fm/useFmTerms";
 import { formatMoney } from "@/utils/money";
@@ -42,7 +42,7 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
   /** Open this record's edit form (an open issue's "Edit ticket"); dropped once the form has it. */
   editTicket?: string;
   onEditOpened?: () => void;
-  /** Open "Open a ticket" pointed at this device (a device's wrench, an Inbox card's Open Ticket); dropped once the form
+  /** Open "Open a ticket" pointed at this device (a device window's Open Ticket, an Inbox card's); dropped once the form
    *  has it. */
   raiseFor?: string;
   onRaiseOpened?: () => void;
@@ -154,9 +154,9 @@ export default function TicketsTab({ onOpenEntity, deviceOptions, editTicket, on
 
   return (
     <div className="fm-stack">
-      {/* the tab's own button, at the right of its first line, in the cards' words and wrench (WorkLabel) */}
+      {/* the tab's own button, at the right of its first line: the one Open Ticket (WorkButton) */}
       <div className="tickets-toolbar">
-        <button type="button" className={CARD_BUTTON} onClick={() => setRaising({})}><WorkLabel kind="raiseTicket" /></button>
+        <WorkButton kind="raiseTicket" onClick={() => setRaising({})} />
       </div>
       {raising && (
         <FaultForm key={raising.entity ?? "new"} presetEntity={raising.entity} deviceOptions={deviceOptions}

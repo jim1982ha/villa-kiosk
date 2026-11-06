@@ -49,7 +49,8 @@ ck("Readiness' devices: the one list, every device reachable (no \"+N more\" tha
 for (const f of ["settings/ConfigEditor.tsx", "settings/GroupedDevices.tsx"]) {
   const t = parseTsx(`components/${f}`);
   // Devices pages each of its two lists, on the map and not (owner, 2026-11-06: a list of 829 objects was drawn whole)
-  const lists = f === "settings/ConfigEditor.tsx" ? 2 : 1;
+  // Grouped devices its two too, its groups and its suggestions (owner, 2026-11-06: the suggestions' fold is gone)
+  const lists = 2;
   ck(`  ...${f.split("/")[1]}: the same`, calls(t, "useTruncated").length === lists && elements(t, "ShowAll").length === lists
      && elements(t, "ShowAll").every((s) => propText(s, "noun")));
 }

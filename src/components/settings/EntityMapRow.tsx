@@ -61,7 +61,7 @@ function EntityMapRow({
   // ⚠️ THE COCKPIT'S CARD (owner, 2026-11-06: "the same card in Settings and Advanced Settings"): the device's name in
   // its strip; its first line of words the decided one (owner, 2026-11-05: the shown box, the id at most 2 lines, the
   // toggle at its right; on a phone the toggle on a line of its own under it: 04-modals.css); its fields always shown
-  // under it, "3D object" the last; its bin at its strip's right (owner, 2026-11-06), so it has no bar. A device the
+  // under it, "3D object" the first (owner, 2026-11-06); its bin at its strip's right (owner, 2026-11-06), so it has no bar. A device the
   // villa's system no longer has says so as the card's state. ⚠️ NEVER FOLDED, NO ROOM LINE (owner, 2026-11-06: the
   // chevron hid its fields; its room under its name said nothing the name did not, "no added value"). A device not on
   // the map is the same card, its id alone on its first line, its "3D object" field empty.
@@ -72,7 +72,7 @@ function EntityMapRow({
         ? <DeviceFields entryKey={entryKey} mapping={mapping} entity={entity} stale={stale} matchedRowRef={matchedRowRef} objects={field} />
         : <CardField label={OBJECT_FIELD}><ObjectsField {...field} /></CardField>}
       // an object the 3D model names is never removed here
-      remove={onRemove && { icon: "bin", label: `Remove ${name}'s settings`, run: () => onRemove(entryKey) }} />
+      remove={onRemove && { label: `Remove ${name}'s settings`, run: () => onRemove(entryKey) }} />
   );
 }
 

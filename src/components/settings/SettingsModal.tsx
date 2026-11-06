@@ -191,10 +191,9 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
         // draft's pending store); "Who gets the messages" is saved on the villa at once, as before.
         <PendingFields pending={slice.pending}>
           <TipTitle title="Full-screen announcements" tip={<>
-            The announcements picked here fill the whole screen of every tablet where full screen is on, each for its
-            own time; then they go, and their card stays in the Cockpit's Inbox. Close ends one sooner. A tablet can
-            switch full screen off, a bedroom's at night for instance: there they show under the category bar like
-            every other announcement, for {fmtDuration(ANNOUNCEMENT_NOTICE_MS)}.
+            The announcements picked here fill the screen of every tablet where full screen is on, each for its own
+            time, then stay in the Cockpit's Inbox. A tablet with full screen off shows them under the category bar for
+            {" "}{fmtDuration(ANNOUNCEMENT_NOTICE_MS)}.
           </>} />
           <OnOffToggle ariaLabel="Full screen on this tablet" title="Let a picked announcement fill the whole screen of this tablet"
             on={v.ringsFullScreen} onChange={(ringsFullScreen) => slice.set({ ringsFullScreen }, { now: true })}
@@ -205,9 +204,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           {can("editConfig") && (
             <>
               <TipTitle title={LISTS_TITLE} tip={<>
-                Who gets the villa's alerts and VESTA's messages on Telegram. Urgent (P1) alerts go to both lists, P2
-                alerts to the {ROLE_LABELS.ops}. With a list empty, they go to every Telegram chat. Changes here are
-                saved at once.
+                Who gets the villa's alerts and VESTA's messages on Telegram: urgent (P1) alerts go to both lists, P2
+                alerts to the {ROLE_LABELS.ops}. With a list empty, they go to every Telegram chat.
               </>} />
               <WhoGetsMessages onSaved={() => setKeptAtOnce((k) => k.includes(LISTS_TITLE) ? k : [...k, LISTS_TITLE])} />
             </>
@@ -304,9 +302,8 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor, ta
           (AppConfig.roomGlowAndCones, every tablet's, editConfig only) share Clickable Glow's. */}
       <div className="setting-line">
         <SettingRow icon={<MapIcon size={16} />} label="Map look" tipLabel="About the map look" tip={<>
-          Icon: a badge with a value pill. Card: a coloured card with icon and value inline. Both show the same
-          information, purely a look preference. Badge size, {settingValue.times(config.entityIconScale)}, is set with the
-          +/- buttons next to the category filters in the top bar.
+          Icon: a badge with its reading on a small pill; Card: a coloured card with its icon and reading. The badge
+          size, {settingValue.times(config.entityIconScale)}, is set with the +/- buttons in the top bar.
         </>}>
           <SegmentedGroup ariaLabel="Floating badge style" active={v.badgeStyle} onChange={(badgeStyle) => slice.set({ badgeStyle }, { now: true })} options={[
             { key: "classic", title: "Icon badge style, the reading sits on a small pill under the icon", label: <><Circle size={16} /> <span className="badge-btn-label">Icon</span></> },

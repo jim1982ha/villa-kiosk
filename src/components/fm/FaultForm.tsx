@@ -1,5 +1,5 @@
 // src/components/fm/FaultForm.tsx
-// THE form for a fault: raising one (Messages' "Open a ticket", a device panel's wrench) and editing one (a
+// THE form for a fault: raising one (Messages' "Open a ticket", a device window's Open Ticket) and editing one (a
 // ticket in the Tickets tab). ONE form for both: a fault raised in a hurry from a phone — often a device and four
 // words — is exactly the record someone later corrects or adds photos to, and a second, subtly different edit form is
 // how the two drift apart. Lived inside the Faults tab until the Overview took over raising (owner, 2026-10-14).
@@ -25,7 +25,7 @@ import { Pill } from "./RecordCard";
 export default function FaultForm({ editing, presetEntity, deviceOptions, onDone }: {
   /** The record being edited; absent when raising a new fault. */
   editing?: FmTicket;
-  /** Raise a fault already pointed at this device (a device panel's wrench). The title stays EMPTY on purpose:
+  /** Raise a fault already pointed at this device (a device window's Open Ticket). The title stays EMPTY on purpose:
    *  someone reporting by hand usually describes what Home Assistant cannot see (a dripping tap), and a
    *  pre-written guess tends to be saved as it is. */
   presetEntity?: string;

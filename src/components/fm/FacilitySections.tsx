@@ -77,7 +77,7 @@ export default function FacilitySections({
   editTicket?: string;
   /** Called once the form has it, so reopening the tab later does not spring it again. */
   onTicketEditOpened?: () => void;
-  /** Tickets opens "Open a ticket" pointed at this device (a device's wrench, an Inbox card's Open Ticket). */
+  /** Tickets opens "Open a ticket" pointed at this device (a device window's Open Ticket, an Inbox card's). */
   reportFaultFor?: string;
   /** Called once the form has it. */
   onFaultFormOpened?: () => void;
