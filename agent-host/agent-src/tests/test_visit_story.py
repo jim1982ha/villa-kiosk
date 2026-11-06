@@ -209,7 +209,7 @@ def test_the_evening_of_06_11_is_one_alert_one_message_per_chat_one_story(tmp_pa
         assert "- Same time as the last 4 evenings (18:18–18:33)" in st, st
         assert "- Seen at Parking → Entrance Left → Waterwall Buddha → Main House Door, 18:34–18:35" in st, st
         # its stronger step rang: said on its own line, never a line of its own (owner, 2026-11-07, drill #135)
-        assert "- Outdoor entrance Lock opened at the lock (not from the app), 18:35, locked again 18:36: alert sent again " \
+        assert "- Outdoor entrance Lock opened at the lock, 18:35, locked again 18:36: alert sent again " \
                "(to: Owner & FM)" in st, st
         assert "- Someone is inside (Living Room) at 18:36" in st, st
         assert not [ln for ln in st if "Still-there" in ln or "Cleared" in ln], st
@@ -217,7 +217,7 @@ def test_the_evening_of_06_11_is_one_alert_one_message_per_chat_one_story(tmp_pa
         assert text.startswith("#4-P1 (new)\n") and "Outdoor entrance Lock opened while the villa is empty" in text
         # the card sent again with the sheet as its picture, the villa's card gone; the card's state the short one
         assert not [ln for ln in st if "Stronger signal sent" in ln], st
-        assert st[-1] == "⚠️ New alert", st
+        assert re.fullmatch(r"⚠️ New alert, monitoring until \d\d:\d\d", st[-1]), st     # owner, 2026-11-07
     assert (OWNER, 500) in v.tg.deleted and (FM, 501) in v.tg.deleted
     # one message per chat: every copy VESTA posted but the card is gone
     for chat in (OWNER, FM):
@@ -386,7 +386,7 @@ def test_vesta_restarted_mid_visit_carries_on_the_same_card(tmp_path, kiosk, med
     play(v, send(vi.event()))
     assert [t for _c, t, _k in v.tg.sent[sent:] if not t.startswith("Approval request")] == []
     assert copy(v, OWNER, 1)["mid"] == 500
-    assert "- Outdoor entrance Lock opened at the lock (not from the app), 18:35" in lines(copy(v, OWNER, 1)["text"])
+    assert "- Outdoor entrance Lock opened at the lock, 18:35" in lines(copy(v, OWNER, 1)["text"])
     # the card is taken over once: a step is an edit, never a notice of its own ("Update sent")
     assert not [ln for ln in lines(copy(v, OWNER, 1)["text"]) if "Update sent" in ln]
     assert [h["stage"] for h in v.state.incident_history(1) if not h.get("fold")] == ["new"]
@@ -406,7 +406,7 @@ def test_vesta_back_after_the_villa_held_the_visit_takes_over_the_same_card_send
     assert {(c, m) for c, m, _t in v.tg.edits} >= {(OWNER, 500), (FM, 501)}
     assert v.tg.media_edits and {(c, m) for c, m, *_ in v.tg.media_edits} == {(OWNER, 500), (FM, 501)}
     st = lines(copy(v, OWNER, 1)["text"])
-    assert "- Outdoor entrance Lock opened at the lock (not from the app), 18:35" in st, st
+    assert "- Outdoor entrance Lock opened at the lock, 18:35" in st, st
     assert copy(v, OWNER, 1)["text"].startswith("#1-P1"), "numbered now"
     assert told(v)[-1]["owner"] == "vesta"
     # its reminder was sent by the villa: VESTA's chase does not send it again

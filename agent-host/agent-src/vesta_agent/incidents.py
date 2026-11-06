@@ -8,7 +8,7 @@ desk's, vesta_shared.store); what each chat shows of it is incident_thread.py's 
 """
 from __future__ import annotations
 
-from vesta_shared.problems import Problems, alert_name, began, incident_runs, priority_of
+from vesta_shared.problems import Problems, alert_name, began, incident_runs, monitored_until, priority_of
 from datetime import datetime
 
 from vesta_shared import alert_watch
@@ -64,6 +64,10 @@ class Incidents:
         """When its current run began (opened, or opened again: problems.began), the moment its Kiosk card's strip
         shows; None for no such incident."""
         return began(self._get(iid))
+
+    def monitored_until(self, iid: int) -> str | None:
+        """Until when open incident `iid`'s visit is monitored (problems.monitored_until, ISO); None for no visit."""
+        return monitored_until(self._get(iid))
 
     def severity(self, iid: int) -> str | None:
         """Its priority (P1…P4): the notices' heading says it."""

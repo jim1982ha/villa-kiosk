@@ -8,6 +8,7 @@
 Synthetic villa: every id invented."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from test_visit_story import (GARDEN_DOOR, LOCK, OWNER, PARKING, ROOM_PERSON, Visit, at, copy, lines, play, send, villa)
@@ -40,7 +41,7 @@ def test_drill_135_reads_one_line_per_step_each_at_its_time(tmp_path, kiosk, med
               "- Outdoor entrance Lock opened from the app, 05:15, locked again 05:16: alert sent again (to: Owner & FM)",
               "- Person seen in the Server Room Person at 05:17"]
     st = lines(copy(v, OWNER)["text"])
-    assert st == wanted + ["⚠️ New alert"], st
+    assert st[:-1] == wanted and re.fullmatch(r"⚠️ New alert, monitoring until \d\d:\d\d", st[-1]), st
     tablet = kiosk.messages["incident:1"]["status"]
     assert tablet == st, (tablet, st)               # the tablet's card: the same lines
 

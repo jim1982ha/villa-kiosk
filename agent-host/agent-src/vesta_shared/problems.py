@@ -749,8 +749,16 @@ class Problems:
         pattern = title.replace(words, "{since}", 1) if d.get("since") and words and words in title else None
         # when the desk closes it if it stays over (Notes.CLOSES_AT, owner 2026-10-21): the card's "closes at about"
         closes = notes_of(self.store.incident(sid)).get(Notes.CLOSES_AT) if kind == "incident" else None
+        confirms_by = self.confirms_by(task, next_night)
         return {"open": task.get("status") == "open", "title": title, "closes_at": closes or None,
-                "confirms_by": self.confirms_by(task, next_night),
+                "confirms_by": confirms_by,
+                "monitored_until": monitored_until(self.store.incident(sid)) if kind == "incident" and task.get("status") == "open"
+                else None,
+                # ⚠️ NOTHING WATCHED, SAID OF EVERY CLOSE (owner, 2026-11-07, drill #136-P1: a visit closed in the Cockpit
+                # sat on the tablet's Watch list with no state, as "about to be watched", since only VESTA's own closes
+                # said `notWatched`): closed, no watch, and its watch decided — an alert closed in the Cockpit before the
+                # desk carried its terms is not decided yet (its next tick says it, alert_watch.rewatch)
+                "not_watched": task.get("status") != "open" and confirms_by is None and self._watch_decided(kind, sid),
                 "pattern": pattern, "since": d.get("since") if pattern else None,
                 "number": sid if kind == "incident" else standing,
                 # its priority as the alert's title writes it after the number ("#5-P2", owner 2026-10-28): the Kiosk's
@@ -781,6 +789,14 @@ class Problems:
     # ⚠️ EVERY CLOSE ALIKE (owner, 2026-10-25: "it shall consistently exist for all cleared faults … all potential
     # cases"): an alert the villa or the desk cleared, with "Watch 1h" on Telegram, left the Cockpit at once, and so did
     # a night-check fault. The same field and the same card say each close's watch.
+    def _watch_decided(self, kind: str | None, sid) -> bool:
+        """Is a closed fault's watch decided — None from confirms_by meaning "nothing watched", not "not known yet"? Not
+        for an alert a person closed whose desk's terms are not on it yet (alert_watch.rewatch writes them)."""
+        if kind != "incident":
+            return True
+        p = notes_of(self.store.incident(sid))
+        return not alert_watch.awaiting_read(self.store.incident(sid)) or bool(p.get(Notes.WATCH_TERMS) or p.get(Notes.WATCH_MINUTES))
+
     def confirms_by(self, task: dict, next_night: Callable[[datetime], datetime | None] | None = None,
                     now: datetime | None = None) -> str | None:
         """Until when the closed fault of `task` is watched — back within it, it reopens as the same problem: the Kiosk
@@ -964,6 +980,16 @@ def _moment(iso):
     except ValueError:
         return None
     return t.replace(tzinfo=timezone.utc) if t and t.tzinfo is None else t
+
+
+def monitored_until(inc: dict | None) -> str | None:
+    """Until when open incident `inc`'s visit is monitored — the villa's record's `closes_at`, the moment it closes if
+    nothing more is seen, moved later at each step (owner, 2026-11-07: "monitoring until 06:40" on the tablet's pill and
+    Telegram's last line); None for no visit, one closed, or no moment said."""
+    if not inc or dict(inc).get("closed_at"):
+        return None
+    at = (notes_of(inc).get(Notes.VISIT) or {}).get("closes_at")
+    return str(at) if at else None
 
 
 def began(inc: dict | None) -> str | None:

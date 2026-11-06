@@ -450,9 +450,11 @@ def hidden_in_rule_rules(rules: list[dict], hidden, name_of, gone=()) -> list[Fi
         # (vesta_shared.automation_words)
         kind = "script" if str(r.get("kind") or "") == "script" else "automation"
         out.append(Finding(HIDDEN_IN_RULE, r["entity_id"], r["entity_id"], "configuration", P3,
-                           f"The {AW.words(alias, r['entity_id'], kind)} watches {n} device{'s' if n > 1 else ''} hidden in "
-                           f"the villa's system that no longer answer{'' if n > 1 else 's'}: {names}.",
+                           # ⚠️ ONE WORDING, HIDDEN OR NOT (owner, 2026-11-07): whether a device is hidden changes
+                           # nothing for the owner — the fault reads as for any device that no longer answers
+                           f"The {AW.words(alias, r['entity_id'], kind)} watches {n} device{'s' if n > 1 else ''} "
+                           f"that no longer answer{'' if n > 1 else 's'}: {names}.",
                            {"name": rule, "kind": r.get("kind"), "hidden": named, "count": n},
                            f"Bring {'them' if n > 1 else 'it'} back online; if a copy replaced {'them' if n > 1 else 'it'}, "
-                           f"point the {kind} at the copy instead (a hidden device is left out of every other check)."))
+                           f"point the {kind} at the copy instead."))
     return out

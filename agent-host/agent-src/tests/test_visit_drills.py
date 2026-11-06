@@ -161,7 +161,7 @@ def test_a_step_after_vesta_holds_the_visit_the_villa_never_told_still_rings(tmp
     play(v, send(vi.event()))
     rang = [c for c, t, _k in v.tg.sent if not t.startswith("Approval")]
     assert sorted(rang) == [OWNER, FM], "the lock, stronger and the villa's never: sent again, it rings"
-    assert "- Outdoor entrance Lock opened at the lock (not from the app), 03:33: alert sent again (to: Owner & FM)" in \
+    assert "- Outdoor entrance Lock opened at the lock, 03:33: alert sent again (to: Owner & FM)" in \
         lines(copy(v, OWNER)["text"])
 
 
@@ -313,3 +313,54 @@ def test_the_most_photos_the_setting_allows_still_make_a_wide_sheet():
     for n in range(d.lo, d.hi + 1):
         (cols, rows), places = sheet.cells(n)
         assert len(places) == n and cols * 16 >= rows * 9, (n, cols, rows)
+
+
+def test_a_visit_a_person_closes_in_the_cockpit_is_closed_on_the_tablet_never_about_to_be_watched(tmp_path, kiosk, media):
+    # drill #136-P1 (owner, 2026-11-07): Not a problem, Reopen, then closed again in the Cockpit — the tablet put it on
+    # Watch with no state line, "about to be watched", since only VESTA's own closes said nothing watches it
+    from datetime import datetime, timedelta, timezone
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "22:48:03", photo=True)
+    play(v, send(vi.event("opened")))
+    (tid,) = [t["id"] for t in kiosk._all() if t.get("status") == "open"]
+    stamp = lambda s: (datetime.now(timezone.utc) + timedelta(seconds=s)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    kiosk.person_closes(tid, by="Owner", at=stamp(1), lasting=True)
+    play(v, lambda v: v.tickets.repair())
+    kiosk.person_reopens(tid, by="Owner", at=stamp(2))
+    play(v, lambda v: v.tickets.repair())
+    kiosk.person_closes(tid, by="Owner", at=stamp(3), cockpit=True)
+    play(v, lambda v: v.tickets.repair())
+    fault = kiosk.ticket(tid)
+    assert fault["status"] == "resolved" and fault.get("notWatched") is True and "confirmsBy" not in fault, fault
+
+
+def test_an_open_visit_says_until_when_it_is_monitored_on_every_copy_and_its_fault(tmp_path, kiosk, media):
+    # owner, 2026-11-07: "⚠️ New alert, monitoring until HH:MM" on Telegram, "monitoring until HH:MM" on the tablet's
+    # pill, the villa's record's closes_at, moved later at each step
+    from datetime import datetime
+    from vesta_shared import status_words
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "22:48:03", photo=True)
+    first = vi.event("opened")
+    play(v, send(first))
+    vi.add("door", GARDEN_DOOR, "22:52:20", photo=True)
+    second = vi.event()
+    play(v, send(second))
+    closes = datetime.fromisoformat(second["visit"]["closes_at"])
+    assert closes > datetime.fromisoformat(first["visit"]["closes_at"]), "the record's moment moved later"
+    hhmm = closes.astimezone(v.notices.tz and __import__("zoneinfo").ZoneInfo(v.notices.tz)).strftime("%H:%M")
+    for chat in (OWNER, FM):
+        assert lines(copy(v, chat)["text"])[-1] == f"⚠️ New alert, monitoring until {hhmm}", lines(copy(v, chat)["text"])
+    (fault,) = [t for t in kiosk._all() if t.get("status") == "open"]
+    assert datetime.fromisoformat(fault["monitoredUntil"]) == closes, fault
+    # every language the Agent's words have
+    for lang in status_words.LANGS:
+        said = status_words.monitoring("new", "07/11/2026 06:40", lang)
+        assert said.startswith(status_words.stage_words("new", lang=lang)) and "06:40" in said and len(said) > len(
+            status_words.stage_words("new", lang=lang)) + 6, (lang, said)
+    # closed: no longer monitored, on the copies and the fault
+    play(v, send(vi.event("resolved")))
+    assert "monitoring" not in lines(copy(v, OWNER)["text"])[-1]
+    assert "monitoredUntil" not in kiosk.ticket(fault["id"]) or kiosk.ticket(fault["id"])["status"] == "resolved"

@@ -409,6 +409,16 @@ def stage_words(word: str, time: str = "", lang: str = "en") -> str:
     return w["new_alert"] if word == "new" else w["still_open"]
 
 
+def monitoring(word: str, until: str, lang: str = "en") -> str:
+    """An open visit's own bottom line: its stage's words, then until when it is monitored, in the desk's words for the
+    chat's language (words.yaml visit_monitoring, English for one it lacks): "New alert, monitoring until 07/11/2026
+    06:40" — the moment shortened by the alert's day when drawn (layout.status_shown). Its stage's words alone without
+    them."""
+    said = mf.desk_words("visit_monitoring")
+    words = said.get(lang_of(lang)) or said.get("en")
+    return f"{stage_words(word, lang=lang)}{sep(lang)}{words.replace('{time}', until)}" if words else stage_words(word, lang=lang)
+
+
 def earlier(n: int, lang: str = "en") -> str:
     """The line counting the history lines left out: "… 3 earlier notices" (layout.render, notice._kept)."""
     w = _w(lang)

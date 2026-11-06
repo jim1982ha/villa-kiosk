@@ -19,7 +19,7 @@ from vesta_shared.problems import Problems
 from vesta_shared.when import Spec
 
 from .kiosk import ASK_HELP, CLOSE, MINE, REOPEN, TAKE, KioskError, closing, confirming, noted, placed, retitled, tagged, \
-    todo
+    monitoring, todo, unwatched
 from .kiosk import fault_title_chars
 from vesta_shared.messaging import headline, incident_tag
 from vesta_shared.message_format import IN_COCKPIT, ON_TELEGRAM, STEPS
@@ -419,6 +419,9 @@ class Tickets:
                     # when the agent closes it if it stays over (owner, 2026-10-21), or that line gone when it holds again
                     if card.get("closes_at") != want["closes_at"]:
                         amends.append(closing(want["closes_at"]))
+                    # an open visit: until when it is monitored, moved later at each step (owner, 2026-11-07)
+                    if card.get("monitored_until") != want["monitored_until"]:
+                        amends.append(monitoring(want["monitored_until"]))
                     # an open fault is never being confirmed (a field left by a reopening that did not take it away)
                     if card.get("confirms_by"):
                         amends.append(confirming(None))
@@ -446,10 +449,14 @@ class Tickets:
                                                         confirms_by=want["confirms_by"], lasting=want["lasting"],
                                                         not_watched=not want["confirms_by"])
                     fixed += n; resolved += n
-                elif card["status"] == "resolved" and card.get("confirms_by") != want["confirms_by"]:
+                elif card["status"] == "resolved" and (card.get("confirms_by") != want["confirms_by"]
+                                                       or (want["not_watched"] and not card.get("not_watched")
+                                                           and (t.get("done_at") or "") >= recent)):
                     # a person's close being confirmed (owner, 2026-10-23): "VESTA confirms by …" while the alert desk
-                    # watches it, taken away once it has read it again (Problems.card confirms_by)
-                    fixed += await self.kiosk.amend(uid, confirming(want["confirms_by"]))
+                    # watches it, taken away once it has read it again (Problems.card confirms_by); one nothing watches
+                    # says so (a visit closed in the Cockpit, drill #136-P1: on the tablet's Watch list with no state)
+                    fixed += await self.kiosk.amend(uid, confirming(want["confirms_by"]),
+                                                    *((unwatched(),) if want["not_watched"] else ()))
             except KioskError as e:
                 # a refusal of this fault is this fault's: the next one is tried (see the repair's own loop above)
                 log.warning("Kiosk fault %s could not be brought up to date: %s", uid, e)

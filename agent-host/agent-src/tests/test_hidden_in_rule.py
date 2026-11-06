@@ -62,8 +62,9 @@ def test_a_rule_watching_a_hidden_device_is_one_fault_naming_it(tmp_path):
     assert [f["entity_id"] for f in got] == ["automation.critical_watchdog_devices"]
     # its own name without the blueprint's prefix, in apostrophes (vesta_shared.automation_words, round 11 card 3)
     # why it is a fault: the hidden device no longer answers (owner, 2026-11-05: the camera's detection was offline)
-    assert got[0]["summary"] == ("The automation 'Devices' watches 1 device hidden in the villa's system that no "
-                                 "longer answers: Front Door Raw (offline).")
+    # ⚠️ worded as for any device (owner, 2026-11-07: whether it is hidden changes nothing for the owner)
+    assert got[0]["summary"] == "The automation 'Devices' watches 1 device that no longer answers: Front Door Raw (offline)."
+    assert "hidden" not in json.loads(got[0]["detail"])["check"]
     assert json.loads(got[0]["detail"])["check"].startswith("Bring it back online; if a copy replaced it")
     assert json.loads(got[0]["detail"])["hidden"] == [RAW]
     assert "Home Assistant" not in got[0]["summary"]

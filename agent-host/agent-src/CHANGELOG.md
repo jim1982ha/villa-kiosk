@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.455 (7 November 2026)
+
+- A person's close of a fault nothing watches says so (owner, 2026-11-07, drill #136-P1: a visit closed in the Cockpit
+  sat on the tablet's Watch list as "about to be watched", no state line, no (i)): Problems.card `not_watched` (closed,
+  no confirms_by, its watch decided: an alert closed before the desk carried its terms is not, _watch_decided), and
+  tickets._converge amends a resolved fault with kiosk.unwatched (notWatched) as resolve_ticket writes it on the
+  agent's own closes. tests/test_visit_drills.py replays the drill (Not a problem, Reopen, Done), red without it.
+- PM-HIDDEN-IN-RULE worded as for any device (owner, 2026-11-07: whether it is hidden changes nothing for the owner):
+  "watches 1 device that no longer answers: …", its check without "(a hidden device is left out of every other
+  check)". tests/test_hidden_in_rule.py.
+- An open visit says until when it is monitored (owner, 2026-11-07): problems.monitored_until (the visit's closes_at,
+  Notes.VISIT, now in the shared store), the Kiosk fault's `monitoredUntil` (agent-contract.json ticket.fields,
+  kiosk.monitoring, kept by the repair), and the heading's `until` (Notices.until, kept current by retitle):
+  layout.stage_line draws "⚠️ New alert, monitoring until 06:40" through status_words.monitoring with the desk's
+  words.yaml `visit_monitoring` (message_format.desk_words), every language; VISIT_WORDS carries it to the villa's
+  package. tests/test_visit_drills.py, red without layout's line.
+- words.yaml visit_lock_here: "{name} opened at the lock, {time}" (owner), every language; the villa's package words
+  block regenerated.
+
 ## 0.6.454 (7 November 2026)
 
 - Status moments by the alert's day (owner, 2026-11-07, drill #135, every alert, Telegram and the tablet alike):

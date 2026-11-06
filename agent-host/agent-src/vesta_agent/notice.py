@@ -273,11 +273,14 @@ class Notices:
     def __init__(self, state, policy: Callable, timezone_name: str, name: Callable[[int], str] | None = None,
                  closed: Callable[[int], bool] | None = None, runs: Callable[[int], int | None] | None = None,
                  reaches: Callable[[int], list[str] | None] | None = None,
-                 watching: Callable[[int], bool] | None = None, began: Callable[[int], str | None] | None = None):
+                 watching: Callable[[int], bool] | None = None, began: Callable[[int], str | None] | None = None,
+                 monitored_until: Callable[[int], str | None] | None = None):
         self.state, self.policy, self.tz = state, policy, timezone_name
         # when an incident's current run began (incidents.Incidents.began): the day its card's strip shows, the day its
         # Status moments are written by (`day`)
         self.began = began or (lambda _iid: None)
+        # until when an open visit is monitored (incidents.Incidents.monitored_until, ISO): its bottom line says it
+        self.monitored_until = monitored_until or (lambda _iid: None)
         # whether a closed incident is still watched (incidents.Incidents.watching): its copies read "(watch)", then
         # "(closed)" once the desk said its watch is over (owner, 2026-10-25)
         self.watching = watching or (lambda _iid: False)
@@ -415,7 +418,17 @@ class Notices:
         word = self.word(int(incident), stage, bool(history))
         return layout.head(label, who,
                            self.history_lines(int(incident), chat, before), word, self.lang(chat),
-                           story=self.history_lines(int(incident), 0, before), day=self.day(int(incident)))
+                           story=self.history_lines(int(incident), 0, before), day=self.day(int(incident)),
+                           until=self.until(int(incident)))
+
+    def until(self, incident: int) -> str | None:
+        """Until when open visit `incident` is monitored, as a moment is written in the villa's time ("07/11/2026
+        06:40"; layout.status_shown shortens it by the alert's day); None for any other incident."""
+        try:
+            t = _moment(self.monitored_until(int(incident)) or "")
+        except Exception:  # noqa: BLE001 — the line is written without it, never not at all
+            return None
+        return moment_label(t, self.tz) if t else None
 
     def day(self, incident: int) -> str | None:
         """Incident `incident`'s own day in the villa's time (ISO): when its current run began (`began`), the day its
@@ -718,8 +731,11 @@ class Notices:
             # first time it changes (review 28: settled, it kept the old look with the new icons, the other chats the new)
             return self.heading(chat, int(incident))
         history = self.state.incident_history(incident)
-        return {**h, "word": self.word(int(incident), None, bool(history)),
-                "to": self.to_line(int(incident), history=history) or h["to"], **({"day": d} if (d := self.day(int(incident))) else {})}
+        # until when it is monitored as it stands NOW: moved at each step, gone once it closed
+        kept = {k: v for k, v in h.items() if k != "until"}
+        return {**kept, "word": self.word(int(incident), None, bool(history)),
+                "to": self.to_line(int(incident), history=history) or h["to"], **({"day": d} if (d := self.day(int(incident))) else {}),
+                **({"until": u} if (u := self.until(int(incident))) else {})}
 
     def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> int:
         """A notice about `incident` went to `sent` — (chat, the role or roles it was for) — one result's messages being one

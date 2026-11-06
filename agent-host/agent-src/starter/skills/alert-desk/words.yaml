@@ -382,16 +382,30 @@ visit_seen:
   ko: "{places}에서 감지, {span}"
 
 visit_lock_here:
-  en: "{name} opened at the lock (not from the app), {time}"
-  fr: "{name} ouverte sur la serrure (pas depuis l’app), {time}"
-  id: "{name} dibuka di kunci (bukan dari aplikasi), {time}"
-  de: "{name} am Schloss geöffnet (nicht über die App), {time}"
-  es: "{name} abierta en la cerradura (no desde la app), {time}"
-  it: "{name} aperta dalla serratura (non dall’app), {time}"
-  nl: "{name} geopend aan het slot (niet via de app), {time}"
-  zh: "{name} 在锁上被打开（不是通过应用），{time}"
-  ja: "{name} が錠で開けられました（アプリからではありません）、{time}"
-  ko: "{name} 잠금장치에서 열림 (앱이 아님), {time}"
+  en: "{name} opened at the lock, {time}"
+  fr: "{name} ouverte sur la serrure, {time}"
+  id: "{name} dibuka di kunci, {time}"
+  de: "{name} am Schloss geöffnet, {time}"
+  es: "{name} abierta en la cerradura, {time}"
+  it: "{name} aperta dalla serratura, {time}"
+  nl: "{name} geopend aan het slot, {time}"
+  zh: "{name} 在锁上被打开，{time}"
+  ja: "{name} が錠で開けられました、{time}"
+  ko: "{name} 잠금장치에서 열림, {time}"
+
+# an open visit's last line on every copy and the tablet's pill: until when it is monitored (the villa's record's
+# closes_at), moved later at each step (owner, 2026-11-07: "⚠️ New alert, monitoring until 06:40")
+visit_monitoring:
+  en: "monitoring until {time}"
+  fr: "surveillance jusqu’à {time}"
+  id: "dipantau hingga {time}"
+  de: "Überwachung bis {time}"
+  es: "vigilancia hasta las {time}"
+  it: "monitoraggio fino alle {time}"
+  nl: "bewaking tot {time}"
+  zh: "监控至 {time}"
+  ja: "{time} まで監視中"
+  ko: "{time}까지 모니터링"
 
 visit_lock_app:
   en: "{name} opened from the app ({who}), {time}"

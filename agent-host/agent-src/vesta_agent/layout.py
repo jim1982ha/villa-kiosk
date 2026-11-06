@@ -55,7 +55,7 @@ def fill_time(text: str | None, now: datetime, zone: str) -> str:
     return (text or "").replace("{time}", moment_label(now, zone))
 
 def head(title: str, to: str = "", history=(), word: str | None = None, lang: str | None = None, story=None,
-         day: str | None = None) -> dict:
+         day: str | None = None, until: str | None = None) -> dict:
     """A message's heading as facts, never as text: its `title` ("#9-P2", "Approval request"), who it is for (`to`,
     the "To:" line's words), an incident's `history` (its "- …" lines and dividers), for an incident, its title's
     `word` ("new", "existing", "closed": the title reads "#9-P2 (existing)") and the language its chat reads (`lang`,
@@ -63,14 +63,16 @@ def head(title: str, to: str = "", history=(), word: str | None = None, lang: st
     own day (ISO, the day its card's strip shows), its Status moments written by it when drawn (`status_shown`). `story`: an
     incident's EVERY step, whoever it went to (the chat's `history` lists its own): the tablet's card, which is
     everyone's, tells it (kiosk_messages.of_parts; alert #83, owner 2026-10-29: after the escalation to the owner, the
-    tablet's card kept the owner's line alone and lost the facility manager's alert and reminder).
+    tablet's card kept the owner's line alone and lost the facility manager's alert and reminder). `until`: an open
+    visit's moment it closes if nothing more is seen, as a moment is written ("07/11/2026 06:40"): its bottom line says
+    it (stage_line).
 
     ⚠️ FACTS UNTIL DRAWN (architecture review, 2026-10-17): the heading was written as text, then read back — its stage
     word by a pattern, its title rewritten by another, its "To:" and history by splitting lines — so a wording change
     could quietly drop a card's ✅ or its "(closed)". Only a record stored before 0.12.230 is read from text (`head_of`)."""
     h = {"title": (title or "").strip(), "to": (to or "").strip(), "history": [x for x in history if x],
          "word": word or None, **({"story": [x for x in story if x]} if story is not None else {}),
-         **({"day": str(day)} if day else {})}
+         **({"day": str(day)} if day else {}), **({"until": str(until)} if until else {})}
     # English is said by no key: a heading recorded before (and every English one) stays exactly as it was
     return {**h, "lang": lang} if lang and status_words.lang_of(lang) != "en" else h
 
@@ -80,7 +82,7 @@ def head_of(h) -> dict | None:
     its history; before 0.12.175 "For: JM"). None for no heading."""
     if isinstance(h, dict):
         return head(h.get("title") or "", h.get("to") or "", h.get("history") or (), h.get("word"), h.get("lang"),
-                    h.get("story"), h.get("day"))
+                    h.get("story"), h.get("day"), h.get("until"))
     lines = [x for x in (h or "").strip().split("\n") if x]
     if not lines:
         return None
@@ -136,7 +138,11 @@ def stage_line(h, status: str, mark: str | None = None) -> str:
     if not word:
         return status
     icon = MARK_ICONS.get(mark or "") if not (mark == "unchecked" and word not in CLOSED_STAGES) else None
-    return f"{icon or STAGE_ICONS[word]} {status or status_words.stage_words(word, lang=h.get('lang') or 'en')}"
+    lang = h.get("lang") or "en"
+    # ⚠️ AN OPEN VISIT SAYS UNTIL WHEN IT IS MONITORED (owner, 2026-11-07): "⚠️ New alert, monitoring until 06:40"
+    if not status and h.get("until") and word not in CLOSED_STAGES:
+        return f"{icon or STAGE_ICONS[word]} {status_words.monitoring(word, h['until'], lang)}"
+    return f"{icon or STAGE_ICONS[word]} {status or status_words.stage_words(word, lang=lang)}"
 
 
 def parts(body: str = "", status: str = "", head=None, lead: str = "", mark: str | None = None) -> dict:

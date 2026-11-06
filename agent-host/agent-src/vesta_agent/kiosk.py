@@ -316,7 +316,8 @@ def fault_of(t: dict) -> dict:
             "entity_id": str(t.get("entityId") or ""),
             "alert_number": t.get("alertNumber"), "alert_priority": t.get("alertPriority"), "origin": t.get("origin"),
             "check": t.get("check"), "title_pattern": t.get("titlePattern"), "since": t.get("since"),
-            "closes_at": t.get("closesAt"), "confirms_by": t.get("confirmsBy"),
+            "closes_at": t.get("closesAt"), "confirms_by": t.get("confirmsBy"), "not_watched": t.get("notWatched") is True,
+            "monitored_until": t.get("monitoredUntil"),
             "note": str(t.get("note") or ""),                     # what to do on site (the agreement's ticket.fields)
             "person_titled": person_titled(t), "cleared": cleared_step(close) if close else None,
             "noted": [(str(u.get("at") or ""), str(u.get("note") or "")) for u in ups if u.get("kind") == NOTED],
@@ -433,6 +434,25 @@ def closing(at: str | None) -> Amend:
         if t.get("status") == "resolved" or t.get("closesAt") == at:
             return None
         return {k: v for k, v in dict(t, closesAt=at).items() if not (k == "closesAt" and v is None)}
+    return amend
+
+
+def monitoring(at: str | None) -> Amend:
+    """An open visit's fault says until when it is monitored (`monitoredUntil`, the villa's record's closes_at: its pill
+    "monitoring until 06:40", owner 2026-11-07), or no longer says it (`at` None)."""
+    def amend(t: dict) -> dict | None:
+        if t.get("monitoredUntil") == at:
+            return None
+        return {k: v for k, v in dict(t, monitoredUntil=at).items() if not (k == "monitoredUntil" and v is None)}
+    return amend
+
+
+def unwatched() -> Amend:
+    """A closed fault nothing watches says so (`notWatched`, the agreement's ticket.fields): Closed on the tablet at
+    once, never "about to be watched" — a person's close too, not only the agent's (resolve_ticket not_watched)."""
+    def amend(t: dict) -> dict | None:
+        return None if t.get("notWatched") is True or t.get("status") != "resolved" or t.get("confirmsBy") \
+            else dict(t, notWatched=True)
     return amend
 
 

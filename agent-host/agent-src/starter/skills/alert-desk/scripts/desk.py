@@ -1169,7 +1169,7 @@ def abandoned(store: Store, ev: dict, now: datetime, params: VillaParams | None 
 # before it, and the villa told what VESTA did (tell_villa), through the script its event names.
 
 #: The incident's note holding the villa's visit as its latest event told it (its record, script, steps, photos, cards).
-VISIT = "visit"
+VISIT = Notes.VISIT
 #: The visit's story lines as last told ({key: English}): only a line that changed is told again (result.seen).
 VISIT_LINES = "visit_lines"
 #: The visit's siren request already asked: never twice in one visit.
@@ -1267,7 +1267,7 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str, str]]:
     - the cameras seen in a row, one line per pass ("Seen at Parking → Entrance Left, 18:34–18:35"): a pass ends when
       no camera saw anything for the siren's window (rules.yaml siren.window_min — what the siren counts together),
       whatever lock or door came between;
-    - each lock opened, how ("at the lock (not from the app)", "from the app (<user>)") and when it was locked again;
+    - each lock opened, how ("at the lock", "from the app (<user>)") and when it was locked again;
     - each door opened; someone inside, the room and when they went in; a person a room's camera saw, the room and
       when; a room's sound, the room and when it was first heard (never "someone is inside")."""
     gap = timedelta(minutes=float(RULES["siren"]["window_min"]))

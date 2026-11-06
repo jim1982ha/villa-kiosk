@@ -595,7 +595,22 @@ ALERT_DESK_SKILL = os.path.join(os.path.dirname(ALERT_DESK_RULES), "skill.yaml")
 VISIT_WORDS = ("visit_seen", "visit_lock_here", "visit_lock_app", "visit_lock_app_plain", "visit_opened", "visit_locked_again", "visit_inside",
                "visit_person", "visit_changed_lock", "visit_changed_door", "visit_changed_inside",
                "visit_changed_motion", "visit_changed_person", "visit_expected", "visit_ended", "visit_home", "no_answer",
-               "visit_title_opened", "visit_noted", "visit_noise", "visit_changed_noise", "visit_drill")
+               "visit_title_opened", "visit_noted", "visit_noise", "visit_changed_noise", "visit_drill", "visit_monitoring")
+
+
+_DESK_WORDS: dict | None = None
+
+
+def desk_words(key: str) -> dict[str, str]:
+    """Entry `key` of the alert desk's words.yaml, by language ({} when it has none): words the engine draws on every
+    copy of a visit's card, the desk's own (skills before code), never typed here — "monitoring until {time}"."""
+    global _DESK_WORDS
+    if _DESK_WORDS is None:
+        import yaml
+        with open(ALERT_DESK_WORDS, encoding="utf-8") as f:
+            _DESK_WORDS = yaml.safe_load(f) or {}
+    entry = _DESK_WORDS.get(key)
+    return {k: str(v) for k, v in entry.items()} if isinstance(entry, dict) else {}
 
 
 def priority_to(rules: dict) -> dict[str, str]:
