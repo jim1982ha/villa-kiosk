@@ -32,10 +32,10 @@ ck("the Facility window is gone, and nothing opens it",
    && !/FacilityModal|"facility"\)/.test(dash) && !/onOpenFacility|ClipboardList/.test(hud));
 // The moves themselves (Faults tab, device filled in, guest's report instead)
 // are pages/screen's, driven by value in screen.mjs; the page only sends them.
-ck("a device's 'report a fault' (shown by the profile's door, a value) opens the Tickets tab's Open a ticket, the device filled in",
+ck("a device's Open Ticket (shown by the profile's door, a value) opens the Tickets tab's Open a ticket, the device filled in",
    /onReportFault: \(\) => go\(\{ type: "reportFault" \}\)/.test(rd("components/panels/useOpenPanelActions.ts"))
    && /may: \{ edit: doors\.editDevices, reportFault: doors\.reportFault \}/.test(rd("components/panels/useOpenPanelActions.ts"))
-   && /if \(!may\.reportFault\) return null;/.test(rd("components/panels/DeviceWindowPieces.tsx")) && /<ReportFaultButton \/>/.test(rd("components/panels/BasePanel.tsx"))
+   && /if \(!may\.reportFault\) return null;/.test(rd("components/panels/DeviceWindowPieces.tsx")) && /<OpenTicketButton \/>/.test(rd("components/panels/BasePanel.tsx"))
    && /reportFaultFor=\{screen\.faultFor \?\? undefined\}/.test(dash));
 ck("the top bar opens it on Messages; Back from a device returns to the tab it left (the tab is held by the page)",
    /onOpenCockpit=\{\(\) => go\(\{ type: "openWindow", window: "cockpit", tab: "messages" \}\)\}/.test(dash)

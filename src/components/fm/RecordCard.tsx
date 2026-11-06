@@ -32,7 +32,7 @@
 // and this one place swaps its text for that cut line, so no card can fold its own way.
 
 import type { ReactNode } from "react";
-import { RefreshCw, Trash2, UserRound, X } from "lucide-react";
+import { RefreshCw, Trash2, UserRound } from "lucide-react";
 import Tip from "@/components/common/Tip";
 import InfoTip from "@/components/common/InfoTip";
 import ErasableRow from "./ErasableRow";
@@ -40,11 +40,10 @@ import EvidenceRow from "./EvidenceRow";
 import { RecordNotes } from "./RecordMeta";
 import { PageLink } from "@/components/messages/AnnouncementContent";
 
-/** A Settings card's remove, a small round icon at the right of its strip (owner, 2026-11-06): a bin when it deletes
- *  the thing (a group, a device's settings, an announcement), an ✕ when it takes it off a list or undoes a link (a chat
- *  off a role's list, a device off Asleep between reports, an unbind). `label` is its tooltip and its accessible name, saying
- *  what goes ("Delete the group Kitchen Temperature", "Take Back Door off Asleep between reports"). */
-export interface CardRemove { icon: "bin" | "x"; label: string; run: () => void }
+/** A Settings card's remove, a small round bin at the right of its strip (owner, 2026-11-06: ONE remove icon on every
+ *  card, the bin; it had been an ✕ on a card taking a thing off a list). `label` is its tooltip and its accessible
+ *  name, saying what goes ("Delete the group Kitchen Temperature", "Take Back Door off Asleep between reports"). */
+export interface CardRemove { label: string; run: () => void }
 
 /** A card's state: its words and its tone's class (fm/tone pillClass, ACCENT_PILL, QUIET_PILL). */
 export interface RecordStatus { text: string; tone: string }
@@ -221,13 +220,12 @@ function StateWords({ status, tip }: { status: readonly RecordStatus[]; tip?: st
 /** ⚠️ A SETTINGS CARD'S REMOVE (owner, 2026-11-06: "a small icon button at the top right of the card's band", where a
  *  Cockpit card shows its time): the app's small round icon button, its 44px touch target outside its glyph so the strip
  *  keeps its height (07-facility.css); a press is the button's, never the card's tap or hold. */
-function RemoveButton({ icon, label, run }: CardRemove) {
-  const Icon = icon === "bin" ? Trash2 : X;
+function RemoveButton({ label, run }: CardRemove) {
   return (
     <Tip text={label}>
-      <button type="button" className={`icon-btn-sm fm-record-remove${icon === "bin" ? " danger" : ""}`} aria-label={label}
-        data-icon={icon} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); run(); }}>
-        <Icon size={16} aria-hidden="true" />
+      <button type="button" className="icon-btn-sm fm-record-remove danger" aria-label={label}
+        onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); run(); }}>
+        <Trash2 size={16} aria-hidden="true" />
       </button>
     </Tip>
   );

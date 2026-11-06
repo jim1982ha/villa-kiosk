@@ -261,6 +261,8 @@ input[type="range"]::-moz-range-thumb {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top;
 }
 .camera-header-actions { display: flex; gap: 8px; margin-left: auto; flex-shrink: 0; }
+/* the Cockpit's Open Ticket (WorkButton, its own look) among the chips: pressable through the header, at their height */
+.camera-header-actions > .btn { pointer-events: auto; min-height: 44px; }
 /* the header's buttons: the title's chip, square, its height (44 px: a finger's reach) */
 .camera-chip-btn {
   pointer-events: auto; display: inline-flex; align-items: center; justify-content: center;
@@ -472,9 +474,10 @@ input[type="range"]::-moz-range-thumb {
     width: var(--cam-btn);
     height: var(--cam-btn);
   }
-  /* the header's buttons (warning, readings, Edit, wrench) right above the column: its size, its right edge */
+  /* the header's buttons (warning, readings, Edit, Open Ticket) right above the column: its size, its right edge */
   .camera-header { padding-right: var(--cam-edge); }
   .camera-chip-btn { width: var(--cam-btn); height: var(--cam-btn); }
+  .camera-header-actions > .btn { min-height: var(--cam-btn); }
   .camera-readings-menu { right: var(--cam-edge); }
   /* svg sizing is the base (non-landscape) rule now — same 55% at every
      button size this cluster ever renders at, so it doesn't need repeating

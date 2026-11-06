@@ -120,11 +120,25 @@ const ICON: Record<WorkActionKind, ReactNode> = {
 };
 
 /** What a work button says: its icon, then its words (fm/deviceWork's ONE wording per action) — a card's buttons and
- *  the Tickets tab's own "Open Ticket" alike. Both words drawn when it has a short one: a card's row too narrow for
+ *  the Tickets tab's own and a device window's "Open Ticket" alike (WorkButton). Both words drawn when it has a short one: a card's row too narrow for
  *  every label in full shows the one word under the icon (07-facility.css, the row's width), any other place the label. */
-export function WorkLabel({ kind }: { kind: WorkActionKind }) {
+function WorkLabel({ kind }: { kind: WorkActionKind }) {
   const { label, short } = WORK_ACTIONS[kind];
   return <>{ICON[kind]}{short ? <><span className="work-long">{label}</span><span className="work-short">{short}</span></> : label}</>;
+}
+
+/** ⚠️ ONE WORK BUTTON (owner, 2026-11-06: a device window's wrench, beside Edit, opened the same ticket form as the
+ *  Cockpit's Open Ticket under another look): a segment of a card's bar, the Tickets tab's own Open Ticket and a device
+ *  window's are each this one button, its icon and words WorkLabel's, its look CARD_BUTTON's (`main`: the card's main
+ *  action, green). A change to it changes every place. */
+export function WorkButton({ kind, onClick, main = false, ariaLabel }: {
+  kind: WorkActionKind; onClick: () => void; main?: boolean; ariaLabel?: string;
+}) {
+  return (
+    <button type="button" className={main ? `${CARD_BUTTON} fm-bar-main` : CARD_BUTTON} aria-label={ariaLabel} onClick={onClick}>
+      <WorkLabel kind={kind} />
+    </button>
+  );
 }
 
 /** ⚠️ THE MAIN ACTION, FIRST AND GREEN (owner, 2026-11-05, the "Status on top" card): Done on a fault, Close on a
@@ -169,11 +183,9 @@ export default function WorkButtons({ actions, cardKey, work, onOpen, raised, as
     return step.ask ? () => work.ask(cardKey, a.kind) : () => void work.close(cardKey, a.ids, step.work, step.lasting);
   };
   const buttons = actions.map((a) => (
-    <button key={a.kind} type="button" className={MAIN[a.kind] ? `${CARD_BUTTON} fm-bar-main` : CARD_BUTTON}
-      aria-label={a.step.kind === "close" && name ? `${a.label} “${name}”` : a.short ? a.label : undefined}
-      onClick={closing(a) ?? (() => (leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised)))}>
-      <WorkLabel kind={a.kind} />
-    </button>
+    <WorkButton key={a.kind} kind={a.kind} main={!!MAIN[a.kind]}
+      ariaLabel={a.step.kind === "close" && name ? `${a.label} “${name}”` : a.short ? a.label : undefined}
+      onClick={closing(a) ?? (() => (leavesCard(a) ? onOpen?.(a) : work.run(cardKey, a, raised)))} />
   ));
   return (
     <>

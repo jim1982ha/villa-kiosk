@@ -268,9 +268,8 @@ export function HeaderActions({ glbUpload, logout }: {
         {glbUpload && <CentralModelInfo addonCfg={glbUpload.addonCfg} loadedModel={glbUpload.loadedModel} />}
         {logout && (
           <div style={glbUpload ? { marginTop: 12 } : undefined}>
-            <strong>Log Out All</strong> signs every device out immediately, this one included, whatever the add-on's
-            "Session length" option says a sign-in should last. Use it if a tablet went missing or a passcode was seen by
-            someone who shouldn't have it.
+            <strong>Log Out All</strong> signs every device out at once, this one too. Use it if a tablet went missing or
+            a passcode was seen by someone who shouldn't have it.
           </div>
         )}
       </InfoTip>
@@ -379,28 +378,19 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
                 pre-fills the filter, so the row that was come for is one of
                 the few on screen. */}
             <ConfigEditor initialSearch={focusEntityId} title="Auto-detected entity settings" tip={<>
-              Entities listed here are auto-detected because their 3D object in the model is already named with the
-              entity ID (e.g. camera.driveway). Edit the display name, category or panel type without reloading the model.
-              Each device's 3D object field holds the objects that show it: add one with its search (an object no
-              device has yet, or one moved from another device), or take one off with its ✕. The counts show the
-              devices on the map and those no 3D object shows yet. To prepare an entity whose 3D object is not in the
-              model yet, type its entity ID in the search: its settings apply as soon as a model with an object named
-              after it is uploaded. Changes here apply to every device that opens the kiosk: this configuration is
-              stored centrally by the add-on, like the 3D model itself, not per browser.
+              {/* ⚠️ TWO SHORT SENTENCES (owner, 2026-11-06: nine lines no one reads at a glance) */}
+              Every device the 3D villa can show, with its settings. Pick a list above; type in the search to find a
+              device, or to prepare one whose 3D object is not in the model yet.
             </>} />
 
             <GroupedDevices title="Grouped devices" tip={<>
-              Fold several entities that are really one physical device (e.g. a combo sensor with separate
-              temperature and humidity entities) into a single map badge. Only the primary entity keeps a badge on the
-              map; every other member's value and 24-hour history appear in that badge's detail view instead. To make
-              one, search for the entity that should keep the map badge (e.g. temperature) and pick it (Create a group),
-              then add the rest as members.
+              Several devices that are really one, such as a sensor for temperature and humidity, shown as one badge on
+              the map. The first device keeps the badge; the others show in its window.
             </>} />
 
             <UnavailableByDesign title="Asleep between reports" tip={<>
-              Devices that sleep between reports, such as a battery door sensor: their "unavailable" is normal. VESTA
-              shows what each one last reported, never "Unavailable", and raises no fault for it; the VESTA Agent skips
-              its offline checks for them too.
+              Devices that sleep between reports, such as a battery door sensor. VESTA shows what each one last
+              reported and raises no fault while it sleeps.
             </>} />
           </>
         )}
@@ -413,8 +403,8 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
           <>
             <TipTitle title="Maintenance records" tip={<>
               How many days faults, tickets, attachments and messages are kept: photos, repaired faults, work done, money
-              spent and messages older than this are deleted.
-              0 keeps them for ever. A task's latest completion is always kept. Up to {RECORDS_KEPT_DAYS_MAX} days.
+              spent and messages older than this are deleted. 0 keeps them for ever, up to {RECORDS_KEPT_DAYS_MAX} days
+              otherwise; a task's latest completion is always kept.
             </>} />
             <RecordsKept />
 
@@ -423,10 +413,8 @@ export default function ConfigEditorModal({ onBack, withinSettings, focusEntityI
                 hid the Refresh/Copy/Download/Probe buttons, which are the
                 reason somebody opens this tab. */}
             <TipTitle title="Device telemetry" tip={<>
-              What every device that opens this kiosk has reported: load timings, script errors, graphics context
-              losses and page-lifecycle transitions. This is how a problem on someone else's phone becomes
-              diagnosable. Newest first; the add-on keeps the latest events, as many as its options allow. Copy and Download give the raw events
-              (every field, not just the summary shown here); Clear empties the store.
+              What every tablet and phone that opens VESTA has reported, newest first: load times, errors and pauses.
+              Copy and Download give every detail; Clear empties the list.
             </>} />
             <TelemetryPanel />
 

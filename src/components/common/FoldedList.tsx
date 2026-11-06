@@ -12,10 +12,11 @@ import InfoTip from "@/components/common/InfoTip";
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Pager, usePaged, PAGE_CARDS } from "./Paged";
+import SegmentedGroup from "./SegmentedGroup";
 
 /** THE "this opens more" control (owner, 2026-11-06: a chevron after the title in one place, an outlined button in
  *  another): its chevron before its words, pointing down while open. A section's title (ListSection) and a list inside
- *  a section ("3 suggested groups", "Show all, 114 more entities") are each this one button, the section's in its
+ *  a section ("Show all, 114 more entities") are each this one button, the section's in its
  *  title's style. */
 export function FoldToggle({ open, onToggle, children, className = "" }: {
   open: boolean; onToggle: () => void; children: ReactNode; className?: string;
@@ -30,7 +31,8 @@ export function FoldToggle({ open, onToggle, children, className = "" }: {
 
 /** ⚠️ A SECTION'S COUNTS OPEN ITS LISTS (owner, 2026-11-06: a section said "4 bound · 829 unbound · 88 not shown" in
  *  its title and again as a line of three toggles under it): each count after the title is the way to its own list,
- *  one shown at a time, the one shown marked (Devices: "120 on the map · 88 not on the map"). */
+ *  one shown at a time, the one shown marked (Devices: "120 on the map | 88 not on the map"; Grouped devices: "9 groups
+ *  | 15 suggested", whose suggestions had a fold of their own beside "Show fewer", owner 2026-11-06). */
 export interface SectionViews {
   items: readonly { key: string; words: string }[];
   /** The list shown while the section is open. */
@@ -38,29 +40,26 @@ export interface SectionViews {
   onShow: (key: string) => void;
 }
 
-/** A section's counts after its title, each a button showing its own list, the one shown marked (Devices' title,
- *  never folded: settings/ConfigEditor; a folded section's were too, until its one, Villa's Bound 3D objects, went). */
-export function SectionViewButtons({ title, views }: { title: string; views: SectionViews }) {
+/** A section's counts after its title, each showing its own list: the app's one segmented control (SegmentedGroup),
+ *  compact, the list shown filled (owner, 2026-11-06: the shown count was underlined like a link, the other plain, and
+ *  a tap on the underlined one was expected to do something). Devices' title (never folded: settings/ConfigEditor) and
+ *  a folded section's (ListSection `views`: Grouped devices), where none is filled while it is folded. */
+export function SectionViewButtons({ title, views, open = true }: { title: string; views: SectionViews; open?: boolean }) {
   return (
-    <span className="section-summary section-views" role="group" aria-label={`${title}: which list`}>
-      {views.items.map((v) => {
-        const shown = v.key === views.shown;
-        return (
-          <button key={v.key} type="button" className={`section-view${shown ? " shown" : ""}`} aria-pressed={shown}
-            onClick={() => views.onShow(v.key)}>{v.words}</button>
-        );
-      })}
-    </span>
+    <SegmentedGroup className="segmented-compact section-views" ariaLabel={`${title}: which list`}
+      active={open ? views.shown : null} onChange={views.onShow}
+      options={views.items.map((v) => ({ key: v.key, label: v.words }))} />
   );
 }
 
 /** One section of a list — Open issues, Notifications, Closed, Recent work — its name and count, its (i) right after
  *  them (`tip`, owner 2026-10-31: next to the words, not at the far end), folded or open by its chevron (owner,
  *  2026-10-28: each collapsible). Advanced Settings' folded sections are this too (settings/Fold): `summary` says what
- *  is inside where a count alone would not ("1 group · 2 suggested"), `bare` leaves its content as it is drawn (a
+ *  is inside where a count alone would not ("3 devices"), `views` its counts that each show a list ("1 group · 2
+ *  suggested"), drawn with its (i) as one unit (as Devices' title, InfoTip TipTitle), `bare` leaves its content as it is drawn (a
  *  section's working part, not a list of cards). */
-export function ListSection({ title, count, summary, open, onToggle, tip, bare = false, children }: {
-  title: string; count?: number; summary?: string; open: boolean; onToggle: () => void; tip?: ReactNode;
+export function ListSection({ title, count, summary, views, open, onToggle, tip, bare = false, children }: {
+  title: string; count?: number; summary?: string; views?: SectionViews; open: boolean; onToggle: () => void; tip?: ReactNode;
   bare?: boolean; children: ReactNode;
 }) {
   return (
@@ -69,9 +68,9 @@ export function ListSection({ title, count, summary, open, onToggle, tip, bare =
         <div className="with-tip">
           <FoldToggle className="messages-section-toggle settings-section-title" open={open} onToggle={onToggle}>
             <span className="fold-toggle-words">{title}{count ? ` (${count})` : ""}</span>
-            {summary && <span className="section-summary">{summary}</span>}
+            {summary && !views && <span className="section-summary">{summary}</span>}
           </FoldToggle>
-          {tip}
+          {views ? <span className="title-after"><SectionViewButtons title={title} views={views} open={open} />{tip}</span> : tip}
         </div>
       </div>
       {open && <div className={bare ? "fold-body" : "fm-list"}>{children}</div>}

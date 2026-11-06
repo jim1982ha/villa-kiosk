@@ -1,7 +1,7 @@
 // src/components/settings/MappingFields.tsx
-// The editable fields of ONE device's mapping — type, category, label,
-// "confirm before toggling", a light's intensity, the linked entity, and the
-// 3D objects that show it — for its card in Advanced Settings › Devices.
+// The editable fields of ONE device's mapping — the 3D objects that show it,
+// type, category, label, "confirm before toggling", a light's intensity and the
+// linked entity — for its card in Advanced Settings › Devices.
 //
 // ⚠️ TWO EDITORS FOR THE SAME RECORD, IN ONE MODAL (round 10, 2.496.156).
 // The bound-objects table and the entity table each rendered these fields
@@ -78,6 +78,9 @@ export default function MappingFields({ entryKey, entityId, mapping, entity, cel
   const pct = Math.round(ratio * 100);
   return (
     <>
+      {/* ⚠️ "3D OBJECT" FIRST (owner, 2026-11-06): right under the card's first line, above Type; a device not on the
+          map shows it alone, so the field is at the same place on both lists' cards */}
+      {cell("objects", OBJECT_FIELD, <ObjectsField {...objects} />, { wide: true })}
       {cell("type", "Type", (
         <Dropdown<EntityType> value={m.type} title="Panel type" ariaLabel="Panel type"
           onChange={(type) => draftField({ type })}
@@ -125,7 +128,6 @@ export default function MappingFields({ entryKey, entityId, mapping, entity, cel
           allowCustom hideCurrentLabel
           placeholder={m.type === "camera" ? "Linked entity, its motion sensor or a switch…" : "Linked entity, a switch or a sensor…"} />
       ), { wide: true })}
-      {cell("objects", OBJECT_FIELD, <ObjectsField {...objects} />, { wide: true })}
     </>
   );
 }

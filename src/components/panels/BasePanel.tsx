@@ -16,7 +16,7 @@ import { useState, type ReactNode } from "react";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { linkedStateWords } from "./panelHeader";
 import { badgeImage } from "@/babylon/badgeIcons";
-import { EditButton, FaultsButton, ReportFaultButton, useDeviceWarning } from "./DeviceWindowPieces";
+import { EditButton, FaultsButton, OpenTicketButton, useDeviceWarning } from "./DeviceWindowPieces";
 import DeviceReadings from "./DeviceReadings";
 import { useConfig } from "@/config/ConfigContext";
 import { categorySurface } from "@/config/EntityCategories";
@@ -74,7 +74,7 @@ interface Props {
 
 export default function BasePanel({ title, entityId, icon, className, headerActions, footerLeading, history, deviceReadings, lost, onClose, children }: Props) {
   const { may, badge, onSetBadgeColor, linked, linkedSensor, motion, back } = usePanelActions();
-  // the device window's pieces (warning, Edit, wrench, readings) are DeviceWindowPieces', drawn by the camera's too
+  // the device window's pieces (warning, Edit, Open Ticket, readings) are DeviceWindowPieces', drawn by the camera's too
   const warning = useDeviceWarning();
   const { resolvedRooms } = useConfig();
   const { entities } = useHA();
@@ -248,7 +248,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
         <div className="modal-footer-group">
           {footerLeading}
           <EditButton />
-          <ReportFaultButton />
+          <OpenTicketButton />
         </div>
       } />
     </Window>

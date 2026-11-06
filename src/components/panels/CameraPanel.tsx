@@ -12,7 +12,7 @@ import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
 import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { linkedStateWords } from "./panelHeader";
-import { EditButton, FaultsButton, ReportFaultButton, useDeviceWarning } from "./DeviceWindowPieces";
+import { EditButton, FaultsButton, OpenTicketButton, useDeviceWarning } from "./DeviceWindowPieces";
 import DeviceReadings from "./DeviceReadings";
 import { useHA } from "@/ha/HAStateStore";
 import { createCameraPlayer, type CameraPlayer, type CameraPlayerState } from "./cameraPlayer";
@@ -84,8 +84,8 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // fullscreen feed, not a modal card), so it reads the identical context and
   // renders the control in its own bottom bar instead of re-deriving anything.
   // `motion`: its linked entity when that detects presence (panelHeader, BinarySensorClasses.cameraMotionId).
-  // ⚠️ AND THE SAME PIECES AS EVERY DEVICE WINDOW (architecture review P, 2026-10-27): its warning sign, Edit, the
-  // wrench and "Also on this device" are DeviceWindowPieces', placed in this window's header; a critical camera that
+  // ⚠️ AND THE SAME PIECES AS EVERY DEVICE WINDOW (architecture review P, 2026-10-27): its warning sign, Edit,
+  // Open Ticket and "Also on this device" are DeviceWindowPieces', placed in this window's header; a critical camera that
   // lost contact is red (badge.critical, reading.lostColor), as the Cockpit and the map paint it.
   const { linked, linkedSensor, motion, back, badge, readings } = usePanelActions();
   const warning = useDeviceWarning();
@@ -628,7 +628,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
             </button>
           )}
           <EditButton className="camera-chip-btn" icon />
-          <ReportFaultButton className="camera-chip-btn" />
+          <OpenTicketButton />
         </div>
       </div>
       {/* "Also on this device", the list every device window draws, over the feed under its button */}

@@ -97,7 +97,7 @@ export default function WhoGetsMessages({ onSaved }: {
                           options={Object.entries(CHAT_LANGUAGES).map(([code, words]) => ({ value: code, label: words }))} />
                       </CardField>
                     }
-                    remove={{ icon: "x", label: `Take ${name(id)} off the ${who}'s list`, run: () => void save((now) => withItem(now, id, false)) }} />
+                    remove={{ label: `Take ${name(id)} off the ${who}'s list`, run: () => void save((now) => withItem(now, id, false)) }} />
                 ))}
               </div>
             )}

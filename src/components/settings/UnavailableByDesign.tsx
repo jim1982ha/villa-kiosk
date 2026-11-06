@@ -48,7 +48,7 @@ export default function UnavailableByDesign({ title, tip }: { title: string; tip
           {shown.map((id) => (
             <EntityCard key={id} entityId={id} lead={<Moon size={16} aria-hidden />}
               tone={marked(id)}
-              remove={{ icon: "x", label: `Take ${name(id)} off Asleep between reports`, run: () => set(id, false) }} />
+              remove={{ label: `Take ${name(id)} off Asleep between reports`, run: () => set(id, false) }} />
           ))}
         </div>
       )}

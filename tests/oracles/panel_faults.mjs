@@ -3,6 +3,7 @@
 // highlighting this specific faults … contextual to the fault and refresh automatically (even disappear)"). Driven by
 // value and drawn: when it shows (panelHeader.faults, the badge's own predicate), what a tap does (screen
 // "openFaults"), the card it marks (attention.cardFocused, AttentionCard), and the button itself (FaultsButton).
+import { readFileSync } from "node:fs";
 import { h, draw, inside } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 import { parseTsx, elements, guardsOf } from "../consistency/jsx.mjs";
@@ -94,26 +95,46 @@ ck("  ...drawn by the device window only while its Overview lists an issue, firs
 // (DeviceWindowPieces), each placing them where its layout has room.
 console.log("\n  the camera window draws the same pieces:");
 {
-  const { EditButton, ReportFaultButton } = await import("@/components/panels/DeviceWindowPieces");
+  const { EditButton, OpenTicketButton } = await import("@/components/panels/DeviceWindowPieces");
+  const { WorkButton } = await import("@/components/fm/WorkButtons");
   const { PanelActionsProvider, NO_PANEL_ACTIONS } = await import("@/components/panels/PanelActionsContext");
   const within = (may, el) => draw(h(PanelActionsProvider, { value: { ...NO_PANEL_ACTIONS, may } }, el));
   const all = { edit: true, reportFault: true }, none = { edit: false, reportFault: false };
-  ck("Edit and the wrench: shown by the profile's doors (a value), named for a screen reader; nothing without them",
+  ck("Edit and Open Ticket: shown by the profile's doors (a value), named for a screen reader; nothing without them",
      /<button type="button" class="btn ghost">Edit<\/button>/.test(within(all, h(EditButton)))
      && /aria-label="Edit this device"/.test(within(all, h(EditButton, { className: "camera-chip-btn", icon: true })))
-     && /aria-label="Report a fault for this device"/.test(within(all, h(ReportFaultButton)))
-     && within(none, h(EditButton)) === "" && within(none, h(ReportFaultButton)) === "");
+     && /Open Ticket/.test(within(all, h(OpenTicketButton)))
+     && within(none, h(EditButton)) === "" && within(none, h(OpenTicketButton)) === "");
+  // ⚠️ THE COCKPIT'S OWN BUTTON (owner, 2026-11-06: an icon-only wrench sat beside Edit): drawn, a device window's Open
+  // Ticket is exactly the Cockpit's (WorkButton: the cards' bar, the Tickets tab), its icon, words and look; it opens
+  // what the wrench opened (the panel's onReportFault: the Tickets tab's "Open a ticket", the device filled in)
+  const cockpit = draw(h(WorkButton, { kind: "raiseTicket", onClick: () => {} }));
+  const pieces = parseTsx("components/panels/DeviceWindowPieces.tsx");
+  const [btn] = elements(pieces, "WorkButton");
+  ck("  ...Open Ticket is the Cockpit's button: the same markup (its wrench icon, its words, its look), the same act",
+     within(all, h(OpenTicketButton)) === cockpit && /^<button type="button" class="btn ghost"><svg[^>]*lucide-wrench/.test(cockpit)
+     && !!btn && btn.getText() === '<WorkButton kind="raiseTicket" onClick={onReportFault} />'
+     && !/<Wrench|ReportFaultButton|Report a fault for this device/.test(pieces.text), [within(all, h(OpenTicketButton)), cockpit]);
+  const wb = parseTsx("components/fm/WorkButtons.tsx"), tt = parseTsx("components/fm/TicketsTab.tsx");
+  ck("  ...and the Cockpit's cards' bar and the Tickets tab draw that one button (no work button of their own)",
+     elements(wb, "WorkButton").length === 1 && elements(wb, "button").length === 1 && elements(tt, "WorkButton").length === 1
+     && elements(tt, "WorkLabel").length === 0);
   const chip = draw(h(FaultsButton, { onOpen: () => {}, severity: "danger", className: "camera-chip-btn" }));
   ck("  ...the warning on the camera's dark chip keeps its issue's colour", /class="camera-chip-btn panel-faults-btn cockpit-attention-danger"/.test(chip), chip);
   const cam = parseTsx("components/panels/CameraPanel.tsx");
   const [warn] = elements(cam, "FaultsButton");
   const readingsMenu = elements(cam, "DeviceReadings");
-  ck("the camera window draws the warning (while there is one), Edit, the wrench and \"Also on this device\"",
+  ck("the camera window draws the warning (while there is one), Edit, Open Ticket and \"Also on this device\"",
      !!warn && guardsOf(warn).join() === "warning" && /const warning = useDeviceWarning\(\);/.test(cam.text)
-     && elements(cam, "EditButton").length === 1 && elements(cam, "ReportFaultButton").length === 1 && readingsMenu.length === 1,
+     && elements(cam, "EditButton").length === 1 && elements(cam, "OpenTicketButton").length === 1 && readingsMenu.length === 1,
      guardsOf(warn ?? cam));
+  // the camera's header lets no tap through but its chips' (pointer-events: none): Open Ticket, the Cockpit's button and
+  // not a chip, is pressable there too, at the chips' height
+  const panels = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
+  ck("  ...its Open Ticket pressable in the camera's header (which passes taps to the feed), at the chips' height",
+     /\.camera-header \{[^}]*pointer-events: none;/.test(panels) && /\n\.camera-header-actions > \.btn \{ pointer-events: auto; min-height: 44px; \}/.test(panels));
   ck("  ...as the card window does (BasePanel draws the same four)",
-     ["FaultsButton", "EditButton", "ReportFaultButton", "DeviceReadings"].every((t) => elements(tree, t).length === 1));
+     ["FaultsButton", "EditButton", "OpenTicketButton", "DeviceReadings"].every((t) => elements(tree, t).length === 1));
   const { lostColor } = await import("@/config/reading");
   const { STATUS_COLOR } = await import("@/utils/stateColors");
   ck("a critical camera that lost contact: its bar red, as the Cockpit and the map; any other, the lost colour",
