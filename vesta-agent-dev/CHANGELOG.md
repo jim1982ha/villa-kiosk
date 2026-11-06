@@ -1,3 +1,8 @@
+## 0.12.470
+
+- Nothing changes in VESTA. Updates reach the store faster: fewer checks are repeated on the developer's computer
+  before an update is sent, and the store's build still runs every check before it offers the update.
+
 ## 0.12.469
 
 - When VESTA closes an alert (a visit drill that ended, a door locked again), the tablet's card now goes to Closed as
