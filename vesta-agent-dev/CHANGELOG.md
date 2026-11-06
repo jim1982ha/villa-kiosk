@@ -1,3 +1,9 @@
+## 0.12.468
+
+- A visit's photo sheet on Telegram is now wide instead of tall, each photo with its camera and time written on it:
+  Telegram no longer cuts off the names of the last row. It shows at most 6 photos (the setting's highest value is
+  now 6); the tablet's card still shows every one.
+
 ## 0.12.467
 
 After the visit drill of 7 November (#132):
