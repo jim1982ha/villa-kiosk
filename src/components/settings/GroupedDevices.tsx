@@ -9,9 +9,8 @@ import { useMemo, useState } from "react";
 import AskDialog from "@/components/common/AskDialog";
 import { Layers, Plus, Sparkles } from "lucide-react";
 import { FoldToggle } from "@/components/common/FoldedList";
-import IdText from "@/components/common/IdText";
-import RecordCard from "@/components/fm/RecordCard";
-import { useCardRoom } from "@/config/VillaModel";
+import EntityCard from "./EntityCard";
+import CardField from "./CardField";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import EntityPicker from "./EntityPicker";
 import SearchOrAdd, { SearchEmpty, useSearchHit } from "@/components/common/SearchOrAdd";
@@ -33,7 +32,6 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
   const { config, update } = useConfig();
   const { entityDeviceIds } = useHA();
   const entityLabel = useEntityLabel();
-  const roomOf = useCardRoom();
   /** A refusal to show in the app's own dialog — see AskDialog for why this is
    *  not `alert()`. */
   const [notice, setNotice] = useState<string | null>(null);
@@ -113,19 +111,19 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
         <SearchEmpty query={search} noun="group" offer={offer} onAdd={createGroup} />
       )}
 
-      {/* ⚠️ EACH GROUP THE COCKPIT'S CARD (owner, 2026-11-06): its name (its primary's) in the strip, the group's icon
-          before it; its room, its primary's id and what the primary does on its quiet line; its members and "Add another
-          entity…" its words; its bin at its strip's right (owner, 2026-11-06), so it has no bar */}
+      {/* ⚠️ EACH GROUP AN ENTITYCARD (owner, 2026-11-06): its primary's name in the strip, the group's icon before it;
+          its primary's id alone on its first line (its room and "primary (keeps the map badge)" said nothing the card and
+          the section's (i) did not: owner, 2026-11-06); its members and "Add another
+          entity…" its one field, "Members" (owner, 2026-11-06: every card's fields as a device's); its bin at its strip's
+          right (owner, 2026-11-06), so it has no bar */}
       {shown.visible.length > 0 && (
         <div className="fm-list settings-cards" ref={listRef}>
           {shown.visible.map((group) => (
-            <RecordCard key={group.id} title={entityLabel(group.primaryEntityId)} lead={<Layers size={16} aria-hidden />}
+            <EntityCard key={group.id} entityId={group.primaryEntityId} lead={<Layers size={16} aria-hidden />}
               tone={marked(group.id)}
-              room={roomOf({ entityId: group.primaryEntityId })}
-              pills={<><span><IdText id={group.primaryEntityId} /></span><span>primary (keeps the map badge)</span></>}
               body={
                 // the member pills and the "add another" picker share one line, the picker compact at the pills' height
-                <div className="group-members">
+                <CardField label="Members"><div className="group-members">
                   {group.memberEntityIds.map((id) => (
                     <RemovablePill key={id} label={entityLabel(id)} tip={id} removeLabel="Remove from group"
                       onRemove={() => removeMember(group, id)} />
@@ -138,7 +136,7 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
                       compact
                     />
                   </div>
-                </div>
+                </div></CardField>
               }
               remove={{ icon: "bin", label: `Delete the group ${entityLabel(group.primaryEntityId)}`, run: () => deleteGroup(group.id) }} />
           ))}
@@ -158,10 +156,8 @@ export default function GroupedDevices({ title, tip }: { title: string; tip?: Re
       {showSuggestions && (
         <div className="fm-list settings-cards">
           {suggestions.map((s) => (
-            <RecordCard key={`${s.primaryEntityId}|${s.memberEntityId}`}
-              title={`${entityLabel(s.primaryEntityId)} + ${entityLabel(s.memberEntityId)}`} lead={<Sparkles size={16} aria-hidden />}
-              room={roomOf({ entityId: s.primaryEntityId })}
-              pills={<><span><IdText id={s.primaryEntityId} /></span><span><IdText id={s.memberEntityId} /></span></>}
+            <EntityCard key={`${s.primaryEntityId}|${s.memberEntityId}`} entityId={s.primaryEntityId} also={[s.memberEntityId]}
+              lead={<Sparkles size={16} aria-hidden />}
               actions={
                 <button type="button" className="btn ghost fm-bar-main" onClick={() => acceptSuggestion(s.primaryEntityId, s.memberEntityId)}>
                   <Plus size={16} aria-hidden />Create this group

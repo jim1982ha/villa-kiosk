@@ -5,36 +5,36 @@
 // carry the same fields (MappingFields), a second editor for the same record. React.memo'd, as EntityMapRow.
 //
 // ⚠️ THE COCKPIT'S CARD (owner, 2026-11-06: "the same card in Settings and Advanced Settings"): Bind in its bar, Unbind
-// an ✕ at its strip's right (owner, 2026-11-06: a remove is an icon in the band, never a word in the bar). They were rows of fixed columns with a small icon at the end. A bound object's card is named after
-// its ENTITY as an asleep device's is (its name in the strip, room · id on the quiet line), its words "<object> is bound
-// to <entity>", then the search that changes it (owner, 2026-11-06); an object bound to nothing is named after the
-// object, the search its words; an entity no object shows, after the entity, room · id on its quiet line.
+// an ✕ at its strip's right (owner, 2026-11-06: a remove is an icon in the band, never a word in the bar). They were rows of fixed columns with a small icon at the end. A bound object's card and an
+// entity no object shows are EntityCards (its entity's name, its id alone on its first line: owner, 2026-11-06), then ONE
+// field, "Bound to" / "3D object" and its search, as a device card's Linked entity (owner, 2026-11-06: "<object> is bound
+// to <entity>" above a bare search did not look like the other cards; "Other · <id> · 3D object: <object>" was a long
+// line saying nothing more); an object bound to nothing an EntityCard too (its object's name, its id under it), its field "Bind to".
 
 import { Link2, Box, EyeOff } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { memo, useState } from "react";
 import IdText from "@/components/common/IdText";
 import SearchPicker from "@/components/common/SearchPicker";
-import RecordCard from "@/components/fm/RecordCard";
+import CardField from "./CardField";
+import EntityCard from "./EntityCard";
+import { useEntityLabel } from "@/hooks/useEntityLabel";
 
-/** A bound 3D object: its entity's card, "<object> is bound to <entity>", the picker changing it at once; its ✕ unbinds it. */
-function BoundObjectCardInner({ mesh, entityId, name, room, onBind, onUnbind }: {
+/** A bound 3D object: its entity's card, "Bound to" the picker changing it at once; its ✕ unbinds it. */
+function BoundObjectCardInner({ mesh, entityId, onBind, onUnbind }: {
   mesh: string;
   entityId: string;
-  /** Its entity's name on every screen (useEntityLabel). */
-  name: string;
-  /** Its entity's room, every card's (useCardRoom). */
-  room: string;
   onBind: (mesh: string, entityId: string) => void;
   onUnbind: (mesh: string) => void;
 }) {
+  const name = useEntityLabel()(entityId);
   return (
-    <RecordCard title={name} lead={<Link2 size={16} aria-hidden />} room={room}
-      pills={<span><IdText id={entityId} /></span>}
-      body={<>
-        <p className="binding-said"><IdText id={mesh} /> is bound to {name}</p>
-        <EntityPicker value={entityId} onChange={(id) => onBind(mesh, id)} allowCustom hideCurrentLabel />
-      </>}
+    <EntityCard entityId={entityId} lead={<Link2 size={16} aria-hidden />}
+      body={
+        <CardField label="Bound to">
+          <EntityPicker value={entityId} onChange={(id) => onBind(mesh, id)} allowCustom hideCurrentLabel />
+        </CardField>
+      }
       remove={{ icon: "x", label: `Unbind ${mesh} from ${name}`, run: () => onUnbind(mesh) }} />
   );
 }
@@ -44,8 +44,13 @@ export const BoundObjectCard = memo(BoundObjectCardInner);
 function UnboundObjectCardInner({ mesh, onBind }: { mesh: string; onBind: (mesh: string, entityId: string) => void }) {
   const [picked, setPicked] = useState<string | undefined>(undefined);
   return (
-    <RecordCard title={<IdText id={mesh} />} lead={<Box size={16} aria-hidden />}
-      body={<EntityPicker value={picked} onChange={setPicked} placeholder="Bind to entity…" allowCustom hideCurrentLabel />}
+    // named as every card (owner, 2026-11-06: its strip showed the raw id): its friendly name, its id under it
+    <EntityCard entityId={mesh} lead={<Box size={16} aria-hidden />}
+      body={
+        <CardField label="Bind to">
+          <EntityPicker value={picked} onChange={setPicked} placeholder="An entity…" allowCustom hideCurrentLabel />
+        </CardField>
+      }
       actions={
         <button type="button" className="btn ghost fm-bar-main" disabled={!picked} aria-label={`Bind ${mesh}`}
           onClick={() => { if (picked) { onBind(mesh, picked); setPicked(undefined); } }}>
@@ -57,22 +62,21 @@ function UnboundObjectCardInner({ mesh, onBind }: { mesh: string; onBind: (mesh:
 export const UnboundObjectCard = memo(UnboundObjectCardInner);
 
 /** An entity no 3D object shows: one of the unbound objects picked, then Bind (the object then shows it). */
-function UnshownEntityCardInner({ entityId, name, room, objects, onBind }: {
+function UnshownEntityCardInner({ entityId, objects, onBind }: {
   entityId: string;
-  /** Its name on every screen (useEntityLabel). */
-  name: string;
-  room: string;
   /** The 3D objects bound to nothing, to pick from. */
   objects: readonly string[];
   onBind: (mesh: string, entityId: string) => void;
 }) {
   const [picked, setPicked] = useState<string | undefined>(undefined);
+  const name = useEntityLabel()(entityId);
   return (
-    <RecordCard title={name} lead={<EyeOff size={16} aria-hidden />} room={room}
-      pills={<span><IdText id={entityId} /></span>}
+    <EntityCard entityId={entityId} lead={<EyeOff size={16} aria-hidden />}
       body={objects.length > 0 && (
-        <SearchPicker placeholder={picked ?? "Pick the 3D object that shows it…"} onPick={setPicked}
-          rows={(q) => objects.filter((o) => o.toLowerCase().includes(q.trim().toLowerCase())).map((o) => ({ key: o, label: <IdText id={o} /> }))} />
+        <CardField label="3D object">
+          <SearchPicker placeholder={picked ?? "The 3D object that shows it…"} onPick={setPicked}
+            rows={(q) => objects.filter((o) => o.toLowerCase().includes(q.trim().toLowerCase())).map((o) => ({ key: o, label: <IdText id={o} /> }))} />
+        </CardField>
       )}
       actions={objects.length > 0 && (
         <button type="button" className="btn ghost fm-bar-main" disabled={!picked} aria-label={`Bind ${name} to a 3D object`}

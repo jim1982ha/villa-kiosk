@@ -23,7 +23,8 @@ import { memo, type RefObject } from "react";
 import { Pencil, Check, X } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import IdText from "@/components/common/IdText";
-import RecordCard from "@/components/fm/RecordCard";
+import EntityCard from "./EntityCard";
+import CardField from "./CardField";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import MappingFields, { ConfirmToggle, useMappingDraft } from "./MappingFields";
@@ -79,7 +80,7 @@ function EntityMapRow({
   // card's state. ⚠️ NEVER FOLDED, NO ROOM LINE (owner, 2026-11-06: the chevron hid its fields; its room under its name
   // said nothing the name did not, "no added value").
   return (
-    <RecordCard title={name} tone={m.disabled ? "device-card-off" : undefined}
+    <EntityCard entityId={entryKey} idLine={false} tone={m.disabled ? "device-card-off" : undefined}
       status={stale ? { text: "No longer exists", tone: "tone-warn" } : undefined}
       body={
         <div className="device-card" ref={matchedRowRef} title={stale ? `${m.entityId} no longer exists` : undefined}>
@@ -154,7 +155,7 @@ function EntityMapRow({
           {!editing && (
             <MappingFields entryKey={entryKey} entityId={m.entityId} mapping={m} entity={entity}
               cell={(key, label, field) => (
-                <div key={key} className="card-field"><span className="card-field-label">{label}</span>{field}</div>
+                <CardField key={key} label={label}>{field}</CardField>
               )} />
           )}
         </div>

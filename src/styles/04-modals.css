@@ -786,8 +786,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 /* a settings list of cards: room above it as above any list */
 .settings-cards { margin-top: 8px; }
-/* a bound 3D object's card says what it binds, one sentence above its search (BindingRow) */
-.binding-said { margin: 0 0 4px; font-size: var(--text-sm); color: var(--text-primary); overflow-wrap: anywhere; }
 /* a device group's members and its "Add another entity…", on one line, wrapping */
 .group-members { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .group-members-add { flex: 1 1 180px; min-width: 140px; }

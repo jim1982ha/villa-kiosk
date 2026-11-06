@@ -117,13 +117,13 @@ const bindings = (view) => { globalThis.__view = view; return drawIn(h(BindingsT
 // [kind, drawn, its name, its bar's words ("" no bar), its remove at its strip's right ([icon, tooltip]) or none]
 const KINDS = [
   ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", "", ["bin", "Delete the group Kitchen Temperature"]],
-  ["  ...a suggested group, its main action first", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Pool Pump Power + Pool Pump", "Create this group"],
+  ["  ...a suggested group, its main action first", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Pool Pump Power", "Create this group"],
   ["a bound 3D object (named after its entity)", bindings("bound"), "Terrace Lamp", "", ["x", "Unbind Lamp_Kitchen from Terrace Lamp"]],
-  ["an object bound to nothing", bindings("unbound"), "Mesh_Unnamed_042", "Bind"],
+  ["an object bound to nothing", bindings("unbound"), "Mesh Unnamed 042", "Bind"],
   ["an entity no object shows", bindings("unshown"), "Ceiling Fan", "Bind"],
   ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "Back Door", "", ["x", "Take Back Door off Asleep between reports"]],
   ["a device of Devices", drawIn(h(ConfigEditor)), "Pool Pump", "", ["bin", "Remove Pool Pump's settings"]],
-  ["a 3D object whose entity is gone", drawIn(h(ConfigEditor)), "fan.example_gone_fan", "Point it there"],
+  ["a 3D object whose entity is gone", drawIn(h(ConfigEditor)), "Example Gone Fan", "Point it there"],
   ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", "", ["bin", "Delete the announcement Front gate doorbell"]],
   ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", "", ["x", `Take Example House FM group off the ${ROLE_LABELS.ops}'s list`]],
 ];
@@ -155,8 +155,13 @@ ck("  ...none of the rows and tables they were (a table, .binding-row, .settings
   const dir = new URL("../../src/components/settings/", import.meta.url);
   const files = readdirSync(dir).filter((f) => f.endsWith(".tsx")).map((f) => [f, readFileSync(new URL(f, dir), "utf8")]);
   const drawing = files.filter(([, t]) => /<RecordCard\b/.test(t)).map(([f]) => f).sort();
-  ck("  ...the files drawing them, each through RecordCard",
-     JSON.stringify(drawing) === JSON.stringify(["BindingRow.tsx", "ConfigEditor.tsx", "EntityMapRow.tsx", "GroupedDevices.tsx", "MessagesSettings.tsx", "UnavailableByDesign.tsx", "WhoGetsMessages.tsx"]), drawing);
+  // owner, 2026-11-06 (later): "make sure you really centralise the cards": a card standing for an entity is the one
+  // EntityCard (its name, its id alone), a 3D object's too (bound to nothing or its entity gone); only what is no entity
+  // (an announcement, a chat) draws RecordCard itself, and no Settings file gives a card a room or a line of its own
+  ck("  ...the files drawing them, each through RecordCard: an entity's card only through EntityCard",
+     JSON.stringify(drawing) === JSON.stringify(["EntityCard.tsx", "MessagesSettings.tsx", "WhoGetsMessages.tsx"]), drawing);
+  const ownLine = files.filter(([f, t]) => f !== "EntityCard.tsx" && /<(RecordCard|EntityCard)\b[^>]*?\b(room|pills|device)=\{/.test(t.replace(/\n\s*/g, " "))).map(([f]) => f);
+  ck("  ...no Settings card given a room or a first line of its own (EntityCard's, its id alone)", ownLine.length === 0, ownLine);
   ck("  ...and none frames a card of its own", files.every(([, t]) => !/className="fm-record-(card|strip|actions)/.test(t)), files.filter(([, t]) => /className="fm-record-(card|strip|actions)/.test(t)).map(([f]) => f));
 }
 
@@ -184,7 +189,7 @@ console.log("\n  the remove icon (owner, 2026-11-06): a press is the button's, S
   // the Cockpit's cards never pass it: the files giving RecordCard a `remove` are Settings' own
   const { readdirSync, statSync } = await import("node:fs");
   const walk = (d) => readdirSync(d).flatMap((f) => { const p = new URL(f, d); return statSync(p).isDirectory() ? walk(new URL(f + "/", d)) : f.endsWith(".tsx") ? [p] : []; });
-  const giving = walk(new URL("../../src/", import.meta.url)).filter((u) => { const t = readFileSync(u, "utf8"); return /<RecordCard\b/.test(t) && /^\s*remove=\{/m.test(t); })
+  const giving = walk(new URL("../../src/", import.meta.url)).filter((u) => { const t = readFileSync(u, "utf8"); return /<(RecordCard|EntityCard)\b/.test(t) && /^\s*remove=\{/m.test(t); })
     .map((u) => u.pathname.split("/src/")[1]).sort();
   ck("  ...the files giving a card its remove are Settings' alone, never a Cockpit card",
      JSON.stringify(giving) === JSON.stringify(["components/settings/BindingRow.tsx", "components/settings/EntityMapRow.tsx", "components/settings/GroupedDevices.tsx",
@@ -226,7 +231,7 @@ console.log("\n  one field per list (owner, 2026-11-06): it narrows the list and
   }
   const kitchen = groups("kitchen");
   ck("Grouped devices: typing narrows the groups, and offers the devices; one in a group says \"In group <its name>\"",
-     JSON.stringify(names(kitchen).filter((n) => !n.includes("+"))) === JSON.stringify(["Kitchen Temperature"])
+     JSON.stringify(cards(kitchen).filter((c) => c.bar !== "Create this group").map((c) => c.name)) === JSON.stringify(["Kitchen Temperature"])
      && JSON.stringify(offers(kitchen)) === JSON.stringify(["Kitchen Humidity / sensor.example_kitchen_humidity / In group Kitchen Temperature",
        "Kitchen Temperature / sensor.example_kitchen_temperature / In group Kitchen Temperature"]), [names(kitchen), offers(kitchen)]);
   const pool = groups("pool");
@@ -267,7 +272,7 @@ console.log("\n  Bound 3D objects: its title's counts open its lists:");
 {
   const head = (html) => inside(html, "cockpit-issues-head");
   // what each list holds: the object bound, the one bound to nothing, the entities no object shows
-  const LISTS = { bound: ["Terrace Lamp"], unbound: ["Mesh_Unnamed_042"], unshown: ["Back Door", "Ceiling Fan"] };
+  const LISTS = { bound: ["Terrace Lamp"], unbound: ["Mesh Unnamed 042"], unshown: ["Back Door", "Ceiling Fan"] };
   const views = (html) => [...head(html).matchAll(/<button type="button" class="section-view( shown)?" aria-pressed="(true|false)">([^<]*)<\/button>/g)].map((m) => [m[3], m[2] === "true"]);
   ck("its three counts are buttons after its title, the list shown marked (bound first)",
      JSON.stringify(views(bindings("bound"))) === JSON.stringify([["1 bound", true], ["1 unbound", false], ["2 not shown", false]]), views(bindings("bound")));
@@ -311,17 +316,64 @@ console.log("\n  a device of Devices: never folded, no room line, its toggle und
 console.log("\n  Bound 3D objects: a bound object's card is its entity's:");
 {
   const card = cards(bindings("bound"))[0]?.card ?? "";
-  ck("its strip its entity's name with the list's icon, its quiet line room · id, as an asleep device's",
+  // owner, 2026-11-06 (later): "more like" a device's card: its name, its line, then "Bound to" and the search on one line
+  const field = (html) => [...html.matchAll(/<div class="card-field"><span class="card-field-label">([^<]+)<\/span>/g)].map((m) => m[1]);
+  ck("its strip its entity's name with the list's icon, its first line its id alone",
      /fm-record-lead"><svg[^>]*lucide-link2?/.test(inside(card, "fm-record-strip")) && text(inside(card, "fm-record-name")) === "|Terrace Lamp|"
-     && text(inside(card, "fm-record-meta")).replace(/\|/g, "") === "Otherlight.example_terrace_lamp", [text(inside(card, "fm-record-strip")), text(inside(card, "fm-record-meta"))]);
-  ck("  ...its words \"<object> is bound to <entity>\", then the search that changes it, its ✕ unbinding it",
-     /<p class="binding-said">/.test(card) && text(inside(card, "binding-said")).replace(/\|/g, "") === "Lamp_Kitchen is bound to Terrace Lamp"
-     && card.indexOf("binding-said") < card.indexOf('class="picker"') && cards(bindings("bound"))[0].remove?.label === "Unbind Lamp_Kitchen from Terrace Lamp", text(inside(card, "fm-record-main")));
+     && text(inside(card, "fm-record-meta")).replace(/\|/g, "") === "light.example_terrace_lamp", [text(inside(card, "fm-record-strip")), text(inside(card, "fm-record-meta"))]);
+  ck("  ...then one field, \"Bound to\" and the search that changes it (no sentence), its ✕ unbinding it",
+     JSON.stringify(field(card)) === '["Bound to"]' && /card-field-label">Bound to<\/span><div class="picker/.test(card) && !/is bound to/.test(card)
+     && cards(bindings("bound"))[0].remove?.label === "Unbind Lamp_Kitchen from Terrace Lamp", text(inside(card, "fm-record-main")));
   const loose = cards(bindings("unbound"))[0]?.card ?? "";
-  ck("  ...an object bound to nothing: its name, the search, Bind; no quiet line",
-     text(inside(loose, "fm-record-name")).replace(/\|/g, "") === "Mesh_Unnamed_042" && !/fm-record-meta/.test(loose) && /class="picker"/.test(loose), loose);
+  // owner, 2026-11-06 (later): its strip showed the raw id; its friendly name there, its id under it, as every card
+  ck("  ...an object bound to nothing: its name, its id under it, its field \"Bind to\", Bind",
+     text(inside(loose, "fm-record-name")).replace(/\|/g, "") === "Mesh Unnamed 042" && text(inside(loose, "fm-record-meta")).replace(/\|/g, "") === "Mesh_Unnamed_042"
+     && JSON.stringify(field(loose)) === '["Bind to"]', loose);
   const unshown = cards(bindings("unshown")).find((c) => c.name === "Ceiling Fan")?.card ?? "";
-  ck("  ...an entity no object shows: its name, room · id", /fan\.example_ceiling_fan/.test(text(inside(unshown, "fm-record-meta")).replace(/\|/g, "")), unshown);
+  ck("  ...an entity no object shows: its name, room · id, its field \"3D object\"",
+     /fan\.example_ceiling_fan/.test(text(inside(unshown, "fm-record-meta")).replace(/\|/g, "")) && JSON.stringify(field(unshown)) === '["3D object"]', unshown);
+}
+
+console.log("\n  every card for an entity: its friendly name in its strip, its id alone on its first line:");
+{
+  // owner, 2026-11-06 (later): "the user friendly name of the entity that it controls" in the header, "only showing the
+  // baseline entity name" under it ("Other · <id> · primary (keeps the map badge)", "… · 3D object: …" were redundant)
+  const { labelOf } = await import("@/config/EntityMap");
+  const ENTITY = [
+    ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "sensor.example_kitchen_temperature"],
+    ["a bound 3D object", bindings("bound"), "light.example_terrace_lamp"],
+    ["an entity no object shows", bindings("unshown"), "fan.example_ceiling_fan"],
+    ["a device asleep between reports", drawIn(h(UnavailableByDesign, { title: "Asleep between reports" })), "binary_sensor.example_back_door"],
+    ["a 3D object bound to nothing", bindings("unbound"), "Mesh_Unnamed_042"],
+    ["a 3D object whose entity is gone", drawIn(h(ConfigEditor)), "fan.example_gone_fan"],
+  ];
+  for (const [kind, html, id] of ENTITY) {
+    const name = labelOf(id, config.entityMap, entities);
+    const card = cards(html).find((c) => c.name === name)?.card ?? "";
+    ck(`${kind}: "${name}" (its entity's name, every screen's) in its strip, "${id}" alone under it`,
+       card !== "" && text(inside(card, "fm-record-meta")).replace(/\|/g, "") === id, [cards(html).map((c) => c.name), text(inside(card, "fm-record-meta"))]);
+  }
+  const pump = cards(drawIn(h(GroupedDevices, { title: "Grouped devices" }))).find((c) => c.bar === "Create this group")?.card ?? "";
+  ck("  ...a suggested group: its primary's name, its two ids joined by \"+\"", /\+/.test(text(inside(pump, "fm-record-meta"))) && !/Other|primary/.test(text(inside(pump, "fm-record-meta"))), text(inside(pump, "fm-record-meta")));
+  const device = cards(drawIn(h(ConfigEditor))).find((c) => c.name === "Pool Pump")?.card ?? "";
+  ck("  ...a device of Devices: its name, its id on its box's line (no second line)", device !== "" && !/fm-record-meta/.test(device), device.slice(0, 200));
+}
+
+console.log("\n  every card's field: its name in the one column, its control beside it, as a device's Linked entity:");
+{
+  const named = (html, name) => [...(cards(html).find((c) => c.name === name)?.card ?? "").matchAll(/<div class="card-field"><span class="card-field-label">([^<]+)<\/span>/g)].map((m) => m[1]);
+  const FIELDS = [
+    ["a device group", drawIn(h(GroupedDevices, { title: "Grouped devices" })), "Kitchen Temperature", ["Members"]],
+    ["a bound 3D object", bindings("bound"), "Terrace Lamp", ["Bound to"]],
+    ["an object bound to nothing", bindings("unbound"), "Mesh Unnamed 042", ["Bind to"]],
+    ["an entity no object shows", bindings("unshown"), "Ceiling Fan", ["3D object"]],
+    ["a full-screen announcement", drawIn(h(FullScreenAnnouncements, { value: config.fullScreen, onChange: noop })), "Front gate doorbell", ["On screen"]],
+    ["a chat that gets the messages", drawIn(h(WhoGetsMessages)), "Example House FM group", ["Language"]],
+  ];
+  for (const [kind, html, name, want] of FIELDS)
+    ck(`${kind}: ${want.map((w) => `"${w}"`).join(", ")}`, JSON.stringify(named(html, name)) === JSON.stringify(want), named(html, name));
+  const group = cards(drawIn(h(GroupedDevices, { title: "Grouped devices" }))).find((c) => c.name === "Kitchen Temperature")?.card ?? "";
+  ck("  ...a group's members and its \"Add another entity…\" inside its Members field", /card-field-label">Members<\/span><div class="group-members">/.test(group), group);
 }
 
 console.log("\n  Device telemetry: a log list, its columns time, kind, device, words:");

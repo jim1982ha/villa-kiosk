@@ -1,3 +1,24 @@
+## 2.496.728
+
+What you will see:
+- Advanced Settings › Villa › Bound 3D objects: a 3D object bound to nothing shows its friendly name in its header and its id under it, like every other card (its header showed the raw id).
+- Devices: a 3D object whose entity is gone ("No such entity") is named the same way.
+
+## 2.496.727
+
+What you will see:
+- Every card for a device in Settings and Advanced Settings (a group, a bound 3D object, an entity no object shows, a device asleep between reports, a device in Devices) has the same layout: the entity's friendly name in its header, its id alone on the line under it, then its fields.
+- The long line under the name is gone: no "Other", no "primary (keeps the map badge)" (the section's (i) says it), no "3D object: …".
+- A suggested group is named after its first device, its two ids under it joined by "+".
+
+## 2.496.726
+
+What you will see:
+- Advanced Settings › Villa › Bound 3D objects: each bound object's card looks like a device's card in Devices. Its name, then its room, its id and its 3D object on one line, then one field, "Bound to", with the search that changes it on the same line. The sentence "… is bound to …" is gone.
+- An object bound to nothing has the field "Bind to", an entity no object shows has the field "3D object", each name in the same column as a device's "Linked entity".
+- Grouped devices: a group's members and "Add another entity…" sit in a field named "Members", in that same column.
+- Every field of every Settings and Advanced Settings card is now drawn the same way, so the names and the boxes line up on every card.
+
 ## 2.496.725
 
 What you will see:

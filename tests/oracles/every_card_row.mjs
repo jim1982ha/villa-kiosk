@@ -131,11 +131,12 @@ console.log("\n  every card of the app, wherever it is drawn:");
   // a card that belongs to no place: every other card has its room line. A new one fails here until it is decided.
   const NO_ROOM = { "cockpit/MessagesTab.tsx": 1 /* a notification or a report */, "fm/ReadinessTab.tsx": 1 /* a villa-wide check */,
     "fm/SavedDocumentsList.tsx": 1 /* a saved document */, "fm/TicketsTab.tsx": 1 /* "No ticket in progress" */, "fm/TodayTab.tsx": 1 /* "Nothing due" */,
-    // Settings' records (owner, 2026-11-06): a 3D object bound to nothing (no device, so no room), a full-screen
-    // announcement (every tablet's), a chat that gets the messages (a person's phone or group)
-    "settings/BindingRow.tsx": 1, "settings/MessagesSettings.tsx": 1, "settings/WhoGetsMessages.tsx": 1,
-    // a device of Devices: its room under its name was redundant (owner, 2026-11-06: "no added value")
-    "settings/EntityMapRow.tsx": 1 };
+    // Settings' records (owner, 2026-11-06): a full-screen announcement (every tablet's), a chat that gets the messages
+    // (a person's phone or group)
+    "settings/MessagesSettings.tsx": 1, "settings/WhoGetsMessages.tsx": 1,
+    // ⚠️ EVERY SETTINGS CARD FOR AN ENTITY, the one EntityCard: its name, its id alone under it (owner, 2026-11-06: a
+    // device's room under its name "no added value"; "only showing the baseline entity name", the room line redundant)
+    "settings/EntityCard.tsx": 1 };
   const cards = files.map((f) => { const all = elements(parseTsx(`components/${f}`), "RecordCard");
     return { f, all, roomless: all.filter((e) => propText(e, "room") === undefined || propText(e, "room") === null).length,
       perCaller: all.filter((e) => /\|\| undefined/.test(propText(e, "room") ?? "")).length }; });
