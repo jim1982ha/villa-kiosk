@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.453 (7 November 2026)
+
+- A close reaches the tablet's fault before its card (owner's drill #134-P1, 04:19:04 card, 04:19:14 fault): a result
+  that settles an incident and moves a task's fault runs tickets.repair before IncidentThread.close tells the tablet
+  the closed card (outcome._moves_faults, the repair after the actions kept); tests/test_close_reaches_fault_first.py,
+  2 mutations red.
+- A fault's first moment is its alert's (owner's drill #134-P1: the card said 04:12, VESTA's take-over after a restart,
+  the villa sent it at 04:10): Problems.card `began` (the incident's opened, or reopened, moment) is the new fault's
+  openedAt (Kiosk.add_ticket opened_at), and the alert desk opens a visit's incident at the villa's opened_at; same
+  test file, 3 mutations red. tests/test_maintenance_noise.py drives outcome._moves_faults instead of matching
+  carry_out's source.
+
 ## 0.6.452 (7 November 2026)
 
 - A visit's photo sheet is landscape (owner's cards #131 960x1440, #133 960x1080: Telegram on Android crops a tall

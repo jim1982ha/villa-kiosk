@@ -654,17 +654,18 @@ class Kiosk:
     async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None,
                          document_ids: list[str] | None = None, number: int | None = None,
                          origin: str | None = None, check: str | None = None, pattern: dict | None = None,
-                         priority: str | None = None) -> str:
+                         priority: str | None = None, opened_at: str | None = None) -> str:
         """`number`: the alert's number, as every chat names it ("#5"), when the fault comes from one — the Kiosk's card
         shows it beside the title (owner, 2026-10-14), so the Telegram message and the card are seen to be one problem.
         `origin`: where the agent made it from — "alert", "night" (its nightly check) or "chat" — the card's source icon.
         `check`: how the agent reads it again to close it — "minutes" or "nightly" (agent-contract `ticket.checks`, both
-        read by every Kiosk: `checksBeforeList`) — the card's "Next check". `pattern`: {"titlePattern", "since"}, the duration the card words when shown."""
+        read by every Kiosk: `checksBeforeList`) — the card's "Next check". `pattern`: {"titlePattern", "since"}, the duration the card words when shown.
+        `opened_at`: when its problem began (its alert first sent: Problems.card `began`), the card's time; now without."""
         tid = self._ticket_id()
 
         def change(data: dict) -> str:
             tickets = list(data.get("tickets") or [])
-            t = {"id": tid, "title": title[:fault_title_chars()], "status": "open", "openedAt": _now(), "photoIds": [],
+            t = {"id": tid, "title": title[:fault_title_chars()], "status": "open", "openedAt": opened_at or _now(), "photoIds": [],
                  "updates": [{"at": _now(), "status": "open", "photoIds": [], "title": title[:fault_title_chars()]}]}
             if document_ids:
                 t["documentIds"] = list(document_ids)

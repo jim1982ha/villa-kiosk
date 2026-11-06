@@ -235,6 +235,13 @@ class Outcome:
                 continue
             kept.append((chat, item, roles))
         pairs = kept
+        # ⚠️ A CLOSE REACHES THE TABLET'S FAULT BEFORE ITS CARD (owner, 2026-11-07, #134-P1): the settle below tells the
+        # tablet the closed card at once, while the faults were brought up to date only after every Telegram edit — ten
+        # seconds in which the tablet's open issue said "Cleared on …" with its Done and Open Ticket buttons. A result
+        # that settles an incident and moves its task's fault runs the repair first (the one hand: tickets.repair); the
+        # one after the actions still runs, for what they changed
+        if res.get("settle") and _moves_faults(res):
+            await self._repair(done)
         # ⚠️ SETTLED BEFORE THIS RESULT'S MESSAGES ARE POSTED (architecture review 12, 2026-10-09): "Need help" sends the
         # owner a new message with the buttons; settled after it, that message lost them the moment it arrived
         for s in res.get("settle") or []:
@@ -364,16 +371,14 @@ class Outcome:
         # ⚠️ A TASK'S FAULT ACTION CARRIES NOTHING TO READ (architecture review, 2026-10-19): a skill says
         # result.faults_changed(); the older shapes — ticket with a task_id, ticket.resolve, ticket.reopen, their words
         # unread — still come from a starter skill edited on a villa (updates keep it), and mean the same.
-        faults_moved = bool(res.get(FAULTS_CHANGED))
+        faults_moved = _moves_faults(res)
         for a in res.get("actions") or []:
             if isinstance(a, int) and not isinstance(a, bool):
-                faults_moved = True     # a task id: an edited desk adding Problems.settle's return to its actions
-                continue
+                continue        # a task id: an edited desk adding Problems.settle's return to its actions (_moves_faults)
             kind = (a or {}).get("action")
             try:
-                if kind == FAULTS_CHANGED or (kind in ("ticket", "ticket.resolve", "ticket.reopen")
-                                              and (kind != "ticket" or a.get("task_id"))):
-                    faults_moved = True
+                if _task_fault(a):
+                    pass                                                    # the repair below (_moves_faults)
                 elif kind == "ticket":
                     if await self.tickets.create(a.get("summary", ""), a.get("entity_id") or None, a.get("note") or None):
                         done["tickets"] += 1
@@ -407,13 +412,17 @@ class Outcome:
                 self.state.log("action_failed", {"action": kind, "error": f"{type(e).__name__}: {str(e)[:error_short_chars()]}"})
                 log.warning("action %s failed (%s: %s)", kind, type(e).__name__, e)
         if faults_moved:
-            try:
-                moved = await self.tickets.repair()
-                done["tickets"] += moved.get("created", 0) + moved.get("reopened", 0)
-                done["resolved"] += moved.get("resolved", 0)
-            except Exception as e:  # noqa: BLE001 — the next repair (5 minutes) does it
-                log.warning("The Kiosk's faults could not be brought up to date (%s: %s)", type(e).__name__, e)
+            await self._repair(done)
         return done
+
+    async def _repair(self, done: dict) -> None:
+        """The Kiosk's faults brought up to date from the tasks (tickets.repair), counted in `done`."""
+        try:
+            moved = await self.tickets.repair()
+            done["tickets"] += moved.get("created", 0) + moved.get("reopened", 0)
+            done["resolved"] += moved.get("resolved", 0)
+        except Exception as e:  # noqa: BLE001 — the next repair (5 minutes) does it
+            log.warning("The Kiosk's faults could not be brought up to date (%s: %s)", type(e).__name__, e)
 
     def _close_shown(self, iid: int, chat: int) -> tuple[str, dict | None] | None:
         """The close chat `chat`'s copy of incident `iid`, closed already, shows (its bottom line, and the step it was
@@ -505,3 +514,18 @@ class Outcome:
         if not found:
             log.info("Incident #%s: no Home Assistant message of its run to take over", iid)
         return out
+
+
+def _task_fault(a) -> bool:
+    """A script's action that says a task's fault moved: result.faults_changed(), or an older shape (ticket with a
+    task_id, ticket.resolve, ticket.reopen) a starter skill edited on a villa still writes."""
+    kind = (a or {}).get("action") if isinstance(a, dict) else None
+    return kind == FAULTS_CHANGED or (kind in ("ticket", "ticket.resolve", "ticket.reopen")
+                                      and (kind != "ticket" or bool(a.get("task_id"))))
+
+
+def _moves_faults(res: dict) -> bool:
+    """Does result `res` move a task's Kiosk fault (its top-level FAULTS_CHANGED, a task id among its actions, or a
+    task's fault action: _task_fault)? Then the repair runs (Outcome.carry_out)."""
+    return bool(res.get(FAULTS_CHANGED)) or any(
+        (isinstance(a, int) and not isinstance(a, bool)) or _task_fault(a) for a in res.get("actions") or [])

@@ -421,8 +421,9 @@ def test_the_night_tells_the_engine_when_the_kiosks_faults_change(tmp_path):
     assert json.loads(r.stdout)[FAULTS_CHANGED] is False               # nothing found: nothing to repair
     import inspect
     from vesta_agent.app import Vesta
-    from vesta_agent.outcome import Outcome
-    assert "faults_moved = bool(res.get(FAULTS_CHANGED))" in inspect.getsource(Outcome.carry_out)   # the engine reads that one key
+    # the engine reads that one key (driven: outcome._moves_faults, what carry_out repairs by)
+    from vesta_agent.outcome import _moves_faults
+    assert _moves_faults({FAULTS_CHANGED: True}) and not _moves_faults({FAULTS_CHANGED: False})
     assert "carry_out" in inspect.getsource(Vesta.run_code_job)
 
 

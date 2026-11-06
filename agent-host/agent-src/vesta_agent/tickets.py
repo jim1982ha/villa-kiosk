@@ -82,7 +82,8 @@ class Tickets:
                                           **({"priority": want.get("priority")} if want["number"] and want.get("priority") else {}),
                                           **({"origin": want["origin"]} if want["origin"] else {}),
                                           **({"check": want["check"]} if want["check"] else {}),
-                                          **({"pattern": self._pattern(want)} if self._pattern(want) else {}))
+                                          **({"pattern": self._pattern(want)} if self._pattern(want) else {}),
+                                          **({"opened_at": want["began"]} if want.get("began") else {}))
         log.info("Kiosk fault %s created: %s", tid, headline(title)[:80])
         if task_id:
             self._store().set_task_uid(int(task_id), tid)

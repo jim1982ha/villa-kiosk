@@ -1,3 +1,11 @@
+## 0.12.469
+
+- When VESTA closes an alert (a visit drill that ended, a door locked again), the tablet's card now goes to Closed as
+  soon as the closed message arrives. Before, for about ten seconds, the card stayed under Open issues saying
+  "Cleared on …" with its Done and Open Ticket buttons.
+- A visit VESTA takes over after a restart now shows, on the tablet's card, the time the villa first sent it (the time
+  of "Alert sent" on Telegram), not the time VESTA took it over.
+
 ## 0.12.468
 
 - A visit's photo sheet on Telegram is now wide instead of tall, each photo with its camera and time written on it:

@@ -1500,7 +1500,9 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         if not takes_up(sev):
             out["decision"] = "maintenance_mode"; store.audit("alert-desk", "suppressed_maintenance", ev); return out
         key = alert_keys({**ev, "entity_id": VISIT})[0]
-        iid = store.new_incident(key, rule_id, ev["entity_id"], sev, ev, now.isoformat())
+        # opened when the villa sent it, whenever VESTA takes it over (a restart in between: owner's drill #134, its
+        # fault's time 04:12 while the villa's alert went at 04:10): the fault's time and every report's
+        iid = store.new_incident(key, rule_id, ev["entity_id"], sev, ev, (_when(v.get("opened_at")) or now).isoformat())
         carry_check(store, iid, route, ev)
         carry_to(store, iid, sev, ev)
         W.carry(store, iid, W.terms(0, 0))                 # a visit is never watched after its close
