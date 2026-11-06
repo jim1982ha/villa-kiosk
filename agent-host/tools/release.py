@@ -18,7 +18,10 @@ agent-src. Nothing compared those three sites before this module; an
 agent-src test now does (tests/test_engine_version.py).
 
 "SHIPPED" MEANS PUBLISHED: exit 0 only once main's vesta-agent-dev/config.yaml
-names the version. GATES ARE LISTED HERE ONCE: agent-host.yaml runs `gates`.
+names the version. GATES ARE LISTED HERE ONCE: agent-host.yaml runs `gates`, every
+one, before the image is built (a red gate publishes nothing). `ship` runs only the
+fast ones here and the tests that name a changed file (ship_plan), and leaves the
+rest to that CI run (owner, 2026-11-07: "simplify massively", releases too slow).
 """
 
 from __future__ import annotations
@@ -95,6 +98,68 @@ GATES: list[tuple[str, list[str], str, str]] = [
 ]
 
 
+# ⚠️ WHAT ship RUNS HERE, THE REST IS CI'S (owner, 2026-11-07). Every gate ran here (5 min 10 s, 309 s of it the 2,087
+# tests) and then again in CI. Here: the gates that take a second, a gate whose own subject is staged (the paths after
+# its name), and the agent's tests that name a changed file (changed_tests). The gate's name is GATES' own.
+SHIP_WHEN: dict[str, tuple[str, ...] | None] = {
+    "The VESTA Kiosk is untouched": None,
+    "The shared rules are dev2's": None,
+    "The app manifest agrees with what the Supervisor reads": None,
+    "Home Assistant's add-on checks": ("vesta-agent/config.yaml", "agent-host/Dockerfile", "agent-host/rootfs/"),
+    "The host's start-up, contract, folders and redaction": ("agent-host/rootfs/", "agent-host/tests/test_host.py"),
+    "The self-test reports each link correctly": ("agent-host/rootfs/", "agent-host/tests/test_selftest.py"),
+    "The sidecar, the restart policy and the stop grace": ("agent-host/rootfs/", "agent-host/tests/test_supervise.py"),
+    "The update check moves only forward": None,
+    "The agreement with the VESTA Kiosk is the Kiosk's own": None,
+    "What the host sends is what the agent reads": None,
+    "The agent's manifest and the host state": None,
+    "The release module": ("agent-host/tools/release.py", "agent-host/tests/test_release.py"),
+    "A mutation run always gives the file back": ("agent-host/tools/mutate.py", "agent-host/tests/test_mutate.py"),
+    "Every name the agent's code uses is defined": None,
+    "Every name the tests use is defined": None,
+}
+TESTS_GATE = "The VESTA Agent's own tests"
+#: Folder names too common to say which tests a file concerns.
+_NOT_A_SUBJECT = {"agent-src", "vesta_agent", "vesta_shared", "starter", "skills", "tests", "villa", "fixtures", "ui",
+                  "homeassistant", "packages", "SKILL", "CHANGELOG", "README", "__init__"}
+
+
+def changed_tests(staged: list[str], src: Path | None = None) -> list[str] | None:
+    """The agent's tests (paths under agent-src) that name a staged agent-src file: a changed test itself, and every
+    test whose text names the changed file's stem or its folder as a word. None: run them all (a conftest changed).
+    A pre-check like the Kiosk's oracles:changed: a test reaching the file through another module is not picked; CI
+    runs every test."""
+    src = src or ROOT / ENGINE_DIR
+    tests = sorted(p for d in ("tests", "tests/villa") for p in (src / d).glob("test_*.py"))
+    picked: set[str] = set()
+    words: set[str] = set()
+    for f in staged:
+        if not f.startswith(ENGINE_DIR) or f == ENGINE_CHANGELOG:
+            continue
+        rel = Path(f[len(ENGINE_DIR):])
+        if rel.name == "conftest.py":
+            return None
+        if rel.parts[0] == "tests" and rel.name.startswith("test_") and rel.suffix == ".py":
+            picked.add(str(rel))
+        words |= {w for w in (rel.stem, rel.parent.name) if len(w) >= 3 and w not in _NOT_A_SUBJECT}
+    if words:
+        pattern = re.compile(r"\b(" + "|".join(re.escape(w) for w in sorted(words)) + r")\b")
+        picked |= {str(t.relative_to(src)) for t in tests if pattern.search(t.read_text(encoding="utf-8"))}
+    return sorted(picked)
+
+
+def ship_plan(staged: list[str]) -> list[tuple[str, list[str], str, str]]:
+    """The gates ship runs here for these staged files, in GATES' shape."""
+    plan = [g for g in GATES if g[0] != TESTS_GATE
+            and (SHIP_WHEN[g[0]] is None or any(f.startswith(SHIP_WHEN[g[0]]) for f in staged))]
+    picked = changed_tests(staged)
+    if picked is None or picked:
+        name, cmd, cwd, lane = next(g for g in GATES if g[0] == TESTS_GATE)
+        plan.append((name if picked is None else f"{name}, the {len(picked)} naming what changed",
+                     cmd if picked is None else cmd[:3] + picked + cmd[4:], cwd, lane))
+    return plan
+
+
 @dataclass
 class GateResult:
     name: str
@@ -109,21 +174,26 @@ def _run_one(cmd: list[str], cwd: str) -> tuple[int, str, float]:
     return proc.returncode, proc.stdout or "", time.monotonic() - start
 
 
-def run_gates() -> list[GateResult]:
-    """Run every gate, even after a failure; return what each did."""
+def run_ship_gates(staged: list[str]) -> list[GateResult]:
+    return run_gates(ship_plan(staged))
+
+
+def run_gates(gates: list[tuple[str, list[str], str, str]] | None = None) -> list[GateResult]:
+    """Run every gate (or these), even after a failure; return what each did."""
     from concurrent.futures import ThreadPoolExecutor
+    gates = GATES if gates is None else gates
     lanes: dict[str, list[int]] = {}
-    for i, (_name, _cmd, _cwd, lane_name) in enumerate(GATES):
+    for i, (_name, _cmd, _cwd, lane_name) in enumerate(gates):
         lanes.setdefault(lane_name, []).append(i)
     done: dict[int, tuple[int, str, float]] = {}
 
     def lane(indices: list[int]) -> None:
         for i in indices:
-            done[i] = _run_one(GATES[i][1], GATES[i][2])
-    with ThreadPoolExecutor(max_workers=len(lanes)) as pool:
+            done[i] = _run_one(gates[i][1], gates[i][2])
+    with ThreadPoolExecutor(max_workers=max(1, len(lanes))) as pool:
         list(pool.map(lane, lanes.values()))
     results: list[GateResult] = []
-    for i, (name, _cmd, _cwd, _lane) in enumerate(GATES):
+    for i, (name, _cmd, _cwd, _lane) in enumerate(gates):
         print(f"::group::{name}" if IN_CI else f"\n═══ {name} ═══", flush=True)
         returncode, out, took = done[i]
         sys.stdout.write(out)
@@ -273,7 +343,7 @@ def copy_agreement(dry_run: bool) -> bool:
     return True
 
 
-def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: float, gates=run_gates) -> int:
+def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: float, gates=run_ship_gates) -> int:
     git("fetch", "-q", "origin", BRANCH, "main")
     if git("rev-parse", "--abbrev-ref", "HEAD").strip() == "main":
         raise ReleaseError("on main: the agent releases from agent-dev (main is written only by CI's channel sync)")
@@ -319,8 +389,9 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
     if dry_run:
         sites = [APP_CONFIG] + ([ENGINE_MANIFEST, ENGINE_INIT] if engine else []) + \
             ([SHIPPED_SKILLS] if any(f.startswith(STARTER_SKILLS) for f in staged) else [])
-        print(f"  dry run: would write versions to {', '.join(sites)}; run {len(GATES)} gates; "
-              f"commit; push HEAD:{BRANCH}; wait ≤ {wait_minutes:g} min for main")
+        print(f"  dry run: would write versions to {', '.join(sites)}; run here: "
+              f"{', '.join(g[0] for g in ship_plan(staged))}; commit; push HEAD:{BRANCH}; CI runs all {len(GATES)} "
+              f"gates before it publishes; wait ≤ {wait_minutes:g} min for main")
         return 0
     if not message:
         raise ReleaseError("a commit message is needed (-m or -F)")
@@ -340,8 +411,8 @@ def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: 
                        cwd=ROOT / ENGINE_DIR, check=True)
         git("add", SHIPPED_SKILLS)
 
-    # 2. Every gate, on exactly what will be committed.
-    if not print_summary(gates()):
+    # 2. The fast gates and the tests naming what changed, on exactly what will be committed; CI runs them all.
+    if not print_summary(gates(staged)):
         raise ReleaseError("a gate failed: nothing committed. Fix, stage, and run ship again (the versions are already written)")
 
     # 3. Commit and push.
@@ -401,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="release.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("gates", help="run every gate CI runs")
-    s = sub.add_parser("ship", help="versions → gates → commit → push → wait until published")
+    s = sub.add_parser("ship", help="versions → the fast gates → commit → push → wait until CI has published")
     s.add_argument("-m", "--message")
     s.add_argument("-F", "--file", help="read the commit message from a file")
     s.add_argument("--dry-run", action="store_true")

@@ -20,7 +20,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 - [No exceptions](owner-rules.md#no-exceptions) — never a per-device exception; fix the check for everyone
 - [Decided means decided](owner-rules.md#decided-means-decided) — approval means build it; objections BEFORE the work, never in a footnote
 - [Ship, don't ask](owner-rules.md#ship-dont-ask) — cause found: implement and ship; ask only for a real decision
-- [Time matters](owner-rules.md#time-matters) — bundle a release; measure only what a decision needs; say what was skipped
+- [Time matters](owner-rules.md#time-matters) — bundle a release; measure only what a decision needs; say what was skipped; new findings go to the next round
 - [One mechanism per job](owner-rules.md#one-mechanism-per-job) — one store, channel or input per job; widen the existing one before adding; merging designs never keeps both
 - [One card, every case](owner-rules.md#one-card-every-case) — same fields at the same place on every card, name and time in the strip, the state the first line; a state never repeats the words; audit every kind and screen before shipping
 - [Defined once](owner-rules.md#defined-once) — every list, value or text in one place; YAML anchors, shared modules
@@ -68,7 +68,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 
 - [Ask where the user sees it](verifying.md#ask-where-the-user-sees-it) — two correct halves joined by nothing; find the output only the whole path makes
 - [Pin the caller](verifying.md#pin-the-caller) — test the production path that supplies the wiring, not the helper
-- [A test must have gone red](verifying.md#a-test-must-have-gone-red) — prove every check red; the mutation pitfalls
+- [A test must have gone red](verifying.md#a-test-must-have-gone-red) — one red proof per fix: its main test fails without the fix; the mutation pitfalls
 - [Validate as the reader](verifying.md#validate-as-the-reader) — every line: true, names its subject, actionable, not duplicated
 - [The screen can describe the wrong thing](verifying.md#the-screen-can-describe-the-wrong-thing) — trace a number to its source; pin the render, not the computation
 - [Measure the claim, not the comment](verifying.md#measure-the-claim-not-the-comment) — count it in the code before acting on a comment or a "can't"
@@ -130,7 +130,7 @@ contributor and every agent follows in this repository; `CLAUDE.md` holds the co
 
 ## Kiosk code
 
-- [Checks drive values](kiosk-code.md#checks-drive-values) — oracles drive values or draw; `npm run oracles:changed` before ship
+- [Checks drive values](kiosk-code.md#checks-drive-values) — oracles drive values or draw; `ship` runs those naming a changed file, CI runs them all
 - [Babylon side-effect imports](kiosk-code.md#babylon-side-effect-imports) — some APIs need a sibling import tsc cannot see; grep the bundle
 - [Animations own their clock](kiosk-code.md#animations-own-their-clock) — never `engine.getDeltaTime()`; per-second rates
 - [Node green, browser dead](kiosk-code.md#node-green-browser-dead) — never store `setTimeout`/`fetch` as a field or default

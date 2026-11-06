@@ -61,7 +61,7 @@ class Sandbox:
         release.ROOT = self.repo
         calls = []
 
-        def gates():
+        def gates(staged):
             calls.append(1)
             return [release.GateResult("stub", "pass" if gates_ok else "FAIL")]
         try:
@@ -101,6 +101,45 @@ class ReleaseRules(unittest.TestCase):
         self.assertIn("python3 agent-host/tools/release.py gates", job)
         self.assertFalse([r for r in runs if re.search(r"tests/(test_|check_)|pytest tests", r)], runs)
         self.assertFalse((HERE / "ci_run.sh").exists(), "ci_run.sh's job is the module's annotations now")
+
+
+class ShipPlan(unittest.TestCase):
+    """What ship runs here (owner, 2026-11-07: "simplify massively"): the fast gates, a gate whose subject is staged,
+    and the tests naming a changed file; every gate is CI's."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.src = Path(self.tmp.name)
+        (self.src / "tests/villa").mkdir(parents=True)
+        for name, text in {"tests/test_outcome.py": "from vesta_agent import outcome\n",
+                           "tests/test_desk.py": "from vesta_agent.desk import x  # the desk skill\n",
+                           "tests/test_other.py": "outcomes = 1  # not the word\n",
+                           "tests/villa/test_real.py": "import outcome\n"}.items():
+            (self.src / name).write_text(text)
+        self.engine = release.ENGINE_DIR
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def picked(self, *rel: str):
+        return release.changed_tests([self.engine + r for r in rel], self.src)
+
+    def test_the_tests_naming_a_changed_file_and_no_other(self):
+        self.assertEqual(self.picked("vesta_agent/outcome.py"), ["tests/test_outcome.py", "tests/villa/test_real.py"])
+        self.assertEqual(self.picked("starter/skills/desk/SKILL.md"), ["tests/test_desk.py"])
+        self.assertEqual(self.picked("tests/test_other.py"), ["tests/test_other.py"])
+        self.assertEqual(self.picked("CHANGELOG.md"), [])
+        self.assertIsNone(self.picked("tests/conftest.py"))
+
+    def test_an_app_only_release_runs_the_fast_gates_and_no_test(self):
+        names = [g[0] for g in release.ship_plan(["vesta-agent/CHANGELOG.md"])]
+        self.assertEqual(names, [g[0] for g in release.GATES if release.SHIP_WHEN.get(g[0], ()) is None
+                                 and g[0] != release.TESTS_GATE])
+        self.assertNotIn(release.TESTS_GATE, names)
+        self.assertNotIn("The sidecar, the restart policy and the stop grace", names)
+
+    def test_every_gate_has_its_ship_rule(self):
+        self.assertEqual(set(release.SHIP_WHEN) | {release.TESTS_GATE}, {g[0] for g in release.GATES})
 
 
 class Ship(unittest.TestCase):
