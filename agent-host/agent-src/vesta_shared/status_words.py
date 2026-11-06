@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 
 from . import message_format as mf
-from .timeutil import lasting
+from .timeutil import lasting, status_moments
 
 #: Every language written here, English first: the People list's menu (vesta_agent.policy.LANGUAGES; a test holds the
 #: two equal). A chat in any other language reads English.
@@ -39,8 +39,11 @@ def _ordinal_en(n: int) -> str:
 #: moment (message_format.REPEATS); `acted`: "<what> on <when>" (message_format.acted);
 #: `colon` / `stop`: what goes before a tail and at a sentence's end; `sep`: between a step and the desk's words;
 #: `units`: s, min, h, d as timeutil.lasting writes them (each joined to its number), `tight` when the parts go unspaced.
+#: `resent`: a visit's card sent again, on its step's line (message_format.RESENT); `on`: the words before a moment that
+#: is a day and one that is a time alone (message_format.ON; none where a moment takes no word before it).
 WORDS: dict[str, dict] = {
     "fr": {
+        "resent": "alerte renvoyée", "on": ("le", "à"),
         "status": "Statut", "to": " (à: {who})", "roles": {"owner": "Propriétaire", "fm": "FM"}, "nobody": "personne",
         "sent": "Envoyé", "line": "{sent} le {at}{to}",
         "steps": {"stronger": "Signal plus fort envoyé", "new": "Alerte envoyée", "reminder": "Rappel envoyé", "escalated": "Escalade envoyée",
@@ -58,6 +61,7 @@ WORDS: dict[str, dict] = {
                     "look_again": "Merci de vérifier à nouveau."},
     },
     "id": {
+        "resent": "peringatan dikirim lagi", "on": ("pada", "pukul"),
         "status": "Status", "to": " (kepada: {who})", "roles": {"owner": "Pemilik", "fm": "FM"}, "nobody": "tidak ada",
         "sent": "Terkirim", "line": "{sent} {at}{to}",
         "steps": {"stronger": "Sinyal lebih kuat terkirim", "new": "Peringatan terkirim", "reminder": "Pengingat terkirim", "escalated": "Eskalasi terkirim",
@@ -75,6 +79,7 @@ WORDS: dict[str, dict] = {
                     "look_again": "Mohon periksa lagi."},
     },
     "de": {
+        "resent": "Alarm erneut gesendet", "on": ("am", "um"),
         "status": "Status", "to": " (an: {who})", "roles": {"owner": "Eigentümer", "fm": "FM"}, "nobody": "niemand",
         "sent": "Gesendet", "line": "{sent} am {at}{to}",
         "steps": {"stronger": "Stärkeres Signal gesendet", "new": "Alarm gesendet", "reminder": "Erinnerung gesendet", "escalated": "Eskalation gesendet",
@@ -92,6 +97,7 @@ WORDS: dict[str, dict] = {
                     "look_again": "Bitte noch einmal prüfen."},
     },
     "es": {
+        "resent": "alerta enviada de nuevo", "on": ("el", "a las"),
         "status": "Estado", "to": " (para: {who})", "roles": {"owner": "Propietario", "fm": "FM"}, "nobody": "nadie",
         "sent": "Enviado", "line": "{sent} el {at}{to}",
         "steps": {"stronger": "Señal más fuerte enviada", "new": "Alerta enviada", "reminder": "Recordatorio enviado", "escalated": "Escalado enviado",
@@ -109,6 +115,7 @@ WORDS: dict[str, dict] = {
                     "look_again": "Por favor, revíselo de nuevo."},
     },
     "it": {
+        "resent": "avviso inviato di nuovo", "on": ("il", "alle"),
         "status": "Stato", "to": " (a: {who})", "roles": {"owner": "Proprietario", "fm": "FM"}, "nobody": "nessuno",
         "sent": "Inviato", "line": "{sent} il {at}{to}",
         "steps": {"stronger": "Segnale più forte inviato", "new": "Avviso inviato", "reminder": "Promemoria inviato", "escalated": "Escalation inviata",
@@ -126,6 +133,7 @@ WORDS: dict[str, dict] = {
                     "look_again": "Si prega di ricontrollare."},
     },
     "nl": {
+        "resent": "melding opnieuw verzonden", "on": ("op", "om"),
         "status": "Status", "to": " (aan: {who})", "roles": {"owner": "Eigenaar", "fm": "FM"}, "nobody": "niemand",
         "sent": "Verzonden", "line": "{sent} op {at}{to}",
         "steps": {"stronger": "Sterker signaal verzonden", "new": "Melding verzonden", "reminder": "Herinnering verzonden", "escalated": "Escalatie verzonden",
@@ -143,6 +151,7 @@ WORDS: dict[str, dict] = {
                     "look_again": "Kijk er alstublieft opnieuw naar."},
     },
     "zh": {
+        "resent": "已再次发送警报",
         "status": "状态", "to": " (发给: {who})", "roles": {"owner": "业主", "fm": "FM"}, "nobody": "无人",
         "sent": "已发送", "line": "{at} {sent}{to}",
         "steps": {"stronger": "已发送更强信号", "new": "已发送警报", "reminder": "已发送提醒", "escalated": "已发送升级通知", "update": "已发送更新",
@@ -159,6 +168,7 @@ WORDS: dict[str, dict] = {
                     "look_again": "请再次检查。"},
     },
     "ja": {
+        "resent": "アラートを再送信",
         "status": "状況", "to": " (宛先: {who})", "roles": {"owner": "オーナー", "fm": "FM"}, "nobody": "なし",
         "sent": "送信済み", "line": "{at} {sent}{to}",
         "steps": {"stronger": "より強い信号を送信", "new": "アラート送信", "reminder": "リマインダー送信", "escalated": "エスカレーション送信",
@@ -175,6 +185,7 @@ WORDS: dict[str, dict] = {
                     "look_again": "もう一度確認してください。"},
     },
     "ko": {
+        "resent": "알림 다시 전송",
         "status": "상태", "to": " (수신: {who})", "roles": {"owner": "소유자", "fm": "FM"}, "nobody": "없음",
         "sent": "전송됨", "line": "{at} {sent}{to}",
         "steps": {"stronger": "더 강한 신호 전송", "new": "알림 전송", "reminder": "리마인더 전송", "escalated": "에스컬레이션 전송", "update": "업데이트 전송",
@@ -281,6 +292,22 @@ def step(stage: str | None, at: str, times_text: str, whom: str, lang: str = "en
             sent=sent, at=at, times=times_text, to=to_tail(whom, lang))
     more, to = repeats(repeated, lang), to_tail(whom, lang)
     return f"{line.removesuffix(to)}{more}{to}" if more and line.endswith(to) else line + more
+
+
+def resent(line: str, whom: str, lang: str = "en") -> str:
+    """A visit's step line with its card sent again for it, said after its words: "Test door opened, 05:14: alert sent
+    again (to: Owner & FM)" (message_format.RESENT)."""
+    w = _w(lang)
+    return f"{line}{colon(lang)}{w['resent'] if w else mf.RESENT}{to_tail(whom, lang)}"
+
+
+def moments(text: str, day, lang: str = "en") -> str:
+    """A Status line of an alert whose day is `day` (a date; None: not known) with its moments as timeutil.status_moment
+    writes them — "Alert sent 05:14", "Cleared at 05:23", "Reminder sent 08/11 09:20" — the words before a moment in
+    `lang` and in English (a line a skill wrote in English only)."""
+    w = _w(lang)
+    ons = tuple(dict.fromkeys(([tuple(w["on"])] if w and w.get("on") else []) + [mf.ON]))
+    return status_moments(text, day, ons)[0]
 
 
 def acted(what: str, when: str, whom: str = "", lang: str = "en") -> str:

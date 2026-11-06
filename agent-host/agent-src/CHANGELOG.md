@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.454 (7 November 2026)
+
+- Status moments by the alert's day (owner, 2026-11-07, drill #135, every alert, Telegram and the tablet alike):
+  timeutil.status_moment / status_moments (the agreement's time and its day without the year, derived as the Kiosk
+  derives them), status_words.moments (the word before a moment in each language: "on" a day, "at" a time), applied
+  at read by layout.status_shown to every Status line and bottom line of Telegram's copies and the tablet's record
+  (kiosk_messages.of_parts); the day is the incident's run start (Incidents.began, problems.began), carried on the
+  heading (`day`), else its first step's: alerts open at the update read so at their next redraw.
+- A visit's "stronger" step is said on its step's line, "<line>: alert sent again (to: …)" (notice.resent_into, the
+  step line begun latest at or before it; status_words.resent, message_format.RESENT, every language), on Telegram,
+  the tablet and the fault's story; the desk sends it at the step's moment.
+- desk.visit_lines: the motion pass the visit opened in ends at its `opened_at` (the villa keeps one step per device in
+  a row: "05:13" became "05:13–05:14").
+- The tablet's fault follows a visit's strongest step while its copies are sent (tickets.follow, the repair's step 3 for
+  the result's incidents alone, beside the sends): its card named the door under the lock's words until the repair.
+
 ## 0.6.453 (7 November 2026)
 
 - A close reaches the tablet's fault before its card (owner's drill #134-P1, 04:19:04 card, 04:19:14 fault): a result

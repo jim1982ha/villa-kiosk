@@ -242,6 +242,14 @@ STEPS: dict[str, Step] = {
 #: sent four "opened" events, and the Status listed "Still-there alert sent 06/11/2026 18:35 (to: Owner & FM)" three
 #: times — each repeat recorded as a step of its own (notice.Notices.record folds it into the one before now).
 REPEATS = ", {n} times"
+#: A visit's card sent again for a step stronger than every one before it, said on that step's own line, after its
+#: words: "Test door opened, 05:14: alert sent again (to: Owner & FM)" (status_words writes each other language's).
+#: ⚠️ ONE LINE PER STEP (owner, 2026-11-07, drill #135): "- Stronger signal sent 07/11/2026 05:14 (to: Owner & FM)" stood
+#: under each step that rang, a second line for one step.
+RESENT = "alert sent again"
+#: The words a moment follows in a Status line when it is a day ("Cleared on 08/11 09:20") and when it is a time alone
+#: ("Cleared at 05:23": timeutil.status_moments); status_words.ON has each language's.
+ON = ("on", "at")
 
 
 def folds(stage: str | None) -> bool:

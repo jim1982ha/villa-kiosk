@@ -140,7 +140,7 @@ def test_vesta_back_while_the_villa_held_the_visit_never_rings_a_step_the_villa_
         assert (chat, card) not in v.tg.deleted
     assert {(c, m) for c, m, _t in v.tg.edits[edits:]} >= {(OWNER, 500), (FM, 501)}, "the door folded in by an edit"
     assert "- Garden Door opened, 03:30" in lines(copy(v, OWNER)["text"])
-    assert not [ln for ln in lines(copy(v, OWNER)["text"]) if "Stronger signal sent" in ln]
+    assert not [ln for ln in lines(copy(v, OWNER)["text"]) if "Stronger signal sent" in ln or "alert sent again" in ln]
 
 
 def test_a_step_after_vesta_holds_the_visit_the_villa_never_told_still_rings(tmp_path, kiosk, media):
@@ -161,7 +161,8 @@ def test_a_step_after_vesta_holds_the_visit_the_villa_never_told_still_rings(tmp
     play(v, send(vi.event()))
     rang = [c for c, t, _k in v.tg.sent if not t.startswith("Approval")]
     assert sorted(rang) == [OWNER, FM], "the lock, stronger and the villa's never: sent again, it rings"
-    assert "- Stronger signal sent " in copy(v, OWNER)["text"]
+    assert "- Outdoor entrance Lock opened at the lock (not from the app), 03:33: alert sent again (to: Owner & FM)" in \
+        lines(copy(v, OWNER)["text"])
 
 
 def test_a_card_deleted_in_its_chat_is_sent_again_never_kept_as_a_pointer(tmp_path, kiosk, media):
@@ -194,7 +195,7 @@ def test_the_close_edits_the_one_card_in_place_keeping_its_sheet(tmp_path, kiosk
     assert [(c, t[:40]) for c, t, _k in v.tg.sent[sent:]] == [], "no new message at the close"
     for chat in (OWNER, FM):
         assert copy(v, chat)["mid"] == cards[chat] and copy(v, chat).get("sheet"), "the same card, its sheet kept"
-        assert re.search(r"Cleared on .*no further signal for 30min", lines(copy(v, chat)["text"])[-1])
+        assert re.search(r"Cleared at .*no further signal for 30min", lines(copy(v, chat)["text"])[-1])
     # on the tablet: the fault closed watching nothing after it — under Closed at once
     (fault,) = [t for t in kiosk._all() if t.get("status") == "resolved"]
     assert fault.get("notWatched") is True and "confirmsBy" not in fault, fault
@@ -218,7 +219,7 @@ def test_the_status_is_in_time_order_and_the_alert_sent_when_the_villa_sent_it(t
     sent = next(i for i, ln in enumerate(st) if ln.startswith("- Alert sent"))
     door = next(i for i, ln in enumerate(st) if ln.startswith("- Garden Door opened"))
     assert seen < sent < door, st
-    assert re.fullmatch(r"- Alert sent \d\d/\d\d/\d{4} 22:55 \(to: Owner & FM\)", st[sent]), st[sent]
+    assert re.fullmatch(r"- Alert sent 22:55 \(to: Owner & FM\)", st[sent]), st[sent]
 
 
 def test_a_lock_opened_from_the_app_by_no_one_known_says_from_the_app(tmp_path, kiosk, media):
@@ -229,7 +230,7 @@ def test_a_lock_opened_from_the_app_by_no_one_known_says_from_the_app(tmp_path, 
     vi.add("lock", LOCK, "22:41:46", how="app:")
     play(v, send(vi.event()))
     st = lines(copy(v, OWNER)["text"])
-    assert "- Outdoor entrance Lock opened from the app, 22:41" in st and not [ln for ln in st if "(?)" in ln], st
+    assert "- Outdoor entrance Lock opened from the app, 22:41: alert sent again (to: Owner & FM)" in st and not [ln for ln in st if "(?)" in ln], st
     w = villa(tmp_path / "jim", kiosk)
     wi = Visit(media=media)
     wi.add("lock", LOCK, "22:41:46", how="app:Jim")

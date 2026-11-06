@@ -773,7 +773,7 @@ class Problems:
                 # ⚠️ ITS FIRST MOMENT IS ITS ALERT'S (owner, 2026-11-07, #134-P1: the tablet's card said 04:12, when
                 # VESTA took the visit over after a restart, while the villa sent it at 04:10 and Telegram's Status says
                 # "Alert sent" then): when its incident opened, or opened again — the fault's openedAt at its making
-                "began": _began(self.store.incident(sid)) if kind == "incident" else None}
+                "began": began(self.store.incident(sid)) if kind == "incident" else None}
 
     # ⚠️ A PERSON'S CLOSE IS WATCHED, AND THE COCKPIT SAYS SO (owner, 2026-10-23: "keep the Fault card visible in the
     # Cockpit when a fault is still being monitored … until VESTA finally closes it"): a Done, or a Close in the Cockpit,
@@ -966,6 +966,7 @@ def _moment(iso):
     return t.replace(tzinfo=timezone.utc) if t and t.tzinfo is None else t
 
 
-def _began(inc: dict | None) -> str | None:
-    """When incident `inc`'s current run began (opened, or opened again), as the store keeps it; None without one."""
+def began(inc: dict | None) -> str | None:
+    """When incident `inc`'s current run began (opened, or opened again), as the store keeps it; None without one: the
+    Kiosk fault's openedAt, the day of its card's strip, and the day its Status moments are written by (notice.Notices.day)."""
     return (inc or {}).get("reopened_at") or (inc or {}).get("opened_at") or None

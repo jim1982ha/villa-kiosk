@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import re
 
+from vesta_shared import status_words
+from vesta_shared.timeutil import villa_time
+
 import asyncio
 from datetime import datetime, timedelta, timezone
 
@@ -82,12 +85,12 @@ def test_each_chat_keeps_only_the_latest_message_and_it_recalls_the_alert(agent)
     tick(agent, 20)                            # the reminder replaces the alert in the FM's chat
     (fm,) = shown(agent, FM_CHAT)
     # the step says itself — what, when, to whom — before the desk's words (owner, 2026-10-16, #43)
-    assert re.fullmatch(r"Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer after 15min \(to: FM\)", status(fm)) \
+    assert re.fullmatch(r"Reminder sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer after 15min \(to: FM\)", status(fm)) \
         and SUMMARY in fm and "What to do:" in fm
     assert agent.tg.sent[-1][2], "the reminder carries the buttons"
     tick(agent, 50)                            # the escalation replaces Home Assistant's alert in the owner's chat
     (grp,) = shown(agent, GROUP)
-    assert re.fullmatch(r"Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer from FM after 45min \(to: Owner\)",
+    assert re.fullmatch(r"Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer from FM after 45min \(to: Owner\)",
                         status(grp)) and SUMMARY in grp
     assert (GROUP, 500) in agent.tg.deleted
     assert len(shown(agent, FM_CHAT)) == 1     # the FM's reminder is untouched by the owner's message
@@ -104,8 +107,8 @@ def test_an_answer_replaces_the_alert_where_it_was_given(agent):
     # the alert first, then where it stands, with when (owner, 2026-10-10) — and no promise of a check this alert's rule
     # gives no states for (architecture review 23: "will check it stays quiet" was never kept)
     # who pressed it by name, as the button's own footer says it (owner, 2026-10-11)
-    assert re.fullmatch(r"Done on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\. Watch 4h\.", status(fm)) \
-        and body(fm).index(SUMMARY) < fm.index("Done on ")
+    assert re.fullmatch(r"Done (?:on|at) (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(Wayan\)\. Watch 4h\.", status(fm)) \
+        and body(fm).index(SUMMARY) < fm.index("Done at ")
 
 
 def test_a_message_past_telegrams_48_hours_becomes_a_pointer(agent):
@@ -149,7 +152,7 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     owner = agent.thread.shown(int(iid))[GROUP]
     assert owner["buttons"] and not owner["settled"], owner
     # the escalation's step to the owner only — never the presser's chat, which got the answer (owner, 2026-10-16)
-    assert re.fullmatch(r"Escalation sent .+, Need help on .+ \(Wayan\): Owner is asked to act\. \(to: Owner\)",
+    assert re.fullmatch(r"Escalation sent .+, Need help at .+ \(Wayan\): Owner is asked to act\. \(to: Owner\)",
                         status(owner["text"])) and SUMMARY in owner["text"]
     assert all(mid != owner["mid"] for _, mid, _ in agent.tg.edits)     # never edited: its buttons are still there
     (fm,) = shown(agent, FM_CHAT)
@@ -212,7 +215,7 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
     # in the owner's chat: "To:" names everyone the alert involves; its "Status:" only the owner's own steps (owner,
     # 2026-10-18, #55 "each chat its own steps") — the FM's alert is the FM chat's line
     assert re.fullmatch(r"#7 \(existing\)\nTo: Owner & FM\nStill stopped\nStatus:\n"
-                        r"⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d \(to: Owner\)", later), later
+                        r"⚠️ ⚙️ Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: Owner\)", later), later
     fm_lines = head_text(agent.notices.heading(FM_CHAT, 7)).split("\n")[2:]
     assert [ln.split(" ")[1] for ln in fm_lines] == ["Alert"] and fm_lines[0].endswith("(to: FM)"), fm_lines
 
@@ -291,7 +294,7 @@ def test_home_assistants_cleared_in_time_message_says_cleared_with_its_time(agen
         "summary": "🔶 Laundry door unlocked — no longer tracked after 30min", CONTEXT_KEY: "RUN-2",
         "timestamp": datetime.now(timezone.utc).isoformat()}))
     adopted = [t for c, mid, t in agent.tg.edits if (c, mid) == (GROUP, 600)]
-    assert adopted and re.fullmatch(r"Cleared on \d\d/\d\d/\d{4} \d\d:\d\d: back to normal when the alert stopped "
+    assert adopted and re.fullmatch(r"Cleared (?:on|at) (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d: back to normal when the alert stopped "
                                     r"watching it\. Watch 4h\.", status(adopted[-1]))
 
 
@@ -315,7 +318,7 @@ def test_a_button_the_skill_renames_still_answers_the_alert(agent):
                                                 "user_id": FM, "bot": BOT,
                                                 "message": {"message_id": 1000 + len(agent.tg.sent), "chat": {"id": FM_CHAT}}}))
     (fm,) = shown(agent, FM_CHAT)
-    assert re.fullmatch(r"Fait on \d\d/\d\d/\d{4} \d\d:\d\d \(Wayan\)\. Watch 4h\.", status(fm))
+    assert re.fullmatch(r"Fait (?:on|at) (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(Wayan\)\. Watch 4h\.", status(fm))
     from vesta_shared.store import Store
     assert Store(agent.s.store_path).incident(int(iid))["closed_at"]
 
@@ -435,7 +438,7 @@ def test_every_copy_carries_the_incidents_word_and_its_own_status_lines(agent):
     # owner's group kept "Done on … (Wayan). Watch 4h." under "(existing)", an alert open again it read as ended
     for text in (group, fm):
         assert status(text).startswith("Reopen request sent ") and "Reopened in the Cockpit" in status(text), text
-        assert "Done on" in text and "Done on" not in text.rsplit("\n", 1)[1], text   # the close kept above it
+        assert "Done at" in text and "Done at" not in text.rsplit("\n", 1)[1], text   # the close kept above it
     assert group.split("\n")[1] == fm.split("\n")[1] == "To: FM"
 
 
@@ -463,10 +466,13 @@ def test_a_cleared_alert_is_watched_then_closed_struck_with_the_time_it_ended(ag
     for text in cards().values():
         status = text.split("\nStatus:\n")[1].split("\n")
         assert text.startswith("#1-P2 (closed)\n"), text
-        assert status[-2].startswith("- Cleared on ") and "Watch" in status[-2], status
-        assert status[-1].startswith("✅ Closed on ") and "did not come back within" in status[-1], status
-        # the moment its watch ended (its Cockpit card's "VESTA confirms by"), never the look that noticed it
-        assert status[-1].startswith(f"✅ Closed on {moment_label(until, agent.s.timezone)}:"), (status, until)
+        assert status[-2].startswith("- Cleared at ") and "Watch" in status[-2], status
+        assert re.match(r"✅ Closed (?:on|at) ", status[-1]) and "did not come back within" in status[-1], status
+        # the moment its watch ended (its Cockpit card's "VESTA confirms by"), never the look that noticed it — as
+        # every Status moment is written: its time alone on the alert's own day (timeutil.status_moment)
+        day = villa_time(Store(agent.s.store_path).incident(1)["opened_at"], agent.s.timezone).date()
+        assert status[-1].startswith(status_words.moments(f"✅ Closed on {moment_label(until, agent.s.timezone)}:", day)), \
+            (status, until)
         assert "strikethrough" in [e["type"] for e in F.telegram_entities(text)], text
     edits = len(agent.tg.edits)
     tick(agent, int((until - datetime.now(timezone.utc)).total_seconds() // 60) + 7)      # said once

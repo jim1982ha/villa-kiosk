@@ -187,7 +187,7 @@ class Vesta:
         # the heading of every message the agent sends on its own (notice.py): who it is for, the incident, its history
         self.notices = Notices(self.state, self.policy, settings.timezone, name=incidents.name,
                                closed=incidents.closed, runs=incidents.runs, reaches=incidents.reaches,
-                               watching=incidents.watching)
+                               watching=incidents.watching, began=incidents.began)
         # every message written on Telegram is also kept for the tablet, in the background (kiosk_messages.py): the thread
         # keeps an alert's, an approval's and a snapshot's, the poster a note sent on its own
         self.messages = KioskMessages(self.kiosk, message_timeout_s, self.owed)

@@ -89,7 +89,7 @@ def test_the_villas_rule_alerting_again_in_a_row_is_one_line_with_its_count(agen
     scenario(agent, lambda v: tick(v, 20), lambda v: v.tickets.repair())
     card = kiosk.messages["incident:1"]["status"]
     (said,) = [ln for ln in card if STILL in ln]
-    assert re.fullmatch(r"- Still-there alert sent \d\d/\d\d/\d{4} \d\d:\d\d, 3 times \(to: FM\)", said), card
+    assert re.fullmatch(r"- Still-there alert sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, 3 times \(to: FM\)", said), card
     assert "Reminder sent" in card[-1], card
     # …and on Telegram, the reminder's copy: the same line
     assert [ln for ln in lines(latest(agent, FM_CHAT)) if STILL in ln] == [said]

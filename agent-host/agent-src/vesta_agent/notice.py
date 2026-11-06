@@ -42,6 +42,7 @@ from vesta_shared.problems import again_days
 from vesta_shared.timeutil import moment_label
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Callable
 
 from . import layout
@@ -232,6 +233,33 @@ def _fold_target(history: list[dict], line: dict) -> int | None:
     return next((i for i in range(len(history) - 1, -1, -1) if history[i].get("fold") == line["fold"]), None)
 
 
+#: A visit's card sent again for a step stronger than every one before it (message_format.STEPS "stronger").
+STRONGER_STAGE = "stronger"
+
+
+def resent_into(history: list[dict]) -> dict[int, int]:
+    """{position of a "stronger" step: position of the visit's story line of the step that made it ring} — the step line
+    begun latest at or before it (`since`, Notices.observe: a step's line carries the moment it began; a line of no
+    moment of its own, the siren's or the photos', is no step). A stronger step with no such line keeps its own line.
+
+    ⚠️ ONE LINE PER STEP (owner, 2026-11-07, drill #135): "Test door opened, 05:14" then "Stronger signal sent 07/11/2026
+    05:14 (to: Owner & FM)" — the ring is said on its step's line, "…, 05:14: alert sent again (to: Owner & FM)". Read
+    from the steps as recorded, so a visit open at the update reads so at once (rules/agent-code.md: format changes need
+    migrations)."""
+    out: dict[int, int] = {}
+    for i, h in enumerate(history):
+        if h.get("stage") != STRONGER_STAGE:
+            continue
+        at, best = _moment(h.get("at")), None
+        for j, x in enumerate(history):
+            began = _moment(x.get("since")) if observed(x) else None
+            if began is not None and at is not None and began <= at and (best is None or began >= best[0]):
+                best = (began, j)
+        if best is not None:
+            out[i] = best[1]
+    return out
+
+
 #: 2nd, 3rd, 11th: the English ordinal of "6th time in 7 days" (status_words writes every language's).
 _ordinal = status_words._ordinal_en
 
@@ -245,8 +273,11 @@ class Notices:
     def __init__(self, state, policy: Callable, timezone_name: str, name: Callable[[int], str] | None = None,
                  closed: Callable[[int], bool] | None = None, runs: Callable[[int], int | None] | None = None,
                  reaches: Callable[[int], list[str] | None] | None = None,
-                 watching: Callable[[int], bool] | None = None):
+                 watching: Callable[[int], bool] | None = None, began: Callable[[int], str | None] | None = None):
         self.state, self.policy, self.tz = state, policy, timezone_name
+        # when an incident's current run began (incidents.Incidents.began): the day its card's strip shows, the day its
+        # Status moments are written by (`day`)
+        self.began = began or (lambda _iid: None)
         # whether a closed incident is still watched (incidents.Incidents.watching): its copies read "(watch)", then
         # "(closed)" once the desk said its watch is over (owner, 2026-10-25)
         self.watching = watching or (lambda _iid: False)
@@ -384,7 +415,20 @@ class Notices:
         word = self.word(int(incident), stage, bool(history))
         return layout.head(label, who,
                            self.history_lines(int(incident), chat, before), word, self.lang(chat),
-                           story=self.history_lines(int(incident), 0, before))
+                           story=self.history_lines(int(incident), 0, before), day=self.day(int(incident)))
+
+    def day(self, incident: int) -> str | None:
+        """Incident `incident`'s own day in the villa's time (ISO): when its current run began (`began`), the day its
+        card's strip shows — else its first step's; None when neither says. Its Status moments are written by it
+        (layout.status_shown: "05:14" that day, "08/11 09:20" another)."""
+        try:
+            at = self.began(int(incident))
+        except Exception:  # noqa: BLE001 — read from its first step instead
+            at = None
+        steps = self.state.incident_history(incident) if at is None else []
+        at = at or next((h["at"] for h in steps if h.get("at")), None)
+        t = _moment(at) if at else None
+        return t.astimezone(ZoneInfo(self.tz)).date().isoformat() if t else None
 
     def to_line(self, incident: int, also=(), history: list[dict] | None = None) -> str | None:
         """The "To:" of every copy of `incident` — the SAME in every chat: every role the incident went to (its
@@ -419,11 +463,20 @@ class Notices:
         kept = [i for i in range(len(history)) if i not in gone]
         if kept and history[kept[-1]].get("stage") == CLOSED_STEP and self.closed_now(incident):
             gone.add(kept[-1])
+        into = {i: j for i, j in resent_into(history).items() if j not in gone}
+        resent: dict[int, set[str]] = {}                # a step's line: the roles its card was sent again to
+        for i, j in into.items():
+            roles = self._roles(history[i])
+            if not (mine and roles and not roles & mine):
+                resent.setdefault(j, set()).update(roles)
         for i, h in enumerate(history):
-            if i in gone:
+            if i in gone or i in into:
                 continue
             roles = self._roles(h) if h.get("chats") or h.get("to") else set()
             if mine and roles and not roles & mine:
+                continue
+            if i in resent:
+                lines.append(f"- {status_words.resent(self._line(h, lang), self._who(resent[i], lang=lang), lang)}")
                 continue
             # ⚠️ ONE LINE PER PRESS (architecture review 23, card 4): a press whose answer says it (skill.yaml `tells`:
             # "🆘 Need help on … (Luc): Owner is asked to act.") is that answer while nothing but the escalation it made
@@ -592,8 +645,16 @@ class Notices:
         each without its time: the Kiosk says the step's own. ⚠️ ONE STORY (architecture review, 2026-10-14): told by
         `_line`, the writer of Telegram's lines, never by a second writer."""
         out = []
-        for h in self.state.incident_history(incident):
-            note = self._line(h, kiosk=True)
+        history = self.state.incident_history(incident)
+        into = resent_into(history)
+        resent: dict[int, set[str]] = {}
+        for i, j in into.items():
+            resent.setdefault(j, set()).update(self._roles(history[i]))
+        for i, h in enumerate(history):
+            note = None if i in into else self._line(h, kiosk=True)
+            if note and i in resent:
+                # its card sent again for it, on its own line, as Telegram's Status says it (resent_into)
+                note = status_words.resent(note, audience(resent[i]) or "nobody")
             if note:
                 # a step repeated in a row: its line, counted, in place of the fault's lines of each time (`ats`, kiosk.noted)
                 out.append({"at": h["at"], "note": note, "stage": h.get("stage"),
@@ -658,7 +719,7 @@ class Notices:
             return self.heading(chat, int(incident))
         history = self.state.incident_history(incident)
         return {**h, "word": self.word(int(incident), None, bool(history)),
-                "to": self.to_line(int(incident), history=history) or h["to"]}
+                "to": self.to_line(int(incident), history=history) or h["to"], **({"day": d} if (d := self.day(int(incident))) else {})}
 
     def record(self, incident: int, stage: str | None, sent: list[tuple[int, object]], at: datetime | None = None) -> int:
         """A notice about `incident` went to `sent` — (chat, the role or roles it was for) — one result's messages being one

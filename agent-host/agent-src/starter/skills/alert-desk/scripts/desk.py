@@ -1297,6 +1297,14 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str, str]]:
             lines[f"person:{eid}"] = {"kind": PERSON, "s": s, "first": at, "last": at}
         elif kind == NOISE and f"noise:{eid}" not in lines:
             lines[f"noise:{eid}"] = {"kind": NOISE, "s": s, "first": at, "last": at}
+    # ⚠️ THE DETECTION THAT OPENED THE VISIT IS SEEN TOO (owner, 2026-11-07, drill #135: "Seen at Test motion, 05:13"
+    # while the villa opened the visit at its second detection, 05:14): the villa keeps one step per device in a row, so
+    # the opening's own moment (`opened_at`) ends the pass it falls in when no step says it
+    opened = _when(v.get("opened_at"))
+    for cur in passes:
+        if opened is not None and cur["first"] <= opened and cur["last"] < opened <= cur["last"] + gap:
+            cur["last"] = opened
+            break
     out = []
     for key, ln in lines.items():
         hm = lambda t: clock(t, zone, days=False)   # noqa: E731
@@ -1536,10 +1544,12 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         lines = visit_lines(v, zone)
         if ring:
             out["decision"] = "visit_stronger"
-            # its line "Stronger signal sent 06/11/2026 18:35 (to: Owner & FM)" in the Status, the card's state "New
-            # alert" (message_format.STEPS "stronger": listed); the step itself is the card's title and its story line
-            out["send"] += tell(inc["severity"], "stronger", incident=iid, ladder=route.get("ladder", True),
-                                **about(inc, Said("")))
+            # said on the step's own line, "…, 18:35: alert sent again (to: Owner & FM)" (notice.resent_into), the
+            # card's state "New alert" (message_format.STEPS "stronger": listed); the step itself is the card's title
+            # at the step's own moment: the line it is said on is the step's that began then
+            rang = (_when((v.get("step") or {}).get("at")) or now).isoformat()
+            out["send"] += [{**m, "at": rang} for m in tell(inc["severity"], "stronger", incident=iid,
+                                                             ladder=route.get("ladder", True), **about(inc, Said("")))]
         else:
             out["actions"].append(R.redraw(iid, body=details(p, rule_id)))
         # a chat whose card the thread does not hold yet (VESTA was away when the villa sent it): taken over too

@@ -182,7 +182,7 @@ def test_a_close_and_a_take_on_in_the_cockpit_replace_the_record(agent, kiosk):
         await v.thread.close(1, "Closed on {time}: cleared.")
     scenario(agent, closed)
     rec = kiosk.messages["incident:1"]
-    assert "Closed on" in rec["status"][-1] and "buttons" not in rec, rec
+    assert "Closed at" in rec["status"][-1] and "buttons" not in rec, rec
 
 
 def test_an_identical_push_is_skipped_and_a_changed_one_is_not(agent, kiosk):
@@ -563,8 +563,8 @@ def test_the_tablets_card_is_in_english_whichever_chats_copy_was_drawn_last(tmp_
                                                   "message": {"message_id": mid, "chat": {"id": FM_CHAT}}, "bot": BOT})
     scenario(v, done)
     rec = kiosk.messages["incident:1"]
-    assert rec["status"][-1].startswith("✅ Done on "), rec["status"]
-    assert rec["languages"]["fr"]["status"][0].startswith("Terminé le "), rec        # the French, beside it
+    assert rec["status"][-1].startswith("✅ Done at "), rec["status"]
+    assert rec["languages"]["fr"]["status"][0].startswith("Terminé à "), rec        # the French, beside it
 
 
 def test_an_open_alert_with_no_step_since_the_tablet_kept_cards_gets_its_card_at_start(agent, kiosk):
@@ -689,7 +689,7 @@ def test_an_alert_closed_while_owed_is_sent_closed_never_open(agent, kiosk):
     scenario(agent, closed, _owed_now(agent))
     assert len(kiosk.pushed) == 1, kiosk.pushed
     rec = kiosk.messages["incident:1"]
-    assert "Closed on" in rec["status"][-1] and "buttons" not in rec, rec
+    assert "Closed at" in rec["status"][-1] and "buttons" not in rec, rec
     # neither kept: the closed one is the one owed
     kiosk.messages.clear()
     kiosk.pushed.clear()
@@ -703,7 +703,7 @@ def test_an_alert_closed_while_owed_is_sent_closed_never_open(agent, kiosk):
     kiosk.unreachable = False
     scenario(agent, _owed_now(agent))
     rec = kiosk.messages[f"incident:{iid}"]
-    assert "Closed on" in rec["status"][-1] and "buttons" not in rec and len(kiosk.pushed) == 1, kiosk.pushed
+    assert "Closed at" in rec["status"][-1] and "buttons" not in rec and len(kiosk.pushed) == 1, kiosk.pushed
 
 
 def test_open_alerts_reach_a_kiosk_that_was_down_when_the_agent_started(agent, kiosk):
@@ -746,5 +746,5 @@ def test_an_owed_alert_card_survives_a_restart(agent, kiosk):
         await v.housekeeping()                             # the first pass after a start: at once
     scenario(again, housekeeping)
     rec = kiosk.messages["incident:1"]
-    assert "Closed on" in rec["status"][-1] and "buttons" not in rec, rec
+    assert "Closed at" in rec["status"][-1] and "buttons" not in rec, rec
     assert again.owed.keys("message") == []

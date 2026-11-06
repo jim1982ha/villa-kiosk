@@ -41,7 +41,7 @@ REGISTRY = {"areas": [{"area_id": "parking", "name": "Parking"}, {"area_id": "li
                          {"entity_id": PARKING_CAM, "name": "Parking Camera", "area_id": "parking"}]}
 STRENGTH = ("lock", "door", "person", "inside", "motion")
 DAY = "2026-11-06"
-TICKET_RE = r"\d\d/\d\d/\d{4} \d\d:\d\d"
+TICKET_RE = r"(?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d"
 
 
 def at(hms: str) -> str:
@@ -208,14 +208,15 @@ def test_the_evening_of_06_11_is_one_alert_one_message_per_chat_one_story(tmp_pa
         assert st[0] == "- Seen at Parking, 18:19–18:20", st
         assert "- Same time as the last 4 evenings (18:18–18:33)" in st, st
         assert "- Seen at Parking → Entrance Left → Waterwall Buddha → Main House Door, 18:34–18:35" in st, st
-        assert "- Outdoor entrance Lock opened at the lock (not from the app), 18:35, locked again 18:36" in st, st
+        # its stronger step rang: said on its own line, never a line of its own (owner, 2026-11-07, drill #135)
+        assert "- Outdoor entrance Lock opened at the lock (not from the app), 18:35, locked again 18:36: alert sent again " \
+               "(to: Owner & FM)" in st, st
         assert "- Someone is inside (Living Room) at 18:36" in st, st
         assert not [ln for ln in st if "Still-there" in ln or "Cleared" in ln], st
         assert sum(ln.startswith("- Seen at") for ln in st) == 2, st
         assert text.startswith("#4-P1 (new)\n") and "Outdoor entrance Lock opened while the villa is empty" in text
-        # its stronger step rang: the card sent again with the sheet as its picture, the villa's card gone — a line of
-        # its Status, the card's state the short one (owner's drills, 2026-11-06)
-        assert [ln for ln in st if re.fullmatch(rf"- Stronger signal sent {TICKET_RE} \(to: Owner & FM\)", ln)], st
+        # the card sent again with the sheet as its picture, the villa's card gone; the card's state the short one
+        assert not [ln for ln in st if "Stronger signal sent" in ln], st
         assert st[-1] == "⚠️ New alert", st
     assert (OWNER, 500) in v.tg.deleted and (FM, 501) in v.tg.deleted
     # one message per chat: every copy VESTA posted but the card is gone
@@ -263,7 +264,7 @@ def test_the_siren_is_one_line_of_the_visit_a_reply_to_its_card_and_no_snapshot_
     asyncio.run(v.approvals.expire(datetime.now(timezone.utc) + timedelta(hours=2)))
     st = lines(copy(v, OWNER, 1)["text"])
     (line,) = [ln for ln in st if "Siren offered" in ln]
-    assert re.fullmatch(r"- Siren offered to the Owner \d\d:\d\d, expired on \d\d:\d\d: nothing was done", line), line
+    assert re.fullmatch(r"- Siren offered to the Owner \d\d:\d\d, expired at \d\d:\d\d: nothing was done", line), line
     assert v.state.siren_stop() is None and not [c for c in Writer.calls if c[0] == "switch"]
     # asked once per visit, whatever came after (four more steps, two sources each time)
     assert len([1 for _c, t, _k in v.tg.sent if t.startswith("Approval")]) == 1
@@ -285,7 +286,7 @@ def test_the_visit_ends_once_with_no_watch_and_a_done_ends_it_on_the_villa(tmp_p
     play(v, send(vi_end))
     for chat in (OWNER, FM):
         bottom = lines(copy(v, chat, 1)["text"])[-1]
-        assert re.fullmatch(rf"✅ Cleared on {TICKET_RE}: no further signal for 30min\.", bottom), bottom
+        assert re.fullmatch(rf"✅ Cleared (?:on|at) {TICKET_RE}: no further signal for 30min\.", bottom), bottom
         assert "Watch" not in copy(v, chat, 1)["text"]
 
 
@@ -323,7 +324,7 @@ def test_a_card_the_reminder_replaced_is_never_taken_over_again(tmp_path, kiosk)
     now = copy(v, GROUP)["mid"]
     assert now != 500 and (GROUP, now) not in v.tg.deleted, "the chat's copy is a live message, never the card gone"
     assert not [e for e in v.tg.edits[edits_before:] if e[1] == 500], "the card gone is never edited"
-    assert "Cleared on" in copy(v, GROUP)["text"]
+    assert "Cleared at" in copy(v, GROUP)["text"]
 
 
 # ---------------------------------------------------------------------------------------------- a break-in
@@ -339,8 +340,7 @@ def test_a_door_forced_after_motion_rings_and_arms_the_siren_never_folded_quietl
     rang = [(c, t) for c, t, _k in v.tg.sent[sent_before:] if not t.startswith("Approval")]
     assert sorted(c for c, _t in rang) == [OWNER, FM], "the door is stronger than motion: sent again, it rings"
     assert all(t.startswith("#1-P1 (new)\n") and "Garden Door opened while the villa is empty" in t for _c, t in rang)
-    assert "- Stronger signal sent " in copy(v, OWNER, 1)["text"] and "- Stronger signal sent " in copy(v, FM, 1)["text"]
-    assert "- Garden Door opened, 02:10" in lines(copy(v, OWNER, 1)["text"])
+    assert all("- Garden Door opened, 02:10: alert sent again (to: Owner & FM)" in lines(copy(v, c, 1)["text"]) for c in (OWNER, FM))
     assert v.state.approvals_in("pending"), "two sources in the siren's window, the villa empty: the owner is asked"
     # another motion after it is no stronger: an edit, no sound
     n = len(v.tg.sent)
@@ -467,7 +467,7 @@ def test_a_person_a_rooms_camera_sees_joins_the_open_visit_as_one_line(tmp_path,
     play(v, send(vi.event("opened")))
     vi.add("person", ROOM_PERSON, "18:40:05", photo=True, area="Server Room")
     play(v, send(vi.event()))
-    assert "- Person seen in the Server Room at 18:40" in lines(copy(v, OWNER, 1)["text"])
+    assert "- Person seen in the Server Room at 18:40: alert sent again (to: Owner & FM)" in lines(copy(v, OWNER, 1)["text"])
     assert len(Store(v.s.store_path).incidents()) == 1, "no notice, no second alert"
 
 
@@ -483,7 +483,7 @@ def test_a_resident_home_ends_the_visit_withdraws_the_siren_and_stops_the_chase(
         assert st[-1] == "✅ Expected: Jim came home at 18:40.", st
     assert v.state.approval(ap["id"])["status"] == "withdrawn"
     (line,) = [ln for ln in lines(copy(v, OWNER, 1)["text"]) if "Siren offered" in ln]
-    assert re.fullmatch(r"- Siren offered to the Owner \d\d:\d\d, withdrawn on \d\d:\d\d: someone came home\. "
+    assert re.fullmatch(r"- Siren offered to the Owner \d\d:\d\d, withdrawn at \d\d:\d\d: someone came home\. "
                         r"Nothing was done", line), line
     assert Store(v.s.store_path).incident(1)["closed_at"]
     sent = len(v.tg.sent)

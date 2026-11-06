@@ -23,14 +23,14 @@ def _closed_in_the_cockpit(tmp_path, lasting=False):
 def test_a_done_in_the_cockpit_is_told_with_its_watch_in_every_chat_and_on_the_tablet(tmp_path):
     v, k, now = _closed_in_the_cockpit(tmp_path)
     told(v, now + timedelta(minutes=1))
-    assert re.fullmatch(rf"✅ Done in the Cockpit on {T} \(Luc\)\. Watch 4h\.", status(v, GROUP)[-1]), status(v, GROUP)
-    assert re.fullmatch(rf"✅ Terminé dans le Cockpit le {T} \(Luc\)\. Surveillance 4h\.", status(v, FM_FR)[-1]), \
+    assert re.fullmatch(rf"✅ Done in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h\.", status(v, GROUP)[-1]), status(v, GROUP)
+    assert re.fullmatch(rf"✅ Terminé dans le Cockpit (?:le|à) {T} \(Luc\)\. Surveillance 4h\.", status(v, FM_FR)[-1]), \
         status(v, FM_FR)
     for chat in (GROUP, FM_FR):
         assert v.thread.shown(1)[chat]["text"].startswith("#1-P2 (watch)\n"), v.thread.shown(1)[chat]["text"]
     card = k.messages["incident:1"]
     assert (card.get("title") or card.get("head")) == "#1-P2 (watch)", card
-    assert re.fullmatch(rf"✅ Done in the Cockpit on {T} \(Luc\)\. Watch 4h\.", card["status"][-1]), card["status"]
+    assert re.fullmatch(rf"✅ Done in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h\.", card["status"][-1]), card["status"]
     # told once: the desk's next look says nothing more of it
     before = list(v.tg.edits)
     told(v, now + timedelta(minutes=2))
@@ -63,7 +63,7 @@ def test_not_a_problem_on_a_persons_ticket_in_the_cockpit_is_said_as_such_and_ne
     assert not alert_watch.awaiting_read(st.incident(iid))        # "Not a problem": never read again
     run(v.outcome.carry_out(desk.tick(st, datetime.now(timezone.utc)), "alert-desk"))
     last = [v.thread.shown(iid)[chat]["text"].split("\n")[-1] for chat, _ in v.state.incident_chats(iid)]
-    assert last and all(re.match(rf"✅ Not a problem in the Cockpit on {T} \(JM\)\.", ln) for ln in last), last
+    assert last and all(re.match(rf"✅ Not a problem in the Cockpit (?:on|at) {T} \(JM\)\.", ln) for ln in last), last
     assert "kiosk_closed" not in notes_of(st.incident(iid))         # told once
 
 
@@ -78,10 +78,10 @@ def test_a_close_and_a_reopening_read_together_keep_the_close_in_every_story(tmp
     run(v.tickets.repair())
     told(v, now + timedelta(minutes=1))
     fr = status_of(v, FM_FR)
-    assert re.fullmatch(rf"- Terminé dans le Cockpit le {T} \(Luc\)\. Surveillance 4h", fr[-2]), fr
+    assert re.fullmatch(rf"- Terminé dans le Cockpit (?:le|à) {T} \(Luc\)\. Surveillance 4h", fr[-2]), fr
     assert "Rouvert dans le Cockpit" in fr[-1], fr
     card = k.messages["incident:1"]["status"]
-    assert re.fullmatch(rf"- Done in the Cockpit on {T} \(Luc\)\. Watch 4h", card[-2]) and "Reopened" in card[-1], card
+    assert re.fullmatch(rf"- Done in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h", card[-2]) and "Reopened" in card[-1], card
 
 
 def test_no_action_needed_in_the_cockpit_is_said_as_such_in_every_chat(tmp_path):
@@ -92,8 +92,8 @@ def test_no_action_needed_in_the_cockpit_is_said_as_such_in_every_chat(tmp_path)
     k.person_closes(uid, by="Luc", at=now.strftime("%Y-%m-%dT%H:%M:00.000Z"), nothing=True)
     run(v.tickets.repair())
     told(v, now + timedelta(minutes=1))
-    assert re.fullmatch(rf"✅ No action needed in the Cockpit on {T} \(Luc\)\. Watch 4h\.", status(v, GROUP)[-1]), \
+    assert re.fullmatch(rf"✅ No action needed in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h\.", status(v, GROUP)[-1]), \
         status(v, GROUP)
-    assert re.fullmatch(rf"✅ Aucune action nécessaire dans le Cockpit le {T} \(Luc\)\. Surveillance 4h\.",
+    assert re.fullmatch(rf"✅ Aucune action nécessaire dans le Cockpit (?:le|à) {T} \(Luc\)\. Surveillance 4h\.",
                         status(v, FM_FR)[-1]), status(v, FM_FR)
     assert alert_watch.awaiting_read(Store(v.s.store_path).incident(1))          # read again, as after a Done

@@ -22,7 +22,8 @@ from vesta_agent.roster import Roster
 
 GROUP, FM_DE, FM_FR = -100123, 222, 333
 RULE = "automation.critical_condition_phase"
-T = r"\d\d/\d\d/\d{4} \d\d:\d\d"
+#: A Status moment: its time alone on the alert's day, "08/11 09:20" another (timeutil.status_moment), whole elsewhere
+T = r"(?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d"
 
 
 def run(coro):
@@ -93,9 +94,9 @@ def test_a_fault_taken_on_in_the_cockpit_is_said_in_each_chats_language(tmp_path
     v, k, uid = villa(tmp_path)
     k.person_moves(uid, by="Luc", at="2026-10-15T00:40:00.000Z")
     run(v.tickets.repair())
-    assert status(v, FM_FR)[-1].endswith(" Ticket ouvert dans le Cockpit le 15/10/2026 00:40 (Luc)."), status(v, FM_FR)
-    assert status(v, FM_DE)[-1].endswith(" Ticket im Cockpit eröffnet am 15/10/2026 00:40 (Luc)."), status(v, FM_DE)
-    assert status(v, GROUP)[-1].endswith(" Ticket opened in the Cockpit on 15/10/2026 00:40 (Luc)."), status(v, GROUP)
+    assert status(v, FM_FR)[-1].endswith(" Ticket ouvert dans le Cockpit le 15/10 00:40 (Luc)."), status(v, FM_FR)
+    assert status(v, FM_DE)[-1].endswith(" Ticket im Cockpit eröffnet am 15/10 00:40 (Luc)."), status(v, FM_DE)
+    assert status(v, GROUP)[-1].endswith(" Ticket opened in the Cockpit on 15/10 00:40 (Luc)."), status(v, GROUP)
     # ...and kept in its story in every language: a later step's card lists it in the chat's words
     assert any(ln == "- Ticket ouvert dans le Cockpit le 15/10/2026 00:40 (Luc)" for ln in v.notices.history_lines(1, FM_FR))
 
@@ -107,9 +108,9 @@ def test_a_fault_closed_in_the_cockpit_is_said_in_each_chats_language_and_its_ch
     run(v.tickets.repair())
     told(v, now + timedelta(minutes=1))
     # told by the desk with the watch its close wrote, as a Telegram Done is (architecture review 23, card 1)
-    assert re.fullmatch(rf"✅ Terminé dans le Cockpit le {T} \(Luc\)\. Surveillance 4h\.", status(v, FM_FR)[-1]), status(v, FM_FR)
-    assert re.fullmatch(rf"✅ Im Cockpit erledigt am {T} \(Luc\)\. 4Std\. Beobachtung\.", status(v, FM_DE)[-1]), status(v, FM_DE)
-    assert re.fullmatch(rf"✅ Done in the Cockpit on {T} \(Luc\)\. Watch 4h\.", status(v, GROUP)[-1]), status(v, GROUP)
+    assert re.fullmatch(rf"✅ Terminé dans le Cockpit (?:le|à) {T} \(Luc\)\. Surveillance 4h\.", status(v, FM_FR)[-1]), status(v, FM_FR)
+    assert re.fullmatch(rf"✅ Im Cockpit erledigt (?:am|um) {T} \(Luc\)\. 4Std\. Beobachtung\.", status(v, FM_DE)[-1]), status(v, FM_DE)
+    assert re.fullmatch(rf"✅ Done in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h\.", status(v, GROUP)[-1]), status(v, GROUP)
     # the desk's read-again after it names the close in each language (alert_watch CHECK, kept by kiosk_words.stored)
     import importlib.util
     import os
@@ -120,7 +121,7 @@ def test_a_fault_closed_in_the_cockpit_is_said_in_each_chats_language_and_its_ch
     from vesta_shared import alert_watch
     from vesta_shared.store import notes_of
     who = desk.relabel(notes_of(Store(v.s.store_path).incident(1))[alert_watch.CHECK])
-    assert re.fullmatch(rf"Done in the Cockpit on {T} \(Luc\)", str(who)) and who.lang("fr").startswith("Terminé dans le Cockpit")
+    assert re.fullmatch(rf"Done in the Cockpit (?:on|at) {T} \(Luc\)", str(who)) and who.lang("fr").startswith("Terminé dans le Cockpit")
 
 
 def test_a_fault_reopened_in_the_cockpit_is_asked_again_in_each_chats_language(tmp_path):
@@ -133,8 +134,8 @@ def test_a_fault_reopened_in_the_cockpit_is_asked_again_in_each_chats_language(t
     k.person_reopens(uid, by="Anna", at=stamp(3))
     run(v.tickets.repair())
     run(v.run_code_job(v.skills.get("alert-desk"), f"desk.py tick --now {(now + timedelta(minutes=4)).isoformat()}", 60))
-    assert re.search(rf"Rouvert dans le Cockpit le {T} \(Anna\)\. Merci de vérifier à nouveau\.", status(v, FM_FR)[-1]), status(v, FM_FR)
-    assert re.search(rf"Im Cockpit wieder geöffnet am {T} \(Anna\)\. Bitte noch einmal prüfen\.", status(v, FM_DE)[-1]), status(v, FM_DE)
+    assert re.search(rf"Rouvert dans le Cockpit (?:le|à) {T} \(Anna\)\. Merci de vérifier à nouveau\.", status(v, FM_FR)[-1]), status(v, FM_FR)
+    assert re.search(rf"Im Cockpit wieder geöffnet (?:am|um) {T} \(Anna\)\. Bitte noch einmal prüfen\.", status(v, FM_DE)[-1]), status(v, FM_DE)
 
 
 def test_not_a_problem_in_the_cockpit_is_said_as_such_never_as_a_done(tmp_path):
@@ -145,14 +146,14 @@ def test_not_a_problem_in_the_cockpit_is_said_as_such_never_as_a_done(tmp_path):
     k.person_closes(uid, by="Luc", at=now.strftime("%Y-%m-%dT%H:%M:00.000Z"), lasting=True)
     run(v.tickets.repair())
     told(v, now + timedelta(minutes=1))
-    assert re.fullmatch(rf"✅ Not a problem in the Cockpit on {T} \(Luc\)\. Watch 4h\.", status(v, GROUP)[-1]), status(v, GROUP)
-    assert re.fullmatch(rf"✅ Pas un problème dans le Cockpit le {T} \(Luc\)\. Surveillance 4h\.", status(v, FM_FR)[-1]), status(v, FM_FR)
+    assert re.fullmatch(rf"✅ Not a problem in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h\.", status(v, GROUP)[-1]), status(v, GROUP)
+    assert re.fullmatch(rf"✅ Pas un problème dans le Cockpit (?:le|à) {T} \(Luc\)\. Surveillance 4h\.", status(v, FM_FR)[-1]), status(v, FM_FR)
     lines = [ln for m in k.messages.values() for ln in m.get("status") or []]        # the tablet's cards of the alert
     # the tablet's card in English, the French beside it (architecture review 22, card 4: it was the FM chat's, drawn last)
-    assert re.fullmatch(rf"✅ Not a problem in the Cockpit on {T} \(Luc\)\. Watch 4h\.", lines[-1]), lines
+    assert re.fullmatch(rf"✅ Not a problem in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h\.", lines[-1]), lines
     (card,) = [m for m in k.messages.values() if m.get("languages")]
     (fr,) = card["languages"]["fr"]["status"]
-    assert re.fullmatch(rf"Pas un problème dans le Cockpit le {T} \(Luc\)\. Surveillance 4h\.", fr), card
+    assert re.fullmatch(rf"Pas un problème dans le Cockpit (?:le|à) {T} \(Luc\)\. Surveillance 4h\.", fr), card
     assert not any("Done" in ln or "Terminé" in ln for ln in lines), lines
 
 
@@ -164,9 +165,9 @@ def test_not_a_problem_pressed_on_telegram_closes_it_as_the_cockpit_does(tmp_pat
     run(v.on_ha_event("telegram_callback", {"id": "cb", "data": "i:1:not_a_problem", "chat_id": FM_FR, "user_id": FM_FR,
                                             "message": {"message_id": v.thread.shown(1)[FM_FR]["mid"], "chat": {"id": FM_FR}},
                                             "bot": BOT}))
-    assert re.fullmatch(rf"✅ Pas un problème le {T} \(Luc\)\. .+", status(v, FM_FR)[-1]), status(v, FM_FR)
+    assert re.fullmatch(rf"✅ Pas un problème (?:le|à) {T} \(Luc\)\. .+", status(v, FM_FR)[-1]), status(v, FM_FR)
     # the same last line in every chat, its watch included (architecture review 21 card 1: the group's ended "(Luc).")
-    assert re.fullmatch(rf"✅ Not a problem on {T} \(Luc\)\. Watch .+", status(v, GROUP)[-1]), status(v, GROUP)
+    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Luc\)\. Watch .+", status(v, GROUP)[-1]), status(v, GROUP)
     # owner, 2026-11-05 (#118): the press said once, by its close — never also a line above it
     assert sum("Pas un problème" in ln for ln in status(v, FM_FR)) == 1, status(v, FM_FR)
     assert sum("Not a problem" in ln for ln in status(v, GROUP)) == 1, status(v, GROUP)
@@ -181,8 +182,8 @@ def test_not_a_problem_pressed_on_telegram_closes_it_as_the_cockpit_does(tmp_pat
 
 
 @pytest.mark.parametrize("lasting,said,said_fr", [
-    (True, "Not a problem in the Cockpit on", "Pas un problème dans le Cockpit le"),
-    (False, "Done in the Cockpit on", "Terminé dans le Cockpit le")])
+    (True, "Not a problem in the Cockpit (?:on|at)", "Pas un problème dans le Cockpit (?:le|à)"),
+    (False, "Done in the Cockpit (?:on|at)", "Terminé dans le Cockpit (?:le|à)")])
 def test_a_close_in_the_cockpit_keeps_its_own_line_once_something_follows_it(tmp_path, lasting, said, said_fr):
     """Architecture review 22, card 6: a close kept a line only when a closing message happened to be sent — "Not a
     problem" in the Cockpit had none, and no close line ever said who closed it. Reopened after it, the card tells the

@@ -24,7 +24,8 @@ from vesta_agent.roster import Roster
 GROUP, FM_DE, FM_FR = -100123, 222, 333
 RULE = "automation.critical_condition_phase"
 SUMMARY = "⚡ Phase C high\nPhase C 4580 W\nAbove 4000 W, Held 15min"
-T = r"\d\d/\d\d/\d{4} \d\d:\d\d"
+#: A Status moment: its time alone on the alert's day, "08/11 09:20" another (timeutil.status_moment), whole elsewhere
+T = r"(?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d"
 
 
 def run(coro):
@@ -78,12 +79,12 @@ def test_each_fm_chat_reads_its_status_in_its_own_language_the_alert_text_unchan
     rule(agent, "opened", 500)
     tick(agent, 20)                                    # the reminder, to both facility manager chats
     de, fr = card(agent, FM_DE), card(agent, FM_FR)
-    assert re.fullmatch(rf"- Alarm gesendet am {T} \(an: FM\)", status(de, "Status")[0]), de
-    assert re.fullmatch(rf"⚠️ ⚙️ Erinnerung gesendet am {T}, Keine Antwort nach 15Min\. \(an: FM\)",
+    assert re.fullmatch(rf"- Alarm gesendet (?:am|um) {T} \(an: FM\)", status(de, "Status")[0]), de
+    assert re.fullmatch(rf"⚠️ ⚙️ Erinnerung gesendet (?:am|um) {T}, Keine Antwort nach 15Min\. \(an: FM\)",
                         status(de, "Status")[-1]), de
-    assert re.fullmatch(rf"- Alerte envoyée le {T} \(à: FM\)", status(fr, "Statut")[0]), fr
+    assert re.fullmatch(rf"- Alerte envoyée (?:le|à) {T} \(à: FM\)", status(fr, "Statut")[0]), fr
     # the desk's own words ("No answer after 15min") in the chat's language, from the skill's words.yaml
-    assert re.fullmatch(rf"⚠️ ⚙️ Rappel envoyé le {T}, Pas de réponse après 15min \(à: FM\)",
+    assert re.fullmatch(rf"⚠️ ⚙️ Rappel envoyé (?:le|à) {T}, Pas de réponse après 15min \(à: FM\)",
                         status(fr, "Statut")[-1]), fr
     for text in (de, fr):
         # the card's first line, "To:" and the villa's own words stay as they are
@@ -106,7 +107,7 @@ def test_the_villas_own_message_taken_over_in_a_french_chat_reads_french(agent):
     rule(agent, "opened", 600, chat=FM_FR)
     rule(agent, "opened", 601, chat=FM_FR)
     fr = card(agent, FM_FR)
-    assert re.fullmatch(rf"⚠️ ⚙️ Alerte « toujours là » envoyée le {T}, Toujours là: \d+ fois depuis .+ \(à: FM\)",
+    assert re.fullmatch(rf"⚠️ ⚙️ Alerte « toujours là » envoyée (?:le|à) {T}, Toujours là: \d+ fois depuis .+ \(à: FM\)",
                         status(fr, "Statut")[-1]), fr
 
 
@@ -115,9 +116,9 @@ def test_a_lowered_priority_is_told_in_each_language(agent):
     # of it later too (IncidentThread.sync)
     rule(agent, "opened", 500)
     rule(agent, "opened", 501, priority="P3")
-    assert re.fullmatch(rf"⚠️ ⚙️ Abaissée à P3 le {T}: gardée pour le prochain résumé quotidien\. Aucune réponse "
+    assert re.fullmatch(rf"⚠️ ⚙️ Abaissée à P3 (?:le|à) {T}: gardée pour le prochain résumé quotidien\. Aucune réponse "
                         r"nécessaire\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
-    assert status(card(agent, GROUP), "Status")[-1].startswith("⚠️ ⚙️ Lowered to P3 on "), card(agent, GROUP)
+    assert status(card(agent, GROUP), "Status")[-1].startswith("⚠️ ⚙️ Lowered to P3 at "), card(agent, GROUP)
 
 
 def test_a_press_reaches_a_chat_its_answer_does_not_concern_in_that_chats_language(tmp_path):
@@ -125,7 +126,7 @@ def test_a_press_reaches_a_chat_its_answer_does_not_concern_in_that_chats_langua
     v = villa(tmp_path, "id")
     rule(v, "opened", 700)
     press(v, FM_DE)
-    assert re.fullmatch(rf"✅ Selesai pada {T} \(Anna\)\. Dipantau .+", status(card(v, GROUP), "Status")[-1]), card(v, GROUP)
+    assert re.fullmatch(rf"✅ Selesai (?:pada|pukul) {T} \(Anna\)\. Dipantau .+", status(card(v, GROUP), "Status")[-1]), card(v, GROUP)
 
 
 def test_the_desks_end_carries_every_language(tmp_path):
@@ -161,10 +162,10 @@ def test_a_press_is_told_in_each_chats_language(agent):
     rule(agent, "opened", 500)
     tick(agent, 20)
     press(agent, FM_FR)
-    assert re.fullmatch(rf"✅ Terminé le {T} \(Luc\)\. Surveillance 4h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
-    assert re.fullmatch(rf"✅ Erledigt am {T} \(Luc\)\. 4Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
+    assert re.fullmatch(rf"✅ Terminé (?:le|à) {T} \(Luc\)\. Surveillance 4h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
+    assert re.fullmatch(rf"✅ Erledigt (?:am|um) {T} \(Luc\)\. 4Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
     # the group's last line says the watch too, as every chat's (architecture review 21 card 1)
-    assert re.fullmatch(rf"✅ Done on {T} \(Luc\)\. Watch 4h\.", status(card(agent, GROUP), "Status")[-1]), card(agent, GROUP)
+    assert re.fullmatch(rf"✅ Done (?:on|at) {T} \(Luc\)\. Watch 4h\.", status(card(agent, GROUP), "Status")[-1]), card(agent, GROUP)
 
 
 def test_a_need_help_press_is_listed_in_each_chats_language(agent):
@@ -180,16 +181,16 @@ def test_a_need_help_press_is_listed_in_each_chats_language(agent):
     run(agent.buttons.press(GROUP, ["1", "done"], SimpleNamespace(name="JM", role="owner", telegram_id=GROUP), toast,
                             name="JM"))
     lines = agent.notices.history_lines(1, FM_FR)
-    assert any(re.fullmatch(rf"- 🆘 Besoin d'aide le {T} \(Anna\)", ln) for ln in lines), lines
-    assert any(re.fullmatch(rf"- 🆘 Need help on {T} \(Anna\)", ln) for ln in agent.notices.history_lines(1, GROUP))
+    assert any(re.fullmatch(rf"- 🆘 Besoin d'aide (?:le|à) {T} \(Anna\)", ln) for ln in lines), lines
+    assert any(re.fullmatch(rf"- 🆘 Need help (?:on|at) {T} \(Anna\)", ln) for ln in agent.notices.history_lines(1, GROUP))
 
 
 def test_a_clearing_says_its_end_in_each_language(agent):
     rule(agent, "opened", 500)
     tick(agent, 20)
     rule(agent, "resolved", 501)
-    assert re.fullmatch(rf"✅ Résolu le {T}\. Surveillance 4h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
-    assert re.fullmatch(rf"✅ Behoben am {T}\. 4Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
+    assert re.fullmatch(rf"✅ Résolu (?:le|à) {T}\. Surveillance 4h\.", status(card(agent, FM_FR), "Statut")[-1]), card(agent, FM_FR)
+    assert re.fullmatch(rf"✅ Behoben (?:am|um) {T}\. 4Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
 
 
 def test_a_copy_recorded_before_keeps_its_english_lines(agent):
@@ -204,7 +205,8 @@ def test_a_copy_recorded_before_keeps_its_english_lines(agent):
     tick(agent, 50)                                    # a step to the owner: the facility manager's copy only retitled
     fr = card(agent, FM_FR)
     assert fr.split("\n")[1] == "To: Owner & FM", fr
-    assert status(fr, "Status") == ["- Alert sent 23/10/2026 09:48 (to: FM)", f"⚠️ ⚙️ {said}"], fr
+    # its lines as recorded, their moments as every Status writes them: of another day than the alert's, "23/10 09:48"
+    assert status(fr, "Status") == ["- Alert sent 23/10 09:48 (to: FM)", f"⚠️ ⚙️ {said.replace('/2026', '')}"], fr
 
 
 def test_every_language_of_the_people_list_has_its_words():

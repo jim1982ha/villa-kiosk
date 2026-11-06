@@ -5,6 +5,7 @@ UTC never reaches a chat message."""
 from __future__ import annotations
 
 import math
+import re
 from datetime import datetime, date, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -69,6 +70,63 @@ def moment_label(d: datetime, zone: "str | ZoneInfo") -> str:
     """A moment as every notice writes it: "11/10/2026 07:05", in the villa's time (vesta_agent/notice.when)."""
     t = d.astimezone(ZoneInfo(zone) if isinstance(zone, str) else zone)
     return t.strftime(MOMENT_FORMAT)
+
+
+#: The agreement's time ("%H:%M") and its day without the year ("%d/%m"), derived from it as the Kiosk derives them
+#: (src/utils/dateText.ts TIME_FORMAT, SHORT_DAY_FORMAT): one agreement, never a second format typed here.
+TIME_FORMAT: str = MOMENT_FORMAT.replace(MOMENT["date"], "").strip()
+SHORT_DAY_FORMAT: str = re.sub(r"(\W)?%Y(\W)?", lambda m: m.group(1) if m.group(1) and m.group(2) else "", MOMENT["date"])
+#: A moment as moment_label writes it, found in a text ("07/11/2026 05:14"), its parts named.
+_MOMENT_IN_TEXT = re.compile(r"(?<!\d)" + re.sub(r"%([dmYHM])", lambda m: {
+    "d": r"(?P<d>\d{2})", "m": r"(?P<m>\d{2})", "Y": r"(?P<Y>\d{4})", "H": r"(?P<H>\d{2})", "M": r"(?P<M>\d{2})"}[m.group(1)],
+    re.escape(MOMENT_FORMAT).replace(r"\%", "%")) + r"(?!\d)")
+
+
+def status_moment(d: datetime, day: date | None) -> str:
+    """A moment of an alert's Status, `d` in the villa's time: its time alone ("05:14") on the alert's own `day` (the
+    day its card's strip shows), else its day without the year and its time ("08/11 09:20"); the whole moment when the
+    alert's day is not known.
+
+    ⚠️ ONE RULE FOR EVERY STATUS MOMENT (owner, 2026-11-07, every alert, Telegram and the tablet alike): "Alert sent
+    07/11/2026 05:14" under a card whose strip says 07/11/2026 repeated the day on every line."""
+    if day is None:
+        return d.strftime(MOMENT_FORMAT)
+    return d.strftime(TIME_FORMAT) if d.date() == day else d.strftime(f"{SHORT_DAY_FORMAT} {TIME_FORMAT}")
+
+
+def status_moments(text: str, day: date | None, on: tuple[tuple[str, str], ...] = ()) -> tuple[str, int]:
+    """`text` with every whole moment in it ("07/11/2026 05:14", as moment_label writes it) written as status_moment
+    says, and how many it rewrote. `on`: the words a moment follows when it is a day ("on") and when it is a time alone
+    ("at"), each language's (status_words.ON): "Cleared on 07/11/2026 05:23" reads "Cleared at 05:23"."""
+    if day is None or not text:
+        return text, 0
+    n = 0
+
+    def short(m: re.Match) -> str:
+        nonlocal n
+        try:
+            d = datetime(int(m["Y"]), int(m["m"]), int(m["d"]), int(m["H"]), int(m["M"]))
+        except ValueError:
+            return m.group(0)
+        n += 1
+        return status_moment(d, day)
+    out = _MOMENT_IN_TEXT.sub(short, text)
+    for day_word, time_word in on:
+        out = re.sub(rf"(?<!\w){re.escape(day_word)} (?=\d\d:\d\d(?!/|\d))", f"{time_word} ", out)
+    return out, n
+
+
+def first_moment(lines) -> date | None:
+    """The day of the first whole moment among `lines` (a Status written before its alert's day was kept: its first
+    step's, "Alert sent 07/11/2026 05:14"); None when none says one."""
+    for ln in lines or ():
+        m = _MOMENT_IN_TEXT.search(str(ln))
+        if m:
+            try:
+                return date(int(m["Y"]), int(m["m"]), int(m["d"]))
+            except ValueError:
+                continue
+    return None
 
 
 def day_label(d: date, weekday: bool = False, short: bool = False) -> str:

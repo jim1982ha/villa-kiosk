@@ -176,6 +176,15 @@ class Outcome:
         if self.notices:
             for iid, lines in story.items():
                 heads[iid] = self.notices.observe(iid, lines)
+        # ⚠️ ITS FAULT FOLLOWS WHILE ITS COPIES GO (owner's drill #135): a result that moves an alert's fault (a visit's
+        # step naming another device) has that fault brought up to date beside the sends, never before them (the ring
+        # waits on nothing) nor only after them (the tablet's card named the door under the lock's words)
+        following = None
+        if self.tickets is not None and _moves_faults(res) and not res.get("settle"):
+            following = asyncio.create_task(self.tickets.follow(
+                {int(x["incident_id"]) for x in [res, *(res.get("ha_messages") or []), *(res.get("send") or [])]
+                 if isinstance(x, dict) and str(x.get("incident_id") or "").isdigit()}))
+            await asyncio.sleep(0)                            # started now: its first read goes out first
         route = Routing(self.policy())
         chats: set[int] = set()
         items = list(res.get("send") or []) + self.unkept_backups(res)
@@ -411,6 +420,8 @@ class Outcome:
             except Exception as e:  # noqa: BLE001
                 self.state.log("action_failed", {"action": kind, "error": f"{type(e).__name__}: {str(e)[:error_short_chars()]}"})
                 log.warning("action %s failed (%s: %s)", kind, type(e).__name__, e)
+        if following is not None:
+            await following
         if faults_moved:
             await self._repair(done)
         return done

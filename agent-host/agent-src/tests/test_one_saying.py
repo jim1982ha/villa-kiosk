@@ -83,11 +83,11 @@ def test_the_heading_names_the_incident_first_and_what_was_sent_to_whom(tmp_path
     # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
     # owner's escalation lists none of the FM's steps — its own step, what, when, to whom (owner, 2026-10-16)
     status_block = text.split("\nStatus:\n")[1]
-    assert re.fullmatch(r"⚠️ ⚙️ Escalation sent \d\d/\d\d/\d{4} \d\d:\d\d, x \(to: Owner\)", status_block), text
+    assert re.fullmatch(r"⚠️ ⚙️ Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, x \(to: Owner\)", status_block), text
     # the FM's chat holds them, a dash per line
     history = [ln for ln in head_text(v.notices.heading(FM, 21)).split("\n")[2:] if ln.startswith("- ")]
-    assert re.fullmatch(r"- Alert sent \d\d/\d\d/\d{4} \d\d:\d\d \(to: FM\)", history[0])
-    assert re.fullmatch(r"- Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d \(to: FM\)", history[1]) and len(history) == 2
+    assert re.fullmatch(r"- Alert sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: FM\)", history[0])
+    assert re.fullmatch(r"- Reminder sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: FM\)", history[1]) and len(history) == 2
     assert not any(w in text for w in ("For:", "First time seen", ", to ", "Follow Up", "-------"))
 
 
@@ -108,7 +108,7 @@ def test_a_copy_settled_by_a_press_is_headed_closed_once_the_desk_closes_it(tmp_
     st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="done")   # the desk closes it
     run(v.thread.close(iid, "Done pressed by Fabien on {time}."))                      # the desk's settle
     assert v.tg.edits[-1][2].startswith(f"#{iid}-P2 (closed)\nTo: FM\n")
-    assert v.tg.edits[-1][2].endswith("Done pressed by Fabien on " + v.tg.edits[-1][2].rsplit(" on ", 1)[1])
+    assert v.tg.edits[-1][2].endswith("Done pressed by Fabien at " + v.tg.edits[-1][2].rsplit(" at ", 1)[1])
     n = len(v.tg.edits)
     run(v.thread.close(iid, "x"))
     assert len(v.tg.edits) == n                                                        # once headed so: nothing more
@@ -163,7 +163,7 @@ def test_need_help_and_an_unchecked_closure_carry_their_icon_end_to_end(tmp_path
     assert all(t.rsplit("\n", 1)[1].startswith("🆘 ") and " (Fabien)" in t.rsplit("\n", 1)[1]
                for _, t, _ in v.tg.sent[-2:])
     asyncio.run(v.outcome.carry_out(desk.reply(st, iid, "done", "owner", now, name="Jim"), "alert-desk"))
-    assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Done on ")     # the owner's copy, settled
+    assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Done at ")     # the owner's copy, settled
     # 10min later the lock does not answer: closed, not checked
     class Silent:
         def states(self, ids):
@@ -225,7 +225,7 @@ def test_a_copy_turning_closed_turns_green(tmp_path):
     assert v.tg.sent[-1][1].endswith("\nStatus:\n⚠️ New alert")
     st.update_incident(iid, closed_at=datetime.now(timezone.utc).isoformat(), state="resolved")
     asyncio.run(v.thread.close(iid, "Cleared on {time}."))
-    assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Cleared on ")
+    assert v.tg.edits[-1][2].rsplit("\n", 1)[1].startswith("✅ Cleared at ")
 
 
 def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):
@@ -245,7 +245,7 @@ def test_one_incident_one_picture_in_every_chat_of_the_same_people(tmp_path):
     text = shown[FM]
     # every role it went to, never a name (owner, 2026-10-13)
     assert text.startswith("#5 (existing)\nTo: Owner & FM\n") and \
-        re.search(r"\n⚠️ ⚙️ Reminder sent \d\d/\d\d/\d{4} \d\d:\d\d, No answer after 15min \(to: FM\)$", text), text
+        re.search(r"\n⚠️ ⚙️ Reminder sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d, No answer after 15min \(to: FM\)$", text), text
     # the group: not sent the reminder, no FM line, its own status kept, its buttons kept — only the title word and
     # "To:" follow the incident (architecture review, 2026-10-19: they are the incident's, the same in every copy; the
     # Status lines are each chat's own, #55 unchanged): "(new)" became "(existing)" with the facility manager's
@@ -266,7 +266,7 @@ def test_a_close_reaches_a_copy_without_buttons_too(tmp_path):
     assert not v.thread.shown(6)[OWNER]["buttons"]
     asyncio.run(v.thread.close(6, "Done on {time} (Fabien)."))
     # its status replaced: the copy is "existing" (its icon ⚠️ ⚙️) and lists the alert sent (owner, 2026-10-15)
-    assert all(r["text"].rsplit("\n", 1)[1].startswith("⚠️ ⚙️ Done on ")
+    assert all(r["text"].rsplit("\n", 1)[1].startswith("⚠️ ⚙️ Done at ")
                and "\n- Alert sent " in r["text"] for r in v.thread.shown(6).values())
 
 

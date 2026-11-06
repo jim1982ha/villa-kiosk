@@ -121,7 +121,7 @@ def test_the_tasks_and_the_kiosks_tickets_agree(agent):
     # owner, 2026-10-10: who closed it in the Cockpit, and when — as a button's footer says it, told by the desk
     # (architecture review 23, card 1: with the watch its close wrote)
     run(v.outcome.carry_out(alert_desk().tick(st, datetime.now(timezone.utc)), "alert-desk"))
-    assert any("Done in the Cockpit on 10/10/2026 " in text for _, _, text in v.tg.edits)
+    assert any("Done in the Cockpit on 10/10 " in text for _, _, text in v.tg.edits)
 
 
 def test_one_occasion_answers_every_routing_question():

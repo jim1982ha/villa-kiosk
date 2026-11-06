@@ -63,7 +63,7 @@ def test_an_approval_for_the_owner_reaches_every_chat_where_the_owner_can_press_
     run(v.on_ha_event("telegram_callback", press))            # in his own private chat Fabien is the Owner he is listed as
     # every copy, in every chat, says who refused and when — its buttons gone (one mechanism: incident_thread.py)
     assert sorted(c for c, _, _ in v.tg.edits) == sorted([FABIEN, JM])
-    assert all(re.search(r"\nStatus:\nRefused on \d\d/\d\d/\d{4} \d\d:\d\d \(Fabien_O\)\. Nothing was done\.$", t)
+    assert all(re.search(r"\nStatus:\nRefused (?:on|at) (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(Fabien_O\)\. Nothing was done\.$", t)
                for _, _, t in v.tg.edits)
 
 
@@ -215,7 +215,7 @@ def test_the_agents_own_approvals_and_warnings_carry_the_heading_in_every_chat(t
     # asked here, and still in the agent's layout (owner, 2026-10-10): heading, the action, then where it stands
     assert chat == JM and text.startswith("Approval request\nTo: ") and re.search(
         r"\nAsked by .+\.\nStatus:\nWaiting for the owner or the facility manager to approve: the buttons work for 15min "
-        r"from \d\d/\d\d/\d{4} \d\d:\d\d\.$", text) and "final state" not in text
+        r"from (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d\.$", text) and "final state" not in text
 
 
 def test_an_unreadable_rules_file_keeps_the_last_good_rules_and_the_siren_that_sounds_stops(tmp_path):
@@ -443,7 +443,7 @@ def test_an_expired_request_says_so_and_a_long_wait_is_still_seen_by_the_ai(tmp_
     assert run(v.approvals.expire(now=in3h)) == 0
     assert run(v.approvals.expire(now=in3h + timedelta(hours=3))) == 1
     (_, _, text), = v.tg.edits
-    assert re.search(r"\nStatus:\nExpired on \d\d/\d\d/\d{4} \d\d:\d\d: nothing was done\.$", text)
+    assert re.search(r"\nStatus:\nExpired (?:on|at) (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d: nothing was done\.$", text)
     assert v.state.approval(msg.approval_id)["status"] == "expired"
 
 
@@ -565,10 +565,10 @@ def test_a_press_the_rules_now_refuse_is_told_as_such_never_failed(tmp_path):
 def test_a_long_incidents_snapshot_is_one_message_and_nothing_hangs():
     # architecture review 20: a caption is 1,024 characters; a head and a status past the limit must never hang render
     from vesta_agent import layout
-    head = "#9-P1 (existing)\nTo: JM, Fabien\n" + "\n".join(f"- Notice {i:02d} on 10/10/2026 10:00, to JM, Fabien" for i in range(20))
+    head = "#9-P1 (existing)\nTo: JM, Fabien\n" + "\n".join(f"- Notice {i:02d} on 10/10/2026 10:00, to JM, Fabien" for i in range(40))
     text = layout.render(layout.parts(head=head, body="Camera snapshot"), 1000)
     assert len(text) <= 1000 and "Camera snapshot" in text and "earlier notice" in text and text.startswith("#9-P1")
-    assert "Notice 19 " in text and "Notice 00 " in text and "Notice 01 " not in text   # the first and the newest kept
+    assert "Notice 39 " in text and "Notice 00 " in text and "Notice 01 " not in text   # the first and the newest kept
     huge = layout.render(layout.parts(head="Approval request\nTo: X\n" + "y" * 9000, body="z", status="s" * 9000), 4096)
     assert len(huge) <= 4096 + 10
 
@@ -584,7 +584,7 @@ def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_se
 
     class Notices:
         def heading(self, chat, incident, roles, stage=None, also=None):
-            return "#9-P1 (existing)\nTo: JM\n" + "\n".join(f"- Reminder sent 10/10/2026 10:{i:02d} to JM" for i in range(30))
+            return "#9-P1 (existing)\nTo: JM\n" + "\n".join(f"- Reminder sent 10/10/2026 10:{i:02d} to JM" for i in range(60))
 
         def roles_for(self, chat, to=None):
             return set()
@@ -594,10 +594,10 @@ def test_a_photo_with_a_long_heading_is_posted_as_one_message_and_recorded_as_se
     run(Poster(send=send, notices=Notices()).post(JM, "Camera snapshot", incident=9, photo=("SlBFRw==", "image/jpeg")))
     (text, photo), = sent
     assert photo and len(text) <= 1000 and text.startswith("#9-P1 (existing)\nTo: JM\nCamera snapshot\nStatus:\n"
-                                                         "- Reminder sent 10/10/2026 10:00 to JM\n- … ") \
+                                                         "- Reminder sent 10:00 to JM\n- … ") \
         and text.endswith("to JM\n⚠️ ⚙️ Still open")                           # one caption: one message
     # the first notice always kept, the newest kept, those between counted (review 28)
-    assert "10:29 to JM" in text and "10:01 to JM" not in text
+    assert "10:59 to JM" in text and "10:01 to JM" not in text
 
 
 def test_the_villas_time_is_filled_into_a_message_in_one_place_and_a_pending_request_reads_from_the_one_table():

@@ -355,12 +355,35 @@ class Tickets:
             return handed
         return 0
 
-    async def _converge(self, problems: Problems, held: dict[str, dict]) -> dict[str, int]:
+    async def follow(self, incidents) -> None:
+        """The open faults of `incidents` made what their tasks say NOW (_converge, step 3 of the repair, for them
+        alone): what a result changed of an alert — the device a visit's strongest step names, its title — reaches its
+        fault while its copies are sent, not after them.
+
+        ⚠️ THE NAME FOLLOWS AT ITS STEP (owner's drill #135, 2026-11-07): the tablet's card read "Test lock opened…" while
+        its name stayed "Test door": its words were told at once, its fault only by the repair after every Telegram copy
+        and the villa's tell, which reads every task first (10 s on the villa), then by the tablet's next read."""
+        wanted = {int(i) for i in incidents if str(i).isdigit()}
+        if not wanted or not self.kiosk.enabled:
+            return
+        async with self._repairing:
+            problems = Problems(self._store())
+            try:
+                held = await self.kiosk.held_tickets()
+            except Exception as e:  # noqa: BLE001 — the repair after the result does it
+                log.warning("The Kiosk's faults could not be read (%s)", type(e).__name__)
+                return
+            await self._converge(problems, held, only=wanted)
+
+    async def _converge(self, problems: Problems, held: dict[str, dict], only: set[int] | None = None) -> dict[str, int]:
         """Step 3: each fault says what its task says (Problems.card). A close is redone for two days (a resolve that did
-        not land: the Kiosk down a moment); past them, a fault a person moved since is theirs."""
+        not land: the Kiosk down a moment); past them, a fault a person moved since is theirs. `only`: the faults of
+        these incidents alone (`follow`)."""
         recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
         fixed, reopened, resolved = 0, 0, 0
         for t in problems.store.tasks(None):
+            if only is not None and problems._source(t) not in {("incident", i) for i in only}:
+                continue
             uid = t.get("todo_uid")
             card = held.get(uid) if uid else None
             if not card:

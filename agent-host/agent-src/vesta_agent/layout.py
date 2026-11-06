@@ -21,14 +21,14 @@ changes; a "For: …" heading recorded before 0.12.175 is laid out under UNTITLE
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from vesta_shared.message_format import (CLOSED_STAGES, INCIDENT_TITLE, MARK_ICONS, STAGE_ICONS, TO, UNTITLED, document,
                                          parts as shape_parts, status_head, STATUS_BREAK)
 from vesta_shared import status_words
 from vesta_shared.limits import limit
 from vesta_shared.messaging import split_message, telegram_message_chars, tg_len
-from vesta_shared.timeutil import moment_label
+from vesta_shared.timeutil import first_moment, moment_label
 
 
 def fit(text: str, limit: int | None = None) -> str:
@@ -54,11 +54,13 @@ def fill_time(text: str | None, now: datetime, zone: str) -> str:
     thread's close and restate, and a taken-over message each replaced it by hand."""
     return (text or "").replace("{time}", moment_label(now, zone))
 
-def head(title: str, to: str = "", history=(), word: str | None = None, lang: str | None = None, story=None) -> dict:
+def head(title: str, to: str = "", history=(), word: str | None = None, lang: str | None = None, story=None,
+         day: str | None = None) -> dict:
     """A message's heading as facts, never as text: its `title` ("#9-P2", "Approval request"), who it is for (`to`,
     the "To:" line's words), an incident's `history` (its "- …" lines and dividers), for an incident, its title's
     `word` ("new", "existing", "closed": the title reads "#9-P2 (existing)") and the language its chat reads (`lang`,
-    a code; none: English) — the Status section is drawn in it (status_words; owner, 2026-10-23). `story`: an
+    a code; none: English) — the Status section is drawn in it (status_words; owner, 2026-10-23); `day`: an incident's
+    own day (ISO, the day its card's strip shows), its Status moments written by it when drawn (`status_shown`). `story`: an
     incident's EVERY step, whoever it went to (the chat's `history` lists its own): the tablet's card, which is
     everyone's, tells it (kiosk_messages.of_parts; alert #83, owner 2026-10-29: after the escalation to the owner, the
     tablet's card kept the owner's line alone and lost the facility manager's alert and reminder).
@@ -67,7 +69,8 @@ def head(title: str, to: str = "", history=(), word: str | None = None, lang: st
     word by a pattern, its title rewritten by another, its "To:" and history by splitting lines — so a wording change
     could quietly drop a card's ✅ or its "(closed)". Only a record stored before 0.12.230 is read from text (`head_of`)."""
     h = {"title": (title or "").strip(), "to": (to or "").strip(), "history": [x for x in history if x],
-         "word": word or None, **({"story": [x for x in story if x]} if story is not None else {})}
+         "word": word or None, **({"story": [x for x in story if x]} if story is not None else {}),
+         **({"day": str(day)} if day else {})}
     # English is said by no key: a heading recorded before (and every English one) stays exactly as it was
     return {**h, "lang": lang} if lang and status_words.lang_of(lang) != "en" else h
 
@@ -77,7 +80,7 @@ def head_of(h) -> dict | None:
     its history; before 0.12.175 "For: JM"). None for no heading."""
     if isinstance(h, dict):
         return head(h.get("title") or "", h.get("to") or "", h.get("history") or (), h.get("word"), h.get("lang"),
-                    h.get("story"))
+                    h.get("story"), h.get("day"))
     lines = [x for x in (h or "").strip().split("\n") if x]
     if not lines:
         return None
@@ -98,6 +101,25 @@ def head_text(h) -> str:
     """A heading as the message shows it: its title line, "To: …", then its history."""
     h = head_of(h)
     return "\n".join([title_line(h), f"{TO}{h['to']}".rstrip(), *h["history"]]) if h else ""
+
+
+def status_shown(h: dict | None, lines: list[str], lang: str | None = None) -> list[str]:
+    """An incident's Status lines as every copy shows them, Telegram's and the tablet's (kiosk_messages.of_parts): each
+    moment its time alone on the alert's own day, "08/11 09:20" on another (status_words.moments). The day is the
+    heading's (`day`, notice.Notices.day); a heading recorded before it was kept reads its first step's day. Any other
+    message's lines as they are.
+
+    ⚠️ AT READ, NEVER STORED (rules/agent-code.md "Format changes need migrations", owner 2026-11-07): the lines are kept
+    as they were written, whole moments and all, so every alert already open, and every line the desk wrote in its own
+    words in every language, reads the new way at its next redraw."""
+    if not h or not h.get("word"):
+        return lines
+    try:
+        day = date.fromisoformat(h["day"]) if h.get("day") else first_moment(h.get("story") or h.get("history"))
+    except ValueError:
+        day = None
+    lang = lang or h.get("lang") or "en"           # `lang`: lines in another language than the copy's (its words in each)
+    return [status_words.moments(x, day, lang) for x in lines]
 
 
 #: An incident message's stage, as its title says it, shown again at the head of its bottom line (owner, 2026-10-11:
@@ -154,12 +176,12 @@ def render(p: dict, limit: int | None = None) -> str:
     negative size, which never returns — the agent would have stopped answering."""
     limit = int(limit or p.get("limit") or telegram_message_chars())
     h = head_of(p.get("head"))
-    status = fit(stage_line(h, (p.get("status") or "").strip(), p.get("mark")), max(limit // 4, 40))
+    status = fit(status_shown(h, [stage_line(h, (p.get("status") or "").strip(), p.get("mark"))])[0], max(limit // 4, 40))
     middle = "\n".join(x.strip() for x in (p.get("lead"), body_shown(p, h)) if x and x.strip())
     if not h:
         tail = f"{status_head()}{status}" if status else ""
         return fit(middle, max(limit - tg_len(tail), 20)) + tail if middle else tail.lstrip("\n")
-    title, to, history = title_line(h), h["to"], list(h["history"])
+    title, to, history = title_line(h), h["to"], status_shown(h, list(h["history"]))
     floor, dropped, cap = min(middle_floor(), tg_len(middle)), 0, None
     lang = h.get("lang") or "en"                       # the chat's language: its Status label and counted line
 

@@ -46,7 +46,7 @@ def test_a_press_on_the_villas_own_button_is_left_to_the_villa_then_applied_from
     play(v, send(ev))
     assert Store(v.s.store_path).incident(1)["closed_at"], "Wayan's Done closed the alert"
     for chat in (OWNER, FM):
-        assert "Done on " in copy(v, chat)["text"] and "(Wayan)" in copy(v, chat)["text"], copy(v, chat)["text"]
+        assert "Done at " in copy(v, chat)["text"] and "(Wayan)" in copy(v, chat)["text"], copy(v, chat)["text"]
         assert "Watch" not in copy(v, chat)["text"]
     assert [t for _c, t, _k in v.tg.sent[sent:] if not t.startswith("Approval")] == [], "nothing sent anew"
     assert len([d for d in told(v) if d.get("answered")]) == 1
@@ -76,7 +76,8 @@ def test_a_stronger_step_before_vesta_said_it_holds_the_visit_rings_from_vesta(t
     play(v, send(vi.event()))
     rang = [c for c, t, _k in v.tg.sent[n:] if "Outdoor entrance Lock opened while the villa is empty" in t]
     assert sorted(rang) == [OWNER, FM], v.tg.sent[n:]
-    assert all("- Stronger signal sent " in copy(v, c)["text"] for c in (OWNER, FM))
+    assert all(": alert sent again (to: Owner & FM)" in copy(v, c)["text"] and "Stronger signal" not in copy(v, c)["text"]
+               for c in (OWNER, FM))
 
 
 # ---------------------------------------------------------------------------------------------- the villa's reminder

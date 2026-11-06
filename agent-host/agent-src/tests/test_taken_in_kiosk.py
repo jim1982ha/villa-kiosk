@@ -121,7 +121,7 @@ def test_the_closed_message_tells_every_step_the_villa_saw_on_15_october(tmp_pat
     send("owner", "No answer from the facility manager after 45 min", "escalated")
     asyncio.run(v.thread.restate(iid, "Ticket opened in the Cockpit by Wayan on 15/10/2026 01:09."))
     taken = v.thread.shown(iid)[owner]["text"]
-    assert "- Escalation sent " in taken and taken.endswith("Ticket opened in the Cockpit by Wayan on 15/10/2026 01:09.")
+    assert "- Escalation sent " in taken and taken.endswith("Ticket opened in the Cockpit by Wayan on 15/10 01:09.")
     st.update_incident(iid, closed_at=st.now(), state=Incident.RESOLVED)
     asyncio.run(v.thread.close(iid, "Cleared on {time}: back to normal."))
     # every step each chat was sent, none dropped — and only those (owner, 2026-10-18, #55 "each chat its own steps",
@@ -131,7 +131,7 @@ def test_the_closed_message_tells_every_step_the_villa_saw_on_15_october(tmp_pat
         text = v.thread.shown(iid)[chat]["text"]
         lines = text.split("Status:\n", 1)[1].split("\n")
         assert [l.split(" ")[1] for l in lines[:-1]] == steps, (chat, lines)
-        assert "- Ticket opened in the Cockpit by Wayan on 15/10/2026 01:09" in lines and "Cleared on " in lines[-1]
+        assert "- Ticket opened in the Cockpit by Wayan on 15/10 01:09" in lines and "Cleared at " in lines[-1]
         assert text.split("\n")[0].endswith("(closed)")
 
 

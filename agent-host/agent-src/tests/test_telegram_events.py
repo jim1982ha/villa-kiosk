@@ -127,7 +127,7 @@ def test_a_press_on_the_agents_own_message_is_handled(agent):
     press = {**old, "id": "cb2", "data": "i:1:need_help"}
     run(agent.on_ha_event("telegram_callback", press))
     assert agent.tg.toasts[-1][1] == "Need help: noted."
-    assert any("Need help on " in status(t) for _, t, _ in agent.tg.sent)   # the owner is told
+    assert any("Need help at " in status(t) for _, t, _ in agent.tg.sent)   # the owner is told
 
 
 def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
@@ -149,7 +149,7 @@ def test_a_press_in_a_private_chat_is_answered_there_and_its_buttons_go(agent):
     assert {(c, m) for c, m, _ in agent.tg.edits} == {(FM, mid)}
     chat, m, text = agent.tg.edits[0]
     assert re.fullmatch(r"🚨 Incident #1: pump stopped\nStatus:\nDone on .+ \(FM\)\.", text)    # what, when, then who, under "Status:"
-    assert re.search(r" on \d\d/\d\d/\d{4} \d\d:\d\d \(FM\)\.$", text)
+    assert re.search(r" (?:on|at) (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(FM\)\.$", text)
 
 
 def test_telegram_gets_plain_text_not_markdown(agent):
@@ -248,7 +248,7 @@ def test_an_answer_settles_the_alert_in_every_chat_and_its_reminder(agent):
     assert {c for c, _, _ in agent.tg.edits} == {OWNER, GROUP, FM}
     shown = {c: r["text"] for c, r in agent.thread.shown(iid).items()}
     assert set(shown) == {OWNER, GROUP, FM} and len(set(shown.values())) == 1, shown
-    assert re.search(r"\n(?:(?:✅|⚠️|⚠️ ⚙️) )?Done on \d\d/\d\d/\d{4} \d\d:\d\d \(FM\)\.", shown[GROUP]), shown[GROUP]
+    assert re.search(r"\n(?:(?:✅|⚠️|⚠️ ⚙️) )?Done (?:on|at) (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(FM\)\.", shown[GROUP]), shown[GROUP]
     # settled once: no chat still shows the incident's buttons unanswered
     assert not [c for c, r in agent.thread.shown(iid).items() if r["buttons"] and not r["settled"]]
 
@@ -260,7 +260,7 @@ def test_an_incident_home_assistant_clears_settles_its_alerts(agent):
                                 "alert-desk"))
     run(agent.outcome.carry_out({"settle": [{"incident_id": iid, "note": "Cleared in the villa's system, {time}. No reply needed."}]}, "alert-desk"))
     assert sorted(c for c, _, _ in agent.tg.edits) == sorted([FM, GROUP])     # every chat of the role: each settled
-    assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n|\(to: [A-Za-z &]+\)\n)(?:(?:✅|⚠️|⚠️ ⚙️) )?Cleared in the villa's system, \d\d/\d\d/\d{4} \d\d:\d\d\. No reply needed\.$", text)
+    assert all(re.search(r"(?:\n-------\n|\n\n|Status:\n|\(to: [A-Za-z &]+\)\n)(?:(?:✅|⚠️|⚠️ ⚙️) )?Cleared in the villa's system, (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d\. No reply needed\.$", text)
                for _, _, text in agent.tg.edits)
 
 

@@ -29,7 +29,8 @@ OWNER, FM = 111, 222
 GROUP, FM_CHAT = -100123, 222
 RULE = "automation.critical_condition_phase"
 SUMMARY = "⚡ Phase C high\nPhase C 4580 W\nAbove 4000 W, Held 15min"
-T = r"\d\d/\d\d/\d{4} \d\d:\d\d"
+#: A Status moment: its time alone on the alert's day, "08/11 09:20" another (timeutil.status_moment), whole elsewhere
+T = r"(?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d"
 
 
 def run(coro):
@@ -109,7 +110,7 @@ def test_the_rules_all_clear_and_the_closing_note_are_one_line(agent):
     # kept once, with whom it went to, for when the alert comes back (below)
     assert len(hist) == 1 and re.fullmatch(rf"- Alert sent {T} \(to: FM\)", hist[0]), hist
     assert [h["stage"] for h in agent.state.incident_history(1)] == ["new", "closed"]
-    assert status_lines(card(agent, FM_CHAT))[-1].startswith("✅ Cleared on "), card(agent, FM_CHAT)
+    assert status_lines(card(agent, FM_CHAT))[-1].startswith("✅ Cleared at "), card(agent, FM_CHAT)
     assert not any("Update sent" in ln or "Closing note" in ln for ln in status_lines(card(agent, FM_CHAT)))
 
 
@@ -123,10 +124,10 @@ def test_not_a_problem_then_the_rules_late_all_clear_then_its_watch_tell_the_pre
     rule(agent, "resolved", 1, 501)
     lines = status_lines(card(agent, GROUP))
     assert len(lines) == 2 and lines[0].startswith("- Alert sent "), lines
-    assert re.fullmatch(rf"✅ Not a problem on {T} \(Owner\)\. Watch .+", lines[1]), lines   # as pressed, word for word
+    assert re.fullmatch(rf"✅ Not a problem (?:on|at) {T} \(Owner\)\. Watch .+", lines[1]), lines   # as pressed, word for word
     tick(agent, 24 * 60)                                                   # its watch is over
     lines = status_lines(card(agent, GROUP))
-    assert len(lines) == 3 and lines[1].startswith("- Not a problem on "), lines
+    assert len(lines) == 3 and lines[1].startswith("- Not a problem at "), lines
     assert lines[2].startswith("✅ Closed on ") and "did not come back" in lines[2], lines
     assert not any("Cleared" in ln or "Closing note" in ln for ln in lines), lines
 
@@ -157,7 +158,7 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     assert re.fullmatch(rf"- Back at {T}, 2nd time in 7 days \(to: FM\)", lines[2]), lines
     # the close in its own words, its moment and its watch (architecture review 22, card 6: "- Closing note sent …"
     # said a message went, never what closed it)
-    assert re.fullmatch(rf"- Cleared on {T}\. Watch .+", lines[1]) and lines[3].startswith("⚠️ ⚙️ Reminder sent"), lines
+    assert re.fullmatch(rf"- Cleared (?:on|at) {T}\. Watch .+", lines[1]) and lines[3].startswith("⚠️ ⚙️ Reminder sent"), lines
     assert not any("ame back" in ln or "ame-back" in ln or ln.startswith("—") for ln in lines), lines
     assert "Facility Manager" not in group and "facility manager" not in group
     fm_before = card(agent, FM_CHAT)

@@ -98,7 +98,7 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
     said = p.get("said") if isinstance(p.get("said"), dict) else {}
     for code, words in (said.get("status_in") or {}).items():
         if isinstance(words, str) and words.strip():
-            languages[code] = {"status": [words.strip()]}
+            languages[code] = {"status": layout.status_shown(h, [words.strip()], code) if h else [words.strip()]}
     tr = p.get("tr")
     if isinstance(tr, dict) and tr.get("lang") and isinstance(tr.get("body"), str) and tr["body"].strip():
         languages.setdefault(tr["lang"], {})["body"] = tr["body"].strip()
@@ -107,7 +107,8 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
         "takes": takes or [],
         "lead": p.get("lead"), "body": layout.body_shown(p, h),
         # the tablet is everyone's: every step, whoever it went to (layout.head's `story`), else this copy's own
-        "status": _lines([*((h.get("story") or h["history"]) if h else []), status], "status", "statusLine"),
+        "status": _lines(layout.status_shown(h, [*((h.get("story") or h["history"]) if h else []), status]), "status",
+                         "statusLine"),
         "stage": (h or {}).get("word") or said.get("stage") or "", "mark": p.get("mark") or "",
         "buttons": buttons_of(keyboard), "languages": languages,
     }
