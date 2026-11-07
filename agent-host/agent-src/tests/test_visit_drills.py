@@ -438,7 +438,7 @@ def test_the_faults_short_story_says_every_line_telegram_says(tmp_path, kiosk, m
     assert [n for n in notes if n.startswith("Seen at Parking")] == ["Seen at Parking, 22:48"], notes
 
 
-def _answered_on_the_villa(v, vi: Visit, first: dict) -> tuple[record.Rec, dict]:
+def _answered_on_the_villa(v, vi: Visit, first: dict, where: str = "telegram") -> tuple[record.Rec, dict]:
     """Drill #140: VESTA stopped; the villa opened the visit and Done was pressed on its card (by Jm), closing the record
     with no "resolved" event — the record as the villa holds it then, read by the engine; and that close."""
     pressed = at("22:53:55")
@@ -448,7 +448,7 @@ def _answered_on_the_villa(v, vi: Visit, first: dict) -> tuple[record.Rec, dict]
         "state": "closed", "seq": len(vi.steps), "owner": "villa", "opened_at": first["visit"]["opened_at"],
         "last_at": vi.steps[-1]["at"], "steps": list(vi.steps), "photos": list(vi.photos), "strongest": vi.strongest(),
         "step": vi.steps[-1], "closed": closed,
-        "answered": {"option": "done", "by": "Jm", "at": pressed, "where": "telegram"}}})
+        "answered": {"option": "done", "by": "Jm", "at": pressed, "where": where}}})
     _read_now(v, rec)
     return rec, closed
 
@@ -519,3 +519,105 @@ def test_an_open_visit_whose_villa_record_says_closed_is_closed_at_the_next_tick
     rec.state = "open"
     res = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=5), client=Villa(), zone=v.notices.tz)
     assert res["visits_over"] == [inc2["id"]] and store.incident(inc2["id"])["closed_at"], res
+
+
+def _watched(kiosk) -> tuple[list[dict], list[dict]]:
+    """Every fault the Kiosk was written, write by write, and every tablet message pushed: what it ever showed."""
+    faults: list[dict] = []
+    real = kiosk._req
+
+    async def req(method, path, body=None, content=None, **kw):
+        got = await real(method, path, body, content, **kw)
+        if path == "/agent/v1/fm-data" and method != "GET" and got[0] == 200:
+            faults.extend(copy_of(t) for t in body["data"].get("tickets") or [])
+        return got
+    kiosk._req = req
+    return faults, kiosk.pushed
+
+
+def copy_of(t: dict) -> dict:
+    return {k: t.get(k) for k in ("id", "status", "alertNumber")}
+
+
+def test_a_visit_already_closed_when_vesta_first_hears_it_is_never_shown_open(tmp_path, kiosk, media):
+    # owner's drills, 2026-11-07 (#141, #143): VESTA back replayed opened, step, resolved ~18s apart; the first made an
+    # OPEN fault and a tablet pop-up "#n-P1 (new)" though the villa's record read closed already: shown open ~19s
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media, owner="pending")
+    vi.add("motion", PARKING, "10:03:27", photo=True)
+    first = vi.event("opened")
+    first["visit"]["opened_at"] = at("10:03:30")
+    vi.add("door", GARDEN_DOOR, "10:03:50", photo=True)
+    second = vi.event()
+    closed = {"why": "quiet", "at": at("10:04:00")}
+    rec = _record_of(vi)
+    record.fire(rec, {"record": record.RECORD, "visit": vi.id, "token": "c", "set": {
+        "state": "closed", "seq": 2, "owner": "villa", "opened_at": at("10:03:30"), "last_at": at("10:03:50"),
+        "steps": list(vi.steps), "photos": list(vi.photos), "strongest": vi.strongest(), "step": vi.steps[-1],
+        "closed": closed}})
+    _read_now(v, rec)
+    end = {**vi.event("resolved"), "timestamp": at("10:04:00")}
+    end["visit"]["closed"] = closed
+    faults, pushed = _watched(kiosk)
+    play(v, send(first))
+    (inc,) = Store(v.s.store_path).incidents(open_only=False)
+    assert inc["closed_at"], "closed at its first event: the record said so"
+    mine = [f for f in faults if f["alertNumber"] == inc["id"]]
+    assert mine and all(f["status"] == "resolved" for f in mine), ("never an open fault", mine)
+    assert [m.get("stage") for m in pushed if m.get("key") == f"incident:{inc['id']}"] \
+        and "new" not in [m.get("stage") for m in pushed if m.get("key") == f"incident:{inc['id']}"], pushed
+    play(v, send(second), send(end))
+    assert all(f["status"] == "resolved" for f in faults if f["alertNumber"] == inc["id"]), faults
+    assert "new" not in [m.get("stage") for m in pushed if m.get("key") == f"incident:{inc['id']}"], pushed
+    assert len({f["id"] for f in faults if f["alertNumber"] == inc["id"]}) == 1, "one fault"
+    assert v.tg.sent == [] and told(v) == [], "nothing sent, the villa never told"
+    (fault,) = [t for t in kiosk._all() if t.get("alertNumber") == inc["id"]]
+    assert any(u.get("kind") == "noted" for u in fault["updates"]), ("its short story with it", fault["updates"])
+    assert kiosk.messages[f"incident:{inc['id']}"].get("stage") == "closed"
+
+
+def test_a_visit_answered_on_the_tablet_while_vesta_was_away_says_where_like_every_press(tmp_path, kiosk, media):
+    # owner's drill, 2026-11-07 (#141): Done pressed in the Cockpit while VESTA was away was closed by VESTA as
+    # "✅ Done at 09:43 (Owner)": where it was pressed, as Telegram's and VESTA's own presses say it, in every language
+    from test_alert_desk import desk
+    from vesta_shared import status_words as SW
+    for where, said in (("cockpit", "✅ Done in the Cockpit "), ("telegram", "✅ Done on Telegram ")):
+        v = villa(tmp_path / where, kiosk)
+        vi = Visit(media=media, owner="pending")
+        vi.add("motion", PARKING, "22:49:32", photo=True)
+        first = vi.event("opened")
+        _rec, closed = _answered_on_the_villa(v, vi, first, where)
+        last = vi.event()
+        last["visit"]["closed"] = closed
+        play(v, send(first), send(last))
+        (inc,) = Store(v.s.store_path).incidents(open_only=False)
+        status = kiosk.messages[f"incident:{inc['id']}"]["status"]
+        assert status[-1].startswith(said) and "(Jm)" in status[-1], status
+    got = desk.answer_said({"option": "done", "by": "Jm", "where": "cockpit"}, "at 09:43", "Jm", end=True)
+    for lang in SW.LANGS:
+        if lang != "en":
+            assert got.langs[lang] == SW.cockpit("closed", "at 09:43", "Jm", lang) + SW.stop(lang), (lang, got.langs)
+
+
+def test_a_visits_step_reaches_the_tablets_fault_before_telegrams_last_edit(tmp_path, kiosk, media):
+    # owner's screenshots, 2026-11-07 (#142): at each step the tablet's card (its name, pill and lines) came 10s to 12s
+    # after Telegram's: the fault was brought up to date only after every edit, the sheet and the villa told
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "22:48:03", photo=True)
+    play(v, send(vi.event("opened")))
+    vi.add("door", GARDEN_DOOR, "22:52:20", photo=True)
+    seen: list[tuple] = []
+    real = kiosk._req
+
+    async def req(method, path, body=None, content=None, **kw):
+        got = await real(method, path, body, content, **kw)
+        if path == "/agent/v1/fm-data" and method != "GET":
+            notes = [u.get("note") or "" for t in body["data"].get("tickets") or [] for u in t.get("updates") or []]
+            seen.append((any(": alert sent again" in n for n in notes),
+                         len(v.tg.sent) + len(v.tg.edits) + len(v.tg.media_edits), len(told(v))))
+        return got
+    kiosk._req = req
+    play(v, send(vi.event()))
+    first = next(s for s in seen if s[0])
+    assert first[1] < len(v.tg.sent) + len(v.tg.edits) + len(v.tg.media_edits) or first[2] < len(told(v)), (first, seen)

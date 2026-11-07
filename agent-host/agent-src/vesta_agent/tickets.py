@@ -52,10 +52,11 @@ class Tickets:
         return Store(self.store_path)
 
     async def create(self, title: str, entity_id: str | None = None, note: str | None = None,
-                            task_id: int | None = None, document: str | None = None) -> str | None:
+                            task_id: int | None = None, document: str | None = None, closed: bool = False) -> str | None:
         """A fault in the Kiosk's Facility records. With a task_id, the task remembers its ticket. `document`: an HTML
         page to keep with it (an investigation's report, owner 2026-10-11) — a Kiosk that cannot hold it gets the fault
-        all the same, its note saying so."""
+        all the same, its note saying so. `closed`: the task's fault made closed as its task says, its short story with
+        it, in one write (Problems.closed_unmade)."""
         if not self.kiosk.enabled:
             self.state.log("fault_skipped", {"reason": "no Kiosk configured", "summary": (title or "")[:80]})
             return None
@@ -83,12 +84,23 @@ class Tickets:
                                           **({"origin": want["origin"]} if want["origin"] else {}),
                                           **({"check": want["check"]} if want["check"] else {}),
                                           **({"pattern": self._pattern(want)} if self._pattern(want) else {}),
-                                          **({"opened_at": want["began"]} if want.get("began") else {}))
+                                          **({"opened_at": want["began"]} if want.get("began") else {}),
+                                          **(self._closed_at_birth(task, want) if closed and task else {}))
         log.info("Kiosk fault %s created: %s", tid, headline(title)[:80])
         if task_id:
             self._store().set_task_uid(int(task_id), tid)
         self.state.log("executed", {"tool": "fault", "fault": tid, "entity": entity_id})
         return tid
+
+    def _closed_at_birth(self, task: dict, want: dict) -> dict:
+        """add_ticket's `amends` and `resolved` for a fault made closed: its whole short story, then its close."""
+        story = self.story(want["number"]) if want["number"] else []
+        # its whole story: an incident closed at its first event has one run (a reopening's own lines only)
+        since = _moment(task.get("reopened_at"))
+        lines = [x for x in story if since is None or (_moment(x["at"]) or since) >= since]
+        return {"amends": (noted(lines),) if lines else (),
+                "resolved": {"note": want["note"], "who": want["who"], "confirms_by": want["confirms_by"],
+                             "lasting": want["lasting"], "not_watched": not want["confirms_by"]}}
 
     def _card(self, problems: Problems, task: dict) -> dict:
         """Problems.card for `task`, with the skills' reading cadences, the night check's next run (how long a fault it
@@ -215,8 +227,18 @@ class Tickets:
             except Exception as e:  # noqa: BLE001 — the next start or night tries again
                 log.warning("A missing Kiosk fault could not be created (%s)", type(e).__name__)
                 break
+        for t in problems.closed_unmade():
+            # ⚠️ NEVER SHOWN OPEN (owner's drills, 2026-11-07, #141, #143): a visit the villa had closed while VESTA was
+            # away made an open fault at its first replayed event, closed ~19s later; made closed, in one write
+            try:
+                if await self.create(problems.current_title(t), t.get("entity_id") or None,
+                                     result.fault_note(problems.check_of(t)), t["id"], closed=True):
+                    made += 1
+            except Exception as e:  # noqa: BLE001 — the next repair tries again
+                log.warning("A closed Kiosk fault could not be created (%s)", type(e).__name__)
+                break
         if made:
-            log.info("Kiosk faults created for %d open task(s) that had none", made)
+            log.info("Kiosk faults created for %d task(s) that had none", made)
             # ⚠️ A NEW FAULT TELLS ITS STORY AT ONCE (owner's end-to-end test, 2026-10-30: alert #95's card on the tablet
             # had no step, and its row no time, until the next repair 4 minutes later): step 3 ran before it existed,
             # so it is brought up to date now, as every fault is (_converge: its number, its check, its short story)

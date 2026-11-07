@@ -851,6 +851,19 @@ class Problems:
     def open_tasks(self) -> list[dict]:
         return self.store.tasks("open")
 
+    def closed_unmade(self) -> list[dict]:
+        """The closed tasks whose fault is made closed though they never had one: their incident asks it
+        (Notes.FAULT_CLOSED, a visit the villa closed while VESTA was away), the task its last."""
+        out = []
+        for t in self.store.tasks(None):
+            kind, sid = self._source(t)
+            if t.get("status") == "open" or t.get("todo_uid") or kind != "incident":
+                continue
+            if notes_of(self.store.incident(sid)).get(Notes.FAULT_CLOSED) \
+                    and (self.store.last_task(t["source"]) or {}).get("id") == t["id"]:
+                out.append(t)
+        return out
+
     def title_of(self, task: dict) -> str:
         """What is wrong, without what to check."""
         return task.get("summary") or ""

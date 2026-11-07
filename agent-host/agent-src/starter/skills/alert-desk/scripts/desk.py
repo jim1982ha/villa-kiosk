@@ -724,6 +724,11 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
         # ⚠️ ALREADY CLOSED HERE, STILL ITS MESSAGE (architecture review 22): the desk saw it over first (seen_again, a
         # Done) — Home Assistant's all-clear then stayed a second message in the group, without its incident's number
         late = _find_by_ha_incident(store, ev.get("ha_incident"), closed_within=timedelta(days=W.late_close_days()), now=now)
+        if late and notes_of(late).get(VISIT_AWAY):
+            # a visit the villa closed while VESTA was away, closed at its first event (visit_intake): its replayed
+            # close changes nothing seen (owner's drills, 2026-11-07, #141, #143)
+            out["incident_id"], out["decision"] = late["id"], "visit_closed"
+            return out
         if late:
             out["incident_id"], out["decision"] = late["id"], "resolved_late"
             # ⚠️ ITS CLOSE SAID AGAIN, NEVER "CLEARED" (owner, 2026-11-05, #118): "Not a problem" pressed at 00:19, the
@@ -780,17 +785,30 @@ def visit_close(store: Store, inc: dict, v: dict, now: datetime, params: VillaPa
         out["actions"].append(R.withdraw_siren(inc["id"]))
     elif home.get("why") == "answered" and ans.get("option") in BUTTONS:
         # the person's answer the villa applied, said as every press is ("Done on {time} (Jm)."), its siren withdrawn
-        b = BUTTONS[ans["option"]]
         who = str(ans.get("by") or home.get("who") or "") or str(role_said("fm"))
-        said = Said(acted(b["label"], "{time}", who) + SW.stop("en"),
-                    {lang: SW.acted(lab, "{time}", who, lang) + SW.stop(lang)
-                     for lang, lab in (b.get("labels") or {}).items() if lang in SW.LANGS})
+        said = answer_said(ans, "{time}", who, end=True)
         over = _close(store, inc, now, out, timed(said), note=str(timed(said)), terms=watch_terms(inc, terms(params)))
         out["actions"].append(R.withdraw_siren(inc["id"]))
     else:
         # a visit's end says why ("Cleared on …: no further signal for 30min."), and nothing is watched after it
         over = _close(store, inc, now, out, timed(ended(visit_quiet(v))), terms=watch_terms(inc, terms(params)))
     return over
+
+
+def answer_said(ans: dict, when: str, who: str, end: bool = False) -> Said:
+    """A press the villa applied (its record's `answered`: option, by, where), as VESTA's own presses say it, where it
+    was pressed, in every language: "Done in the Cockpit at 09:43 (Owner)", "Not a problem on Telegram …". ⚠️ WHERE
+    (owner's drill, 2026-11-07, #141): a Done on the tablet while VESTA was away was closed as "Done at 09:43 (Owner)".
+    A place the villa did not name: the button's label alone. `end`: a sentence (its full stop)."""
+    b = BUTTONS[ans["option"]]
+    stop = (lambda lang: SW.stop(lang)) if end else (lambda _lang: "")    # noqa: E731
+    where = (mf.PRESSED_ON_TELEGRAM.get(str(ans["option"])) or {}).get(str(ans.get("where") or ""))
+    if where:
+        return Said(SW.closed_where(where, when, who) + stop("en"),
+                    {lang: SW.closed_where(where, when, who, lang) + stop(lang) for lang in SW.LANGS if lang != "en"})
+    return Said(acted(b["label"], when, who) + stop("en"),
+                {lang: SW.acted(lab, when, who, lang) + stop(lang)
+                 for lang, lab in (b.get("labels") or {}).items() if lang in SW.LANGS})
 
 
 def _close_again(inc: dict):
@@ -1530,7 +1548,7 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     top = v.get("strongest") or v.get("step") or {}
     # the alert's words: the strongest step's title as the villa writes it ("<name> opened while the villa is empty")
     ev = {**ev, "message": ev.get("label") or ev.get("message"), "entity_id": str(top.get("entity_id") or "")}
-    inc = known = _find_by_ha_incident(store, vid)
+    inc = _find_by_ha_incident(store, vid)
     late = _find_by_ha_incident(store, vid, closed_within=timedelta(days=W.late_close_days()), now=now) if inc is None \
         else None
     # ⚠️ OVER ON THE VILLA BEFORE VESTA HEARD IT (owner's drill, 2026-11-07, #138): VESTA back after the villa closed the
@@ -1568,7 +1586,10 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         villa_told(store, iid, ev)                    # taken over from the villa: the steps it told, never rung again
         if away:
             # its fault made (its task); no one chased (tick): the villa asked and reminded already, its close follows
-            store.note(iid, {VISIT_AWAY: True})
+            # ⚠️ CLOSED AT THIS FIRST EVENT (owner's drills, 2026-11-07, #141, #143): closed only at the next replayed
+            # event, ~18s later, its fault and the tablet showed it open, "#n-P1 (new)", while the villa's record said
+            # closed already. Its fault is made closed (Notes.FAULT_CLOSED), its card closed: never shown open
+            store.note(iid, {VISIT_AWAY: True, Notes.FAULT_CLOSED: True})
         inc = store.incident(iid)
         out["decision"] = "visit_away" if away else "new"
         lines = visit_lines(v, zone)
@@ -1580,7 +1601,8 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         # heading and buttons; a chat with none gets VESTA's own
         # "Alert sent" when the villa sent it, whenever VESTA takes it over (a restart in between: owner's drill #129)
         sent = (_when(v.get("opened_at")) or now).isoformat()
-        out["ha_messages"] = [R.ha_message(iid, text, ev.get("_context_id"), stage="new", messages=[] if away else _cards(v),
+        out["ha_messages"] = [R.ha_message(iid, text, ev.get("_context_id"), stage="new",
+                                           messages=[] if away else _cards(v),
                                            takes=[f"{VISIT}:{vid}"], at=sent, alone=away)]
         if not away:
             out["send"] += [{**m, "at": sent} for m in tell(sev, "new", incident=iid, ladder=route.get("ladder", True),
@@ -1633,8 +1655,8 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         # (an answer that closed the visit is said by its close: visit_close)
         # the answer the villa applied, a line of the story ("Not a problem on … (Wayan)"), never answered again
         t = _when(ans.get("at")) or now
-        lines.append(("answered", Said(acted(BUTTONS[ans["option"]]["label"], moment_label(t, zone),
-                                             str(ans.get("by") or "") or role_said("fm"))), t.isoformat(), t.isoformat()))
+        lines.append(("answered", answer_said(ans, moment_label(t, zone), str(ans.get("by") or "") or str(role_said("fm"))),
+                      t.isoformat(), t.isoformat()))
     news = [ln for ln in lines if was.get(ln[0]) != str(ln[1])]
     if news:
         _faults_follow(out)                            # the Kiosk fault's story follows at once (tickets.repair)
@@ -1648,8 +1670,9 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
         # was away closes the record with no "resolved" event, only a step carrying its close — #140 stayed open,
         # "monitoring until 08:54", a new alert on the tablet. Closed at the next event naming it, or the next tick
         # (visits_over), once its Kiosk fault exists (this run's repair makes it for the incident just opened: a task
-        # closed before it has one never gets one), so it is ONE closed fault
-        if known is not None and not store.incident(iid).get("closed_at"):
+        # closed before it has one never gets one), so it is ONE closed fault — made closed (Notes.FAULT_CLOSED) when
+        # this event opened it (owner's drills #141, #143: shown open until the next replayed event)
+        if not store.incident(iid).get("closed_at"):
             visit_close(store, store.incident(iid), v, now, params, zone, out)
         store.audit("alert-desk", out["decision"], {"incident": iid, "visit": vid, "rings": False, "closed": True})
         return out

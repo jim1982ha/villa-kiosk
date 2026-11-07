@@ -1,3 +1,12 @@
+## 0.12.476
+
+- A visit the villa had already closed while VESTA was stopped is no longer shown open on the tablet for about 20
+  seconds when VESTA starts again: its card and its fault arrive closed at once, with no "(new)" pop-up.
+- A visit answered on the tablet while VESTA was stopped now says where, like every other press: "Done in the Cockpit
+  at 09:43 (Owner)" (or "on Telegram"), in every language.
+- At each step of a visit the tablet's card (its name, pill and lines) now follows Telegram's message within about a
+  second, instead of 10 to 12 seconds later.
+
 ## 0.12.475
 
 - A visit someone closed on the villa's own Telegram message (Done) while VESTA was stopped is now closed in VESTA too

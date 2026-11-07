@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.458 (7 November 2026)
+
+- A visit already closed on the villa when VESTA first takes it in is closed at that first event (owner's drills,
+  2026-11-07, #141, #143: the catch-up's replayed opening made an open fault and a "(new)" pop-up, closed ~19s later):
+  desk `visit_intake` closes it at once (`visit_close`), noting `Notes.FAULT_CLOSED`; `resolved` of such a visit changes
+  nothing; `Tickets.repair` makes the fault of a closed task that asks it (`Problems.closed_unmade`) closed in ONE write
+  (`Kiosk.add_ticket(amends=, resolved=)`, its short story with it; `resolve_ticket`'s close shared as `_resolved`).
+- A press the villa applied says where (owner's drill #141: "Done at 09:43 (Owner)" for a press in the Cockpit): desk
+  `answer_said`, the record's `answered.where` through `message_format.PRESSED_ON_TELEGRAM` and
+  `status_words.closed_where`, every language; the visit's close and its "answered" line.
+- The tablet's fault follows Telegram's copies (owner's screenshots, #142: 10s to 12s behind, the repair waiting on the
+  siren's request, the sheet and the villa told): `Outcome.carry_out` runs a repair beside that slow work once the
+  copies are posted.
+
 ## 0.6.457 (7 November 2026)
 
 - A visit closed by a person on the villa while VESTA was away is closed at once (owner's drill, 2026-11-07, #140: Done

@@ -467,6 +467,28 @@ def confirming(at: str | None) -> Amend:
     return amend
 
 
+def _resolved(data: dict, t: dict, *, note: str | None = None, who: str | None = None, confirms_by: str | None = None,
+              lasting: bool = False, not_watched: bool = False) -> dict:
+    """Ticket `t` resolved now, as Kiosk.resolve_ticket says it (a person's Done recorded in `data`'s completions)."""
+    now = _now()
+    upd = {"at": now, "status": "resolved", "photoIds": []}
+    if note:
+        upd["note"] = note[:update_note_chars()]
+    if who and lasting:
+        upd.update(who=who[:who_chars()], kind=CLEARED, lasting=True)
+    elif who:
+        upd["who"] = who[:who_chars()]       # the person, on the card (faultWhen: who, else by)
+        # its `by` is the Kiosk's to stamp ("VESTA Agent"); the person is `who` (fmEngine.workedBy)
+        data["completions"] = list(data.get("completions") or []) + [{
+            "id": "va-cp-" + secrets.token_hex(6), "scheduleId": "", "ticketId": t["id"], "at": now,
+            "by": "", "who": who[:who_chars()], "photoIds": [], **({"note": note[:update_note_chars()]} if note else {})}]
+    else:
+        upd["kind"] = CLEARED
+    return dict(t, status="resolved", resolvedAt=now, **({"confirmsBy": confirms_by} if confirms_by else {}),
+                **({"notWatched": True} if not_watched and not confirms_by else {}),
+                updates=list(t.get("updates") or []) + [upd])
+
+
 class Kiosk:
     def __init__(self, url: str, token: str, headers: dict | None = None):
         self.url = url.rstrip("/")
@@ -674,13 +696,16 @@ class Kiosk:
     async def add_ticket(self, title: str, entity_id: str | None = None, note: str | None = None,
                          document_ids: list[str] | None = None, number: int | None = None,
                          origin: str | None = None, check: str | None = None, pattern: dict | None = None,
-                         priority: str | None = None, opened_at: str | None = None) -> str:
+                         priority: str | None = None, opened_at: str | None = None,
+                         amends: tuple = (), resolved: dict | None = None) -> str:
         """`number`: the alert's number, as every chat names it ("#5"), when the fault comes from one — the Kiosk's card
         shows it beside the title (owner, 2026-10-14), so the Telegram message and the card are seen to be one problem.
         `origin`: where the agent made it from — "alert", "night" (its nightly check) or "chat" — the card's source icon.
         `check`: how the agent reads it again to close it — "minutes" or "nightly" (agent-contract `ticket.checks`, both
         read by every Kiosk: `checksBeforeList`) — the card's "Next check". `pattern`: {"titlePattern", "since"}, the duration the card words when shown.
-        `opened_at`: when its problem began (its alert first sent: Problems.card `began`), the card's time; now without."""
+        `opened_at`: when its problem began (its alert first sent: Problems.card `began`), the card's time; now without.
+        `amends`: what it says beyond (kiosk.noted: its short story); `resolved`: resolve_ticket's words — made closed, in
+        the SAME write, never shown open (a visit the villa closed while VESTA was away, owner's drills #141, #143)."""
         tid = self._ticket_id()
 
         def change(data: dict) -> str:
@@ -702,6 +727,10 @@ class Kiosk:
             if check:
                 t["check"] = check
             t.update({k: v for k, v in (pattern or {}).items() if v})     # titlePattern, since
+            for amend in amends:
+                t = amend(t) or t
+            if resolved is not None:
+                t = _resolved(data, t, **resolved)
             tickets.append(self._gated(None, t))
             data["tickets"] = tickets
             return tid
@@ -855,24 +884,8 @@ class Kiosk:
                 if isinstance(t, dict) and t.get("id") == tid:
                     if t.get("status") == "resolved":
                         return False
-                    now = _now()
-                    upd = {"at": now, "status": "resolved", "photoIds": []}
-                    if note:
-                        upd["note"] = note[:update_note_chars()]
-                    if who and lasting:
-                        upd.update(who=who[:who_chars()], kind=CLEARED, lasting=True)
-                    elif who:
-                        upd["who"] = who[:who_chars()]       # the person, on the card (faultWhen: who, else by)
-                        # its `by` is the Kiosk's to stamp ("VESTA Agent"); the person is `who` (fmEngine.workedBy)
-                        data["completions"] = list(data.get("completions") or []) + [{
-                            "id": "va-cp-" + secrets.token_hex(6), "scheduleId": "", "ticketId": tid, "at": now,
-                            "by": "", "who": who[:who_chars()], "photoIds": [], **({"note": note[:update_note_chars()]} if note else {})}]
-                    else:
-                        upd["kind"] = CLEARED
-                    tickets[i] = self._gated(t, dict(t, status="resolved", resolvedAt=now,
-                                                     **({"confirmsBy": confirms_by} if confirms_by else {}),
-                                                     **({"notWatched": True} if not_watched and not confirms_by else {}),
-                                                     updates=list(t.get("updates") or []) + [upd]))
+                    tickets[i] = self._gated(t, _resolved(data, t, note=note, who=who, confirms_by=confirms_by,
+                                                          lasting=lasting, not_watched=not_watched))
                     data["tickets"] = tickets
                     return True
             return False

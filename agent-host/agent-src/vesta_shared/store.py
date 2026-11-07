@@ -113,6 +113,10 @@ class Notes:
     # the villa's visit as its latest event told it (the alert desk's: its record, steps, photos, cards, and `closes_at`,
     # when it closes if nothing more is seen); read by monitored_until for the Kiosk fault and every copy's last line
     VISIT = "visit"
+    # its Kiosk fault is made even though its task closed before one existed, made closed in one write (Tickets.repair):
+    # ⚠️ A VISIT THE VILLA CLOSED WHILE VESTA WAS AWAY (owner's drills, 2026-11-07, #141, #143): its first event made an
+    # open fault and a "new" pop-up on the tablet, shown open ~19s until the replayed close; set by the alert desk
+    FAULT_CLOSED = "fault_closed"
     # how long its close is watched (owner 2026-10-23, every close 2026-10-25): written by THE close
     # (vesta_shared.alert_watch.close) from the terms below, gone when that close cannot come back; every reader asks
     # alert_watch (until, watching, reopens). An open incident of a desk before 0.6.350 carried it while open.

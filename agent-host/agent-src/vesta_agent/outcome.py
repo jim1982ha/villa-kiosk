@@ -359,6 +359,13 @@ class Outcome:
                                        quiet=elsewhere,
                                        head_for=head_for, keyboard=(
                     lambda c, i=iid: self.buttons.keyboard(i, c, skill_name)) if skill_name and self.buttons.open(iid) else None)
+        # ⚠️ THE TABLET'S FAULT AS SOON AS TELEGRAM'S COPIES ARE (owner's screenshots, 2026-11-07, #142): the step's lines
+        # ("alert sent again (to: …)") reached the tablet's card 10s to 12s after Telegram, the repair waiting on the
+        # siren's request, the sheet's pictures and the villa told; brought up to date now, beside them
+        slow = res.get("siren_gate") or any(isinstance(a, dict) and a.get("action") in (REDRAW, SHEET, TELL_VILLA)
+                                            for a in res.get("actions") or [])
+        early = asyncio.create_task(self._repair(done)) \
+            if self.tickets is not None and noticed and slow and _moves_faults(res) else None
         # ⚠️ AN ALERT NOBODY ASKED TO ANSWER RECEIVED (architecture review 25): Telegram refused every chat of the people
         # first in line (a person who never pressed Start) — the alert desk hands it on at its next tick, never 45
         # minutes later. Only a REFUSED chat counts: Telegram switched off is not "unreachable". Who is first in line is
@@ -422,6 +429,8 @@ class Outcome:
                 log.warning("action %s failed (%s: %s)", kind, type(e).__name__, e)
         if following is not None:
             await following
+        if early is not None:
+            await early
         if faults_moved:
             await self._repair(done)
         return done
