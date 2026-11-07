@@ -41,7 +41,7 @@ export interface PassSnapshot {
   chipDrawnWidth(key: string): number | undefined;
   chipScale: number;
   minGapPx: number;
-  /** GROUP_OVERLAP_ALLOW_WIDTHS (0: grouping on contact, rules/decided.md#badges-group-only-when-they-touch). */
+  /** GROUP_OVERLAP_ALLOW_WIDTHS (0: grouping on contact, rules/RULES.md#badges-group-only-when-they-touch). */
   overlapAllow: number;
   /** The pass's solver input, for the order-dependence re-solve. */
   solve: { items: readonly PlacementItem[]; gap: number; mode: "priority" | "legacy"; drawableMax: number };
@@ -57,9 +57,9 @@ export interface PlacementCounts {
 }
 
 /**
- * The counts that are NOT failures, each with the heading of the owner's decision that allows it in rules/decided.md
+ * The counts that are NOT failures, each with the heading of the owner's decision that allows it in rules/RULES.md
  * (tests/oracles/placement_check.mjs reads the file). Every other count is a failure: nothing on the map overlaps
- * (rules/decided.md#nothing-on-the-map-overlaps). A category is allowed here, by the owner's word, or nowhere.
+ * (rules/RULES.md#nothing-on-the-map-overlaps). A category is allowed here, by the owner's word, or nowhere.
  */
 export const ALLOWED_FINDINGS: Readonly<Partial<Record<keyof PlacementCounts, string>>> = {
   byWall: "badges-behind-a-wall-hide-while-walking",
@@ -157,7 +157,7 @@ export class PlacementCheck {
     // Two of the focused room's OWN badges get their own bucket rather than
     // being dropped: the exemption stacks them (pairFocusedRoom pairs them up),
     // and a bucket says where an overlap came from. Both are failures
-    // (rules/decided.md#nothing-on-the-map-overlaps). A focused badge under
+    // (rules/RULES.md#nothing-on-the-map-overlaps). A focused badge under
     // ANOTHER room's is a plain overlap since 2.496.553: the other badge yields
     // (badgePlacement.focusContacts).
     for (let i = 0; i < bb.length; i++) {
@@ -183,7 +183,7 @@ export class PlacementCheck {
     // PERSPECTIVE at the LIVE camera, because the check's job is the renderer's
     // own output. A badge further than the rung's reference depth draws closer
     // than the plane predicted, so a count here can be that residual — still a
-    // failure (rules/decided.md#nothing-on-the-map-overlaps), and the replay
+    // failure (rules/RULES.md#nothing-on-the-map-overlaps), and the replay
     // (tools/placement-probe.mjs) is how to tell it from a pass bug.
     // ── BUCKET, DO NOT DROP (2.432.0) ─────────────────────────────────────
     // These two `continue`s USED to skip every pair involving a focused card or
@@ -352,7 +352,7 @@ export class PlacementCheck {
     }
     if (f.orphaned || f.byWall) {
       lines.push(`PLACEMENT: ${f.orphaned} badge(s) hidden with no summary and no chip`
-        + ` (+${f.byWall} behind a wall, allowed: rules/decided.md#${ALLOWED_FINDINGS.byWall})`);
+        + ` (+${f.byWall} behind a wall, allowed: rules/RULES.md#${ALLOWED_FINDINGS.byWall})`);
     }
 
     // "Nothing is drawn inside a summary's ink" — the invariant the absorb

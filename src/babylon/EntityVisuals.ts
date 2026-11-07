@@ -995,7 +995,7 @@ export class EntityVisuals {
     this.scene = scene;
     this.config = config;
     this.walker = walker;
-    // `?debug=place`: the last pass's report, for an agent to read and replay (rules/kiosk-code.md).
+    // `?debug=place`: the last pass's report, for an agent to read and replay (rules/RULES.md).
     if (channelEnabled("place")) {
       debugCopyButton("Copy placement report",
         () => this.lastPlacementReport && JSON.stringify(this.lastPlacementReport));
@@ -4398,7 +4398,7 @@ export class EntityVisuals {
     });
     const found = this.placementCheck.check(snapshot);
     for (const line of found.lines) placeDebug(line);
-    // The report an agent reads (rules/kiosk-code.md#measure-on-the-real-model-offline): the debug box copies the
+    // The report an agent reads (rules/RULES.md#measure-on-the-real-model-offline): the debug box copies the
     // last one, and a failing pass sends it to the telemetry ring, throttled (placementTelemetry).
     const report = placementReport({
       app: typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : undefined,

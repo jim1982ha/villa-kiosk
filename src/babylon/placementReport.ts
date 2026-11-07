@@ -211,7 +211,7 @@ export function replayPlacement(rep: PlacementReport, opt: ReplayOptions = {}):
 }
 
 /** How often a failing pass may reach the telemetry ring: the ring is shared by every device, so never unthrottled
- *  (rules/kiosk-code.md#performance-instruments). */
+ *  (rules/RULES.md#performance-instruments). */
 export const PLACEMENT_TELEMETRY_MS = 60_000;
 /** Under the proxy's TELEMETRY_MAX_BODY (64 kB), with room for the stamps. */
 export const PLACEMENT_TELEMETRY_BYTES = 60_000;

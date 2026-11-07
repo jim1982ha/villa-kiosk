@@ -1,36 +1,11 @@
-# The first automated gate this branch has had beyond `tsc -b` inside the image.
-#
-# ⚠️ dev2 SHIPPED TO PRODUCTION WITH ONE GATE, AND IT COULD NOT SEE THE PYTHON.
-# Until 2.496.23 this directory held only `build.yaml`: the sole automated check
-# on 55,000 lines of TypeScript, 2,073 lines of proxy and both hard rules was
-# `RUN npm run build` in the Dockerfile. A syntax error in `supervisor-proxy.py`
-# produced a GREEN BUILD and a container serving static HTML with no auth
-# backend behind it, because nothing in the pipeline so much as parsed it.
-#
-# ⚠️ AND THE PINS THAT DID EXIST WERE INVISIBLE. Eighteen oracles sat in a
-# `tests/` directory that `.gitignore` excluded wholesale — not tracked, so a
-# fresh clone had none and CI had none. That is fixed in the same release; see
-# `.gitignore`'s own note on why `tests/*` and not `tests/`.
+# Every check (tools/release.py gates), once per change.
 name: CI
 
+# Runs once per change: build.yaml calls it before building the image (a red check publishes nothing), and a pull
+# request runs it on its own. No push trigger: that ran every check a second time.
 on:
-  push:
-    branches: [dev2, main]
-  pull_request:
-  workflow_dispatch:
-  # ⚠️ CALLABLE, SO THE IMAGE BUILD CAN DEPEND ON IT. Until this was added,
-  # build.yaml and this file were two INDEPENDENT workflows on the same push
-  # trigger: nothing in build.yaml referenced these checks, its GHCR step is an
-  # unconditional `push: true`, and its manifest-sync job needs only `build`.
-  # So a commit that reddened every gate below still published an image to GHCR
-  # and still committed the manifest to main that makes Home Assistant offer
-  # it. The iPad on the wall updated to a build whose gates had failed, and the
-  # red X sat on a DIFFERENT workflow from the one that shipped.
-  #
-  # GitHub Actions has no cross-workflow `needs:`, so build.yaml calls this as
-  # a reusable workflow and gates its own build job on the result. Every gate
-  # in this file was advisory before that edge existed.
   workflow_call:
+  pull_request:
 
 permissions:
   contents: read
@@ -73,11 +48,5 @@ jobs:
         run: python3 -m pip install --quiet aiohttp
 
       - name: The gates
-        # ⚠️ LISTED ONCE, IN tools/release.py (2.496.249). This file named nine
-        # steps, CLAUDE.md the same list again, and a developer retyped it:
-        # three copies of one fact, kept equal by hand. The module runs every
-        # gate even after a red one, prints each in its own log group and an
-        # annotation per failure, and is the same command `ship` and a
-        # developer run (`npm run gates`). tests/release.py fails if a gate
-        # reappears here.
+        # Listed once, in tools/release.py: the same command as `npm run gates`.
         run: python3 tools/release.py gates
