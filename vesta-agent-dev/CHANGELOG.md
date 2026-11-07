@@ -1,3 +1,12 @@
+## 0.12.477
+
+- At each step of a visit, the tablet's card now changes its name and its "monitoring until" together with its words,
+  instead of about 15 seconds after Telegram.
+- Cleaned up after the presence automation's switch to visits: VESTA no longer keeps the old way of handling presence
+  alerts one by one (its separate "Camera snapshot" messages before the siren question, its own siren count across
+  alerts, its "repeat counted" timer for presence). Nothing changes for the other alerts. The siren question of a visit
+  is unchanged: a reply to the visit's card, its pictures in the visit's photo sheet, only the owner can approve.
+
 ## 0.12.476
 
 - A visit the villa had already closed while VESTA was stopped is no longer shown open on the tablet for about 20
