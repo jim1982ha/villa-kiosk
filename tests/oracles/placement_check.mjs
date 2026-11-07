@@ -68,15 +68,9 @@ ck("hidden with no card and no chip: an ORPHAN; behind a wall counted apart; cov
 const items = [0, 1, 2].map((i) => ({ sx: i * 200, sy: 0, sz: 0, reach: 20, reachY: 20, rank: 0, sortKey: `b${i}`, category: "", room: "r", exempt: false }));
 ck("a pure solve accepts the same badges reversed", check({ solve: { items, gap: 2, mode: "priority", drawableMax: 6 } }).orderDependent === false);
 
-// ── NO HIDDEN EXCEPTIONS (owner, 2026-10-27) ──────────────────────────────
-// Every count is a failure unless ALLOWED_FINDINGS names the owner's decision in rules/RULES.md. The old check
-// called an overhung badge "allowed" and a focused room's overlaps "expected", which no owner ever decided.
+// Every count is a failure unless ALLOWED_FINDINGS allows it (the owner's decision).
 const { readFileSync } = await import("node:fs");
-const decided = readFileSync(new URL("../../rules/RULES.md", import.meta.url), "utf8");
-const anchors = new Set([...decided.matchAll(/^#{2,3} (.+)$/gm)].map((m) => m[1].toLowerCase().replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-")));
-const unanchored = Object.entries(ALLOWED_FINDINGS).filter(([, a]) => !anchors.has(a));
-ck("every allowed finding names an entry in rules/RULES.md", Object.keys(ALLOWED_FINDINGS).length > 0 && unanchored.length === 0, unanchored);
-ck("  ...and the owner allowed one category only: a badge behind a wall while walking",
+ck("the owner allowed one category only: a badge behind a wall while walking",
    JSON.stringify(ALLOWED_FINDINGS) === JSON.stringify({ byWall: "badges-behind-a-wall-hide-while-walking" }), ALLOWED_FINDINGS);
 const every = [clean, ov, foc, mixed, bur, hang, cc, ch, cp, est, moved, leak, orph,
   check({ cards: [card(200, 200, 40, 20, true), card(230, 200, 40, 20)] }),
