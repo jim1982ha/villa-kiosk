@@ -4127,14 +4127,11 @@ def _announcement_photo_sources(event) -> list:
     """The announcement's photos as real files inside the villa's media folder, in its order (its main photo first, the
     strongest signal's: "One visit, one story", owner 2026-11-06): [{path, label, at}], each file once, at most the
     agreement's count (vestaMessage.limits.photos); one that is not such a file is left out (_media_photo). `at` is empty
-    when the event says no time: the announcement's own then (_record_announcement).
-    ⚠️ `photo` (ONE path, no label), the villa's single photo before `photos`: the villa's automations (the doorbell, the
-    presence guard) still send it, so it is read as a list of one until they move to `photos` (phase D of "One visit, one
-    story" removes this reading)."""
+    when the event says no time: the announcement's own then (_record_announcement)."""
     data = event.get("data") if isinstance(event, dict) else None
     if not isinstance(data, dict):
         return []
-    raw = data.get("photos") if isinstance(data.get("photos"), list) else [{"path": data.get("photo")}]
+    raw = data.get("photos") if isinstance(data.get("photos"), list) else []
     out, seen = [], set()
     for one in raw:
         path = _media_photo(one.get("path")) if isinstance(one, dict) else None
