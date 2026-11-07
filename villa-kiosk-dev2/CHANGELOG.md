@@ -1,3 +1,8 @@
+## 2.496.754
+
+What you will see:
+- Nothing changes on the tablet. The working rules start again from a short list of your product decisions.
+
 ## 2.496.753
 
 What you will see:
