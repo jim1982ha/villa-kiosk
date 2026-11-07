@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.464 (7 November 2026)
+
+- A visit's photos chosen and ordered once (architecture review of visits, card 3): visit_state.photos_of (the record's
+  photos, the strongest step's device marked) and visit_state.ordered (the lead, the earliest of the strongest step's,
+  then every other photo oldest first, the siren's snapshots among them; `onSheet` on the lead and the latest of the
+  rest the picture holds). The desk's sheet action and "+N more photos" count (off_sheet), sheet.build's tiles,
+  Visits.jpeg and the "All photos" album read it; desk._visit_photos and sheet.chosen are gone. "+N more photos" stays
+  the last Status line (a caption would reach Telegram's picture only, not the tablet's card).
+
 ## 0.6.463 (7 November 2026)
 
 - An alert's Status written once (architecture review of visits, card 2): vesta_agent/status_story.py turns an

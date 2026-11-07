@@ -1,3 +1,8 @@
+## 0.12.482
+
+- A visit's photos are put in one order everywhere VESTA shows them: the strongest step's photo first (the large one
+  on the Telegram picture), then the others oldest first. "📷 All photos" now starts with that photo too.
+
 ## 0.12.481
 
 - Every Telegram copy of an alert now shows the same Status, in its chat's language: the owner's group, joined at an

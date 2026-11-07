@@ -1503,19 +1503,6 @@ def visit_siren(store: Store, iid: int, v: dict, ev: dict) -> dict | None:
                    offered_in=offered.langs)
 
 
-def _visit_photos(v: dict) -> list[dict]:
-    """The visit's photos for its sheet, the strongest step's first: [{path, label, at, strongest?}]."""
-    top = (v.get("strongest") or {}).get("entity_id")
-    out = []
-    for ph in v.get("photos") or []:
-        if not isinstance(ph, dict) or not ph.get("path") or not _when(ph.get("at")):
-            continue
-        out.append({"path": str(ph["path"]), "label": str(ph.get("camera_name") or ph.get("camera") or ""),
-                    "at": str(ph["at"]), **({"strongest": True} if top and ph.get("entity_id") == top else {})})
-    out.sort(key=lambda ph: (not ph.get("strongest"), ph["at"]))
-    return out
-
-
 def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | None, occupancy_reader, zone) -> dict:
     """A visit's step (phase opened or step), with its `visit`: the visit's ONE alert, opened at its first step seen —
     or taken over when VESTA comes back while the villa held it — then told anew at each step."""
@@ -1623,14 +1610,15 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     store.note(iid, {VISIT: v, "ha_incident": vid})
     # only the lines that changed are told (the engine folds each into its line: Notices.observe)
     was = notes_of(store.incident(iid)).get(VISIT_LINES) or {}
-    photos = _visit_photos(v)
     # at most 9: what the sheet's landscape grid holds (sheet.cells), Telegram cropping a taller picture
     shown = int(limit("visit.sheet_tiles", 9, unit="photos", group="text", lo=1, hi=9,
                       says="How many of a visit's photos its Telegram picture shows: the strongest step's, then the latest.",
                       reached="The others are on the tablet's card; the Status says how many.", told="person"))
-    if len(photos) > shown:
+    # the visit's photos, in the one order and with the ones the picture shows marked (visit_state.ordered)
+    photos = VS.ordered(VS.photos_of(v), shown)
+    if VS.off_sheet(photos):
         # its Status's last line, whatever came after (owner, 2026-11-07): a count of the card, never a moment
-        lines.append(("photos", say("visit_more_photos", n=len(photos) - shown), now.isoformat(), None))
+        lines.append(("photos", say("visit_more_photos", n=VS.off_sheet(photos)), now.isoformat(), None))
     ans = v.get("answered") if away and isinstance(v.get("answered"), dict) else None
     if ans and ans.get("option") in BUTTONS and (v.get("closed") or {}).get("why") != "answered":
         # (an answer that closed the visit is said by its close: visit_close)

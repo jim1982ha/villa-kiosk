@@ -18,6 +18,7 @@ import os
 from datetime import datetime
 
 from vesta_shared.limits import limit
+from vesta_shared import visit_state
 from vesta_shared.timeutil import clock
 
 log = logging.getLogger("vesta.sheet")
@@ -43,15 +44,6 @@ def _inside(path: str, roots) -> str | None:
     real = os.path.realpath(str(path or ""))
     ok = any(real.startswith(os.path.realpath(r) + os.sep) for r in roots if r)
     return real if ok and os.path.isfile(real) else None
-
-
-def chosen(photos: list[dict], shown: int) -> list[dict]:
-    """The photos a sheet of at most `shown` tiles holds: the strongest step's first (photos come strongest first), then
-    the latest of the rest, in the order they were taken."""
-    if len(photos) <= shown:
-        return list(photos)
-    first, rest = photos[0], sorted(photos[1:], key=lambda p: str(p.get("at")))
-    return [first, *rest[-(shown - 1):]] if shown > 1 else [first]
 
 
 def cells(n: int) -> tuple[tuple[int, int], list[tuple[int, int, int]]]:
@@ -81,7 +73,8 @@ def build(photos: list[dict], shown: int, zone: str, own: str | None = None) -> 
     w = tile_px()
     h = w * 9 // 16                                   # the cameras' own shape: a 16:9 photo fills its tile
     tiles = []
-    for p in chosen(photos, shown):
+    # the tiles the visit's one order marks for the picture (visit_state.ordered: the lead, then the latest)
+    for p in [p for p in visit_state.ordered(photos, shown) if p.get("onSheet")]:
         path = _inside(p.get("path"), (MEDIA, own))
         if not path or os.path.getsize(path) > photo_bytes():
             log.info("A visit photo was left out of its sheet: %s", "too large" if path else "not in the media folder")

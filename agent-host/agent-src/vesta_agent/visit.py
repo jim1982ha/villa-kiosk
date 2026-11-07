@@ -23,6 +23,7 @@ import os
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
+from vesta_shared import visit_state
 from vesta_shared.timeutil import clock
 
 from . import sheet
@@ -55,8 +56,7 @@ class Visits:
     async def jpeg(self, iid: int, photos: list[dict], shown: int) -> bytes | None:
         """The visit's sheet: `photos` (the desk's, the strongest first) and the cameras its siren snapped; None when
         none can be read."""
-        snaps = self.state.visit_snaps(iid)
-        both = photos[:1] + sorted(photos[1:] + snaps, key=lambda p: str(p.get("at"))) if photos else snaps
+        both = visit_state.ordered(list(photos) + self.state.visit_snaps(iid), shown)
         return await asyncio.to_thread(sheet.build, both, shown, self.tz, os.path.join(self.out_dir, "visits"))
 
     async def picture(self, iid: int, photos: list[dict], shown: int, jpeg: bytes | None = None) -> int:
@@ -69,9 +69,9 @@ class Visits:
 
     # ------------------------------------------------------------------ every photo, on ask
     def every_photo(self, iid: int) -> list[dict]:
-        """Every photo of visit `iid` (the desk's last sheet and the cameras its siren snapped), oldest first."""
-        photos = list(self.state.visit_photos(iid).get("photos") or []) + self.state.visit_snaps(iid)
-        return sorted(photos, key=lambda p: str(p.get("at")))
+        """Every photo of visit `iid` (the desk's last sheet and the cameras its siren snapped), in the visit's one order
+        (visit_state.ordered: the strongest step's first, then the rest oldest first)."""
+        return visit_state.ordered(list(self.state.visit_photos(iid).get("photos") or []) + self.state.visit_snaps(iid))
 
     async def album(self, p) -> None:
         """"All photos" pressed (`p`, press.Press: button_data.PHOTOS) under a visit's card: every photo of the visit,

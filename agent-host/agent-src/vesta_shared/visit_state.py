@@ -157,3 +157,44 @@ def ending(v: dict) -> Ending:
     ans = v.get("answered") if isinstance(v.get("answered"), dict) else {}
     at = when(home.get("at")) or (when(ans.get("at")) if home.get("why") == ANSWERED else None)
     return Ending(at if home else None, str(home.get("why") or ""), str(home.get("who") or ""), ans)
+
+
+# ------------------------------------------------------------------ the visit's photos
+# ⚠️ ONE WAY TO CHOOSE AND ORDER THEM (architecture review of visits, 2026-11-07, card 3): the desk ordered them
+# strongest first, the sheet kept the strongest and the latest, the picture put the siren's snapshots in by time and
+# "All photos" sent them oldest first — #148's sheet dropped the Parking photo with the person. One list now: the lead
+# (the strongest step's photo, the earliest of its device) first, then every other photo oldest first, those Telegram's
+# picture shows marked `onSheet` (the lead and the latest of the rest).
+def photos_of(v: dict) -> list[dict]:
+    """The photos visit `v`'s record holds, as the sheet and the tablet read them: [{path, label, at, strongest?}] — the
+    ones of the strongest step's device marked `strongest`; a photo with no file or no moment left out."""
+    top = (v.get("strongest") or {}).get("entity_id")
+    out = []
+    for ph in v.get("photos") or []:
+        if not isinstance(ph, dict) or not ph.get("path") or not when(ph.get("at")):
+            continue
+        out.append({"path": str(ph["path"]), "label": str(ph.get("camera_name") or ph.get("camera") or ""),
+                    "at": str(ph["at"]), **({"strongest": True} if top and ph.get("entity_id") == top else {})})
+    return ordered(out)
+
+
+def ordered(photos, shown: int | None = None) -> list[dict]:
+    """`photos` (the record's, the siren's snapshots with them) as ONE list: the lead first (`lead`: the earliest of the
+    strongest step's, else the earliest), then the rest oldest first; with `shown` (how many tiles Telegram's picture
+    holds), `onSheet` on the lead and the latest of the rest — in that same order."""
+    photos = [{k: x for k, x in p.items() if k not in ("lead", "onSheet")} for p in photos or [] if isinstance(p, dict)]
+    if not photos:
+        return []
+    by_time = sorted(photos, key=lambda p: str(p.get("at")))
+    lead = next((p for p in by_time if p.get("strongest")), by_time[0])
+    rest = [p for p in by_time if p is not lead]
+    out = [{**lead, "lead": True}, *rest]
+    if shown is None:
+        return out
+    keep = {id(p) for p in rest[-(shown - 1):]} if shown > 1 else set()
+    return [{**out[0], "onSheet": True}, *({**p, "onSheet": id(p) in keep} for p in rest)]
+
+
+def off_sheet(photos) -> int:
+    """How many of an `ordered` list Telegram's picture leaves to the tablet ("+N more photos")."""
+    return sum(1 for p in photos or [] if not p.get("onSheet"))

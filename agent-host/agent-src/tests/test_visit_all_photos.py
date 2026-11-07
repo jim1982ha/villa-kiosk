@@ -25,7 +25,7 @@ def _photos_button(v, chat):
     return [b for row in rows for b in row if b["callback_data"].startswith(button_data.PHOTOS + ":")], rows
 
 
-def test_all_photos_sends_every_photo_of_the_visit_in_time_order_in_the_chat_pressed_only(tmp_path, kiosk, media):
+def test_all_photos_sends_every_photo_of_the_visit_in_its_one_order_in_the_chat_pressed_only(tmp_path, kiosk, media):
     v = villa(tmp_path, kiosk)
     vi = Visit(media=media)
     vi.add("motion", PARKING, "18:20:16", photo=True)
@@ -46,8 +46,10 @@ def test_all_photos_sends_every_photo_of_the_visit_in_time_order_in_the_chat_pre
     assert [(c, r) for c, _caps, r in albums] == [(OWNER, mid), (OWNER, mid)], "replies to the card, in that chat alone"
     caps = [cap for _c, cs, _r in albums for cap in cs]
     assert [len(cs) for _c, cs, _r in albums] == [10, 3], "albums of up to 10"
-    assert caps[:3] == ["Parking · 18:20", "Entrance Left · 18:34", "Outdoor entrance Lock · 18:35"], caps
-    assert caps[3:] == [f"Waterwall Buddha · 18:4{i}" for i in range(10)], "every photo, oldest first"
+    # the visit's one order (visit_state.ordered): the strongest step's first, as the picture's largest tile, then
+    # every other photo oldest first (architecture review of visits, 2026-11-07, card 3)
+    assert caps[:3] == ["Outdoor entrance Lock · 18:35", "Parking · 18:20", "Entrance Left · 18:34"], caps
+    assert caps[3:] == [f"Waterwall Buddha · 18:4{i}" for i in range(10)], "every other photo, oldest first"
     assert v.tg.toasts[-1][1] == "13 photos: sending.", v.tg.toasts
     # pressed again later: the visit's photos as they are then, sent again
     _press(v, OWNER, button["callback_data"], mid, cb="cb2")
