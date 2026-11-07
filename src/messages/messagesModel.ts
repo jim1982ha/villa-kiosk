@@ -12,6 +12,7 @@ import { roomLabel } from "@/config/devicePlace";
 import { STAGE_WORDS } from "@/fm/fmEngine";
 import { pillClass, QUIET_PILL } from "@/fm/tone";
 import { byTime, stillKept } from "./feed";
+import { villaTime, wallClock } from "@/utils/villaClock";
 
 export type MessagesFilter = "issues" | "notifications" | "reports";
 
@@ -143,7 +144,7 @@ export function villaAlertCards(kept: readonly Announcement[]): { open: CardView
 
 /** When the villa's message was first sent: its `since` (kept by the add-on since 2.496.742), else, for one kept before,
  *  the earliest moment it holds — a photo's time, its first line's time ("Seen at Parking, 07:09", on its own last
- *  step's day, the day before when later than it), its last step's. ⚠️ OWNER, 2026-11-07: a visit kept before showed its
+ *  step's day at the villa, the day before when later than it), its last step's. ⚠️ OWNER, 2026-11-07: a visit kept before showed its
  *  close (07:16) for its first send (07:09). Pure. */
 export function firstMoment(a: Pick<Announcement, "since" | "at" | "photos" | "text">): string | null {
   if (a.since) return a.since;
@@ -151,9 +152,8 @@ export function firstMoment(a: Pick<Announcement, "since" | "at" | "photos" | "t
   const times = a.photos.map((p) => Date.parse(p.at)).filter(Number.isFinite);
   const m = /\b(\d{1,2}):(\d{2})\b/.exec(a.text.split("\n").map((l) => l.trim()).find(Boolean) ?? "");
   if (m && Number.isFinite(last)) {
-    const d = new Date(last);
-    d.setHours(Number(m[1]), Number(m[2]), 0, 0);
-    times.push(d.getTime() > last ? d.getTime() - 86_400_000 : d.getTime());
+    const w = wallClock(last), on = (day: number) => villaTime(w.year, w.month, day, Number(m[1]), Number(m[2]));
+    times.push(on(w.day) > last ? on(w.day - 1) : on(w.day));
   }
   if (Number.isFinite(last)) times.push(last);
   return times.length ? new Date(Math.min(...times)).toISOString() : a.at || null;

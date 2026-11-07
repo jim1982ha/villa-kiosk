@@ -1,4 +1,4 @@
-## 2.496.744
+## 2.496.745
 
 What you will see:
 - While VESTA Agent is off, the villa's own visit card under Closed can be erased like every other closed card: hold it, enter the superadmin code, and it goes.
