@@ -166,13 +166,17 @@ console.log("\n  one corner per device — the bottom-right pill is the linked e
   const same = cases.every(([st, cfg]) => {
     const src = storeLookSource({ "lock.l": ent("lock.l", "locked"), "binary_sensor.d": ent("binary_sensor.d", st, { device_class: "door" }) },
       { entityMap: lockMap, isHidden: () => false, ...cfg });
-    const own = deviceLook("binary_sensor.d", src).mark;   // the sensor's own badge, its top-right
+    // ONE "!" PER DEVICE (owner, 2026-11-07): a fault the lock's top-right already wears is not drawn again below
+    const lockFault = cfg.hasFault?.("lock.l") ?? false;
+    const ownSrc = storeLookSource({ "binary_sensor.d": ent("binary_sensor.d", st, { device_class: "door" }) },
+      { entityMap: lockMap, isHidden: () => false, ...cfg, hasFault: (id) => !lockFault && (cfg.hasFault?.(id) ?? false) });
+    const own = deviceLook("binary_sensor.d", ownSrc).mark;   // the sensor's own badge, its top-right
     const pill = deviceLook("lock.l", src).linkPill;
     return own === null ? pill === "on" || pill === "off" : own === "active" ? pill === "on" : pill === own;
   });
-  ck("the bottom-right pill of the lock IS the door sensor's own top-right pill, whenever it has one (one precedence; in use: \"on\")", same);
+  ck("the bottom-right pill of the lock IS the door sensor's own top-right pill, whenever it has one (one precedence; in use: \"on\"; the lock's own fault never twice)", same);
   ck("  ...and the source says so: linkPillOf applies badgeMarkOf to the linked reading",
-     /const mark = r\.link \? badgeMarkOf\(r\.link\) : null;/.test(src("utils/deviceActivity.ts"))
+     /const mark = link \? badgeMarkOf\(link\) : null;/.test(src("utils/deviceActivity.ts"))
      && /return mark \? pillOf\(mark\) : r\.linkedOn \? "on" : "off";/.test(src("utils/deviceActivity.ts")));
 }
 

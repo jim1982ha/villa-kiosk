@@ -95,4 +95,27 @@ console.log("\n  every window as its profile sees the villa (architecture review
      deviceIssues(attentionFor(problems, owner).attentionGroups).amber.has(id));
 }
 
+console.log("\n  a camera and its motion sensor (owner, 2026-11-07, visit #148-P1: two amber \"!\" on a camera with nothing wrong)");
+{
+  // the camera's detection is its linked entity, folded onto the camera's device; the fault names the detection
+  const cam = "camera.cam_a", motion = "binary_sensor.cam_a_motion";
+  const entities = { [cam]: ent(cam, "idle"), [motion]: ent(motion, "on") };
+  const entityMap = { [cam]: { entityId: cam, type: "camera", linkedEntityId: motion } };
+  const devices = devicesOf({ ids: [cam], folding: new Map([[motion, cam]]) });
+  const look = (t) => {
+    const fmData = { ...EMPTY_FM_DATA, tickets: [t] };
+    const att = attentionFor({ devices, attentionItems: attentionOf({ devices, entities, entityMap, resolvedRooms: {}, fmData }).attentionItems }, () => true);
+    const amber = deviceIssues(att.attentionGroups).amber;
+    const l = deviceLook(cam, storeLookSource(entities, { entityMap, isHidden: () => false, isCritical: () => false, hasFault: (x) => amber.has(x) }));
+    return { mark: l.mark, linkPill: l.linkPill, cards: att.attentionGroups.length };
+  };
+  const fault = { ...ticket("t1", motion, "Camera A detection stuck"), source: "vesta_agent", origin: "alert", alertNumber: 91 };
+  const F = look(fault);
+  ck("a device fault on the camera's detection: ONE amber \"!\" (top-right); the other corner says the detection is on",
+     F.mark === "fault" && F.linkPill === "on", F);
+  const V = look({ ...fault, title: "Activity while the villa is empty", monitoredUntil: "2026-11-07T06:40:00Z" });
+  ck("  ...an open visit naming the detection: no \"!\" at all, the detection's plain on pill; its card still listed",
+     V.mark !== "fault" && V.linkPill === "on" && V.cards === 1, V);
+}
+
 done("✅ one answer per device: the badge, the window's sign and the Cockpit's card agree");
