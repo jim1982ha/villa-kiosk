@@ -1,3 +1,13 @@
+## 0.12.475
+
+- A visit someone closed on the villa's own Telegram message (Done) while VESTA was stopped is now closed in VESTA too
+  as soon as VESTA starts again: one closed alert, "Done at 08:53 (Jm)", no new alert popping up on the tablet and
+  nothing sent on Telegram. Alert #140 from this morning's drill closes by itself within 5 minutes of the update.
+- The tablet's card no longer says "monitoring until" twice: its state line reads "New alert", the time stays on its
+  pill. Telegram still reads "New alert, monitoring until 08:47".
+- The villa's own line for a button pressed while VESTA is away says the time only, like VESTA: "Done on Telegram at
+  08:53 (Jm)" (needs the updated visit package and a one-word change in the presence automation).
+
 ## 0.12.474
 
 - Nothing changes in what VESTA does. Updates are prepared faster: the step that proved each test could fail is gone,
