@@ -280,8 +280,8 @@ async def main() -> None:
     (media / "cams" / "ring1.jpg").write_bytes(proxy._JPEG_MAGIC + b"first ring")
     kev = lambda msg, **more: {"event_type": proxy.ANNOUNCEMENT_EVENT, "data": {"message": msg, **more}}
     (DATA / "announcements.json").write_text("[]")
-    # the villa's single `photo` (one path), as the doorbell still sends it until phase D: read as a list of one
-    await proxy._record_announcement(app, kev("<b>Ring</b>", key="run-1", photo=f"{media}/cams/ring1.jpg",
+    # a ring's `photos`: one path, no camera named
+    await proxy._record_announcement(app, kev("<b>Ring</b>", key="run-1", photos=[{"path": f"{media}/cams/ring1.jpg"}],
                                                buttons=[[["🔓 Unlock", "/unlock_gate"]]]))
     status, body = await call("GET", "/announcements", owner)
     ring = body["announcements"][0]
@@ -421,7 +421,7 @@ async def main() -> None:
     pending.unlink()
     proxy.ANNOUNCEMENT_PHOTO_GRACE_S = 0   # the sweep's grace for a copy not yet recorded: none here
     (media / "cams" / "ring2.jpg").write_bytes(proxy._JPEG_MAGIC + b"new ring")
-    await proxy._record_announcement(app, kev("<b>Ring again</b>", key="run-1", photo=f"{media}/cams/ring2.jpg"))
+    await proxy._record_announcement(app, kev("<b>Ring again</b>", key="run-1", photos=[{"path": f"{media}/cams/ring2.jpg"}]))
     ck("a rewrite bringing its own photo: the first copy is deleted", not photo_file.exists(),
        sorted(p.name for p in (DATA / proxy.ANNOUNCEMENT_PHOTO_DIR).iterdir()))
     (DATA / "announcements.json").write_text(json.dumps(

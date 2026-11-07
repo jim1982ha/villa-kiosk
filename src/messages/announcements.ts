@@ -76,7 +76,7 @@ export interface Announcement {
   versions?: Record<string, LanguageVersion>;
 }
 
-/** One photo of an announcement: the add-on's id, the camera that took it (empty when the villa named none: a ring's),
+/** One photo of an announcement: the add-on's id, the camera that took it (empty when the villa named none),
  *  when it was taken (ISO). */
 export interface AnnouncementPhoto { id: string; label: string; at: string }
 
