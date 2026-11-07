@@ -79,7 +79,7 @@ jobs:
           version=$(grep -E '^version:' vesta-agent/config.yaml | head -1 | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add agent-host/versions.json vesta-agent/config.yaml vesta-agent/CHANGELOG.md
+          git add agent-host/versions.json vesta-agent/config.yaml vesta-agent/CHANGELOG.md agent-host/agent-src/vesta-agent.yaml
           git commit -m "chore(agent-updates): VESTA Agent ${version} — newer HA MCP or VESTA Agent release"
           for attempt in 1 2 3; do
             if git push origin "HEAD:${{ matrix.branch }}"; then break; fi

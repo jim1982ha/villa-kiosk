@@ -16,6 +16,7 @@ Synthetic villa: every id invented."""
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 
 import pytest
@@ -452,6 +453,10 @@ def test_a_visit_the_villa_closed_while_vesta_was_away_is_one_closed_card_never_
         tmp_path, kiosk, media, why, where, phases, last):
     from datetime import datetime
     v = villa(tmp_path, kiosk)
+    # the visit is dated DAY (fixed) and replayed at the real time: the longest window keeps its close matched
+    # (the default 1 day failed the test from DAY + 1 day on); good until DAY + 30 days
+    with open(os.path.join(os.path.dirname(v.s.policy_path), "limits.yaml"), "a", encoding="utf-8") as f:
+        f.write("\nalerts.late_close_days: 30\n")
     vi = Visit(media=media, owner="pending")
     vi.add("motion", PARKING, "10:03:27", photo=True)
     events = [vi.event("opened")]

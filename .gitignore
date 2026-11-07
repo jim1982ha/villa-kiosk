@@ -1,70 +1,26 @@
 .claude
-# ⚠️ `.scratch/` HOLDS THE VILLA'S OWN VOCABULARY AND MUST NEVER BE TRACKED.
-# `forbidden-tokens.txt` lists the property's name, hostname and model filename
-# so `tests/hard-rules.py` can check they are absent from everything shipped —
-# writing them into a tracked guard would BE the leak the guard exists to
-# prevent. It was NOT ignored on this branch until 2.496.24, which was found by
-# the guard's own first run trying to add its token list.
+# Villa-private data and the Kiosk's security suite: never tracked.
 .scratch/
-# ⚠️ `tests/*` AND NOT `tests/`, AND THE DIFFERENCE IS THE WHOLE POINT. Git
-# cannot re-include anything whose PARENT directory is excluded, so `tests/`
-# followed by `!tests/oracles/` silently keeps ignoring the whole tree — the
-# negation never gets a chance to match. Matching the CHILDREN leaves the
-# directory itself considered, so the negations below work.
-#
-# ⚠️ THIS BRANCH HAD THE BROKEN FORM UNTIL 2.496.23, AND IT IS WHY dev2 SHIPPED
-# TO PRODUCTION WITH ONE GATE. Eighteen oracles existed and not one of them was
-# tracked: a fresh clone had none, CI had none, and every pin written here was
-# invisible the moment it left this machine.
-tests/*
-!tests/oracles/
-!tests/consistency/
-# ⚠️ THE PATTERN, NOT ONE FILE. This read `!tests/hard-rules.py` and git
-# refused the very next guard added beside it. A negation naming one file is a
-# negation somebody has to remember; naming the shape is one nobody does.
-!tests/*.py
-# ⚠️ AND THE DATA A GATE READS, NOT JUST THE GATE. `tests/forbidden-token-hashes.txt`
-# is what lets the villa-name check run on a build server at all, and it landed
-# here as a .txt — so `!tests/*.py` did not reach it, it was never committed,
-# and CI failed on three consecutive releases with the check correctly refusing
-# to pass without it. The lesson written three lines above, re-learned one
-# extension over.
-!tests/*.txt
-# Local scratch inside the tracked directories stays ignored.
-tests/oracles/*.log
-tests/**/node_modules/
+# Local leftovers of the Kiosk tree this branch no longer carries (the Kiosk lives on dev2).
+/tests/
+/rootfs/
+/src/
 node_modules
 dist
-dist-ssr
-dist.zip
-*.local
+tsconfig.tsbuildinfo
 .env
 .DS_Store
-*.log
-.vite
-tsconfig.tsbuildinfo
-sources/
 ._*
-
-# Local model & asset working files — these are user data, never committed.
-*.sh3d
-*.obj
-*.mtl
-*.glb
-
-# Python bytecode (supervisor-proxy.py)
+*.log
 __pycache__/
 *.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+agent-host/.venv/
 
-# Local dev TLS certs (mkcert) — never commit
-certs/
-
-# The VESTA Agent's source lives in agent-host/agent-src/ (owner, 2026-09-30).
-# ⚠️ ITS VILLA TESTS NEVER: tests/villa/ holds real data pulled from the villa
-# (fixtures of its entities, history and helpers) — the hard rule of CLAUDE.md.
-# They run locally; CI runs the synthetic tests beside them.
+# The VESTA Agent's villa tests hold real data pulled from the villa: they run locally only.
 agent-host/agent-src/tests/villa/
-
-# a store a test or a probe left in the agent's folder never ships inside the app (architecture review 24: d1.sqlite did)
+# a store a test or a probe left in the agent's folder never ships inside the app
 agent-host/agent-src/*.sqlite
 agent-host/agent-src/*.sqlite-*

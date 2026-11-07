@@ -122,6 +122,14 @@ if changelog.exists():
 else:
     problems.append("CHANGELOG.md is missing")
 
+# One version: the agent reads its own from vesta-agent.yaml (vesta_agent.__version__), and it is the app's.
+agent_manifest = ROOT / "agent-host/agent-src/vesta-agent.yaml"
+if DIR.name == "vesta-agent" and agent_manifest.exists():
+    agent_version = (yaml.safe_load(agent_manifest.read_text()) or {}).get("version")
+    if str(agent_version) != str(cfg.get("version")):
+        problems.append(f"agent-src/vesta-agent.yaml is {agent_version}, config.yaml is {cfg.get('version')}: "
+                        "one version, written by tools/release.py ship")
+
 for name in ("icon.png", "logo.png", "DOCS.md"):
     if not (DIR / name).exists():
         problems.append(f"{name} is missing")

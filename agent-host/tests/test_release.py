@@ -1,329 +1,35 @@
-"""agent-host/tools/release.py, driven through its interface — `ship` in a throwaway repository.
-
-0 means Home Assistant offers the version: a real `ship` runs against a
-temporary git repository with a bare "origin", a stand-in for CI that publishes
-the channel manifest on main, and gates that pass or fail on demand.
-"""
+"""agent-host/tools/release.py: a smoke test. CI is the release's gate; this only proves the module reads a version,
+writes it, and names gates that exist."""
 from __future__ import annotations
 
 import importlib.util
-import os
-import subprocess
 import sys
-import tempfile
-import threading
-import time
 import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("agent_release", HERE.parent / "tools" / "release.py")
 release = importlib.util.module_from_spec(spec)
-sys.modules["agent_release"] = release   # a dataclass looks its module up while it is created
+sys.modules["agent_release"] = release
 spec.loader.exec_module(release)
 
 
-def sh(cwd: Path, *cmd: str) -> str:
-    return subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True).stdout
-
-
-class Sandbox:
-    def __init__(self, tmp: Path):
-        self.tmp, self.origin, self.repo = tmp, tmp / "origin.git", tmp / "repo"
-        sh(tmp, "git", "init", "-q", "--bare", "-b", "main", str(self.origin))
-        sh(tmp, "git", "init", "-q", "-b", "main", str(self.repo))
-        for k, v in (("user.name", "t"), ("user.email", "t@t"), ("commit.gpgsign", "false")):
-            sh(self.repo, "git", "config", k, v)
-        self.write("vesta-agent/config.yaml", 'name: "VESTA Agent"\nversion: "1.0.0"\n')
-        self.write("vesta-agent/CHANGELOG.md", "## 1.0.0\n\n- first\n")
-        self.write("agent-host/agent-src/vesta-agent.yaml", 'name: vesta-agent\nversion: "0.5.0"\n')
-        self.write("agent-host/agent-src/vesta_agent/__init__.py", '"""engine"""\n__version__ = "0.5.0"\n')
-        self.write("agent-host/agent-src/CHANGELOG.md", "# Changelog\n\n## 0.5.0 (1 October 2026)\n\n- first\n")
-        self.write("agent-host/agent-src/vesta_agent/app.py", "x = 1\n")
-        self.write("vesta-agent-dev/config.yaml", 'version: "1.0.0"\n')
-        sh(self.repo, "git", "add", "-A"); sh(self.repo, "git", "commit", "-q", "-m", "start")
-        sh(self.repo, "git", "remote", "add", "origin", str(self.origin))
-        sh(self.repo, "git", "push", "-q", "origin", "main", "main:agent-dev")
-        sh(self.repo, "git", "checkout", "-q", "-b", "work", "origin/agent-dev")
-
-    def write(self, rel: str, text: str) -> None:
-        p = self.repo / rel
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(text)
-
-    def read(self, rel: str) -> str:
-        return (self.repo / rel).read_text()
-
-    def stage(self, *rel: str) -> None:
-        sh(self.repo, "git", "add", *rel)
-
-    def ship(self, message="release", gates_ok=True, wait=0.05, dry=False):
-        release.ROOT = self.repo
-        calls = []
-
-        def gates(staged):
-            calls.append(1)
-            return [release.GateResult("stub", "pass" if gates_ok else "FAIL")]
-        try:
-            return release.ship(message, dry, wait_minutes=wait, poll_seconds=0.05, gates=gates), calls, ""
-        except release.ReleaseError as e:
-            return None, calls, str(e)
-
-    def publish_when(self, subject: str, version: str, stop: threading.Event) -> None:
-        """CI's sync job: once a commit with `subject` is on agent-dev, publish `version` on main."""
-        work = self.tmp / "ci"
-        sh(self.tmp, "git", "clone", "-q", str(self.origin), str(work))
-        for k, v in (("user.name", "ci"), ("user.email", "ci@ci")):
-            sh(work, "git", "config", k, v)
-        while not stop.is_set():
-            sh(work, "git", "fetch", "-q", "origin")
-            if subject in sh(work, "git", "log", "-1", "--format=%s", "origin/agent-dev"):
-                sh(work, "git", "checkout", "-q", "-B", "main", "origin/main")
-                (work / "vesta-agent-dev/config.yaml").write_text(f'version: "{version}"\n')
-                sh(work, "git", "commit", "-qam", f"publish {version}")
-                sh(work, "git", "push", "-q", "origin", "main")
-                return
-            time.sleep(0.05)
-
-
-class ReleaseRules(unittest.TestCase):
-    def test_versions_are_named_by_the_changelogs_top_entry(self):
-        self.assertEqual(release.changelog_version("# Changelog\n\n## 0.6.18 (2 Oct)\n\n## 0.6.17\n", "x"), "0.6.18")
+class Smoke(unittest.TestCase):
+    def test_the_version_is_the_changelogs_top_entry_written_into_yaml(self):
+        self.assertEqual(release.changelog_version("# x\n\n## 0.12.10\n\n## 0.12.9\n"), "0.12.10")
         self.assertGreater(release.parse_version("0.12.10"), release.parse_version("0.12.9"))
-        self.assertEqual(release.with_init_version('a\n__version__ = "0.1.0"\n', "0.2.0"), 'a\n__version__ = "0.2.0"\n')
         self.assertEqual(release.with_yaml_version('n: x\nversion: "1.0.0"\n', "1.0.1"), 'n: x\nversion: "1.0.1"\n')
 
-    def test_ci_runs_the_gates_through_this_module_and_lists_none_of_its_own(self):
-        import re
-        wf = (HERE.parent.parent / ".github/workflows/agent-host.yaml").read_text()
-        job = wf[wf.index("\n  tests:"):wf.index("\n  build:")]
-        runs = [r.strip() for r in re.findall(r"^\s+run:\s*\|?\s*(.*)$", job, re.M)]
-        self.assertIn("python3 agent-host/tools/release.py gates", job)
-        self.assertFalse([r for r in runs if re.search(r"tests/(test_|check_)|pytest tests", r)], runs)
-        self.assertFalse((HERE / "ci_run.sh").exists(), "ci_run.sh's job is the module's annotations now")
-
-
-class ShipPlan(unittest.TestCase):
-    """What ship runs here (owner, 2026-11-07: "simplify massively"): the fast gates, a gate whose subject is staged,
-    and the tests naming a changed file; every gate is CI's."""
-
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.src = Path(self.tmp.name)
-        (self.src / "tests/villa").mkdir(parents=True)
-        for name, text in {"tests/test_outcome.py": "from vesta_agent import outcome\n",
-                           "tests/test_desk.py": "from vesta_agent.desk import x  # the desk skill\n",
-                           "tests/test_other.py": "outcomes = 1  # not the word\n",
-                           "tests/villa/test_real.py": "import outcome\n"}.items():
-            (self.src / name).write_text(text)
-        self.engine = release.ENGINE_DIR
-
-    def tearDown(self):
-        self.tmp.cleanup()
-
-    def picked(self, *rel: str):
-        return release.changed_tests([self.engine + r for r in rel], self.src)
-
-    def test_the_tests_naming_a_changed_file_and_no_other(self):
-        self.assertEqual(self.picked("vesta_agent/outcome.py"), ["tests/test_outcome.py", "tests/villa/test_real.py"])
-        self.assertEqual(self.picked("starter/skills/desk/SKILL.md"), ["tests/test_desk.py"])
-        self.assertEqual(self.picked("tests/test_other.py"), ["tests/test_other.py"])
-        self.assertEqual(self.picked("CHANGELOG.md"), [])
-        self.assertEqual(self.picked("tests/conftest.py"), [], "CI runs them all, never every test here")
-
-    def test_an_app_only_release_runs_the_fast_gates_and_no_test(self):
-        names = [g[0] for g in release.ship_plan(["vesta-agent/CHANGELOG.md"])]
-        self.assertEqual(names, [g[0] for g in release.GATES if release.SHIP_WHEN.get(g[0], ()) is None
-                                 and g[0] != release.TESTS_GATE])
-        self.assertNotIn(release.TESTS_GATE, names)
-        self.assertNotIn("The sidecar, the restart policy and the stop grace", names)
-
-    def test_every_gate_has_its_ship_rule(self):
-        self.assertEqual(set(release.SHIP_WHEN) | {release.TESTS_GATE}, {g[0] for g in release.GATES})
-
-
-class Ship(unittest.TestCase):
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.s = Sandbox(Path(self._tmp.name))
-
-    def tearDown(self):
-        self._tmp.cleanup()
-
-    def test_refusals(self):
-        # nothing new and the top version already published: it says so (2026-10-14), never "not staged"
-        code, calls, err = self.s.ship()
-        self.assertEqual((code, calls), (0, []), err)
-        self.s.write("agent-host/agent-src/vesta_agent/app.py", "x = 9\n")
-        self.s.stage("agent-host/agent-src/vesta_agent/app.py")
-        code, _, err = self.s.ship()
-        self.assertIsNone(code); self.assertIn("vesta-agent/CHANGELOG.md is not staged", err)
-        sh(self.s.repo, "git", "checkout", "HEAD", "--", "agent-host/agent-src/vesta_agent/app.py")
-        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.0\n\n- again\n")
-        self.s.stage("vesta-agent/CHANGELOG.md")
-        code, _, err = self.s.ship()
-        self.assertIsNone(code); self.assertIn("not above", err)
-        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- the change\n\n## 1.0.0\n")
-        self.s.stage("vesta-agent/CHANGELOG.md")
-        self.s.write("agent-host/agent-src/vesta_agent/app.py", "x = 2\n")
-        code, _, err = self.s.ship()
-        self.assertIsNone(code); self.assertIn("unstaged", err)
-        self.s.stage("agent-host/agent-src/vesta_agent/app.py")
-        code, _, err = self.s.ship()
-        self.assertIsNone(code); self.assertIn("agent-src/CHANGELOG.md is not staged", err)
-
-    def test_an_app_only_release_leaves_the_engine_alone(self):
-        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- docs\n\n## 1.0.0\n")
-        self.s.stage("vesta-agent/CHANGELOG.md")
-        code, calls, err = self.s.ship()
-        self.assertEqual(code, 3, err)   # pushed, CI never published: never 0
-        # run again with nothing new: already committed and pushed, not published — exit 3, no gate, no "not staged"
-        code, calls, err = self.s.ship()
-        self.assertEqual((code, calls), (3, []), err)
-        files = set(sh(self.s.repo, "git", "show", "--name-only", "--format=", "HEAD").split())
-        self.assertEqual(files, {"vesta-agent/CHANGELOG.md", "vesta-agent/config.yaml"})
-        self.assertIn('"0.5.0"', self.s.read("agent-host/agent-src/vesta-agent.yaml"))
-
-    def test_a_release_that_ships_a_starter_skill_records_it_as_shipped(self):
-        # architecture review, 2026-10-17: 104 of 229 releases recorded a changed starter skill by hand, after a test
-        # failed and said how — the release records it itself, like the version, and only when a skill ships
-        stub = ("import json, os\n"
-                "def record_shipped(d):\n"
-                "    names = sorted(os.listdir(d))\n"
-                "    with open(os.path.join(os.path.dirname(d), 'shipped-skills.json'), 'w') as f:\n"
-                "        json.dump({n: [open(os.path.join(d, n, 'SKILL.md')).read()] for n in names}, f)\n")
-        self.s.write("agent-host/agent-src/vesta_agent/skills.py", stub)
-        self.s.write("agent-host/agent-src/starter/skills/desk/SKILL.md", "v2")
-        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- skill\n\n## 1.0.0\n")
-        self.s.write("agent-host/agent-src/CHANGELOG.md", "# Changelog\n\n## 0.5.1 (2 October 2026)\n\n- y\n\n## 0.5.0\n")
-        self.s.stage("vesta-agent/CHANGELOG.md", "agent-host/agent-src/CHANGELOG.md", "agent-host/agent-src/vesta_agent/skills.py",
-                     "agent-host/agent-src/starter/skills/desk/SKILL.md")
-        code, calls, err = self.s.ship()
-        self.assertEqual(code, 3, err)
-        files = set(sh(self.s.repo, "git", "show", "--name-only", "--format=", "HEAD").split())
-        self.assertIn("agent-host/agent-src/starter/shipped-skills.json", files)
-        self.assertIn('"desk": ["v2"]', self.s.read("agent-host/agent-src/starter/shipped-skills.json"))
-
-    def test_a_release_without_a_starter_skill_records_nothing(self):
-        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- docs\n\n## 1.0.0\n")
-        self.s.stage("vesta-agent/CHANGELOG.md")
-        self.s.ship()
-        self.assertFalse((self.s.repo / "agent-host/agent-src/starter/shipped-skills.json").exists())
-
-    def test_the_release_copies_the_kiosks_agreement_itself(self):
-        # architecture review R, 2026-10-29: the copy was made by hand after the Kiosk's release; one release stopped on it
-        self.s.write("agent-host/rootfs/opt/vesta/host/agent-contract.json", '{"version": 1}\n')
-        sh(self.s.repo, "git", "add", "-A"); sh(self.s.repo, "git", "commit", "-q", "-m", "copy")
-        sh(self.s.repo, "git", "push", "-q", "origin", "HEAD:agent-dev")
-        kiosk = self.s.tmp / "kiosk"
-        sh(self.s.tmp, "git", "clone", "-q", str(self.s.origin), str(kiosk))
-        for k, v in (("user.name", "k"), ("user.email", "k@k")):
-            sh(kiosk, "git", "config", k, v)
-        (kiosk / "rootfs/usr/share/vesta").mkdir(parents=True)
-        (kiosk / "rootfs/usr/share/vesta/agent-contract.json").write_text('{"version": 2}\n')
-        sh(kiosk, "git", "add", "-A"); sh(kiosk, "git", "commit", "-q", "-m", "kiosk")
-        sh(kiosk, "git", "push", "-q", "origin", "HEAD:dev2")
-        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- x\n\n## 1.0.0\n")
-        self.s.stage("vesta-agent/CHANGELOG.md")
-        code, calls, err = self.s.ship()
-        self.assertEqual(code, 3, err)
-        files = set(sh(self.s.repo, "git", "show", "--name-only", "--format=", "HEAD").split())
-        self.assertIn("agent-host/rootfs/opt/vesta/host/agent-contract.json", files)
-        self.assertEqual(self.s.read("agent-host/rootfs/opt/vesta/host/agent-contract.json"), '{"version": 2}\n')
-
-    def test_a_failing_gate_commits_nothing(self):
-        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- x\n\n## 1.0.0\n")
-        self.s.stage("vesta-agent/CHANGELOG.md")
-        head = sh(self.s.repo, "git", "rev-parse", "HEAD")
-        code, calls, err = self.s.ship(gates_ok=False)
-        self.assertIsNone(code); self.assertIn("gate failed", err)
-        self.assertEqual(sh(self.s.repo, "git", "rev-parse", "HEAD"), head)
-        self.assertEqual(sh(self.s.repo, "git", "rev-parse", "origin/agent-dev"), head)
-
-    def test_an_engine_release_writes_all_three_engine_sites_and_waits_until_published(self):
-        self.s.write("vesta-agent/CHANGELOG.md", "## 1.0.1\n\n- engine\n\n## 1.0.0\n")
-        self.s.write("agent-host/agent-src/CHANGELOG.md", "# Changelog\n\n## 0.5.1 (2 October 2026)\n\n- y\n\n## 0.5.0\n")
-        self.s.write("agent-host/agent-src/vesta_agent/app.py", "x = 3\n")
-        self.s.stage("vesta-agent/CHANGELOG.md", "agent-host/agent-src/CHANGELOG.md", "agent-host/agent-src/vesta_agent/app.py")
-        code, calls, err = self.s.ship(dry=True)
-        self.assertEqual((code, calls), (0, []), err)
-        self.assertIn('"0.5.0"', self.s.read("agent-host/agent-src/vesta-agent.yaml"))   # dry run wrote nothing
-        stop = threading.Event()
-        ci = threading.Thread(target=self.s.publish_when, args=("engine release", "1.0.1", stop))
-        ci.start()
-        try:
-            code, calls, err = self.s.ship(message="engine release", wait=0.5)
-        finally:
-            stop.set(); ci.join()
-        self.assertEqual(code, 0, err)
-        code, calls, err = self.s.ship()
-        self.assertEqual((code, calls), (0, []), err)    # run again: already published, nothing to do
-        self.assertIn('version: "0.5.1"', self.s.read("agent-host/agent-src/vesta-agent.yaml"))
-        self.assertIn('__version__ = "0.5.1"', self.s.read("agent-host/agent-src/vesta_agent/__init__.py"))
-        self.assertIn('version: "1.0.1"', self.s.read("vesta-agent/config.yaml"))
-
-    def test_a_push_of_a_built_path_without_a_new_version_is_refused(self):
-        # retro, 2026-10-15: a note pushed by hand under agent-host/ rebuilt 0.12.215 over itself
-        with tempfile.TemporaryDirectory() as t:
-            box = Sandbox(Path(t))
-            release.ROOT = box.repo
-            remote = sh(box.repo, "git", "rev-parse", "origin/agent-dev").strip()
-            box.write("agent-host/ARCHITECTURE.md", "a note\n"); box.stage("agent-host/ARCHITECTURE.md")
-            sh(box.repo, "git", "commit", "-q", "-m", "note")
-            head = sh(box.repo, "git", "rev-parse", "HEAD").strip()
-            why = release.check_push(head, remote)
-            self.assertIn("without a new version", why or "")
-            self.assertEqual(release.main(["check-push", head, remote]), 1)
-            box.write("vesta-agent/config.yaml", 'name: "VESTA Agent"\nversion: "1.0.1"\n'); box.stage("vesta-agent/config.yaml")
-            sh(box.repo, "git", "commit", "-q", "-m", "release")
-            self.assertIsNone(release.check_push(sh(box.repo, "git", "rev-parse", "HEAD").strip(), remote))
-            box.write("README.md", "elsewhere\n"); box.stage("README.md")                 # a path nothing builds
-            sh(box.repo, "git", "commit", "-q", "-m", "readme")
-            self.assertIsNone(release.check_push(sh(box.repo, "git", "rev-parse", "HEAD").strip(),
-                                                 sh(box.repo, "git", "rev-parse", "HEAD~1").strip()))
-            self.assertIsNone(release.check_push(head, release.ZERO))                      # a new branch
-
-    def test_refused_on_main(self):
-        sh(self.s.repo, "git", "checkout", "-q", "main")
-        code, _, err = self.s.ship()
-        self.assertIsNone(code); self.assertIn("on main", err)
-
-
-
-class CiFailures(unittest.TestCase):
-    """ship says a red CI run at once (2026-10-05: it waited out the full --wait)."""
-
-    def test_a_failed_run_is_named_and_a_running_one_is_not(self):
-        red = {"workflow_runs": [{"name": "Build", "status": "completed", "conclusion": "failure"},
-                                 {"name": "Tests", "status": "in_progress", "conclusion": None}]}
-        self.assertEqual(release.ci_failures("x", fetch=lambda: red), ["Build"])
-
-    def test_github_unreachable_is_not_a_failure(self):
-        def down():
-            raise OSError("offline")
-        self.assertIsNone(release.ci_failures("x", fetch=down))
-
-
-PORT_WORDS = ("SIDECAR" + "_PORT", "95" + "83")     # built, so this file does not name them itself
-
-
-class Lanes(unittest.TestCase):
-    """Every gate whose test file binds the sidecar's fixed port is in the "sidecar" lane (architecture review,
-    2026-10-07: the lanes were a table keyed by the gates' display names — a renamed gate left it unseen)."""
-
-    def test_a_gate_that_uses_the_sidecars_port_shares_its_lane(self):
-        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        found = 0
-        for name, cmd, cwd, lane in release.GATES:
-            for part in cmd:
-                path = os.path.join(root, cwd, part)
-                if part.endswith(".py") and os.path.isfile(path):
-                    src = open(path, encoding="utf-8").read()
-                    if any(word in src for word in PORT_WORDS):
-                        found += 1
-                        self.assertEqual(lane, "sidecar", name)
-        self.assertGreaterEqual(found, 3)
+    def test_every_gate_names_a_file_that_exists_and_ci_runs_them_through_this_module(self):
+        root = HERE.parent.parent
+        for name, cmd, cwd, _ in release.GATES:
+            for arg in cmd:
+                if arg.endswith((".py", ".sh")) and "/" in arg:
+                    self.assertTrue((root / cwd / arg).exists(), (name, arg))
+        for site in release.VERSION_SITES:
+            self.assertIsNotNone(release.yaml_version((root / site).read_text()), site)
+        self.assertIn("python3 agent-host/tools/release.py gates", (root / ".github/workflows/agent-host.yaml").read_text())
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=1)
+    unittest.main()

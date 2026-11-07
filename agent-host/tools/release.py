@@ -1,27 +1,16 @@
 #!/usr/bin/env python3
-"""The VESTA Agent's release, as one module: `gates` and `ship`.
+"""The VESTA Agent's release: `gates` and `ship`.
 
-    python3 agent-host/tools/release.py gates              # every gate CI runs, all of them, then a summary
-    python3 agent-host/tools/release.py ship -F msg.txt    # versions → gates → commit → push → published
+    python3 agent-host/tools/release.py gates              # every gate, even after a red one, then a summary (CI runs this)
+    python3 agent-host/tools/release.py ship -F msg.txt    # version → quick check → commit → push → wait until published
     python3 agent-host/tools/release.py ship --dry-run     # what ship would do, changing nothing
 
-The same shape as the VESTA Kiosk's tools/release.py, which lives on its own
-branch: each app's release knows only its own files (the isolation rule,
-agent-host/CLAUDE.md), so the two are siblings, not one module.
+ONE VERSION: the top `## x.y.z` of vesta-agent/CHANGELOG.md, written into vesta-agent/config.yaml (what the store
+offers) and agent-src/vesta-agent.yaml (the agent reads it as its __version__, the UI's cache path).
 
-TWO VERSIONS, EACH NAMED BY ITS CHANGELOG. The app (what Home Assistant offers)
-is the top `## x.y.z` of vesta-agent/CHANGELOG.md, copied into
-vesta-agent/config.yaml. The engine (agent-src) is the top `## x.y.z (date)` of
-agent-host/agent-src/CHANGELOG.md, copied into vesta-agent.yaml and
-vesta_agent/__init__.__version__ — and asked for only when the release changes
-agent-src. Nothing compared those three sites before this module; an
-agent-src test now does (tests/test_engine_version.py).
-
-"SHIPPED" MEANS PUBLISHED: exit 0 only once main's vesta-agent-dev/config.yaml
-names the version. GATES ARE LISTED HERE ONCE: agent-host.yaml runs `gates`, every
-one, before the image is built (a red gate publishes nothing). `ship` runs only the
-fast ones here and the tests that name a changed file (ship_plan), and leaves the
-rest to that CI run (owner, 2026-11-07: "simplify massively", releases too slow).
+CI is the gate: agent-host.yaml runs `gates` before the image is built, so a red gate publishes nothing. `ship` runs
+only the quick checks here, then waits once for main's vesta-agent-dev/config.yaml to name the version: exit 0 when
+published, 3 when pushed but not published in time (read the CI run), 2 when refused.
 """
 
 from __future__ import annotations
@@ -32,461 +21,203 @@ import re
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 IN_CI = os.environ.get("GITHUB_ACTIONS") == "true"
 
-APP = "VESTA Agent (dev)"
 BRANCH = "agent-dev"
-CHANNEL_DIR = "vesta-agent-dev"        # what CI writes on main for BRANCH (agent-host.yaml sync-agent-dev-manifest)
-APP_CHANGELOG = "vesta-agent/CHANGELOG.md"
-APP_CONFIG = "vesta-agent/config.yaml"
-ENGINE_DIR = "agent-host/agent-src/"
-ENGINE_CHANGELOG = "agent-host/agent-src/CHANGELOG.md"
-ENGINE_MANIFEST = "agent-host/agent-src/vesta-agent.yaml"
-ENGINE_INIT = "agent-host/agent-src/vesta_agent/__init__.py"
-#: The starter skills, and the record of every version of them a release shipped (vesta_agent.skills.record_shipped):
-#: a skill whose fingerprint is not in it is taken for one the villa edited, and never updated again.
+CHANNEL_CONFIG = "vesta-agent-dev/config.yaml"     # written on main by CI (agent-host.yaml sync-agent-dev-manifest)
+CHANGELOG = "vesta-agent/CHANGELOG.md"
+VERSION_SITES = ("vesta-agent/config.yaml", "agent-host/agent-src/vesta-agent.yaml")
+#: Every version of each starter skill a release shipped (vesta_agent.skills.record_shipped): a skill whose
+#: fingerprint is not in it is taken for one the villa edited, and never updated again.
 STARTER_SKILLS = "agent-host/agent-src/starter/skills/"
 SHIPPED_SKILLS = "agent-host/agent-src/starter/shipped-skills.json"
+#: The agreement with the VESTA Kiosk: the Kiosk's file on its branch, and this app's copy of it.
+KIOSK_AGREEMENT, KIOSK_BRANCH = "rootfs/usr/share/vesta/agent-contract.json", "dev2"
+AGREEMENT_COPY = "agent-host/rootfs/opt/vesta/host/agent-contract.json"
 
-#: ⚠️ THE TESTS' PYTHON IS A FIXED PLACE (2026-10-13): this machine has no `python` and its python3 lacks pytest, and
-#: a session found the only working environment in ANOTHER session's /tmp scratchpad, gone at the next reboot. Off CI,
-#: agent-host/.venv (uv venv --python 3.13; pyyaml pytest pytest-xdist ruff -r agent-src/requirements.txt; gitignored) is used when it
-#: exists; CI installs its own packages and runs with the interpreter that started this file.
+#: Off CI, agent-host/.venv (gitignored; uv venv --python 3.13; pyyaml pytest pytest-xdist ruff
+#: -r agent-src/requirements.txt). This machine has no `python` and its python3 lacks pytest.
 VENV_PY = ROOT / "agent-host" / ".venv" / "bin" / "python"
 PY = str(VENV_PY) if not IN_CI and VENV_PY.exists() else sys.executable
-# (name, command, working directory under ROOT, lane). ⚠️ A LANE RUNS ITS GATES IN ORDER, LANES RUN AT ONCE
-# (2026-10-05: one gate at a time was 77 s, 38 of them the agent's own tests). Every gate that binds the fixed sidecar
-# port (contract.SIDECAR_PORT) is in the "sidecar" lane, so two never bind it together — said on the gate's own line
-# (architecture review, 2026-10-07: a table keyed by these names meant a renamed gate silently left the lane;
-# tests/test_release.py finds every gate whose test file uses the port and holds it to this lane).
-GATES: list[tuple[str, list[str], str, str]] = [
-    ("The VESTA Kiosk is untouched", ["bash", "agent-host/tests/check_isolation.sh", "origin/main"], ".", "rest"),
-    ("The shared rules are dev2's", ["bash", "agent-host/tests/check_shared_rules.sh"], ".", "rest"),
-    ("The app manifest agrees with what the Supervisor reads", [PY, "agent-host/tests/check_manifest.py"], ".", "rest"),
-    # Home Assistant's own checks — the community example app's CI: the add-on
-    # linter, hadolint, shellcheck (agent-host/tools/addon_lint.py; needs Docker).
-    ("Home Assistant's add-on checks",
-     [PY, "agent-host/tools/addon_lint.py", "vesta-agent", "agent-host/Dockerfile", "agent-host/rootfs"], ".", "rest"),
-    ("The host's start-up, contract, folders and redaction", [PY, "agent-host/tests/test_host.py"], ".", "sidecar"),
-    ("The self-test reports each link correctly", [PY, "agent-host/tests/test_selftest.py"], ".", "sidecar"),
-    # since 0.12.46 (no test mode) its slot tests stand a fake on the sidecar's port too
-    ("The sidecar, the restart policy and the stop grace", [PY, "agent-host/tests/test_supervise.py"], ".", "sidecar"),
-    ("The update check moves only forward", [PY, "agent-host/tests/test_updates.py"], ".", "rest"),
-    ("The agreement with the VESTA Kiosk is the Kiosk's own", [PY, "agent-host/tests/test_kiosk_contract.py"], ".", "rest"),
-    ("What the host sends is what the agent reads", [PY, "agent-host/tests/test_env_contract.py"], ".", "rest"),
-    ("The agent's manifest and the host state", [PY, "agent-host/tests/test_manifest.py"], ".", "rest"),
-    ("The release module", [PY, "agent-host/tests/test_release.py"], ".", "rest"),
-    # ⚠️ NO NAME USED THAT IS NOT DEFINED (retro, 2026-10-15): a 1,042-line split of the reports' composer was checked
-    # for missing imports by a throwaway script. pyflakes' rules (ruff F) on the agent's own code; on the tests,
-    # undefined names only (their fixture imports read as unused). `# noqa: F401` marks a re-export.
+SRC = "agent-host/agent-src"
+
+# (name, command, working directory under ROOT, run by ship too)
+GATES: list[tuple[str, list[str], str, bool]] = [
+    ("The VESTA Kiosk is untouched", ["bash", "agent-host/tests/check_isolation.sh", "origin/main"], ".", True),
+    ("The app manifest agrees with what the Supervisor reads", [PY, "agent-host/tests/check_manifest.py"], ".", True),
     ("Every name the agent's code uses is defined",
-     [PY, "-m", "ruff", "check", "--no-cache", "--select", "F", "vesta_agent", "vesta_shared", "starter"],
-     "agent-host/agent-src", "rest"),
+     [PY, "-m", "ruff", "check", "--no-cache", "--select", "F", "vesta_agent", "vesta_shared", "starter"], SRC, True),
     ("Every name the tests use is defined",
-     [PY, "-m", "ruff", "check", "--no-cache", "--select", "F821,F822,F823", "tests"], "agent-host/agent-src", "rest"),
-    # The synthetic tests. tests/villa/ (real data, gitignored) is collected too wherever it exists.
-    # -n auto (pytest-xdist): about 60 s on this machine instead of 130 — longer than a command's 2-minute limit (retro,
-    # 2026-10-15)
+     [PY, "-m", "ruff", "check", "--no-cache", "--select", "F821,F822,F823", "tests"], SRC, True),
+    ("Home Assistant's add-on checks",
+     [PY, "agent-host/tools/addon_lint.py", "vesta-agent", "agent-host/Dockerfile", "agent-host/rootfs"], ".", False),
+    ("The host's start-up, contract, folders and redaction", [PY, "agent-host/tests/test_host.py"], ".", False),
+    ("The self-test reports each link correctly", [PY, "agent-host/tests/test_selftest.py"], ".", False),
+    ("The sidecar, the restart policy and the stop grace", [PY, "agent-host/tests/test_supervise.py"], ".", False),
+    ("The update check moves only forward", [PY, "agent-host/tests/test_updates.py"], ".", False),
+    ("The agreement with the VESTA Kiosk is the Kiosk's own", [PY, "agent-host/tests/test_kiosk_contract.py"], ".", False),
+    ("What the host sends is what the agent reads", [PY, "agent-host/tests/test_env_contract.py"], ".", False),
+    ("The agent's manifest and the host state", [PY, "agent-host/tests/test_manifest.py"], ".", False),
+    ("The release module", [PY, "agent-host/tests/test_release.py"], ".", False),
+    # tests/villa/ (real data, gitignored) is collected too wherever it exists.
     ("The VESTA Agent's own tests", [PY, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider", "-n", "auto"],
-     "agent-host/agent-src",
-     "agent"),
+     SRC, False),
 ]
-
-
-# ⚠️ WHAT ship RUNS HERE, THE REST IS CI'S (owner, 2026-11-07). Every gate ran here (5 min 10 s, 309 s of it the 2,087
-# tests) and then again in CI. Here: the gates that take a second, a gate whose own subject is staged (the paths after
-# its name), and the agent's tests that name a changed file (changed_tests). The gate's name is GATES' own.
-SHIP_WHEN: dict[str, tuple[str, ...] | None] = {
-    "The VESTA Kiosk is untouched": None,
-    "The shared rules are dev2's": None,
-    "The app manifest agrees with what the Supervisor reads": None,
-    "Home Assistant's add-on checks": ("vesta-agent/config.yaml", "agent-host/Dockerfile", "agent-host/rootfs/"),
-    "The host's start-up, contract, folders and redaction": ("agent-host/rootfs/", "agent-host/tests/test_host.py"),
-    "The self-test reports each link correctly": ("agent-host/rootfs/", "agent-host/tests/test_selftest.py"),
-    "The sidecar, the restart policy and the stop grace": ("agent-host/rootfs/", "agent-host/tests/test_supervise.py"),
-    "The update check moves only forward": None,
-    "The agreement with the VESTA Kiosk is the Kiosk's own": None,
-    "What the host sends is what the agent reads": None,
-    "The agent's manifest and the host state": None,
-    "The release module": ("agent-host/tools/release.py", "agent-host/tests/test_release.py"),
-    "Every name the agent's code uses is defined": None,
-    "Every name the tests use is defined": None,
-}
-TESTS_GATE = "The VESTA Agent's own tests"
-#: Folder names too common to say which tests a file concerns.
-_NOT_A_SUBJECT = {"agent-src", "vesta_agent", "vesta_shared", "starter", "skills", "tests", "villa", "fixtures", "ui",
-                  "homeassistant", "packages", "SKILL", "CHANGELOG", "README", "__init__"}
-
-
-def changed_tests(staged: list[str], src: Path | None = None) -> list[str]:
-    """The agent's tests (paths under agent-src) that name a staged agent-src file: a changed test itself, and every
-    test whose text names the changed file's stem or its folder as a word; a conftest picks none of its own (owner,
-    2026-11-07: it ran all ~2,000 here, CI runs them before publishing). A pre-check like the Kiosk's oracles:changed: a test reaching the file through another module is not picked; CI
-    runs every test."""
-    src = src or ROOT / ENGINE_DIR
-    tests = sorted(p for d in ("tests", "tests/villa") for p in (src / d).glob("test_*.py"))
-    picked: set[str] = set()
-    words: set[str] = set()
-    for f in staged:
-        if not f.startswith(ENGINE_DIR) or f == ENGINE_CHANGELOG:
-            continue
-        rel = Path(f[len(ENGINE_DIR):])
-        if rel.name == "conftest.py":
-            continue
-        if rel.parts[0] == "tests" and rel.name.startswith("test_") and rel.suffix == ".py":
-            picked.add(str(rel))
-        words |= {w for w in (rel.stem, rel.parent.name) if len(w) >= 3 and w not in _NOT_A_SUBJECT}
-    if words:
-        pattern = re.compile(r"\b(" + "|".join(re.escape(w) for w in sorted(words)) + r")\b")
-        picked |= {str(t.relative_to(src)) for t in tests if pattern.search(t.read_text(encoding="utf-8"))}
-    return sorted(picked)
-
-
-def ship_plan(staged: list[str]) -> list[tuple[str, list[str], str, str]]:
-    """The gates ship runs here for these staged files, in GATES' shape."""
-    plan = [g for g in GATES if g[0] != TESTS_GATE
-            and (SHIP_WHEN[g[0]] is None or any(f.startswith(SHIP_WHEN[g[0]]) for f in staged))]
-    picked = changed_tests(staged)
-    if picked:
-        name, cmd, cwd, lane = next(g for g in GATES if g[0] == TESTS_GATE)
-        plan.append((f"{name}, the {len(picked)} naming what changed", cmd[:3] + picked + cmd[4:], cwd, lane))
-    return plan
-
-
-@dataclass
-class GateResult:
-    name: str
-    status: str            # "pass" | "FAIL"
-    seconds: float = 0.0
-    note: str = ""
-
-
-def _run_one(cmd: list[str], cwd: str) -> tuple[int, str, float]:
-    start = time.monotonic()
-    proc = subprocess.run(cmd, cwd=ROOT / cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    return proc.returncode, proc.stdout or "", time.monotonic() - start
-
-
-def run_ship_gates(staged: list[str]) -> list[GateResult]:
-    return run_gates(ship_plan(staged))
-
-
-def run_gates(gates: list[tuple[str, list[str], str, str]] | None = None) -> list[GateResult]:
-    """Run every gate (or these), even after a failure; return what each did."""
-    from concurrent.futures import ThreadPoolExecutor
-    gates = GATES if gates is None else gates
-    lanes: dict[str, list[int]] = {}
-    for i, (_name, _cmd, _cwd, lane_name) in enumerate(gates):
-        lanes.setdefault(lane_name, []).append(i)
-    done: dict[int, tuple[int, str, float]] = {}
-
-    def lane(indices: list[int]) -> None:
-        for i in indices:
-            done[i] = _run_one(gates[i][1], gates[i][2])
-    with ThreadPoolExecutor(max_workers=max(1, len(lanes))) as pool:
-        list(pool.map(lane, lanes.values()))
-    results: list[GateResult] = []
-    for i, (name, _cmd, _cwd, _lane) in enumerate(gates):
-        print(f"::group::{name}" if IN_CI else f"\n═══ {name} ═══", flush=True)
-        returncode, out, took = done[i]
-        sys.stdout.write(out)
-        if IN_CI:
-            print("::endgroup::", flush=True)
-        if returncode == 0:
-            results.append(GateResult(name, "pass", took))
-            continue
-        results.append(GateResult(name, "FAIL", took, f"exit {returncode}"))
-        if IN_CI:
-            # The job log needs a signed-in account; an annotation does not (was tests/ci_run.sh).
-            for line in _failure_lines(out):
-                print(f"::error title={name}::{line}", flush=True)
-    return results
-
-
-def _failure_lines(out: str) -> list[str]:
-    pick = [l.strip() for l in out.splitlines() if re.search(r"^(FAIL|ERROR):|Error:|assert|    FAIL|^  FAIL|FAILED", l)]
-    return [l[:300] for l in pick[:8]] or ["failed (see the log group above)"]
-
-
-def print_summary(results: list[GateResult]) -> bool:
-    print("\n── gates ─────────────────────────────────────────")
-    for r in results:
-        mark = "✅" if r.status == "pass" else "❌"
-        print(f"  {mark} {r.status:<5} {r.name}{f'  ({r.seconds:.0f} s)' if r.seconds else ''}{'  ' + r.note if r.note else ''}")
-    failed = [r for r in results if r.status == "FAIL"]
-    print(f"── {len(failed)} failed of {len(results)}" if failed else "── all gates pass")
-    return not failed
-
-
-# ── Versions ─────────────────────────────────────────────────────────────────
-VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 
 
 class ReleaseError(RuntimeError):
     pass
 
 
-def parse_version(v: str) -> tuple[int, int, int]:
-    if not VERSION.match(v):
+def run_gates(quick: bool = False) -> bool:
+    """Run every gate (or only ship's), even after a failure; print a summary; True when all pass."""
+    results = []
+    for name, cmd, cwd, in_ship in GATES:
+        if quick and not in_ship:
+            continue
+        print(f"::group::{name}" if IN_CI else f"\n═══ {name} ═══", flush=True)
+        start = time.monotonic()
+        p = subprocess.run(cmd, cwd=ROOT / cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        sys.stdout.write(p.stdout or "")
+        if IN_CI:
+            print("::endgroup::", flush=True)
+            if p.returncode:
+                print(f"::error title={name}::failed (see the log group above)", flush=True)
+        results.append((name, p.returncode == 0, time.monotonic() - start))
+    print("\n── gates ─────────────────────────────────────────")
+    for name, ok, took in results:
+        print(f"  {'✅ pass' if ok else '❌ FAIL'}  {name}  ({took:.0f} s)")
+    failed = sum(not ok for _, ok, _ in results)
+    print(f"── {failed} failed of {len(results)}" if failed else "── all gates pass")
+    return not failed
+
+
+# ── Versions ─────────────────────────────────────────────────────────────────
+
+def parse_version(v: str) -> tuple[int, ...]:
+    if not re.fullmatch(r"\d+\.\d+\.\d+", v):
         raise ReleaseError(f"{v!r} is not a version (x.y.z)")
-    a, b, c = (int(x) for x in v.split("."))
-    return a, b, c
+    return tuple(int(x) for x in v.split("."))
 
 
-def changelog_version(text: str, where: str) -> str:
-    """The first `## x.y.z` heading (a date after it, as agent-src writes, is allowed)."""
+def changelog_version(text: str) -> str:
     m = re.search(r"^## (\d+\.\d+\.\d+)\b", text, re.M)
     if not m:
-        raise ReleaseError(f"{where} has no `## x.y.z` entry")
+        raise ReleaseError(f"{CHANGELOG} has no `## x.y.z` entry")
     return m.group(1)
 
 
-def yaml_version(text: str, where: str) -> str:
+def yaml_version(text: str) -> str | None:
     m = re.search(r'^version:\s*"?([^"\s]+)"?\s*$', text, re.M)
-    if not m:
-        raise ReleaseError(f"{where} has no version line")
-    return m.group(1)
+    return m.group(1) if m else None
 
 
 def with_yaml_version(text: str, version: str) -> str:
-    return re.sub(r'^(version:\s*)"?[^"\s]+"?(\s*)$', lambda m: f'{m.group(1)}"{version}"{m.group(2)}', text, count=1, flags=re.M)
+    return re.sub(r'^(version:\s*)"?[^"\s]+"?(\s*)$', lambda m: f'{m.group(1)}"{version}"{m.group(2)}', text,
+                  count=1, flags=re.M)
 
 
-def with_init_version(text: str, version: str) -> str:
-    return re.sub(r'^__version__ = "[^"]+"', f'__version__ = "{version}"', text, count=1, flags=re.M)
-
-
-def git(*args: str, check: bool = True) -> str:
-    for attempt in range(4):
-        p = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
-        # Worktrees share one set of remote refs: a fetch running in another (the Kiosk's own ship)
-        # holds their lock for a moment. Wait it out rather than fail the release.
-        if not (args[0] == "fetch" and "cannot lock ref" in p.stderr) or attempt == 3:
-            break
-        time.sleep(2 + attempt * 3)
-    if check and p.returncode != 0:
+def git(*args: str) -> str:
+    p = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
+    if p.returncode != 0:
         raise ReleaseError(f"git {' '.join(args)}: {p.stderr.strip() or p.stdout.strip()}")
     return p.stdout
 
 
 def published_version() -> str | None:
     git("fetch", "-q", "origin", "main")
-    p = subprocess.run(["git", "show", f"origin/main:{CHANNEL_DIR}/config.yaml"], cwd=ROOT, capture_output=True, text=True)
-    return yaml_version(p.stdout, CHANNEL_DIR) if p.returncode == 0 else None
+    p = subprocess.run(["git", "show", f"origin/main:{CHANNEL_CONFIG}"], cwd=ROOT, capture_output=True, text=True)
+    return yaml_version(p.stdout) if p.returncode == 0 else None
 
 
-def _newer(changelog: str, released: str, label: str) -> str:
-    version = changelog_version((ROOT / changelog).read_text(), changelog)
-    if parse_version(version) <= parse_version(released):
-        raise ReleaseError(f"{changelog}'s top entry is {version}, not above the released {label} {released}: "
-                           "add the new entry at the TOP")
-    return version
-
-
-# ── ship ─────────────────────────────────────────────────────────────────────
-
-def ci_failures(sha: str, fetch=None) -> list[str] | None:
-    """The CI runs for `sha` that ended in failure, by name — [] when none has (yet), None when GitHub could
-    not be asked (offline, rate-limited: the wait simply goes on, as before).
-
-    ⚠️ ship USED TO WAIT OUT A RED RUN (2026-10-05): it only watched main for the published version, so a
-    failed CI run kept it waiting the full --wait (30-40 min) before saying "not published". The repository
-    is public: its Actions runs are readable without a token."""
-    import json as _json
-    import urllib.request
-    if fetch is None:
-        url = git("remote", "get-url", "origin").strip()
-        m = re.search(r"github\.com[:/]([^/]+)/([^/.]+?)(?:\.git)?$", url)
-        if not m:
-            return None
-        api = f"https://api.github.com/repos/{m.group(1)}/{m.group(2)}/actions/runs?head_sha={sha}&per_page=20"
-
-        def fetch():
-            with urllib.request.urlopen(urllib.request.Request(api, headers={"Accept": "application/vnd.github+json"}),
-                                        timeout=10) as r:
-                return _json.load(r)
-    try:
-        runs = fetch().get("workflow_runs") or []
-    except Exception:  # noqa: BLE001 — not knowing is not failing
-        return None
-    return [str(r.get("name") or r.get("id")) for r in runs if r.get("status") == "completed" and r.get("conclusion") == "failure"]
-
-#: The agreement with the VESTA Kiosk: the Kiosk's file on its branch, and this app's copy of it.
-KIOSK_AGREEMENT, KIOSK_BRANCH = "rootfs/usr/share/vesta/agent-contract.json", "dev2"
-AGREEMENT_COPY = "agent-host/rootfs/opt/vesta/host/agent-contract.json"
-
-
-def copy_agreement(dry_run: bool) -> bool:
-    """⚠️ THE AGREEMENT IS COPIED BY THE RELEASE, NEVER BY HAND (architecture review R, 2026-10-29: 0.12.389 never
-    published, and an Agent release waited a day, because the copy was made after the Kiosk's release, by hand). The
-    Kiosk's file on its branch replaces this app's copy and ships with the release; the gate that compares them stays
-    (test_kiosk_contract.py: the Kiosk must have published it first). True when it changed. Nothing when the Kiosk's
-    branch cannot be read: that gate says so."""
-    git("fetch", "-q", "origin", KIOSK_BRANCH, check=False)
+def copy_agreement(dry_run: bool) -> None:
+    """The Kiosk's agreement on its branch replaces this app's copy and ships with the release (a copy made by hand
+    once held a release back a day). test_kiosk_contract.py still compares them in CI."""
+    subprocess.run(["git", "fetch", "-q", "origin", KIOSK_BRANCH], cwd=ROOT, capture_output=True)
     theirs = subprocess.run(["git", "show", f"origin/{KIOSK_BRANCH}:{KIOSK_AGREEMENT}"], cwd=ROOT,
                             capture_output=True, text=True)
     mine = ROOT / AGREEMENT_COPY
     if theirs.returncode != 0 or (mine.exists() and mine.read_text() == theirs.stdout):
-        return False
+        return
     print(f"  the agreement copied from the Kiosk ({KIOSK_BRANCH})" + (" (dry run: not written)" if dry_run else ""))
     if not dry_run:
-        mine.parent.mkdir(parents=True, exist_ok=True)
         mine.write_text(theirs.stdout)
         git("add", AGREEMENT_COPY)
-    return True
 
 
-def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: float, gates=run_ship_gates) -> int:
-    git("fetch", "-q", "origin", BRANCH, "main")
+# ── ship ─────────────────────────────────────────────────────────────────────
+
+def ship(message: str | None, dry_run: bool, wait_minutes: float, poll_seconds: float = 15) -> int:
+    git("fetch", "-q", "origin", BRANCH)
     if git("rev-parse", "--abbrev-ref", "HEAD").strip() == "main":
-        raise ReleaseError("on main: the agent releases from agent-dev (main is written only by CI's channel sync)")
-    if subprocess.run(["git", "merge-base", "--is-ancestor", f"origin/{BRANCH}", "HEAD"], cwd=ROOT).returncode != 0:
-        raise ReleaseError(f"HEAD does not contain origin/{BRANCH}: pull it first, a push would not fast-forward")
-    # ⚠️ ALREADY RELEASED SAYS SO (2026-10-14): an interrupted ship had committed, pushed and published; run again, it
-    # refused with "not staged" and the release was reported as never having happened. When the app changelog's top
-    # version IS the last commit's and nothing is waiting, the answer is where that release stands.
-    if not git("diff", "--name-only").strip() and not git("diff", "--cached", "--name-only").strip():
-        top = changelog_version((ROOT / APP_CHANGELOG).read_text(), APP_CHANGELOG)
-        if top == yaml_version(git("show", f"HEAD:{APP_CONFIG}"), APP_CONFIG):
-            sha = git("rev-parse", "HEAD").strip()
-            if published_version() == top:
-                print(f"✅ ALREADY PUBLISHED: {top} is commit {sha[:8]}, and Home Assistant offers it. Nothing to do.")
-                return 0
-            if subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", f"origin/{BRANCH}"], cwd=ROOT).returncode == 0:
-                print(f"⏳ {top} is already committed ({sha[:8]}) and pushed, NOT published yet: read the CI run for it.")
-                return 3
-            raise ReleaseError(f"{top} is already committed ({sha[:8]}) but NOT pushed: push it (git push origin HEAD:{BRANCH})")
+        raise ReleaseError("on main: the agent releases from agent-dev")
+    if subprocess.run(["git", "merge-base", "--is-ancestor", f"origin/{BRANCH}", "HEAD"], cwd=ROOT).returncode:
+        raise ReleaseError(f"HEAD does not contain origin/{BRANCH}: pull first")
     copy_agreement(dry_run)
-    unstaged = git("diff", "--name-only").strip()
-    if unstaged:
-        raise ReleaseError("unstaged changes in tracked files: stage what ships (by name) or stash the rest\n  "
-                           + unstaged.replace("\n", "\n  "))
+    if git("diff", "--name-only").strip():
+        raise ReleaseError("unstaged changes in tracked files: stage what ships (by name) or stash the rest")
     staged = git("diff", "--cached", "--name-only").split()
-    if APP_CHANGELOG not in staged:
-        raise ReleaseError(f"{APP_CHANGELOG} is not staged: its new top entry is what names the version")
-    app_now = yaml_version(git("show", f"HEAD:{APP_CONFIG}"), APP_CONFIG)
-    app = _newer(APP_CHANGELOG, app_now, "app")
-    engine_changed = any(f.startswith(ENGINE_DIR) and f != ENGINE_CHANGELOG for f in staged)
-    engine = None
-    if engine_changed:
-        if ENGINE_CHANGELOG not in staged:
-            raise ReleaseError(f"this release changes {ENGINE_DIR} but {ENGINE_CHANGELOG} is not staged: "
-                               "the engine's own entry names its version")
-        engine = _newer(ENGINE_CHANGELOG, yaml_version(git("show", f"HEAD:{ENGINE_MANIFEST}"), ENGINE_MANIFEST), "engine")
-    if published_version() == app:
-        raise ReleaseError(f"{app} is already published")
+    if CHANGELOG not in staged:
+        raise ReleaseError(f"{CHANGELOG} is not staged: its new top entry names the version")
+    before = yaml_version(git("show", f"HEAD:{VERSION_SITES[0]}")) or "0.0.0"
+    version = changelog_version((ROOT / CHANGELOG).read_text())
+    if parse_version(version) <= parse_version(before):
+        raise ReleaseError(f"{CHANGELOG}'s top entry is {version}, not above {before}: add the new entry at the TOP")
+    skills = any(f.startswith(STARTER_SKILLS) for f in staged)
 
-    print(f"{APP}: app {app_now} → {app}" + (f", engine → {engine}" if engine else ", engine unchanged")
-          + f"  (branch {BRANCH}, channel {CHANNEL_DIR}/ on main)")
-    print("  ships: " + ", ".join(staged))
+    print(f"VESTA Agent (dev) {before} → {version}: {len(staged)} files staged")
     if dry_run:
-        sites = [APP_CONFIG] + ([ENGINE_MANIFEST, ENGINE_INIT] if engine else []) + \
-            ([SHIPPED_SKILLS] if any(f.startswith(STARTER_SKILLS) for f in staged) else [])
-        print(f"  dry run: would write versions to {', '.join(sites)}; run here: "
-              f"{', '.join(g[0] for g in ship_plan(staged))}; commit; push HEAD:{BRANCH}; CI runs all {len(GATES)} "
-              f"gates before it publishes; wait ≤ {wait_minutes:g} min for main")
+        print(f"  dry run: would write {version} to {', '.join(VERSION_SITES)}"
+              + (f", record {SHIPPED_SKILLS}" if skills else "")
+              + f"; run the quick checks; commit; push HEAD:{BRANCH}; wait ≤ {wait_minutes:g} min for main")
         return 0
     if not message:
         raise ReleaseError("a commit message is needed (-m or -F)")
 
-    # 1. The versions, everywhere they are written.
-    (ROOT / APP_CONFIG).write_text(with_yaml_version((ROOT / APP_CONFIG).read_text(), app))
-    git("add", APP_CONFIG)
-    if engine:
-        (ROOT / ENGINE_MANIFEST).write_text(with_yaml_version((ROOT / ENGINE_MANIFEST).read_text(), engine))
-        (ROOT / ENGINE_INIT).write_text(with_init_version((ROOT / ENGINE_INIT).read_text(), engine))
-        git("add", ENGINE_MANIFEST, ENGINE_INIT)
-
-    # ...and the starter skills it ships, recorded as shipped (architecture review, 2026-10-17: 104 of 229 releases
-    # recorded them by hand, after a test failed and said how).
-    if any(f.startswith(STARTER_SKILLS) for f in staged):
+    for site in VERSION_SITES:
+        (ROOT / site).write_text(with_yaml_version((ROOT / site).read_text(), version))
+    git("add", *VERSION_SITES)
+    if skills:
         subprocess.run([PY, "-c", "from vesta_agent.skills import record_shipped; record_shipped('starter/skills')"],
-                       cwd=ROOT / ENGINE_DIR, check=True)
+                       cwd=ROOT / SRC, check=True)
         git("add", SHIPPED_SKILLS)
 
-    # 2. The fast gates and the tests naming what changed, on exactly what will be committed; CI runs them all.
-    if not print_summary(gates(staged)):
-        raise ReleaseError("a gate failed: nothing committed. Fix, stage, and run ship again (the versions are already written)")
+    if not run_gates(quick=True):
+        raise ReleaseError("a quick check failed: nothing committed. Fix, stage, and ship again")
 
-    # 3. Commit and push.
     subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=ROOT, input=message, text=True, check=True)
     print(git("log", "-1", "--format=  committed %h %s").rstrip())
     git("push", "-q", "origin", f"HEAD:{BRANCH}")
-    print(f"  pushed to {BRANCH}; waiting for CI to publish {CHANNEL_DIR}/ on main…")
+    print(f"  pushed to {BRANCH}; CI runs every gate, then publishes. Waiting for main…")
 
-    # 4. Published, or say plainly that it is not.
     deadline = time.monotonic() + wait_minutes * 60
-    sha = git("rev-parse", "HEAD").strip()
-    polls = 0
     while time.monotonic() < deadline:
-        if published_version() == app:
-            print(f"✅ PUBLISHED: Home Assistant offers {APP} {app}")
+        if published_version() == version:
+            print(f"✅ PUBLISHED: the store offers VESTA Agent (dev) {version}")
             return 0
-        # a red run is said at once, not waited out (every third poll: the API allows 60 calls an hour)
-        polls += 1
-        failed = ci_failures(sha) if polls % 3 == 0 else None
-        if failed:
-            print(f"❌ pushed, NOT published: CI failed ({', '.join(failed)}) for {sha[:8]}. Read that run, fix, ship again.")
-            return 3
         time.sleep(poll_seconds)
-    print(f"⏳ pushed, NOT published after {wait_minutes:g} min: main's {CHANNEL_DIR}/ is still "
-          f"{published_version()}. Read the CI run for this commit before calling it shipped.")
+    print(f"⏳ pushed, NOT published after {wait_minutes:g} min: read the CI run for this commit.")
     return 3
 
 
-#: The paths the app's image is built from (.github/workflows/agent-host.yaml): a push touching them builds a release.
-BUILT_PATHS = ("agent-host/", "vesta-agent/")
-ZERO = "0" * 40
-
-
-def check_push(local_sha: str, remote_sha: str) -> str | None:
-    """Why a push of `local_sha` over `remote_sha` (agent-dev) must be refused, or None.
-
-    ⚠️ A BUILT PATH GOES OUT ONLY WITH A NEW VERSION (retro, 2026-10-15): a note in agent-host/ARCHITECTURE.md was pushed
-    by hand, outside `ship`, and CI rebuilt 0.12.215 over itself — the Supervisor resolves image:<version>, so a code
-    change pushed that way is an update Home Assistant never sees. The pre-push hook asks here."""
-    if local_sha == ZERO or remote_sha == ZERO:
-        return None                                   # a branch deleted or created: nothing to compare
-    changed = git("diff", "--name-only", remote_sha, local_sha).split()
-    if not any(f.startswith(BUILT_PATHS) for f in changed):
-        return None
-    before = yaml_version(git("show", f"{remote_sha}:{APP_CONFIG}"), APP_CONFIG)
-    after = yaml_version(git("show", f"{local_sha}:{APP_CONFIG}"), APP_CONFIG)
-    if parse_version(after) > parse_version(before):
-        return None
-    return (f"this push changes {', '.join(sorted({f for f in changed if f.startswith(BUILT_PATHS)})[:3])} "
-            f"without a new version ({APP_CONFIG} still says {after}): release it with "
-            "`agent-host/.venv/bin/python agent-host/tools/release.py ship -F msg`.")
-
-
 def main(argv: list[str] | None = None) -> int:
-    # Line by line even into a file or a pipe: a release watched through its log must show where it is.
     sys.stdout.reconfigure(line_buffering=True)
     ap = argparse.ArgumentParser(prog="release.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("gates", help="run every gate CI runs")
-    s = sub.add_parser("ship", help="versions → the fast gates → commit → push → wait until CI has published")
+    sub.add_parser("gates", help="run every gate (what CI runs)")
+    s = sub.add_parser("ship", help="version → quick checks → commit → push → wait until published")
     s.add_argument("-m", "--message")
     s.add_argument("-F", "--file", help="read the commit message from a file")
     s.add_argument("--dry-run", action="store_true")
-    s.add_argument("--wait", type=float, default=40, help="minutes to wait for main (default 40: a multi-arch image)")
-    c = sub.add_parser("check-push", help="the pre-push hook: refuse a push of a built path without a new version")
-    c.add_argument("local_sha"); c.add_argument("remote_sha")
+    s.add_argument("--wait", type=float, default=40, help="minutes to wait for main (default 40)")
     a = ap.parse_args(argv)
     try:
         if a.cmd == "gates":
-            return 0 if print_summary(run_gates()) else 1
-        if a.cmd == "check-push":
-            why = check_push(a.local_sha, a.remote_sha)
-            if why:
-                print(f"✋ REFUSED: {why}", file=sys.stderr)
-            return 1 if why else 0
-        message = Path(a.file).read_text() if a.file else a.message
-        return ship(message, a.dry_run, a.wait, poll_seconds=10)
+            return 0 if run_gates() else 1
+        return ship(Path(a.file).read_text() if a.file else a.message, a.dry_run, a.wait)
     except ReleaseError as e:
         print(f"❌ {e}", file=sys.stderr)
         return 2

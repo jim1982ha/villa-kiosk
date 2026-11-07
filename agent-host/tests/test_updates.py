@@ -60,12 +60,15 @@ class Updates(unittest.TestCase):
             (root / "vesta-agent").mkdir()
             (root / "agent-host/versions.json").write_text(json.dumps({"ha_mcp": "8.5.0", "agent_repo": "", "agent_ref": ""}))
             (root / "vesta-agent/config.yaml").write_text('name: "VESTA Agent"\nversion: "0.7.0"\nslug: vesta_agent\n')
+            (root / "vesta-agent.yaml").write_text('name: vesta-agent\nversion: "0.7.0"\n')
+            cu.AGENT_MANIFEST = root / "vesta-agent.yaml"
             (root / "vesta-agent/CHANGELOG.md").write_text("## 0.7.0\n\n- before\n")
             cu.VERSIONS, cu.CONFIG, cu.CHANGELOG = (root / "agent-host/versions.json",
                                                     root / "vesta-agent/config.yaml", root / "vesta-agent/CHANGELOG.md")
             version = cu.apply({"ha_mcp": "8.6.0", "agent_repo": "", "agent_ref": ""}, ["HA MCP 8.6.0"])
             self.assertEqual(version, "0.7.1")
             self.assertIn('version: "0.7.1"', cu.CONFIG.read_text())
+            self.assertIn('version: "0.7.1"', cu.AGENT_MANIFEST.read_text(), "one version: the agent's too")
             self.assertEqual(json.loads(cu.VERSIONS.read_text())["ha_mcp"], "8.6.0")
             cl = cu.CHANGELOG.read_text()
             self.assertTrue(cl.startswith("## 0.7.1\n"), "the Update dialog shows the new entry first")

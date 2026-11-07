@@ -343,7 +343,7 @@ class Vesta:
                 from . import __version__
                 from .history import History
                 for name in copied:
-                    History(self.s.history_path).record("Release", f"{name} added by engine {__version__} (a new starter skill)",
+                    History(self.s.history_path).record("Release", f"{name} added by version {__version__} (a new starter skill)",
                                                         {"kind": "release", "skill": name}, None, None)
         try:
             updated, kept = self.skills.update_starters()
@@ -356,7 +356,7 @@ class Vesta:
             from . import __version__
             from .history import History
             for name in updated:
-                History(self.s.history_path).record("Release", f"{name} updated to engine {__version__} (never edited here)",
+                History(self.s.history_path).record("Release", f"{name} updated to version {__version__} (never edited here)",
                                                     {"kind": "release", "skill": name}, None, None)
         for name in kept:
             log.warning("Starter skill %s: this version brings changes, but yours was edited, so it is kept. "

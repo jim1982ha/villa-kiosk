@@ -5,7 +5,8 @@ there is one, make the release that ships it (docs/agent-host/SPEC.md 4.3).
 What it changes, and only this:
   * agent-host/versions.json   — the versions the image is built from;
   * vesta-agent/config.yaml    — the app version, one patch step up, so Home
-                                 Assistant offers the update;
+                                 Assistant offers the update, and the same
+                                 version in agent-src/vesta-agent.yaml (one version);
   * vesta-agent/CHANGELOG.md   — what the owner reads in the Update dialog.
 
 It decides nothing about safety: the build that follows starts the new HA MCP
@@ -28,6 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 VERSIONS = ROOT / "agent-host" / "versions.json"
 CONFIG = ROOT / "vesta-agent" / "config.yaml"
+AGENT_MANIFEST = ROOT / "agent-host" / "agent-src" / "vesta-agent.yaml"
 CHANGELOG = ROOT / "vesta-agent" / "CHANGELOG.md"
 
 
@@ -93,12 +95,13 @@ def plan(versions: dict, ha_mcp: str, agent: str) -> tuple[dict, list[str]]:
 
 
 def apply(new_versions: dict, lines: list[str]) -> str:
-    """Write the three files; returns the new app version."""
+    """Write the files; returns the new app version."""
     VERSIONS.write_text(json.dumps(new_versions, indent=2) + "\n")
     cfg = CONFIG.read_text()
     current = re.search(r'^version:\s*"([^"]+)"', cfg, re.M).group(1)
     version = bump_patch(current)
-    CONFIG.write_text(re.sub(r'^version:\s*"[^"]+"', f'version: "{version}"', cfg, count=1, flags=re.M))
+    for path in (CONFIG, AGENT_MANIFEST):
+        path.write_text(re.sub(r'^version:\s*"[^"]+"', f'version: "{version}"', path.read_text(), count=1, flags=re.M))
     entry = f"## {version}\n\n### Updated automatically\n" + "".join(f"- {l}\n" for l in lines) + "\n"
     CHANGELOG.write_text(entry + CHANGELOG.read_text())
     return version
