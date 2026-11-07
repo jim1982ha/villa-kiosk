@@ -1,3 +1,8 @@
+## 2.496.749
+
+What you will see:
+- A visit's card (Issues, Watch, Closed) shows the photo of the strongest moment first and about twice as large, with its camera and time under it; the other photos follow in time order, smaller, wrapping as before. A tap still opens any photo full size. The pop-up keeps its small photos, and a card with no strongest photo (an older card, a single photo) looks as before.
+
 ## 2.496.748
 
 What you will see:

@@ -7,7 +7,7 @@ import { h, draw } from "../consistency/screen.mjs";
 import { ck, done } from "../consistency/check.mjs";
 import { parseTsx, elements, propText } from "../consistency/jsx.mjs";
 const { readLayout, parseAnnouncement, parseVestaMessage, ANNOUNCEMENT_NOTICE_MS, noticeFor, pressOf, PRESS_SAID, titleSentences,
-  photoCaption } = await import("@/messages/announcements");
+  photoCaption, photoOrder } = await import("@/messages/announcements");
 const { setVillaTimeZone } = await import("@/utils/villaClock");
 setVillaTimeZone("UTC");   // the photos' times below are written in the villa's zone: one fixed here
 const { AnnouncementContent } = await import("@/components/messages/AnnouncementContent");
@@ -278,6 +278,32 @@ ck("a photo's words: its camera and its time, the time alone when no camera is n
   ck("  ...a tap opens the one full-size viewer (PhotoLightbox), the row's every photo in it with its words",
      viewer.length === 1 && propText(viewer[0], "photos") === "shown.map((p) => ({ src: announcementPhotoUrl(p.id), label: photoCaption(p) }))"
      && propText(viewer[0], "index") === "viewing" && opens.length === 1, [viewer.map((v) => propText(v, "photos")), opens]);
+}
+{
+  // THE STRONGEST STEP'S PHOTO LARGER (owner, 2026-11-07): flagged by the VESTA Agent, first and about twice a tile, the
+  // others after it in time order; none flagged, or one photo alone: every tile alike, as recorded
+  const flagged = [{ ...visitPhotos[2], strongest: true }, visitPhotos[0], visitPhotos[1], visitPhotos[3]];
+  const read = parseAnnouncement({ seq: 10, message: ring, key: "visit:v2", photos: flagged });
+  ck("the strongest step's flag is read with its photo (`strongest: true` only)",
+     read?.photos[0]?.strongest === true && read.photos.slice(1).every((p) => !("strongest" in p))
+     && !("strongest" in (parseAnnouncement({ seq: 11, message: ring, photos: [{ ...visitPhotos[0], strongest: "yes" }] })?.photos[0] ?? {})), read?.photos);
+  const card = draw(h(AnnouncementContent, { announcement: { ...a(10), title: "Visit", photos: flagged } }));
+  const tiles = [...card.matchAll(/<figure class="(photo-tile[^"]*)">.*?\/announcement-photo\/([0-9a-f]{32}\.jpg)/g)].map((m) => [m[1], m[2]]);
+  ck("  ...its card draws it first, larger, the others in time order after it (Parking 18:34:10, Entrance lock, Main door)",
+     JSON.stringify(tiles) === JSON.stringify([["photo-tile photo-tile-strongest", ID("c")], ["photo-tile", ID("b")],
+       ["photo-tile", ID("a")], ["photo-tile", ID("d")]]), [tiles, card]);
+  const later = photoOrder([visitPhotos[0], { ...visitPhotos[3], strongest: true }, visitPhotos[1]]);
+  ck("  ...a flagged photo not first is put first", later.big && later.photos.map((p) => p.id).join() === [ID("d"), ID("b"), ID("a")].join());
+  const plain = photoOrder(visitPhotos);
+  ck("  ...none flagged: the record's order, every tile alike; one photo alone, even flagged: as today",
+     !plain.big && plain.photos.map((p) => p.id).join() === visitPhotos.map((p) => p.id).join()
+     && !draw(h(AnnouncementContent, { announcement: { ...a(11), title: "Visit", photos: visitPhotos } })).includes("photo-tile-strongest")
+     && !draw(h(AnnouncementContent, { announcement: { ...a(12), title: "Ring", photos: [{ ...visitPhotos[0], strongest: true }] } })).includes("photo-tile-strongest"),
+     plain);
+  const css = src("styles/08-shared.css");
+  ck("  ...twice a tile, never wider than the card on a phone; the notice keeps its small tiles",
+     /\.photo-tile-strongest \{ --tile-w: 248px; max-width: 100%; \}/.test(css)
+     && /\.vesta-notice \.photo-tile, \.vesta-notice \.photo-tile-strongest \{ --tile-w: 88px; \}/.test(css), "08-shared.css");
 }
 ck("  ...in the column, before the passing notice (a motion notice never replaces a ring)",
    /<ServiceErrorToast \/>\s*<AnnouncementNotice \/>\s*<AppNotice /.test(src("pages/Dashboard.tsx")));
