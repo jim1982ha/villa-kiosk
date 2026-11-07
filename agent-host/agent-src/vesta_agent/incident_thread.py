@@ -123,7 +123,7 @@ class IncidentThread:
     async def post(self, iid: int | str, chat: int, mid: int, parts: dict, *, buttons: bool = False,
                    keyboard: dict | None = None, photo=None, sheet: str | None = None) -> None:
         """Message `mid`, just sent to `chat` with these `parts` (layout.py), is now incident `iid`'s message there: the
-        earlier one goes. `photo`: the picture it carries ((base64, mime): a snapshot), kept for the tablet; `sheet`:
+        earlier one goes. `photo`: the picture it carries ((base64, mime)), kept for the tablet; `sheet`:
         the visit's sheet it carries (its fingerprint: `picture` leaves it as it is)."""
         async with self._lock(iid):
             await self._post(iid, chat, mid, parts, buttons=buttons, keyboard=keyboard, photo=photo, sheet=sheet)

@@ -505,7 +505,7 @@ then fixed with the probe's scenarios as the tests. Decided:
 - **One copy per chat, whatever wrote it.** The villa's own message of a step, taken over in a chat (`ha_messages`:
   its number, heading and buttons — `Outcome.adopt_ha`, `IncidentThread.adopt`), IS the desk's copy there: a desk
   message of the same (incident, chat, step) is not sent to that chat (`Outcome.carry_out`, right after adoption; the
-  chat still gets this result's snapshot and counts as reached for `first_in_line`). `Routing.deliveries` keeps the
+  chat counts as reached for `first_in_line`). `Routing.deliveries` keeps the
   desk's own dedupe (a chat listed for both roles). The rule sits in Outcome, not routing, because what adoption showed
   is known only once Telegram answered and routing's roles (`Notices.audiences`) are what the taken-over copy says. A
   P1 had rung the owner's group twice: the rule's message edited, then deleted for an identical one. "A failed send
@@ -1073,8 +1073,9 @@ still off; an investigation calling a sensor with no value "stopped reporting").
   `handed_over` / `handed` arguments stay for a skill edited before 0.12.430. tests/test_fault_endings.py runs one table
   through recheck.py and nightly.py and asserts the same note.
 - **The siren's request: `vesta_agent/siren.py`** (card 5). `Request.gate` carries a script's `siren_gate` out — not
-  asked with someone home, asked (never executed) of the owner while the villa is empty (`WHILE_EMPTY`), the cameras'
-  pictures first and "look" said only when every chat got one, and when it cannot be asked (no siren chosen, or the
+  asked with someone home, asked (never executed) of the owner while the villa is empty (`WHILE_EMPTY`), a reply to the
+  visit's card with its cameras snapped into the visit's sheet and "look" said only when every chat has the card, and
+  when it cannot be asked (no siren chosen, or the
   request reached nobody) the warning to every chat of the gate's `to` (the skill's people: the owner AND the facility
   manager, each chat once). `withdrawn_now` is the withdrawal at the press (actions.decide) and at every pass
   (approvals.expire); `always_owners` is policy.owners_alone; `Siren` keeps the automatic stop. Outcome.carry_out only
@@ -1311,7 +1312,11 @@ where a list named no chat (and, round 15, for approvals): two lists of the same
 
 The villa's presence automation will group every presence signal of one visit itself (its record, `visit` in
 `vesta_critical_event`: phase `opened` for the first step, `step` for each later one, `resolved` once). Until the
-villa sends `step` (phase C), nothing live changes: an event without `visit` takes the old path.
+villa sends `step` (phase C), nothing live changes: an event without `visit` takes the old path. Live since
+2026-11-07 11:04 (the presence guard's Alert mode removed): its old path's pieces went with it in 0.12.477 — the desk's
+`siren_gate` and `signal_name` (open intrusion incidents counted), the siren on a presence alert's repeat, return or
+first alert outside a visit, the presence route's cooldown, the "Camera snapshot" messages before a request
+(`siren.Request._pictures`); the repeat, the "Back again" reopening and the watch stay for every other route.
 
 | Job | One owner |
 |---|---|
@@ -1329,4 +1334,9 @@ villa sends `step` (phase C), nothing live changes: an event without `visit` tak
 
 The tablet's card takes the visit's announcement by its key `visit:<id>` (agreement `vestaMessage.takes`): its photos
 are the villa's own; the Agent pushes no photo list. Removed as dead (no blueprint sends it, read on the villa
-2026-11-06): the alert's `snapshot` field, `result.snapshot`, the `snapshot.get` action; the siren's own pictures stay.
+2026-11-06): the alert's `snapshot` field, `result.snapshot`, the `snapshot.get` action.
+
+An alert's Kiosk fault travels with its tablet record: each push of `incident:<n>` brings that fault up to date just
+before it (`KioskMessages.fault` = `Tickets.follow`, its own time limit; a failure never holds the words), so the
+card's name and "monitoring until" change with its words (owner's drill, 2026-11-07 10:56: 15s behind Telegram). The
+repairs after the result stay for what only they do (a new fault, the story's lines once recorded).

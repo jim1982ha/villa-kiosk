@@ -621,3 +621,28 @@ def test_a_visits_step_reaches_the_tablets_fault_before_telegrams_last_edit(tmp_
     play(v, send(vi.event()))
     first = next(s for s in seen if s[0])
     assert first[1] < len(v.tg.sent) + len(v.tg.edits) + len(v.tg.media_edits) or first[2] < len(told(v)), (first, seen)
+
+
+def test_a_visits_step_writes_its_fault_with_its_tablet_message(tmp_path, kiosk, media):
+    # owner's drill, 2026-11-07, 10:56: Telegram's copies of the door's step at 10:57:11 and 10:57:13, the tablet's pop-up
+    # within a second, the card's name and "monitoring until" at 10:57:28 — the fault came only with the repair after
+    # every copy, the sheet and the villa told. Now each push of the alert's record brings its fault first
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("motion", PARKING, "10:56:13", photo=True)
+    play(v, send(vi.event("opened")))
+    vi.add("door", GARDEN_DOOR, "10:56:34", photo=True)
+    step = vi.event()
+    until = step["visit"]["closes_at"]
+    writes: list[tuple] = []
+    real = kiosk._req
+
+    async def req(method, path, body=None, content=None, **kw):
+        if path == "/agent/v1/vesta-message" and str((body or {}).get("key")) == "incident:1":
+            (fault,) = [t for t in kiosk._all() if t.get("alertNumber") == 1]
+            writes.append((fault.get("entityId"), fault.get("monitoredUntil")))
+        return await real(method, path, body, content, **kw)
+    kiosk._req = req
+    play(v, send(step))
+    # the first record of the step the tablet keeps: its fault already names the door and says until when it is watched
+    assert writes and writes[0] == (GARDEN_DOOR, until), writes

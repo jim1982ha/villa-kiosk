@@ -52,18 +52,6 @@ def test_a_closing_message_is_headed_closed_never_new(tmp_path):
     assert v.tg.sent[-1][1].startswith(f"#9 (closed)\n{to}\n")
 
 
-# ---------------------------------------------------------------------- the siren
-def test_a_second_intrusion_counts_each_sensor_when_it_tripped(tmp_path):
-    # review 24: the garden alert of 20:00, back at 22:00, counted as 20:00 — two sensors in a minute, no siren
-    store = Store(str(tmp_path / "s.sqlite"))
-    garden = desk.intake(store, ev("automation.garden", "binary_sensor.garden", 0), T0)["incident_id"]
-    desk.intake(store, ev("automation.garden", "binary_sensor.garden", 5, phase="resolved"), T0 + timedelta(minutes=5))
-    back = desk.intake(store, ev("automation.garden", "binary_sensor.garden", 120), T0 + timedelta(minutes=120))
-    assert back["decision"] == "reopened" and back["incident_id"] == garden
-    gate = desk.intake(store, ev("automation.gate", "binary_sensor.gate", 121), T0 + timedelta(minutes=121))
-    assert gate["siren_gate"]["armed"] and gate["siren_gate"]["signals"] == ["binary_sensor.gate", "binary_sensor.garden"][::-1]
-
-
 # ---------------------------------------------------------------------- one problem, one fault, one name
 def _flapping(store, times, rule="automation.ap", entity="sensor.ap"):
     iid = None

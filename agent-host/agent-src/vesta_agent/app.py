@@ -194,8 +194,10 @@ class Vesta:
                                watching=incidents.watching, began=incidents.began,
                                monitored_until=incidents.monitored_until)
         # every message written on Telegram is also kept for the tablet, in the background (kiosk_messages.py): the thread
-        # keeps an alert's, an approval's and a snapshot's, the poster a note sent on its own
-        self.messages = KioskMessages(self.kiosk, message_timeout_s, self.owed)
+        # keeps an alert's and an approval's, the poster a note sent on its own
+        # an alert's record carries its fault with it: brought up to date just before (tickets.follow, built below)
+        self.messages = KioskMessages(self.kiosk, message_timeout_s, self.owed,
+                                      fault=lambda iid: self.tickets.follow({iid}))
         # what each chat shows of an incident (incident_thread.py), and an alert's buttons and their press: its words (each
         # chat's heading, Status and language) are the notices'; an alert card's own words are drawn by the translations,
         # which are built on the thread (hence the late lookup)
@@ -260,7 +262,7 @@ class Vesta:
         self.answering = answering.Answering(self.delivery, self.fault_offers, self.approvals, self.chat_jobs,
                                              self.tablet.later, self.aloud)
         self.outcome = Outcome(policy=self.policy, state=self.state, send=self.delivery.send, actions=self.actions,
-                               reader=self.reader, tickets=self.tickets, buttons=self.buttons, thread=self.thread,
+                               tickets=self.tickets, buttons=self.buttons, thread=self.thread,
                                notices=self.notices, out_dir=settings.out_dir, timezone_name=settings.timezone,
                                poster=self.poster, ask=self.approvals.ask, incidents=incidents, visits=self.visits)
         self.server_tools: list[dict] = []

@@ -1,7 +1,8 @@
 """The siren's request as the owner reads it (owner's Telegram, 2026-10-31 00:19): "Intrusion suspected: 2 independent
 sensors in 5min while the villa is empty: binary_sensor.parking_motion, lock.outdoor_entrance_lock. Look at the snapshot."
 — no snapshot came, the devices were named by their ids, and it was the owner arriving home: the "empty" sensor went off
-3 seconds after the alert, the request stayed pressable for 15 minutes. Invented entities."""
+3 seconds after the alert, the request stayed pressable for 15 minutes. Only a visit offers it now (the presence guard's
+alerts are visits, 2026-11-07); its pictures and its place in the story: test_visit_story. Invented entities."""
 from __future__ import annotations
 
 import asyncio
@@ -40,11 +41,23 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def event(entity, started, **extra):
-    rule = PG["rule"]
-    return {"blueprint": PG["blueprint"], "rule_id": rule, "incident_id": f"{rule}-{started}", "phase": "opened",
-            "severity": "critical", "label": "Presence while empty", "entities": [entity],
-            "summary": "Presence while empty", "timestamp": T0.isoformat(), **extra}
+NAMES = {"binary_sensor.example_drive_motion": "Drive Motion", "lock.example_entrance": "Entrance Lock"}
+KINDS = {"binary_sensor": "motion", "lock": "lock"}
+
+
+def event(*entities):
+    """The presence guard's visit as its automation hands it over at its latest step: one step per entity, a minute
+    apart from T0 (the agreed `visit` object; test_visit_story drives the whole path)."""
+    steps = [{"seq": n + 1, "kind": KINDS[e.split(".")[0]], "entity_id": e, "name": NAMES[e],
+              "at": (T0 + timedelta(minutes=n)).isoformat()} for n, e in enumerate(entities)]
+    last = steps[-1]
+    vid = f"{PG['rule'].removeprefix('automation.')}-1793000000"
+    return {"blueprint": PG["blueprint"], "rule_id": PG["rule"], "incident_id": vid,
+            "phase": "opened" if len(steps) == 1 else "step", "severity": "critical", "label": "Presence while empty",
+            "entities": sorted(entities), "summary": "Presence while empty", "timestamp": last["at"],
+            "visit": {"record": "sensor.example_visit", "seq": last["seq"], "opened_at": steps[0]["at"],
+                      "last_at": last["at"], "closes_at": (T0 + timedelta(minutes=30)).isoformat(), "step": last,
+                      "strongest": last, "steps": steps, "photos": [], "messages": [], "owner": "vesta"}}
 
 
 @pytest.fixture
@@ -58,9 +71,10 @@ def pack(tmp_path, monkeypatch):
     desk._PACK.clear()
 
 
-def two_signals(store, first="binary_sensor.example_drive_motion", second="lock.example_entrance", **extra):
-    desk.intake(store, event(first, 1, **extra), T0, occupancy_reader=lambda: "empty")
-    return desk.intake(store, event(second, 2), T0 + timedelta(minutes=1), occupancy_reader=lambda: "empty")["siren_gate"]
+def two_signals(store, first="binary_sensor.example_drive_motion", second="lock.example_entrance", occupancy="empty"):
+    desk.intake(store, event(first), T0, occupancy_reader=lambda: occupancy)
+    return desk.intake(store, event(first, second), T0 + timedelta(minutes=1),
+                       occupancy_reader=lambda: occupancy)["siren_gate"]
 
 
 # ---------------------------------------------------------------------- the desk: what the request says
@@ -69,19 +83,19 @@ def test_the_request_names_the_devices_and_the_camera_that_can_show_them(tmp_pat
     assert gate["armed"] is True
     assert "Drive Motion, Entrance Lock" in gate["prompt"]
     assert "binary_sensor." not in gate["prompt"] and "lock." not in gate["prompt"]          # never an entity id
-    # the camera the villa's system places in the area of a signal: its picture goes first, then the words to look
+    # the camera the villa's system places in the area of a signal, with no picture in the visit: snapped into its sheet
     assert gate["cameras"] == [CAMERA] and gate["seen"] and "snapshot" not in gate["prompt"]
 
 
 def test_no_camera_no_picture_mentioned(tmp_path, monkeypatch):
-    # no knowledge pack (no area known) and no alert naming a camera: the request never speaks of a picture
+    # no knowledge pack (no area known): no camera to snap, and the request never speaks of a picture
     monkeypatch.delenv("VESTA_PACK", raising=False)
     desk._PACK.clear()
     gate = two_signals(Store(str(tmp_path / "s.sqlite")))
     desk._PACK.clear()
-    assert gate["armed"] is True and gate["cameras"] == [] and gate["seen"] == ""
+    assert gate["armed"] is True and gate["cameras"] == []
     assert "snapshot" not in gate["prompt"].lower() and "picture" not in gate["prompt"].lower()
-    assert "binary_sensor." not in gate["prompt"] and "Presence while empty" in gate["prompt"]  # its alert's name
+    assert "binary_sensor." not in gate["prompt"] and "Drive Motion, Entrance Lock" in gate["prompt"]  # the villa's names
 
 
 # ---------------------------------------------------------------------- the engine: asked, pressed, withdrawn
@@ -96,10 +110,10 @@ class Writer:
         return {i: {"state": "on"} for i in ids}
 
 
-def villa(tmp_path, empty="on", images=None):
+def villa(tmp_path, empty="on"):
     states = {EMPTY_SENSOR: {"entity_id": EMPTY_SENSOR, "state": empty}}
     v = make_agent(tmp_path, {"act_enabled": True, "siren_entity": SIREN, "allowed_services": {"switch.turn_on": "owner"}}, roster=Roster.of(owner=[(OWNER, "JM")]),
-                   reader=FakeHA(tools=[tool("ha_get_state")], states=states, images=images or {}))
+                   reader=FakeHA(tools=[tool("ha_get_state")], states=states))
     with open(v.s.pack_path, "w", encoding="utf-8") as f:
         f.write(build_pack(REGISTRY, []).to_json())
     kiosk_told.save(v.s.pack_path, "villaEmptySensor", EMPTY_SENSOR)              # the Kiosk's pick, as its heartbeat answer keeps it
@@ -107,30 +121,12 @@ def villa(tmp_path, empty="on", images=None):
     return v
 
 
-def gate(cameras=(CAMERA,)):
-    return R.siren(True, "Intrusion suspected: Drive Motion, Entrance Lock.", ("owner", "fm"), cameras=list(cameras),
-                   seen="Look at the camera picture above first." if cameras else "")
+def gate():
+    return R.siren(True, "Intrusion suspected: Drive Motion, Entrance Lock.", ("owner", "fm"))
 
 
 def requests(v):
     return [(c, t, kb) for c, t, kb in v.tg.sent if t.startswith("Approval request")]
-
-
-def test_the_picture_goes_before_the_question_and_only_then_is_it_mentioned(tmp_path):
-    v = villa(tmp_path, images={CAMERA: "SlBFRw=="})
-    run(v.outcome.carry_out({"siren_gate": gate()}, "alert-desk"))
-    assert v.tg.photos and v.tg.photos[0][0] == OWNER
-    order = [t.split("\n", 1)[0] for _, t, _ in v.tg.sent]
-    assert order.index("Camera snapshot") < order.index("Approval request")
-    (_, text, _), = requests(v)
-    assert "Look at the camera picture above first." in text
-
-
-def test_a_camera_that_gives_no_picture_is_never_mentioned(tmp_path):
-    v = villa(tmp_path)                                      # the camera answers with no image
-    run(v.outcome.carry_out({"siren_gate": gate()}, "alert-desk"))
-    (_, text, _), = requests(v)
-    assert not v.tg.photos and "picture" not in text and "snapshot" not in text.lower()
 
 
 def test_someone_home_before_the_question_it_is_not_asked(tmp_path):
@@ -140,7 +136,7 @@ def test_someone_home_before_the_question_it_is_not_asked(tmp_path):
 
 
 def _asked(v):
-    run(v.outcome.carry_out({"siren_gate": gate(())}, "alert-desk"))
+    run(v.outcome.carry_out({"siren_gate": gate()}, "alert-desk"))
     (ap,) = v.state.approvals_in("pending")
     return ap
 
@@ -217,7 +213,7 @@ def test_an_any_rule_lets_only_the_owner_approve_the_siren(tmp_path):
 
 # ---------------------------------------------------------------------- the request's whole life, on siren.py itself
 # (architecture review round 13, card 5): the owner's rule — never on without asking, never asked with someone home,
-# pictures first, withdrawn once someone is home — and who hears of an intrusion when the siren cannot be asked, each
+# withdrawn once someone is home — and who hears of an intrusion when the siren cannot be asked, each
 # proved on siren.Request with stand-ins, no script result built
 from types import SimpleNamespace  # noqa: E402
 
@@ -242,7 +238,7 @@ class _Actions:
         return "asked", SimpleNamespace(chats=[OWNER], to="owner", approval_id="a1")
 
 
-def _request(siren=SIREN, home=False, refuse=None, photos=None, delivered=True):
+def _request(siren=SIREN, home=False, refuse=None, delivered=True):
     """A siren.Request over stand-ins: its posts and questions recorded in order in `seen`."""
     seen = []
 
@@ -253,21 +249,18 @@ def _request(siren=SIREN, home=False, refuse=None, photos=None, delivered=True):
     async def ask(msg, head="", origin=None):
         seen.append(("ask", tuple(msg.chats), head))
         return len(msg.chats) if delivered else 0
-
-    async def photo(cam):
-        return (photos or {}).get(cam)
     acts = _Actions(home, refuse)
     pol = SimpleNamespace(siren_entity=siren, roster=SimpleNamespace(
         chats_for=lambda role, lang=None: {"owner": [OWNER], "fm": [FM]}[role]))
     log = []
     req = S.Request(policy=lambda: pol, state=SimpleNamespace(log=lambda *a: log.append(a)), actions=acts, ask=ask,
-                    post=post, photo=photo, name=lambda cam: "Drive Camera")
+                    post=post)
     return req, acts, seen
 
 
 def test_the_siren_is_only_ever_asked_for_never_turned_on():
     req, acts, seen = _request()
-    out = run(req.gate(gate(())))
+    out = run(req.gate(gate()))
     assert out["asked"] is True
     # the one call that could sound it is a REQUEST, of the villa's siren, marked "only while the villa is empty",
     # asked by nobody (an alert): actions.request makes it an Approve the owner presses
@@ -285,18 +278,6 @@ def test_never_asked_while_someone_is_home():
     assert [c[0] for c in acts.calls] == ["occupied"] and seen == []
 
 
-def test_the_pictures_come_first_and_only_then_is_it_said_to_look():
-    req, _, seen = _request(photos={CAMERA: ("SlBFRw==", "image/jpeg")})
-    run(req.gate(gate()))
-    assert [k for k, *_ in seen] == ["post", "ask"]
-    assert seen[0][3]["photo"] == ("SlBFRw==", "image/jpeg") and seen[0][1] == OWNER
-    assert seen[1][2].endswith("Look at the camera picture above first.")
-    # a camera that gives no picture: nothing sent, and the question never says to look
-    req, _, seen = _request()
-    run(req.gate(gate()))
-    assert [k for k, *_ in seen] == ["ask"] and "picture" not in seen[0][2]
-
-
 def test_a_request_asked_while_empty_is_withdrawn_once_someone_is_home():
     asked = {S.WHILE_EMPTY: True}
     assert S.withdrawn_now(asked, lambda: True) is True
@@ -312,7 +293,7 @@ def test_when_the_siren_cannot_be_asked_the_owner_and_the_facility_manager_hear_
     # architecture review round 13, card 5: with no siren chosen the warning went to the owner and the facility manager;
     # with a siren chosen but its request unsendable, to the owner only. One answer: the gate's people, every time
     req, _, seen = _request(siren=siren, refuse=refuse, delivered=delivered)
-    out = run(req.gate(gate(())))
+    out = run(req.gate(gate()))
     assert out["asked"] is False and out["warned"] == {OWNER, FM}
     posts = [(chat, text, kw) for k, chat, text, kw in [s for s in seen if s[0] == "post"]]
     assert {c for c, *_ in posts} == {OWNER, FM}
@@ -327,7 +308,7 @@ def test_when_the_siren_cannot_be_asked_the_owner_and_the_facility_manager_hear_
 def test_a_chat_listed_for_both_roles_hears_of_it_once():
     req, _, seen = _request(siren=None)
     req.policy().roster.chats_for = lambda role, lang=None: [OWNER]           # one group for the owner and the FM
-    out = run(req.gate(gate(())))
+    out = run(req.gate(gate()))
     (post,) = [s for s in seen if s[0] == "post"]
     assert out["warned"] == {OWNER} and post[3]["roles"] == {"owner", "fm"}
 
@@ -338,7 +319,7 @@ def test_the_engine_hands_the_gate_to_the_siren_and_nothing_else_asks_for_it():
     from vesta_agent import outcome
     src = inspect.getsource(outcome)
     assert "self.siren.gate(" in src
-    for word in ("siren_entity", "occupied", "turn_on", "cannot be requested", "_pictures"):
+    for word in ("siren_entity", "occupied", "turn_on", "cannot be requested"):
         assert word not in src, word
 
 
@@ -356,7 +337,7 @@ def moving(tmp_path, phone="not_home"):
 
 def test_movement_indoors_with_no_known_phone_home_keeps_the_button(tmp_path):
     v = moving(tmp_path)
-    run(v.outcome.carry_out({"siren_gate": gate(())}, "alert-desk"))
+    run(v.outcome.carry_out({"siren_gate": gate()}, "alert-desk"))
     assert len(requests(v)) == 1
     (ap,) = v.state.approvals_in("pending")
     assert run(v.approvals.expire()) == 0                     # still only movement: it waits
@@ -365,7 +346,7 @@ def test_movement_indoors_with_no_known_phone_home_keeps_the_button(tmp_path):
 
 def test_a_known_phone_home_takes_the_button_away_even_with_the_villa_read_by_movement(tmp_path):
     v = moving(tmp_path, phone="home")
-    run(v.outcome.carry_out({"siren_gate": gate(())}, "alert-desk"))
+    run(v.outcome.carry_out({"siren_gate": gate()}, "alert-desk"))
     assert requests(v) == []
     v = moving(tmp_path / "2")
     ap = _asked(v)
@@ -377,15 +358,12 @@ def test_a_known_phone_home_takes_the_button_away_even_with_the_villa_read_by_mo
 def test_who_cannot_be_told_is_someone_home(tmp_path, attributes):
     v = moving(tmp_path)
     v.reader._states[EMPTY_SENSOR]["attributes"] = attributes
-    run(v.outcome.carry_out({"siren_gate": gate(())}, "alert-desk"))
+    run(v.outcome.carry_out({"siren_gate": gate()}, "alert-desk"))
     assert requests(v) == []
 
 
 def test_the_desk_asks_on_movement_and_says_so(tmp_path, pack):
-    store = Store(str(tmp_path / "s.sqlite"))
-    desk.intake(store, event("binary_sensor.example_drive_motion", 1), T0, occupancy_reader=lambda: "movement")
-    gate_ = desk.intake(store, event("lock.example_entrance", 2), T0 + timedelta(minutes=1),
-                        occupancy_reader=lambda: "movement")["siren_gate"]
+    gate_ = two_signals(Store(str(tmp_path / "s.sqlite")), occupancy="movement")
     assert gate_["armed"] is True and "no known phone is home, with movement indoors" in gate_["prompt"]
 
 
@@ -434,8 +412,5 @@ def test_a_typing_slip_in_policy_yaml_still_asks_for_the_siren_with_the_engines_
     env = skills.script_env(s)
     for k in ("VESTA_POLICY", skills.SIREN_MINUTES_ENV):
         monkeypatch.setenv(k, env[k])
-    store = Store(str(tmp_path / "s.sqlite"))
-    desk.intake(store, event("binary_sensor.example_drive_motion", 1), T0, occupancy_reader=lambda: "empty")
-    out = desk.intake(store, event("lock.example_entrance", 2), T0 + timedelta(minutes=1),
-                      occupancy_reader=lambda: "empty")
-    assert out["siren_gate"]["armed"] and out["siren_gate"]["prompt"].endswith("Approving sounds the siren for 7min.")
+    gate_ = two_signals(Store(str(tmp_path / "s.sqlite")))
+    assert gate_["armed"] and gate_["prompt"].endswith("Approving sounds the siren for 7min.")

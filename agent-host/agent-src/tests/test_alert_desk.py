@@ -104,17 +104,6 @@ def test_a_repeat_inside_the_cooldown_is_counted_not_sent(store):
     assert res["decision"] == "counted" and res["send"] == []
 
 
-def test_intrusion_arms_the_siren_gate_only_when_empty_with_two_signals(store):
-    pg = dict(blueprint="critical_presence_guard", rule="automation.critical_presence_guard_night")
-    a = desk.intake(store, event(entities=("binary_sensor.garden_motion",), started=1, **pg), T0, occupancy_reader=lambda: "empty")
-    assert a["siren_gate"]["armed"] is False                               # one signal
-    b = desk.intake(store, event(entities=("binary_sensor.gate_motion",), started=2, **pg),
-                    T0 + timedelta(minutes=1), occupancy_reader=lambda: "empty")
-    assert b["siren_gate"]["armed"] is True
-    c = desk.intake(Store(":memory:"), event(entities=("binary_sensor.gate_motion",), **pg), T0, occupancy_reader=lambda: "occupied")
-    assert c["siren_gate"]["armed"] is False
-
-
 def test_villa_silent_follows_the_engine_connection_beat(store):
     store.beat("ha_events", T0.isoformat())
     assert not desk.tick(store, T0 + timedelta(minutes=10))["send"]
@@ -771,7 +760,7 @@ def test_the_siren_reads_the_kiosks_empty_sensor(tmp_path, monkeypatch):
 
 def test_the_siren_path_end_to_end_from_the_kiosks_answer_to_the_gate(tmp_path):
     """The Kiosk's heartbeat answer names the sensor (the engine's kiosk_answered keeps it beside the pack); the real
-    desk.py, run as the engine runs it (VESTA_PACK), reads it: two intrusion sensors with it "on" arm the siren gate.
+    desk.py, run as the engine runs it (VESTA_PACK), reads it: a visit's two sources with it "on" arm the siren gate.
     The Kiosk then says none is picked: the villa cannot be told empty, the gate stays shut."""
     import subprocess
     import sys
@@ -782,11 +771,12 @@ def test_the_siren_path_end_to_end_from_the_kiosks_answer_to_the_gate(tmp_path):
     fx = tmp_path / "fx"
     fx.mkdir()
     (fx / "states.json").write_text(json.dumps({"states": {"binary_sensor.example_empty": {"state": "on"}}}))
-    pg = dict(blueprint="critical_presence_guard", rule="automation.critical_presence_guard_night")
+    from test_siren_request import event as visit
+    first, second = "binary_sensor.example_drive_motion", "lock.example_entrance"
 
-    def intake(store, entity, started, minute):
+    def intake(store, entities, started, minute):
         p = tmp_path / f"ev{started}.json"
-        p.write_text(json.dumps(event(entities=(entity,), started=started, **pg)))
+        p.write_text(json.dumps(visit(*entities)))
         r = subprocess.run([sys.executable, os.path.join(STARTER_SKILLS, "alert-desk", "scripts", "desk.py"), "intake",
                             "--event", str(p), "--store", str(tmp_path / store), "--fixture-dir", str(fx),
                             "--now", (T0 + timedelta(minutes=minute)).isoformat()],
@@ -796,13 +786,13 @@ def test_the_siren_path_end_to_end_from_the_kiosks_answer_to_the_gate(tmp_path):
         return json.loads(r.stdout)["siren_gate"]
 
     App.kiosk_answered(engine, {"villaEmptySensor": "binary_sensor.example_empty"})
-    intake("a.sqlite", "binary_sensor.example_garden_motion", 1, 0)
-    gate = intake("a.sqlite", "binary_sensor.example_gate_motion", 2, 1)
+    intake("a.sqlite", (first,), 1, 0)
+    gate = intake("a.sqlite", (first, second), 2, 1)
     assert gate["armed"] is True and gate["occupancy"] == "empty"
     App.kiosk_answered(engine, {"maintenance": False})                       # the key absent: the pick is kept
     App.kiosk_answered(engine, {"villaEmptySensor": ""})                     # none picked
-    intake("b.sqlite", "binary_sensor.example_garden_motion", 3, 0)
-    gate = intake("b.sqlite", "binary_sensor.example_gate_motion", 4, 1)
+    intake("b.sqlite", (first,), 3, 0)
+    gate = intake("b.sqlite", (first, second), 4, 1)
     assert gate["armed"] is False and gate["occupancy"] == "unknown"
 
 
@@ -1002,10 +992,11 @@ def test_the_desks_durations_are_worded_as_both_apps_word_one(store, monkeypatch
     assert escalated["escalated"] == [iid] and escalated["send"][0]["status"] == "No answer from FM after 2h 30min"
     monkeypatch.setitem(desk.RULES["siren"], "window_min", 90)
     monkeypatch.setattr(desk, "siren_minutes", lambda: 120)
-    for n, e in enumerate(("binary_sensor.a", "binary_sensor.b")):
-        store.new_incident(f"k{n}", "automation.critical_presence_guard_x", e, "P1",
-                           {"message": "Motion", "blueprint": "critical_presence_guard"}, T0.isoformat())
-    gate = desk.siren_gate(store, {"occupancy": "empty"}, T0 + timedelta(minutes=1))
+    from test_siren_request import event as visit
+    pg = Store(":memory:")
+    desk.intake(pg, visit("binary_sensor.example_drive_motion"), T0, occupancy_reader=lambda: "empty")
+    gate = desk.intake(pg, visit("binary_sensor.example_drive_motion", "lock.example_entrance"), T0 + timedelta(minutes=1),
+                       occupancy_reader=lambda: "empty")["siren_gate"]
     assert gate["armed"] and "2 independent sensors in 1h 30min while the villa is empty" in gate["prompt"]
     assert gate["prompt"].endswith("Approving sounds the siren for 2h.")
     store.beat("ha_events", T0.isoformat())

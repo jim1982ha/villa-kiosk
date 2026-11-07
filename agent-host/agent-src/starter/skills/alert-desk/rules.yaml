@@ -19,8 +19,7 @@ routes:
     check: "Go to the device named. If it is water, close the supply valve of that room and photograph the floor."
   - blueprint: critical_presence_guard
     severity: P1
-    cooldown_min: 15  # How long after an alert of activity while the villa is empty a repeat on the same device is counted, not sent again.
-    intrusion: true
+    intrusion: true  # its visits may offer the siren (desk.visit_siren); a visit groups its own signals, so no cooldown
     check: "Activity while the villa is marked empty. Look at the camera before anything else."
   - blueprint: critical_condition
     severity: P2

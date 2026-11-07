@@ -379,8 +379,9 @@ class Tickets:
 
     async def follow(self, incidents) -> None:
         """The open faults of `incidents` made what their tasks say NOW (_converge, step 3 of the repair, for them
-        alone): what a result changed of an alert — the device a visit's strongest step names, its title — reaches its
-        fault while its copies are sent, not after them.
+        alone): what a result changed of an alert — the device a visit's strongest step names, its title, its
+        "monitoring until" — reaches its fault in the tablet's push of each of its records (kiosk_messages: just before
+        it), not after every copy.
 
         ⚠️ THE NAME FOLLOWS AT ITS STEP (owner's drill #135, 2026-11-07): the tablet's card read "Test lock opened…" while
         its name stayed "Test door": its words were told at once, its fault only by the repair after every Telegram copy

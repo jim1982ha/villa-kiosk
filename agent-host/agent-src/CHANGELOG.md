@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.459 (7 November 2026)
+
+- The presence guard's old Alert mode is gone from the villa (live 2026-11-07 11:04: Visit and Notice modes only), and
+  its pieces from the Agent (owner: "delete every redundant old piece; keep no dead code"): desk `siren_gate` and
+  `signal_name` (open intrusion incidents counted), the siren gate on a non-visit alert's first run, repeat and
+  "Back again", the presence route's `cooldown_min`, `siren.Request._pictures` (the "Camera snapshot" messages before a
+  request; a visit's request snaps its cameras into its sheet), `Request(photo=, name=)`, the `shown` set and the
+  never-read `chats` of `Outcome.carry_out`, `Outcome(reader=)`. SKILL.md says the visit's siren. Kept, still used by
+  critical_condition, binary_trip and the others: the repeat ("counted"/"still"), the reopening, the watch, the ladder.
+- An alert's Kiosk fault travels with its tablet record (owner's drill, 2026-11-07 10:56: Telegram 10:57:11/13, the
+  card's name and "monitoring until" 10:57:28): `KioskMessages` brings the fault up to date (`fault` =
+  `Tickets.follow`) just before each push of `incident:<n>`, its own time limit; the `following` task at the start of
+  `Outcome.carry_out` it replaces is removed (tests/test_visit_drills.py).
+
 ## 0.6.458 (7 November 2026)
 
 - A visit already closed on the villa when VESTA first takes it in is closed at that first event (owner's drills,

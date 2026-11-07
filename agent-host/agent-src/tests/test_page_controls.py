@@ -81,7 +81,7 @@ def test_an_edited_skill_compares_with_the_release_and_takes_it_back(ui):
     path = os.path.join(ui.skills_dir, "alert-desk", "rules.yaml")
     text = open(path).read()
     with open(path, "w") as f:
-        f.write(text.replace("cooldown_min: 15", "cooldown_min: 20", 1))
+        f.write(text.replace("cooldown_min: 30", "cooldown_min: 20", 1))
     with open(os.path.join(ui.skills_dir, "alert-desk", "villa.notes.md"), "w") as f:
         f.write("the villa's own")
 
@@ -96,7 +96,7 @@ def test_an_edited_skill_compares_with_the_release_and_takes_it_back(ui):
     d, cmp, st, after, st2 = call(ui, fn)
     assert d["release"]["state"] == "edited" and d["release"]["differs"] == ["rules.yaml"]
     changed = [r for r in cmp["rows"] if not r["same"]]
-    assert changed and "cooldown_min: 20" in changed[0]["here"] and "cooldown_min: 15" in changed[0]["release"]
+    assert changed and "cooldown_min: 20" in changed[0]["here"] and "cooldown_min: 30" in changed[0]["release"]
     assert st == 200 and after["release"]["state"] == "follows"
     assert open(os.path.join(ui.skills_dir, "alert-desk", "villa.notes.md")).read() == "the villa's own"
     assert st2 == 200 and "cooldown_min: 20" in open(path).read()                 # Undo: the edited one is back

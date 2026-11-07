@@ -57,8 +57,7 @@ The decision is one of:
   priority reaches (as the first alert), with the villa system's latest words and claim.
 - `new`: the roles its priority reaches (rules.yaml `people_roles`) get the message, the asked role's
   (`chase.asks`) with the ladder buttons;
-  a P1 or P2 also becomes a fault in the Kiosk's Open issues; a camera snapshot travels with
-  the message when the event names one.
+  a P1 or P2 also becomes a fault in the Kiosk's Open issues.
 - P3 goes to the store with state `digest`; the reports skill picks it up for its daily digest (at that job's time in its skill.yaml). P4 is logged only.
 
 ## One message per incident per chat
@@ -106,7 +105,8 @@ answer (after a restart), the automation alerts anyway.
 ## The siren: strict human validation
 
 `rules.yaml` section `siren`. The gate arms only when all three hold:
-1. At least `siren.min_signals` independent intrusion signals (different entities) inside `siren.window_min`.
+1. At least `siren.min_signals` independent signals (different devices) among one visit's steps inside
+   `siren.window_min` (a presence guard's visit: its route's `intrusion`). Asked once per visit, never on a drill.
 2. No known phone is home: the "empty" sensor picked in the VESTA Kiosk's Settings › Villa reads on (the one its
    presence tile follows), or it reads off for movement alone, every person it lists being away: an intruder moves
    too, so the owner keeps the button and looks at the camera first. None picked, missing or unreadable, or a known
@@ -116,9 +116,9 @@ answer (after a restart), the automation alerts anyway.
 
 The approval goes through the engine's policy like any action, with read-back and its automatic stop
 (`siren_auto_off_min`). A single sensor, an occupied villa, a late press: nothing fires. The request names the
-devices as the villa's system names them. When a camera can show the place (one an alert names as its snapshot, or
-one the villa's system places in the same area as a sensor that tripped), its picture is sent just before the
-question, and only then does the question say to look at it; with no picture, none is mentioned. The villa is read
+devices as the villa's system names them. The question is a reply to the visit's card in each owner chat: the cameras
+the villa's system places in the same area as a step, with no picture in the visit for that window, are snapped into
+the visit's photo sheet first, and the question says to look only when every one of its chats has the card. The villa is read
 again just before asking and at every check while the request waits: someone in it, it is not asked, or it is
 withdrawn ("someone came home"), and an Approve pressed after that sounds nothing.
 

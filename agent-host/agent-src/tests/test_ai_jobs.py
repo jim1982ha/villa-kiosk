@@ -84,7 +84,7 @@ def jobs(tmp_path, monkeypatch):
     turns = Turns(s, st, lambda: pol, server_tools=server_tools, toolbox=lambda allowed, settings=None, invoked=None, inv=None: Toolbox(),
                   system_prompt=lambda: "sys", tell_owner=tell_owner, safe=safe)
     # the real Outcome: a job's notice goes out the one way every message does (outcome.carry_out)
-    out = Outcome(policy=lambda: pol, state=st, send=d.send, actions=None, reader=None, tickets=None, buttons=None,
+    out = Outcome(policy=lambda: pol, state=st, send=d.send, actions=None, tickets=None, buttons=None,
                   thread=None)
     j = AiJobs(s, st, lambda: pol, Skills(s.skills_dir), d, ChatJobs(d, safe), out, turns=turns, safe=safe)
     return types.SimpleNamespace(j=j, d=d, pol=pol, told=told, steps=steps, steps_sent=steps_sent)
@@ -208,7 +208,7 @@ def test_one_brain_and_one_limit_for_a_skill_are_what_every_one_of_its_jobs_runs
     d, st = Delivery(), State(s.state_path)
     turns = Turns(s, st, lambda: pol[0], server_tools=nothing, toolbox=lambda *a, **k: Toolbox(),
                   system_prompt=lambda: "sys", tell_owner=nothing, safe=safe)
-    out = Outcome(policy=lambda: pol[0], state=st, send=d.send, actions=None, reader=None, tickets=None, buttons=None,
+    out = Outcome(policy=lambda: pol[0], state=st, send=d.send, actions=None, tickets=None, buttons=None,
                   thread=None)
     j = AiJobs(s, st, lambda: pol[0], Skills(s.skills_dir), d, ChatJobs(d, safe), out, turns=turns, safe=safe)
     ai = FakeAI("Sent.").install(monkeypatch)

@@ -92,7 +92,7 @@ def _outcome(tmp_path, tele):
     s = settings(str(tmp_path))
     pol = Policy({}, Roster.of(fm=[(-2, "Managers")]))
     return Outcome(policy=lambda: pol, state=State(s.state_path), send=tele.send, edit=tele.edit, actions=None,
-                   reader=None, tickets=None, buttons=None, thread=None)
+                   tickets=None, buttons=None, thread=None)
 
 
 def test_the_engine_rewrites_the_message_where_it_went_never_a_new_one(tmp_path):
@@ -381,7 +381,7 @@ def test_each_chat_reads_the_night_checks_story_in_its_own_language_as_the_alert
     state = State(s.state_path)
     from vesta_agent.posting import Poster
     notices, tablet = Notices(state, lambda: pol, "Asia/Makassar"), []
-    out = Outcome(policy=lambda: pol, state=state, send=tele.send, edit=tele.edit, actions=None, reader=None,
+    out = Outcome(policy=lambda: pol, state=state, send=tele.send, edit=tele.edit, actions=None,
                   tickets=None, buttons=None, thread=None, notices=notices,
                   poster=Poster(send=tele.send, notices=notices, timezone_name="Asia/Makassar", edit=tele.edit,
                                 mirror=tablet.append))

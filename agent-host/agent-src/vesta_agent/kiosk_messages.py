@@ -2,7 +2,7 @@
 2026-10-28: everything Telegram shows is reproduced on the tablet).
 
 ⚠️ DELIVERY'S SECOND SINK, NEVER A SECOND WRITER OF WORDS. The words of a message are drawn once, where they always were:
-IncidentThread (an alert, an approval, a snapshot: `_post`, `_show`) and Poster (a note sent on its own, its rewrite). Those
+IncidentThread (an alert, an approval: `_post`, `_show`) and Poster (a note sent on its own, its rewrite). Those
 call `KioskMessages` with the very parts they drew; nothing here composes a sentence. One record per thread (`key`), which
 the Kiosk replaces when the message is rewritten — the tablet shows the message as it stands, as Telegram does.
 
@@ -181,9 +181,19 @@ def page_id(html: bytes) -> str:
 
 def thread_key(iid) -> str:
     """The thread of an incident (its number, in the agreement's form `vestaMessage.incidentKey`, the one the tablet
-    reads), or of an approval or a snapshot (their own ids)."""
+    reads), or of an approval (its own id)."""
     form = str(agreement.section("vestaMessage").get("incidentKey") or "incident:{number}")
     return form.replace("{number}", str(iid)) if str(iid).isdigit() else f"thread:{iid}"
+
+
+def incident_of(key: str) -> int | None:
+    """The alert number a record's key names (thread_key's incident form), or None for any other thread."""
+    form = str(agreement.section("vestaMessage").get("incidentKey") or "incident:{number}")
+    head, _, tail = form.partition("{number}")
+    if not (key.startswith(head) and key.endswith(tail)):
+        return None
+    n = key[len(head):len(key) - len(tail) if tail else None]
+    return int(n) if n.isdigit() else None
 
 
 def photo_b64(photo) -> str | None:
@@ -213,9 +223,12 @@ class KioskMessages:
     """Keeps records for the tablet, in the background (see the module's note). One push in flight per key, the newest
     waiting: a message changed twice in a row is pushed in order, never both at once."""
 
-    def __init__(self, kiosk, timeout_s, owed: KioskOwed):
+    def __init__(self, kiosk, timeout_s, owed: KioskOwed, fault=None):
         self.kiosk = kiosk
         self._timeout_s = timeout_s            # kiosk.message_timeout_s: read at each push (the Limits tab applies at once)
+        # fault(number): that alert's Kiosk fault made what its task says now (tickets.Tickets.follow), written just
+        # before its record, in the same push (_drain)
+        self.fault = fault
         # key → its newest copy the Kiosk did not keep, as drawn (see the module's note), sent again by the owed's pass
         self.owed = owed
         owed.sends(MESSAGE, lambda _key, rec: self.keep(rec))
@@ -289,6 +302,7 @@ class KioskMessages:
     async def _drain(self, key: str) -> None:
         while key in self._pending:
             drawn = self._pending.pop(key)
+            await self._fault_first(key)
             try:
                 rec = await self._with_pages(drawn)
                 kept = await asyncio.wait_for(self.kiosk.keep_message(rec), self._timeout_s())
@@ -306,6 +320,23 @@ class KioskMessages:
                     log.warning("A message could not be kept for the tablet (%s); it is sent again later",
                                 type(e).__name__)
         self._running.pop(key, None)
+
+    async def _fault_first(self, key: str) -> None:
+        """An alert's record (its key the agreement's incident form): its fault brought up to date first — its name (the
+        device its words name), its "monitoring until" pill, its lines — so the tablet's card changes with its words.
+
+        ⚠️ ONE PUSH, FAULT AND WORDS (owner's drill, 2026-11-07, 10:56: Telegram's copies at 10:57:11 and 10:57:13, the
+        tablet's pop-up within a second, its card's name and "monitoring until" at 10:57:28): the fault waited for the
+        repair after every Telegram edit, the sheet and the villa told. Its own time limit; a fault not brought up to
+        date never holds the words (the repair after the result does it)."""
+        iid = incident_of(key)
+        if iid is None or self.fault is None:
+            return
+        try:
+            await asyncio.wait_for(self.fault(iid), self._timeout_s())
+        except Exception as e:  # noqa: BLE001 — the words go anyway
+            log.warning("Alert #%s: its Kiosk fault could not be brought up to date with its message (%s)", iid,
+                        type(e).__name__)
 
     def _owe(self, key: str, drawn: dict) -> None:
         """`drawn` was not kept: forgotten as pushed (the same copy told again is sent), and owed — unless a newer copy

@@ -60,26 +60,26 @@ def withdrawn_now(action: dict, occupied: Callable[[], bool]) -> bool:
 
 class Request:
     """The siren's request for an intrusion (a script's `siren_gate`), start to end. `actions`: actions.Actions (who is
-    home, the request itself); `ask`: approvals.Approvals.ask; `post`: posting.Poster.post; `photo(camera)`: what a
-    camera shows now, (base64, mime) or None; `name(entity)`: its name as the villa's system gives it."""
+    home, the request itself); `ask`: approvals.Approvals.ask; `post`: posting.Poster.post (the warning).
+
+    ⚠️ ONE STORY, NO PICTURE MESSAGES (owner, 2026-11-07: "delete every redundant old piece"): the presence guard's
+    alerts are visits now, and only a visit offers the siren (the alert desk's visit_siren); its pictures go into the
+    visit's sheet. The "Camera snapshot" messages sent before a request of the old alerts went with them."""
 
     def __init__(self, *, policy: Callable, state, actions, ask: Callable[..., Awaitable[int]] | None,
-                 post: Callable[..., Awaitable], photo: Callable[[str], Awaitable], name: Callable[[str], str],
-                 visits=None):
+                 post: Callable[..., Awaitable], visits=None):
         self.policy, self.state, self.actions, self.ask = policy, state, actions, ask
-        self.post, self.photo, self.name = post, photo, name
+        self.post = post
         # visit.Visits: a visit's request is part of its one story (its card, its sheet, a line of its Status)
         self.visits = visits
 
-    async def gate(self, gate: dict, origin=None, shown: set | None = None) -> dict:
+    async def gate(self, gate: dict, origin=None) -> dict:
         """Carry out a script's gate: {asked: bool, why: what kept it from being asked ("" when asked), warned: the
-        chats told of the intrusion by the warning itself}. `shown`: (chat, camera) pairs whose picture went out, added
-        to. An unarmed gate does nothing."""
+        chats told of the intrusion by the warning itself}. An unarmed gate does nothing."""
         out = {"asked": False, "why": "", "warned": set()}
         prompt = gate.get("prompt") if isinstance(gate, dict) and gate.get("armed") else None
         if not prompt:
             return out
-        shown = shown if shown is not None else set()
         siren = self.policy().siren_entity
         if not siren:
             # no siren to ask for: the warning itself goes to the gate's people (it was dropped before, 0.12.80)
@@ -109,13 +109,6 @@ class Request:
             await self.visits.snap(visit, gate.get("cameras"))
             replies = {c: m for c in msg.chats if (m := self.visits.card(visit, c))}
             if gate.get("seen") and msg.chats and set(replies) >= set(msg.chats):
-                head = f"{prompt} {gate['seen']}"
-        elif msg:
-            # ⚠️ THE PICTURE BEFORE THE QUESTION, AND SAID ONLY WHEN SENT (owner's Telegram, 2026-10-31 00:19: "Look at
-            # the snapshot", and none came): the cameras the desk found near the signals, each in every chat of the
-            # request first; the request says to look only when every one of its chats has a picture
-            pictured = await self._pictures(gate.get("cameras"), msg.chats, {msg.to} if msg.to else (), origin, shown)
-            if gate.get("seen") and msg.chats and pictured >= set(msg.chats):
                 head = f"{prompt} {gate['seen']}"
         # ⚠️ THE INTRUSION IS SAID, WHATEVER BECOMES OF THE REQUEST (architecture review 21): its words travel only as
         # the siren request's lead — a request no owner chat received showed them nowhere
@@ -155,25 +148,6 @@ class Request:
             self.state.log("siren_warning_unsent", {"to": list(gate.get("to") or ("owner",))})
             log.warning("The intrusion warning reached no chat (%s)", said or "no siren chosen")
         return told
-
-    async def _pictures(self, cameras, chats, roles, origin, shown: set) -> set[int]:
-        """What each camera of `cameras` shows now, posted in every chat of `chats` (for `roles`, as the question is),
-        before the question it goes with. Records each (chat, camera) in `shown`; returns the chats that received one."""
-        got: set[int] = set()
-        for cam in cameras or []:
-            try:
-                photo = await self.photo(cam)
-            except Exception as e:  # noqa: BLE001 — no picture: the question says nothing of one
-                log.warning("Camera %s gave no picture (%s: %s)", cam, type(e).__name__, e)
-                continue
-            if not photo:
-                continue
-            for chat in chats:
-                if await self.post(chat, self.name(cam), title="Camera snapshot", roles=roles, photo=photo,
-                                   thread=f"snapshot-{cam}", origin=origin):
-                    shown.add((chat, cam))
-                    got.add(chat)
-        return got
 
 
 class Siren:

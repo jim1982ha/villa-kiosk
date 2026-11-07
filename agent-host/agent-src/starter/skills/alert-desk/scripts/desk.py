@@ -501,6 +501,7 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         # minute. A newer rule can never raise an alert on an older desk: recorded, nothing sent, nothing created
         store.audit("alert-desk", "phase_unknown", {"rule": ev.get("rule_id"), "phase": ev["phase"]})
         return {"send": [], "actions": [], "incident_id": None, "decision": "phase_unknown"}
+    # the presence guard's alerts are visits (its Alert mode removed, owner 2026-11-07): only a visit offers the siren
     if visit_of(ev) and ev["phase"] in ("opened", "step"):
         return visit_intake(store, ev, now, params, occupancy_reader, zone)
     if ev["phase"] == "step":
@@ -523,8 +524,6 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     # a villa helper no screen showed. Only a NEW alert is held: one already open carries on as before (its promise)
     if cur is None and not takes_up(sev):
         out["decision"] = "maintenance_mode"; store.audit("alert-desk", "suppressed_maintenance", ev); return out
-    if route.get("intrusion") and not ev.get("occupancy"):
-        ev["occupancy"] = occupancy_reader()
     if cur:
         last = datetime.fromisoformat(cur["last_seen_at"])
         store.touch_incident(cur["id"], now.isoformat())
@@ -549,8 +548,6 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
         # ⚠️ TO WHOM ITS PRIORITY SENDS IT (owner, 2026-10-13: "respect what the skill is doing, consistently to any P1,
         # P2, P3"): a repeat went to the facility manager whatever the priority, unlike the alert it repeats
         out["send"] += tell(sev, "still", incident=cur["id"], ladder=route.get("ladder", True), **about(cur, status))
-        if route.get("intrusion"):
-            out["siren_gate"] = siren_gate(store, ev, now)
         return out
     back = back_alert(store, ev, now)
     if back:
@@ -569,10 +566,6 @@ def intake(store: Store, ev: dict, now: datetime, params: VillaParams | None = N
     out["ha_messages"] = [R.ha_message(iid, text, ev.get("_context_id"), stage="new")]
     out["send"] += tell(sev, "new", incident=iid, ladder=route.get("ladder", True), text=text)
     _ladder(store, iid, ev, now, sev, route, out)
-    # intrusion: open the siren gate, never fire it
-    if route.get("intrusion"):
-        # armed: the engine asks the owner to Approve the siren (no siren set: the warning goes to owner and fm)
-        out["siren_gate"] = siren_gate(store, ev, now)
     return out
 
 
@@ -704,8 +697,6 @@ def reopen(store: Store, inc: dict, ev: dict, now: datetime, sev: str, route: di
         # phrase of it (status_words.again), never "Back at …, Back again: 2 times in 7 days" (round 11, card 2)
         status = Said(SW.again(runs, AGAIN_DAYS), {lang: SW.again(runs, AGAIN_DAYS, lang) for lang in SW.LANGS if lang != "en"})
         out["ha_messages"] = [R.ha_message(inc["id"], context=ev.get("_context_id"), stage="back", **about(inc, status))]
-        if route.get("intrusion"):
-            out["siren_gate"] = siren_gate(store, ev, now)
     out["send"] += tell(sev, "back" if came_back_now else "still", incident=inc["id"], ladder=route.get("ladder", True),
                         **about(inc, status))
     out["incident_id"], out["decision"] = inc["id"], "reopened"
@@ -1754,14 +1745,6 @@ def siren_minutes() -> int:
         return Policy({}).siren_auto_off_min
 
 
-def signal_name(inc: dict) -> str:
-    """An intrusion signal as a person reads it: its device's name as the villa's system has it (the knowledge pack),
-    else its alert's own name — never its entity id."""
-    pack, eid = _pack(), inc["entity_id"]
-    named = pack.name_of(eid) if pack else None
-    return named or problem_name(str(notes_of(inc).get("label") or notes_of(inc).get("message") or "a sensor"))["headline"]
-
-
 def cameras_near(recent: list[dict]) -> list[str]:
     """The cameras that can show where the intrusion signals tripped: every camera the villa's system places in the same
     area as a signal (the knowledge pack). None: no picture.
@@ -1774,35 +1757,6 @@ def cameras_near(recent: list[dict]) -> list[str]:
         areas = {(pack.row(i["entity_id"]) or {}).get("area") for i in recent} - {None, ""}
         out += sorted(r["entity_id"] for r in pack.rows() if r["entity_id"].startswith("camera.") and r.get("area") in areas)
     return list(dict.fromkeys(out))
-
-
-def siren_gate(store: Store, ev: dict, now: datetime) -> dict:
-    cfg = RULES["siren"]
-    window = now - timedelta(minutes=cfg["window_min"])
-    recent = [i for i in store.incidents(open_only=True)
-              if route_for(i["rule_id"], notes_of(i).get(Notes.BLUEPRINT)).get("intrusion")
-              # ⚠️ WHEN IT LAST TRIPPED, NOT WHEN IT FIRST OPENED (architecture review 24): reopened "Back again", the
-              # garden alert of 20:00 tripping again at 22:00 counted as 20:00 — two sensors in a minute, no siren asked
-              and datetime.fromisoformat(i.get("last_seen_at") or i["opened_at"]) >= window]
-    signals = {i["entity_id"] for i in recent}
-    mode = (ev.get("occupancy") or UNKNOWN).lower()
-    armed = len(signals) >= cfg["min_signals"] and mode in ASKED_WHILE
-    prompt, cameras = "", []
-    if armed:
-        # The engine turns this into an Approve / Refuse request to the owner (outcome.carry_out). Its durations as
-        # both apps word one (timeutil.lasting: "1 h 30 min", never "90 min")
-        # ⚠️ NAMES, AND A PICTURE ONLY WHEN THERE IS ONE (owner's Telegram, 2026-10-31 00:19): the request listed
-        # "binary_sensor.parking_motion, lock.outdoor_entrance_lock" and said "Look at the snapshot" — no snapshot was
-        # ever sent (the presence guard's alerts name no camera). The devices are named as the villa names them; the
-        # cameras that can show the place go to the engine, which sends their pictures first and adds `seen` only then
-        names = sorted({signal_name(i) for i in recent})
-        prompt = (f"Intrusion suspected: {len(signals)} independent sensors in {lasting(cfg['window_min'] * 60)} while "
-                  f"{ASKED_WHILE[mode]}: {', '.join(names)}. Approving sounds the siren for "
-                  f"{lasting(siren_minutes() * 60)}.")
-        cameras = cameras_near(recent)
-    return R.siren(armed, prompt, ("owner", "fm"), signals=sorted(signals), occupancy=mode, cameras=cameras,
-                   seen="Look at the camera picture above first." if cameras else "",
-                   reason=None if armed else ("villa not empty" if mode not in ASKED_WHILE else "single signal"))
 
 
 def reply(store: Store, iid: int, option: str, sender_role: str, now: datetime, params: VillaParams | None = None,

@@ -72,25 +72,24 @@ def has_work(res) -> bool:
     return isinstance(res, dict) and any(res.get(k) for k in CARRIED_KEYS)
 
 
-
 async def camera_photo(reader, entity_id) -> tuple[str, str] | None:
-    """What a camera shows now, as (base64, mime) for Telegram's sendPhoto; None when it gave no image: the siren's
-    pictures before its question, a visit's camera snapped into its sheet (a chat reply carries the pictures the AI
-    looked at: tools.Toolbox.photos)."""
+    """What a camera shows now, as (base64, mime) for Telegram's sendPhoto; None when it gave no image: a visit's camera
+    snapped into its sheet before the siren's question (a chat reply carries the pictures the AI looked at:
+    tools.Toolbox.photos)."""
     if not str(entity_id or "").startswith("camera."):
         return None
     blocks = await asyncio.to_thread(reader.tool_content, "ha_get_camera_image", {"entity_id": entity_id})
     img = next((b for b in blocks if b.get("type") == "image" and b.get("data")), None)
     return (img["data"], img.get("mimeType") or "image/jpeg") if img else None
 
+
 class Outcome:
-    def __init__(self, *, policy: Callable, state, send: Callable[..., Awaitable], actions, reader, tickets, buttons,
+    def __init__(self, *, policy: Callable, state, send: Callable[..., Awaitable], actions, tickets, buttons,
                  thread, notices=None, out_dir: str = "", timezone_name: str = "UTC", poster=None, ask=None, incidents=None,
                  edit: Callable[..., Awaitable] | None = None, visits=None):
         self.policy = policy
         self.state = state
         self.actions = actions
-        self.reader = reader
         self.tickets = tickets          # tickets.Tickets: ticket, ticket.resolve
         self.buttons = buttons          # alert_buttons.AlertButtons: an alert's buttons
         self.thread = thread            # incident_thread.IncidentThread: what each chat shows of an incident
@@ -107,8 +106,7 @@ class Outcome:
         # a visit's sheet, the villa told what VESTA did with it, its siren told in its story (visit.Visits)
         self.visits = visits
         self.siren = siren.Request(policy=policy, state=state, actions=actions, ask=ask, post=self.poster.post,
-                                   photo=lambda cam: camera_photo(self.reader, cam),
-                                   name=lambda cam: self.actions.names(cam), visits=visits)
+                                   visits=visits)
 
     async def rewrite(self, e: dict, skill_name: str | None) -> int:
         """A message sent earlier with this `key` (result.message key=), rewritten in every chat it went to, in its
@@ -176,17 +174,8 @@ class Outcome:
         if self.notices:
             for iid, lines in story.items():
                 heads[iid] = self.notices.observe(iid, lines)
-        # ⚠️ ITS FAULT FOLLOWS WHILE ITS COPIES GO (owner's drill #135): a result that moves an alert's fault (a visit's
-        # step naming another device) has that fault brought up to date beside the sends, never before them (the ring
-        # waits on nothing) nor only after them (the tablet's card named the door under the lock's words)
-        following = None
-        if self.tickets is not None and _moves_faults(res) and not res.get("settle"):
-            following = asyncio.create_task(self.tickets.follow(
-                {int(x["incident_id"]) for x in [res, *(res.get("ha_messages") or []), *(res.get("send") or [])]
-                 if isinstance(x, dict) and str(x.get("incident_id") or "").isdigit()}))
-            await asyncio.sleep(0)                            # started now: its first read goes out first
+        # (an alert's fault follows its copies in the tablet's push of its record: kiosk_messages.KioskMessages.fault)
         route = Routing(self.policy())
-        chats: set[int] = set()
         items = list(res.get("send") or []) + self.unkept_backups(res)
         # one result's messages are ONE notice of its incident: one history line, its chats together (notice.py)
         # one history line per kind of notice this result sent (owner, 2026-10-11: "Escalated … to Jim, Fabien" — Fabien
@@ -238,7 +227,6 @@ class Outcome:
         for chat, item, roles in pairs:
             iid = incident_of(item)
             if iid and (int(iid), chat, item.get("stage")) in adopted:
-                chats.add(chat)                                       # this result's snapshot goes there too
                 if item.get("first_in_line"):
                     asked.setdefault(int(iid), []).append((chat, True))  # the people asked to answer have it
                 continue
@@ -307,7 +295,6 @@ class Outcome:
             if iid:
                 notice(iid, item.get("stage"), chat, roles or (self.notices.roles_of(int(iid)) if self.notices else ()))
                 posted.setdefault(int(iid), []).append((chat, item.get("stage"), going.get(int(iid))))
-            chats.add(chat)
             done["sent"] += 1
             done.setdefault("messages", {})[chat] = mid          # each chat's message: a page's buttons go under it
             if item.get("key") and not iid:
@@ -376,10 +363,8 @@ class Outcome:
                 if self.incidents is not None:
                     self.incidents.unreached(iid)
                 log.warning("Incident #%s: no chat of the people asked to answer received it — handed on", iid)
-        shown: set[tuple[int, str]] = set()          # (chat, camera) whose picture this result already sent
-        # the siren's request, start to end (siren.Request: when it is asked, pictures first, who hears of an intrusion
-        # when it cannot be): its warning's chats get this result's snapshot too
-        chats |= (await self.siren.gate(res.get("siren_gate") or {}, origin=origin, shown=shown))["warned"]
+        # the siren's request, start to end (siren.Request: when it is asked, who hears of an intrusion when it cannot be)
+        await self.siren.gate(res.get("siren_gate") or {}, origin=origin)
         # ⚠️ ONE HAND MOVES THE CARDS (architecture review, 2026-10-15): a script's fault actions were carried out here,
         # and the repair worked the same cards out from the tasks — two routes, a 2-day "redo the close" window for when
         # the first failed, and a person's Done that could meet the agent's close. A fault about a task is now the
@@ -427,8 +412,6 @@ class Outcome:
             except Exception as e:  # noqa: BLE001
                 self.state.log("action_failed", {"action": kind, "error": f"{type(e).__name__}: {str(e)[:error_short_chars()]}"})
                 log.warning("action %s failed (%s: %s)", kind, type(e).__name__, e)
-        if following is not None:
-            await following
         if early is not None:
             await early
         if faults_moved:

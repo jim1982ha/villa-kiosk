@@ -3,7 +3,7 @@
 ⚠️ ONE STEP FOR EVERY MESSAGE THE AGENT SENDS ON ITS OWN (architecture review 18, then 20). It was Outcome's private
 `_post`, which the approvals reached through Outcome — and Outcome reached the approvals through a field patched in after
 construction: built any other way, the siren's gate called None. Alerts (outcome.py), approval requests (approvals.py),
-the siren's warning and a camera snapshot all go through here; both modules are handed this one.
+and the siren's warning all go through here; both modules are handed this one.
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ class Poster:
         """The message in `chat`: its heading — who it is for (`roles`), the incident and its history — unless it answers
         the person who asked, in their chat, or is `plain`; its parts laid out (layout.py) to fit ONE Telegram message —
         a photo's or a file's caption included, so the copy recorded is the message sent; then its `thread` (an incident,
-        an approval, a snapshot): the earlier copy in this chat goes. `told`: the roles this step of the incident went to
+        an approval): the earlier copy in this chat goes. `told`: the roles this step of the incident went to
         (its bottom line says them: notice.Notices.bottom). `status_in`: the skill's `status` in other languages
         ({code: text}) — an alert's copy says the one its chat reads. `keep`: a note sent on its own is also kept for the
         tablet (True; or the skill's own `key`, so a later rewrite replaces it there too) — a reply to a person is not;
@@ -102,7 +102,7 @@ class Poster:
             p["said"] = said
         # the alert's own words in the chat's language: known, the card goes translated; not yet, it goes as written and
         # is translated once recorded — never waited for (IncidentThread.own_words). The incident's own
-        # card only: a snapshot's caption is the agent's
+        # card only: an approval's words are the agent's
         if self.thread is not None and said and str(thread) == str(incident):
             p = self.thread.own_words(incident, chat, p)
         # ⚠️ A CAPTION IS 1,024 CHARACTERS (architecture review 20): laid out for 4,096, a long incident's snapshot went as a
