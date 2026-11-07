@@ -4097,12 +4097,39 @@ def _announcement_record(event, seq: int) -> dict | None:
     for field in ("entity_id", "record"):
         if isinstance(eid := data.get(field), str) and AGENT_ENTITY_RE.fullmatch(eid):
             rec[field] = eid
+    if card := _announcement_card(data.get("card")):
+        rec["card"] = card
     # the automation run that announced it (the bus event's context): the VESTA Agent names the runs it took over
     # (vestaMessage `takes`), so the tablet shows VESTA's card in place of the villa's own message of that run
     run = (event.get("context") or {}).get("id") if isinstance(event.get("context"), dict) else None
     if isinstance(run, str) and run.strip():
         rec["run"] = run.strip()[:ANNOUNCEMENT_KEY_MAX]
     return rec
+
+
+#: A visit card's facts: at most this many lines, each at most this long (the card says the visit's steps, one a line).
+ANNOUNCEMENT_CARD_LINES_MAX = 40
+ANNOUNCEMENT_CARD_LINE_MAX = 300
+
+
+def _announcement_card(raw) -> dict | None:
+    """A visit card's facts as the villa's blueprint sends them (critical_presence_guard's `card`: title, stage, bottom
+    line, first send, monitored until, lines, room), each a string (`lines` a list of them) cut at its length; None when
+    it is not one (no title, a stage the agreement does not name). The tablet draws the card from them (architecture
+    review of 2026-11-07, card 4: one card whoever tells the visit), its text read only for a card without them."""
+    if not isinstance(raw, dict):
+        return None
+    def text(name: str, cap: int = ANNOUNCEMENT_KEY_MAX) -> str:
+        v = raw.get(name)
+        return v.strip()[:cap] if isinstance(v, str) else ""
+    stages = AGENT_CONTRACT_TABLE.get("stageMarks") or {}
+    if not text("title", ANNOUNCEMENT_CARD_LINE_MAX) or text("stage") not in stages:
+        return None
+    lines = raw.get("lines") if isinstance(raw.get("lines"), list) else []
+    return {"title": text("title", ANNOUNCEMENT_CARD_LINE_MAX), "stage": text("stage"),
+            "status": text("status", ANNOUNCEMENT_CARD_LINE_MAX), "since": text("since"), "until": text("until"),
+            "lines": [x.strip()[:ANNOUNCEMENT_CARD_LINE_MAX] for x in lines if isinstance(x, str) and x.strip()][:ANNOUNCEMENT_CARD_LINES_MAX],
+            "room": text("room")}
 
 
 def _media_photo(raw) -> str | None:

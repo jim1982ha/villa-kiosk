@@ -254,7 +254,7 @@ function monitoringPill(problems: readonly CheckedProblem[]): CheckSaid | null {
   if (!until) return null;
   const when = `monitoring until ${statusMoment(until.monitoredUntil!, until.openedAt ?? null)}`, at = momentText(until.monitoredUntil!);
   return { text: `${when.charAt(0).toUpperCase()}${when.slice(1)}`, at, when, pill: when,
-    tip: `VESTA closes this alert at ${at} if nothing more is seen; each new sign moves it later.` };
+    tip: `Closes at ${at} if nothing more is seen; each new sign moves it later.` };
 }
 
 /** A problem that is only what the map shows now (no fault on it): this tablet reads it again all the time. */

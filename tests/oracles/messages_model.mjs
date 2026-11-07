@@ -771,6 +771,10 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
   // time once answered: the same fields at the same place now
   const { momentText } = await import("@/utils/dateText");
   const { cardStrip, rowWhen } = await import("@/config/cockpitCard");
+  // its lines' and its pill's times are the villa's clock (+08:00 here, the fixture's): read on it, wherever the check
+  // runs (CI is UTC)
+  const { setVillaTimeZone } = await import("@/utils/villaClock");
+  setVillaTimeZone("Etc/GMT-8");
   const at2 = { ...step2, since: step1.at };
   const openCard = villaAlertCards([at2]).open[0];
   const openHtml = draw(h(AttentionCard, { card: openCard, onOpenEntity: () => {} }));
@@ -793,8 +797,6 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
   // owner, 2026-11-07: a visit card kept before 2.496.742 (no `since`) showed its close, 07:16, for its first send, 07:09
   // its lines' times are the villa's clock (+08:00 here, the fixture's): read on it, wherever the check runs (CI is UTC)
   const { firstMoment } = await import("@/messages/messagesModel");
-  const { setVillaTimeZone } = await import("@/utils/villaClock");
-  setVillaTimeZone("Etc/GMT-8");
   const keptBefore = { ...over, photos: [] };
   const keptCard = villaAlertCards([keptBefore]).closed[0];
   const first = new Date("2026-11-07T07:09:00+08:00");
@@ -811,9 +813,10 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
     message: layout("TEST: Test door opened while the villa is empty", ["Test door opened, 07:10"], "⚠️ New alert, monitoring until 07:40"), photos: [] });
   const namedCard = villaAlertCards([named]).open[0];
   const namedHtml = draw(h(AttentionCard, { card: namedCard, onOpenEntity: () => {}, buttons: (l) => l.actions.map((a) => a.label).join(" · ") }));
-  ck("  ...named by its strongest step's device, which it opens; the title's words its line",
+  // architecture review 2026-11-07, card 4: its title's words are its message's first words, as VESTA's lead line is
+  ck("  ...named by its strongest step's device, which it opens; the title's words its message's first",
      namedCard.title === "Test door" && namedCard.entityId === "binary_sensor.example_door"
-     && namedCard.lines[0].text === "TEST: Test door opened while the villa is empty" && namedHtml.includes(">Test door<")
+     && namedCard.lines[0].text === "" && namedCard.lines[0].told.text === "TEST: Test door opened while the villa is empty" && namedHtml.includes(">Test door<")
      && namedHtml.includes("TEST: Test door opened while the villa is empty"), [namedCard.title, namedCard.lines[0].text]);
   ck("  ...a card kept before names no device: its title, as before", openCard.title.startsWith("Garden Door") && openCard.lines[0].text === "");
   const acts = namedCard.lines[0].actions;
@@ -831,5 +834,51 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
      sent.length === 3 && sent[0][0].endsWith("visit-press") && J(sent[0][1]) === J({ key: "visit:example-1", command: "done" })
      && sent[1][1].command === "need_help" && okW.done && okW.note === null && !goneW.done && goneW.note === "No longer offered"
      && !failW.done && failW.note === "Not sent, try again" && visitWrite({ ...acts[0], step: { kind: "help" } }, send(200)) === null, [sent, okW, goneW, failW]);
+}
+
+// architecture review of 2026-11-07, card 4 (owner-approved): ONE tablet card whoever tells the visit. The villa's card
+// was rebuilt from its message's text and drawn apart from VESTA's, so each field VESTA's card gained (its name, its
+// time, its state, its pill, its buttons) was copied over by hand. The villa now sends the card's facts (`card`), and
+// both are drawn by one builder: the same visit told by the villa and by VESTA is the same card, apart from the chip
+// (the villa numbers no alert) and the buttons
+{
+  const { groupAttention } = await import("@/config/attention");
+  const { cockpitCard } = await import("@/config/cockpitCard");
+  const { parseAnnouncement } = await import("@/messages/announcements");
+  const { AttentionCard } = await import("@/components/cockpit/IssueCard");
+  const since = "2026-11-07T07:09:59+08:00", until = "2026-11-07T07:40:23+08:00", at = "2026-11-07T07:10:23+08:00";
+  const title = "TEST: Test door opened while the villa is empty", lines = ["Seen at Parking, 07:09", "Test door opened, 07:10"];
+  const photos = [{ id: `${"a".repeat(32)}.jpg`, label: "Camera 1", at }, { id: `${"b".repeat(32)}.jpg`, label: "Camera 2", at }];
+  const facts = { title, stage: "new", status: "⚠️ New alert", since, until, lines, room: "Hall" };
+  // the villa's message as today's blueprint writes it, its facts beside it (the text says other words: the facts win)
+  const villa = parseAnnouncement({ seq: 80, at, key: "visit:example-2", device: "Test door", entity_id: "binary_sensor.example_door",
+    record: "sensor.example_visit", photos, card: facts,
+    message: `<b>Old words</b>\nTo: Owner &amp; FM\n<blockquote>Old line, 06:00</blockquote>\n\nStatus:\n<blockquote><i>⚠️ Old state, monitoring until 06:30</i></blockquote>` });
+  const vesta = parseVestaMessage({ seq: 81, at, key: "incident:148", title: "#148-P1 (new)", to: "Owner & FM", lead: title, body: "",
+    status: [...lines, "⚠️ New alert"], stage: "new", photos, buttons: [{ label: "Done", kind: "done", id: "148" }] });
+  const [g] = groupAttention([{ id: "fault:v148", kind: "fault", title: "Test door", detail: "Fault", entityId: "binary_sensor.example_door",
+    ticketId: "v148", stage: "fault", source: "alert", check: "minutes", openedAt: since, monitoredUntil: until, alertNumber: 148,
+    alertLabel: "#148-P1", device: { key: "binary_sensor.example_door", label: "Test door", room: "Hall" } }]);
+  const byVilla = messagesView({ open: [], watched: [], announcements: [villa], filter: "issues", selected: null }).issues[0].card;
+  const byVesta = messagesView({ open: [cockpitCard(g, { checkMinutes: 5, nightlyAt: "02:00" })], watched: [], announcements: [vesta],
+    filter: "issues", selected: null }).issues[0].card;
+  // what the owner sees, drawn; the chip (the strip's alert name) taken out
+  const face = (card) => draw(h(AttentionCard, { card: { ...card, lines: card.lines.map((l) => ({ ...l, alertLabel: undefined })) }, onOpenEntity: () => {} }));
+  ck("the same visit told by the villa (its facts) and by VESTA: the same card drawn, apart from the chip and the buttons",
+     face(byVilla) === face(byVesta) && face(byVilla).includes("New alert") && face(byVilla).includes(">Hall<")
+     && face(byVilla).includes("Test door opened, 07:10") && face(byVilla).includes(title), [face(byVilla), face(byVesta)]);
+  ck("  ...the chip VESTA's only; the buttons each its own (the villa's four, VESTA's for its record)",
+     draw(h(AttentionCard, { card: byVesta, onOpenEntity: () => {} })).includes("#148-P1")
+     && !draw(h(AttentionCard, { card: byVilla, onOpenEntity: () => {} })).includes("#148")
+     && byVilla.lines[0].actions.map((a) => a.step.kind).join() === "visit,visit,visit,visit", byVilla.lines[0].actions);
+  ck("  ...the villa's facts drawn, never its text cut apart: its old words, line and state nowhere",
+     !/Old words|Old line|Old state|06:30/.test(face(byVilla)) && byVilla.nextCheck.pill === byVesta.nextCheck.pill, face(byVilla));
+  // a message with no facts (kept before, or today's blueprint until the new one is saved): its text read, as before
+  const { villaFields } = await import("@/messages/messagesModel");
+  const noFacts = { ...villa, card: undefined };
+  const read = villaFields(noFacts);
+  ck("  ...a message with no facts: read from its text (the earlier checks draw such cards), its monitoring time a moment",
+     read.title === "Old words" && read.status === "⚠️ Old state" && read.lines.join() === "Old line, 06:00"
+     && read.stage === "new" && Date.parse(read.until) > Date.parse(at), read);
 }
 done("✅ the Messages model: what the tab lists, its counts and the card open");
