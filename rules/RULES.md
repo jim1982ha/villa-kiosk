@@ -14,15 +14,14 @@ the answer mid-work, say so first in the next message and ask.
 Once the cause is found, implement and ship. Ask only for a real choice between two behaviours the owner wants.
 
 ### Time matters
-Bundle related items into one release. Measure only what a decision rests on, and say what was skipped. New findings
-during a piece of work go to the next round.
+Ship each fix as soon as it is ready; don't hold one piece of work for another. Measure only what a decision rests
+on. Do small, located fixes directly; use a sub-agent only for a real investigation, with the files already named.
 
 ### The owner installs updates
 Shipping ends at "published". Never install or update an app on the villa, and tell every agent you start the same.
 
 ### The owner verifies by screenshots
-Never drive a browser to verify UI work. Before giving test steps, measure the change on the villa; start with a small
-text sketch of the screen with the spot marked, then the exact steps, or say plainly there is nothing visible.
+Never drive a browser to verify UI work: say where on which screen to look.
 
 ### Speak in UI terms
 Use the screen's words (tab, button label, chip text, message). No file, function, key, record id or version number
@@ -32,14 +31,8 @@ unless the owner's decision depends on it, and then say what it means. No table 
 At most three questions per round, each answerable in one word, about what the owner will see. Decide mechanisms and
 obvious defaults yourself and state them in one line.
 
-### List every request
-When a message carries several asks, end with one line per ask, as written, and what was done (or not, and why),
-checked in the code or the live system.
-
 ### Check before you report
-Before calling something open, parked, failed or "forever", open the code or changelog that would make it true. After
-an interrupted command, read the real state (git log, origin, CI). Verify a sub-agent's findings against the current
-code before they reach the owner.
+Don't call something done, open or failed without having looked at it.
 
 ### Review pages
 Plain English, never French, for the owner, not a programmer. Each card, in order: what the owner sees today (drawn as
@@ -123,8 +116,7 @@ Every card (Cockpit, Inbox, Tickets, Settings, Advanced Settings) has the same a
   green).
 
 A time comes from `beganAt` or the record, never a per-kind blank. One card per device in Open issues and Watch. Never
-add a condition to the shared card that makes one kind read differently: ask the owner first. A change to a card is
-proven on every kind and every tab (`every_card_row.mjs`, `cockpit_cards.mjs`, `settings_cards.mjs`). In Settings,
+add a condition to the shared card that makes one kind read differently: ask the owner first. In Settings,
 each list has one field (`SearchOrAdd`) and fields start at one column (`--card-field-label`); a device of Devices is
 never folded and has no room line.
 
@@ -191,11 +183,6 @@ cite a gitignored file in a tracked comment.
 ### Performance instruments
 Answer performance questions from telemetry: the on-device probe (Settings › Advanced › Device telemetry), the freeze
 spans (`cover` 0 = no app code ran), the leak watch (`scene`). Never add an unthrottled reporter.
-
-### Measure on the real model offline
-Measure a visual or placement change on the real villa model headless (gitignored probes) before the owner checks.
-For placement, copy the report from `?debug=place` (or the `placement` telemetry row), save it under `.scratch/`, and
-replay it with `node tools/placement-probe.mjs <report.json>` (`--focus`, `--no-focus`, `--suppress`).
 
 ## The villa's system
 
@@ -265,4 +252,4 @@ path, say what still arrives with the Agent stopped, the Kiosk stopped, and a li
 Migrate what the Agent wrote, refuse loudly what the owner wrote, rebuild nightly artefacts at start-up.
 
 ### Test the real argument path
-Test the caller with real wiring; read the app log the morning after a release.
+Test the caller with real wiring, not only the helper it calls.
