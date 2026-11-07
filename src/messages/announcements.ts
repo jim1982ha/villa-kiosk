@@ -20,6 +20,9 @@ export interface Announcement {
   seq: number;
   /** When the villa's system announced it (ISO). */
   at: string;
+  /** When its first version arrived (ISO), the add-on's on a rewrite (supervisor-proxy.py _announcements_with): the one
+   *  time of a villa visit's card, whatever step or press came after; absent on a record never rewritten. */
+  since?: string;
   title: string;
   /** Who it is for, as the layout says it ("Owner & FM"); empty when it does not. */
   to: string;
@@ -274,6 +277,7 @@ export function parseAnnouncement(raw: unknown): Announcement | null {
     buttons: key ? buttonsOf(r.buttons) : [],
     ...(typeof r.run === "string" && r.run ? { run: r.run } : {}),
     ...(r.asked === true ? { asked: true } : {}),
+    ...(typeof r.since === "string" && r.since ? { since: r.since } : {}),
   };
 }
 

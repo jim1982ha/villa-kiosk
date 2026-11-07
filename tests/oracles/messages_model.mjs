@@ -766,5 +766,29 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
      villaAlertCards(shownTogether(kept, [vesta])).open.length === 0 && villaAlertCards(kept).open.length === 1);
   ck("  ...an announcement that is no alert (a ring, no stage) stays a notification",
      villaAlertCards([ann(70, { key: "ring:1" })]).open.length === 0);
+  // owner, 2026-11-07 (drill 08:48-08:53, VESTA stopped): beside VESTA's card of the same visit, the villa's wore the live
+  // state's icon, no room line, its lines as words (no "Status:"), its whole bottom line as its state, and the press's
+  // time once answered: the same fields at the same place now
+  const { momentText } = await import("@/utils/dateText");
+  const { cardStrip, rowWhen } = await import("@/config/cockpitCard");
+  const at2 = { ...step2, since: step1.at };
+  const openCard = villaAlertCards([at2]).open[0];
+  const openHtml = draw(h(AttentionCard, { card: openCard, onOpenEntity: () => {} }));
+  ck("  ...the alert's icon, the room line, the visit's first send as its one time",
+     openCard.lead.sources.join() === "alert" && openHtml.includes(">Other<") && rowWhen(openCard) === momentText(step1.at)
+     && openHtml.includes(momentText(step1.at)), [openCard.lead, rowWhen(openCard), openHtml]);
+  ck("  ...its state \"New alert\" alone, \"monitoring until 07:40\" in the pill at its right, its lines under \"Status:\"",
+     cardStrip(openCard).status.map((x) => x.text).join() === "New alert" && openCard.nextCheck?.pill === "monitoring until 07:40"
+     && openHtml.includes("monitoring until 07:40") && !openHtml.includes("New alert, monitoring")
+     && /Status:[\s\S]*Seen at Parking, 07:09[\s\S]*Garden Door opened, 07:10/.test(openHtml), openHtml);
+  const done_ = parseAnnouncement({ seq: 53, at: "2026-11-07T07:12:00+08:00", key: "visit:example-1", since: step1.at,
+    message: layout("Garden Door opened while the villa is empty", ["Seen at Parking, 07:09", "Garden Door opened, 07:10"],
+      "✅ Done on Telegram on 07/11/2026 07:12 (Jm)"), photos: [] });
+  const doneCard = villaAlertCards([done_]).closed[0];
+  const doneHtml = draw(h(AttentionCard, { card: doneCard, onOpenEntity: () => {} }));
+  ck("  ...answered: the closed stage's word, the answer its who line, its time still the first send's",
+     cardStrip(doneCard).status.map((x) => x.text).join() === "Resolved" && doneCard.lines[0].who === "Done on Telegram on 07/11/2026 07:12 (Jm)"
+     && (doneHtml.match(/Done on Telegram/g) ?? []).length === 1 && rowWhen(doneCard) === momentText(step1.at)
+     && doneCard.lines[0].actions.length === 0, [cardStrip(doneCard), doneHtml]);
 }
 done("✅ the Messages model: what the tab lists, its counts and the card open");

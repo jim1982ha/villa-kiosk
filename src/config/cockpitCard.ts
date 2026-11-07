@@ -276,6 +276,9 @@ export interface CardLine {
   /** VESTA's message of its alert, joined to it once (messagesModel issueAsTold): its words drawn in the line, the
    *  line named by the message's title. Absent on a line VESTA holds no message for, and before the join. */
   told?: Announcement;
+  /** Its who line when the record itself says how it ended (the villa's own visit card: "Done on Telegram on … (Jm)",
+   *  messagesModel.villaAlertCards), in place of a move's; absent everywhere else. */
+  who?: string;
   /** Its own pill on its header, on a card of several whose pill says another check: "checked live" for a problem
    *  watched live (faultTiming.LIVE_CHECK). */
   check?: CheckSaid;

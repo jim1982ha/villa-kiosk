@@ -4277,12 +4277,16 @@ def _announcements_with(stored: list, rec: dict) -> list:
     (the night check's message rewritten by a later check stays a report). ⚠️ `asked` (agent-contract.json `asked`):
     set on a rewrite of one that offered buttons, or had asked before — the one fact a rewrite loses and the tablet needs
     to tell a request answered (approved, refused, expired, a ring opened or missed) from a note that never asked, so it
-    lists the first under Closed (owner, 2026-10-29). Never taken from the writer. Pure — tests/store-doors.py drives it."""
-    rec = {k: v for k, v in rec.items() if k != "asked"}
+    lists the first under Closed (owner, 2026-10-29). ⚠️ `since`: when the first of its versions arrived (owner,
+    2026-11-07: the villa's visit card took the time of its last step, a press, in place of the visit's first send), so
+    its card keeps one time. Both never taken from the writer. Pure — tests/store-doors.py drives it."""
+    rec = {k: v for k, v in rec.items() if k not in ("asked", "since")}
     if "key" in rec:
         old = next((a for a in stored if isinstance(a, dict) and a.get("key") == rec["key"]), None)
         if old is not None:
             rec = {**{f: old[f] for f in KEPT_ON_REWRITE if f not in rec and old.get(f)}, **rec}
+            if isinstance(first := old.get("since") or old.get("at"), str) and first:
+                rec["since"] = first
             if old.get("asked") is True or old.get("buttons"):
                 rec["asked"] = True
             stored = [a for a in stored if a is not old]

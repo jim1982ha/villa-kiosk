@@ -94,7 +94,7 @@ export function AttentionCard({ card, onOpenEntity, buttons, focused, erase }: {
       ...(line.check ? { check: { pill: line.check.pill, tip: line.check.tip } } : {}),
       lead: icons.lines[i] ? <SourceIcons {...icons.lines[i]!} size={14} /> : undefined,
       text: <LineWords line={line} look={card.look} />,
-      who: card.look === "watched" ? line.closing : moveWho(line.move, said.map((s) => s.text), at, momentText),
+      who: line.who ?? (card.look === "watched" ? line.closing : moveWho(line.move, said.map((s) => s.text), at, momentText)),
       actions: buttons?.(line) ?? undefined,
     };
   });
