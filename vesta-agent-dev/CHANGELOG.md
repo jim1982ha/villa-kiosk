@@ -1,3 +1,7 @@
+## 0.12.483
+
+- Nothing changes in what VESTA does; releases are simpler and faster.
+
 ## 0.12.482
 
 - A visit's photos are put in one order everywhere VESTA shows them: the strongest step's photo first (the large one
