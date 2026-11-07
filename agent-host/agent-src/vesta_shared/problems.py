@@ -28,7 +28,7 @@ from . import agreement, result
 from .limits import limit
 from .messaging import headline, incident_tag, problem_title_chars
 from .store import Incident, Notes, Store, notes_of
-from . import alert_watch, kiosk_words, maintenance
+from . import alert_watch, kiosk_words, maintenance, visit_state
 from . import message_format as mf
 from .help_link import HelpLink
 
@@ -859,7 +859,7 @@ class Problems:
             kind, sid = self._source(t)
             if t.get("status") == "open" or t.get("todo_uid") or kind != "incident":
                 continue
-            if notes_of(self.store.incident(sid)).get(Notes.FAULT_CLOSED) \
+            if visit_state.fault_made_closed(notes_of(self.store.incident(sid))) \
                     and (self.store.last_task(t["source"]) or {}).get("id") == t["id"]:
                 out.append(t)
         return out

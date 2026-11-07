@@ -18,6 +18,8 @@ from __future__ import annotations
 import asyncio
 import re
 
+import pytest
+
 import test_visit_record as record
 from test_visit_story import (FM, GARDEN_DOOR, LOCK, OWNER, PARKING, RECORD, ENTRANCE, Visit, at, copy, lines, play,
                               send, told, villa)
@@ -373,57 +375,6 @@ def test_an_open_visit_says_until_when_it_is_monitored_on_every_copy_and_its_fau
 
 
 # ---------------------------------------------------------------------------------------------- ended while VESTA was away
-def test_a_visit_the_villa_closed_while_vesta_was_away_is_recorded_once_closed_and_never_told(tmp_path, kiosk, media):
-    # owner's drill, 2026-11-07 (#138): VESTA stopped; the villa opened the visit (07:09:59), rang its door (07:10:23),
-    # reminded (07:12) and closed it after its quiet (07:16:00). VESTA back at 07:16:43 replayed it: incident #138 opened
-    # again, the villa told twice (its record rewritten: owner, number, ack, its replies lost), the tablet's card
-    # "Cleared at 07:17". The record read now says it is over: one closed incident and fault, closed at 07:16, the
-    # tablet's one card standing for the villa's announcement; nothing sent, edited or deleted, the villa never told
-    from datetime import datetime
-    from vesta_shared.timeutil import moment_label
-    v = villa(tmp_path, kiosk)
-    vi = Visit(media=media, owner="pending")
-    vi.add("motion", PARKING, "07:09:27", photo=True)
-    first = vi.event("opened")
-    first["visit"]["opened_at"] = at("07:09:59")
-    vi.add("door", GARDEN_DOOR, "07:10:23", photo=True)
-    second = vi.event()
-    vi.reminded_at = at("07:12:00")
-    closed = {"why": "quiet", "at": at("07:16:00")}
-    rec = _record_of(vi)
-    replies = [{"entity_id": f"notify.example_{c}", "chat_id": c, "message_id": m, "role": "reply", "media": "photo"}
-               for c, m in ((OWNER, 600), (FM, 601), (OWNER, 602), (FM, 603))]
-    record.fire(rec, {"record": record.RECORD, "visit": vi.id, "token": "c", "set": {
-        "state": "closed", "seq": 2, "owner": "villa", "opened_at": at("07:09:59"), "last_at": at("07:10:23"),
-        "closes_at": at("07:15:23"), "steps": list(vi.steps), "photos": list(vi.photos), "strongest": vi.strongest(),
-        "step": vi.steps[-1], "reminded_at": vi.reminded_at, "closed": closed,
-        "messages": rec.attributes["messages"] + replies}})
-    _read_now(v, rec)
-    before = dict(rec.attributes)
-    end = {**vi.event("resolved"), "timestamp": at("07:16:00")}
-    end["visit"]["closed"] = closed
-    play(v, send(first))
-    assert any(ln.startswith("- Garden Door opened") for ln in kiosk.messages["incident:1"]["status"]), \
-        "its story as the record holds it, the door told by the opening's replay already"
-    play(v, send(second), send(end))
-    assert [(c, t[:40]) for c, t, _k in v.tg.sent] == [], "nothing sent: the villa's cards are final"
-    assert v.tg.edits == [] and v.tg.media_edits == [] and v.tg.deleted == [], "nothing edited or deleted"
-    assert told(v) == [], "the villa is never told of a visit it closed"
-    _replay(rec, told(v))
-    assert rec.attributes == before, "its record as the villa left it"
-    store = Store(v.s.store_path)
-    (inc,) = [i for i in store.incidents(open_only=False)]
-    assert inc["closed_at"] and datetime.fromisoformat(inc["closed_at"]) == datetime.fromisoformat(at("07:16:00")), inc
-    (fault,) = [t for t in kiosk._all() if t.get("alertNumber") == inc["id"]]
-    assert fault["status"] == "resolved", fault
-    card = kiosk.messages[f"incident:{inc['id']}"]
-    assert f"visit:{vi.id}" in card["takes"], "the tablet's one card stands for the villa's announcement"
-    assert card.get("stage") == "closed", card
-    said = moment_label(datetime.fromisoformat(at("07:16:00")), v.notices.tz).split(" ")[-1]
-    assert card["status"][-1].startswith(f"✅ Cleared at {said}"), ("the villa's close moment", card["status"])
-    assert any(ln.startswith("- Garden Door opened") for ln in card["status"]), card["status"]
-
-
 def test_the_faults_short_story_says_every_line_telegram_says(tmp_path, kiosk, media):
     # owner, 2026-11-07: the tablet's card showing the fault's own story (VESTA's message absent) lacked "Alert sent" (its
     # moment the visit's first line's: the fault keeps one line per moment) and the door's ": alert sent again (to: …)"
@@ -444,89 +395,6 @@ def test_the_faults_short_story_says_every_line_telegram_says(tmp_path, kiosk, m
     assert [n for n in notes if n.startswith("Seen at Parking")] == ["Seen at Parking, 22:48"], notes
 
 
-def _answered_on_the_villa(v, vi: Visit, first: dict, where: str = "telegram") -> tuple[record.Rec, dict]:
-    """Drill #140: VESTA stopped; the villa opened the visit and Done was pressed on its card (by Jm), closing the record
-    with no "resolved" event — the record as the villa holds it then, read by the engine; and that close."""
-    pressed = at("22:53:55")
-    closed = {"why": "answered", "at": pressed, "who": "Jm"}
-    rec = _record_of(vi)
-    record.fire(rec, {"record": record.RECORD, "visit": vi.id, "token": "c", "set": {
-        "state": "closed", "seq": len(vi.steps), "owner": "villa", "opened_at": first["visit"]["opened_at"],
-        "last_at": vi.steps[-1]["at"], "steps": list(vi.steps), "photos": list(vi.photos), "strongest": vi.strongest(),
-        "step": vi.steps[-1], "closed": closed,
-        "answered": {"option": "done", "by": "Jm", "at": pressed, "where": where}}})
-    _read_now(v, rec)
-    return rec, closed
-
-
-def test_a_visit_answered_on_the_villa_while_vesta_was_away_is_closed_at_once_never_told(tmp_path, kiosk, media):
-    # owner's drill, 2026-11-07 (#140): VESTA stopped, Done pressed on the villa's card at 08:53:55; the press's last
-    # event is a "step" carrying the close, no "resolved". VESTA back replayed opened, step, step: #140 stayed open,
-    # "monitoring until 08:54", its fault open, the tablet showing it as a new alert
-    from datetime import datetime
-    v = villa(tmp_path, kiosk)
-    vi = Visit(media=media, owner="pending")
-    vi.add("motion", PARKING, "22:49:32", photo=True)
-    first = vi.event("opened")
-    vi.add("door", GARDEN_DOOR, "22:49:57", photo=True)
-    second = vi.event()
-    rec, closed = _answered_on_the_villa(v, vi, first)
-    before = dict(rec.attributes)
-    third = vi.event()
-    third["visit"]["closed"] = closed
-    play(v, send(first), send(second), send(third))
-    assert v.tg.sent == [] and v.tg.edits == [] and v.tg.deleted == [], "nothing sent or edited: the villa's cards"
-    assert told(v) == [], "the villa is never told of a visit it closed"
-    _replay(rec, told(v))
-    assert rec.attributes == before
-    (inc,) = Store(v.s.store_path).incidents(open_only=False)
-    assert inc["closed_at"] and datetime.fromisoformat(inc["closed_at"]) == datetime.fromisoformat(at("22:53:55")), inc
-    (fault,) = [t for t in kiosk._all() if t.get("alertNumber") == inc["id"]]
-    assert fault["status"] == "resolved", fault
-    card = kiosk.messages[f"incident:{inc['id']}"]
-    assert card.get("stage") == "closed", card
-    hhmm = datetime.fromisoformat(at("22:53:55")).astimezone(__import__("zoneinfo").ZoneInfo(v.notices.tz)).strftime("%H:%M")
-    assert card["status"][-1].startswith("✅ Done ") and hhmm in card["status"][-1] and "(Jm)" in card["status"][-1], \
-        card["status"]
-    assert not any("monitoring" in ln for ln in card["status"]), card["status"]
-
-
-def test_an_open_visit_whose_villa_record_says_closed_is_closed_at_the_next_tick(tmp_path, kiosk, media):
-    # the same drill, VESTA having heard only the opening (or #140 left open by 0.12.473): the tick reads the record
-    from datetime import datetime, timedelta, timezone
-    from test_alert_desk import desk
-    v = villa(tmp_path, kiosk)
-    vi = Visit(media=media, owner="pending")
-    vi.add("motion", PARKING, "22:49:32", photo=True)
-    first = vi.event("opened")
-    play(v, send(first))
-    store = Store(v.s.store_path)
-    (inc,) = store.incidents(open_only=True)
-    rec, _closed = _answered_on_the_villa(v, vi, first)
-
-    class Villa:
-        def states(self, ids=None):
-            return {RECORD: {"entity_id": RECORD, "state": rec.state, "attributes": dict(rec.attributes)}}
-    res = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=5), client=Villa(), zone=v.notices.tz)
-    assert res["visits_over"] == [inc["id"]] and res["send"] == [], res
-    got = store.incident(inc["id"])
-    assert datetime.fromisoformat(got["closed_at"]) == datetime.fromisoformat(at("22:53:55")), got
-    (settle,) = res["settle"]
-    assert "Done" in str(settle) and "(Jm)" in str(settle), settle
-    assert not [a for a in res["actions"] if a.get("action") == "tell_villa"], res["actions"]
-    # a later visit holding the record closes an open one too
-    vi2 = Visit(media=media, owner="pending")
-    vi2.id = f"{vi.id}0"
-    vi2.add("motion", PARKING, "23:10:00", photo=True)
-    v.reader._states.pop(RECORD)
-    play(v, send(vi2.event("opened")))
-    (inc2,) = store.incidents(open_only=True)
-    rec.attributes = {**rec.attributes, "id": "automation.example-other"}
-    rec.state = "open"
-    res = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=5), client=Villa(), zone=v.notices.tz)
-    assert res["visits_over"] == [inc2["id"]] and store.incident(inc2["id"])["closed_at"], res
-
-
 def _watched(kiosk) -> tuple[list[dict], list[dict]]:
     """Every fault the Kiosk was written, write by write, and every tablet message pushed: what it ever showed."""
     faults: list[dict] = []
@@ -545,60 +413,123 @@ def copy_of(t: dict) -> dict:
     return {k: t.get(k) for k in ("id", "status", "alertNumber")}
 
 
-def test_a_visit_already_closed_when_vesta_first_hears_it_is_never_shown_open(tmp_path, kiosk, media):
-    # owner's drills, 2026-11-07 (#141, #143): VESTA back replayed opened, step, resolved ~18s apart; the first made an
-    # OPEN fault and a tablet pop-up "#n-P1 (new)" though the villa's record read closed already: shown open ~19s
+# ------------------------------------------------------------------- a visit's state: record x events x VESTA
+# The owner's drills of 2026-11-07, one table (visit_state: the one decision of where a visit stands):
+# #138 VESTA stopped; the villa opened the visit, rang its door, reminded and closed it after its quiet; VESTA back
+#      replayed opened, step, resolved — #138 opened again, the villa told twice, "Cleared at 07:17" for 07:16.
+# #140 Done pressed on the villa's card while VESTA was away: the press's last event a "step" carrying the close, no
+#      "resolved" — #140 stayed open, "monitoring until 08:54", its fault open, the tablet showing a new alert.
+# #141 the same press in the Cockpit was closed as "Done at 09:43 (Owner)": where it was pressed, like every press.
+# #143 replayed ~18s apart, the first event made an OPEN fault and a "#n-P1 (new)" pop-up: shown open ~19s.
+# Whatever the record and the order, VESTA down: one closed incident and fault, closed at the villa's moment, the
+# tablet's one card closed and standing for the villa's announcement; nothing sent, edited or deleted; never told.
+def _closed_on_the_villa(vi: Visit, closed: dict, answered: dict | None, replies: bool) -> record.Rec:
+    """The villa's record of visit `vi` as the villa left it: closed (`closed`), a press it applied (`answered`), its
+    replies under the cards while it held the visit (`replies`)."""
+    rec = _record_of(vi)
+    more = [{"entity_id": f"notify.example_{c}", "chat_id": c, "message_id": m, "role": "reply", "media": "photo"}
+            for c, m in ((OWNER, 600), (FM, 601), (OWNER, 602), (FM, 603))] if replies else []
+    record.fire(rec, {"record": record.RECORD, "visit": vi.id, "token": "c", "set": {
+        "state": "closed", "seq": len(vi.steps), "owner": "villa", "opened_at": vi.steps[0]["at"],
+        "last_at": vi.steps[-1]["at"], "steps": list(vi.steps), "photos": list(vi.photos), "strongest": vi.strongest(),
+        "step": vi.steps[-1], "reminded_at": vi.reminded_at, "closed": closed,
+        **({"answered": answered} if answered else {}), "messages": rec.attributes["messages"] + more}})
+    return rec
+
+
+_PRESS = {"option": "done", "by": "Jm", "at": at("10:04:00")}
+AWAY_TABLE = [
+    # name, why it closed, where a press was made, the events replayed (the last carrying the close), its last line
+    ("#138 quiet, opened+step+resolved", "quiet", None, ("opened", "step", "resolved"), "✅ Cleared at "),
+    ("#143 quiet, opened+resolved", "quiet", None, ("opened", "resolved"), "✅ Cleared at "),
+    ("#140 Done on Telegram, no resolved", "answered", "telegram", ("opened", "step", "step"), "✅ Done on Telegram "),
+    ("#141 Done in the Cockpit", "answered", "cockpit", ("opened", "step"), "✅ Done in the Cockpit "),
+]
+
+
+@pytest.mark.parametrize("why,where,phases,last", [r[1:] for r in AWAY_TABLE], ids=[r[0] for r in AWAY_TABLE])
+def test_a_visit_the_villa_closed_while_vesta_was_away_is_one_closed_card_never_shown_open_never_told(
+        tmp_path, kiosk, media, why, where, phases, last):
+    from datetime import datetime
     v = villa(tmp_path, kiosk)
     vi = Visit(media=media, owner="pending")
     vi.add("motion", PARKING, "10:03:27", photo=True)
-    first = vi.event("opened")
-    first["visit"]["opened_at"] = at("10:03:30")
+    events = [vi.event("opened")]
     vi.add("door", GARDEN_DOOR, "10:03:50", photo=True)
-    second = vi.event()
-    closed = {"why": "quiet", "at": at("10:04:00")}
-    rec = _record_of(vi)
-    record.fire(rec, {"record": record.RECORD, "visit": vi.id, "token": "c", "set": {
-        "state": "closed", "seq": 2, "owner": "villa", "opened_at": at("10:03:30"), "last_at": at("10:03:50"),
-        "steps": list(vi.steps), "photos": list(vi.photos), "strongest": vi.strongest(), "step": vi.steps[-1],
-        "closed": closed}})
+    events += [vi.event(ph) for ph in phases[1:]]
+    vi.reminded_at = at("10:03:55")
+    closed = {"why": why, "at": at("10:04:00"), **({"who": "Jm"} if where else {})}
+    rec = _closed_on_the_villa(vi, closed, {**_PRESS, "where": where} if where else None, replies=why == "quiet")
     _read_now(v, rec)
-    end = {**vi.event("resolved"), "timestamp": at("10:04:00")}
-    end["visit"]["closed"] = closed
+    events[-1] = {**events[-1], "timestamp": at("10:04:00")}
+    events[-1]["visit"]["closed"] = closed
+    before = dict(rec.attributes)
     faults, pushed = _watched(kiosk)
-    play(v, send(first))
+    play(v, send(events[0]))
     (inc,) = Store(v.s.store_path).incidents(open_only=False)
     assert inc["closed_at"], "closed at its first event: the record said so"
+    play(v, *[send(e) for e in events[1:]])
     mine = [f for f in faults if f["alertNumber"] == inc["id"]]
-    assert mine and all(f["status"] == "resolved" for f in mine), ("never an open fault", mine)
-    assert [m.get("stage") for m in pushed if m.get("key") == f"incident:{inc['id']}"] \
-        and "new" not in [m.get("stage") for m in pushed if m.get("key") == f"incident:{inc['id']}"], pushed
-    play(v, send(second), send(end))
-    assert all(f["status"] == "resolved" for f in faults if f["alertNumber"] == inc["id"]), faults
-    assert "new" not in [m.get("stage") for m in pushed if m.get("key") == f"incident:{inc['id']}"], pushed
-    assert len({f["id"] for f in faults if f["alertNumber"] == inc["id"]}) == 1, "one fault"
-    assert v.tg.sent == [] and told(v) == [], "nothing sent, the villa never told"
+    assert mine and all(f["status"] == "resolved" for f in mine) and len({f["id"] for f in mine}) == 1, \
+        ("one fault, never open", mine)
+    stages = [m.get("stage") for m in pushed if m.get("key") == f"incident:{inc['id']}"]
+    assert stages and "new" not in stages, ("never a new alert on the tablet", stages)
+    assert v.tg.sent == [] and v.tg.edits == [] and v.tg.media_edits == [] and v.tg.deleted == [], \
+        "nothing sent, edited or deleted: the villa's cards are final"
+    assert told(v) == [], "the villa is never told of a visit it closed"
+    _replay(rec, told(v))
+    assert rec.attributes == before, "its record as the villa left it"
+    (inc,) = Store(v.s.store_path).incidents(open_only=False)
+    assert datetime.fromisoformat(inc["closed_at"]) == datetime.fromisoformat(at("10:04:00")), inc
     (fault,) = [t for t in kiosk._all() if t.get("alertNumber") == inc["id"]]
     assert any(u.get("kind") == "noted" for u in fault["updates"]), ("its short story with it", fault["updates"])
-    assert kiosk.messages[f"incident:{inc['id']}"].get("stage") == "closed"
+    card = kiosk.messages[f"incident:{inc['id']}"]
+    assert f"visit:{vi.id}" in card["takes"] and card.get("stage") == "closed", card
+    hhmm = datetime.fromisoformat(at("10:04:00")).astimezone(__import__("zoneinfo").ZoneInfo(v.notices.tz)).strftime("%H:%M")
+    assert card["status"][-1].startswith(last) and hhmm in card["status"][-1], card["status"]
+    assert where is None or "(Jm)" in card["status"][-1], card["status"]
+    assert any(ln.startswith("- Garden Door opened") for ln in card["status"]), ("its story as the record holds it",
+                                                                                  card["status"])
+    assert not any("monitoring" in ln for ln in card["status"]), card["status"]
 
 
-def test_a_visit_answered_on_the_tablet_while_vesta_was_away_says_where_like_every_press(tmp_path, kiosk, media):
-    # owner's drill, 2026-11-07 (#141): Done pressed in the Cockpit while VESTA was away was closed by VESTA as
-    # "✅ Done at 09:43 (Owner)": where it was pressed, as Telegram's and VESTA's own presses say it, in every language
+# VESTA up: an open visit whose record says it ended (a press on the villa's card with no event, or a later visit
+# holding the record) is closed at the next tick, as the villa closed it, nothing sent or told
+UP_TABLE = [("Done on the villa's card", "answered"), ("a later visit holds the record", "later")]
+
+
+@pytest.mark.parametrize("how", [r[1] for r in UP_TABLE], ids=[r[0] for r in UP_TABLE])
+def test_an_open_visit_whose_villa_record_says_it_ended_is_closed_at_the_next_tick(tmp_path, kiosk, media, how):
+    from datetime import datetime, timedelta, timezone
+    from test_alert_desk import desk
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media, owner="pending")
+    vi.add("motion", PARKING, "10:03:27", photo=True)
+    play(v, send(vi.event("opened")))
+    store = Store(v.s.store_path)
+    (inc,) = store.incidents(open_only=True)
+    rec = _closed_on_the_villa(vi, {"why": "answered", "at": _PRESS["at"], "who": "Jm"}, {**_PRESS, "where": "telegram"},
+                               replies=False)
+    if how == "later":
+        rec.attributes, rec.state = {**rec.attributes, "id": "automation.example-other"}, "open"
+
+    class Villa:
+        def states(self, ids=None):
+            return {RECORD: {"entity_id": RECORD, "state": rec.state, "attributes": dict(rec.attributes)}}
+    res = desk.tick(store, datetime.now(timezone.utc) + timedelta(minutes=5), client=Villa(), zone=v.notices.tz)
+    assert res["visits_over"] == [inc["id"]] and res["send"] == [], res
+    assert not [a for a in res["actions"] if a.get("action") == "tell_villa"], res["actions"]
+    got = store.incident(inc["id"])
+    assert got["closed_at"], got
+    if how == "answered":
+        assert datetime.fromisoformat(got["closed_at"]) == datetime.fromisoformat(_PRESS["at"]), got
+        (settle,) = res["settle"]
+        assert "Done" in str(settle) and "(Jm)" in str(settle), settle
+
+
+def test_a_press_the_villa_applied_says_where_in_every_language():
     from test_alert_desk import desk
     from vesta_shared import status_words as SW
-    for where, said in (("cockpit", "✅ Done in the Cockpit "), ("telegram", "✅ Done on Telegram ")):
-        v = villa(tmp_path / where, kiosk)
-        vi = Visit(media=media, owner="pending")
-        vi.add("motion", PARKING, "22:49:32", photo=True)
-        first = vi.event("opened")
-        _rec, closed = _answered_on_the_villa(v, vi, first, where)
-        last = vi.event()
-        last["visit"]["closed"] = closed
-        play(v, send(first), send(last))
-        (inc,) = Store(v.s.store_path).incidents(open_only=False)
-        status = kiosk.messages[f"incident:{inc['id']}"]["status"]
-        assert status[-1].startswith(said) and "(Jm)" in status[-1], status
     got = desk.answer_said({"option": "done", "by": "Jm", "where": "cockpit"}, "at 09:43", "Jm", end=True)
     for lang in SW.LANGS:
         if lang != "en":

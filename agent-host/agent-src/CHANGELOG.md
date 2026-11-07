@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.462 (7 November 2026)
+
+- Where a visit stands is decided once (architecture review of visits, card 1): vesta_shared/visit_state.py reads the
+  villa's record as read now (`now_of`, the engine's read and the desk's tick alike), merges it with the event
+  (`seen`), says what changed since VESTA last saw it (`transition`: new, step, late, close; away; villa told) and how
+  it ended (`ending`). desk.visit_intake, resolved, visits_over, visit_close and the tick, app.Vesta._visit_now and
+  Problems.closed_unmade ask it; their own copies (VISIT_STORY, VISIT_ENDED, VISIT_NOW, the away tests) are gone.
+  Behaviour unchanged; the closed-while-away drills (#138, #140, #141, #143) are one table test.
+
 ## 0.6.461 (7 November 2026)
 
 - "📷 All photos" under a visit's Telegram card once it has two photos (owner, 2026-11-07): its own row after the

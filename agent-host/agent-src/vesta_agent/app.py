@@ -63,7 +63,7 @@ from .kiosk_messages import KioskMessages
 from .kiosk_owed import KioskOwed
 from .alert_buttons import AlertButtons
 from .outcome import Outcome
-from vesta_shared import occupancy
+from vesta_shared import occupancy, visit_state
 from vesta_shared import villa_recipients
 from .voice import TelegramAudio, Voice
 from .transcriber import villa_entity_ids
@@ -87,10 +87,6 @@ from .turn_reply import TurnReply
 from .notice import Notices
 
 log = logging.getLogger("vesta")
-
-#: A visit's story as the villa's record holds it (its steps, photos, strongest step, moments): read whole when the
-#: record says the visit is over (Vesta._visit_now), the alert desk then telling it from the record, not the late event.
-VISIT_STORY = ("steps", "photos", "strongest", "step", "seq", "opened_at", "last_at", "closes_at", "entities")
 
 #: Commands the agent answers. Any other command belongs to Home Assistant's automations.
 def _now_local(tz: str) -> datetime:
@@ -663,19 +659,12 @@ class Vesta:
             log.info("The visit's record could not be read (%s): its event is taken as it was", type(e).__name__)
             return
         row = ((got or {}).get(rec) or {}) if isinstance(got, dict) else {}
-        attrs = row.get("attributes") if isinstance(row, dict) else None
-        if isinstance(attrs, dict) and attrs.get("id") == event["incident_id"]:
-            v["now"] = {k: attrs.get(k)
-                        for k in ("owner", "messages", "answered", "reminded_at", "ack_seq", "closed", "seq")}
-            if row.get("state") == "closed" or isinstance(attrs.get("closed"), dict):
-                # ⚠️ ENDED WHILE VESTA WAS AWAY (owner's drill, 2026-11-07, #138): the catch-up replayed a visit the villa
-                # had closed, VESTA opened it again, told the villa and rewrote its record — its whole story as the
-                # villa holds it, and that it is over (`closed`): the alert desk records it, the villa's cards final
-                v["now"].update({k: attrs[k] for k in VISIT_STORY if attrs.get(k) is not None})
-                v["now"]["closed"] = attrs["closed"] if isinstance(attrs.get("closed"), dict) else {"why": "closed"}
-        elif isinstance(attrs, dict) and attrs.get("id") and event.get("incident_id"):
-            # the record holds a later visit: this one is over (its story the event's own)
-            v["now"] = {"closed": {"why": "closed"}}
+        # ⚠️ ENDED WHILE VESTA WAS AWAY (owner's drill, 2026-11-07, #138): the catch-up replayed a visit the villa had
+        # closed, VESTA opened it again, told the villa and rewrote its record — what the record says now, as the tick
+        # reads it too (visit_state.now_of: one decision), the alert desk telling the step from it
+        now = visit_state.now_of(row, event["incident_id"])
+        if now is not None:
+            v["now"] = now
 
     async def _alert_names(self, event: dict) -> None:
         """The alert's devices as the villa's system names them now, kept for its card's translation (translation.py:

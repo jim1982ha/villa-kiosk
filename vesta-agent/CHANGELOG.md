@@ -1,3 +1,9 @@
+## 0.12.480
+
+- Nothing changes on screen. Whether a visit is still open or already over, since when and why, is now worked out in
+  one place, the same way when a signal arrives, when VESTA restarts and at the regular check, so a visit the villa
+  closed while VESTA was off can only appear once, as a closed card.
+
 ## 0.12.479
 
 - A visit's Telegram card with two photos or more has a "📷 All photos" button on its own row: it sends every photo of
