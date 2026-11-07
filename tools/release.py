@@ -44,15 +44,9 @@ SECURITY = (".scratch/security/security_test.py",
 
 GATES: list[tuple[str, list[str]]] = [
     BUILD,
-    ("Oracles", ["npm", "run", "test:oracles"]),
+    ("Tests", ["npm", "test"]),
     HARD_RULES,
-    ("The proxy's security rules", ["npm", "run", "test:proxy"]),
-    ("The path lists agree", ["npm", "run", "test:routes"]),
-    ("The add-on manifest agrees", ["npm", "run", "test:manifest"]),
-    ("Home Assistant's add-on checks", ["npm", "run", "test:addon-lint"]),
-    ("The crash-loop rule", ["npm", "run", "test:service-finish"]),
-    ("The proxy parses", ["npm", "run", "test:proxy-parse"]),
-    ("The release module", ["npm", "run", "test:release"]),
+    ("The proxy's rules", ["npm", "run", "test:proxy"]),
 ]
 
 

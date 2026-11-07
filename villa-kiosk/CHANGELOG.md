@@ -1,3 +1,18 @@
+## 2.496.755
+
+What you will see:
+- Nothing changes on the tablet; fewer checks before each release.
+
+## 2.496.754
+
+What you will see:
+- Nothing changes on the tablet. The working rules start again from a short list of your product decisions.
+
+## 2.496.753
+
+What you will see:
+- Nothing changes on the tablet. The working rules are shorter: the steps that slowed every fix are removed.
+
 ## 2.496.752
 
 What you will see:

@@ -19,32 +19,17 @@ jobs:
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          # ⚠️ 24, BECAUSE THE ORACLES IMPORT THE SHIPPED TYPESCRIPT DIRECTLY.
-          # They run under plain `node` with type stripping and the repo's own
-          # alias hook (tests/consistency/) rather than a test runner — which is
-          # what makes them test the module that ships instead of a copy of it.
+          # 24: the tests import the shipped TypeScript directly (type stripping
+          # and the alias hook in tests/consistency/, under `node --test`).
           node-version: "24"
 
       - name: Install
-        # `npm ci`: the committed lockfile, exactly, or a failure — never a
-        # quiet rewrite. It "failed on the runner and nowhere else" from
-        # 2.496.23 to 2.496.208 and was blamed on the runner; the cause was
-        # the lockfile, written under a developer-machine `legacy-peer-deps`
-        # setting the runner did not share (see .npmrc, which now fixes the
-        # resolver for every machine). Found by the lockfile check this step
-        # replaces, whose annotation showed the runner's rewrite (2.496.208).
-        # The Dockerfile's build stage runs the same command: one resolver on
-        # both paths, so a green run here speaks for the image.
+        # The committed lockfile exactly (the Dockerfile runs the same command).
         run: npm ci --no-audit --no-fund
 
       - name: The proxy's runtime dependency
-        # ⚠️ WITHOUT THIS, THE NEXT STEP CANNOT EVEN IMPORT ITS SUBJECT.
-        # supervisor-proxy.py does `from aiohttp import ...` at module scope and
-        # proxy-rules.py EXECUTES the module (importlib, because the filename is
-        # hyphenated). A bare runner has no aiohttp, so that gate failed on the
-        # import and had never run in CI — the same as every other gate here,
-        # which could not run at all until 2.496.34. The image installs the same
-        # dependency as an apk (py3-aiohttp); this is CI's half of that fact.
+        # The proxy tests import supervisor-proxy.py, which needs aiohttp (the
+        # image installs it as an apk, py3-aiohttp).
         run: python3 -m pip install --quiet aiohttp
 
       - name: The gates
