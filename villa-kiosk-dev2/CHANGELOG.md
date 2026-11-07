@@ -1,3 +1,8 @@
+## 2.496.747
+
+What you will see:
+- Nothing changes on the tablet: the villa's doorbell and presence messages now send their pictures the new way only, and the app no longer reads the old single-picture way for a new message. Cards kept before still show their picture.
+
 ## 2.496.746
 
 What you will see:
