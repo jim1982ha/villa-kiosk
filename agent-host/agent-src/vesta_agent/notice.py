@@ -33,7 +33,7 @@ named who a message was for. The skill now writes only what happened; this write
 """
 from __future__ import annotations
 
-from vesta_shared.message_format import (MARK_ICONS, ON_PLACE, ON_TELEGRAM, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED,
+from vesta_shared.message_format import (ON_TELEGRAM, PRESSED_STAGE, ROLE_WORDS, STEPS, UNTITLED,
                                          audience, folds)
 from vesta_shared import status_words
 from vesta_shared.limits import limit
@@ -41,11 +41,12 @@ from vesta_shared.messaging import incident_tag
 from vesta_shared.problems import again_days
 from vesta_shared.timeutil import moment_label
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 from typing import Callable
 
-from . import layout
+from . import layout, status_story
+from .status_story import STRONGER_STAGE, _NO_STEP, _cut, listed, observed, resent_into, stays  # noqa: F401
 
 
 #: The steps that are notes, not notices sent (note_step): a ticket someone took on in the Kiosk (app.py) — the Kiosk's
@@ -160,7 +161,8 @@ def _merged(last: dict, line: dict) -> dict:
     for c, r in line.get("chats") or []:
         chats.setdefault(int(c), set()).update(r or ())
     ats = (last.get("ats") or [last["at"]]) + (line.get("ats") or [line["at"]])
-    return {**last, **line, "chats": [[c, sorted(r)] for c, r in chats.items()],
+    # its id the first one's (status_story.line_id): the fault's line of it is that line, said anew
+    return {**last, **line, "id": status_story.line_id(last), "chats": [[c, sorted(r)] for c, r in chats.items()],
             "times": last.get("times", 1) + line.get("times", 1), "ats": ats[-history_kept():]}
 
 
@@ -177,46 +179,6 @@ def fold(history: list[dict]) -> tuple[list[dict], list[int]]:
             out.append(h)
         held.append(len(out) - 1)
     return out, held
-
-
-_NO_STEP = STEPS["update"]
-
-
-def observed(h: dict) -> bool:
-    """Is history line `h` a line of a visit's story (Notices.observe) rather than a notice sent?"""
-    return bool(h.get("fold"))
-
-
-def listed(h: dict) -> bool:
-    """Is history line `h` a notice whose line stays among the Status lines while its bottom line says where the alert
-    stands (message_format.Step.listed: a stronger signal, its card's state "New alert")?"""
-    return bool((STEPS.get(h.get("stage") or "") or _NO_STEP).listed)
-
-
-def stays(h: dict, history: list[dict]) -> bool:
-    """Does notice `h` keep its line among the Status lines while the bottom line says it too: a listed step (a
-    stronger signal), and a visit's alert (`history`: its incident's, holding the visit's story lines).
-
-    ⚠️ A VISIT'S ALERT IS ALWAYS ONE OF ITS LINES (owner, 2026-11-07, real visit #148): a visit whose first step was
-    already its strongest never rang again, so its "Alert sent" was only its bottom line's and its Status never said
-    when the villa sent it, while every drill's did (a stronger step had followed)."""
-    return listed(h) or (h.get("stage") == "new" and any(observed(x) for x in history))
-
-
-def _cut(history: list[dict], n: int) -> tuple[list[dict], set[int]]:
-    """`history` without its last `n` NOTICES — the steps a copy's bottom line says — and the positions left out. A
-    visit's story lines are kept wherever they stand: they are no notice, and every copy lists them (Notices.observe);
-    a listed notice (a stronger signal) is one of the `n` and stays too."""
-    gone: set[int] = set()
-    counted = 0
-    for i in range(len(history) - 1, -1, -1):
-        if counted == n:
-            break
-        if not observed(history[i]):
-            counted += 1
-            if not stays(history[i], history):      # its line stays: the bottom line says where the alert stands instead
-                gone.add(i)
-    return [h for i, h in enumerate(history) if i not in gone], gone
 
 
 def _in_time(history: list[dict], line: dict, at: str) -> list[dict]:
@@ -244,33 +206,6 @@ def _fold_target(history: list[dict], line: dict) -> int | None:
     … → Main House Door" stays ONE line across the lock's line and the card sent again between two cameras: one line per
     kind of step, said anew where it began. None: a new line."""
     return next((i for i in range(len(history) - 1, -1, -1) if history[i].get("fold") == line["fold"]), None)
-
-
-#: A visit's card sent again for a step stronger than every one before it (message_format.STEPS "stronger").
-STRONGER_STAGE = "stronger"
-
-
-def resent_into(history: list[dict]) -> dict[int, int]:
-    """{position of a "stronger" step: position of the visit's story line of the step that made it ring} — the step line
-    begun latest at or before it (`since`, Notices.observe: a step's line carries the moment it began; a line of no
-    moment of its own, the siren's or the photos', is no step). A stronger step with no such line keeps its own line.
-
-    ⚠️ ONE LINE PER STEP (owner, 2026-11-07, drill #135): "Test door opened, 05:14" then "Stronger signal sent 07/11/2026
-    05:14 (to: Owner & FM)" — the ring is said on its step's line, "…, 05:14: alert sent again (to: Owner & FM)". Read
-    from the steps as recorded, so a visit open at the update reads so at once (rules/agent-code.md: format changes need
-    migrations)."""
-    out: dict[int, int] = {}
-    for i, h in enumerate(history):
-        if h.get("stage") != STRONGER_STAGE:
-            continue
-        at, best = _moment(h.get("at")), None
-        for j, x in enumerate(history):
-            began = _moment(x.get("since")) if observed(x) else None
-            if began is not None and at is not None and began <= at and (best is None or began >= best[0]):
-                best = (began, j)
-        if best is not None:
-            out[i] = best[1]
-    return out
 
 
 #: 2nd, 3rd, 11th: the English ordinal of "6th time in 7 days" (status_words writes every language's).
@@ -430,8 +365,8 @@ class Notices:
             label = incident_tag(incident)
         word = self.word(int(incident), stage, bool(history))
         return layout.head(label, who,
-                           self.history_lines(int(incident), chat, before), word, self.lang(chat),
-                           story=self.history_lines(int(incident), 0, before), day=self.day(int(incident)),
+                           self.kept(int(incident), chat, before), word, self.lang(chat),
+                           story=self.kept(int(incident), 0, before), day=self.day(int(incident)),
                            until=self.until(int(incident)))
 
     def until(self, incident: int) -> str | None:
@@ -470,51 +405,22 @@ class Notices:
         return audience(everyone | self._wanted(reach), short=True) or self._reach_words(reach) or "nobody"
 
     def history_lines(self, incident: int, chat: int = 0, latest_excluded: int = 0) -> list[str]:
-        """Incident `incident`'s "Status:" lines as chat `chat` sees them: the steps sent to one of its roles, and what
-        was sent to nobody in particular (a button pressed, a note) — every step for a chat that has no role (0: any).
+        """Incident `incident`'s "Status:" lines as chat `chat`'s copy shows them (`kept`, drawn: status_story.texts)."""
+        d = self.day(int(incident))
+        return status_story.texts(self.kept(incident, chat, latest_excluded), date.fromisoformat(d) if d else None,
+                                  self.lang(chat))
 
-        ⚠️ EACH CHAT ITS OWN STEPS (owner, 2026-10-18, #55): the owner's group listed "Reminder sent … (to: FM)" and a
-        still-there to the FM, and the facility manager's chat the still-theres sent to the owner alone. "To:" still
-        names everyone the alert involves; the lines are the ones sent to this chat's people."""
-        mine = self._chat_roles(chat)
-        lang = self.lang(chat)                 # drawn from the stored steps in the chat's language at every redraw
-        lines = []
-        history = self.state.incident_history(incident)
-        # `latest_excluded`: the last steps recorded, left out — a copy refreshed with the notice just sent, whose own
-        # bottom line already says it (Outcome's refresh of the other chats)
-        gone = _cut(history, latest_excluded)[1] if latest_excluded else set()
-        # ⚠️ A CLOSE STANDING IS ITS BOTTOM LINE (owner, 2026-11-05, #118): redrawn while closed, the card listed
-        # "- Closing note sent 00:19" above "✅ Not a problem on 00:19 (Jm). Watch 1h." — the same close. Its step shows
-        # once something came after it (it came back), or as the close's own words once its watch is over (note_step)
-        kept = [i for i in range(len(history)) if i not in gone]
-        if kept and history[kept[-1]].get("stage") == CLOSED_STEP and self.closed_now(incident):
-            gone.add(kept[-1])
-        into = {i: j for i, j in resent_into(history).items() if j not in gone}
-        resent: dict[int, set[str]] = {}                # a step's line: the roles its card was sent again to
-        for i, j in into.items():
-            roles = self._roles(history[i])
-            if not (mine and roles and not roles & mine):
-                resent.setdefault(j, set()).update(roles)
-        for i, h in enumerate(history):
-            if i in gone or i in into:
-                continue
-            roles = self._roles(h) if h.get("chats") or h.get("to") else set()
-            if mine and roles and not roles & mine:
-                continue
-            if i in resent:
-                lines.append(f"- {status_words.resent(self._line(h, lang), self._who(resent[i], lang=lang), lang)}")
-                continue
-            # ⚠️ ONE LINE PER PRESS (architecture review 23, card 4): a press whose answer says it (skill.yaml `tells`:
-            # "🆘 Need help on … (Luc): Owner is asked to act.") is that answer while nothing but the escalation it made
-            # came after it — its own line once something did
-            if h.get("stage") == PRESSED_STAGE and h.get("told") and \
-                    all(x.get("stage") == ESCALATED_STAGE for x in history[i + 1:]):
-                continue
-            # ⚠️ ONE RUN, THEN THE NEXT (owner, 2026-10-16, #43): a second run starts at its "- Back at …" line, which
-            # says how many times it came (message_format.STEPS: one line, the shape of every other step)
-            # a step is kept as facts (stage, moment, roles, count) and worded by `_line`, the Kiosk's card's writer too
-            lines.append(f"- {self._line(h, lang)}")
-        return lines
+    def kept(self, incident: int, chat: int = 0, latest_excluded: int = 0) -> list[dict]:
+        """Incident `incident`'s "Status:" lines as chat `chat`'s copy keeps them (status_story.lines: every step, for
+        everyone, in the chat's language), each its id, its moment and its words — drawn when shown
+        (layout.status_shown). `latest_excluded`: the last steps recorded, left out — a copy whose own bottom line says
+        them (Outcome's refresh of the other chats).
+
+        ⚠️ EVERY COPY THE SAME LINES (owner, 2026-11-07, live #146-P2, reversing 2026-10-18 #55 "each chat its own
+        steps"): the owner's group, joined at the escalation, listed only the steps sent to the owner. "(to: …)" says
+        who was told; a chat keeps only its language."""
+        return [status_story.as_head(x, self.tz)
+                for x in status_story.lines(self, incident, self.lang(chat), latest_excluded)]
 
     def closed_now(self, incident: int) -> bool:
         """Is incident `incident` closed now (False when that cannot be read)?"""
@@ -527,9 +433,12 @@ class Notices:
         """A copy of `incident` in `chat` that showed the Status lines `shown` (its own steps), told for everyone: (how
         many of the newest steps it left to its bottom line, every step before them, whoever it went to) — None when no
         count draws its lines again (a copy drawn by an older wording)."""
+        d = self.day(int(incident))
+        day = date.fromisoformat(d) if d else None
+        drawn = status_story.texts(shown, day, self.lang(chat))    # a copy kept as text (before 0.12.481): as drawn
         for n in range(len(self.state.incident_history(incident)) + 1):
-            if self.history_lines(incident, chat, n) == list(shown):
-                return n, self.history_lines(incident, 0, n)
+            if self.history_lines(incident, chat, n) == drawn:
+                return n, self.kept(incident, 0, n)
         return None
 
     def refold(self, incident: int) -> dict[int, str]:
@@ -587,22 +496,6 @@ class Notices:
         self.state.set_incident_history(incident, _kept(history))
         return {chat: self.heading(chat, int(incident), before=n) for chat, n in befores.items()}
 
-    def concerns(self, chat: int, roles) -> bool:
-        """Is a step sent to `roles` one of chat `chat`'s — a role of the chat's among them (a chat with no role, or a
-        step to nobody in particular: yes)? A step that is not leaves the chat's copy as it is (each chat its own steps)."""
-        mine, roles = self._chat_roles(chat), set(roles or ())
-        return not mine or not roles or bool(mine & roles)
-
-    def _chat_roles(self, chat: int) -> set[str]:
-        """The roles chat `chat` is listed with (roles_for); none for no chat, or when the People list cannot be read —
-        then every step shows there, as before each chat had its own."""
-        if not chat:
-            return set()
-        try:
-            return self.roles_for(chat)
-        except Exception:  # noqa: BLE001
-            return set()
-
     def _who(self, roles, reach=None, incident: int | None = None, lang: str = "en") -> str:
         """Whom a step went to, as its line says it: its roles ("FM"), else what its incident's priority does instead
         (`reach`, the line's own record of it; or read from `incident`: "digest" — the desk's word, as it wrote it),
@@ -651,81 +544,12 @@ class Notices:
         except (TypeError, ValueError):
             return p
 
-    @staticmethod
-    def _pressed(h: dict, at: str = "", lang: str = "en") -> str:
-        """A press as every reader tells it: Telegram's Status "🆘 Need help on 16/10/2026 18:20 (Fabien)" (`at`), in
-        the chat's language when the button has a label in it (`labels`; else the whole line in English, never half),
-        the Kiosk card, whose line has its own time, "🆘 Need help on Telegram (Fabien)" — message_format.acted's order.
-        The card names where it was pressed: its own buttons keep the Kiosk's words (decisions of "One inbox")."""
-        label = (h.get("labels") or {}).get(lang) if lang != "en" else None
-        lang = lang if label else "en"
-        what = f"{MARK_ICONS.get(h.get('mark') or '', '')} {label or h.get('label')}".strip()
-        # a press kept before its place was (0.12.453): on Telegram, the only place then recorded
-        where = ON_PLACE.get(h.get("place") or ON_TELEGRAM, ON_PLACE[ON_TELEGRAM])
-        return status_words.acted(what, at, h.get("name") or "", lang) if at else f"{what} {where} ({h.get('name')})"
-
     def story(self, incident: int) -> list[dict]:
-        """What a fault's card in the Kiosk tells of incident `incident`'s Telegram life, oldest first: [{at, note,
-        stage}] — "Alert sent (to: Facility Manager)", "🆘 Need help on Telegram (Fabien)" — every line Telegram's
-        "Status:" shows (ticket 19 of "One inbox", owner 2026-10-28: it told reminders, escalations and presses only),
-        each without its time: the Kiosk says the step's own. ⚠️ ONE STORY (architecture review, 2026-10-14): told by
-        `_line`, the writer of Telegram's lines, never by a second writer."""
-        out = []
-        history = self.state.incident_history(incident)
-        into = resent_into(history)
-        resent: dict[int, set[str]] = {}
-        for i, j in into.items():
-            resent.setdefault(j, set()).update(self._roles(history[i]))
-        told = []
-        for i, h in enumerate(history):
-            note = None if i in into else self._line(h, kiosk=True)
-            if note and i in resent:
-                # its card sent again for it, on its own line, as Telegram's Status says it (resent_into)
-                note = status_words.resent(note, audience(resent[i]) or "nobody")
-            if note:
-                told.append((i, h, note))
-        # ⚠️ ONE MOMENT PER LINE (owner, 2026-11-07: the fault's story lacked "Alert sent", at the very moment of the
-        # visit's first line — the fault keeps one line per moment, kiosk.noted): a line at a moment another holds is a
-        # microsecond after it, the card's time the same; a notice keeps its own (a run starts at it: tickets._run_start)
-        used: set[str] = set()
-        moment: dict[int, str] = {}
-        for i, h, _note in sorted(told, key=lambda x: observed(x[1])):
-            at, m = h["at"], _moment(h["at"])
-            while at in used and m is not None:
-                m += timedelta(microseconds=1)
-                at = m.isoformat()
-            used.add(at)
-            moment[i] = at
-        for i, h, note in told:
-            at = moment[i]
-            # a step repeated in a row: its line, counted, in place of the fault's lines of each time (`ats`,
-            # kiosk.noted); ⚠️ a visit's line, or one its card was sent again for, said anew at its moment (owner,
-            # 2026-11-07: the door's ": alert sent again (to: …)" never reached the fault, its line written already)
-            ats = [a for a in h.get("ats") or () if a != h["at"] and a not in used]
-            again = observed(h) or i in resent
-            out.append({"at": at, "note": note, "stage": h.get("stage"),
-                        **({"ats": [*ats, at]} if h.get("ats") or again else {})})
-        return out
-
-    def _line(self, h: dict, lang: str = "en", kiosk: bool = False) -> str | None:
-        """One step of an incident's history as its story tells it: on Telegram (a "Status:" line, with its moment, in
-        the chat's language), or on the Kiosk's card (`kiosk`: English, no moment — the card says the step's own; a
-        press says it was on Telegram). None for what the card does not tell: the "… N earlier notices" count (no
-        moment; the card keeps every line it was given), and a ticket taken on in the Cockpit — the Kiosk's own step."""
-        if h.get("dropped"):
-            return None if kiosk else status_words.earlier(h["dropped"], lang)
-        if h.get("note"):
-            # someone took it on in the Kiosk, its close once its watch is over: kept as written (note_step)
-            return None if kiosk and h.get("stage") == TAKEN_STAGE else (h.get("note_in") or {}).get(lang) or h["note"]
-        if h.get("stage") == PRESSED_STAGE:
-            return self._pressed(h, "" if kiosk else when(datetime.fromisoformat(h["at"]), self.tz), lang)
-        if kiosk:
-            # the step and whom, in the words of its Telegram line ("Reminder sent (to: Facility Manager)")
-            sent = STEPS[h["stage"]].sent if h.get("stage") in STEPS else "Sent"
-            whom = audience(self._roles(h)) or self._reach_words(h.get("reach")) or "nobody"
-            return f"{sent}{status_words.repeats(h.get('times'))} (to: {whom})"
-        return self.step(h.get("stage"), self._roles(h), datetime.fromisoformat(h["at"]), h.get("run"), h.get("reach"), lang,
-                         h.get("times"))
+        """What a fault's card in the Kiosk tells of incident `incident`, oldest first: [{id, at, note, stage}] — every
+        line Telegram's "Status:" shows, in its words without the moment (the Kiosk says the line's own), kept by its id
+        (kiosk.noted). ⚠️ ONE STORY (architecture review of visits, 2026-11-07, card 2): status_story.fault, the same
+        lines as Telegram's and the tablet's, never a second writer."""
+        return status_story.fault(self, incident)
 
     def word(self, incident: int, stage: str | None = None, history: bool = True) -> str:
         """The title's word for a notice about `incident`: what the notice is (`stage`) — else what the incident is

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.463 (7 November 2026)
+
+- An alert's Status written once (architecture review of visits, card 2): vesta_agent/status_story.py turns an
+  incident's history into ordered lines {id, moment as data, words with a slot for it, roles} and owns which lines
+  there are (repeats folded, a visit's "Alert sent" kept, the bottom line's steps cut, "alert sent again" on its step's
+  line, a press its answer says, "+N more photos" last; `stays`, `listed`, `_cut`, `resent_into` moved there).
+  Telegram and the tablet's message render them (`shown`: the moment by the alert's day from data, no regex on step
+  lines; a heading keeps its lines as facts, layout.status_shown draws them, text kept by older copies still read);
+  the fault renders the same English words without the moment (`fault`). notice._line, _pressed and the fault's own
+  wording and microsecond nudge are gone.
+- The fault keeps a line by its id (`line` on the noted update, kiosk.noted), said anew in place; a fault kept by moment
+  is taken over at the first repair (its lines at a line's moments, or a microsecond after: the old nudge). The Kiosk
+  needs no change (notedStory ignores `line`).
+- Every copy the same lines, the viewer everyone (owner, 2026-11-07, live #146-P2, reversing #55 "each chat its own
+  steps"): Notices.concerns, IncidentThread.sync's `quiet` and Step.every_copy are gone; a copy settled at a close and
+  open again since takes the buttons back (sync), so a later close reaches it.
+
 ## 0.6.462 (7 November 2026)
 
 - Where a visit stands is decided once (architecture review of visits, card 1): vesta_shared/visit_state.py reads the

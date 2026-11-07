@@ -88,11 +88,10 @@ def test_an_answer_in_the_group_never_widens_to(agent):
     assert agent.tg.toasts, "a press on the rule's own copy, taken over, is the agent's to answer"
     assert "(watch)" in card(agent, GROUP).split("\n")[0], card(agent, GROUP)     # closed, watched (owner, 2026-10-25)
     assert card(agent, GROUP).split("\n")[1] == "To: FM", card(agent, GROUP)
-    # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
-    # steps to the FM are listed in the FM's chat, never in the owner's group
+    # every chat lists every step (owner, 2026-11-07, live #146-P2): the FM's in the owner's group too
     hist = head_text(agent.notices.heading(FM_CHAT, 1)).split("\n")[2:]
     assert hist and all(ln.endswith(" (to: FM)") for ln in hist), hist
-    assert not any(ln.endswith(" (to: FM)") for ln in head_text(agent.notices.heading(GROUP, 1)).split("\n")[2:])
+    assert head_text(agent.notices.heading(GROUP, 1)).split("\n")[2:] == hist
 
 
 def test_a_p1_names_both_roles_from_its_first_message(agent):
@@ -143,9 +142,9 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
                         status(back).removeprefix("⚠️ ⚙️ ")), status(back)
     before = card(agent, GROUP)
     tick(agent, 20)                                     # the reminder: to the FM alone
-    # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): a
-    # step to the FM leaves the owner's group copy as it was — no edit, no line
-    assert card(agent, GROUP) == before
+    # owner, 2026-11-07, live #146-P2 (reversing 2026-10-18 #55 "each chat its own steps"): a step to the FM is shown
+    # on the owner's group copy too — every copy the same
+    assert card(agent, GROUP) != before and card(agent, GROUP) == card(agent, FM_CHAT)
     group = card(agent, FM_CHAT)                        # the FM's copy tells it
     # point 1: the bottom line says its own step — never "Reminder: no answer after 15min" alone under 18:03
     assert re.fullmatch(rf"⚠️ ⚙️ Reminder sent {T}, No answer after 15min \(to: FM\)", status_lines(group)[-1]), group
@@ -166,11 +165,10 @@ def test_a_run_that_came_back_starts_at_a_back_at_line_and_a_reminder_carries_it
     esc = card(agent, GROUP)
     lines = status_lines(esc)
     assert re.fullmatch(rf"⚠️ ⚙️ Escalation sent {T}, No answer from FM after 45min \(to: Owner\)", lines[-1]), lines
-    assert not any("(to: FM)" in ln for ln in lines), lines     # the FM's steps are the FM chat's
-    # and the owner's step leaves the FM's copy's own lines alone — only "To:" follows the incident, which now involves
-    # the owner (architecture review, 2026-10-19: the title word and "To:" are the incident's, the same in every copy)
+    assert any("(to: FM)" in ln for ln in lines), lines         # every step, the FM's too, "(to: …)" says whom
+    # and the owner's step is shown on the FM's copy too, its "To:" now naming the owner
     fm_now = card(agent, FM_CHAT)
-    assert status_lines(fm_now) == status_lines(fm_before) and fm_now.split("\n")[0] == fm_before.split("\n")[0]
+    assert status_lines(fm_now) == lines and fm_now != fm_before
     assert fm_before.split("\n")[1] == "To: FM" and fm_now.split("\n")[1] == "To: Owner & FM", fm_now
 
 
@@ -225,7 +223,9 @@ def test_every_step_is_one_line_of_the_step_table_and_said_the_same_everywhere()
         assert head_text(n.heading(-1, 7, to="fm")).split("\n")[-1] == f"- {line}", stage
         said = n.bottom(stage, {"fm"}, "why", at)
         assert said == (f"{line.removesuffix(' (to: FM)')}, why (to: FM)" if step.timed else "why"), stage
-        assert [s["note"] for s in n.story(7)] == [f"{step.sent} (to: Facility Manager)"], stage
+        # the fault's line: the same words, its moment left to the Kiosk (status_story: one writer)
+        from vesta_agent.status_story import SLOT, bare
+        assert [s["note"] for s in n.story(7)] == [bare(step.line.format(sent=step.sent, at=SLOT, times="", who="FM"))], stage
 
 
 def follows(v, blueprint: str, rule_id: str, mid: int):

@@ -22,7 +22,7 @@ import asyncio
 import json
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 import aiohttp
@@ -358,41 +358,62 @@ def placed(entity_id: str) -> Amend:
 
 
 def noted(lines: list[dict]) -> Amend:
-    """Lines of what happened about an open fault on Telegram ([{at, note}], notice.Notices.story), each a "noted" step
-    at its own time; a line the fault already has is not written again."""
+    """Lines of what happened about an open fault on Telegram ([{id, at, note}], notice.Notices.story: the alert's
+    Status lines), each a "noted" step at its own time, kept by the line's id (`line`): a line the fault has is said
+    anew in place (its words, its latest moment), a new one is added; nothing when nothing changed.
+
+    ⚠️ BY ITS ID, NEVER ITS MOMENT (architecture review of visits, 2026-11-07, card 2): the fault kept one line per
+    moment, so "Alert sent" and a visit's first line at the same second needed a microsecond nudge, and a line said
+    anew at a moment already written was never written again. ⚠️ A FAULT KEPT BY MOMENT (before 0.12.481) IS TAKEN
+    OVER: its line at a line's moment, or one of the moments a repeat folded into it (`ats`), or a microsecond after
+    one of them (the old nudge), becomes that line — the first in place (its writer kept), the others gone
+    (rules/agent-code.md "Format changes need migrations"). Only this agent's own Telegram lines."""
     def amend(t: dict) -> dict | None:
         if t.get("status") == "resolved":
             return None
         ups = list(t.get("updates") or [])
-
-        def mine(u, at) -> bool:
-            return isinstance(u, dict) and u.get("kind") == NOTED and u.get("at") == at
+        mine = [i for i, u in enumerate(ups) if isinstance(u, dict) and u.get("kind") == NOTED]
+        told = {str(x.get("id") or x["at"]) for x in lines}
         changed = False
         for x in lines:
+            lid = str(x.get("id") or x["at"])
             step = {"at": x["at"], "status": t.get("status") or "open", "photoIds": [], "kind": NOTED,
-                    "note": str(x["note"])[:update_note_chars()]}
-            # ⚠️ ONE LINE PER PROBLEM (owner, 2026-11-06, #125-P1): a step repeated in a row is one line, counted, at
-            # its latest moment (notice.Notices.record): the fault's lines of its earlier moments (`ats`) give way to
-            # it — the first in place (its writer kept), the others gone. Only this agent's own Telegram lines.
-            earlier = [at for at in x.get("ats") or () if at != x["at"]]
-            at_now = [i for i, u in enumerate(ups) if mine(u, x["at"])]
-            before = [i for i, u in enumerate(ups) if any(mine(u, at) for at in earlier)]
-            if not before:
-                # ⚠️ BY ITS MOMENT, NEVER ITS WORDS (architecture review, 2026-10-15): a reworded stage ("Reminder
-                # sent") or a People change re-wrote every past line, and each was added again under the new words —
-                # only a count grown since is written again (the same moment, its line counted)
-                if not at_now:
-                    ups.append(step); changed = True
-                elif x.get("ats") and ups[at_now[0]].get("note") != step["note"]:
-                    ups[at_now[0]] = {**ups[at_now[0]], "note": step["note"]}; changed = True
+                    "note": str(x["note"])[:update_note_chars()], "line": lid}
+            moments = {_instant(a) for a in [*(x.get("ats") or ()), x["at"]]} - {None}
+            # a line of the fault no longer told (kept by moment before 0.12.481, or a repeat folded since) at one of
+            # this line's moments is this line
+            loose = [i for i in mine if ups[i] is not None and ups[i].get("line") not in told]
+            have = [i for i in mine if ups[i] is not None and ups[i].get("line") == lid]
+            have += [i for i in loose if i not in have and _instant(ups[i].get("at")) in moments]
+            if not have:
+                # the old nudge's moment only when none is its own (two lines of one second)
+                have = [i for i in loose if not ups[i].get("line")
+                        and _near(_instant(ups[i].get("at")), moments)][:1]
+            if not have:
+                ups.append(step); mine.append(len(ups) - 1); changed = True
                 continue
-            first = (at_now + before)[0]
-            ups[first] = {**ups[first], **step}
-            gone = set(at_now + before) - {first}
-            ups = [u for i, u in enumerate(ups) if i not in gone]
-            changed = True
-        return dict(t, updates=ups) if changed else None
+            first, rest = have[0], have[1:]
+            was = ups[first]
+            if any(was.get(k) != step[k] for k in ("at", "note", "line")) or rest:
+                ups[first] = {**was, **step}
+                for i in rest:
+                    ups[i] = None
+                changed = True
+        return dict(t, updates=[u for u in ups if u is not None]) if changed else None
     return amend
+
+
+def _instant(at) -> datetime | None:
+    try:
+        m = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return m if m.tzinfo else m.replace(tzinfo=timezone.utc)
+
+
+def _near(m: datetime | None, moments: set) -> bool:
+    """Is `m` one of `moments`, or the old nudge after one (a few microseconds: kept before 0.12.481)?"""
+    return m is not None and any(timedelta(0) <= m - x < timedelta(milliseconds=1) for x in moments)
 
 
 #: How this agent labels a fault's note ("What to do: …"; "Check: …" until review 29): a note so labelled is the agent's

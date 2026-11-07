@@ -182,7 +182,8 @@ def test_a_need_help_press_is_listed_in_each_chats_language(agent):
                             name="JM"))
     lines = agent.notices.history_lines(1, FM_FR)
     assert any(re.fullmatch(rf"- 🆘 Besoin d'aide (?:le|à) {T} \(Anna\)", ln) for ln in lines), lines
-    assert any(re.fullmatch(rf"- 🆘 Need help (?:on|at) {T} \(Anna\)", ln) for ln in agent.notices.history_lines(1, GROUP))
+    assert any(re.fullmatch(rf"- 🆘 Need help on Telegram (?:on|at) {T} \(Anna\)", ln)
+               for ln in agent.notices.history_lines(1, GROUP))
 
 
 def test_a_clearing_says_its_end_in_each_language(agent):
@@ -193,8 +194,10 @@ def test_a_clearing_says_its_end_in_each_language(agent):
     assert re.fullmatch(rf"✅ Behoben (?:am|um) {T}\. 4Std\. Beobachtung\.", status(card(agent, FM_DE), "Status")[-1]), card(agent, FM_DE)
 
 
-def test_a_copy_recorded_before_keeps_its_english_lines(agent):
-    # a copy stored by an earlier release: its heading as text, its lines English, no step kept with its status
+def test_a_copy_recorded_before_is_drawn_again_whole_at_the_next_step(agent):
+    # a copy stored by an earlier release (its heading as text, its lines English, no step kept with its status) was
+    # only retitled at a step to another chat; every copy now takes every change (owner, 2026-11-07, live #146-P2):
+    # drawn again whole, every line in its chat's language
     rule(agent, "opened", 500)
     tick(agent, 20)
     rec = agent.thread.shown(1)[FM_FR]
@@ -202,11 +205,11 @@ def test_a_copy_recorded_before_keeps_its_english_lines(agent):
     said = "Reminder sent 23/10/2026 10:04, No answer after 15min (to: FM)"
     agent.state.set_incident_message(1, FM_FR, {**rec, "parts": {"head": old, "lead": "", "body": SUMMARY,
                                                                   "status": said, "mark": None}})
-    tick(agent, 50)                                    # a step to the owner: the facility manager's copy only retitled
+    tick(agent, 50)                                    # a step to the owner: the facility manager's copy too
     fr = card(agent, FM_FR)
     assert fr.split("\n")[1] == "To: Owner & FM", fr
-    # its lines as recorded, their moments as every Status writes them: of another day than the alert's, "23/10 09:48"
-    assert status(fr, "Status") == ["- Alert sent 23/10 09:48 (to: FM)", f"⚠️ ⚙️ {said.replace('/2026', '')}"], fr
+    lines = status(fr, "Statut")
+    assert [ln.split(" ")[1] for ln in lines] == ["Alerte", "Rappel", "⚙️"] and "Escalade envoyée" in lines[-1], lines
 
 
 def test_every_language_of_the_people_list_has_its_words():

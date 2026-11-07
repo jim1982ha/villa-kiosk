@@ -50,7 +50,7 @@ def told(notices, state, iid, minutes_after):
     note_press(state, iid, "Done", "Wayan", None, closes=True)       # Done: the fault's close says it, not a line
 
 
-STORY = ["Alert sent (to: Facility Manager)", "Reminder sent (to: Facility Manager)", "Escalation sent (to: Owner)",
+STORY = ["Alert sent (to: FM)", "Reminder sent (to: FM)", "Escalation sent (to: Owner)",
          "🆘 Need help on Telegram (Wayan)"]
 
 
@@ -121,7 +121,8 @@ def test_a_reworded_line_is_never_written_on_the_card_again(tmp_path):
     finally:
         STEPS["reminder"] = saved
     notes = [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
-    assert notes.count("Reminder sent (to: Facility Manager)") == 1 and "Reminder posted to Facility Manager" not in notes
+    # kept by its id: the reworded line said anew in its place, never added again (status_story, kiosk.noted)
+    assert [n for n in notes if n.startswith("Reminder")] == ["Reminder posted (to: FM)"], notes
 
 
 def test_a_closing_note_a_note_and_a_long_story_say_what_telegram_says(tmp_path):
@@ -132,7 +133,7 @@ def test_a_closing_note_a_note_and_a_long_story_say_what_telegram_says(tmp_path)
     notices.record(iid, "closed", [(FM, "fm")])
     # the same close told once (owner, 2026-11-05, #118): a closing note after it is no step of its own
     assert [x["note"] for x in notices.story(iid)][-2:] == [
-        "🆘 Need help on Telegram (Wayan)", "Cleared in the villa's system on 28/10/2026 10:00"]
+        "🆘 Need help on Telegram (Wayan)", "Cleared in the villa's system on 28/10 10:00"]
     # a ticket taken on in the Cockpit is the Kiosk's own step already ("in progress since … by …"): never told twice
     note_step(state, iid, "taken", "Ticket opened in the Cockpit on 28/10/2026 10:05 (JM)")
     assert "Ticket opened" in notices.history_lines(iid)[-1]
@@ -163,7 +164,7 @@ def test_a_reopened_fault_tells_only_its_new_run(tmp_path):
     run(t.repair())
     notes = [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
     # the first run's lines belong to the fault as it was then
-    assert notes == ["Back: alert sent (to: Facility Manager)"], notes
+    assert notes == ["Back (to: FM)"], notes
 
 
 def test_a_fault_made_in_a_later_run_starts_at_that_runs_return(tmp_path):
@@ -174,7 +175,7 @@ def test_a_fault_made_in_a_later_run_starts_at_that_runs_return(tmp_path):
     notices.record(iid, "back", [(FM, "fm")], at=now - timedelta(minutes=30))         # the run the fault is made in
     run(t.repair())
     notes = [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"]
-    assert notes == ["Back: alert sent (to: Facility Manager)"], notes
+    assert notes == ["Back (to: FM)"], notes
 
 
 def test_a_fault_the_repair_makes_tells_its_story_in_that_same_repair(tmp_path):
@@ -191,4 +192,4 @@ def test_a_fault_the_repair_makes_tells_its_story_in_that_same_repair(tmp_path):
     notices.record(iid, "new", [(FM, "fm")], at=datetime.now(timezone.utc))
     run(t.repair())                                      # ONE repair: it makes the fault
     uid = k.doc["data"]["tickets"][0]["id"]
-    assert [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"] == ["Alert sent (to: Facility Manager)"]
+    assert [u["note"] for u in k.ticket(uid)["updates"] if u.get("kind") == "noted"] == ["Alert sent (to: FM)"]

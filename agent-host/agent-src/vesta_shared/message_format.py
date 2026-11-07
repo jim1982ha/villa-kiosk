@@ -197,10 +197,6 @@ class Step(NamedTuple):
     #: and {who} (the roles, short). ⚠️ EVERY LINE ENDS "(to: …)" (owner, 2026-10-18, #41: "Alert sent … to Owner &
     #: FM" beside "Back at …, 2nd time in 7 days (to: Owner & FM)" — two shapes for whom in one Status).
     line: str = "{sent} {at} (to: {who})"
-    #: it undoes an ending: every copy takes it, as every copy took the close (vesta_agent/outcome.py). ⚠️ A REOPENING
-    #: UNDOES AN ENDING (owner, 2026-11-05): each chat keeps its own steps, yet the owner's group, which read "Done …
-    #: Watch 4h", kept it under "(existing)" while the facility manager alone read the reopening
-    every_copy: bool = False
     #: its line stays among the Status lines and the bottom line is where the alert stands (its title word's): a step
     #: that is part of the story, never the alert's state. ⚠️ (owner's drills, 2026-11-06: the tablet's card read
     #: "Stronger signal sent 22:57, TEST: Test door opened while the villa is empty (to: Owner & FM)" as its state)
@@ -233,7 +229,7 @@ STEPS: dict[str, Step] = {
     # of its Status, the card's state "New alert" again (owner, 2026-11-06: one visit, one story; a break-in is never
     # folded quietly; the state line is the short state)
     "stronger": Step("Stronger signal sent", "new", timed=False, listed=True),
-    "reopened": Step("Reopen request sent", "existing", timed=True, every_copy=True),
+    "reopened": Step("Reopen request sent", "existing", timed=True),
     "closed": Step("Closing note sent", "closed", timed=False),
 }
 #: How often a step repeated in a row, after its moment: "Still-there alert sent 06/11/2026 18:35, 3 times (to: Owner &

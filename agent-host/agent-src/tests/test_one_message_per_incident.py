@@ -162,18 +162,16 @@ def test_need_help_reaches_the_owner_with_the_buttons_to_answer(agent):
     # alert sent on (ticket 19 of "One inbox") — and Telegram's Status the same events in the same words: the press,
     # then the escalation; never an "Update sent" (architecture review, 2026-10-15)
     notes = [x["note"] for x in agent.tickets.story(int(iid))]
-    assert notes == ["Alert sent (to: Facility Manager)", "Reminder sent (to: Facility Manager)",
+    assert notes == ["Alert sent (to: FM)", "Reminder sent (to: FM)",
                      "🆘 Need help on Telegram (Wayan)", "Escalation sent (to: Owner)"], notes
     # owner, 2026-10-18, #55 "each chat its own steps" (reversing part of 2026-10-11 "one incident, one picture"): the
-    # FM's chat lists the FM's steps and the press, never the escalation to the owner; the owner's group the press and
-    # its escalation, never the FM's alert or reminder — the press said by the answer below them while nothing but its
-    # escalation follows it (architecture review 23, card 4: it was said twice)
+    # every chat lists every step, "(to: …)" saying who was told (owner, 2026-11-07, live #146-P2) — the press said by
+    # the answer below them while nothing but its escalation follows it (architecture review 23, card 4: said twice)
     def kinds(chat):
         lines = head_text(agent.notices.heading(chat, int(iid))).split("\n")[2:]
         return [next((k for k in ("Alert sent", "Reminder sent", "🆘 Need help on", "Escalation sent")
                       if l.startswith("- " + k)), l) for l in lines]
-    assert kinds(FM_CHAT) == ["Alert sent", "Reminder sent"], kinds(FM_CHAT)
-    assert kinds(GROUP) == ["Escalation sent"], kinds(GROUP)
+    assert kinds(FM_CHAT) == kinds(GROUP) == ["Alert sent", "Reminder sent", "Escalation sent"], kinds(FM_CHAT)
 
 
 def test_a_second_close_changes_nothing_and_the_records_are_pruned_with_the_others(agent):
@@ -212,12 +210,12 @@ def test_every_notice_has_one_heading_with_the_incidents_history(agent):
     run(agent.outcome.carry_out({"send": [R.message("owner", "Still stopped", incident=7, buttons=True,
                                                     stage="escalated")]}, "alert-desk"))
     later = agent.tg.sent[-1][1]
-    # in the owner's chat: "To:" names everyone the alert involves; its "Status:" only the owner's own steps (owner,
-    # 2026-10-18, #55 "each chat its own steps") — the FM's alert is the FM chat's line
+    # in the owner's chat: "To:" names everyone the alert involves; its "Status:" every step, the FM's alert too
+    # (owner, 2026-11-07, live #146-P2: every copy the same lines)
     assert re.fullmatch(r"#7 \(existing\)\nTo: Owner & FM\nStill stopped\nStatus:\n"
-                        r"⚠️ ⚙️ Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: Owner\)", later), later
+                        r"- Alert sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: FM\)\n⚠️ ⚙️ Escalation sent (?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d \(to: Owner\)", later), later
     fm_lines = head_text(agent.notices.heading(FM_CHAT, 7)).split("\n")[2:]
-    assert [ln.split(" ")[1] for ln in fm_lines] == ["Alert"] and fm_lines[0].endswith("(to: FM)"), fm_lines
+    assert [ln.split(" ")[1] for ln in fm_lines] == ["Alert", "Escalation"] and fm_lines[0].endswith("(to: FM)"), fm_lines
 
 
 def test_a_fault_closed_in_the_kiosk_says_who_and_when_on_telegram():

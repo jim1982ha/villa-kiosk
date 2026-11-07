@@ -43,7 +43,7 @@ import os
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from vesta_shared.message_format import KIOSK_UNREACHED, STEPS
+from vesta_shared.message_format import KIOSK_UNREACHED
 from vesta_shared.result import FAULTS_CHANGED, REDRAW, SHEET, TAKE_ON, TELL_VILLA, WITHDRAW_SIREN
 from vesta_shared.ha_client import error_short_chars
 
@@ -325,15 +325,9 @@ class Outcome:
         for iid, shown_in in posted.items():
             last_chat, last_stage, last_also = shown_in[-1]
             latest = (self.thread.shown(iid).get(last_chat) or {})
-            # ⚠️ EACH CHAT ITS OWN STEPS (owner, 2026-10-18, #55): a step to the facility manager alone re-posted the
-            # owner's group copy with it — a chat none of whose roles this step went to keeps its own words (`quiet`)
-            # and takes only the heading: the title word and "To:" are the incident's, the same in every copy
-            # (architecture review, 2026-10-19)
-            stepped = set().union(*[r for (i, _st), r in told.items() if i == iid] or [set()])
-            # a step that undoes an ending (a reopening) reaches every copy, as its close did (Step.every_copy)
-            every = any(s.every_copy for (i, st) in told if i == iid and (s := STEPS.get(st or "")))
-            elsewhere = set() if every else {c for c, _rec in self.thread.state.incident_chats(iid)
-                                             if self.notices and not self.notices.concerns(c, stepped)}
+            # ⚠️ EVERY COPY AT EVERY CHANGE (owner, 2026-11-07, live #146-P2, reversing 2026-10-18 #55 "each chat its
+            # own steps"): a step to the facility manager alone left the owner's group copy as it was — at the return
+            # and at the Done it still read "Cleared … Watch 1h". Every copy shows the step just sent, quietly
             # this result's own steps of the incident: its bottom line says them, the history above them never.
             # ⚠️ COUNTED AS RECORDED (architecture review 22, card 1): counted here by its own rule, the villa's late
             # all-clear of an alert closed and watched out was 1 step that Notices.record never added, and every other
@@ -349,7 +343,6 @@ class Outcome:
             listed = any(stays({"stage": st}, hist) for (i, st) in noticed if i == iid)
             if latest.get("parts"):
                 await self.thread.sync(iid, layout.of(latest), skip=set() if listed else {c for c, _s, _a in shown_in},
-                                       quiet=elsewhere,
                                        head_for=head_for, keyboard=(
                     lambda c, i=iid: self.buttons.keyboard(i, c, skill_name)) if skill_name and self.buttons.open(iid) else None)
         # ⚠️ THE TABLET'S FAULT AS SOON AS TELEGRAM'S COPIES ARE (owner's screenshots, 2026-11-07, #142): the step's lines

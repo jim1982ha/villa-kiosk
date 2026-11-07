@@ -124,10 +124,9 @@ def test_the_closed_message_tells_every_step_the_villa_saw_on_15_october(tmp_pat
     assert "- Escalation sent " in taken and taken.endswith("Ticket opened in the Cockpit by Wayan on 15/10 01:09.")
     st.update_incident(iid, closed_at=st.now(), state=Incident.RESOLVED)
     asyncio.run(v.thread.close(iid, "Cleared on {time}: back to normal."))
-    # every step each chat was sent, none dropped — and only those (owner, 2026-10-18, #55 "each chat its own steps",
-    # reversing part of 2026-10-11 "one incident, one picture"): the owner's chat its escalation, the FM's its alert and
-    # reminder; the ticket taken on and the clear, sent to nobody in particular, in both
-    for chat, steps in ((owner, ["Escalation", "Ticket"]), (fm, ["Alert", "Reminder", "Ticket"])):
+    # every step, none dropped, in every chat (owner, 2026-11-07, live #146-P2: every copy the same lines)
+    for chat, steps in ((owner, ["Alert", "Reminder", "Escalation", "Ticket"]),
+                        (fm, ["Alert", "Reminder", "Escalation", "Ticket"])):
         text = v.thread.shown(iid)[chat]["text"]
         lines = text.split("Status:\n", 1)[1].split("\n")
         assert [l.split(" ")[1] for l in lines[:-1]] == steps, (chat, lines)

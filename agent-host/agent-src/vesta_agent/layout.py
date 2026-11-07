@@ -30,6 +30,8 @@ from vesta_shared.limits import limit
 from vesta_shared.messaging import split_message, telegram_message_chars, tg_len
 from vesta_shared.timeutil import first_moment, moment_label
 
+from . import status_story
+
 
 def fit(text: str, limit: int | None = None) -> str:
     """One message's text at most `limit` (Telegram's units; the villa's message limit by default), cut between lines
@@ -102,7 +104,7 @@ def title_line(h: dict) -> str:
 def head_text(h) -> str:
     """A heading as the message shows it: its title line, "To: …", then its history."""
     h = head_of(h)
-    return "\n".join([title_line(h), f"{TO}{h['to']}".rstrip(), *h["history"]]) if h else ""
+    return "\n".join([title_line(h), f"{TO}{h['to']}".rstrip(), *status_story.texts(h["history"])]) if h else ""
 
 
 def status_shown(h: dict | None, lines: list[str], lang: str | None = None) -> list[str]:
@@ -115,13 +117,27 @@ def status_shown(h: dict | None, lines: list[str], lang: str | None = None) -> l
     as they were written, whole moments and all, so every alert already open, and every line the desk wrote in its own
     words in every language, reads the new way at its next redraw."""
     if not h or not h.get("word"):
-        return lines
+        return status_story.texts(lines) if any(isinstance(x, dict) for x in lines) else lines
     try:
-        day = date.fromisoformat(h["day"]) if h.get("day") else first_moment(h.get("story") or h.get("history"))
+        day = date.fromisoformat(h["day"]) if h.get("day") else _first_day(h.get("story") or h.get("history"))
     except ValueError:
         day = None
     lang = lang or h.get("lang") or "en"           # `lang`: lines in another language than the copy's (its words in each)
-    return [status_words.moments(x, day, lang) for x in lines]
+    return status_story.texts(lines, day, lang)
+
+
+def _first_day(lines) -> date | None:
+    """The day of a heading's first line: kept as facts, its moment's; kept as text, its first whole moment's."""
+    for x in lines or ():
+        if isinstance(x, dict):
+            if x.get("at"):
+                try:
+                    return datetime.fromisoformat(str(x["at"])).date()
+                except ValueError:
+                    continue
+        else:
+            return first_moment(lines)
+    return None
 
 
 #: An incident message's stage, as its title says it, shown again at the head of its bottom line (owner, 2026-10-11:

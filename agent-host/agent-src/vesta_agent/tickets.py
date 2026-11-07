@@ -459,10 +459,9 @@ class Tickets:
                     if want["number"]:
                         story = self.story(want["number"])
                         since = _run_start(story, t)
-                        have = {at for at, _note in card.get("noted") or []}            # by its moment (kiosk.noted)
-                        # a step repeated in a row (`ats`) is written again: its line counted in place of the earlier
-                        lines = [x for x in story if (since is None or (_moment(x["at"]) or since) >= since)
-                                 and (x["at"] not in have or x.get("ats"))]
+                        # every line of this run: the fault keeps each by its id, writing only what changed
+                        # (kiosk.noted)
+                        lines = [x for x in story if since is None or (_moment(x["at"]) or since) >= since]
                         if lines:
                             amends.append(noted(lines))
                     fixed += await self.kiosk.amend(uid, *amends)

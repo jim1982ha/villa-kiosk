@@ -4,6 +4,8 @@ in every chat and on the tablet's card, until someone acted — pressed in the C
 answer says the press (skill.yaml `tells`) keeps no line of it, as a closing button. Synthetic villa; names invented."""
 from __future__ import annotations
 
+import re
+
 from types import SimpleNamespace
 
 import pytest
@@ -31,4 +33,5 @@ def test_need_help_is_said_once_in_every_chat_and_on_the_tablet(tmp_path, chat, 
     owner = SimpleNamespace(name="JM", role="owner", telegram_id=GROUP)
     run(v.buttons.press(GROUP, ["1", "done"], owner, _toast, name="JM"))
     assert any(ln.startswith("- 🆘 Besoin d'aide à ") and ln.endswith("(Luc)") for ln in status(v, FM_FR)), status(v, FM_FR)
-    assert any(ln.startswith("- 🆘 Need help at ") for ln in status(v, GROUP)), status(v, GROUP)
+    # where it was pressed, as the fault's line says it (status_story: one wording, the moment apart)
+    assert any(re.match(r"- 🆘 Need help (on Telegram|on the tablet) at ", ln) for ln in status(v, GROUP)), status(v, GROUP)

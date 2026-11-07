@@ -98,7 +98,7 @@ def test_a_fault_taken_on_in_the_cockpit_is_said_in_each_chats_language(tmp_path
     assert status(v, FM_DE)[-1].endswith(" Ticket im Cockpit eröffnet am 15/10 00:40 (Luc)."), status(v, FM_DE)
     assert status(v, GROUP)[-1].endswith(" Ticket opened in the Cockpit on 15/10 00:40 (Luc)."), status(v, GROUP)
     # ...and kept in its story in every language: a later step's card lists it in the chat's words
-    assert any(ln == "- Ticket ouvert dans le Cockpit le 15/10/2026 00:40 (Luc)" for ln in v.notices.history_lines(1, FM_FR))
+    assert any(ln == "- Ticket ouvert dans le Cockpit le 15/10 00:40 (Luc)" for ln in v.notices.history_lines(1, FM_FR))
 
 
 def test_a_fault_closed_in_the_cockpit_is_said_in_each_chats_language_and_its_check_after_too(tmp_path):

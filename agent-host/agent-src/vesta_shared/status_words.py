@@ -301,13 +301,18 @@ def resent(line: str, whom: str, lang: str = "en") -> str:
     return f"{line}{colon(lang)}{w['resent'] if w else mf.RESENT}{to_tail(whom, lang)}"
 
 
+def on_words(lang: str = "en") -> tuple[tuple[str, str], ...]:
+    """The words a moment follows when it is a day ("on") and when it is a time alone ("at"), `lang`'s then English's
+    (message_format.ON): "Cleared on 07/11/2026 23:10", "Cleared at 23:10"."""
+    w = _w(lang)
+    return tuple(dict.fromkeys(([tuple(w["on"])] if w and w.get("on") else []) + [mf.ON]))
+
+
 def moments(text: str, day, lang: str = "en") -> str:
     """A Status line of an alert whose day is `day` (a date; None: not known) with its moments as timeutil.status_moment
     writes them — "Alert sent 05:14", "Cleared at 05:23", "Reminder sent 08/11 09:20" — the words before a moment in
     `lang` and in English (a line a skill wrote in English only)."""
-    w = _w(lang)
-    ons = tuple(dict.fromkeys(([tuple(w["on"])] if w and w.get("on") else []) + [mf.ON]))
-    return status_moments(text, day, ons)[0]
+    return status_moments(text, day, on_words(lang))[0]
 
 
 def acted(what: str, when: str, whom: str = "", lang: str = "en") -> str:

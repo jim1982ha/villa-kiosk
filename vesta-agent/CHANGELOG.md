@@ -1,3 +1,14 @@
+## 0.12.481
+
+- Every Telegram copy of an alert now shows the same Status, in its chat's language: the owner's group, joined at an
+  escalation, no longer shows only its own steps, and "(to: …)" says who was told each time.
+- Every copy is updated at every change of the alert (a reminder, a return, a close, a press), whichever chat the step
+  was sent to. Before, the owner's group could still read "Cleared … Watch 1h" on an alert that had come back and been
+  closed since.
+- The tablet's short story of an alert says the same lines as Telegram ("Reminder sent (to: FM)", "Back, 2nd time in 7
+  days (to: FM)"), each with its own time beside it.
+- A press in the Status says where it was made: "🆘 Need help on Telegram at 11:18 (Wayan)".
+
 ## 0.12.480
 
 - Nothing changes on screen. Whether a visit is still open or already over, since when and why, is now worked out in

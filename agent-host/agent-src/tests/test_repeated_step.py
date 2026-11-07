@@ -84,7 +84,7 @@ def test_the_villas_rule_alerting_again_in_a_row_is_one_line_with_its_count(agen
     card = kiosk.messages["incident:1"]["status"]
     assert len([ln for ln in card if STILL in ln]) == 1, card
     # the fault's story, brought up to date after each: its line replaced, counted, never one more per repeat
-    assert [n for n in fault_lines(kiosk) if STILL in n] == ["Still-there alert sent, 3 times (to: Facility Manager)"]
+    assert [n for n in fault_lines(kiosk) if STILL in n] == ["Still-there alert sent, 3 times (to: FM)"]
     # then the reminder: the still-there one line above it, its latest moment and its count, on the tablet too
     scenario(agent, lambda v: tick(v, 20), lambda v: v.tickets.repair())
     card = kiosk.messages["incident:1"]["status"]
@@ -95,7 +95,7 @@ def test_the_villas_rule_alerting_again_in_a_row_is_one_line_with_its_count(agen
     assert [ln for ln in lines(latest(agent, FM_CHAT)) if STILL in ln] == [said]
     # the fault's story in the Cockpit: one line, counted
     noted = fault_lines(kiosk)
-    assert [n for n in noted if STILL in n] == ["Still-there alert sent, 3 times (to: Facility Manager)"], noted
+    assert [n for n in noted if STILL in n] == ["Still-there alert sent, 3 times (to: FM)"], noted
 
 
 def test_a_repeat_says_the_same_count_in_every_language(agent):
@@ -144,7 +144,7 @@ def test_an_alert_an_older_engine_recorded_once_per_repeat_reads_one_line_after_
     # the fault's story: its three lines one, counted
     scenario(agent, lambda v: v.tickets.repair())
     noted = fault_lines(kiosk)
-    assert [n for n in noted if STILL in n] == ["Still-there alert sent, 3 times (to: Facility Manager)"], noted
+    assert [n for n in noted if STILL in n] == ["Still-there alert sent, 3 times (to: FM)"], noted
 
 
 def test_a_copy_left_behind_by_the_repeats_keeps_the_steps_it_showed(agent, kiosk, monkeypatch):
