@@ -1,3 +1,12 @@
+## 0.12.473
+
+- A visit the villa ended while VESTA was stopped is recorded by VESTA when it starts again as one closed alert, with
+  its story and the villa's own close time ("Cleared at 07:16"): VESTA no longer reopens it, sends or edits nothing on
+  Telegram (the villa's messages stay as they are) and no longer rewrites the villa's record of it. The tablet shows
+  it as one closed card, with the visit's photos.
+- The tablet's card of an alert, when it shows the short story, now has every line Telegram has: "Alert sent (to: …)"
+  and, on the step that sent it again, ": alert sent again (to: …)".
+
 ## 0.12.472
 
 - A visit closed on the tablet (Done, Not a problem, or any other answer) goes straight to Closed, as one the villa
