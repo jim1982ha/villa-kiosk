@@ -45,14 +45,16 @@ export function CockpitAttentionRow({ card, onOpenEntity, canManage, onEditTicke
 }
 
 /** ⚠️ EVERY CLOSED RECORD IS ERASED THE SAME WAY (owner, 2026-11-07: a hold on #134-P1's card under Closed did nothing,
- *  while the villa's message beside it asked for the superadmin code): held, the card's records (`erases`) and VESTA's
- *  messages it tells are erased, behind the superadmin code (RecordCard `erase`: ErasableRow), as a message's card and a
- *  ticket are. None on a card nothing erases (an open issue, Watch). Pure: a check runs it. */
+ *  while the villa's message beside it asked for the superadmin code): held, the card's records (`erases`) and the
+ *  messages it tells (VESTA's, or the villa's own visit's: messagesModel.villaAlertCards, owner 2026-11-07: its closed
+ *  card did nothing on a hold) are erased, behind the superadmin code (RecordCard `erase`: ErasableRow), as a message's
+ *  card and a ticket are. Only a closed card; none on a card nothing erases (an open issue, Watch). Pure: a check runs it. */
 export function cardErase(card: CardView, removeTicket: (id: string, token: string) => Promise<unknown>,
   removeMessage: (a: Announcement, token: string) => Promise<unknown>): RecordCardProps["erase"] {
+  if (card.look !== "closed") return undefined;
   const ids = card.erases ?? [];
-  if (ids.length === 0) return undefined;
   const told = card.lines.flatMap((l) => (l.told ? [l.told] : []));
+  if (ids.length === 0 && told.length === 0) return undefined;
   return {
     title: "Erase this record", detail: [card.lines[0]?.alertLabel, card.title].filter(Boolean).join(" "),
     run: async (token) => {
