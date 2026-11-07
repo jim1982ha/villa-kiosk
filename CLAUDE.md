@@ -1,8 +1,7 @@
 # CLAUDE.md (agent-dev: the VESTA Agent)
 
 This branch holds only the VESTA Agent (`agent-host/`, `vesta-agent/`). The VESTA Kiosk and the project's shared
-rules live on **`dev2`**: read `git show origin/dev2:CLAUDE.md` and `git show origin/dev2:rules/INDEX.md` (and the rule
-files it links) before work that touches the owner, the villa's system, wording or git. The Agent's own hard rules are
+rules live on **`dev2`**: read `git show origin/dev2:CLAUDE.md` and `git show origin/dev2:rules/RULES.md` before work that touches the owner, the villa's system, wording or git. The Agent's own hard rules are
 in `agent-host/CLAUDE.md`.
 
 ## Branches
