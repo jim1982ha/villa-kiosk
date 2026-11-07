@@ -40,12 +40,21 @@ REGISTRY = {"areas": [{"area_id": "parking", "name": "Parking"}, {"area_id": "li
             "entities": [{"entity_id": PARKING, "name": "Parking", "area_id": "parking", "device_class": "motion"},
                          {"entity_id": PARKING_CAM, "name": "Parking Camera", "area_id": "parking"}]}
 STRENGTH = ("lock", "door", "person", "inside", "motion")
-DAY = "2026-11-06"
+DAY = "2026-11-06"     # the evening replayed; a test the clock judges dates its visit by just_past (never expires)
 TICKET_RE = r"(?:\d\d/\d\d(?:/\d{4})? )?\d\d:\d\d"
 
 
 def at(hms: str) -> str:
     return f"{DAY}T{hms}+00:00"
+
+
+def just_past(hms: str, now: datetime | None = None) -> str:
+    """The latest day ("YYYY-MM-DD", UTC) whose `hms` is already past: a visit dated so (DAY) that ends at `hms` ended
+    less than a day ago, whatever day the test runs — a fixed date compared with the real clock expires (a test of
+    06/11 failed from 07/11 on)."""
+    now = now or datetime.now(timezone.utc)
+    h, m, s = (int(x) for x in hms.split(":"))
+    return (now - timedelta(hours=h, minutes=m, seconds=s)).date().isoformat()
 
 
 class Visit:
@@ -140,7 +149,9 @@ def villa(tmp_path, kiosk, empty="on"):
 def past_evenings(v):
     """The same automation's alert on the three evenings before (3, 4 and 5 November), as the old way filed them."""
     store = Store(v.s.store_path)
-    for when in ("2026-11-03T18:33:00+00:00", "2026-11-04T18:31:00+00:00", "2026-11-05T18:18:00+00:00"):
+    day = datetime.fromisoformat(DAY)
+    for back, hm in ((3, "18:33"), (2, "18:31"), (1, "18:18")):
+        when = f"{(day - timedelta(days=back)).date().isoformat()}T{hm}:00+00:00"
         iid = store.new_incident(f"rule:{UID}|{PARKING}", RULE, PARKING, "P1", {"message": "Activity"}, when)
         store.update_incident(iid, closed_at=when, state="resolved")
 

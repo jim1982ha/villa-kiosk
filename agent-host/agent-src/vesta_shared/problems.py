@@ -768,7 +768,11 @@ class Problems:
                 # where it came from, the Kiosk card's source icon (owner, 2026-10-14): an alert or the night check
                 "origin": agreed("origins", {"incident": "alert", "finding": "night"}.get(kind or "", "")),
                 # how it is read again, the card's "Next check" (owner, 2026-10-15)
-                "check": agreed("checks", _check_word(kind, task.get("rule_id"), rechecked))
+                # ⚠️ A DAY'S VERDICT IS READ AGAIN WHEN A DAY HAS FINISHED (owner, 2026-11-07: "Bore Pump used 4.64 kWh/day
+                # over the last 2 days", next check within 5min): a finding judged on a finished day (JUDGED_DAY, the
+                # recheck's per_day readings) cannot change before the next day ends — its card says the nightly time
+                "check": agreed("checks", _check_word(kind, task.get("rule_id"), rechecked,
+                                                      json.loads((row or {}).get("detail") or "{}").get(JUDGED_DAY)))
                 if kind in ("incident", "finding") else None,
                 "note": task.get("close_note") or "Closed: the problem is over.", "who": task.get("closed_who") or None,
                 # closed as "Not a problem while it lasts" (on Telegram or the tablet): its fault says so too
@@ -964,10 +968,11 @@ class Problems:
         return (kind, int(sid)) if sid.isdigit() else (None, None)
 
 
-def _check_word(kind, rule_id, rechecked) -> str:
+def _check_word(kind, rule_id, rechecked, judged_day=False) -> str:
     """The soonest reading of a fault's problem, as the agreement's `ticket.checks` names it: "minutes" (an alert, or a
-    rule read every few minutes — "*" in `rechecked`: every rule, owner 2026-10-20), else "nightly"."""
-    if kind == "incident" or rule_id in rechecked or "*" in rechecked:
+    rule read every few minutes — "*" in `rechecked`: every rule, owner 2026-10-20), else "nightly" — and "nightly" for
+    a finding judged on a finished day (`judged_day`: its verdict can change only once the next day has finished)."""
+    if kind == "incident" or (not judged_day and (rule_id in rechecked or "*" in rechecked)):
         return "minutes"
     return "nightly"
 

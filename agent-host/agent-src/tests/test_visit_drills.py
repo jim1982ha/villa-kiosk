@@ -16,14 +16,14 @@ Synthetic villa: every id invented."""
 from __future__ import annotations
 
 import asyncio
-import os
 import re
 
 import pytest
 
 import test_visit_record as record
-from test_visit_story import (FM, GARDEN_DOOR, LOCK, OWNER, PARKING, RECORD, ENTRANCE, Visit, at, copy, lines, play,
-                              send, told, villa)
+import test_visit_story
+from test_visit_story import (FM, GARDEN_DOOR, LOCK, OWNER, PARKING, RECORD, ENTRANCE, Visit, at, copy, just_past, lines,
+                              play, send, told, villa)
 from test_visit_story import kiosk, media  # noqa: F401 — its fixtures
 from vesta_agent.ha_events import CONTEXT_KEY
 from vesta_shared.store import Store
@@ -438,7 +438,11 @@ def _closed_on_the_villa(vi: Visit, closed: dict, answered: dict | None, replies
     return rec
 
 
-_PRESS = {"option": "done", "by": "Jm", "at": at("10:04:00")}
+def _press() -> dict:
+    """The owner's Done on the villa's card, at the visit's close (dated as the visit is: DAY when it is made)."""
+    return {"option": "done", "by": "Jm", "at": at("10:04:00")}
+
+
 AWAY_TABLE = [
     # name, why it closed, where a press was made, the events replayed (the last carrying the close), its last line
     ("#138 quiet, opened+step+resolved", "quiet", None, ("opened", "step", "resolved"), "✅ Cleared at "),
@@ -450,13 +454,12 @@ AWAY_TABLE = [
 
 @pytest.mark.parametrize("why,where,phases,last", [r[1:] for r in AWAY_TABLE], ids=[r[0] for r in AWAY_TABLE])
 def test_a_visit_the_villa_closed_while_vesta_was_away_is_one_closed_card_never_shown_open_never_told(
-        tmp_path, kiosk, media, why, where, phases, last):
+        tmp_path, kiosk, media, why, where, phases, last, monkeypatch):
     from datetime import datetime
+    # ⚠️ REPLAYED AT THE REAL TIME, SO DATED BY IT: a visit of a fixed day failed from the next day on (the late close is
+    # matched within alerts.late_close_days of now); it closed less than a day ago, whatever day this runs
+    monkeypatch.setattr(test_visit_story, "DAY", just_past("10:04:00"))
     v = villa(tmp_path, kiosk)
-    # the visit is dated DAY (fixed) and replayed at the real time: the longest window keeps its close matched
-    # (the default 1 day failed the test from DAY + 1 day on); good until DAY + 30 days
-    with open(os.path.join(os.path.dirname(v.s.policy_path), "limits.yaml"), "a", encoding="utf-8") as f:
-        f.write("\nalerts.late_close_days: 30\n")
     vi = Visit(media=media, owner="pending")
     vi.add("motion", PARKING, "10:03:27", photo=True)
     events = [vi.event("opened")]
@@ -464,7 +467,7 @@ def test_a_visit_the_villa_closed_while_vesta_was_away_is_one_closed_card_never_
     events += [vi.event(ph) for ph in phases[1:]]
     vi.reminded_at = at("10:03:55")
     closed = {"why": why, "at": at("10:04:00"), **({"who": "Jm"} if where else {})}
-    rec = _closed_on_the_villa(vi, closed, {**_PRESS, "where": where} if where else None, replies=why == "quiet")
+    rec = _closed_on_the_villa(vi, closed, {**_press(), "where": where} if where else None, replies=why == "quiet")
     _read_now(v, rec)
     events[-1] = {**events[-1], "timestamp": at("10:04:00")}
     events[-1]["visit"]["closed"] = closed
@@ -513,7 +516,8 @@ def test_an_open_visit_whose_villa_record_says_it_ended_is_closed_at_the_next_ti
     play(v, send(vi.event("opened")))
     store = Store(v.s.store_path)
     (inc,) = store.incidents(open_only=True)
-    rec = _closed_on_the_villa(vi, {"why": "answered", "at": _PRESS["at"], "who": "Jm"}, {**_PRESS, "where": "telegram"},
+    press = _press()
+    rec = _closed_on_the_villa(vi, {"why": "answered", "at": press["at"], "who": "Jm"}, {**press, "where": "telegram"},
                                replies=False)
     if how == "later":
         rec.attributes, rec.state = {**rec.attributes, "id": "automation.example-other"}, "open"
@@ -527,7 +531,7 @@ def test_an_open_visit_whose_villa_record_says_it_ended_is_closed_at_the_next_ti
     got = store.incident(inc["id"])
     assert got["closed_at"], got
     if how == "answered":
-        assert datetime.fromisoformat(got["closed_at"]) == datetime.fromisoformat(_PRESS["at"]), got
+        assert datetime.fromisoformat(got["closed_at"]) == datetime.fromisoformat(press["at"]), got
         (settle,) = res["settle"]
         assert "Done" in str(settle) and "(Jm)" in str(settle), settle
 

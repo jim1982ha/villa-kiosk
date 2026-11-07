@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from helpers import PYTHONPATH, STARTER_SKILLS
-from vesta_shared.problems import STILL_THERE, Problems
+from vesta_shared.problems import JUDGED_DAY, STILL_THERE, Problems
 from vesta_shared.store import Store
 
 SKILL = os.path.join(STARTER_SKILLS, "preventive-maintenance")
@@ -224,6 +224,11 @@ def test_every_rule_of_the_night_is_read_again_every_5_minutes_and_every_card_sa
     for i, rule in enumerate(sorted(rules)):
         tid, _ = pb.open_task("finding", i + 1, rule, f"sensor.x{i}", "x")
         assert pb.card(store.task(tid), set(sk.rechecks))["check"] == "minutes", rule
+    # ⚠️ but a finding judged on a finished day (owner, 2026-11-07): its verdict changes only once the next day has
+    # finished, so its card says the nightly time, whatever its rule (the finding's own mark, never a list of rules)
+    fid, _ = store.raise_finding("PM-SILENT", "sensor.day", "x", "2026-10-19", "P3", "x", {JUDGED_DAY: True})
+    tid, _ = pb.open_task("finding", fid, "PM-SILENT", "sensor.day", "x")
+    assert pb.card(store.task(tid), set(sk.rechecks))["check"] == "nightly"
     # no day recheck left: one night check, the 5-minute tick, nothing else
     assert [j.get("run") for j in sk.schedule] == ["nightly.py --out nightly.json"] and KIOSK_JOBS == {"nightly_check"}
 
@@ -369,6 +374,20 @@ def test_a_day_total_fault_never_closes_mid_day_and_closes_on_the_first_tick_aft
     out = _tick(tmp_path, early + timedelta(minutes=15))
     assert _status(tmp_path, fid) == ("closed" if closes else "open")
     assert out["actions"] == (MOVED if closes else [])
+
+
+def test_every_per_day_reading_marks_its_findings_and_their_card_says_the_nightly_time(tmp_path):
+    # owner, 2026-11-07: "Bore Pump used 4.64 kWh/day over the last 2 days", next check within 5min — its verdict can
+    # only change once the next day has finished. The night's own finding, through the production path: the card's check
+    # follows the reading's per_day, through the night's one mark (nightly.day_seen: JUDGED_DAY)
+    from vesta_agent.skills import parse_skill
+    recheck = _recheck_module()
+    fid = _night_found_a_collapse(tmp_path)
+    store = Store(str(tmp_path / "s.sqlite"))
+    assert recheck.READS["PM-ENERGY-CHANGE"].per_day
+    task = store.last_task(f"finding:{fid}")
+    sk = parse_skill("preventive-maintenance", SKILL)
+    assert Problems(store).card(task, set(sk.rechecks))["check"] == "nightly"
 
 
 # ------------------------------------------------------------------------------------- the reconnect loops' logbook
