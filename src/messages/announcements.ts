@@ -14,6 +14,7 @@ import { clockTime } from "@/utils/dateText";
 import { fetchFeed, type FeedRead } from "./feed";
 import type { FullScreenAnnouncement } from "@/config/AppConfig";
 import AGENT_CONTRACT from "../../rootfs/usr/share/vesta/agent-contract.json" with { type: "json" };
+import HA_COMMANDS from "../../rootfs/usr/share/vesta/ha-commands.json" with { type: "json" };
 
 export interface Announcement {
   /** Its order in the add-on's store: a page asks for what came after the last one it holds. */
@@ -49,6 +50,13 @@ export interface Announcement {
   takes?: string[];
   /** The villa's own: the automation run that announced it (the add-on reads it from the event). */
   run?: string;
+  /** The villa's own visit card: its strongest step's device ("Test door") and that device's entity, the card's name
+   *  and what it opens; absent on every other record, and on a visit card kept before 2.496.743. */
+  device?: string;
+  entityId?: string;
+  /** The villa's own visit card: the visit record it names, where the add-on checks a press on its buttons (none
+   *  named, as before the blueprint named it: no buttons offered). */
+  record?: string;
   /** It offered buttons once and was rewritten since (agent-contract.json `_asked`: the add-on stamps it): with none
    *  offered now, its question was answered or is over (messagesModel.placeOf). */
   asked?: boolean;
@@ -278,6 +286,9 @@ export function parseAnnouncement(raw: unknown): Announcement | null {
     ...(typeof r.run === "string" && r.run ? { run: r.run } : {}),
     ...(r.asked === true ? { asked: true } : {}),
     ...(typeof r.since === "string" && r.since ? { since: r.since } : {}),
+    ...(typeof r.device === "string" && r.device.trim() ? { device: r.device.trim() } : {}),
+    ...(typeof r.entity_id === "string" && r.entity_id ? { entityId: r.entity_id } : {}),
+    ...(typeof r.record === "string" && r.record ? { record: r.record } : {}),
   };
 }
 
@@ -465,6 +476,17 @@ async function pressAt(
     return { outcome: "failed" };
   }
 }
+
+/** ⚠️ THE VILLA'S OWN VISIT CARD'S BUTTONS (owner, 2026-11-07, VESTA away: the tablet's copy of the villa's card had
+ *  none while Telegram had Done · Not a problem · Open Ticket · Need help): ha-commands.json `visitPress`, the button
+ *  kinds of every card ↔ the villa's options, and the key a visit card is known by. */
+export const VISIT_PRESS = HA_COMMANDS.visitPress as { keyPrefix: string; options: Record<string, string> };
+
+/** Press `option` of the villa's visit card `key` (its announcement's): the add-on fires the villa's one visit event,
+ *  stamped with this session's profile, only for the visit still open (/visit-press). `send` is backendFetch. */
+export const pressVisit = (key: string, option: string,
+  send: (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status"> & { json?: () => Promise<unknown> }>,
+): Promise<PressResult> => pressAt("visit-press", key, option, send);
 
 /** Erase kept message `a` with a one-shot superadmin authorisation (held on its row, then the code: owner,
  *  2026-10-29): whether the add-on removed it. Every page then drops it at its next read (feed `kept`). `send` is

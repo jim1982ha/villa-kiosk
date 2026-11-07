@@ -4090,6 +4090,13 @@ def _announcement_record(event, seq: int) -> dict | None:
         rec["key"] = key.strip()[:ANNOUNCEMENT_KEY_MAX]
     if buttons := _announcement_buttons(data.get("buttons")):
         rec["buttons"] = buttons
+    # a visit's card (critical_presence_guard, Visit mode): its strongest step's device names the tablet's card, and
+    # its record is where a press on its own buttons is checked (_visit_press_refusal)
+    if isinstance(device := data.get("device"), str) and device.strip():
+        rec["device"] = device.strip()[:ANNOUNCEMENT_KEY_MAX]
+    for field in ("entity_id", "record"):
+        if isinstance(eid := data.get(field), str) and AGENT_ENTITY_RE.fullmatch(eid):
+            rec[field] = eid
     # the automation run that announced it (the bus event's context): the VESTA Agent names the runs it took over
     # (vestaMessage `takes`), so the tablet shows VESTA's card in place of the villa's own message of that run
     run = (event.get("context") or {}).get("id") if isinstance(event.get("context"), dict) else None
@@ -5179,14 +5186,20 @@ def _offers_button(items: list, key, command) -> bool:
                for a in items)
 
 
-async def _fire_press(app: web.Application, data: dict) -> bool:
-    """Fire the press event on the villa's bus with the add-on's own token; whether the villa's system took it."""
+async def _fire_event(app: web.Application, event: str, data: dict) -> bool:
+    """Fire `event` on the villa's bus with the add-on's own token; whether the villa's system took it. Called with the
+    one event of each press door only (the announcement press, the visit press), never one a page names."""
     try:
-        async with app["session"].post(f"http://{SUPERVISOR}/core/api/events/{ANNOUNCEMENT_PRESS}", headers=AUTH,
+        async with app["session"].post(f"http://{SUPERVISOR}/core/api/events/{event}", headers=AUTH,
                                        json=data, timeout=ClientTimeout(total=10)) as resp:
             return resp.status == 200
     except (ClientError, OSError, asyncio.TimeoutError):
         return False
+
+
+async def _fire_press(app: web.Application, data: dict) -> bool:
+    """Fire the press event on the villa's bus; whether the villa's system took it."""
+    return await _fire_event(app, ANNOUNCEMENT_PRESS, data)
 
 
 async def announcement_press_handler(request: web.Request) -> web.Response:
@@ -5203,6 +5216,84 @@ async def announcement_press_handler(request: web.Request) -> web.Response:
     if not _offers_button(items, body["key"], body["command"]):
         return web.json_response({"error": "This button is no longer offered."}, status=409)
     if not await _fire_press(request.app, {"command": body["command"], "key": body["key"]}):
+        return web.json_response({"error": "The villa's system was not reached."}, status=502)
+    return web.json_response({"ok": True})
+
+
+# ── The villa's own visit card's buttons, pressed on a tablet (ha-commands.json `visitPress`) ─────────────────────
+# While VESTA is away the villa tells a visit itself, with Done · Not a problem · Open Ticket · Need help on Telegram
+# (owner, 2026-11-07: the tablet's copy of that card had none). ⚠️ THE PAGE NEVER FIRES THE EVENT: it names the card by
+# its key and the button by its option; this process fires the one visit event with {visit, option, by, where}, `by`
+# the signed-in profile's own name, never the page's, and only for the visit the card's record names as open and VESTA
+# does not hold (VESTA's card then stands in its place: its buttons go to VESTA). No websocket fire_event is admitted.
+VISIT_PRESS = HA_COMMANDS.get("visitPress") if isinstance(HA_COMMANDS.get("visitPress"), dict) else {}
+VISIT_OPTIONS = frozenset(v for v in (VISIT_PRESS.get("options") or {}).values() if isinstance(v, str) and v)
+
+
+def _profile_label(role: str) -> str:
+    """A profile's name as every report says it (roles.json `label`); empty for an unknown one."""
+    return str(((ROLES_TABLE.get("profiles") or {}).get(role) or {}).get("label") or "")
+
+
+def _visit_record_of(items: list, key) -> str | None:
+    """The visit record a kept announcement with this key names (the villa's visit card), or None. Pure."""
+    prefix = str(VISIT_PRESS.get("keyPrefix") or "")
+    if not prefix or not isinstance(key, str) or not key.startswith(prefix) or len(key) == len(prefix):
+        return None
+    held = next((a for a in items if isinstance(a, dict) and a.get("key") == key), None)
+    rec = held.get("record") if held else None
+    return rec if isinstance(rec, str) and AGENT_ENTITY_RE.fullmatch(rec) else None
+
+
+def _visit_press_refusal(key, option, state) -> str | None:
+    """Why a press on the villa's visit card is not fired, or None: the option one of the card's four, the record's
+    state (`state`, the villa's own: {state, attributes}) the visit `key` names, open, and not held by VESTA. Pure —
+    the security suite drives it."""
+    if not isinstance(option, str) or option not in VISIT_OPTIONS:
+        return "This button is not one of the visit's."
+    visit = key[len(str(VISIT_PRESS.get("keyPrefix") or "")):] if isinstance(key, str) else ""
+    attrs = state.get("attributes") if isinstance(state, dict) and isinstance(state.get("attributes"), dict) else {}
+    if not visit or not isinstance(state, dict) or state.get("state") != "open" or attrs.get("id") != visit:
+        return "This visit is no longer open."
+    if attrs.get("owner") == "vesta":
+        return "VESTA holds this visit: press on its card."
+    return None
+
+
+async def _villa_state(app: web.Application, entity_id: str) -> dict | None:
+    """One entity's state as the villa's system has it now (the add-on's own token), or None when not reached."""
+    try:
+        async with app["session"].get(f"http://{SUPERVISOR}/core/api/states/{entity_id}", headers=AUTH,
+                                      timeout=ClientTimeout(total=10)) as resp:
+            return await resp.json() if resp.status == 200 else None
+    except (ClientError, OSError, asyncio.TimeoutError, ValueError):
+        return None
+
+
+async def visit_press_handler(request: web.Request) -> web.Response:
+    """`{"key", "command"}` — a button of the villa's own visit card (`command` its option), an owner's or a facility
+    manager's (visitPress `capability`): 200 once the event is on the villa's bus, 409 when the visit is over, held by
+    VESTA or the card names no record, 400 for any other button, 502 when the villa's system was not reached."""
+    if (refused := _refuse(request, str(VISIT_PRESS.get("capability") or "administer"),
+                           "Only the owner or the facility manager answers an alert.")) is not None:
+        return refused
+    body = await _json_object(request)
+    if isinstance(body, web.Response):
+        return body
+    event = str(VISIT_PRESS.get("event") or "")
+    if not event or set(body) != {"key", "command"} or not isinstance(body["command"], str) or body["command"] not in VISIT_OPTIONS:
+        return web.json_response({"error": "a press names a visit's card and one of its buttons, nothing else"}, status=400)
+    record = _visit_record_of(await asyncio.to_thread(ANNOUNCED.items), body["key"])
+    if record is None:
+        return web.json_response({"error": "This button is no longer offered."}, status=409)
+    state = await _villa_state(request.app, record)
+    if state is None:
+        return web.json_response({"error": "The villa's system was not reached."}, status=502)
+    if (why := _visit_press_refusal(body["key"], body["command"], state)) is not None:
+        return web.json_response({"error": why}, status=409)
+    data = {"visit": state["attributes"]["id"], "option": body["command"], "by": _profile_label(_role_for(request)),
+            "where": str(VISIT_PRESS.get("where") or "")}
+    if not await _fire_event(request.app, event, data):
         return web.json_response({"error": "The villa's system was not reached."}, status=502)
     return web.json_response({"ok": True})
 
@@ -5523,6 +5614,7 @@ def build_app(data_dir: str | None = None) -> web.Application:
     app.router.add_get("/announcement-photo/{id}", announcement_photo_handler)
     app.router.add_get("/vesta-messages", vesta_messages_handler)
     app.router.add_post("/announcement-press", announcement_press_handler)
+    app.router.add_post("/visit-press", visit_press_handler)
     app.router.add_post("/message-erase", message_erase_handler)
     # Talking to VESTA (every profile, each its own conversation).
     app.router.add_post("/vesta-ask", vesta_ask_handler)

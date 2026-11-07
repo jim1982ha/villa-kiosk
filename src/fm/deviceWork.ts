@@ -78,6 +78,9 @@ type WorkStep =
   | { kind: "raise" }
   | { kind: "help" }
   | { kind: "raiseThen"; then: "done" | "help" }
+  /** The villa's own visit card (VESTA away): the press goes to the villa as its Telegram press does, `option` the
+   *  villa's button (messagesModel.villaAlertCards, WorkButtons.visitWrite); the action's one id is the card's key. */
+  | { kind: "visit"; option: string }
   /** `work`: the records are resolved as work done (a completion with who did it, in Recent work, as a Done on Telegram
    *  records it: the Agent's resolve_ticket); without, closed with no action (no completion, no cost). `lasting`: closed
    *  with no action as "Not a problem while it lasts" (FmTicketUpdate.lasting). `ask`: the question asked in place of

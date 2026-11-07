@@ -14,6 +14,9 @@
   "announcement": "vesta_message",
   "_press": "The ONE event a page may have the villa's system receive: a button an announcement offers (the doorbell's Unlock), pressed on a tablet. Never sent by a page: the add-on fires it (supervisor-proxy.py, /announcement-press), for every profile, only with the command and key of a button an announcement it keeps still offers. The villa's automation that offered the button waits for it, as it waits for Telegram's own press. NOT in `events` and not a websocket command: no page fires or hears it from the bus.",
   "press": "vesta_action",
+  "_visitPress": "The villa's own visit card's buttons (Done · Not a problem · Open Ticket · Need help), pressed on a tablet while VESTA is away: the add-on fires `event` (supervisor-proxy.py, /visit-press) with {visit, option, by, where}, only for a profile holding `capability`, only for an `option` listed here (by the card's button kind), only for the visit its announcement (key `keyPrefix` + the visit) names as open in its `record` and that VESTA does not hold. The villa's Presence Guard handles it as its Telegram press. NOT in `events` and not a websocket command: no page fires or hears it from the bus.",
+  "visitPress": {"event": "vesta_visit_button", "keyPrefix": "visit:", "where": "cockpit", "capability": "manageFacility",
+                 "options": {"done": "done", "notAProblem": "not_a_problem", "openTicket": "open_ticket", "needHelp": "need_help"}},
   "_camera": "Every command that opens a camera's picture; each also needs the viewCameras capability.",
   "camera": [
     "camera/stream", "camera/capabilities",

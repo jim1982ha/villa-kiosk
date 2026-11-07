@@ -790,5 +790,33 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
      cardStrip(doneCard).status.map((x) => x.text).join() === "Resolved" && doneCard.lines[0].who === "Done on Telegram on 07/11/2026 07:12 (Jm)"
      && (doneHtml.match(/Done on Telegram/g) ?? []).length === 1 && rowWhen(doneCard) === momentText(step1.at)
      && doneCard.lines[0].actions.length === 0, [cardStrip(doneCard), doneHtml]);
+  // owner, 2026-11-07: the villa's card was named by its title's words and had no buttons, VESTA's by the device with
+  // Done · Not a problem · Open Ticket · Need help
+  const { visitWrite } = await import("@/components/fm/WorkButtons");
+  const named = parseAnnouncement({ seq: 54, at: "2026-11-07T07:10:23+08:00", key: "visit:example-1", since: step1.at,
+    device: "Test door", entity_id: "binary_sensor.example_door", record: "sensor.example_visit",
+    message: layout("TEST: Test door opened while the villa is empty", ["Test door opened, 07:10"], "⚠️ New alert, monitoring until 07:40"), photos: [] });
+  const namedCard = villaAlertCards([named]).open[0];
+  const namedHtml = draw(h(AttentionCard, { card: namedCard, onOpenEntity: () => {}, buttons: (l) => l.actions.map((a) => a.label).join(" · ") }));
+  ck("  ...named by its strongest step's device, which it opens; the title's words its line",
+     namedCard.title === "Test door" && namedCard.entityId === "binary_sensor.example_door"
+     && namedCard.lines[0].text === "TEST: Test door opened while the villa is empty" && namedHtml.includes(">Test door<")
+     && namedHtml.includes("TEST: Test door opened while the villa is empty"), [namedCard.title, namedCard.lines[0].text]);
+  ck("  ...a card kept before names no device: its title, as before", openCard.title.startsWith("Garden Door") && openCard.lines[0].text === "");
+  const acts = namedCard.lines[0].actions;
+  ck("  ...open: Done · Not a problem · Open Ticket · Need help, each the villa's option, on its card's key",
+     J(acts.map((a) => [a.label, a.step.kind, a.step.option, a.ids[0]])) === J([["Done", "visit", "done", "visit:example-1"],
+       ["Not a problem", "visit", "not_a_problem", "visit:example-1"], ["Open Ticket", "visit", "open_ticket", "visit:example-1"],
+       ["Need help", "visit", "need_help", "visit:example-1"]]) && namedHtml.includes("Done · Not a problem · Open Ticket · Need help"), acts);
+  ck("  ...over, none; a villa alert that is no visit, none; a card naming no record (kept before), none", doneCard.lines[0].actions.length === 0
+     && openCard.lines[0].actions.length === 0
+     && villaAlertCards([{ ...named, key: "alarm:1" }]).open[0].lines[0].actions.length === 0);
+  const sent = [];
+  const send = (status) => async (url, init) => { sent.push([url, JSON.parse(init.body)]); return { ok: status === 200, status, json: async () => ({ ok: true }) }; };
+  const okW = await visitWrite(acts[0], send(200)), goneW = await visitWrite(acts[3], send(409)), failW = await visitWrite(acts[1], send(502));
+  ck("  ...a press goes to the add-on's visit door with the card's key and the option, nothing else; refused, the card says why",
+     sent.length === 3 && sent[0][0].endsWith("visit-press") && J(sent[0][1]) === J({ key: "visit:example-1", command: "done" })
+     && sent[1][1].command === "need_help" && okW.done && okW.note === null && !goneW.done && goneW.note === "No longer offered"
+     && !failW.done && failW.note === "Not sent, try again" && visitWrite({ ...acts[0], step: { kind: "help" } }, send(200)) === null, [sent, okW, goneW, failW]);
 }
 done("✅ the Messages model: what the tab lists, its counts and the card open");
