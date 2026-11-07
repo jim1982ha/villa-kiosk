@@ -129,7 +129,7 @@ class ShipPlan(unittest.TestCase):
         self.assertEqual(self.picked("starter/skills/desk/SKILL.md"), ["tests/test_desk.py"])
         self.assertEqual(self.picked("tests/test_other.py"), ["tests/test_other.py"])
         self.assertEqual(self.picked("CHANGELOG.md"), [])
-        self.assertIsNone(self.picked("tests/conftest.py"))
+        self.assertEqual(self.picked("tests/conftest.py"), [], "CI runs them all, never every test here")
 
     def test_an_app_only_release_runs_the_fast_gates_and_no_test(self):
         names = [g[0] for g in release.ship_plan(["vesta-agent/CHANGELOG.md"])]

@@ -512,3 +512,51 @@ def test_the_sheet_reads_only_the_media_folder_and_the_villa_is_told_only_throug
     v.actions.writer_factory = Writer
     assert asyncio.run(v.actions.tell_villa("switch.example_siren", {"x": 1})) is False and Writer.calls == []
     assert asyncio.run(v.actions.tell_villa(SCRIPT, {"x": 1})) is True and Writer.calls == [("script", SCRIPT.split(".")[1], {"x": 1})]
+
+
+# ---------------------------------------------------------------------------------------------- real visit #148
+def _visit_148(v, media, upto=None):
+    """07/11 11:24–11:37 (real visit #148): the living room inside first — the waiting signal — then the door's camera
+    opens the visit at 11:24:40, the living room again at 11:28, a room's sound, another camera."""
+    vi = Visit(media=media)
+    vi.add("inside", LIVING, "11:24:26", area="Living Room")
+    vi.add("motion", DOOR_MOTION, "11:24:36", photo=True)
+    ev = vi.event("opened")
+    ev["visit"]["opened_at"] = at("11:24:40")
+    play(v, send(ev))
+    for kind, eid, hms, area in (("motion", DOOR_MOTION, "11:28:03", None), ("inside", LIVING, "11:28:12", "Living Room"),
+                                 ("noise", ROOM_PERSON, "11:32:58", "Storage Room"),
+                                 ("motion", WATERWALL, "11:37:29", None))[:upto]:
+        vi.add(kind, eid, hms, photo=kind != "noise", area=area)
+        ev = vi.event()
+        ev["visit"]["opened_at"] = at("11:24:40")
+        play(v, send(ev))
+    return vi
+
+
+def test_a_visit_whose_first_step_was_its_strongest_says_its_alert_sent_from_its_first_card(tmp_path, kiosk, media):
+    # real visit #148 (owner, 2026-11-07): nothing stronger than the first step ever came, so no card was sent again and
+    # the Status never said "Alert sent" — on Telegram or the tablet — while every drill's did
+    v = villa(tmp_path, kiosk)
+    vi = Visit(media=media)
+    vi.add("inside", LIVING, "11:24:26", area="Living Room")      # one source: no siren's question redraws the cards
+    ev = vi.event("opened")
+    ev["visit"]["opened_at"] = at("11:24:40")
+    play(v, send(ev))
+    for chat in (OWNER, FM):
+        st = lines(copy(v, chat)["text"])
+        assert "- Alert sent 11:24 (to: Owner & FM)" in st, st
+        assert st.index("- Someone is inside (Living Room) at 11:24") < st.index("- Alert sent 11:24 (to: Owner & FM)"), st
+    assert "- Alert sent 11:24 (to: Owner & FM)" in kiosk.messages["incident:1"]["status"], kiosk.messages["incident:1"]
+
+
+def test_the_same_room_again_widens_its_line_like_the_cameras(tmp_path, kiosk, media):
+    # real visit #148: the living room at 11:24 and again at 11:28 read "Someone is inside (Living Room) at 11:24"
+    v = villa(tmp_path, kiosk)
+    _visit_148(v, media)
+    st = lines(copy(v, OWNER)["text"])
+    assert st[:3] == ["- Someone is inside (Living Room) at 11:24–11:28", "- Seen at Main House Door, 11:24–11:28",
+                      "- Alert sent 11:24 (to: Owner & FM)"], st
+    assert "- Sound heard in the Storage Room at 11:32" in st and "- Seen at Waterwall Buddha, 11:37" in st, st
+    assert sum("Someone is inside" in ln for ln in st) == 1, st
+    assert sum(ln.startswith("- Alert sent") for ln in st) == 1, st

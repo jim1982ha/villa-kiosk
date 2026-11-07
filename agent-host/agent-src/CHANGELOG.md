@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.460 (7 November 2026)
+
+- A visit's "Alert sent" is always one of its Status lines, from its first card (real visit #148, 2026-11-07: its
+  first step, the living room, was already its strongest, so nothing rang again and the Status never said when the
+  alert was sent): `notice.stays` keeps a visit's "new" step among the lines, `_cut` and Outcome's redraw of the copies
+  just sent alike.
+- The same room again widens its line, as the cameras' do (#148: "Someone is inside (Living Room) at 11:24", its 11:28
+  lost): `visit_lines` folds inside, person and sound steps per device, "at 11:24–11:28"; another room is its own line.
+
 ## 0.6.459 (7 November 2026)
 
 - The presence guard's old Alert mode is gone from the villa (live 2026-11-07 11:04: Visit and Notice modes only), and

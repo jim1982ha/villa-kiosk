@@ -50,6 +50,7 @@ from vesta_shared.ha_client import error_short_chars
 from . import layout
 from vesta_shared.status_words import pick
 from . import siren
+from .notice import stays
 from .incidents import Incidents
 from .posting import Poster
 from .routing import Origin, Routing
@@ -340,7 +341,9 @@ class Outcome:
                         self.notices.heading(c, i, stage=st, also=al, before=n)) if self.notices else None
             # a step whose line stays in the Status (Step.listed: a stronger signal) is a line the copies just sent did
             # not hold yet (drawn before it was recorded): they are drawn again too, quietly
-            listed = any((STEPS.get(st or "") and STEPS[st].listed) for (i, st) in noticed if i == iid)
+            # and a visit's alert (notice.stays)
+            hist = self.notices.state.incident_history(iid) if self.notices else []
+            listed = any(stays({"stage": st}, hist) for (i, st) in noticed if i == iid)
             if latest.get("parts"):
                 await self.thread.sync(iid, layout.of(latest), skip=set() if listed else {c for c, _s, _a in shown_in},
                                        quiet=elsewhere,

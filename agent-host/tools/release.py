@@ -122,10 +122,10 @@ _NOT_A_SUBJECT = {"agent-src", "vesta_agent", "vesta_shared", "starter", "skills
                   "homeassistant", "packages", "SKILL", "CHANGELOG", "README", "__init__"}
 
 
-def changed_tests(staged: list[str], src: Path | None = None) -> list[str] | None:
+def changed_tests(staged: list[str], src: Path | None = None) -> list[str]:
     """The agent's tests (paths under agent-src) that name a staged agent-src file: a changed test itself, and every
-    test whose text names the changed file's stem or its folder as a word. None: run them all (a conftest changed).
-    A pre-check like the Kiosk's oracles:changed: a test reaching the file through another module is not picked; CI
+    test whose text names the changed file's stem or its folder as a word; a conftest picks none of its own (owner,
+    2026-11-07: it ran all ~2,000 here, CI runs them before publishing). A pre-check like the Kiosk's oracles:changed: a test reaching the file through another module is not picked; CI
     runs every test."""
     src = src or ROOT / ENGINE_DIR
     tests = sorted(p for d in ("tests", "tests/villa") for p in (src / d).glob("test_*.py"))
@@ -136,7 +136,7 @@ def changed_tests(staged: list[str], src: Path | None = None) -> list[str] | Non
             continue
         rel = Path(f[len(ENGINE_DIR):])
         if rel.name == "conftest.py":
-            return None
+            continue
         if rel.parts[0] == "tests" and rel.name.startswith("test_") and rel.suffix == ".py":
             picked.add(str(rel))
         words |= {w for w in (rel.stem, rel.parent.name) if len(w) >= 3 and w not in _NOT_A_SUBJECT}
@@ -151,10 +151,9 @@ def ship_plan(staged: list[str]) -> list[tuple[str, list[str], str, str]]:
     plan = [g for g in GATES if g[0] != TESTS_GATE
             and (SHIP_WHEN[g[0]] is None or any(f.startswith(SHIP_WHEN[g[0]]) for f in staged))]
     picked = changed_tests(staged)
-    if picked is None or picked:
+    if picked:
         name, cmd, cwd, lane = next(g for g in GATES if g[0] == TESTS_GATE)
-        plan.append((name if picked is None else f"{name}, the {len(picked)} naming what changed",
-                     cmd if picked is None else cmd[:3] + picked + cmd[4:], cwd, lane))
+        plan.append((f"{name}, the {len(picked)} naming what changed", cmd[:3] + picked + cmd[4:], cwd, lane))
     return plan
 
 

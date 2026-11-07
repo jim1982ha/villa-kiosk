@@ -1,3 +1,12 @@
+## 0.12.478
+
+- Every visit's Status now says when its alert was sent ("Alert sent 11:24 (to: Owner & FM)"), from its first message,
+  even when nothing stronger came after the first signal.
+- When someone is seen inside the same room again, its line now spans both moments ("Someone is inside (Living Room)
+  at 11:24–11:28"), like the cameras' lines; a sound or a person seen again in the same room too.
+- Updates are prepared faster: a change to the shared test setup no longer re-runs all 2,000 tests on the developer's
+  computer; the store's build still runs them all.
+
 ## 0.12.477
 
 - At each step of a visit, the tablet's card now changes its name and its "monitoring until" together with its words,

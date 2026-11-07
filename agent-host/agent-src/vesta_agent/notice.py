@@ -190,6 +190,16 @@ def listed(h: dict) -> bool:
     return bool((STEPS.get(h.get("stage") or "") or _NO_STEP).listed)
 
 
+def stays(h: dict, history: list[dict]) -> bool:
+    """Does notice `h` keep its line among the Status lines while the bottom line says it too: a listed step (a
+    stronger signal), and a visit's alert (`history`: its incident's, holding the visit's story lines).
+
+    ⚠️ A VISIT'S ALERT IS ALWAYS ONE OF ITS LINES (owner, 2026-11-07, real visit #148): a visit whose first step was
+    already its strongest never rang again, so its "Alert sent" was only its bottom line's and its Status never said
+    when the villa sent it, while every drill's did (a stronger step had followed)."""
+    return listed(h) or (h.get("stage") == "new" and any(observed(x) for x in history))
+
+
 def _cut(history: list[dict], n: int) -> tuple[list[dict], set[int]]:
     """`history` without its last `n` NOTICES — the steps a copy's bottom line says — and the positions left out. A
     visit's story lines are kept wherever they stand: they are no notice, and every copy lists them (Notices.observe);
@@ -201,7 +211,7 @@ def _cut(history: list[dict], n: int) -> tuple[list[dict], set[int]]:
             break
         if not observed(history[i]):
             counted += 1
-            if not listed(history[i]):      # its line stays: the bottom line says where the alert stands instead
+            if not stays(history[i], history):      # its line stays: the bottom line says where the alert stands instead
                 gone.add(i)
     return [h for i, h in enumerate(history) if i not in gone], gone
 

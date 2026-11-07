@@ -1343,12 +1343,16 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str, str]]:
             lines[f"lock:{eid}"]["last"] = at
         elif kind == DOOR and f"door:{eid}" not in lines:
             lines[f"door:{eid}"] = {"kind": DOOR, "s": s, "first": at, "last": at}
-        elif kind == INSIDE and "inside" not in lines:
-            lines["inside"] = {"kind": INSIDE, "s": s, "first": at, "last": at}
-        elif kind == PERSON and f"person:{eid}" not in lines:
-            lines[f"person:{eid}"] = {"kind": PERSON, "s": s, "first": at, "last": at}
-        elif kind == NOISE and f"noise:{eid}" not in lines:
-            lines[f"noise:{eid}"] = {"kind": NOISE, "s": s, "first": at, "last": at}
+        elif kind in (INSIDE, PERSON, NOISE):
+            # ⚠️ THE SAME PLACE AGAIN IS ITS LINE, ITS SPAN WIDENED (owner, 2026-11-07, real visit #148: the living room
+            # at 11:24 and again at 11:28 read "Someone is inside (Living Room) at 11:24", its second moment lost, and a
+            # third room's never said), as the cameras' "Seen at …, 11:24–11:28"
+            key = "inside" if kind == INSIDE and not any(k.startswith("inside") for k in lines) else f"{kind}:{eid}"
+            key = next((k for k, x in lines.items() if x.get("kind") == kind and x["s"].get("entity_id") == eid), key)
+            if key in lines:
+                lines[key]["last"] = at
+            else:
+                lines[key] = {"kind": kind, "s": s, "first": at, "last": at}
     # ⚠️ THE DETECTION THAT OPENED THE VISIT IS SEEN TOO (owner, 2026-11-07, drill #135: "Seen at Test motion, 05:13"
     # while the villa opened the visit at its second detection, 05:14): the villa keeps one step per device in a row, so
     # the opening's own moment (`opened_at`) ends the pass it falls in when no step says it
@@ -1374,11 +1378,14 @@ def visit_lines(v: dict, zone: str) -> list[tuple[str, Said, str, str]]:
         elif ln["kind"] == DOOR:
             said = say("visit_opened", name=_place(ln["s"]), time=hm(ln["first"]))
         elif ln["kind"] == PERSON:
-            said = say("visit_person", room=str(ln["s"].get("area") or _place(ln["s"])), time=hm(ln["first"]))
+            said = say("visit_person", room=str(ln["s"].get("area") or _place(ln["s"])),
+                       time=_span(ln["first"], ln["last"], zone))
         elif ln["kind"] == NOISE:
-            said = say("visit_noise", room=str(ln["s"].get("area") or _place(ln["s"])), time=hm(ln["first"]))
+            said = say("visit_noise", room=str(ln["s"].get("area") or _place(ln["s"])),
+                       time=_span(ln["first"], ln["last"], zone))
         else:
-            said = say("visit_inside", room=str(ln["s"].get("area") or _place(ln["s"])), time=hm(ln["first"]))
+            said = say("visit_inside", room=str(ln["s"].get("area") or _place(ln["s"])),
+                       time=_span(ln["first"], ln["last"], zone))
         out.append((key, said, ln["last"].isoformat(), ln["first"].isoformat()))
     return out
 
