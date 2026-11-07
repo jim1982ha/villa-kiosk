@@ -57,6 +57,10 @@ export interface Announcement {
   /** The villa's own visit card: the visit record it names, where the add-on checks a press on its buttons (none
    *  named, as before the blueprint named it: no buttons offered). */
   record?: string;
+  /** The villa's own visit card as its facts (the blueprint's `card`, kept by the add-on): what the tablet draws it from,
+   *  as VESTA's card is drawn (messagesModel.villaFields). Absent on a card kept before, or sent by a blueprint that does
+   *  not send them: its text is read then. */
+  card?: VillaCardFields;
   /** It offered buttons once and was rewritten since (agent-contract.json `_asked`: the add-on stamps it): with none
    *  offered now, its question was answered or is over (messagesModel.placeOf). */
   asked?: boolean;
@@ -75,6 +79,12 @@ export interface Announcement {
    *  tablet shows is that tablet's (inLanguage). */
   versions?: Record<string, LanguageVersion>;
 }
+
+/** A villa visit card's facts, as the villa's blueprint sends them (critical_presence_guard's `card`): its title, its
+ *  stage (agent-contract.json stageMarks' keys), its bottom line as Telegram shows it without "monitoring until"
+ *  ("⚠️ New alert", "✅ Done on Telegram at 07:12 (Jm)"), its first send and until when it is monitored (ISO; empty: none
+ *  said), its lines, the strongest step's room. */
+export interface VillaCardFields { title: string; stage: string; status: string; since: string; until: string; lines: string[]; room: string }
 
 /** One photo of an announcement: the add-on's id, the camera that took it (empty when the villa named none),
  *  when it was taken (ISO), and whether it is the visit's strongest step's (the VESTA Agent flags it: drawn larger). */
@@ -301,7 +311,18 @@ export function parseAnnouncement(raw: unknown): Announcement | null {
     ...(typeof r.device === "string" && r.device.trim() ? { device: r.device.trim() } : {}),
     ...(typeof r.entity_id === "string" && r.entity_id ? { entityId: r.entity_id } : {}),
     ...(typeof r.record === "string" && r.record ? { record: r.record } : {}),
+    ...(cardOf(r.card) ? { card: cardOf(r.card)! } : {}),
   };
+}
+
+/** A kept record's `card` (VillaCardFields), read; undefined when it is not one (a stage this build does not know, no
+ *  title): its text is read then. */
+function cardOf(raw: unknown): VillaCardFields | undefined {
+  const c = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  if (!c || !str(c.title) || !(STAGES as string[]).includes(str(c.stage))) return undefined;
+  return { title: str(c.title), stage: str(c.stage), status: str(c.status), since: str(c.since), until: str(c.until),
+    lines: strings(c.lines).map((l) => l.trim()).filter(Boolean), room: str(c.room) };
 }
 
 /** A stored record of either feed with its number; null for anything else. */

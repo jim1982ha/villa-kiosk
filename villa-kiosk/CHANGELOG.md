@@ -1,3 +1,9 @@
+## 2.496.750
+
+What you will see:
+- A visit told by the villa itself (VESTA stopped) now shows exactly the card VESTA shows for it: the device's name, its room, the visit's first time, "New alert" with "monitoring until" at its right, the visit's words and photos, and the villa's four buttons. Only the alert number is missing, as the villa gives none. Its colour is now the same amber as VESTA's card.
+- Once the updated Presence Guard blueprint is saved on the villa, its card is drawn from what the villa sends for it, no longer from its message's text. Cards kept before, and visits sent before that save, still show as they do today.
+
 ## 2.496.749
 
 What you will see:

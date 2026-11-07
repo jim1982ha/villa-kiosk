@@ -553,6 +553,16 @@ odd = proxy._announcement_record({"event_type": proxy.ANNOUNCEMENT_EVENT, "data"
 ck("a visit's announcement keeps its device's name, its entity and its visit record; nothing else in their place",
    (named.get("device"), named.get("entity_id"), named.get("record")) == ("Test door", "binary_sensor.example_door", "sensor.example_visit")
    and not {"device", "entity_id", "record"} & set(odd), (named, odd))
+# architecture review of 2026-11-07, card 4: the villa sends its visit card's facts; the tablet draws them as VESTA's card
+facts = proxy._announcement_record({"event_type": proxy.ANNOUNCEMENT_EVENT, "data": {"message": "<b>x</b>", "key": "visit:x",
+    "card": {"title": " Test door opened ", "stage": "new", "status": "⚠️ New alert", "since": "2026-11-07T07:09:59+08:00",
+             "until": "2026-11-07T07:40:00+08:00", "lines": ["Seen at Parking, 07:09", 5, " ", "y" * 900], "room": "Hall", "extra": 1}}}, 1)
+bad_card = [proxy._announcement_record({"event_type": proxy.ANNOUNCEMENT_EVENT, "data": {"message": "<b>x</b>", "card": c}}, 1)
+            for c in ({"title": "x", "stage": "later"}, {"stage": "new"}, ["x"], "x")]
+ck("a visit's announcement keeps its card's facts, each a string cut at its length, nothing else; none for one that is no card",
+   facts.get("card") == {"title": "Test door opened", "stage": "new", "status": "⚠️ New alert", "since": "2026-11-07T07:09:59+08:00",
+                         "until": "2026-11-07T07:40:00+08:00", "lines": ["Seen at Parking, 07:09", "y" * proxy.ANNOUNCEMENT_CARD_LINE_MAX],
+                         "room": "Hall"} and not any("card" in r for r in bad_card), (facts, bad_card))
 ck("  ...the press door finds the record by the card's key, refuses a visit not open, VESTA's or another option",
    proxy._visit_record_of([named], "visit:x") == "sensor.example_visit" and proxy._visit_record_of([named], "visit:y") is None
    and proxy._visit_press_refusal("visit:x", "done", {"state": "open", "attributes": {"id": "x", "owner": "villa"}}) is None

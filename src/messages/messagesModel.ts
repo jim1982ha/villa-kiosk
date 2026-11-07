@@ -5,12 +5,12 @@
 // Messages screen reads; the later tickets add the reports and VESTA's conversation to it. Pure:
 // tests/oracles/messages_model.mjs.
 
-import { othersFirst, saysWord, type CardView } from "@/config/cockpitCard";
-import { alertStage, incidentKey, statusWords, versionOf, VISIT_PRESS, type Announcement } from "./announcements";
+import { cockpitCard, othersFirst, saysWord, type CardLine, type CardView } from "@/config/cockpitCard";
+import { groupAttention, type AttentionItem } from "@/config/attention";
+import { alertStage, incidentKey, statusWords, versionOf, VISIT_PRESS, type Announcement, type VillaCardFields } from "./announcements";
 import { WORK_ACTIONS, type WorkAction, type WorkActionKind } from "@/fm/deviceWork";
-import { roomLabel } from "@/config/devicePlace";
 import { STAGE_WORDS } from "@/fm/fmEngine";
-import { pillClass, QUIET_PILL } from "@/fm/tone";
+import { QUIET_PILL } from "@/fm/tone";
 import { byTime, stillKept } from "./feed";
 import { villaTime, wallClock } from "@/utils/villaClock";
 
@@ -96,50 +96,60 @@ export const idOf = (a: Announcement): string => `${a.feed === "vesta" ? "v" : "
  * ⚠️ THE VILLA'S OWN ALERT IS AN ALERT'S CARD (owner, 2026-11-07: VESTA stopped, a visit showed under Notifications as a
  * bell card, "TEST: Test door opened while the villa is empty" with its first line only, no photo, while Telegram had the
  * villa's whole story; rules: "Never in the critical path", "One card, every case"). A villa announcement that is an
- * alert (its stage: announcements.alertStage) and is rewritten at each step (its `key`: a visit's one announcement,
- * "visit:<id>") is drawn as every alert is, its words, photos and Status inside the one card (CardLine `told`): under
- * Open issues while it is open, under Closed once over. VESTA's card takes its place by that key (supersedes, shownTogether)
- * the moment VESTA tells it, its fault then holding it. Pure: tests/oracles/messages_model.mjs.
+ * alert (its stage) and is rewritten at each step (its `key`: a visit's one announcement, "visit:<id>") is drawn as every
+ * alert is: under Open issues while it is open, under Closed once over. VESTA's card takes its place by that key
+ * (supersedes, shownTogether) the moment VESTA tells it, its fault then holding it. Pure: tests/oracles/messages_model.mjs.
  *
- * ⚠️ THE SAME FIELDS AT THE SAME PLACE AS VESTA'S CARD (owner, 2026-11-07, drill with VESTA stopped): it wore the live
- * state's icon, took the time of its last step (a press) and said its whole bottom line as its state. Now: the alert's
- * icon, the visit's first send (`since`, kept by the add-on) as its one time, the room line ("Other": the villa names
- * none), its lines under "Status:" (its `story`), on an open visit its state's words alone ("New alert") with "monitoring
- * until 08:54" in the pill at their right; once over, the closed stage's word, its bottom line ("Done on Telegram on …
- * (Jm)") its who line. No chip: the villa numbers no alert (VESTA does).
- *
- * ⚠️ ITS DEVICE ITS NAME, AND VESTA'S CARD'S BUTTONS (owner, 2026-11-07): its strip said the title's words and it had no
- * buttons, while VESTA's card is named by the device and offers Done · Not a problem · Open Ticket · Need help. Now the
- * strongest step's device ("Test door", the villa's `device`; the title when a card kept before names none) is its name
- * and opens it, the title's words its line; an open visit card naming its record offers the four (visitActions), pressed
- * through the add-on to the villa as its Telegram press is. Over, or naming no record (kept before), none.
+ * ⚠️ ONE CARD, WHOEVER TELLS THE VISIT (architecture review of 2026-11-07, card 4): this card was rebuilt here field by
+ * field (its name, its time, its state, its pill, its buttons: each added again by hand after VESTA's card had it). It
+ * is now VESTA's card's own builder's (attention.groupAttention, cockpitCard.cockpitCard, the told line issueAsTold
+ * joins), fed by two thin adapters: VESTA's fault and message, and the villa's facts (villaFields: the blueprint's
+ * `card`, its text read only for a card that has none). What differs is only what the villa does not have: no chip (it
+ * numbers no alert) and its own four buttons (visitActions), pressed through the add-on to the villa as on Telegram.
+ * Over: the closed stage's word, its bottom line ("Done on Telegram on … (Jm)") its who line, in the grey of what is over.
  */
 export function villaAlertCards(kept: readonly Announcement[]): { open: CardView[]; closed: CardView[] } {
   const open: CardView[] = [], closed: CardView[] = [];
   for (const a of kept) {
-    const stage = a.feed === undefined && a.key !== null && !isReport(a) ? alertStage(a) : null;
-    if (!stage) continue;
-    const over = stage === "watch" || stage === "closed";
-    const severity = over ? "lost" as const : "danger" as const;
-    const { state, monitoring } = villaState(a.status, over);
-    const card: CardView = {
-      key: `villa:${a.key}`, title: a.device || a.title, room: roomLabel(null), ...(a.device && a.entityId ? { entityId: a.entityId } : {}),
-      // an alert of the villa's: the alert's icon, in the problem's colour, grey once over
-      lead: { sources: ["alert"], severities: [severity] },
-      nextCheck: monitoring ? { text: capital(monitoring), at: null, when: monitoring, pill: monitoring,
-        tip: `${capital(monitoring)}: the villa's system closes this alert then if nothing more is seen; each new sign moves it later.` } : null,
-      lines: [{ key: `villa:${a.key}`, text: a.device ? a.title : "", records: [], actions: over || !a.record ? [] : visitActions(a.key!), asked: null, story: [], openedAt: a.since || firstMoment(a),
-        closing: null, ...(over && state ? { who: statusWords(a.status) } : {}),
-        // its words are the visit's lines: drawn under "Status:" as VESTA's card draws its own; its bottom line is the
-        // state line's (or the who line's) alone
-        told: { ...a, text: "", story: a.text.split("\n").map((l) => l.trim()).filter(Boolean), status: "" } }],
-      status: state ? [{ text: state, tone: over ? QUIET_PILL : pillClass("danger") }] : [],
-      tone: severity,
-      ...(over ? { look: "closed" as const, ...(a.at ? { closedAt: a.at } : {}) } : {}),
-    };
-    (over ? closed : open).push(card);
+    const f = a.feed === undefined && a.key !== null && !isReport(a) ? villaFields(a) : null;
+    if (!f) continue;
+    const card = villaCard(a, f);
+    (card.look === "closed" ? closed : open).push(card);
   }
   return { open, closed };
+}
+
+/** A villa alert's facts, the card's one input: its own (the blueprint's `card`), else read from its text, for a card
+ *  kept before or a blueprint not sending them: its lines split, its state cut before ", monitoring until …", its first
+ *  send the earliest moment it holds (firstMoment). null: no alert (no stage). Pure. */
+export function villaFields(a: Announcement): VillaCardFields | null {
+  if (a.card) return { ...a.card, since: a.card.since || firstMoment(a) || "" };
+  const stage = alertStage(a);
+  if (!stage) return null;
+  const over = stage === "watch" || stage === "closed";
+  const cut = over ? -1 : a.status.indexOf(", ");
+  return { title: a.title, stage, status: cut < 0 ? a.status : a.status.slice(0, cut).trim(), since: firstMoment(a) ?? "",
+    until: cut < 0 ? "" : (onVillaDayOf(a.status.slice(cut + 2), a.at, "after") ?? ""), lines: a.text.split("\n").map((l) => l.trim()).filter(Boolean), room: "" };
+}
+
+/** The card of a villa alert, from its facts: built as VESTA's card of the same visit is (one fault line of the
+ *  alert's, its device's name and room, its first send its time, "monitoring until" in its pill: cockpitCard), the
+ *  villa's message its told line (its title its words when a device names the card, its lines under "Status:"). */
+function villaCard(a: Announcement, f: VillaCardFields): CardView {
+  const over = f.stage === "watch" || f.stage === "closed";
+  const named = !!(a.device && a.entityId);
+  const room = f.room || undefined;
+  const item: AttentionItem = { id: `villa:${a.key}`, kind: "fault", title: named ? a.device! : f.title, source: "alert", stage: "fault",
+    ...(room ? { room } : {}), ...(named ? { entityId: a.entityId, device: { key: a.entityId!, label: a.device!, ...(room ? { room } : {}) } } : {}),
+    ...(f.since ? { openedAt: f.since } : {}), ...(!over && f.until ? { monitoredUntil: f.until } : {}) };
+  const base = cockpitCard(groupAttention([item])[0], null);
+  const key = `villa:${a.key}`;
+  const told: Announcement = { ...a, text: named ? f.title : "", story: f.lines, status: over ? "" : f.status };
+  const line: CardLine = { ...base.lines[0], key, text: "", records: [], asked: null, told,
+    actions: over || !a.record ? [] : visitActions(a.key!), ...(over && f.status ? { who: statusWords(f.status) } : {}) };
+  if (!over) return { ...base, key, lines: [line] };
+  return { ...base, key, lines: [line], nextCheck: null, lead: { sources: base.lead?.sources ?? ["alert"], severities: ["lost"] },
+    status: [{ text: STAGE_WORDS.closed.card, tone: QUIET_PILL }], tone: "lost", look: "closed", ...(a.at ? { closedAt: a.at } : {}) };
 }
 
 /** When the villa's message was first sent: its `since` (kept by the add-on since 2.496.742), else, for one kept before,
@@ -150,13 +160,21 @@ export function firstMoment(a: Pick<Announcement, "since" | "at" | "photos" | "t
   if (a.since) return a.since;
   const last = Date.parse(a.at ?? "");
   const times = a.photos.map((p) => Date.parse(p.at)).filter(Number.isFinite);
-  const m = /\b(\d{1,2}):(\d{2})\b/.exec(a.text.split("\n").map((l) => l.trim()).find(Boolean) ?? "");
-  if (m && Number.isFinite(last)) {
-    const w = wallClock(last), on = (day: number) => villaTime(w.year, w.month, day, Number(m[1]), Number(m[2]));
-    times.push(on(w.day) > last ? on(w.day - 1) : on(w.day));
-  }
+  const line = onVillaDayOf(a.text.split("\n").map((l) => l.trim()).find(Boolean) ?? "", a.at, "before");
+  if (line) times.push(Date.parse(line));
   if (Number.isFinite(last)) times.push(last);
   return times.length ? new Date(Math.min(...times)).toISOString() : a.at || null;
+}
+
+/** The first "07:09" of `words` as a moment on the villa's clock, on the day of `ref`: the day before when later than
+ *  it ("before": a line it tells of), the day after when earlier ("after": until when it is monitored); null without
+ *  a time or a moment. Pure. */
+function onVillaDayOf(words: string, ref: string | undefined, side: "before" | "after"): string | null {
+  const last = Date.parse(ref ?? ""), m = /\b(\d{1,2}):(\d{2})\b/.exec(words);
+  if (!m || !Number.isFinite(last)) return null;
+  const w = wallClock(last), on = (day: number) => villaTime(w.year, w.month, day, Number(m[1]), Number(m[2]));
+  const t = side === "before" ? (on(w.day) > last ? on(w.day - 1) : on(w.day)) : (on(w.day) < last ? on(w.day + 1) : on(w.day));
+  return new Date(t).toISOString();
 }
 
 /** The buttons of the villa's own open visit card (its key `visit:<id>`), in the order of every card's (Done · Not a
@@ -170,17 +188,6 @@ export function visitActions(key: string): WorkAction[] {
     return option ? [{ kind, ids: [key], ...WORK_ACTIONS[kind], step: { kind: "visit" as const, option } }] : [];
   });
 }
-
-/** A villa alert's bottom line as its card says it: open, its stage's words ("New alert") and what follows them
- *  ("monitoring until 08:54", the pill's); over, the closed stage's word (the line itself is the who line). Pure. */
-function villaState(status: string, over: boolean): { state: string; monitoring: string } {
-  const words = statusWords(status);
-  if (!words) return { state: "", monitoring: "" };
-  if (over) return { state: STAGE_WORDS.closed.card, monitoring: "" };
-  const cut = words.indexOf(", ");
-  return cut < 0 ? { state: words, monitoring: "" } : { state: words.slice(0, cut), monitoring: words.slice(cut + 2).trim() };
-}
-const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** VESTA's card of each alert an open issue carries, in the order of its lines (its thread `incident:<n>`, the Agent's
  *  kiosk_messages.thread_key): what the issue shows above its own buttons, as Telegram shows it. Pure. */
