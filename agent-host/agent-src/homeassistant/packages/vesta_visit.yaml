@@ -86,7 +86,7 @@ template:
           closes: >-
             {{ ["done", "not_a_problem"] }}
           moment: >-
-            {{ "%d/%m/%Y %H:%M" }}
+            {{ "%H:%M" }}
         # END VISIT WORDS
 
 script:

@@ -733,28 +733,9 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
                                                as_it_stands=True)]
         return out
     v = visit_of(ev) or notes_of(inc).get(VISIT)
-    home = (v or {}).get("closed") if isinstance((v or {}).get("closed"), dict) else {}
     away = bool(notes_of(inc).get(VISIT_AWAY))
-    timed = lambda said: said                    # noqa: E731 — "{time}": the engine's moment, when it says it
-    if v and _when(home.get("at")):
-        # ⚠️ A VISIT ENDS WHEN THE VILLA ENDED IT (owner's drill, 2026-11-07, #138: "Cleared at 07:17" for the villa's
-        # close at 07:16, told when VESTA came back): its close moment the record's, its words saying it
-        now = _when(home["at"])
-        at = moment_label(now, zone or "UTC")
-        timed = lambda said: Said(str(said).replace("{time}", at),     # noqa: E731
-                                  {k: t.replace("{time}", at) for k, t in getattr(said, "langs", {}).items()})
-    if v and home.get("why") == HOME:
-        # ⚠️ A RESIDENT HOME ENDS THE VISIT (owner, 2026-11-06): it was expected — "Expected: Jim came home at 18:40.",
-        # its chase stopped by the close, the siren's question withdrawn (result.withdraw_siren)
-        came = _when(home.get("at")) or now
-        said = say("visit_home", name=str(home.get("who") or "?"), time=clock(came, zone or "UTC", days=False))
-        over = _close(store, inc, now, out, timed(Said(f"{said}{SW.stop('en')}", {k: f"{t}{SW.stop(k)}" for k, t in said.langs.items()})),
-                      note=f"{said}.", terms=watch_terms(inc, terms(params)))
-        out["actions"].append(R.withdraw_siren(inc["id"]))
-    else:
-        # a visit's end says why ("Cleared on …: no further signal for 30min."), and nothing is watched after it
-        over = _close(store, inc, now, out, timed(ended(visit_quiet(v))) if v else ended(),
-                      terms=watch_terms(inc, terms(params)))
+    over = visit_close(store, inc, v, now, params, zone, out) if v else \
+        _close(store, inc, now, out, ended(), terms=watch_terms(inc, terms(params)))
     out["incident_id"], out["decision"] = inc["id"], "resolved"
     if away:
         # the villa's cards are final: its close said on the tablet's card alone (the settle above), no chat touched
@@ -769,6 +750,47 @@ def resolved(store: Store, ev: dict, now: datetime, params: VillaParams | None =
                                        **about(inc, over))]
     store.audit("alert-desk", "resolved", {"incident": inc["id"]})
     return out
+
+
+def visit_close(store: Store, inc: dict, v: dict, now: datetime, params: VillaParams | None, zone: str | None,
+                out: dict) -> Said:
+    """Incident `inc`'s visit `v` over: closed as the villa closed it when its record says so (`v["closed"]`: its
+    moment, and why — a resident home, a person's answer, its quiet), else now after its quiet. Returns the words said.
+
+    ⚠️ A VISIT ENDS WHEN THE VILLA ENDED IT (owner's drill, 2026-11-07, #138: "Cleared at 07:17" for the villa's close
+    at 07:16, told when VESTA came back): its close moment the record's, its words saying it. ⚠️ AN ANSWER IS ITS CLOSE
+    (owner's drill, 2026-11-07, #140: Done pressed on the villa's card at 08:53 while VESTA was away, the visit left
+    open "monitoring until 08:54"): "Done at 08:53 (Jm)."."""
+    home = v.get("closed") if isinstance(v.get("closed"), dict) else {}
+    ans = v.get("answered") if isinstance(v.get("answered"), dict) else {}
+    timed = lambda said: said                    # noqa: E731 — "{time}": the engine's moment, when it says it
+    when = _when(home.get("at")) or (_when(ans.get("at")) if home.get("why") == "answered" else None)
+    if home and when:
+        now = when
+        at = moment_label(now, zone or "UTC")
+        timed = lambda said: Said(str(said).replace("{time}", at),     # noqa: E731
+                                  {k: t.replace("{time}", at) for k, t in getattr(said, "langs", {}).items()})
+    if home.get("why") == HOME:
+        # ⚠️ A RESIDENT HOME ENDS THE VISIT (owner, 2026-11-06): it was expected — "Expected: Jim came home at 18:40.",
+        # its chase stopped by the close, the siren's question withdrawn (result.withdraw_siren)
+        came = _when(home.get("at")) or now
+        said = say("visit_home", name=str(home.get("who") or "?"), time=clock(came, zone or "UTC", days=False))
+        over = _close(store, inc, now, out, timed(Said(f"{said}{SW.stop('en')}", {k: f"{t}{SW.stop(k)}" for k, t in said.langs.items()})),
+                      note=f"{said}.", terms=watch_terms(inc, terms(params)))
+        out["actions"].append(R.withdraw_siren(inc["id"]))
+    elif home.get("why") == "answered" and ans.get("option") in BUTTONS:
+        # the person's answer the villa applied, said as every press is ("Done on {time} (Jm)."), its siren withdrawn
+        b = BUTTONS[ans["option"]]
+        who = str(ans.get("by") or home.get("who") or "") or str(role_said("fm"))
+        said = Said(acted(b["label"], "{time}", who) + SW.stop("en"),
+                    {lang: SW.acted(lab, "{time}", who, lang) + SW.stop(lang)
+                     for lang, lab in (b.get("labels") or {}).items() if lang in SW.LANGS})
+        over = _close(store, inc, now, out, timed(said), note=str(timed(said)), terms=watch_terms(inc, terms(params)))
+        out["actions"].append(R.withdraw_siren(inc["id"]))
+    else:
+        # a visit's end says why ("Cleared on …: no further signal for 30min."), and nothing is watched after it
+        over = _close(store, inc, now, out, timed(ended(visit_quiet(v))), terms=watch_terms(inc, terms(params)))
+    return over
 
 
 def _close_again(inc: dict):
@@ -1508,7 +1530,7 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     top = v.get("strongest") or v.get("step") or {}
     # the alert's words: the strongest step's title as the villa writes it ("<name> opened while the villa is empty")
     ev = {**ev, "message": ev.get("label") or ev.get("message"), "entity_id": str(top.get("entity_id") or "")}
-    inc = _find_by_ha_incident(store, vid)
+    inc = known = _find_by_ha_incident(store, vid)
     late = _find_by_ha_incident(store, vid, closed_within=timedelta(days=W.late_close_days()), now=now) if inc is None \
         else None
     # ⚠️ OVER ON THE VILLA BEFORE VESTA HEARD IT (owner's drill, 2026-11-07, #138): VESTA back after the villa closed the
@@ -1607,7 +1629,8 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     if len(photos) > shown:
         lines.append(("photos", say("visit_more_photos", n=len(photos) - shown), now.isoformat(), None))
     ans = v.get("answered") if away and isinstance(v.get("answered"), dict) else None
-    if ans and ans.get("option") in BUTTONS:
+    if ans and ans.get("option") in BUTTONS and (v.get("closed") or {}).get("why") != "answered":
+        # (an answer that closed the visit is said by its close: visit_close)
         # the answer the villa applied, a line of the story ("Not a problem on … (Wayan)"), never answered again
         t = _when(ans.get("at")) or now
         lines.append(("answered", Said(acted(BUTTONS[ans["option"]]["label"], moment_label(t, zone),
@@ -1620,8 +1643,15 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     if photos and not away:
         out["actions"].append(R.sheet(iid, photos, shown))
     if away:
-        # the tablet's card carries the villa's photos (its announcement taken); the close is the villa's (resolved)
-        store.audit("alert-desk", out["decision"], {"incident": iid, "visit": vid, "rings": False})
+        # the tablet's card carries the villa's photos (its announcement taken); the close is the villa's, at once.
+        # ⚠️ NOT ONLY ON ITS "RESOLVED" (owner's drill, 2026-11-07, #140): Done pressed on the villa's card while VESTA
+        # was away closes the record with no "resolved" event, only a step carrying its close — #140 stayed open,
+        # "monitoring until 08:54", a new alert on the tablet. Closed at the next event naming it, or the next tick
+        # (visits_over), once its Kiosk fault exists (this run's repair makes it for the incident just opened: a task
+        # closed before it has one never gets one), so it is ONE closed fault
+        if known is not None and not store.incident(iid).get("closed_at"):
+            visit_close(store, store.incident(iid), v, now, params, zone, out)
+        store.audit("alert-desk", out["decision"], {"incident": iid, "visit": vid, "rings": False, "closed": True})
         return out
     # a press the villa recorded while VESTA was away: that person's answer, applied once, never asked again
     ans = v.get("answered") if isinstance(v.get("answered"), dict) else None
@@ -1640,6 +1670,46 @@ def visit_intake(store: Store, ev: dict, now: datetime, params: VillaParams | No
     visit_told(store.incident(iid), out, ack_seq=_seq(v), drop=_replies(v) or None)
     store.audit("alert-desk", out["decision"], {"incident": iid, "visit": vid, "rings": ring})
     return out
+
+
+#: What the villa's record holds of a visit that ended (its story, why and when it closed, a person's answer): read whole
+#: by visits_over, as the engine reads it for a late event (app.Vesta._visit_now, VISIT_STORY)
+VISIT_ENDED = ("steps", "photos", "strongest", "step", "seq", "opened_at", "last_at", "closes_at", "answered", "closed")
+
+
+def visits_over(store: Store, now: datetime, client, out: dict, params: VillaParams | None, zone: str | None) -> list[int]:
+    """Every open visit's incident whose villa record now says the visit ended — closed (its `closed`, or its state), or
+    holding a later visit — closed as the villa closed it (visit_close), nothing sent or told. Returns their ids.
+
+    ⚠️ A CLOSE NO EVENT SAID (owner's drill, 2026-11-07, #140): Done pressed on the villa's card while VESTA was away
+    closes the record with no "resolved" event, and a visit VESTA heard only the opening of stayed open, "monitoring
+    until 08:54", its fault open and the tablet showing it as a new alert."""
+    closed = []
+    for inc in store.incidents(open_only=True):
+        p = notes_of(inc)
+        v, vid = p.get(VISIT), str(p.get("ha_incident") or "")
+        rec = v.get("record") if isinstance(v, dict) else None
+        if not (isinstance(rec, str) and rec.startswith("sensor.") and vid):
+            continue
+        try:
+            row = (client.states([rec]) or {}).get(rec) or {}
+        except Exception:  # noqa: BLE001 — the villa not readable now: the next tick
+            continue
+        attrs = row.get("attributes") if isinstance(row, dict) else None
+        if not isinstance(attrs, dict) or not attrs.get("id"):
+            continue
+        if attrs["id"] == vid and (row.get("state") == "closed" or isinstance(attrs.get("closed"), dict)):
+            ended = {**v, **{k: attrs[k] for k in VISIT_ENDED if attrs.get(k) is not None}}
+            ended["closed"] = attrs["closed"] if isinstance(attrs.get("closed"), dict) else {"why": "closed"}
+        elif attrs["id"] != vid:
+            ended = {**v, "closed": {"why": "closed"}}          # a later visit holds the record: this one is over
+        else:
+            continue
+        store.note(inc["id"], {VISIT: ended})
+        visit_close(store, store.incident(inc["id"]), ended, now, params, zone, out)
+        store.audit("alert-desk", "visit_over", {"incident": inc["id"], "visit": vid})
+        closed.append(inc["id"])
+    return closed
 
 
 def _seq(v: dict):
@@ -1839,6 +1909,7 @@ def tick(store: Store, now: datetime, params: VillaParams | None = None, client=
         out["cleared"] = seen_again(store, now, client, params.behaviour("clear_minutes"), out, terms(params))
         out["not_quiet"] = quiet_after_done(store, now, client, params.behaviour("clear_minutes"), out, terms(params))
         out["rule_gone"] = rule_gone(store, now, client, params.behaviour("clear_minutes"), out)
+        out["visits_over"] = visits_over(store, now, client, out, params, zone)
     out["cockpit_closed"] = cockpit_closes(store, out, terms(params))
     out["watch_over"] = watch_over(store, now, out, zone)
     out["helped"] = help_alerts(store, now, out, terms(params))

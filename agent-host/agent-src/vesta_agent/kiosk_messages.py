@@ -93,7 +93,10 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
     stands), its stage, the words it was drawn in besides English when the agent holds them, its buttons. `to`: the "To:"
     of every chat's copy together (IncidentThread.tell), else this copy's; `takes`: the villa's runs it stands for."""
     h = layout.head_of(p.get("head"))
-    status = layout.stage_line(h, (p.get("status") or "").strip(), p.get("mark")) if h else (p.get("status") or "").strip()
+    # ⚠️ "MONITORING UNTIL" ONCE (owner, 2026-11-07, drill #139): the tablet's card said it in its state AND its pill;
+    # the pill (the fault's monitoredUntil) says it there, so the tablet's state is the stage's words alone
+    status = layout.stage_line({**h, "until": None}, (p.get("status") or "").strip(), p.get("mark")) if h \
+        else (p.get("status") or "").strip()
     languages: dict = {}
     said = p.get("said") if isinstance(p.get("said"), dict) else {}
     for code, words in (said.get("status_in") or {}).items():

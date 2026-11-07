@@ -311,7 +311,7 @@ def test_the_villas_visit_words_are_the_desks_written_once_into_the_visit_packag
     import ast
     from vesta_shared.message_format import (JINJA_BEGIN, JINJA_END, VISIT_BEGIN, VISIT_END, VISIT_WORDS,
                                              package_visit_words)
-    from vesta_shared.timeutil import MOMENT_FORMAT
+    from vesta_shared.timeutil import TIME_FORMAT
     path = os.path.join(HA, "packages", "vesta_visit.yaml")
     with open(path, encoding="utf-8") as f:
         src = f.read()
@@ -336,7 +336,7 @@ def test_the_villas_visit_words_are_the_desks_written_once_into_the_visit_packag
     assert got["closes"] == [b["option"] for b in buttons if b.get("closes")] == ["done", "not_a_problem"]
     assert got["pressed"] == {"done": "Done on Telegram", "not_a_problem": "Not a problem on Telegram",
                               "open_ticket": "Ticket opened on Telegram", "need_help": "Need help on Telegram"}
-    assert got["moment"] == MOMENT_FORMAT
+    assert got["moment"] == TIME_FORMAT == "%H:%M", "a press said at its time alone (owner, 2026-11-07, #140)"
     # ONE mechanism: the template no longer carries a copy the blueprint could never read
     with open(os.path.join(HA, "custom_templates", "vesta_message.jinja"), encoding="utf-8") as f:
         jinja = f.read()

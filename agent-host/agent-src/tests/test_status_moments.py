@@ -43,7 +43,8 @@ def test_drill_135_reads_one_line_per_step_each_at_its_time(tmp_path, kiosk, med
     st = lines(copy(v, OWNER)["text"])
     assert st[:-1] == wanted and re.fullmatch(r"⚠️ New alert, monitoring until \d\d:\d\d", st[-1]), st
     tablet = kiosk.messages["incident:1"]["status"]
-    assert tablet == st, (tablet, st)               # the tablet's card: the same lines
+    # the tablet's card: the same lines, its state the stage alone (its pill says until when: owner, 2026-11-07)
+    assert tablet == st[:-1] + ["⚠️ New alert"], (tablet, st)
 
 
 class _Kept:

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.457 (7 November 2026)
+
+- A visit closed by a person on the villa while VESTA was away is closed at once (owner's drill, 2026-11-07, #140: Done
+  on the villa's card at 08:53:55, its last event a "step" carrying `closed{why answered}`, no "resolved"; the catch-up
+  left #140 open, "monitoring until 08:54", its fault open, a new-alert pop-up on the tablet): desk `visit_intake` closes
+  an incident whose visit (record read now, or the event) says closed at the next event naming it (`visit_close`, shared
+  with `resolved`: the villa's close moment, "Done on {time} (Jm)." for an answer, its quiet else), nothing rung,
+  redrawn, answered or told; the tick's `visits_over` closes every open visit incident whose record says closed or holds
+  a later visit (tests/test_visit_drills.py).
+- The tablet copy's stage line is the stage alone ("⚠️ New alert"): its pill says until when (kiosk_messages.of_parts).
+- The visit package's `moment` is timeutil.TIME_FORMAT ("%H:%M").
+
 ## 0.6.456 (7 November 2026)
 
 - A visit the villa closed while VESTA was away is recorded, never told (owner's drill, 2026-11-07, #138: the catch-up

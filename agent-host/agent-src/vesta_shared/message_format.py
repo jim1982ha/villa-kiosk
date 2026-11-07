@@ -761,14 +761,15 @@ def package_visit_words() -> str:
     """The attributes of the villa's "VESTA visit words" sensor (packages/vesta_visit.yaml): the English the villa's
     presence automation writes a visit with while VESTA is away — `words` (words.yaml's English of VISIT_WORDS),
     `buttons` (the alert desk's [option, label], in its order), `pressed` (each press as a line says it, pressed on
-    Telegram), `closes` (the options that close an alert) and `moment` (timeutil.MOMENT_FORMAT, "Done on {moment}").
+    Telegram), `closes` (the options that close an alert) and `moment` (timeutil.TIME_FORMAT, "Done on Telegram at
+    08:53 (Jm)": a press is said on the alert's own day, its time alone, as VESTA says it — owner, 2026-11-07, #140).
 
     ⚠️ A BLUEPRINT CANNOT READ A TEMPLATE'S VARIABLE (phase C of one visit, one story, 2026-11-06): the words were a
     `vm_visit_words` set inside vesta_message.jinja, which a blueprint's own templates never see (a variable set in an
     included file stays there), and the villa's installed copy of the template is not updated by any tool. A sensor's
     attributes are read by every template; the words stay the desk's, written here, never by hand."""
     import yaml
-    from .timeutil import MOMENT_FORMAT
+    from .timeutil import TIME_FORMAT
     with open(ALERT_DESK_WORDS, encoding="utf-8") as f:
         said = yaml.safe_load(f) or {}
     with open(ALERT_DESK_SKILL, encoding="utf-8") as f:
@@ -783,7 +784,7 @@ def package_visit_words() -> str:
                        ("buttons", [[str(b["option"]), str(b["label"])] for b in buttons]),
                        ("pressed", {str(b["option"]): pressed(b) for b in buttons}),
                        ("closes", [str(b["option"]) for b in buttons if b.get("closes")]),
-                       ("moment", MOMENT_FORMAT)):
+                       ("moment", TIME_FORMAT)):
         lines += [f"          {key}: >-", f"            {{{{ {lit(value)} }}}}"]
     lines.append(VISIT_END)
     return "\n".join(lines)
