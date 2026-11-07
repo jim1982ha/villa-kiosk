@@ -10,7 +10,7 @@
 # ⚠️ BUMP `version` ON EVERY PUSH. The Supervisor resolves image:<version>, never
 # :latest, so an unchanged version is an update Home Assistant cannot see.
 name: "VESTA Agent"
-version: "0.12.484"
+version: "0.12.485"
 slug: vesta_agent_dev
 description: "Runs the VESTA Agent, the villa's AI assistant"
 url: "https://github.com/jim1982ha/villa-kiosk"
@@ -22,7 +22,7 @@ image: "ghcr.io/jim1982ha/vesta-agent-agent-dev-{arch}"
 init: false
 # startup: application and boot: auto are the Supervisor's defaults, so they are
 # not written out: Home Assistant's add-on linter refuses a key that repeats a
-# default (agent-host/tools/addon_lint.py, a gate).
+# default.
 #
 # ⚠️ NO LOCAL-ONLY PRIVILEGES (SPEC H3, PLAN F10). Home Assistant is reached with
 # the "VESTA Agent" user's token, exactly as from outside the villa, so the same

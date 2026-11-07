@@ -1,3 +1,7 @@
+## 0.12.485
+
+- Nothing changes in what VESTA does; fewer checks before each release.
+
 ## 0.12.484
 
 - A maintenance fault judged on a whole day (a pump's daily energy or run time, a tank's highest level) no longer says
