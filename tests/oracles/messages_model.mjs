@@ -729,4 +729,42 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
   ck("  ...the tab says the view's words", readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8")
      .includes("{view.notificationsEmpty}") && !readFileSync(new URL("../../src/components/cockpit/MessagesTab.tsx", import.meta.url), "utf8").includes("Nothing announced yet."));
 }
+
+// owner, 2026-11-07 (drill #138, VESTA stopped): the villa's visit showed under Notifications as a bell card, its first
+// line only and no photo; with VESTA away the tablet shows the visit as the alert it is, its every photo and line
+{
+  const { villaAlertCards } = await import("@/messages/messagesModel");
+  const { parseAnnouncement } = await import("@/messages/announcements");
+  const { AttentionCard } = await import("@/components/cockpit/IssueCard");
+  const layout = (title, lines, status) => `<b>${title}</b>\nTo: Owner &amp; FM\n<blockquote>${lines.join("\n")}</blockquote>\n\nStatus:\n<blockquote><i>${status}</i></blockquote>`;
+  const photo = (n) => ({ id: `${String(n).repeat(32)}.jpg`, label: `Camera ${n}`, at: "2026-11-07T07:10:23+08:00" });
+  const step1 = parseAnnouncement({ seq: 50, at: "2026-11-07T07:09:59+08:00", key: "visit:example-1",
+    message: layout("Activity while the villa is empty", ["Seen at Parking, 07:09"], "⚠️ New alert, monitoring until 07:39"), photos: [photo(1)] });
+  const step2 = parseAnnouncement({ seq: 51, at: "2026-11-07T07:10:23+08:00", key: "visit:example-1",
+    message: layout("Garden Door opened while the villa is empty", ["Seen at Parking, 07:09", "Garden Door opened, 07:10"],
+      "⚠️ New alert, monitoring until 07:40"), photos: [photo(1), photo(2)] });
+  const kept = mergeAnnouncements([step1], [step2]);
+  const view = messagesView({ open: [], watched: [], announcements: kept, filter: "issues", selected: null });
+  const notes_ = messagesView({ open: [], watched: [], announcements: kept, filter: "notifications", selected: null });
+  ck("a villa's alert told step by step (its key) is ONE open issue, its latest step; never a notification",
+     view.issues.length === 1 && view.issues[0].kind === "issue" && view.issues[0].card.title.startsWith("Garden Door")
+     && notes_.notifications.length === 0 && view.filters[0].count === 1, [view.issues, notes_.notifications]);
+  const html = draw(h(AttentionCard, { card: view.issues[0].card, onOpenEntity: () => {} }));
+  ck("  ...drawn as every alert's card: its state first, every line, every photo",
+     html.includes("New alert") && html.includes("Seen at Parking, 07:09") && html.includes("Garden Door opened, 07:10")
+     && (html.match(/announcement-photo\//g) ?? []).length === 2, html);
+  const over = parseAnnouncement({ seq: 52, at: "2026-11-07T07:16:00+08:00", key: "visit:example-1",
+    message: layout("Garden Door opened while the villa is empty", ["Seen at Parking, 07:09", "Garden Door opened, 07:10"],
+      "✅ Cleared at 07:16: no further signal for 5min."), photos: [photo(1), photo(2)] });
+  const closedView = messagesView({ open: [], watched: [], announcements: mergeAnnouncements(kept, [over]), filter: "issues", selected: null });
+  ck("  ...over, under Closed as that card, no longer open",
+     closedView.issues.length === 0 && closedView.closed.length === 1 && closedView.closed[0].kind === "issue"
+     && closedView.closed[0].card.look === "closed", closedView.closed);
+  const vesta = parseVestaMessage({ seq: 60, at: "2026-11-07T07:17:00+08:00", key: "incident:138", title: "#138-P1 (new)",
+    status: ["⚠️ New alert"], stage: "new", takes: ["visit:example-1"] });
+  ck("  ...VESTA's card takes its place by its key: no villa card left",
+     villaAlertCards(shownTogether(kept, [vesta])).open.length === 0 && villaAlertCards(kept).open.length === 1);
+  ck("  ...an announcement that is no alert (a ring, no stage) stays a notification",
+     villaAlertCards([ann(70, { key: "ring:1" })]).open.length === 0);
+}
 done("✅ the Messages model: what the tab lists, its counts and the card open");

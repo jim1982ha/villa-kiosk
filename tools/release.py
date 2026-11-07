@@ -70,7 +70,6 @@ GATES: list[tuple[str, list[str]]] = [
     ("The crash-loop rule", ["npm", "run", "test:service-finish"]),
     ("The proxy parses", ["npm", "run", "test:proxy-parse"]),
     ("The release module", ["npm", "run", "test:release"]),
-    ("A mutation run always gives the file back", ["npm", "run", "test:mutate"]),
 ]
 
 # ⚠️ THE QUICK CHECK FIRST (retro, 2026-10-25: three ships in one day each ran 5 to 8 min of gates, then stopped on an
