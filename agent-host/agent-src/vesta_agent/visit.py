@@ -31,17 +31,21 @@ log = logging.getLogger("vesta.visit")
 
 #: The story line a visit's siren request is told on (notice.Notices.observe)
 SIREN_LINE = "siren"
+#: The most photos one Telegram album holds (sendMediaGroup)
+ALBUM = 10
 
 
 class Visits:
     def __init__(self, *, state, thread, notices, photo: Callable[[str], Awaitable], out_dir: str, timezone_name: str,
                  tell: Callable[[str, dict], Awaitable[bool]] | None = None,
                  keyboard: Callable[[int, int], dict | None] | None = None, name: Callable[[str], str] = str,
-                 withdraw: Callable[[str], Awaitable[bool]] | None = None):
+                 withdraw: Callable[[str], Awaitable[bool]] | None = None,
+                 album: Callable[[int, list, int | None], Awaitable[list[int]]] | None = None):
         """`photo(camera)`: what a camera shows now ((base64, mime) or None, outcome.camera_photo); `tell(script, data)`:
         the villa's script run with `data` (actions.Actions.tell_villa), None: the villa is never told; `keyboard(iid,
         chat)`: the buttons a copy keeps (alert_buttons.AlertButtons); `name(camera)`: its name as the villa gives it."""
         self.name = name
+        self._album = album               # delivery.Delivery.album: photos as Telegram albums, a reply to a message
         self._withdraw = withdraw         # approvals.Approvals.withdraw: a waiting request withdrawn, every copy told
         self.state, self.thread, self.notices = state, thread, notices
         self.photo, self.out_dir, self.tz, self._tell, self.keyboard = photo, out_dir, timezone_name, tell, keyboard
@@ -62,6 +66,43 @@ class Visits:
         if not jpeg:
             return 0
         return await self.thread.picture(iid, jpeg, (lambda c: self.keyboard(iid, c)) if self.keyboard else None)
+
+    # ------------------------------------------------------------------ every photo, on ask
+    def every_photo(self, iid: int) -> list[dict]:
+        """Every photo of visit `iid` (the desk's last sheet and the cameras its siren snapped), oldest first."""
+        photos = list(self.state.visit_photos(iid).get("photos") or []) + self.state.visit_snaps(iid)
+        return sorted(photos, key=lambda p: str(p.get("at")))
+
+    async def album(self, p) -> None:
+        """"All photos" pressed (`p`, press.Press: button_data.PHOTOS) under a visit's card: every photo of the visit,
+        whole, each captioned with its camera and its time ("Parking · 11:57"), oldest first, as replies to the card
+        pressed in the chat pressed alone — Telegram albums of up to 10 (sendMediaGroup's most). Pressed again, the
+        visit's photos as they are then: nothing is remembered of the first press."""
+        iid = p.parts[0]
+        if not iid.isdigit() or p.place != "telegram" or self._album is None:
+            return await p.toast("Unknown button.")
+        own = os.path.join(self.out_dir, "visits")
+        got = []
+        for ph in self.every_photo(int(iid)):
+            path = sheet._inside(ph.get("path"), (sheet.MEDIA, own))
+            if not path or os.path.getsize(path) > sheet.photo_bytes():
+                continue
+            with open(path, "rb") as f:
+                jpeg = f.read()
+            try:
+                when = clock(datetime.fromisoformat(str(ph.get("at"))), self.tz, days=False)
+            except (TypeError, ValueError):
+                when = ""
+            got.append((jpeg, " · ".join(t for t in (str(ph.get("label") or ""), when) if t)))
+        if not got:
+            return await p.toast("No photo of this visit can be read now.")
+        await p.toast(f"{len(got)} photos: sending." if len(got) > 1 else "1 photo: sending.")
+        for i in range(0, len(got), ALBUM):
+            try:
+                await self._album(p.chat, got[i:i + ALBUM], p.mid)
+            except Exception as e:  # noqa: BLE001 — the photos already sent stay; the card is untouched
+                log.warning("Incident #%s: its photos could not be sent (%s)", iid, type(e).__name__)
+                return
 
     # ------------------------------------------------------------------ the villa told
     async def tell(self, iid: int, script: str, fields: dict, name: str = "") -> bool:

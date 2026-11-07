@@ -161,6 +161,14 @@ class Delivery:
             return "refused"
         return await place.edit_media(chat_id, message_id, photo, plain_text(text), keyboard)
 
+    async def album(self, chat_id: int, photos: list[tuple[bytes, str]], reply_to: int | None = None) -> list[int]:
+        """Photos as Telegram albums (a visit's every photo, visit.Visits.album): the ids made; none for a place that
+        holds no Telegram picture (Telegram off, a tablet's conversation)."""
+        place = self._place(chat_id)
+        if not hasattr(place, "album"):
+            return []
+        return await place.album(chat_id, photos, reply_to)
+
     async def settle(self, p, said: str, keyboard: dict | None = None) -> bool:
         """A pressed message (`p`, press.Press) stays whole, what the press did written under it, its buttons gone (or
         `keyboard`, the ones still to press). ⚠️ WITHIN ITS OWN LIMIT (review 32): a page's message is a file's caption
@@ -274,6 +282,11 @@ class TelegramChats:
         if not ok:
             self.state.log("edit_refused", {"chat": chat_id, "message": message_id, **({"gone": True} if ok is GONE else {})})
         return ok if ok is GONE else bool(ok)          # gone from its chat: said so (telegram.GONE), never retried
+
+    async def album(self, chat_id: int, photos: list[tuple[bytes, str]], reply_to: int | None = None) -> list[int]:
+        if self.tg is None:
+            return []
+        return await self.tg.album(int(chat_id), photos, reply_to=reply_to)
 
     async def edit_media(self, chat_id: int, message_id: int, photo: bytes, text: str, keyboard: dict | None = None) -> str:
         if self.tg is None:

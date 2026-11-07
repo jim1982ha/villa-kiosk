@@ -247,7 +247,8 @@ class Vesta:
         self.visits = Visits(state=self.state, thread=self.thread, notices=self.notices,
                              photo=lambda cam: camera_photo(self.reader, cam), out_dir=settings.out_dir,
                              timezone_name=settings.timezone, tell=self.actions.tell_villa, name=self.name_of,
-                             withdraw=lambda aid: self.approvals.withdraw(aid))
+                             withdraw=lambda aid: self.approvals.withdraw(aid), album=self.delivery.album,
+                             keyboard=lambda iid, chat: self.buttons.still(iid, chat))
         # an approval request from start to end (approvals.py); the siren's gate asks through it too
         self.approvals = Approvals(state=self.state, policy=self.policy, actions=self.actions, thread=self.thread,
                                    post=self.poster.post, timezone_name=settings.timezone, safe=self._safe,
@@ -1030,7 +1031,7 @@ class Vesta:
         handle = {button_data.APPROVAL: self.approvals.press, button_data.CONTINUE: self._press_continue,
                   button_data.ALERT: self._press_alert, button_data.REPORT: self._press_report,
                   button_data.TICKET: self.fault_offers.press, button_data.COMMAND: self.command_offers.press,
-                  button_data.DECLINE: self.command_offers.decline}.get(kind)
+                  button_data.DECLINE: self.command_offers.decline, button_data.PHOTOS: self.visits.album}.get(kind)
         if handle is None:
             return await toast("Unknown button.")
         # a listed group's member presses with its role (Roster.member); a tablet's profile as the Kiosk stamped it

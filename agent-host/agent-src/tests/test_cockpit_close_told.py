@@ -81,7 +81,9 @@ def test_a_close_and_a_reopening_read_together_keep_the_close_in_every_story(tmp
     assert re.fullmatch(rf"- Terminé dans le Cockpit (?:le|à) {T} \(Luc\)\. Surveillance 4h", fr[-2]), fr
     assert "Rouvert dans le Cockpit" in fr[-1], fr
     card = k.messages["incident:1"]["status"]
-    assert re.fullmatch(rf"- Done in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h", card[-2]) and "Reopened" in card[-1], card
+    # the tablet's state is the step alone, what was said with it the line above (owner, 2026-11-07)
+    assert re.fullmatch(rf"- Done in the Cockpit (?:on|at) {T} \(Luc\)\. Watch 4h", card[-3]) and "Reopened" in card[-2], card
+    assert re.fullmatch(rf"\S+ \S+ Reopen request sent {T}", card[-1]), card
 
 
 def test_no_action_needed_in_the_cockpit_is_said_as_such_in_every_chat(tmp_path):

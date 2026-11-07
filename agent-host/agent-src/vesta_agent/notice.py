@@ -131,7 +131,10 @@ def note_step(state, incident: int, stage: str, note: str, note_in: dict | None 
 
 
 def _kept(history: list[dict]) -> list[dict]:
-    """The history with its first notice always kept and the dropped ones counted ("- … 3 earlier notices")."""
+    """The history with its first notice always kept and the dropped ones counted ("- … 3 earlier notices"); a line kept
+    last (result.seen `last`: "+3 more photos on the tablet") after every other, whatever was told after it (owner,
+    2026-11-07: it stood mid-list, in time order)."""
+    history = [h for h in history if not h.get("last")] + [h for h in history if h.get("last")]
     most = history_kept()
     if len(history) <= most:
         return history
@@ -574,7 +577,7 @@ class Notices:
             line = {"at": str(ln.get("at") or now), "stage": SEEN_STAGE, "fold": str(ln["key"]),
                     "note": str(ln["note"]).rstrip("."),
                     "note_in": {k: str(v).rstrip(".") for k, v in (ln.get("note_in") or {}).items() if isinstance(v, str)},
-                    **({"since": str(ln["since"])} if ln.get("since") else {})}
+                    **({"since": str(ln["since"])} if ln.get("since") else {}), **({"last": True} if ln.get("last") else {})}
             i = _fold_target(history, line)
             if i is None:
                 # a step of the visit where it began among the others; a line of no moment of its own after them

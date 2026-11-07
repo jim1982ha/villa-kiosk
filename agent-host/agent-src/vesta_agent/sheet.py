@@ -56,13 +56,17 @@ def chosen(photos: list[dict], shown: int) -> list[dict]:
 
 def cells(n: int) -> tuple[tuple[int, int], list[tuple[int, int, int]]]:
     """The layout of `n` tiles on a grid of 16:9 cells: the canvas (columns, rows) and each tile's (column, row, span).
-    The strongest spans 2x2 at the top left; the next two stack in the right column; the rest go along rows of 3 below.
+    The strongest spans 2x2 at the top left; up to 6, the next two stack in the right column and the rest go along rows
+    of 3 below; 7 to 9 are 4 columns wide: two columns of 2 at its right, then a row of 4 below.
 
     ⚠️ NEVER TALLER THAN WIDE (owner's cards #131, #133, 2026-11-07): the sheet was two tiles wide and grew downwards
     (960x1440), and Telegram on Android crops a tall photo in its chat bubble: the top and the last row's labels were
-    cut off. Up to the six visit.sheet_tiles allows it is 3 cells by 3 at most."""
+    cut off. Up to the nine visit.sheet_tiles allows it is 3 cells by 3, or 4 by 3, at most."""
     if n <= 1:
         return (2, 2), [(0, 0, 2)][:n]
+    if n >= 7:
+        right = [(c, r, 1) for r in range(2) for c in (2, 3)]
+        return (4, 3), ([(0, 0, 2)] + right + [(c, 2, 1) for c in range(4)])[:n]
     out = [(0, 0, 2)] + [(2, r, 1) for r in range(min(n - 1, 2))]
     out += [(i % 3, 2 + i // 3, 1) for i in range(max(0, n - 3))]
     return (3, 2 + -(-max(0, n - 3) // 3)), out
@@ -75,7 +79,7 @@ def build(photos: list[dict], shown: int, zone: str, own: str | None = None) -> 
     from."""
     from PIL import Image, ImageDraw, ImageFont, ImageOps
     w = tile_px()
-    h = w * 9 // 16                                   # the cameras' own shape: each photo fills its tile, no margin
+    h = w * 9 // 16                                   # the cameras' own shape: a 16:9 photo fills its tile
     tiles = []
     for p in chosen(photos, shown):
         path = _inside(p.get("path"), (MEDIA, own))
@@ -96,7 +100,12 @@ def build(photos: list[dict], shown: int, zone: str, own: str | None = None) -> 
     pad = max(4, w // 80)
     for (im, p), (c, r, span) in zip(tiles, places):
         x, y, size = c * w, r * h, (span * w, span * h)
-        sheet.paste(ImageOps.fit(im, size), (x, y))
+        # ⚠️ EACH PHOTO WHOLE (owner, 2026-11-07): cropped to fill its tile, a photo lost the camera's own date, time and
+        # name written in its corners; it is shrunk to fit, dark bands round a photo of another shape
+        fit = ImageOps.contain(im, size)
+        x, y = x + (size[0] - fit.width) // 2, y + (size[1] - fit.height) // 2
+        sheet.paste(fit, (x, y))
+        size = fit.size                               # the label goes on the photo itself, at its bottom left
         try:
             when = clock(datetime.fromisoformat(str(p.get("at"))), zone, days=False)
         except (TypeError, ValueError):

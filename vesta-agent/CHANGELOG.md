@@ -1,3 +1,14 @@
+## 0.12.479
+
+- A visit's Telegram card with two photos or more has a "📷 All photos" button on its own row: it sends every photo of
+  the visit, whole, oldest first, each named with its camera and time ("Parking · 11:57"), as a reply to that card in
+  that chat only, in albums of up to 10. Pressing it again later sends the photos as they are then.
+- The card's picture now holds up to 9 photos, and no photo is cut any more: the camera's own date, time and name stay
+  visible, with dark bands beside a photo of another shape.
+- On the tablet, a card's state line is now short ("Reminder sent 11:43"); the rest of what was said ("No answer after
+  15min. Seen at … Was this visit expected? (to: Owner & FM)") is a Status line just above it. Telegram is unchanged.
+- "+N more photos on the tablet" is always the last Status line, just above the state.
+
 ## 0.12.478
 
 - Every visit's Status now says when its alert was sent ("Alert sent 11:24 (to: Owner & FM)"), from its first message,

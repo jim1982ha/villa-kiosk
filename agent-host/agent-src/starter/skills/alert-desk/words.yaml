@@ -588,6 +588,19 @@ visit_more_photos:
   ja: "タブレットに他 {n} 枚の写真"
   ko: "태블릿에 사진 {n}장 더"
 
+# the button under a visit's Telegram card that sends every photo of the visit, whole, in that chat
+visit_all_photos:
+  en: "📷 All photos"
+  fr: "📷 Toutes les photos"
+  id: "📷 Semua foto"
+  de: "📷 Alle Fotos"
+  es: "📷 Todas las fotos"
+  it: "📷 Tutte le foto"
+  nl: "📷 Alle foto's"
+  zh: "📷 全部照片"
+  ja: "📷 すべての写真"
+  ko: "📷 모든 사진"
+
 # a reminder of a visit says what changed since its first alert, then asks
 visit_changed_lock:
   en: "{name} was opened at {time}."

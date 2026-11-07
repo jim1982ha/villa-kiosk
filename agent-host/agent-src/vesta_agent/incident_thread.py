@@ -540,7 +540,10 @@ class IncidentThread:
                 kb = ((keyboard(chat) if keyboard else None) or rec.get("kb")) if live else None
                 said = await self.media(chat, rec["mid"], jpeg, text, kb) if self.media else "refused"
                 if said == "shown":
-                    self.state.set_incident_message(iid, chat, {**rec, "parts": p, "text": text, "sheet": made})
+                    # the buttons it shows now kept with it ("All photos" once a second photo came): a later edit
+                    # that keeps the record's buttons never takes that row off
+                    self.state.set_incident_message(iid, chat, {**rec, "parts": p, "text": text, "sheet": made,
+                                                                **({"kb": kb} if kb else {})})
                     n += 1
                 elif said == "not_media" and self.send:
                     mid = await self.send(chat, text, keyboard=kb, photo=(base64.b64encode(jpeg).decode(), "image/jpeg"))

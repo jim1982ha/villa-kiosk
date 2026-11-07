@@ -60,7 +60,19 @@ class AlertButtons:
         """The buttons of incident `iid`, for a message to `chat` from `skill_name` (whose on_reply answers them)."""
         self.state.set_alert_skill(iid, chat, skill_name)
         return {"inline_keyboard": [[{"text": b["label"], "callback_data": button_data.make(button_data.ALERT, iid, b["option"])}
-                                     for b in self.offered(self.skills.get(skill_name), iid)]]}
+                                     for b in self.offered(self.skills.get(skill_name), iid)], *self._photos_row(iid, chat)]}
+
+    def _photos_row(self, iid: int, chat: int) -> list[list[dict]]:
+        """⚠️ EVERY PHOTO OF A VISIT, ON ASK (owner, 2026-11-07): the card's picture holds at most visit.sheet_tiles small
+        tiles; a visit with two photos or more gets a row of its own under the alert's buttons that sends them all, whole,
+        in the chat pressed (visit.Visits.album). Its words are the desk's (result.sheet `button`), in the chat's language."""
+        rec = self.state.visit_photos(iid)
+        b = rec.get("button") or {}
+        if not b.get("label") or len(rec.get("photos") or []) + len(self.state.visit_snaps(iid)) < 2:
+            return []
+        lang = self.thread.words.lang(chat) if hasattr(self.thread.words, "lang") else "en"
+        return [[{"text": (b.get("labels") or {}).get(lang) or b["label"],
+                  "callback_data": button_data.make(button_data.PHOTOS, iid)}]]
 
     def still(self, iid: int | str, chat: int) -> dict | None:
         """The buttons incident `iid`'s copy in `chat` keeps now (its skill's, as offered), None when it is closed or no

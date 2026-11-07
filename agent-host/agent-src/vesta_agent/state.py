@@ -467,6 +467,13 @@ class State:
     def set_visit_snaps(self, incident: int | str, snaps: list[dict]) -> None:
         self.put(f"visitsnaps:{incident}", json.dumps(snaps))
 
+    def visit_photos(self, incident: int | str) -> dict:
+        """The visit's photos as its desk last gave them ({photos, button}: result.sheet), {} before its first sheet."""
+        return json.loads(self.get(f"visitphotos:{incident}") or "{}")
+
+    def set_visit_photos(self, incident: int | str, record: dict) -> None:
+        self.put(f"visitphotos:{incident}", json.dumps(record))
+
     def visit_sheet(self, incident: int | str) -> str | None:
         return self.get(f"visitsheet:{incident}")
 

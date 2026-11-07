@@ -228,6 +228,31 @@ class Telegram:
             data["reply_parameters"] = {"message_id": part.reply_to, "allow_sending_without_reply": True}
         return await self.api("sendMessage", **data) or {}
 
+    async def album(self, chat_id: int, photos: list[tuple[bytes, str]], reply_to: int | None = None) -> list[int]:
+        """Photos (JPEG bytes, each with its caption) as ONE Telegram album (sendMediaGroup: 2 to 10 photos; one alone is
+        a photo message), a reply to `reply_to` when given. The ids of the messages it made; a TelegramError when
+        refused."""
+        if not photos:
+            return []
+        if len(photos) == 1:
+            import base64
+            return await self.send(chat_id, photos[0][1], photo_b64=(base64.b64encode(photos[0][0]).decode(), "image/jpeg"),
+                                   reply_to=reply_to)
+        media = [{"type": "photo", "media": f"attach://p{i}", "caption": cap[:telegram_caption_chars()]}
+                 for i, (_jpeg, cap) in enumerate(photos)]
+
+        def form() -> aiohttp.FormData:
+            f = aiohttp.FormData()
+            f.add_field("chat_id", str(chat_id))
+            f.add_field("media", json.dumps(media))
+            if reply_to:
+                f.add_field("reply_parameters", json.dumps({"message_id": int(reply_to), "allow_sending_without_reply": True}))
+            for i, (jpeg, _cap) in enumerate(photos):
+                f.add_field(f"p{i}", jpeg, filename=f"p{i}.jpg", content_type="image/jpeg")
+            return f
+        got = await self._call("sendMediaGroup", lambda: {"data": form()}) or []
+        return [m["message_id"] for m in got if isinstance(m, dict) and m.get("message_id")]
+
     async def download(self, file_id: str, limit: int | None = None) -> bytes:
         """A file a person sent, by the id Home Assistant's telegram_attachment event gave.
         Telegram serves a bot files up to 20 MB."""

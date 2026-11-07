@@ -14,11 +14,14 @@ REPORT = "w"        # a report without the AI:          w:<problem>:<job>
 TICKET = "t"        # a fault the AI offered:           t:<offer id>:<y|n>
 COMMAND = "o"       # a command skill a reply offered:  o:<offer id> (its skill and question kept: command_offers.py)
 DECLINE = "d"       # …and declined, its second button: d:<offer id> (owner, 2026-10-20: "a button to reject it")
+PHOTOS = "p"        # a visit's every photo, sent in the chat pressed: p:<incident id> (owner, 2026-11-07)
 
-PARTS = {APPROVAL: 2, CONTINUE: 1, ALERT: 2, REPORT: 2, TICKET: 2, COMMAND: 1, DECLINE: 1}
+PARTS = {APPROVAL: 2, CONTINUE: 1, ALERT: 2, REPORT: 2, TICKET: 2, COMMAND: 1, DECLINE: 1, PHOTOS: 1}
 # who may press is the handler's to judge; these need a person policy.yaml knows before anything else is read
 # (an approval checks it itself, with the press recorded for the owner to see)
-FOR_PEOPLE_ONLY = {CONTINUE, ALERT, REPORT, TICKET, COMMAND, DECLINE}
+FOR_PEOPLE_ONLY = {CONTINUE, ALERT, REPORT, TICKET, COMMAND, DECLINE, PHOTOS}
+#: Buttons Telegram alone shows: the tablet's card already shows every photo of a visit (owner, 2026-11-07)
+TELEGRAM_ONLY = {PHOTOS}
 
 
 #: ⚠️ THE VILLA'S OWN BUTTONS ARE THE VILLA'S (one visit, one story, 2026-11-06): a visit's first message carries the

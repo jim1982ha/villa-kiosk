@@ -38,6 +38,7 @@ class FakeTelegram:
         self.edit_keyboards = []
         self.replies: list = []            # (chat, message id, the message it answers): a send with reply_to
         self.media_edits: list = []       # (chat, message, jpeg bytes, caption, keyboard): editMessageMedia
+        self.albums: list = []            # (chat, [caption, ...], the message it answers): sendMediaGroup
         self.with_photo: set = set()      # (chat, message) of every message sent with a picture (a test may add the villa's)
         self.gone: set = set()            # (chat, message) deleted in the chat by someone else: Telegram finds it no more
         self.refuse: set[str] = set()
@@ -72,6 +73,19 @@ class FakeTelegram:
             ids.append(self.next_id)
         if reply_to and ids:
             self.replies.append((chat_id, ids[0], int(reply_to)))
+        return ids
+
+    async def album(self, chat_id, photos, reply_to=None):
+        """sendMediaGroup (one photo alone: a photo message, as the real one sends it)."""
+        if "send" in self.refuse:
+            raise TelegramError("sendMediaGroup: 400 refused by the test")
+        ids = []
+        for _jpeg, _cap in photos:
+            self.next_id += 1
+            self.with_photo.add((chat_id, self.next_id))
+            ids.append(self.next_id)
+        if photos:
+            self.albums.append((chat_id, [cap for _j, cap in photos], reply_to))
         return ids
 
     async def download(self, file_id, limit=20 * 1024 * 1024):

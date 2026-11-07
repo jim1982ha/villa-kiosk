@@ -270,13 +270,14 @@ def siren(armed: bool, prompt: str | None, to: tuple[str, ...] = ("owner", "fm")
 
 
 def seen(incident: int, key: str, note: str, note_in: dict | None = None, at: str | None = None,
-         since: str | None = None) -> dict:
+         since: str | None = None, last: bool = False) -> dict:
     """One line of a visit's story on incident `incident` (owner, 2026-11-06: one visit, one story): `note` in the
     desk's words ({code: text} in `note_in`), `key` the line it is — the same key again is the SAME line, said anew
     (the engine folds it, notice.Notices.observe: "Seen at Parking → Entrance Left, 18:34–18:35"); `at`: its latest
-    moment; `since`: when it began, where a new line stands among the Status lines (in time order)."""
+    moment; `since`: when it began, where a new line stands among the Status lines (in time order); `last`: a line of
+    no moment ("+3 more photos on the tablet"), always the last of them, whatever is told after it."""
     return {"incident_id": int(incident), "key": _key(key), "note": str(note), **_in("note_in", note_in),
-            **({"at": str(at)} if at else {}), **({"since": str(since)} if since else {})}
+            **({"at": str(at)} if at else {}), **({"since": str(since)} if since else {}), **({"last": True} if last else {})}
 
 
 #: The actions of a visit (desk.py visit_intake), as the engine reads them.
@@ -295,10 +296,13 @@ def redraw(incident: int, body: str | None = None) -> dict:
     return {"action": REDRAW, "incident_id": int(incident), **({"body": str(body)} if body is not None else {})}
 
 
-def sheet(incident: int, photos: list[dict], shown: int) -> dict:
+def sheet(incident: int, photos: list[dict], shown: int, button=None) -> dict:
     """The picture of every copy of `incident` becomes ONE sheet of the visit's photos (`photos`: [{path, label, at,
-    strongest?}], the strongest first), at most `shown` tiles; the tablet's card carries them all."""
-    return {"action": SHEET, "incident_id": int(incident), "photos": list(photos), "shown": int(shown)}
+    strongest?}], the strongest first), at most `shown` tiles; the tablet's card carries them all. `button`: the words
+    of the button that sends every photo in the chat pressed (its English; `.langs` its other languages), under a card
+    whose visit has two photos or more."""
+    return {"action": SHEET, "incident_id": int(incident), "photos": list(photos), "shown": int(shown),
+            **({"button": {"label": str(button), **_in("labels", getattr(button, "langs", None))}} if button else {})}
 
 
 def tell_villa(incident: int, script: str, fields: dict) -> dict:

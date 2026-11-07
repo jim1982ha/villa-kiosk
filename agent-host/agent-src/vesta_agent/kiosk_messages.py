@@ -67,7 +67,7 @@ def buttons_of(keyboard: dict | None) -> list[dict]:
     for row in (keyboard or {}).get("inline_keyboard") or ():
         for b in row:
             kind, parts = button_data.read(str(b.get("callback_data") or ""))
-            if kind:
+            if kind and kind not in button_data.TELEGRAM_ONLY:
                 out.append({"label": _cut(b.get("text"), "label"), "kind": kind, "id": ":".join(parts)})
     return out
 
@@ -93,12 +93,16 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
     stands), its stage, the words it was drawn in besides English when the agent holds them, its buttons. `to`: the "To:"
     of every chat's copy together (IncidentThread.tell), else this copy's; `takes`: the villa's runs it stands for."""
     h = layout.head_of(p.get("head"))
+    said = p.get("said") if isinstance(p.get("said"), dict) else {}
+    # ⚠️ THE STATE IS THE STAGE ALONE (owner, 2026-11-07): a reminder's state line was its whole bottom line, "Reminder
+    # sent 11:43, No answer after 15min. Seen at … Was this visit expected? (to: Owner & FM)"; the step's own words
+    # ("Reminder sent 11:43") are the state, what the desk said with it a Status line above, as Telegram's bottom line
+    # says it (Telegram keeps it whole)
+    bottom, said_with = _step_and_words((p.get("status") or "").strip(), said) if h else ((p.get("status") or "").strip(), "")
     # ⚠️ "MONITORING UNTIL" ONCE (owner, 2026-11-07, drill #139): the tablet's card said it in its state AND its pill;
     # the pill (the fault's monitoredUntil) says it there, so the tablet's state is the stage's words alone
-    status = layout.stage_line({**h, "until": None}, (p.get("status") or "").strip(), p.get("mark")) if h \
-        else (p.get("status") or "").strip()
+    status = layout.stage_line({**h, "until": None}, bottom, p.get("mark")) if h else bottom
     languages: dict = {}
-    said = p.get("said") if isinstance(p.get("said"), dict) else {}
     for code, words in (said.get("status_in") or {}).items():
         if isinstance(words, str) and words.strip():
             languages[code] = {"status": layout.status_shown(h, [words.strip()], code) if h else [words.strip()]}
@@ -110,12 +114,27 @@ def of_parts(key: str, p: dict, *, keyboard: dict | None = None, photo: str | No
         "takes": takes or [],
         "lead": p.get("lead"), "body": layout.body_shown(p, h),
         # the tablet is everyone's: every step, whoever it went to (layout.head's `story`), else this copy's own
-        "status": _lines(layout.status_shown(h, [*((h.get("story") or h["history"]) if h else []), status]), "status",
-                         "statusLine"),
+        "status": _lines(layout.status_shown(h, [*((h.get("story") or h["history"]) if h else []),
+                                                 *([f"- {said_with}"] if said_with else []), status]), "status", "statusLine"),
         "stage": (h or {}).get("word") or said.get("stage") or "", "mark": p.get("mark") or "",
         "buttons": buttons_of(keyboard), "languages": languages,
     }
     return _finished(rec, photo)
+
+
+def _step_and_words(status: str, said: dict) -> tuple[str, str]:
+    """A step's bottom line ("Reminder sent 11:43, No answer after 15min. … (to: Owner & FM)", notice.Notices.bottom)
+    as its step alone and the words said with it, whom included ("No answer after 15min. … (to: Owner & FM)"); the line
+    whole and no words when it is no step said with words (`said`: what it was drawn from, layout.step_said)."""
+    if not (said.get("stage") and said.get("at")):
+        return status, ""
+    for words in [said.get("status"), *(said.get("status_in") or {}).values()]:
+        words = str(words or "").strip()
+        i = status.rfind(words) if words else -1
+        step = status[:i].rstrip(" ,;:，、") if i > 0 else ""
+        if step:
+            return step, status[i:]
+    return status, ""
 
 
 def of_note(key: str, title: str, to: str, text: str, *, status: str = "", lead: str = "", keyboard: dict | None = None,

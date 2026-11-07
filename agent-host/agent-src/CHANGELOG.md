@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.461 (7 November 2026)
+
+- "📷 All photos" under a visit's Telegram card once it has two photos (owner, 2026-11-07): its own row after the
+  alert's buttons, its words the desk's (words.yaml `visit_all_photos`, every language; result.sheet `button`); a press
+  (button_data.PHOTOS, Telegram only: kiosk_messages.buttons_of leaves it out) sends every photo of the visit whole,
+  oldest first, each captioned "Parking · 11:57", as albums of up to 10 replying to the card in that chat alone
+  (visit.Visits.album, Telegram.album: sendMediaGroup); pressed again, the photos as they are then. The photos are kept
+  with the sheet (State.visit_photos); a picture's edit keeps the keyboard it showed (IncidentThread.picture).
+- A visit's picture holds 9 photos (visit.sheet_tiles 9, hi 9): 7 to 9 on a 4 by 3 grid, the strongest 2x2; every
+  photo whole (ImageOps.contain, dark bands), its label at its bottom left, so the camera's own date and name show.
+- The tablet's state is the step alone ("Reminder sent 11:43"), the desk's words said with it a Status line above
+  (kiosk_messages._step_and_words); Telegram's bottom line unchanged.
+- "+N more photos on the tablet" is always the last Status line (result.seen `last`, notice._kept).
+
 ## 0.6.460 (7 November 2026)
 
 - A visit's "Alert sent" is always one of its Status lines, from its first card (real visit #148, 2026-11-07: its

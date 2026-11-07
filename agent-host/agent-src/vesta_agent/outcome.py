@@ -203,6 +203,9 @@ class Outcome:
         if self.visits is not None:
             for a in res.get("actions") or []:
                 if isinstance(a, dict) and a.get("action") == SHEET and str(a.get("incident_id") or "").isdigit():
+                    # kept before any copy is sent: its "All photos" button (alert_buttons.keyboard) and its press
+                    self.state.set_visit_photos(int(a["incident_id"]), {"photos": list(a.get("photos") or []),
+                                                                        "button": a.get("button") or {}})
                     try:
                         got = await self.visits.jpeg(int(a["incident_id"]), list(a.get("photos") or []),
                                                      int(a.get("shown") or 1))
