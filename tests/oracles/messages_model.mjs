@@ -771,6 +771,10 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
   // time once answered: the same fields at the same place now
   const { momentText } = await import("@/utils/dateText");
   const { cardStrip, rowWhen } = await import("@/config/cockpitCard");
+  // its lines' and its pill's times are the villa's clock (+08:00 here, the fixture's): read on it, wherever the check
+  // runs (CI is UTC)
+  const { setVillaTimeZone } = await import("@/utils/villaClock");
+  setVillaTimeZone("Etc/GMT-8");
   const at2 = { ...step2, since: step1.at };
   const openCard = villaAlertCards([at2]).open[0];
   const openHtml = draw(h(AttentionCard, { card: openCard, onOpenEntity: () => {} }));
@@ -793,8 +797,6 @@ ck("  ...a report under Reports, an open alert a notification, a closed one in C
   // owner, 2026-11-07: a visit card kept before 2.496.742 (no `since`) showed its close, 07:16, for its first send, 07:09
   // its lines' times are the villa's clock (+08:00 here, the fixture's): read on it, wherever the check runs (CI is UTC)
   const { firstMoment } = await import("@/messages/messagesModel");
-  const { setVillaTimeZone } = await import("@/utils/villaClock");
-  setVillaTimeZone("Etc/GMT-8");
   const keptBefore = { ...over, photos: [] };
   const keptCard = villaAlertCards([keptBefore]).closed[0];
   const first = new Date("2026-11-07T07:09:00+08:00");

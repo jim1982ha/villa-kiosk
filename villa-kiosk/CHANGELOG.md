@@ -1,3 +1,8 @@
+## 2.496.751
+
+What you will see:
+- The changes of 2.496.750 (one card for a visit, whoever tells it), which were not published: a check of the build failed on the build server's clock. Nothing else changes.
+
 ## 2.496.750
 
 What you will see:
