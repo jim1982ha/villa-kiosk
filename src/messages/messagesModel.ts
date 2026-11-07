@@ -6,7 +6,8 @@
 // tests/oracles/messages_model.mjs.
 
 import { othersFirst, saysWord, type CardView } from "@/config/cockpitCard";
-import { alertStage, incidentKey, statusWords, versionOf, type Announcement } from "./announcements";
+import { alertStage, incidentKey, statusWords, versionOf, VISIT_PRESS, type Announcement } from "./announcements";
+import { WORK_ACTIONS, type WorkAction, type WorkActionKind } from "@/fm/deviceWork";
 import { roomLabel } from "@/config/devicePlace";
 import { STAGE_WORDS } from "@/fm/fmEngine";
 import { pillClass, QUIET_PILL } from "@/fm/tone";
@@ -104,8 +105,13 @@ export const idOf = (a: Announcement): string => `${a.feed === "vesta" ? "v" : "
  * icon, the visit's first send (`since`, kept by the add-on) as its one time, the room line ("Other": the villa names
  * none), its lines under "Status:" (its `story`), on an open visit its state's words alone ("New alert") with "monitoring
  * until 08:54" in the pill at their right; once over, the closed stage's word, its bottom line ("Done on Telegram on …
- * (Jm)") its who line. No chip: the villa numbers no alert (VESTA does). No buttons: a press on the tablet reaches the
- * villa only through VESTA.
+ * (Jm)") its who line. No chip: the villa numbers no alert (VESTA does).
+ *
+ * ⚠️ ITS DEVICE ITS NAME, AND VESTA'S CARD'S BUTTONS (owner, 2026-11-07): its strip said the title's words and it had no
+ * buttons, while VESTA's card is named by the device and offers Done · Not a problem · Open Ticket · Need help. Now the
+ * strongest step's device ("Test door", the villa's `device`; the title when a card kept before names none) is its name
+ * and opens it, the title's words its line; an open visit card naming its record offers the four (visitActions), pressed
+ * through the add-on to the villa as its Telegram press is. Over, or naming no record (kept before), none.
  */
 export function villaAlertCards(kept: readonly Announcement[]): { open: CardView[]; closed: CardView[] } {
   const open: CardView[] = [], closed: CardView[] = [];
@@ -116,12 +122,12 @@ export function villaAlertCards(kept: readonly Announcement[]): { open: CardView
     const severity = over ? "lost" as const : "danger" as const;
     const { state, monitoring } = villaState(a.status, over);
     const card: CardView = {
-      key: `villa:${a.key}`, title: a.title, room: roomLabel(null),
+      key: `villa:${a.key}`, title: a.device || a.title, room: roomLabel(null), ...(a.device && a.entityId ? { entityId: a.entityId } : {}),
       // an alert of the villa's: the alert's icon, in the problem's colour, grey once over
       lead: { sources: ["alert"], severities: [severity] },
       nextCheck: monitoring ? { text: capital(monitoring), at: null, when: monitoring, pill: monitoring,
         tip: `${capital(monitoring)}: the villa's system closes this alert then if nothing more is seen; each new sign moves it later.` } : null,
-      lines: [{ key: `villa:${a.key}`, text: "", records: [], actions: [], asked: null, story: [], openedAt: a.since || a.at || null,
+      lines: [{ key: `villa:${a.key}`, text: a.device ? a.title : "", records: [], actions: over || !a.record ? [] : visitActions(a.key!), asked: null, story: [], openedAt: a.since || a.at || null,
         closing: null, ...(over && state ? { who: statusWords(a.status) } : {}),
         // its words are the visit's lines: drawn under "Status:" as VESTA's card draws its own; its bottom line is the
         // state line's (or the who line's) alone
@@ -133,6 +139,18 @@ export function villaAlertCards(kept: readonly Announcement[]): { open: CardView
     (over ? closed : open).push(card);
   }
   return { open, closed };
+}
+
+/** The buttons of the villa's own open visit card (its key `visit:<id>`), in the order of every card's (Done · Not a
+ *  problem · Open Ticket · Need help, deviceWork.overviewActions), each the villa's option (ha-commands.json
+ *  visitPress); none for any other villa alert. Pure. */
+export function visitActions(key: string): WorkAction[] {
+  if (!key.startsWith(VISIT_PRESS.keyPrefix) || key.length === VISIT_PRESS.keyPrefix.length) return [];
+  const kinds: WorkActionKind[] = ["done", "notAProblem", "openTicket", "needHelp"];
+  return kinds.flatMap((kind) => {
+    const option = VISIT_PRESS.options[kind];
+    return option ? [{ kind, ids: [key], ...WORK_ACTIONS[kind], step: { kind: "visit" as const, option } }] : [];
+  });
 }
 
 /** A villa alert's bottom line as its card says it: open, its stage's words ("New alert") and what follows them

@@ -1,3 +1,8 @@
+## 2.496.743
+
+What you will see:
+- While VESTA Agent is off, the villa's own visit card is named by the device that matters most ("Test door"), with the alert's words under it, and tapping the name opens that device. An owner or facility manager now gets the same buttons as on VESTA's card: Done, Not a problem, Open Ticket, Need help. A press reaches the villa at once: its Telegram messages say "Done in the Cockpit at 09:20 (Owner)", lose their buttons and the visit closes on Done or Not a problem, as a press on Telegram does. This starts once the updated Presence Guard blueprint is pasted on the villa; before that the card looks as today, without buttons.
+
 ## 2.496.742
 
 What you will see:

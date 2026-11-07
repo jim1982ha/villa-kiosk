@@ -22,6 +22,8 @@ import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import { momentText } from "@/utils/dateText";
 import FaultStageModal from "./FaultStageModal";
 import { CardAsk } from "./RecordCard";
+import { PRESS_SAID, pressVisit } from "@/messages/announcements";
+import { backendFetch } from "@/auth/sessionLost";
 
 /** The fault a card with no record raises for its device (IssueCard.raisedFor). */
 export type RaisedFault = Omit<FmTicket, "id" | "openedAt" | "status">;
@@ -57,6 +59,14 @@ export function stepWrite(a: WorkAction, writers: Pick<FmDataContextValue, "help
   return null;
 }
 
+/** A press on the villa's own visit card (a "visit" step): sent to the villa through the add-on, and what the card
+ *  says when it did not get there (PRESS_SAID). null for any other step. Pure: the oracle passes its own `send`. */
+export function visitWrite(a: WorkAction, send: Parameters<typeof pressVisit>[2]): Promise<Pick<FmSaveOutcome, "done" | "note">> | null {
+  if (a.step.kind !== "visit") return null;
+  return pressVisit(a.ids[0], a.step.option, send)
+    .then(({ outcome }) => ({ done: outcome === "sent", note: outcome === "sent" ? null : PRESS_SAID[outcome] }));
+}
+
 export function useCardWork(): CardWork {
   const fm = useFmData();
   const { data, closeTickets, advanceTickets } = fm;
@@ -65,7 +75,7 @@ export function useCardWork(): CardWork {
   const [staging, setStaging] = useState<CardWork["staging"]>(null);
   /** A write, and why it did not land on its card. On success the records say it: the card leaves its list, or
    *  shows its Need help. */
-  const said = async (key: string, write: Promise<FmSaveOutcome>) => {
+  const said = async (key: string, write: Promise<Pick<FmSaveOutcome, "done" | "note">>) => {
     setProblem(null);
     const { done, note: why } = await write;
     if (!done && why) setProblem({ key, text: why });
@@ -89,7 +99,7 @@ export function useCardWork(): CardWork {
           tickets: a.ids.map((id) => data.tickets.find((t) => t.id === id)).filter((t): t is FmTicket => !!t) });
         return;
       }
-      const write = stepWrite(a, fm, raised);
+      const write = visitWrite(a, backendFetch) ?? stepWrite(a, fm, raised);
       if (write) void said(key, write);
     },
     staging,

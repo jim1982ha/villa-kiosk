@@ -540,6 +540,21 @@ ck("a rewrite keeps when its first version arrived (`since`), never the writer's
    v3[-1].get("since") == "2026-11-07T08:48:10+08:00" and v3[-1]["at"] == "2026-11-07T08:53:00+08:00"
    and "since" not in proxy._announcements_with([], dict(v1, since="x"))[-1], v3)
 
+# owner, 2026-11-07: the villa's visit card names its device and offers its buttons (the press door checks its record)
+named = proxy._announcement_record({"event_type": proxy.ANNOUNCEMENT_EVENT, "data": {"message": "<b>x</b>", "key": "visit:x",
+    "device": " Test door ", "entity_id": "binary_sensor.example_door", "record": "sensor.example_visit"}}, 1)
+odd = proxy._announcement_record({"event_type": proxy.ANNOUNCEMENT_EVENT, "data": {"message": "<b>x</b>", "key": "visit:x",
+    "device": 5, "entity_id": "../x", "record": "sensor.x/../y"}}, 1)
+ck("a visit's announcement keeps its device's name, its entity and its visit record; nothing else in their place",
+   (named.get("device"), named.get("entity_id"), named.get("record")) == ("Test door", "binary_sensor.example_door", "sensor.example_visit")
+   and not {"device", "entity_id", "record"} & set(odd), (named, odd))
+ck("  ...the press door finds the record by the card's key, refuses a visit not open, VESTA's or another option",
+   proxy._visit_record_of([named], "visit:x") == "sensor.example_visit" and proxy._visit_record_of([named], "visit:y") is None
+   and proxy._visit_press_refusal("visit:x", "done", {"state": "open", "attributes": {"id": "x", "owner": "villa"}}) is None
+   and proxy._visit_press_refusal("visit:x", "done", {"state": "open", "attributes": {"id": "x", "owner": "vesta"}}) is not None
+   and proxy._visit_press_refusal("visit:x", "done", {"state": "closed", "attributes": {"id": "x"}}) is not None
+   and proxy._visit_press_refusal("visit:x", "unlock", {"state": "open", "attributes": {"id": "x"}}) is not None)
+
 # ── VESTA's card shows the pictures of the villa's messages it took over (owner, 2026-11-02: #107 on the tablet) ─────
 print("\n  a card that took a villa message over:")
 ph = lambda i: {"id": i, "label": i[0].upper(), "at": "2026-11-06T18:00:00+00:00"}
